@@ -1,0 +1,111 @@
+/*
+ * Colour tokens are written onto :root at runtime by ThemeProvider, from the
+ * same TypeScript definitions the SVG exporter reads. The values here are the
+ * dark palette repeated as a static fallback, so the first paint before React
+ * mounts is not a white flash.
+ *
+ * Everything else — spacing, radii, typography — lives only here.
+ */
+:root {
+  --dc-canvas: #0f1115;
+  --dc-grid: #252a33;
+  --dc-surface: #181b21;
+  --dc-surface-raised: #1e222a;
+  --dc-border: #2c333d;
+  --dc-border-strong: #3d4653;
+  --dc-text: #e6e9ee;
+  --dc-text-muted: #98a1b0;
+  --dc-text-faint: #6b7482;
+  --dc-selection: #5fd6c9;
+  --dc-selection-soft: rgba(95, 214, 201, 0.16);
+  --dc-edge: #6d7885;
+  --dc-edge-label-bg: #12151a;
+  --dc-code-bg: #12151a;
+  --dc-code-border: #2c333d;
+  --dc-shadow: rgba(0, 0, 0, 0.45);
+
+  --dc-danger: #e2687f;
+
+  --dc-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --dc-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --dc-radius-sm: 5px;
+  --dc-radius: 8px;
+  --dc-radius-lg: 12px;
+
+  --dc-bar-height: 46px;
+  --dc-status-height: 32px;
+
+  --dc-shadow-panel: 0 8px 30px -8px var(--dc-shadow), 0 1px 2px rgba(0, 0, 0, 0.2);
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --dc-danger: #c2455f;
+  --dc-shadow-panel: 0 8px 28px -10px rgba(19, 24, 32, 0.22), 0 1px 2px rgba(19, 24, 32, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--dc-canvas);
+  color: var(--dc-text);
+  font-family: var(--dc-font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+code,
+kbd,
+pre {
+  font-family: var(--dc-mono);
+}
+
+:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+.dc-muted {
+  color: var(--dc-text-muted);
+}
+
+.dc-warn {
+  color: var(--dc-danger);
+}
+
+.dc-dot {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin: 0 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+  vertical-align: middle;
+}
+
+.dc-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

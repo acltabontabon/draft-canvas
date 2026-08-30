@@ -1,0 +1,104 @@
+import type { Accent, CodeLanguage, DraftNodeType, NoteKind } from '../document/types';
+
+export interface Preset {
+  id: string;
+  label: string;
+  type: DraftNodeType;
+  shortcut: string;
+  /** Shown in the shortcut sheet and as the button tooltip. */
+  hint: string;
+  accent?: Accent;
+  noteKind?: NoteKind;
+  language?: CodeLanguage;
+  text?: string;
+}
+
+/**
+ * The entire shape vocabulary.
+ *
+ * It is short on purpose. A developer explaining a system reaches for a handful
+ * of things over and over; a palette of three hundred shapes turns "explain the
+ * idea" into "choose a shape", which is the failure mode this tool exists to
+ * avoid.
+ */
+/** The default: what a double-click on empty canvas produces. */
+export const CARD_PRESET: Preset = {
+  id: 'card',
+  label: 'Card',
+  type: 'card',
+  shortcut: 'R',
+  hint: 'A plain box',
+};
+
+export const PRESETS: Preset[] = [
+  CARD_PRESET,
+  { id: 'text', label: 'Text', type: 'text', shortcut: 'T', hint: 'Label with no box' },
+  {
+    id: 'note',
+    label: 'Note',
+    type: 'note',
+    shortcut: 'N',
+    hint: 'A remark, question, warning or decision',
+    noteKind: 'note',
+  },
+  {
+    id: 'code',
+    label: 'Code',
+    type: 'code',
+    shortcut: 'C',
+    hint: 'Syntax-highlighted code, config or logs',
+    language: 'json',
+  },
+];
+
+export const DEV_PRESETS: Preset[] = [
+  {
+    id: 'service',
+    label: 'Service',
+    type: 'service',
+    shortcut: 'S',
+    hint: 'An application or service',
+    accent: 'teal',
+    text: 'Service',
+  },
+  {
+    id: 'database',
+    label: 'Database',
+    type: 'database',
+    shortcut: 'D',
+    hint: 'A datastore',
+    accent: 'blue',
+    text: 'Database',
+  },
+  {
+    id: 'queue',
+    label: 'Queue',
+    type: 'queue',
+    shortcut: 'Q',
+    hint: 'A topic, queue or event stream',
+    accent: 'violet',
+    text: 'Topic',
+  },
+  {
+    id: 'actor',
+    label: 'Actor',
+    type: 'actor',
+    shortcut: 'A',
+    hint: 'A person or client',
+    text: 'User',
+  },
+  {
+    id: 'ellipse',
+    label: 'Circle',
+    type: 'ellipse',
+    shortcut: 'O',
+    hint: 'A circle or state',
+  },
+];
+
+export const ALL_PRESETS = [...PRESETS, ...DEV_PRESETS];
+
+export function presetForShortcut(key: string): Preset | undefined {
+  const upper = key.toUpperCase();
+  return ALL_PRESETS.find((preset) => preset.shortcut === upper);
+}

@@ -1,0 +1,252 @@
+import { useRef, useState } from 'react';
+import { readProjectFile } from '../../export/project';
+import type { DraftSummary } from '../../document/types';
+import { useUiStore } from '../../store/uiStore';
+import type { DocumentSession } from '../../store/useDocumentSession';
+import { Button } from '../common/Button';
+import { Modal } from '../common/Modal';
+import { PrivacyNote } from '../PrivacyNote';
+
+/**
+ * The landing screen: a list of what is stored in this browser.
+ *
+ * Deliberately not a dashboard. There are no projects, no folders and no
+ * sharing — just the diagrams on this device and a way into a new one.
+ */
+export function LibraryScreen({ session }: { session: DocumentSession }) {
+  const notify = useUiStore((state) => state.notify);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [confirmDelete, setConfirmDelete] = useState<DraftSummary | null>(null);
+  const [renaming, setRenaming] = useState<DraftSummary | null>(null);
+
+  const onImport = async (file: File | undefined) => {
+    if (!file) return;
+    const result = await readProjectFile(file);
+    if (!result.ok) {
+      notify(result.error, 'error');
+      return;
+    }
+    if (result.repairs.length > 0) {
+      notify(`Imported with repairs: ${result.repairs.join(' ')}`);
+    }
+    await session.adoptDocument(result.document);
+  };
+
+  return (
+    <div className="dc-library">
+      <div className="dc-library-inner">
+        <header className="dc-library-header">
+          <div>
+            <h1>Draft Canvas</h1>
+            <p className="dc-lede">A local-first canvas for explaining software.</p>
+          </div>
+          <div className="dc-library-actions">
+            <Button
+              variant="quiet"
+              icon="upload"
+              onClick={() => fileInput.current?.click()}
+              disabled={!session.ready}
+            >
+              Import
+            </Button>
+            <Button
+              variant="solid"
+              icon="plus"
+              onClick={() => void session.newDocument()}
+              disabled={!session.ready}
+            >
+              New canvas
+            </Button>
+          </div>
+        </header>
+
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".draftcanvas,.json,application/json"
+          hidden
+          onChange={(event) => {
+            void onImport(event.target.files?.[0]);
+            event.target.value = '';
+          }}
+        />
+
+        <section className="dc-library-list">
+          <div className="dc-library-list-head">
+            <h2>Your diagrams</h2>
+            <span className="dc-muted">Stored only on this device.</span>
+          </div>
+
+          {!session.ready && <p className="dc-muted dc-library-empty">Opening local storage…</p>}
+
+          {session.ready && session.library.length === 0 && (
+            <div className="dc-library-empty">
+              <p>Nothing here yet.</p>
+              <p className="dc-muted">
+                Create a canvas, or import a <code>.draftcanvas</code> file you exported earlier.
+              </p>
+            </div>
+          )}
+
+          <ul>
+            {session.library.map((entry) => (
+              <li key={entry.id}>
+                <button
+                  type="button"
+                  className="dc-library-item"
+                  onClick={() => void session.openDocument(entry.id)}
+                >
+                  <span className="dc-library-item-title">{entry.title}</span>
+                  <span className="dc-library-item-meta">
+                    {relativeTime(entry.updatedAt)}
+                    <span className="dc-dot" />
+                    {entry.nodeCount} {entry.nodeCount === 1 ? 'element' : 'elements'}
+                    {entry.edgeCount > 0 && (
+                      <>
+                        <span className="dc-dot" />
+                        {entry.edgeCount} {entry.edgeCount === 1 ? 'connection' : 'connections'}
+                      </>
+                    )}
+                  </span>
+                </button>
+                <div className="dc-library-item-actions">
+                  <Button
+                    icon="pencil"
+                    variant="quiet"
+                    aria-label={`Rename ${entry.title}`}
+                    onClick={() => setRenaming(entry)}
+                  />
+                  <Button
+                    icon="copy"
+                    variant="quiet"
+                    aria-label={`Duplicate ${entry.title}`}
+                    onClick={() => void session.duplicateDocument(entry.id)}
+                  />
+                  <Button
+                    icon="trash"
+                    variant="quiet"
+                    aria-label={`Delete ${entry.title}`}
+                    onClick={() => setConfirmDelete(entry)}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <PrivacyNote durable={session.durable} />
+      </div>
+
+      {confirmDelete && (
+        <Modal
+          title="Delete this diagram?"
+          onClose={() => setConfirmDelete(null)}
+          footer={
+            <>
+              <Button variant="quiet" onClick={() => setConfirmDelete(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                icon="trash"
+                onClick={() => {
+                  void session.deleteDocument(confirmDelete.id);
+                  setConfirmDelete(null);
+                }}
+              >
+                Delete
+              </Button>
+            </>
+          }
+        >
+          <p>
+            <strong>{confirmDelete.title}</strong> will be removed from this browser. This cannot be
+            undone.
+          </p>
+          <p className="dc-muted">
+            If you might want it later, open it first and export a <code>.draftcanvas</code> file.
+          </p>
+        </Modal>
+      )}
+
+      {renaming && (
+        <RenameDialog
+          entry={renaming}
+          onClose={() => setRenaming(null)}
+          onSubmit={(title) => {
+            void session.renameDocument(renaming.id, title);
+            setRenaming(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function RenameDialog({
+  entry,
+  onClose,
+  onSubmit,
+}: {
+  entry: DraftSummary;
+  onClose: () => void;
+  onSubmit: (title: string) => void;
+}) {
+  const [value, setValue] = useState(entry.title);
+  const submit = () => {
+    const title = value.trim();
+    if (title) onSubmit(title);
+    else onClose();
+  };
+
+  return (
+    <Modal
+      title="Rename"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="quiet" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="solid" icon="check" onClick={submit}>
+            Rename
+          </Button>
+        </>
+      }
+    >
+      <label className="dc-field">
+        <span>Title</span>
+        <input
+          autoFocus
+          value={value}
+          maxLength={200}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') submit();
+          }}
+        />
+      </label>
+    </Modal>
+  );
+}
+
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['second', 1000],
+  ['minute', 60_000],
+  ['hour', 3_600_000],
+  ['day', 86_400_000],
+];
+
+function relativeTime(at: number): string {
+  const delta = at - Date.now();
+  const absolute = Math.abs(delta);
+  if (absolute < 45_000) return 'just now';
+
+  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  for (let i = UNITS.length - 1; i >= 0; i -= 1) {
+    const [unit, ms] = UNITS[i]!;
+    if (absolute >= ms) return formatter.format(Math.round(delta / ms), unit);
+  }
+  return 'just now';
+}
+

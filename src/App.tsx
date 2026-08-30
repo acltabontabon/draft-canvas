@@ -1,0 +1,38 @@
+import { ReactFlowProvider } from '@xyflow/react';
+import { useDocumentSession } from './store/useDocumentSession';
+import { EditorScreen } from './ui/Editor/EditorScreen';
+import { LibraryScreen } from './ui/Library/LibraryScreen';
+import { Toasts } from './ui/common/Toasts';
+import { ThemeProvider } from './ui/theme/ThemeProvider';
+
+/**
+ * There is no router.
+ *
+ * The library and the editor are two states of one screen, which keeps the app
+ * deployable under any path — /workbench/draft-canvas or anywhere else — with
+ * no base-path configuration and no server rewrite rules.
+ */
+function Shell() {
+  const session = useDocumentSession();
+
+  return (
+    <>
+      {session.openId ? (
+        <ReactFlowProvider>
+          <EditorScreen session={session} />
+        </ReactFlowProvider>
+      ) : (
+        <LibraryScreen session={session} />
+      )}
+      <Toasts />
+    </>
+  );
+}
+
+export function App() {
+  return (
+    <ThemeProvider>
+      <Shell />
+    </ThemeProvider>
+  );
+}

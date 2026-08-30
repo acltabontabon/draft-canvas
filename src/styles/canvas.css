@@ -1,0 +1,317 @@
+/*
+ * Canvas surface, nodes, connectors and editing affordances.
+ *
+ * Nothing here paints node content — that comes from the display list, which
+ * the exporter shares. These rules cover only the interactive chrome around it.
+ */
+
+.dc-canvas {
+  position: absolute;
+  inset: 0;
+  background: var(--dc-canvas);
+}
+
+.dc-canvas .react-flow {
+  background: transparent;
+}
+
+.dc-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- nodes -- */
+
+.dc-node {
+  position: relative;
+  border-radius: var(--dc-radius);
+}
+
+.dc-node-surface {
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* The selection ring is chrome, so it lives here rather than in the display
+   list — which is precisely why it never appears in an exported image. */
+.dc-node[data-selected='true']::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1.5px solid var(--dc-selection);
+  border-radius: calc(var(--dc-radius) + 3px);
+  pointer-events: none;
+}
+
+.dc-node[data-type='ellipse'][data-selected='true']::after {
+  border-radius: 50%;
+}
+
+.dc-node[data-type='text'] {
+  cursor: text;
+}
+
+.dc-node-editor {
+  position: absolute;
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  resize: none;
+  overflow: auto;
+  outline: 1.5px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+.dc-node-editor-code {
+  background: var(--dc-code-bg);
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* -------------------------------------------------------------- handles -- */
+
+.dc-handle {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--dc-selection);
+  border-radius: 50%;
+  background: var(--dc-canvas);
+  opacity: 0;
+  transition: opacity 90ms ease, transform 90ms ease;
+}
+
+.dc-node:hover .dc-handle,
+.dc-node[data-selected='true'] .dc-handle {
+  opacity: 1;
+}
+
+.dc-handle:hover {
+  transform: scale(1.35);
+  opacity: 1;
+}
+
+/* Keeps the whole node edge a valid drop target while a connection is in
+   flight, so aiming at a 9px dot is never required. */
+.react-flow.connecting .dc-handle {
+  opacity: 1;
+}
+
+/* Present mode keeps the handles in the DOM but out of sight. */
+.dc-editor[data-mode='present'] .dc-handle {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.dc-resize-line {
+  border-color: var(--dc-selection);
+  opacity: 0.55;
+}
+
+.dc-resize-handle {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--dc-selection);
+  border-radius: 2px;
+  background: var(--dc-canvas);
+}
+
+/* ---------------------------------------------------------------- edges -- */
+
+.react-flow__edge-interaction {
+  cursor: pointer;
+}
+
+.dc-edge[data-selected='true'] .dc-edge-line {
+  stroke: var(--dc-selection);
+  stroke-width: 2.4;
+}
+
+/* Connector labels read over the diagram, not under it. */
+.react-flow__edgelabel-renderer {
+  z-index: 4;
+}
+
+.dc-edge-label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 7px;
+  border: 1px solid var(--dc-border);
+  border-radius: 4px;
+  background: var(--dc-edge-label-bg);
+  color: var(--dc-text);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: all;
+  cursor: text;
+}
+
+/* When a connector is both labelled and numbered, the step rides inside the
+   label rather than sitting on the line, where the two would collide on any
+   short connector. */
+.dc-edge-label-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border: 1.3px solid currentColor;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.dc-edge-label-input {
+  width: 140px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+.dc-edge-step {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1.4px solid var(--dc-edge);
+  border-radius: 50%;
+  background: var(--dc-edge-label-bg);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.dc-edge-step[data-active='true'] {
+  border-width: 2px;
+  transform-origin: center;
+}
+
+/* --------------------------------------------------------------- guides -- */
+
+.dc-guide {
+  position: absolute;
+  background: var(--dc-selection);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.dc-guide[data-axis='x'] {
+  width: 1px;
+}
+
+.dc-guide[data-axis='y'] {
+  height: 1px;
+}
+
+/* ---------------------------------------------------------- empty state -- */
+
+.dc-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.dc-empty-title {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 16px;
+  font-weight: 550;
+}
+
+.dc-empty-hint {
+  margin: 0;
+  color: var(--dc-text-faint);
+  font-size: 13.5px;
+}
+
+.dc-empty-keys {
+  margin: 14px 0 0;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------- explain --- */
+
+/*
+ * Dimming is done with one class on the container rather than by pushing a prop
+ * into every node. A hundred nodes fade with zero React work.
+ */
+.dc-canvas[data-explain='on'] .react-flow__node {
+  opacity: 0.3;
+  filter: grayscale(0.5);
+  transition: opacity 180ms ease, filter 180ms ease;
+}
+
+.dc-canvas[data-explain='on'] .dc-edge[data-dimmed='true'] {
+  opacity: 0.22;
+  transition: opacity 180ms ease;
+}
+
+.dc-canvas[data-explain='on'] .dc-edge[data-active='true'] {
+  opacity: 1;
+}
+
+/*
+ * Labels are portalled out of the edge group, so the dim applied to the
+ * connector does not reach them. Without this the quiet steps keep shouting.
+ */
+.dc-edge-label[data-dimmed='true'],
+.dc-edge-step[data-dimmed='true'] {
+  opacity: 0.22;
+  transition: opacity 180ms ease;
+}
+
+.dc-edge-label[data-active='true'] {
+  border-color: var(--dc-selection);
+}
+
+/* The two nodes either end of the current step stay fully lit. */
+.dc-canvas[data-explain='on'] .react-flow__node:has(.dc-node[data-explain-active='true']) {
+  opacity: 1;
+  filter: none;
+}
+
+.dc-editor[data-armed='true'] .react-flow__pane {
+  cursor: crosshair;
+}
+
+.dc-editor[data-mode='present'] .react-flow__pane {
+  cursor: grab;
+}
+
+/* React Flow paints its own selection box; align it with our palette. */
+.react-flow__selection {
+  background: var(--dc-selection-soft);
+  border: 1px solid var(--dc-selection);
+}
+
+.react-flow__edge.selected .dc-edge-line {
+  stroke: var(--dc-selection);
+}
+
+.react-flow__attribution {
+  display: none;
+}

@@ -1,0 +1,470 @@
+import { create } from 'zustand';
+import { createDocument, createEdge, createNode, type CreateNodeInput } from '../document/factory';
+import {
+  addEdges,
+  addNodes,
+  alignNodes,
+  bringForward,
+  bringToFront,
+  distributeNodes,
+  extractFragment,
+  moveNodes,
+  pasteFragment,
+  removeElements,
+  sendBackward,
+  sendToBack,
+  setParent,
+  setSettings,
+  setTitle,
+  setViewport,
+  touch,
+  updateEdge,
+  updateNode,
+  type AlignEdge,
+  type Clipboard,
+} from '../document/operations';
+import {
+  clearSequence,
+  moveInSequence,
+  sequenceAll,
+  toggleSequence,
+} from '../document/sequence';
+import type {
+  DraftDocument,
+  DraftEdge,
+  DraftNode,
+  DraftSettings,
+  DraftViewport,
+} from '../document/types';
+import {
+  EMPTY_HISTORY,
+  EMPTY_SELECTION,
+  canRedo,
+  canUndo,
+  pushEntry,
+  redo as redoStack,
+  undo as undoStack,
+  type HistoryState,
+  type Selection,
+} from '../history/HistoryStack';
+import type { SaveState } from '../storage/autosave';
+
+export type EditorMode = 'edit' | 'present';
+
+export interface ExplainState {
+  active: boolean;
+  step: number;
+}
+
+interface Interaction {
+  label: string;
+  document: DraftDocument;
+  selection: Selection;
+}
+
+export interface EditorStore {
+  document: DraftDocument;
+  history: HistoryState;
+  selection: Selection;
+  clipboard: Clipboard | null;
+  save: SaveState;
+  mode: EditorMode;
+  explain: ExplainState;
+  /** Bumped on every document write; autosave watches this rather than deep-diffing. */
+  revision: number;
+
+  /* Document access */
+  setDocument: (document: DraftDocument, options?: { resetHistory?: boolean }) => void;
+  apply: (label: string, recipe: (doc: DraftDocument) => DraftDocument, options?: ApplyOptions) => void;
+
+  /* Interactions (drag, resize) collapse into one undo entry */
+  beginInteraction: (label: string) => void;
+  endInteraction: () => void;
+
+  /* Editing commands */
+  addNode: (input: CreateNodeInput) => DraftNode;
+  addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string) => void;
+  connect: (source: string, target: string) => DraftEdge | null;
+  updateNodeById: (id: string, patch: Partial<Omit<DraftNode, 'id'>>, label?: string) => void;
+  updateNodeText: (id: string, text: string) => void;
+  updateEdgeById: (id: string, patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>, label?: string) => void;
+  updateEdgeLabel: (id: string, label: string) => void;
+  commitPositions: (positions: Map<string, { x: number; y: number }>) => void;
+  deleteSelection: () => void;
+  duplicateSelection: () => void;
+  copySelection: () => void;
+  paste: (offset?: { x: number; y: number }) => void;
+  align: (edge: AlignEdge) => void;
+  distribute: (axis: 'x' | 'y') => void;
+  groupSelection: () => void;
+  ungroupSelection: () => void;
+  raise: (toFront?: boolean) => void;
+  lower: (toBack?: boolean) => void;
+
+  /* Sequencing */
+  toggleEdgeSequence: (edgeId: string) => void;
+  moveEdgeInSequence: (edgeId: string, direction: -1 | 1) => void;
+  numberAllEdges: () => void;
+  clearAllSequence: () => void;
+
+  /* Document-level */
+  rename: (title: string) => void;
+  updateSettings: (patch: Partial<DraftSettings>) => void;
+  persistViewport: (viewport: DraftViewport) => void;
+
+  /* History */
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+
+  /* Selection and modes */
+  setSelection: (selection: Selection) => void;
+  setSaveState: (state: SaveState) => void;
+  setMode: (mode: EditorMode) => void;
+  setExplain: (explain: Partial<ExplainState>) => void;
+}
+
+export interface ApplyOptions {
+  /** Entries with the same key merge, so text editing is one undo step. */
+  coalesceKey?: string;
+  /** Skips the history entry — used for viewport and other non-editorial state. */
+  transient?: boolean;
+  selection?: Selection;
+}
+
+let interaction: Interaction | null = null;
+
+export const useEditorStore = create<EditorStore>((set, get) => ({
+  document: createDocument(),
+  history: EMPTY_HISTORY,
+  selection: EMPTY_SELECTION,
+  clipboard: null,
+  save: { status: 'idle' },
+  mode: 'edit',
+  explain: { active: false, step: 0 },
+  revision: 0,
+
+  setDocument(document, options) {
+    interaction = null;
+    set((state) => ({
+      document,
+      history: options?.resetHistory === false ? state.history : EMPTY_HISTORY,
+      selection: EMPTY_SELECTION,
+      explain: { active: false, step: 0 },
+      revision: state.revision + 1,
+    }));
+  },
+
+  apply(label, recipe, options) {
+    const state = get();
+    const before = state.document;
+    const next = touch(recipe(before));
+    // Structural sharing means an operation that changed nothing returns the
+    // same object, so no-op commands never create a dead undo step.
+    if (next === before || shallowEqualDocument(next, before)) return;
+
+    if (interaction || options?.transient) {
+      set((s) => ({
+        document: next,
+        selection: options?.selection ?? s.selection,
+        revision: s.revision + 1,
+      }));
+      return;
+    }
+
+    const selectionAfter = options?.selection ?? state.selection;
+    set((s) => ({
+      document: next,
+      selection: selectionAfter,
+      revision: s.revision + 1,
+      history: pushEntry(s.history, {
+        label,
+        before,
+        after: next,
+        selectionBefore: state.selection,
+        selectionAfter,
+        at: Date.now(),
+        coalesceKey: options?.coalesceKey,
+      }),
+    }));
+  },
+
+  beginInteraction(label) {
+    const state = get();
+    interaction = { label, document: state.document, selection: state.selection };
+  },
+
+  endInteraction() {
+    const active = interaction;
+    interaction = null;
+    if (!active) return;
+    const state = get();
+    // A click that moved nothing leaves the document identical; no entry.
+    if (state.document === active.document) return;
+    set((s) => ({
+      history: pushEntry(s.history, {
+        label: active.label,
+        before: active.document,
+        after: s.document,
+        selectionBefore: active.selection,
+        selectionAfter: s.selection,
+        at: Date.now(),
+      }),
+    }));
+  },
+
+  addNode(input) {
+    const node = createNode(input);
+    get().apply(`Add ${input.type}`, (doc) => addNodes(doc, [node]), {
+      selection: { nodes: [node.id], edges: [] },
+    });
+    return node;
+  },
+
+  addNodesWithEdges(nodes, edges, label) {
+    get().apply(label, (doc) => addEdges(addNodes(doc, nodes), edges), {
+      selection: { nodes: nodes.map((n) => n.id), edges: [] },
+    });
+  },
+
+  connect(source, target) {
+    const state = get();
+    if (source === target) return null;
+    const exists = state.document.edges.some((e) => e.source === source && e.target === target);
+    if (exists) return null;
+    const edge = createEdge({ source, target });
+    state.apply('Connect', (doc) => addEdges(doc, [edge]), {
+      selection: { nodes: [], edges: [edge.id] },
+    });
+    return edge;
+  },
+
+  updateNodeById(id, patch, label = 'Change node') {
+    get().apply(label, (doc) => updateNode(doc, id, patch));
+  },
+
+  updateNodeText(id, text) {
+    get().apply('Edit text', (doc) => updateNode(doc, id, { text }), {
+      coalesceKey: `text:${id}`,
+    });
+  },
+
+  updateEdgeById(id, patch, label = 'Change connection') {
+    get().apply(label, (doc) => updateEdge(doc, id, patch));
+  },
+
+  updateEdgeLabel(id, label) {
+    get().apply('Label connection', (doc) => updateEdge(doc, id, { label }), {
+      coalesceKey: `edge-label:${id}`,
+    });
+  },
+
+  commitPositions(positions) {
+    get().apply('Move', (doc) => moveNodes(doc, positions));
+  },
+
+  deleteSelection() {
+    const { selection, apply } = get();
+    if (selection.nodes.length === 0 && selection.edges.length === 0) return;
+    apply('Delete', (doc) => removeElements(doc, selection.nodes, selection.edges), {
+      selection: EMPTY_SELECTION,
+    });
+  },
+
+  duplicateSelection() {
+    const state = get();
+    if (state.selection.nodes.length === 0) return;
+    const fragment = extractFragment(state.document, state.selection.nodes);
+    const result = pasteFragment(state.document, fragment, { x: 24, y: 24 });
+    state.apply('Duplicate', () => result.doc, {
+      selection: { nodes: result.nodeIds, edges: result.edgeIds },
+    });
+  },
+
+  copySelection() {
+    const state = get();
+    if (state.selection.nodes.length === 0) return;
+    set({ clipboard: extractFragment(state.document, state.selection.nodes) });
+  },
+
+  paste(offset = { x: 32, y: 32 }) {
+    const state = get();
+    const fragment = state.clipboard;
+    if (!fragment || fragment.nodes.length === 0) return;
+    const result = pasteFragment(state.document, fragment, offset);
+    state.apply('Paste', () => result.doc, {
+      selection: { nodes: result.nodeIds, edges: result.edgeIds },
+    });
+  },
+
+  align(edge) {
+    const { selection, apply } = get();
+    apply('Align', (doc) => alignNodes(doc, selection.nodes, edge));
+  },
+
+  distribute(axis) {
+    const { selection, apply } = get();
+    apply('Distribute', (doc) => distributeNodes(doc, selection.nodes, axis));
+  },
+
+  groupSelection() {
+    const state = get();
+    const members = state.document.nodes.filter((n) => state.selection.nodes.includes(n.id));
+    if (members.length < 2) return;
+
+    const padding = 28;
+    const minX = Math.min(...members.map((n) => n.x)) - padding;
+    const minY = Math.min(...members.map((n) => n.y)) - padding - 12;
+    const maxX = Math.max(...members.map((n) => n.x + n.width)) + padding;
+    const maxY = Math.max(...members.map((n) => n.y + n.height)) + padding;
+    const minZ = Math.min(...members.map((n) => n.z));
+
+    const boundary = createNode({
+      type: 'group',
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      z: minZ - 1,
+      text: 'Boundary',
+    });
+
+    state.apply(
+      'Group',
+      (doc) => setParent(addNodes(doc, [boundary]), state.selection.nodes, boundary.id),
+      { selection: { nodes: [boundary.id], edges: [] } },
+    );
+  },
+
+  ungroupSelection() {
+    const state = get();
+    const boundaries = state.document.nodes.filter(
+      (n) => n.type === 'group' && state.selection.nodes.includes(n.id),
+    );
+    if (boundaries.length === 0) return;
+    const boundaryIds = new Set(boundaries.map((b) => b.id));
+    const children = state.document.nodes
+      .filter((n) => n.parentId && boundaryIds.has(n.parentId))
+      .map((n) => n.id);
+
+    state.apply(
+      'Ungroup',
+      (doc) => {
+        const detached = setParent(doc, children, undefined);
+        // Remove only the boundary; `removeElements` would take the contents too.
+        return { ...detached, nodes: detached.nodes.filter((n) => !boundaryIds.has(n.id)) };
+      },
+      { selection: { nodes: children, edges: [] } },
+    );
+  },
+
+  raise(toFront = false) {
+    const { selection, apply } = get();
+    apply('Bring forward', (doc) =>
+      toFront ? bringToFront(doc, selection.nodes) : bringForward(doc, selection.nodes),
+    );
+  },
+
+  lower(toBack = false) {
+    const { selection, apply } = get();
+    apply('Send backward', (doc) =>
+      toBack ? sendToBack(doc, selection.nodes) : sendBackward(doc, selection.nodes),
+    );
+  },
+
+  toggleEdgeSequence(edgeId) {
+    get().apply('Sequence', (doc) => toggleSequence(doc, edgeId));
+  },
+
+  moveEdgeInSequence(edgeId, direction) {
+    get().apply('Reorder step', (doc) => moveInSequence(doc, edgeId, direction));
+  },
+
+  numberAllEdges() {
+    get().apply('Number all steps', sequenceAll);
+  },
+
+  clearAllSequence() {
+    get().apply('Clear steps', clearSequence);
+  },
+
+  rename(title) {
+    get().apply('Rename', (doc) => setTitle(doc, title), { coalesceKey: 'title' });
+  },
+
+  updateSettings(patch) {
+    get().apply('Change settings', (doc) => setSettings(doc, patch));
+  },
+
+  persistViewport(viewport) {
+    // The viewport is saved but is not an editorial action, so it stays out of
+    // the undo stack — nobody wants Ctrl+Z to undo a scroll.
+    get().apply('Viewport', (doc) => setViewport(doc, viewport), { transient: true });
+  },
+
+  undo() {
+    const state = get();
+    const { history, entry } = undoStack(state.history);
+    if (!entry) return;
+    set((s) => ({
+      history,
+      document: entry.before,
+      selection: entry.selectionBefore,
+      revision: s.revision + 1,
+    }));
+  },
+
+  redo() {
+    const state = get();
+    const { history, entry } = redoStack(state.history);
+    if (!entry) return;
+    set((s) => ({
+      history,
+      document: entry.after,
+      selection: entry.selectionAfter,
+      revision: s.revision + 1,
+    }));
+  },
+
+  canUndo: () => canUndo(get().history),
+  canRedo: () => canRedo(get().history),
+
+  setSelection(selection) {
+    set({ selection });
+  },
+
+  setSaveState(save) {
+    set({ save });
+  },
+
+  setMode(mode) {
+    set((s) => ({
+      mode,
+      explain: mode === 'edit' ? { active: false, step: 0 } : s.explain,
+    }));
+  },
+
+  setExplain(explain) {
+    set((s) => ({ explain: { ...s.explain, ...explain } }));
+  },
+}));
+
+/**
+ * Guards against writes that produce an equal-but-new document object, which
+ * would otherwise fill the undo stack with entries that change nothing.
+ */
+function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
+  return (
+    a.nodes === b.nodes &&
+    a.edges === b.edges &&
+    a.settings === b.settings &&
+    a.viewport === b.viewport &&
+    a.metadata.title === b.metadata.title
+  );
+}
+
+/** Test seam: interaction state lives outside the store, so it needs resetting. */
+export function __resetInteraction(): void {
+  interaction = null;
+}
