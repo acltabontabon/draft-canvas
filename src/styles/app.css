@@ -741,9 +741,18 @@ kbd {
   border-color: color-mix(in srgb, var(--dc-danger) 45%, var(--dc-border));
 }
 
+/*
+ * Draft Canvas is a desktop tool; a narrow screen is for looking at a diagram
+ * someone shared, not for building one. The chrome folds rather than competing
+ * with the canvas for the little space there is.
+ */
 @media (max-width: 720px) {
   .dc-shortcuts {
     grid-template-columns: 1fr;
+  }
+
+  .dc-library {
+    padding: 32px 18px 48px;
   }
 
   .dc-library-header {
@@ -751,7 +760,43 @@ kbd {
     gap: 16px;
   }
 
-  .dc-status-hint {
+  .dc-library-item-actions {
+    opacity: 1;
+  }
+
+  /* Title on the first row, the tool palette scrolling on its own below. */
+  .dc-toolbar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .dc-toolbar-tools {
+    order: 3;
+    width: 100%;
+    padding-bottom: 2px;
+  }
+
+  .dc-title-input {
+    max-width: 42vw;
+  }
+
+  .dc-status {
+    height: auto;
+    padding: 6px 10px;
+  }
+
+  .dc-status-hint,
+  .dc-status-right > .dc-muted,
+  .dc-status-right > .dc-inspector-divider {
     display: none;
+  }
+
+  .dc-inspector {
+    left: 8px;
+    right: 8px;
+    transform: none;
+    max-width: none;
   }
 }
