@@ -14,6 +14,7 @@ import type {
   DraftNode,
   DraftViewport,
   DraftSettings,
+  Side,
 } from './types';
 
 const clampCoord = (n: number) =>
@@ -89,6 +90,42 @@ export function updateEdge(
     if (edge.id !== id) return edge;
     changed = true;
     return applyPatch<DraftEdge>(edge, patch);
+  });
+  return changed ? withEdges(doc, edges) : doc;
+}
+
+/**
+ * Grabbing an existing connector's endpoint and dropping it somewhere else —
+ * a new node, or a new side of the same node — is how a user explicitly
+ * overrides a previously persisted anchor (see `EdgeAnchor` in `types.ts`).
+ * Only the endpoint actually dragged changes; the other one, and its anchor,
+ * are untouched. `newSide` absent (a body-hit, not a handle) clears that
+ * endpoint's anchor instead of leaving it stale, so routing falls back to
+ * `chooseSides` for it going forward — the same as a freshly drawn edge
+ * whose drop wasn't aimed at a specific side.
+ *
+ * A separate function from `updateEdge`, not a cast around it: that patch
+ * type deliberately excludes `source`/`target` so nothing else can rewire an
+ * edge's endpoints by accident. This is the one place that's the point.
+ */
+export function reconnectEdge(
+  doc: DraftDocument,
+  id: string,
+  endpoint: 'source' | 'target',
+  newNodeId: string,
+  newSide: Side | undefined,
+): DraftDocument {
+  const anchor = newSide ? { side: newSide, offset: 0.5 } : undefined;
+  let changed = false;
+  const edges = doc.edges.map((edge) => {
+    if (edge.id !== id) return edge;
+    changed = true;
+    const next: DraftEdge =
+      endpoint === 'source' ? { ...edge, source: newNodeId } : { ...edge, target: newNodeId };
+    const anchorKey = endpoint === 'source' ? 'sourceAnchor' : 'targetAnchor';
+    if (anchor) next[anchorKey] = anchor;
+    else delete next[anchorKey];
+    return next;
   });
   return changed ? withEdges(doc, edges) : doc;
 }

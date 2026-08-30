@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDocument } from '../src/document/factory';
+import { createDocument, createEdge, createNode } from '../src/document/factory';
+import { addEdges, addNodes, reconnectEdge } from '../src/document/operations';
 import { normalizeDocument } from '../src/document/validate';
 import { DRAFT_FORMAT, CURRENT_VERSION } from '../src/document/types';
 import { anchorPoint } from '../src/edges/routing';
@@ -179,5 +180,87 @@ describe('anchorPoint offsets', () => {
   it('clamps an out-of-range offset rather than leaving the rect', () => {
     expect(anchorPoint(rect, 'top', -3)).toEqual(anchorPoint(rect, 'top', 0));
     expect(anchorPoint(rect, 'top', 9)).toEqual(anchorPoint(rect, 'top', 1));
+  });
+});
+
+describe('reconnectEdge', () => {
+  function fixture() {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
+    const b = createNode({ id: 'b', type: 'database', x: 300, y: 0 });
+    const c = createNode({ id: 'c', type: 'queue', x: 600, y: 0 });
+    const edge = createEdge({
+      id: 'e1',
+      source: 'a',
+      target: 'b',
+      sourceAnchor: { side: 'right', offset: 0.5 },
+      targetAnchor: { side: 'left', offset: 0.5 },
+    });
+    return addEdges(addNodes(createDocument(), [a, b, c]), [edge]);
+  }
+
+  it('moves the source endpoint to a new node and sets its new anchor', () => {
+    const doc = reconnectEdge(fixture(), 'e1', 'source', 'c', 'bottom');
+    const edge = doc.edges[0]!;
+    expect(edge.source).toBe('c');
+    expect(edge.sourceAnchor).toEqual({ side: 'bottom', offset: 0.5 });
+  });
+
+  it('leaves the untouched endpoint and its anchor exactly as they were', () => {
+    const doc = reconnectEdge(fixture(), 'e1', 'source', 'c', 'bottom');
+    const edge = doc.edges[0]!;
+    expect(edge.target).toBe('b');
+    expect(edge.targetAnchor).toEqual({ side: 'left', offset: 0.5 });
+  });
+
+  it('moves the target endpoint symmetrically, leaving the source untouched', () => {
+    const doc = reconnectEdge(fixture(), 'e1', 'target', 'c', 'top');
+    const edge = doc.edges[0]!;
+    expect(edge.target).toBe('c');
+    expect(edge.targetAnchor).toEqual({ side: 'top', offset: 0.5 });
+    expect(edge.source).toBe('a');
+    expect(edge.sourceAnchor).toEqual({ side: 'right', offset: 0.5 });
+  });
+
+  it('clears the touched endpoint\'s anchor when dropped without a specific side (a body hit)', () => {
+    const doc = reconnectEdge(fixture(), 'e1', 'source', 'c', undefined);
+    expect(doc.edges[0]!.sourceAnchor).toBeUndefined();
+  });
+
+  it('can reconnect to a different side of the same node', () => {
+    const doc = reconnectEdge(fixture(), 'e1', 'source', 'a', 'top');
+    const edge = doc.edges[0]!;
+    expect(edge.source).toBe('a');
+    expect(edge.sourceAnchor).toEqual({ side: 'top', offset: 0.5 });
+  });
+
+  it('keeps every other edge and node array referentially unchanged', () => {
+    const other = createEdge({ id: 'e2', source: 'b', target: 'c' });
+    const doc = addEdges(fixture(), [other]);
+    const next = reconnectEdge(doc, 'e1', 'source', 'c', 'bottom');
+    expect(next.nodes).toBe(doc.nodes);
+    expect(next.edges[1]).toBe(doc.edges[1]);
+  });
+
+  it('is a no-op — same document reference — for an unknown edge id', () => {
+    const doc = fixture();
+    expect(reconnectEdge(doc, 'missing', 'source', 'c', 'bottom')).toBe(doc);
+  });
+
+  it('is one undo step through the store', () => {
+    __resetInteraction();
+    useEditorStore.setState({
+      document: fixture(),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+    const before = useEditorStore.getState().history.past.length;
+    useEditorStore.getState().reconnectEdge('e1', 'source', 'c', 'bottom');
+    expect(useEditorStore.getState().history.past).toHaveLength(before + 1);
+    expect(useEditorStore.getState().document.edges[0]!.source).toBe('c');
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document.edges[0]!.source).toBe('a');
   });
 });

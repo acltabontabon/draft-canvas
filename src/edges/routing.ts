@@ -203,6 +203,45 @@ function laneNudge(rect: Rect, side: Side, lane: number): { x: number; y: number
   return isHorizontalSide(side) ? { x: 0, y: span } : { x: span, y: 0 };
 }
 
+/**
+ * Keeps an anchor point on its rect's actual boundary after a lane nudge.
+ * `laneNudge` alone only bounds its own span relative to the side's length —
+ * it doesn't know where the anchor's own offset already sits, so a nudge
+ * added to an offset near one end (say 0.9) can walk the point past the
+ * corner. This is the final word: whatever the offset and nudge added up
+ * to, the point lands back on the side it's actually meant to be on. A
+ * marker's `refX` assumes exactly this — see `render/svg/markers.ts`.
+ */
+function clampToBoundary(
+  point: { x: number; y: number },
+  rect: Rect,
+  side: Side,
+): { x: number; y: number } {
+  if (isHorizontalSide(side)) {
+    return { x: point.x, y: Math.max(rect.y, Math.min(rect.y + rect.height, point.y)) };
+  }
+  return { x: Math.max(rect.x, Math.min(rect.x + rect.width, point.x)), y: point.y };
+}
+
+/**
+ * A label chip is far taller than the ~10px between two lanes' lines, so
+ * riding along with the line's own nudge isn't enough to keep parallel
+ * labels from stacking — this is the extra separation applied on top, for
+ * whichever axis the lanes actually fan out on. Not clamped to a node's own
+ * side, unlike `laneNudge`: a label lives in open canvas space between the
+ * nodes, not on either node's boundary.
+ */
+const LABEL_LANE_SPACING = 20;
+
+export function labelLaneOffset(sourceSide: Side, targetSide: Side, lane: number): { x: number; y: number } {
+  if (!lane) return { x: 0, y: 0 };
+  if (isHorizontalSide(sourceSide) && isHorizontalSide(targetSide)) return { x: 0, y: lane * LABEL_LANE_SPACING };
+  if (isVerticalSide(sourceSide) && isVerticalSide(targetSide)) return { x: lane * LABEL_LANE_SPACING, y: 0 };
+  // A mixed pairing has no single well-defined fan-out axis for labels —
+  // the line itself already separates via `laneNudge`, which is enough.
+  return { x: 0, y: 0 };
+}
+
 const OBSTACLE_MARGIN = 16;
 /** How far an obstacle's edge may sit from the direct run and still count as
  *  blocking it — a full node height/width would false-positive on anything
@@ -367,8 +406,16 @@ export function routeBetween(
   const targetPoint = anchorPoint(targetRect, targetSide, anchors?.target?.offset);
   const sourceNudge = laneNudge(sourceRect, sourceSide, options?.lane ?? 0);
   const targetNudge = laneNudge(targetRect, targetSide, options?.lane ?? 0);
-  const from = { x: sourcePoint.x + sourceNudge.x, y: sourcePoint.y + sourceNudge.y };
-  const to = { x: targetPoint.x + targetNudge.x, y: targetPoint.y + targetNudge.y };
+  const from = clampToBoundary(
+    { x: sourcePoint.x + sourceNudge.x, y: sourcePoint.y + sourceNudge.y },
+    sourceRect,
+    sourceSide,
+  );
+  const to = clampToBoundary(
+    { x: targetPoint.x + targetNudge.x, y: targetPoint.y + targetNudge.y },
+    targetRect,
+    targetSide,
+  );
 
   const params = {
     sourceX: from.x,

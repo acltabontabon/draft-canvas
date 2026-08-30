@@ -5,7 +5,7 @@ import { accentOf, type Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
-import { rectOf, routeEdge, type RoutedEdge, type Side } from './routing';
+import { labelLaneOffset, rectOf, routeEdge, type RoutedEdge, type Side } from './routing';
 
 export interface EdgeDescribeContext {
   theme: Theme;
@@ -56,6 +56,14 @@ export function describeEdge(
   const route = routeEdge(edge, nodes, { lane: ctx.lane, obstacles });
   if (!route) return null;
 
+  // A label chip is far taller than the line's own lane nudge — extra
+  // separation on top of it is what keeps parallel labels from stacking.
+  // Matches `DraftEdgeView.tsx` — the dual-renderer contract this module
+  // shares with it.
+  const labelNudge = labelLaneOffset(route.source.side, route.target.side, ctx.lane ?? 0);
+  const labelX = route.labelX + labelNudge.x;
+  const labelY = route.labelY + labelNudge.y;
+
   const palette = accentOf(ctx.theme, edge.accent);
   const color = edge.accent && edge.accent !== 'neutral' ? palette.chip : ctx.theme.edge;
 
@@ -87,12 +95,12 @@ export function describeEdge(
     const stepWidth = hasStep ? BADGE_RADIUS * 2 + LABEL_GAP : 0;
     const w = layout.width + stepWidth + LABEL_PADDING_X * 2;
     const h = Math.max(layout.height, hasStep ? BADGE_RADIUS * 2 : 0) + LABEL_PADDING_Y * 2;
-    const left = route.labelX - w / 2;
+    const left = labelX - w / 2;
 
     overlay.push({
       t: 'rect',
       x: left,
-      y: route.labelY - h / 2,
+      y: labelY - h / 2,
       w,
       h,
       r: 4,
@@ -113,7 +121,7 @@ export function describeEdge(
         {
           t: 'ellipse',
           cx,
-          cy: route.labelY,
+          cy: labelY,
           rx: BADGE_RADIUS,
           ry: BADGE_RADIUS,
           fill: 'none',
@@ -122,7 +130,7 @@ export function describeEdge(
         {
           t: 'text',
           x: cx,
-          y: route.labelY - stepLayout.height / 2,
+          y: labelY - stepLayout.height / 2,
           layout: stepLayout,
           font: FONTS.sequenceBadge,
           fill: color,
@@ -134,7 +142,7 @@ export function describeEdge(
     overlay.push({
       t: 'text',
       x: left + LABEL_PADDING_X + stepWidth + layout.width / 2,
-      y: route.labelY - layout.height / 2,
+      y: labelY - layout.height / 2,
       layout,
       font: FONTS.edgeLabel,
       fill: ctx.theme.text,
@@ -184,8 +192,8 @@ export function describeEdge(
     });
     const w = layout.width + CONDITION_PADDING_X * 2;
     const h = layout.height + CONDITION_PADDING_Y * 2;
-    const left = route.labelX - w / 2;
-    const y = route.labelY + CONDITION_OFFSET_Y;
+    const left = labelX - w / 2;
+    const y = labelY + CONDITION_OFFSET_Y;
     overlay.push(
       {
         t: 'rect',
@@ -199,7 +207,7 @@ export function describeEdge(
       },
       {
         t: 'text',
-        x: route.labelX,
+        x: labelX,
         y: y + CONDITION_PADDING_Y,
         layout,
         font: FONTS.presetTag,

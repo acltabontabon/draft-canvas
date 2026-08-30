@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { anchorPoint, chooseSides, detourAround, laneIndex, routeBetween, routeEdge } from '../src/edges/routing';
+import {
+  anchorPoint,
+  chooseSides,
+  detourAround,
+  labelLaneOffset,
+  laneIndex,
+  routeBetween,
+  routeEdge,
+} from '../src/edges/routing';
+import { describeEdge } from '../src/edges/describe';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes, moveNodes, updateNode } from '../src/document/operations';
+import { getMeasurer } from '../src/render/text/measure';
+import { DARK } from '../src/render/theme/tokens';
 import type { DraftEdge, DraftNode } from '../src/document/types';
 
 /**
@@ -353,5 +364,109 @@ describe('route stability', () => {
     const route = routeEdge(doc.edges[0]!, nodes)!;
     expect(route.source.side).toBe('top');
     expect(route.target.side).toBe('top');
+  });
+});
+
+describe('labelLaneOffset', () => {
+  it('adds no offset for a lone edge (lane 0)', () => {
+    expect(labelLaneOffset('right', 'left', 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('separates labels vertically for a horizontal pairing, further than the line itself', () => {
+    const offset = labelLaneOffset('right', 'left', 1);
+    expect(offset.x).toBe(0);
+    expect(offset.y).toBeGreaterThan(0);
+  });
+
+  it('separates labels horizontally for a vertical pairing', () => {
+    const offset = labelLaneOffset('bottom', 'top', 1);
+    expect(offset.y).toBe(0);
+    expect(offset.x).toBeGreaterThan(0);
+  });
+
+  it('opposite lanes get opposite-signed offsets', () => {
+    const left = labelLaneOffset('right', 'left', -1);
+    const right = labelLaneOffset('right', 'left', 1);
+    expect(left.y).toBe(-right.y);
+  });
+
+  it('adds no offset for a mixed pairing — no single fan-out axis', () => {
+    expect(labelLaneOffset('right', 'top', 2)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('label chips stay readable in a multi-lane fixture', () => {
+  function rectOverlap(a: { x: number; y: number; w: number; h: number }, b: typeof a): boolean {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  it('three labelled parallel edges produce three non-overlapping label chips', () => {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, width: 120, height: 200 });
+    const b = createNode({ id: 'b', type: 'database', x: 400, y: 0, width: 120, height: 200 });
+    const edges = [
+      createEdge({ id: 'e1', source: 'a', target: 'b', label: 'PaymentRequested' }),
+      createEdge({ id: 'e2', source: 'a', target: 'b', label: 'PaymentCompleted' }),
+      createEdge({ id: 'e3', source: 'a', target: 'b', label: 'PaymentFailed' }),
+    ];
+    const nodes = new Map([
+      ['a', a],
+      ['b', b],
+    ]);
+    const lanes = laneIndex(edges);
+    const ctx = { theme: DARK, measurer: getMeasurer(), showSequence: false };
+
+    const rects = edges.map((edge) => {
+      const described = describeEdge(edge, nodes, { ...ctx, lane: lanes.get(edge.id)!.offset })!;
+      const chip = described.overlay.find((s) => s.t === 'rect')!;
+      return chip as { x: number; y: number; w: number; h: number };
+    });
+
+    expect(rects).toHaveLength(3);
+    for (let i = 0; i < rects.length; i += 1) {
+      for (let j = i + 1; j < rects.length; j += 1) {
+        expect(rectOverlap(rects[i]!, rects[j]!)).toBe(false);
+      }
+    }
+  });
+});
+
+describe('anchor offsets and lanes never move an endpoint off its node boundary', () => {
+  // What a marker's `refX` positioning assumes — see `render/svg/markers.ts`.
+  const sourceRect = { x: 0, y: 0, width: 120, height: 80 };
+  const targetRect = { x: 400, y: 0, width: 120, height: 80 };
+
+  it.each([
+    { side: 'right' as const, offset: 0.1, lane: 0 },
+    { side: 'right' as const, offset: 0.9, lane: 2 },
+    { side: 'right' as const, offset: 0.5, lane: -2 },
+    { side: 'top' as const, offset: 0.3, lane: 1 },
+    { side: 'bottom' as const, offset: 0.7, lane: -1 },
+  ])('keeps the source anchor exactly on its rect boundary for $side @ $offset, lane $lane', ({
+    side,
+    offset,
+    lane,
+  }) => {
+    const route = routeBetween(sourceRect, targetRect, 'smoothstep', {
+      anchors: { source: { side, offset } },
+      lane,
+    });
+    if (side === 'right') {
+      expect(route.source.x).toBe(sourceRect.x + sourceRect.width);
+      expect(route.source.y).toBeGreaterThanOrEqual(sourceRect.y);
+      expect(route.source.y).toBeLessThanOrEqual(sourceRect.y + sourceRect.height);
+    } else {
+      expect(route.source.y).toBe(side === 'bottom' ? sourceRect.y + sourceRect.height : sourceRect.y);
+      expect(route.source.x).toBeGreaterThanOrEqual(sourceRect.x);
+      expect(route.source.x).toBeLessThanOrEqual(sourceRect.x + sourceRect.width);
+    }
+  });
+
+  it('an obstacle detour never moves the endpoint either — only the path between them', () => {
+    const obstacle = { x: 150, y: 0, width: 100, height: 80 };
+    const route = routeBetween(sourceRect, targetRect, 'smoothstep', {
+      anchors: { source: { side: 'right', offset: 0.5 } },
+      obstacles: [obstacle],
+    });
+    expect(route.source).toEqual({ x: 120, y: 40, side: 'right' });
   });
 });

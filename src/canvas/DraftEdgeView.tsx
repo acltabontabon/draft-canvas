@@ -3,7 +3,7 @@ import { BaseEdge, EdgeLabelRenderer, useInternalNode, type EdgeProps } from '@x
 import { explainEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import { accentOf } from '../render/theme/tokens';
-import { laneIndex, rectOf, routeBetween, type Rect } from '../edges/routing';
+import { labelLaneOffset, laneIndex, rectOf, routeBetween, type Rect } from '../edges/routing';
 import { isEdgeFocused, useEditorStore } from '../store/editorStore';
 import { selectEdge } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
@@ -77,6 +77,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     lane: laneOffset,
     obstacles,
   });
+  // A label chip is far taller than the line's own lane nudge — extra
+  // separation on top of it is what keeps parallel labels from stacking.
+  const labelNudge = labelLaneOffset(route.source.side, route.target.side, laneOffset);
+  const labelX = route.labelX + labelNudge.x;
+  const labelY = route.labelY + labelNudge.y;
   const palette = accentOf(theme, edge.accent);
   const color = edge.accent && edge.accent !== 'neutral' ? palette.chip : theme.edge;
 
@@ -135,7 +140,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-focus-dimmed={focusDimmed ? 'true' : undefined}
             data-shown={isShownStep ? 'true' : undefined}
             data-active={isActiveStep ? 'true' : undefined}
-            style={{ transform: `translate(-50%, -50%) translate(${route.labelX}px, ${route.labelY}px)` }}
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
             onDoubleClick={() => mode === 'edit' && setEditing(true)}
           >
             {hasStep && (
@@ -197,7 +202,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-shown={isShownStep ? 'true' : undefined}
             data-active={isActiveStep ? 'true' : undefined}
             style={{
-              transform: `translate(-50%, 0) translate(${route.labelX}px, ${route.labelY + 16}px)`,
+              transform: `translate(-50%, 0) translate(${labelX}px, ${labelY + 16}px)`,
             }}
           >
             <span className="dc-edge-condition" style={{ color }}>

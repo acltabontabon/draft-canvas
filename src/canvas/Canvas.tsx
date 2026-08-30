@@ -11,6 +11,7 @@ import {
   type Connection,
   type FinalConnectionState,
   type EdgeChange,
+  type HandleType,
   type NodeChange,
   type OnSelectionChangeParams,
 } from '@xyflow/react';
@@ -674,6 +675,33 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
     [onQuickConnectMenu, screenToFlowPosition, store],
   );
 
+  /**
+   * Dragging an existing connector's endpoint to a new node/side is how a
+   * user explicitly overrides a previously persisted anchor. React Flow's
+   * `onReconnect` reports the *whole* new connection, including the end the
+   * user never touched — `onReconnectStart`'s `handleType` is the only
+   * reliable signal for which one actually moved, so only that endpoint's
+   * anchor changes; see `document/operations.ts`'s `reconnectEdge`.
+   */
+  const reconnectingEndpoint = useRef<HandleType | null>(null);
+  const onReconnectStart = useCallback((_event: unknown, _edge: DraftRfEdge, handleType: HandleType) => {
+    reconnectingEndpoint.current = handleType;
+  }, []);
+  const onReconnect = useCallback(
+    (oldEdge: DraftRfEdge, connection: Connection) => {
+      const endpoint = reconnectingEndpoint.current;
+      reconnectingEndpoint.current = null;
+      if (!endpoint || !connection.source || !connection.target) return;
+      const nodeId = endpoint === 'source' ? connection.source : connection.target;
+      const handle = endpoint === 'source' ? connection.sourceHandle : connection.targetHandle;
+      store.getState().reconnectEdge(oldEdge.id, endpoint, nodeId, isSide(handle) ? handle : undefined);
+    },
+    [store],
+  );
+  const onReconnectEnd = useCallback(() => {
+    reconnectingEndpoint.current = null;
+  }, []);
+
   const onPaneDoubleClick = useCallback(
     (event: React.MouseEvent) => {
       if (!interactive) return;
@@ -746,6 +774,10 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
+        onReconnect={onReconnect}
+        onReconnectStart={onReconnectStart}
+        onReconnectEnd={onReconnectEnd}
+        edgesReconnectable={interactive}
         onDoubleClick={onPaneDoubleClick}
         onPaneClick={onPaneClick}
         onPointerMove={onPointerMove}

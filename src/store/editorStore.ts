@@ -18,6 +18,7 @@ import {
   extractFragment,
   moveNodes,
   pasteFragment,
+  reconnectEdge as reconnectEdgeOp,
   removeAttachment as removeAttachmentOp,
   removeElements,
   reorderAttachment as reorderAttachmentOp,
@@ -150,6 +151,8 @@ export interface EditorStore {
   updateNodeById: (id: string, patch: Partial<Omit<DraftNode, 'id'>>, label?: string) => void;
   updateNodeText: (id: string, text: string) => void;
   updateEdgeById: (id: string, patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>, label?: string) => void;
+  /** Dragging an existing connector's endpoint to a new node/side. */
+  reconnectEdge: (id: string, endpoint: 'source' | 'target', newNodeId: string, newSide: Side | undefined) => void;
   updateEdgeLabel: (id: string, label: string) => void;
   /** Sets (or clears) a semantic type — fills the default label only if the
    *  edge has none, and never touches `accent`. See `document/edgeSemantics.ts`. */
@@ -361,6 +364,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   updateEdgeById(id, patch, label = 'Change connection') {
     get().apply(label, (doc) => updateEdge(doc, id, patch));
+  },
+
+  reconnectEdge(id, endpoint, newNodeId, newSide) {
+    get().apply('Reconnect', (doc) => reconnectEdgeOp(doc, id, endpoint, newNodeId, newSide));
   },
 
   updateEdgeLabel(id, label) {
