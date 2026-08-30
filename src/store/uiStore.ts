@@ -27,6 +27,9 @@ interface UiStore {
   quickConnect: QuickConnectState | null;
   /** The node id a dragged attachable node is currently armed against. */
   attachArmedTarget: string | null;
+  /** The edge id a dragged note/code node is currently armed against — see `Canvas.tsx`'s
+   *  drag-to-attach wiring and `dragTargets.ts`'s `findEdgeDropCandidate`. */
+  attachArmedEdgeTarget: string | null;
   /**
    * The node id a connector-endpoint drag (see `DraftEdgeView.tsx`) is
    * currently hovering as a candidate drop target. Node handles always keep
@@ -39,6 +42,10 @@ interface UiStore {
   reconnectHoverTarget: string | null;
   /** The host node whose attachment popover is open, if any. */
   openAttachmentPopover: string | null;
+  /** The specific attachment (an edge can carry several) currently pinned open for editing, if
+   *  any — see `EdgeAttachmentChip` in `DraftEdgeView.tsx`. Hover reveals a chip's card
+   *  independently of this; only a click pins one open for editing. */
+  openEdgeDetail: { edgeId: string; attachmentId: string } | null;
   /** Whether the Flow list drawer is visible. */
   flowPanelOpen: boolean;
   /**
@@ -63,8 +70,10 @@ interface UiStore {
   setExportOpen: (open: boolean) => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
+  setAttachArmedEdgeTarget: (edgeId: string | null) => void;
   setReconnectHoverTarget: (nodeId: string | null) => void;
   setOpenAttachmentPopover: (hostId: string | null) => void;
+  setOpenEdgeDetail: (target: { edgeId: string; attachmentId: string } | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean) => void;
   requestEdit: (id: string | null) => void;
@@ -81,8 +90,10 @@ export const useUiStore = create<UiStore>((set) => ({
   toasts: [],
   quickConnect: null,
   attachArmedTarget: null,
+  attachArmedEdgeTarget: null,
   reconnectHoverTarget: null,
   openAttachmentPopover: null,
+  openEdgeDetail: null,
   flowPanelOpen: false,
   interactionActive: false,
   editRequestId: null,
@@ -93,9 +104,12 @@ export const useUiStore = create<UiStore>((set) => ({
   setQuickConnect: (quickConnect) => set({ quickConnect }),
   setAttachArmedTarget: (attachArmedTarget) =>
     set((state) => (state.attachArmedTarget === attachArmedTarget ? state : { attachArmedTarget })),
+  setAttachArmedEdgeTarget: (attachArmedEdgeTarget) =>
+    set((state) => (state.attachArmedEdgeTarget === attachArmedEdgeTarget ? state : { attachArmedEdgeTarget })),
   setReconnectHoverTarget: (reconnectHoverTarget) =>
     set((state) => (state.reconnectHoverTarget === reconnectHoverTarget ? state : { reconnectHoverTarget })),
   setOpenAttachmentPopover: (openAttachmentPopover) => set({ openAttachmentPopover }),
+  setOpenEdgeDetail: (openEdgeDetail) => set({ openEdgeDetail }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   setInteractionActive: (interactionActive) =>
     set((state) => (state.interactionActive === interactionActive ? state : { interactionActive })),

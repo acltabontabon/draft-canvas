@@ -156,9 +156,16 @@ export interface RoutedEdge {
   d: string;
   labelX: number;
   labelY: number;
+  /** Which side of the line the label chip should sit on — see `labelSideFor`. */
+  labelSide: Side;
   source: Anchor;
   target: Anchor;
 }
+
+/** Gap, in canvas pixels, between the line and a label chip's near edge. Shared by
+ *  `DraftEdgeView.tsx` (transform-based) and `edges/describe.ts` (direct rect math) so the two
+ *  renderers can't drift the way `CONDITION_OFFSET_Y` already has. */
+export const LABEL_LINE_GAP = 8;
 
 export interface LaneAssignment {
   /** This edge's signed slot within its parallel-edge group; `0` for a lone edge. */
@@ -440,6 +447,42 @@ function buildDetourPath(
 }
 
 /**
+ * Which side of the line a label chip should sit on, so it never straddles the stroke. Kept
+ * deliberately simple and deterministic — no obstacle scan beyond the two endpoints' own nodes,
+ * no solver — per the same "smart but not clever" preference `chooseSides` already follows.
+ *
+ * Orientation comes from the side pairing (both vertical -> left/right candidates, both
+ * horizontal -> top/bottom candidates); a mixed pairing falls back to comparing the endpoints'
+ * own delta, since `chooseSides` never itself returns a mixed pair — only two independently
+ * persisted anchors can produce one. The default candidate (`right` / `top`) flips to its
+ * opposite only if it would land inside the source or target node's own rect — both already at
+ * hand here, so no new obstacle lookup is needed.
+ */
+export function labelSideFor(
+  sourceRect: Rect,
+  targetRect: Rect,
+  sourceSide: Side,
+  targetSide: Side,
+  point: { x: number; y: number },
+): Side {
+  const vertical = isVerticalSide(sourceSide) && isVerticalSide(targetSide);
+  const horizontal = isHorizontalSide(sourceSide) && isHorizontalSide(targetSide);
+  const preferVertical = vertical || (!horizontal && Math.abs(targetRect.x - sourceRect.x) < Math.abs(targetRect.y - sourceRect.y));
+
+  const insideRect = (rect: Rect, x: number, y: number) =>
+    x > rect.x && x < rect.x + rect.width && y > rect.y && y < rect.y + rect.height;
+
+  if (preferVertical) {
+    const rightPoint = { x: point.x + LABEL_LINE_GAP, y: point.y };
+    const collides = insideRect(sourceRect, rightPoint.x, rightPoint.y) || insideRect(targetRect, rightPoint.x, rightPoint.y);
+    return collides ? 'left' : 'right';
+  }
+  const topPoint = { x: point.x, y: point.y - LABEL_LINE_GAP };
+  const collides = insideRect(sourceRect, topPoint.x, topPoint.y) || insideRect(targetRect, topPoint.x, topPoint.y);
+  return collides ? 'bottom' : 'top';
+}
+
+/**
  * Routes between two node rectangles, honouring a persisted anchor for
  * whichever endpoint has one and falling back to `chooseSides`'s nearest-side
  * heuristic for whichever doesn't. An anchor represents the user's explicit
@@ -531,6 +574,7 @@ export function routeBetween(
     d: path,
     labelX,
     labelY,
+    labelSide: labelSideFor(sourceRect, targetRect, sourceSide, targetSide, { x: labelX, y: labelY }),
     source: { ...from, side: sourceSide },
     target: { ...to, side: targetSide },
   };

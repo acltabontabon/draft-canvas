@@ -10,6 +10,7 @@ import {
   addEdges,
   addNodes,
   alignNodes,
+  attachToEdge as attachToEdgeOp,
   attachToNode as attachToNodeOp,
   bringForward,
   bringToFront,
@@ -20,6 +21,7 @@ import {
   pasteFragment,
   reconnectEdge as reconnectEdgeOp,
   removeAttachment as removeAttachmentOp,
+  removeEdgeAttachment as removeEdgeAttachmentOp,
   removeElements,
   reorderAttachment as reorderAttachmentOp,
   sendBackward,
@@ -31,6 +33,7 @@ import {
   touch,
   updateAttachment as updateAttachmentOp,
   updateEdge,
+  updateEdgeAttachment as updateEdgeAttachmentOp,
   updateNode,
   type AlignEdge,
   type Clipboard,
@@ -207,6 +210,14 @@ export interface EditorStore {
   updateAttachment: (hostId: string, attachmentId: string, patch: Partial<Omit<Attachment, 'id'>>) => void;
   removeAttachment: (hostId: string, attachmentId: string) => void;
   reorderAttachment: (hostId: string, attachmentId: string, direction: -1 | 1) => void;
+
+  /* Edge attachments — see `EdgeAttachmentReveal` in `DraftEdgeView.tsx`. */
+  attachToEdge: (edgeId: string, attachment: Attachment) => void;
+  /** Dragging an existing Note/Code node onto a connector folds it into that connector's
+   *  attachment — the same idea as `attachExistingNode`, mirrored for an edge target. */
+  attachExistingNodeToEdge: (nodeId: string, edgeId: string) => void;
+  updateEdgeAttachment: (edgeId: string, attachmentId: string, patch: Partial<Omit<Attachment, 'id'>>) => void;
+  removeEdgeAttachment: (edgeId: string, attachmentId: string) => void;
 
   /* Boundary containment */
   /** Sets or clears (`boundaryId: null`) a node's containing boundary. */
@@ -627,6 +638,38 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   reorderAttachment(hostId, attachmentId, direction) {
     get().apply('Reorder attachment', (doc) => reorderAttachmentOp(doc, hostId, attachmentId, direction));
+  },
+
+  attachToEdge(edgeId, attachment) {
+    get().apply('Attach', (doc) => attachToEdgeOp(doc, edgeId, attachment));
+  },
+
+  attachExistingNodeToEdge(nodeId, edgeId) {
+    const state = get();
+    const node = state.document.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    // Callers only invoke this for a note/code node — checked before the drag is even armed.
+    const attachment = createAttachment({
+      type: node.type as AttachableType,
+      text: node.text,
+      accent: node.accent,
+      noteKind: node.noteKind,
+      language: node.language,
+      code: node.code,
+    });
+    state.apply(
+      'Attach',
+      (doc) => attachToEdgeOp(removeElements(doc, [nodeId]), edgeId, attachment),
+      { selection: EMPTY_SELECTION },
+    );
+  },
+
+  updateEdgeAttachment(edgeId, attachmentId, patch) {
+    get().apply('Edit attachment', (doc) => updateEdgeAttachmentOp(doc, edgeId, attachmentId, patch));
+  },
+
+  removeEdgeAttachment(edgeId, attachmentId) {
+    get().apply('Remove attachment', (doc) => removeEdgeAttachmentOp(doc, edgeId, attachmentId));
   },
 
   reparentNode(nodeId, boundaryId) {

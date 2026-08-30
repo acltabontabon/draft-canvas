@@ -204,6 +204,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   let renamedNodes = 0;
   let droppedAttachments = 0;
   let truncatedAttachments = 0;
+  let droppedEdgeAttachments = 0;
+  let truncatedEdgeAttachments = 0;
   /** Maps the id as written in the file to the id we actually used. */
   const nodeIdRemap = new Map<string, string>();
 
@@ -432,6 +434,40 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     const targetAnchor = parseAnchor(candidate.targetAnchor);
     if (targetAnchor) edge.targetAnchor = targetAnchor;
 
+    // Same repair discipline as a node's own `attachments` above — this is
+    // the identical `Attachment` shape, just hosted on a connector instead.
+    const rawEdgeAttachments = Array.isArray(candidate.attachments) ? candidate.attachments : [];
+    if (rawEdgeAttachments.length > LIMITS.maxAttachmentsPerEdge) {
+      truncatedEdgeAttachments += rawEdgeAttachments.length - LIMITS.maxAttachmentsPerEdge;
+    }
+    if (rawEdgeAttachments.length > 0) {
+      const attachments: Attachment[] = [];
+      const seenEdgeAttachmentIds = new Set<string>();
+      for (const rawAttachment of rawEdgeAttachments.slice(0, LIMITS.maxAttachmentsPerEdge)) {
+        if (!isRecord(rawAttachment)) {
+          droppedEdgeAttachments += 1;
+          continue;
+        }
+        let attachmentId = safeId(rawAttachment.id);
+        if (!attachmentId || seenEdgeAttachmentIds.has(attachmentId)) attachmentId = createId('a');
+        seenEdgeAttachmentIds.add(attachmentId);
+
+        const attachmentType = oneOf<AttachableType>(rawAttachment.type, ATTACHABLE_TYPES, 'note');
+        const attachment: Attachment = { id: attachmentId, type: attachmentType };
+
+        const attachmentLabel = text(rawAttachment.text, LIMITS.maxTextLength);
+        if (attachmentLabel !== undefined) attachment.text = attachmentLabel;
+
+        const attachmentAccent = oneOfOptional<Accent>(rawAttachment.accent, ACCENTS);
+        if (attachmentAccent !== undefined) attachment.accent = attachmentAccent;
+
+        Object.assign(attachment, validateAttachableFields(rawAttachment, attachmentType));
+
+        attachments.push(attachment);
+      }
+      if (attachments.length > 0) edge.attachments = attachments;
+    }
+
     edges.push(edge);
   }
 
@@ -448,6 +484,12 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   }
   if (droppedEdges > 0) {
     repairs.push(`Dropped ${droppedEdges} connection(s) pointing at nodes that do not exist.`);
+  }
+  if (droppedEdgeAttachments > 0) {
+    repairs.push(`Dropped ${droppedEdgeAttachments} unreadable connection attachment(s).`);
+  }
+  if (truncatedEdgeAttachments > 0) {
+    repairs.push(`A connection had too many attachments; kept the first ${LIMITS.maxAttachmentsPerEdge}.`);
   }
 
   /* --------------------------------------------------------------- flows -- */

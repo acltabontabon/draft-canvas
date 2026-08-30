@@ -477,6 +477,58 @@ export function reorderAttachment(
   return withAttachments(doc, hostId, next);
 }
 
+/* ------------------------------------------------------- edge attachments --- */
+
+function withEdgeAttachments(doc: DraftDocument, edgeId: string, attachments: Attachment[]): DraftDocument {
+  let changed = false;
+  const edges = doc.edges.map((edge) => {
+    if (edge.id !== edgeId) return edge;
+    changed = true;
+    return attachments.length > 0 ? { ...edge, attachments } : withoutEdgeAttachmentsField(edge);
+  });
+  return changed ? withEdges(doc, edges) : doc;
+}
+
+function withoutEdgeAttachmentsField(edge: DraftEdge): DraftEdge {
+  if (!edge.attachments) return edge;
+  const { attachments: _dropped, ...rest } = edge;
+  return rest;
+}
+
+/** Folds an attachment onto a connector. Mirrors `attachToNode` — see its own comment for why an
+ *  edge attachment is the same `Attachment` type, not a parallel one. */
+export function attachToEdge(doc: DraftDocument, edgeId: string, attachment: Attachment): DraftDocument {
+  const edge = doc.edges.find((e) => e.id === edgeId);
+  if (!edge) return doc;
+  const existing = edge.attachments ?? [];
+  const next = [...existing, attachment].slice(0, LIMITS.maxAttachmentsPerEdge);
+  return withEdgeAttachments(doc, edgeId, next);
+}
+
+export function updateEdgeAttachment(
+  doc: DraftDocument,
+  edgeId: string,
+  attachmentId: string,
+  patch: Partial<Omit<Attachment, 'id'>>,
+): DraftDocument {
+  const edge = doc.edges.find((e) => e.id === edgeId);
+  if (!edge?.attachments) return doc;
+  let changed = false;
+  const next = edge.attachments.map((a) => {
+    if (a.id !== attachmentId) return a;
+    changed = true;
+    return { ...a, ...patch };
+  });
+  return changed ? withEdgeAttachments(doc, edgeId, next) : doc;
+}
+
+export function removeEdgeAttachment(doc: DraftDocument, edgeId: string, attachmentId: string): DraftDocument {
+  const edge = doc.edges.find((e) => e.id === edgeId);
+  if (!edge?.attachments) return doc;
+  const next = edge.attachments.filter((a) => a.id !== attachmentId);
+  return next.length === edge.attachments.length ? doc : withEdgeAttachments(doc, edgeId, next);
+}
+
 /* ---------------------------------------------------------------- groups --- */
 
 /** Every node transitively parented under `id` — used so dragging a boundary

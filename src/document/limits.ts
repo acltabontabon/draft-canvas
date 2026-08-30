@@ -21,6 +21,8 @@ export const LIMITS = {
   minZoom: 0.1,
   maxZoom: 4,
   maxAttachmentsPerNode: 12,
+  /** Small on purpose — v1's toolbar and reveal card only ever create or show the first one. */
+  maxAttachmentsPerEdge: 4,
   maxFlows: 50,
   maxStepsPerFlow: 200,
   /** Per step, per array (`extraNodeIds`, `extraEdgeIds`) — a "frame" step spotlighting more than this is not a walkthrough anymore. */

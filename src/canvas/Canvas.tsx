@@ -22,6 +22,7 @@ import { useEditorStore } from '../store/editorStore';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { ATTACH_DWELL_MS, deepestBoundaryAt, evaluateAttachCandidates } from './dragTargets';
+import { findEdgeDropCandidate } from './edgeDropTarget';
 import { DraftEdgeView } from './DraftEdgeView';
 import { DraftNodeView } from './DraftNodeView';
 import { Markers } from './Markers';
@@ -229,7 +230,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
   const theme = useThemeValue();
 
   const store = useEditorStore;
-  const { screenToFlowPosition, getNodes } = useReactFlow();
+  const { screenToFlowPosition, flowToScreenPosition, getNodes } = useReactFlow();
 
   const interactive = mode === 'edit';
 
@@ -393,6 +394,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
           if (overlapId) {
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(overlapId);
+            useUiStore.getState().setAttachArmedEdgeTarget(null);
           } else if (centerHitId) {
             if (dwellTargetId.current !== centerHitId) {
               clearDwell();
@@ -409,14 +411,31 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
             // an overlap hit above) may arm this exact target.
             const armed = useUiStore.getState().attachArmedTarget;
             if (armed !== null && armed !== centerHitId) useUiStore.getState().setAttachArmedTarget(null);
+            useUiStore.getState().setAttachArmedEdgeTarget(null);
+          } else if (draggedDoc.type === 'note' || draggedDoc.type === 'code') {
+            // No node claimed this drop — a note/code card dragged onto a connector's own
+            // hit corridor folds it into that connector's attachment instead. Reuses the exact
+            // same corridor a click already uses (`findEdgeDropCandidate`), so this is precise
+            // enough to arm instantly, the same way a strong node overlap does above — no dwell.
+            clearDwell();
+            useUiStore.getState().setAttachArmedTarget(null);
+            const center = {
+              x: liveRect.x + liveRect.width / 2,
+              y: liveRect.y + liveRect.height / 2,
+            };
+            const screenPoint = flowToScreenPosition(center);
+            const edgeId = findEdgeDropCandidate(screenPoint.x, screenPoint.y, draggedDoc.id);
+            useUiStore.getState().setAttachArmedEdgeTarget(edgeId);
           } else {
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(null);
+            useUiStore.getState().setAttachArmedEdgeTarget(null);
           }
         }
       } else {
         clearDwell();
         useUiStore.getState().setAttachArmedTarget(null);
+        useUiStore.getState().setAttachArmedEdgeTarget(null);
       }
 
       setNodes((current) => {
@@ -442,7 +461,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
         }
       }
     },
-    [clearDwell, getNodes, setNodes, store],
+    [clearDwell, flowToScreenPosition, getNodes, setNodes, store],
   );
 
   const setEdges = useCallback(
@@ -540,6 +559,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
       sweptDescendants.current = swept;
       clearDwell();
       useUiStore.getState().setAttachArmedTarget(null);
+      useUiStore.getState().setAttachArmedEdgeTarget(null);
 
       staticRects.current = state.document.nodes
         .filter((node) => !moving.has(node.id))
@@ -576,11 +596,16 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
 
     const singleId = draggedIds.size === 1 && sweptDescendants.current.size === 0 ? [...draggedIds][0]! : null;
     const armedHost = useUiStore.getState().attachArmedTarget;
+    const armedEdge = useUiStore.getState().attachArmedEdgeTarget;
 
     if (singleId && armedHost) {
       positions.delete(singleId);
       if (positions.size > 0) state.commitPositions(positions);
       state.attachExistingNode(singleId, armedHost);
+    } else if (singleId && armedEdge) {
+      positions.delete(singleId);
+      if (positions.size > 0) state.commitPositions(positions);
+      state.attachExistingNodeToEdge(singleId, armedEdge);
     } else {
       const draggedDoc = singleId ? state.document.nodes.find((n) => n.id === singleId) : undefined;
       const finalPosition = singleId ? positions.get(singleId) : undefined;
@@ -605,6 +630,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
     sweptDescendants.current = new Map();
     clearDwell();
     useUiStore.getState().setAttachArmedTarget(null);
+    useUiStore.getState().setAttachArmedEdgeTarget(null);
   }, [clearDwell, getNodes, store]);
 
   const onConnect = useCallback(

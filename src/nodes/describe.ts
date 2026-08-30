@@ -38,15 +38,17 @@ const CODE_PADDING_X = 12;
 const CODE_PADDING_Y = 8;
 const NOTE_BAR_WIDTH = 3;
 
-/** Notes are colour-coded by intent — the whole point of having four kinds. */
-const NOTE_ACCENTS: Record<NoteKind, 'amber' | 'blue' | 'rose' | 'green'> = {
+/** Notes are colour-coded by intent — the whole point of having four kinds. Exported so an edge
+ *  attachment (`EdgeAttachmentReveal` in `DraftEdgeView.tsx`) can match a note's own look exactly
+ *  rather than duplicating this table. */
+export const NOTE_ACCENTS: Record<NoteKind, 'amber' | 'blue' | 'rose' | 'green'> = {
   note: 'amber',
   question: 'blue',
   warning: 'rose',
   decision: 'green',
 };
 
-const NOTE_LABELS: Record<NoteKind, string> = {
+export const NOTE_LABELS: Record<NoteKind, string> = {
   note: 'NOTE',
   question: 'QUESTION',
   warning: 'WARNING',

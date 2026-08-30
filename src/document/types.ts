@@ -248,6 +248,16 @@ export interface DraftEdge {
    * only `setEdgeSemantic`/`setEdgeKind` stamp `'explicit'`.
    */
   semanticsOrigin?: 'inferred' | 'explicit';
+  /**
+   * Supporting detail (a note, or a code/JSON snippet) hidden by default and revealed on hover or
+   * selection — see `EdgeAttachmentReveal` in `DraftEdgeView.tsx`. The exact same `Attachment`
+   * type a node uses, reused rather than duplicated; an array for the same reason node attachments
+   * are, though the toolbar and reveal card only ever create or show the first entry in v1. Kept
+   * entirely separate from the older, narrower `details` field above (which stays exactly as it
+   * was — the one thing that already reads it, `FlowBar.tsx`'s playback panel, must keep working
+   * unchanged) rather than trying to unify the two for a feature that never wrote `details` anyway.
+   */
+  attachments?: Attachment[];
 }
 
 /**

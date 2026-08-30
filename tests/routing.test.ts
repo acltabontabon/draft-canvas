@@ -4,6 +4,7 @@ import {
   chooseSides,
   detourAround,
   labelLaneOffset,
+  labelSideFor,
   laneIndex,
   routeBetween,
   routeEdge,
@@ -392,6 +393,119 @@ describe('labelLaneOffset', () => {
 
   it('adds no offset for a mixed pairing — no single fan-out axis', () => {
     expect(labelLaneOffset('right', 'top', 2)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('labelSideFor picks which side of the line a label chip should sit on', () => {
+  it('prefers right for a vertical pairing (nodes stacked top/bottom)', () => {
+    const side = labelSideFor(
+      { x: 0, y: 0, width: 100, height: 60 },
+      { x: 0, y: 300, width: 100, height: 60 },
+      'bottom',
+      'top',
+      { x: 50, y: 180 },
+    );
+    expect(side).toBe('right');
+  });
+
+  it('prefers top for a horizontal pairing (nodes side by side)', () => {
+    const side = labelSideFor(
+      { x: 0, y: 0, width: 100, height: 60 },
+      { x: 300, y: 0, width: 100, height: 60 },
+      'right',
+      'left',
+      { x: 200, y: 30 },
+    );
+    expect(side).toBe('top');
+  });
+
+  it('flips to left when the right candidate would land inside a node (overlapping rects)', () => {
+    // Overlapping nodes are an edge case the document model allows (e.g. a
+    // manual drag) — the flip should still hold up rather than assume rects
+    // never overlap.
+    const side = labelSideFor(
+      { x: 0, y: 0, width: 100, height: 200 },
+      { x: 0, y: 150, width: 100, height: 200 },
+      'bottom',
+      'top',
+      { x: 50, y: 175 },
+    );
+    expect(side).toBe('left');
+  });
+
+  it('flips to bottom when the top candidate would land inside a node (overlapping rects)', () => {
+    const side = labelSideFor(
+      { x: 0, y: 0, width: 200, height: 100 },
+      { x: 150, y: 0, width: 200, height: 100 },
+      'right',
+      'left',
+      { x: 175, y: 50 },
+    );
+    expect(side).toBe('bottom');
+  });
+
+  it('falls back to comparing endpoint deltas for a mixed side pairing (independent explicit anchors)', () => {
+    const mostlyVertical = labelSideFor(
+      { x: 0, y: 0, width: 100, height: 60 },
+      { x: 20, y: 400, width: 100, height: 60 },
+      'right',
+      'top',
+      { x: 60, y: 200 },
+    );
+    expect(mostlyVertical).toBe('right');
+
+    const mostlyHorizontal = labelSideFor(
+      { x: 0, y: 0, width: 100, height: 60 },
+      { x: 500, y: 20, width: 100, height: 60 },
+      'right',
+      'top',
+      { x: 250, y: 30 },
+    );
+    expect(mostlyHorizontal).toBe('top');
+  });
+});
+
+describe('a vertical connector\'s label chip never straddles the line', () => {
+  it('sits entirely to one side of the line\'s own x-coordinate', () => {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, width: 120, height: 60 });
+    const b = createNode({ id: 'b', type: 'database', x: 0, y: 400, width: 120, height: 60 });
+    const edge = createEdge({ id: 'e1', source: 'a', target: 'b', label: 'PaymentRequested' });
+    const nodes = new Map([
+      ['a', a],
+      ['b', b],
+    ]);
+    const ctx = { theme: DARK, measurer: getMeasurer(), showSequence: false };
+
+    const described = describeEdge(edge, nodes, ctx)!;
+    const chip = described.overlay.find((s) => s.t === 'rect')! as { x: number; y: number; w: number };
+    const lineX = described.route.labelX;
+
+    // A chip that straddled the line would have x < lineX < x + w.
+    const straddles = chip.x < lineX && chip.x + chip.w > lineX;
+    expect(straddles).toBe(false);
+  });
+
+  it('also clears the line for the inferred semantic caption — the common case with no explicit label', () => {
+    // This is the case that actually shipped broken: a fresh connect infers a
+    // semantic (e.g. "writes") and shows it as a caption with no user label,
+    // which is the default for most connectors, not the edge case.
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, width: 120, height: 60 });
+    const b = createNode({ id: 'b', type: 'database', x: 0, y: 400, width: 120, height: 60 });
+    const edge = createEdge({ id: 'e1', source: 'a', target: 'b', semantic: 'writes' });
+    const nodes = new Map([
+      ['a', a],
+      ['b', b],
+    ]);
+    const ctx = { theme: DARK, measurer: getMeasurer(), showSequence: false };
+
+    const described = describeEdge(edge, nodes, ctx)!;
+    const caption = described.overlay.find((s) => s.t === 'text')! as { x: number; align: string };
+    const lineX = described.route.labelX;
+
+    // The caption's own anchor point must not sit on the line's x-coordinate,
+    // and it must be aligned away from it (start/end), not centered on it.
+    expect(caption.align).not.toBe('middle');
+    expect(caption.x).not.toBe(lineX);
   });
 });
 

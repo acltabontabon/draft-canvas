@@ -1,11 +1,11 @@
 import type { DraftEdge, DraftNode, EdgeRouting } from '../document/types';
-import type { Shape } from '../render/displayList';
+import type { Shape, TextAlign } from '../render/displayList';
 import { markerRef } from '../render/svg/markers';
 import type { Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
-import { labelLaneOffset, rectOf, routeEdge, type RoutedEdge, type Side } from './routing';
+import { LABEL_LINE_GAP, labelLaneOffset, rectOf, routeEdge, type RoutedEdge, type Side } from './routing';
 import { dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 
@@ -31,6 +31,49 @@ const CONDITION_PADDING_X = 6;
 const CONDITION_PADDING_Y = 2;
 /** How far below the label chip a condition chip sits, in canvas units. */
 const CONDITION_OFFSET_Y = 18;
+
+/**
+ * The label chip's top-left corner, anchored to whichever side of the line `route.labelSide`
+ * picked instead of centered on it — mirrors `labelChipTransform` in `DraftEdgeView.tsx`, computed
+ * directly here since this renderer already knows the chip's exact `w`/`h` up front.
+ */
+function labelChipRect(side: Side, x: number, y: number, w: number, h: number): { left: number; top: number } {
+  switch (side) {
+    case 'right':
+      return { left: x + LABEL_LINE_GAP, top: y - h / 2 };
+    case 'left':
+      return { left: x - LABEL_LINE_GAP - w, top: y - h / 2 };
+    case 'top':
+      return { left: x - w / 2, top: y - LABEL_LINE_GAP - h };
+    case 'bottom':
+      return { left: x - w / 2, top: y + LABEL_LINE_GAP };
+  }
+}
+
+/**
+ * Mirrors `captionAnchor` in `DraftEdgeView.tsx`: a horizontal line's caption already clears it
+ * with the pre-existing fixed downward offset; a vertical line needs the caption moved beside it
+ * instead, since a y-only offset never leaves the line's own x-coordinate.
+ */
+function captionAnchor(side: Side, x: number, y: number, height: number): { x: number; y: number; align: TextAlign } {
+  if (side === 'right') return { x: x + LABEL_LINE_GAP, y: y - height / 2, align: 'start' };
+  if (side === 'left') return { x: x - LABEL_LINE_GAP, y: y - height / 2, align: 'end' };
+  return { x, y: y + 6, align: 'middle' };
+}
+
+/** Mirrors `conditionTransform` in `DraftEdgeView.tsx` — stacked below the label for a horizontal
+ *  line (unchanged), stacked beside the line for a vertical one. */
+function conditionChipRect(side: Side, x: number, y: number, w: number, h: number): { left: number; top: number } {
+  switch (side) {
+    case 'right':
+      return { left: x + LABEL_LINE_GAP, top: y - h / 2 + CONDITION_OFFSET_Y };
+    case 'left':
+      return { left: x - LABEL_LINE_GAP - w, top: y - h / 2 + CONDITION_OFFSET_Y };
+    case 'top':
+    case 'bottom':
+      return { left: x - w / 2, top: y + CONDITION_OFFSET_Y };
+  }
+}
 
 export interface DescribedEdge {
   route: RoutedEdge;
@@ -112,14 +155,15 @@ export function describeEdge(
         maxLines: 1,
         measurer: ctx.measurer,
       });
+      const caption = captionAnchor(route.labelSide, labelX, labelY, captionLayout.height);
       overlay.push({
         t: 'text',
-        x: labelX,
-        y: labelY + 6,
+        x: caption.x,
+        y: caption.y,
         layout: captionLayout,
         font: FONTS.connectorCaption,
         fill: ctx.theme.textFaint,
-        align: 'middle',
+        align: caption.align,
       });
     }
   }
@@ -138,12 +182,13 @@ export function describeEdge(
     const stepWidth = hasStep ? BADGE_RADIUS * 2 + LABEL_GAP : 0;
     const w = layout.width + stepWidth + LABEL_PADDING_X * 2;
     const h = Math.max(layout.height, hasStep ? BADGE_RADIUS * 2 : 0) + LABEL_PADDING_Y * 2;
-    const left = labelX - w / 2;
+    const { left, top } = labelChipRect(route.labelSide, labelX, labelY, w, h);
+    const centerY = top + h / 2;
 
     overlay.push({
       t: 'rect',
       x: left,
-      y: labelY - h / 2,
+      y: top,
       w,
       h,
       r: 4,
@@ -164,7 +209,7 @@ export function describeEdge(
         {
           t: 'ellipse',
           cx,
-          cy: labelY,
+          cy: centerY,
           rx: BADGE_RADIUS,
           ry: BADGE_RADIUS,
           fill: 'none',
@@ -173,7 +218,7 @@ export function describeEdge(
         {
           t: 'text',
           x: cx,
-          y: labelY - stepLayout.height / 2,
+          y: centerY - stepLayout.height / 2,
           layout: stepLayout,
           font: FONTS.sequenceBadge,
           fill: color,
@@ -185,7 +230,7 @@ export function describeEdge(
     overlay.push({
       t: 'text',
       x: left + LABEL_PADDING_X + stepWidth + layout.width / 2,
-      y: labelY - layout.height / 2,
+      y: centerY - layout.height / 2,
       layout,
       font: FONTS.edgeLabel,
       fill: ctx.theme.text,
@@ -235,13 +280,12 @@ export function describeEdge(
     });
     const w = layout.width + CONDITION_PADDING_X * 2;
     const h = layout.height + CONDITION_PADDING_Y * 2;
-    const left = labelX - w / 2;
-    const y = labelY + CONDITION_OFFSET_Y;
+    const { left, top } = conditionChipRect(route.labelSide, labelX, labelY, w, h);
     overlay.push(
       {
         t: 'rect',
         x: left,
-        y,
+        y: top,
         w,
         h,
         r: 4,
@@ -250,8 +294,8 @@ export function describeEdge(
       },
       {
         t: 'text',
-        x: labelX,
-        y: y + CONDITION_PADDING_Y,
+        x: left + w / 2,
+        y: top + CONDITION_PADDING_Y,
         layout,
         font: FONTS.presetTag,
         fill: color,

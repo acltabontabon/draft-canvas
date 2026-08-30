@@ -202,6 +202,13 @@
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 60%, transparent));
 }
 
+/* A dragged note/code card is hovering this connector's own hit corridor — dropping now folds it
+ * into an attachment. A brighter, wider glow than selection's, so "drop here" reads as a distinct
+ * signal, not as "this happens to be selected". */
+.dc-edge[data-attach-target='true'] .dc-edge-line {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--dc-selection) 85%, transparent));
+}
+
 /*
  * A selected connector's draggable endpoints — real drag targets (see the
  * long comment above them in `DraftEdgeView.tsx` for why they're driven by
@@ -324,6 +331,186 @@
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* ------------------------------------------------------ edge detail -- */
+
+/* The row of attachment chips — positioned above the connector by default (or below, via
+   `[data-flip='below']`, when "above" would land on the connector's own source/target node).
+   `gap` is what keeps several chips from touching when an edge carries more than one. */
+.dc-edge-attachment-row {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* One attachment, styled to match exactly what its own card type already looks like elsewhere in
+   the app (`nodes/describe.ts`'s `note`/`codeCard`) via `--dc-chip-*` custom properties set inline
+   per chip in `DraftEdgeView.tsx` — a Note attachment reads as a note, a Code one as code, not as
+   one generic box for every kind. */
+.dc-edge-attachment-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid var(--dc-chip-border);
+  border-radius: 999px;
+  background: var(--dc-chip-fill);
+  color: var(--dc-chip-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: all;
+  box-shadow: var(--dc-shadow-panel);
+  transition: transform 90ms ease, box-shadow 90ms ease;
+}
+
+.dc-edge-attachment-chip:hover,
+.dc-edge-attachment-chip:focus-visible {
+  transform: scale(1.06);
+  outline: none;
+}
+
+/* A note's icon is the same "colour bar, not a sticky-note skeuomorph" idea its real card uses,
+   shrunk to a dot; code gets a literal glyph instead, so the two kinds are distinguishable even
+   with the row's uppercase label style making every chip's text look similar. */
+.dc-edge-attachment-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dc-edge-attachment-chip[data-kind='note'] .dc-edge-attachment-chip-icon {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dc-chip-accent);
+}
+
+.dc-edge-attachment-chip[data-kind='code'] .dc-edge-attachment-chip-icon {
+  font-family: var(--dc-mono);
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.dc-edge-attachment-card {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  pointer-events: all;
+  cursor: default;
+  /* Reset the chip's own uppercase/letter-spacing styling — the card is a DOM child of the chip
+     (for simple CSS-relative positioning), not a visual extension of it, and its content (a
+     note's actual text, code, or an editing textarea) must keep the user's real casing. Only the
+     card header explicitly re-applies uppercase for itself, the same way the chip's label does. */
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+
+.dc-edge-attachment-row:not([data-flip='below']) .dc-edge-attachment-card {
+  bottom: calc(100% + 6px);
+}
+
+.dc-edge-attachment-row[data-flip='below'] .dc-edge-attachment-card {
+  top: calc(100% + 6px);
+}
+
+/* The animation lives here, separate from the positioned outer element above — see the matching
+   comment in `DraftEdgeView.tsx`: a CSS animation replaces the whole `transform` property for its
+   duration, so animating scale on the same element as the positioning translate would clobber it. */
+.dc-edge-attachment-card-inner {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  max-height: 240px;
+  border: 1px solid var(--dc-chip-border);
+  border-radius: 8px;
+  background: var(--dc-chip-fill);
+  box-shadow: var(--dc-shadow-panel);
+  overflow: hidden;
+  animation: dc-attachment-card-in 120ms ease;
+}
+
+/* The note card's own left colour bar, shown at full size once the chip expands into its card. */
+.dc-edge-attachment-card-inner[data-kind='note'] {
+  border-left: 3px solid var(--dc-chip-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-edge-attachment-card-inner {
+    animation: none;
+  }
+}
+
+@keyframes dc-attachment-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dc-edge-attachment-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 9px;
+  border-bottom: 1px solid var(--dc-chip-border);
+  color: var(--dc-chip-accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dc-edge-attachment-delete {
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  opacity: 0.75;
+  font-size: 10.5px;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+
+.dc-edge-attachment-delete:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.dc-edge-attachment-note {
+  padding: 8px 10px;
+  overflow-y: auto;
+  color: var(--dc-text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.dc-edge-attachment-code {
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  background: var(--dc-chip-fill);
+  font-family: var(--dc-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
 }
 
 /* A pulse traveling along the active connector during Presentation Mode —

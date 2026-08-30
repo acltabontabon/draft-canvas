@@ -1,15 +1,28 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { BaseEdge, EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
-import type { DraftNode } from '../document/types';
+import type { Attachment, DraftEdge, DraftNode } from '../document/types';
 import { explainEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
-import { anchorForDrop, labelLaneOffset, laneIndex, rectOf, routeBetween, type Rect } from '../edges/routing';
+import {
+  LABEL_LINE_GAP,
+  anchorForDrop,
+  labelLaneOffset,
+  laneIndex,
+  rectOf,
+  routeBetween,
+  type Rect,
+  type Side,
+} from '../edges/routing';
 import { dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import { NOTE_ACCENTS, NOTE_LABELS } from '../nodes/describe';
+import { LANGUAGE_LABELS, tokenizeCode } from '../render/code/highlight';
+import { CODE_THEMES, colorForScope } from '../render/code/theme';
+import { accentOf, type Theme } from '../render/theme/tokens';
 import { isEdgeFocused, useEditorStore } from '../store/editorStore';
 import { selectEdge, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { useTheme, useThemeValue } from '../ui/theme/useTheme';
 import { FONTS, cssFont } from '../render/text/fonts';
 
 const NO_OBSTACLES: readonly Rect[] = [];
@@ -28,6 +41,87 @@ interface DragOverride {
  *  stand in for a node's rect in `routeBetween` with no special-casing there. */
 function pointRect(point: { x: number; y: number }): Rect {
   return { x: point.x, y: point.y, width: 0, height: 0 };
+}
+
+/**
+ * Anchors the label chip to whichever side of the line `labelSide` picked, instead of centering
+ * it on the line itself — the fix for a label visually cut through by its own connector. Only
+ * this chip moves; the event dot, conditional diamond, caption, and condition chip all keep
+ * anchoring straight at `(x, y)` as before, since they were never the ones being cut through.
+ */
+function labelChipTransform(side: Side, x: number, y: number): string {
+  switch (side) {
+    case 'right':
+      return `translate(0, -50%) translate(${x + LABEL_LINE_GAP}px, ${y}px)`;
+    case 'left':
+      return `translate(-100%, -50%) translate(${x - LABEL_LINE_GAP}px, ${y}px)`;
+    case 'top':
+      return `translate(-50%, -100%) translate(${x}px, ${y - LABEL_LINE_GAP}px)`;
+    case 'bottom':
+      return `translate(-50%, 0) translate(${x}px, ${y + LABEL_LINE_GAP}px)`;
+  }
+}
+
+/**
+ * The same line-clearance idea as `labelChipTransform`, for the plain SVG `<text>` caption: a
+ * fixed downward offset (the pre-existing behaviour) already clears a horizontal line just fine,
+ * since it moves the text off the line's own y-coordinate — the vertical-line case is the one that
+ * was never actually clear (a y-only offset leaves the text centered right back on the line's x).
+ */
+function captionAnchor(
+  side: Side,
+  x: number,
+  y: number,
+): { x: number; y: number; textAnchor: 'start' | 'middle' | 'end'; dominantBaseline?: 'middle' } {
+  if (side === 'right') return { x: x + LABEL_LINE_GAP, y, textAnchor: 'start', dominantBaseline: 'middle' };
+  if (side === 'left') return { x: x - LABEL_LINE_GAP, y, textAnchor: 'end', dominantBaseline: 'middle' };
+  return { x, y: y + 14, textAnchor: 'middle' };
+}
+
+/** Same idea for the condition chip — stacked below the caption for a horizontal line
+ *  (unchanged), stacked beside the line for a vertical one. */
+function conditionTransform(side: Side, x: number, y: number): string {
+  switch (side) {
+    case 'right':
+      return `translate(0, 0) translate(${x + LABEL_LINE_GAP}px, ${y + 16}px)`;
+    case 'left':
+      return `translate(-100%, 0) translate(${x - LABEL_LINE_GAP}px, ${y + 16}px)`;
+    case 'top':
+    case 'bottom':
+      return `translate(-50%, 0) translate(${x}px, ${y + 16}px)`;
+  }
+}
+
+/** Gap between the connector's own label point and the attachment chip row — small, since a chip
+ *  row is compact and doesn't need the same clearance a full label chip does. */
+const ATTACHMENT_ROW_GAP = 12;
+
+/** The row sits above the connector by default — the natural, expected spot per a connection's
+ *  own reading direction — and only flips below when "above" would land inside the very node the
+ *  connector is attached to (a short connector's most common failure mode). The probe distance
+ *  covers a typical *open card*, not just the chip: a card opens further in the same direction the
+ *  row already chose, so checking only the chip's own small height let a card on a short connector
+ *  reach back into the node even when the chip itself had cleared it — caught by testing an actual
+ *  short vertical connector in the browser, not by reasoning about it. A single point check against
+ *  this nominal reach is deliberately approximate, not a real box-overlap test: a full collision
+ *  solver is exactly what this project's connector work has consistently avoided. */
+const ATTACHMENT_ROW_NOMINAL_REACH = 150;
+
+function attachmentRowBelowsSourceOrTarget(x: number, y: number, sourceRect: Rect, targetRect: Rect): boolean {
+  // The full span a card might occupy, not just its far edge — a node overlapping any part of
+  // this vertical range (not only sitting exactly at its top) is what actually causes the
+  // overlap this function exists to avoid.
+  const bottom = y - ATTACHMENT_ROW_GAP;
+  const top = bottom - ATTACHMENT_ROW_NOMINAL_REACH;
+  const overlapsRect = (rect: Rect) =>
+    x > rect.x && x < rect.x + rect.width && rect.y < bottom && rect.y + rect.height > top;
+  return overlapsRect(sourceRect) || overlapsRect(targetRect);
+}
+
+function attachmentRowTransform(x: number, y: number, flipBelow: boolean): string {
+  return flipBelow
+    ? `translate(-50%, 0) translate(${x}px, ${y + ATTACHMENT_ROW_GAP}px)`
+    : `translate(-50%, -100%) translate(${x}px, ${y - ATTACHMENT_ROW_GAP}px)`;
 }
 
 /**
@@ -66,6 +160,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // per pointer-move frame, matching "cheap during interaction, refine after."
   const nodes = useEditorStore((state) => state.document.nodes);
   const interactionActive = useUiStore((state) => state.interactionActive);
+  const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
 
   const sourceNode = useInternalNode(edge?.source ?? '');
   const targetNode = useInternalNode(edge?.target ?? '');
@@ -146,7 +241,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // external stylesheet rule — so a selected connector's stroke and width
   // must be decided here, not in CSS (only the halo in `canvas.css` — a
   // `filter`, never set inline — can safely live there).
-  const strokeColor = isActiveStep || selected ? theme.selection : color;
+  const strokeColor = isActiveStep || selected || attachTarget ? theme.selection : color;
   const conditionText = edge.condition ? `[${edge.condition}]` : null;
 
   return (
@@ -158,6 +253,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-dimmed={dimmed ? 'true' : undefined}
       data-focus-dimmed={focusDimmed ? 'true' : undefined}
       data-flow-active={isActiveStep ? 'true' : undefined}
+      data-attach-target={attachTarget ? 'true' : undefined}
     >
 {/*
         `BaseEdge` draws the path and, through `interactionWidth`, a second
@@ -171,7 +267,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         interactionWidth={18}
         style={{
           stroke: strokeColor,
-          strokeWidth: isActiveStep ? 2.6 : selected ? 2.4 : 1.6,
+          strokeWidth: isActiveStep ? 2.6 : selected || attachTarget ? 2.4 : 1.6,
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
@@ -193,17 +289,21 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       {/* A subtle caption of the relationship — independent of `kind`'s glyph
           above, so a plain call/read/write connector reads just as clearly as
           an event one. Yields entirely to a real label the moment there is one. */}
-      {!hasLabel && !hasStep && edge.semantic && (
-        <text
-          x={labelX}
-          y={labelY + 14}
-          textAnchor="middle"
-          fill={theme.textFaint}
-          style={{ font: cssFont(FONTS.connectorCaption) }}
-        >
-          {SEMANTIC_DEFAULTS[edge.semantic].label}
-        </text>
-      )}
+      {!hasLabel && !hasStep && edge.semantic && (() => {
+        const caption = captionAnchor(route.labelSide, labelX, labelY);
+        return (
+          <text
+            x={caption.x}
+            y={caption.y}
+            textAnchor={caption.textAnchor}
+            dominantBaseline={caption.dominantBaseline}
+            fill={theme.textFaint}
+            style={{ font: cssFont(FONTS.connectorCaption) }}
+          >
+            {SEMANTIC_DEFAULTS[edge.semantic].label}
+          </text>
+        );
+      })()}
 
       <EdgeLabelRenderer>
         {/*
@@ -247,7 +347,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-focus-dimmed={focusDimmed ? 'true' : undefined}
             data-shown={isShownStep ? 'true' : undefined}
             data-active={isActiveStep ? 'true' : undefined}
-            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+            style={{ transform: labelChipTransform(route.labelSide, labelX, labelY) }}
             onDoubleClick={() => mode === 'edit' && setEditing(true)}
           >
             {hasStep && (
@@ -309,7 +409,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-shown={isShownStep ? 'true' : undefined}
             data-active={isActiveStep ? 'true' : undefined}
             style={{
-              transform: `translate(-50%, 0) translate(${labelX}px, ${labelY + 16}px)`,
+              transform: conditionTransform(route.labelSide, labelX, labelY),
             }}
           >
             <span className="dc-edge-condition" style={{ color }}>
@@ -317,10 +417,345 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             </span>
           </div>
         )}
+
+        {/* Mounted only when there is something to reveal — no cost, no listeners, when an
+            edge has no attachment. Stays mounted in presentation mode (hover still works
+            there); only pinning into edit mode is gated to edit mode, below. */}
+        {edge.attachments?.length ? (
+          <EdgeAttachmentRow
+            edge={edge}
+            x={labelX}
+            y={labelY}
+            flipBelow={attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect)}
+            selected={Boolean(selected)}
+            editable={mode !== 'present'}
+          />
+        ) : null}
       </EdgeLabelRenderer>
     </g>
   );
 });
+
+/** How long after the pointer leaves both the marker and the card before it closes — long
+ *  enough that moving from one to the other never flickers shut, short enough that it doesn't
+ *  linger once the user has clearly moved on. */
+const ATTACHMENT_CLOSE_DELAY_MS = 250;
+
+/**
+ * Read-only, syntax-highlighted code — the same `tokenizeCode`/`colorForScope` primitives
+ * `FlowBar.tsx`'s `DetailPanel` uses for a connection's legacy `details` field during playback,
+ * reused here rather than duplicated. Not imported from there directly: `ui/Editor/FlowBar.tsx`
+ * sits above `canvas/` in this app's one-way dependency order, so this is its own small instance
+ * of the same pattern, not a shared component.
+ */
+function ReadOnlyCode({ language, code }: { language: Parameters<typeof tokenizeCode>[1]; code: string }) {
+  const { name } = useTheme();
+  const codeTheme = CODE_THEMES[name];
+  const lines = tokenizeCode(code, language);
+  return (
+    <pre className="dc-edge-attachment-code">
+      <code>
+        {lines.map((line, index) => (
+          <span className="dc-code-line" key={index}>
+            {line.length === 0
+              ? '\n'
+              : line.map((token, tokenIndex) => (
+                  <span key={tokenIndex} style={{ color: colorForScope(codeTheme, token.scope) }}>
+                    {token.text}
+                  </span>
+                ))}
+            {line.length > 0 && '\n'}
+          </span>
+        ))}
+      </code>
+    </pre>
+  );
+}
+
+/** What a chip/card looks like for one attachment — matches the corresponding card type's own
+ *  real styling exactly (`nodes/describe.ts`'s `note`/`codeCard`), rather than a generic box, so
+ *  a Note attachment reads as a note and a Code one reads as code. */
+interface AttachmentLook {
+  fill: string;
+  border: string;
+  accent: string;
+  headerBg?: string;
+  label: string;
+}
+
+function attachmentLookFor(theme: Theme, attachment: Attachment): AttachmentLook {
+  if (attachment.type === 'code') {
+    const language = attachment.language ?? 'plaintext';
+    return {
+      fill: theme.codeBg,
+      border: theme.codeBorder,
+      accent: theme.textFaint,
+      headerBg: theme.surfaceRaised,
+      label: LANGUAGE_LABELS[language],
+    };
+  }
+  const kind = attachment.noteKind ?? 'note';
+  const palette = accentOf(theme, attachment.accent ?? NOTE_ACCENTS[kind]);
+  return { fill: palette.fill, border: palette.line, accent: palette.chip, label: NOTE_LABELS[kind] };
+}
+
+/**
+ * The row of small chips floating above (or, if that would land on the connector's own source/
+ * target node, below) its label point — one chip per attachment, each independently
+ * hoverable/pinnable, so several attachments sit side by side rather than competing for one card.
+ */
+function EdgeAttachmentRow({
+  edge,
+  x,
+  y,
+  flipBelow,
+  selected,
+  editable,
+}: {
+  edge: DraftEdge;
+  x: number;
+  y: number;
+  flipBelow: boolean;
+  selected: boolean;
+  editable: boolean;
+}) {
+  const attachments = edge.attachments;
+  if (!attachments?.length) return null;
+  return (
+    <div
+      className="dc-edge-attachment-row"
+      data-flip={flipBelow ? 'below' : undefined}
+      style={{ transform: attachmentRowTransform(x, y, flipBelow) }}
+    >
+      {attachments.map((attachment) => (
+        <EdgeAttachmentChip key={attachment.id} edge={edge} attachment={attachment} selected={selected} editable={editable} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One attachment's chip and its own floating card. The card is a plain CSS-positioned child of
+ * the chip (not placed via flow coordinates like the row itself) — `top`/`bottom` off the chip's
+ * own box, flipped by `.dc-edge-attachment-row[data-flip]` in `canvas.css` — which is what keeps
+ * every card opening away from the connector's line regardless of how many chips sit beside it.
+ *
+ * Visible when `hovering || selected || pinned`. Hover uses a close-delay timer (not React state
+ * per tick) so moving from the chip into its card never flickers shut — `pointerenter`/`leave`
+ * don't fire on crossing into a DOM descendant, so this only bridges the small CSS gap between
+ * chip and card, not the whole hand-off. Selection makes the read-only preview reachable by
+ * keyboard for free (selecting an edge already is) with no new key bindings; pinning (`uiStore`'s
+ * `openEdgeDetail`, naming both the edge and this specific attachment) is the only state that
+ * enables editing, and only when `editable` (i.e. not presenting).
+ */
+function EdgeAttachmentChip({
+  edge,
+  attachment,
+  selected,
+  editable,
+}: {
+  edge: DraftEdge;
+  attachment: Attachment;
+  selected: boolean;
+  editable: boolean;
+}) {
+  const theme = useThemeValue();
+  const look = attachmentLookFor(theme, attachment);
+  const pinned = useUiStore(
+    (state) => state.openEdgeDetail?.edgeId === edge.id && state.openEdgeDetail?.attachmentId === attachment.id,
+  );
+  const setOpenEdgeDetail = useUiStore((state) => state.setOpenEdgeDetail);
+  const updateEdgeAttachment = useEditorStore((state) => state.updateEdgeAttachment);
+  const removeEdgeAttachment = useEditorStore((state) => state.removeEdgeAttachment);
+
+  const [hovering, setHovering] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current === null) return;
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setHovering(false), ATTACHMENT_CLOSE_DELAY_MS);
+  }, [cancelClose]);
+
+  useEffect(() => cancelClose, [cancelClose]);
+
+  // The textarea is uncontrolled (`defaultValue`) for smooth typing, but its live value must
+  // survive whatever closes the card — Escape, a click anywhere outside, or the chip itself.
+  // None of those reliably fire the textarea's own `blur` before React unmounts it: verified in
+  // the browser that both Escape and an outside click discarded an in-progress edit, because the
+  // state update that closes the card and the DOM removal happen before any native blur/focusout
+  // has a chance to reach a still-live listener. So the live value is tracked here in a ref via
+  // `onChange` (cheap — updates a ref, not state, no re-render) and committed by this effect on
+  // the transition from pinned to not-pinned, regardless of *what* caused it — decoupled entirely
+  // from focus/blur timing.
+  const pendingValueRef = useRef<string | null>(null);
+  const wasPinned = useRef(pinned);
+  useEffect(() => {
+    if (wasPinned.current && !pinned) {
+      const pending = pendingValueRef.current;
+      if (pending !== null) {
+        const field = attachment.type === 'code' ? 'code' : 'text';
+        const current = attachment.type === 'code' ? attachment.code ?? '' : attachment.text ?? '';
+        if (pending !== current) updateEdgeAttachment(edge.id, attachment.id, { [field]: pending });
+      }
+      pendingValueRef.current = null;
+    }
+    wasPinned.current = pinned;
+  }, [pinned, attachment, edge.id, updateEdgeAttachment]);
+
+  // Same precedent as `AttachmentPopover`: a capture-phase Escape (so it preempts
+  // `EditorScreen`'s own bubble-phase chain), plus a click anywhere outside the card closes it —
+  // registered a tick late so the very click that opened the card doesn't immediately close it.
+  useEffect(() => {
+    if (!pinned) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      setOpenEdgeDetail(null);
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (cardRef.current && !cardRef.current.contains(event.target as Node)) setOpenEdgeDetail(null);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    const id = window.setTimeout(() => window.addEventListener('pointerdown', onPointerDown), 0);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.clearTimeout(id);
+    };
+  }, [pinned, setOpenEdgeDetail]);
+
+  const visible = hovering || selected || pinned;
+  const kind = attachment.type === 'code' ? 'code' : 'note';
+
+  const togglePin = () => {
+    if (!editable) return;
+    setOpenEdgeDetail(pinned ? null : { edgeId: edge.id, attachmentId: attachment.id });
+  };
+
+  const chipVars = {
+    ['--dc-chip-fill']: look.fill,
+    ['--dc-chip-border']: look.border,
+    ['--dc-chip-accent']: look.accent,
+  } as CSSProperties;
+
+  return (
+    <div
+      className="dc-edge-attachment-chip"
+      data-kind={kind}
+      role="button"
+      tabIndex={0}
+      title={pinned ? 'Close attached detail' : kind === 'code' ? 'View attached code' : 'View attached note'}
+      // Set explicitly rather than left to default content-based computation: the card (with its
+      // own, possibly lengthy, note/code content) is a DOM child of this chip for simple
+      // CSS-relative positioning, and without this, that content would bleed into the chip's own
+      // accessible name whenever it's open.
+      aria-label={pinned ? 'Close attached detail' : kind === 'code' ? 'View attached code' : 'View attached note'}
+      style={chipVars}
+      onPointerEnter={() => {
+        cancelClose();
+        setHovering(true);
+      }}
+      onPointerLeave={scheduleClose}
+      onClick={(event) => {
+        // The card (delete button, textarea) is a DOM child of this chip, so a click anywhere
+        // inside it bubbles up here too — only clicks that did *not* originate inside the card
+        // should toggle pin. Checking the card specifically (not `target === currentTarget`)
+        // matters: a real click on the chip's own icon/label spans also has to work, and those
+        // are non-card descendants of this same div.
+        if ((event.target as HTMLElement).closest('.dc-edge-attachment-card')) return;
+        event.stopPropagation();
+        togglePin();
+      }}
+      onKeyDown={(event) => {
+        // Same reasoning as onClick above: without this guard, typing a space inside the card's
+        // own textarea bubbles up and re-triggers this handler, closing the card mid-edit and
+        // swallowing the keystroke — caught by an e2e test typing through a real space character.
+        if ((event.target as HTMLElement).closest('.dc-edge-attachment-card')) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        togglePin();
+      }}
+    >
+      <span className="dc-edge-attachment-chip-icon" aria-hidden="true">
+        {kind === 'code' ? '{ }' : ''}
+      </span>
+      <span className="dc-edge-attachment-chip-label">{look.label}</span>
+
+      {visible && (
+        <div
+          ref={cardRef}
+          className="dc-edge-attachment-card"
+          data-pinned={pinned ? 'true' : undefined}
+          onPointerEnter={() => {
+            cancelClose();
+            setHovering(true);
+          }}
+          onPointerLeave={scheduleClose}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {/* The reveal animation lives on this inner wrapper, not the positioned outer div —
+              a CSS animation replaces the whole `transform` property for its duration, so
+              animating scale here would otherwise clobber the outer div's own translate. */}
+          <div className="dc-edge-attachment-card-inner" data-kind={kind} style={chipVars}>
+            <header
+              className="dc-edge-attachment-card-header"
+              style={look.headerBg ? { background: look.headerBg } : undefined}
+            >
+              <span>{look.label}</span>
+              {pinned && (
+                <button
+                  type="button"
+                  className="dc-edge-attachment-delete"
+                  title="Delete attached detail"
+                  onClick={() => {
+                    removeEdgeAttachment(edge.id, attachment.id);
+                    setOpenEdgeDetail(null);
+                  }}
+                >
+                  Delete
+                </button>
+              )}
+            </header>
+            {pinned ? (
+              attachment.type === 'code' ? (
+                <textarea
+                  autoFocus
+                  className="dc-attachment-editor dc-attachment-editor-code"
+                  spellCheck={false}
+                  defaultValue={attachment.code ?? ''}
+                  onChange={(event) => {
+                    pendingValueRef.current = event.currentTarget.value;
+                  }}
+                />
+              ) : (
+                <textarea
+                  autoFocus
+                  className="dc-attachment-editor"
+                  defaultValue={attachment.text ?? ''}
+                  onChange={(event) => {
+                    pendingValueRef.current = event.currentTarget.value;
+                  }}
+                />
+              )
+            ) : attachment.type === 'code' ? (
+              <ReadOnlyCode language={attachment.language ?? 'plaintext'} code={attachment.code ?? ''} />
+            ) : (
+              <div className="dc-edge-attachment-note">{attachment.text || 'Empty note'}</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * One draggable connector endpoint. Grabbing it and dropping it on a node
