@@ -6,6 +6,10 @@ import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
 import { Autosave } from '../src/storage/autosave';
 import { QuotaExceededError } from '../src/storage/DraftRepository';
+import { decryptDocument } from '../src/crypto/documentCipher';
+import { getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/keyStore';
+import { isEncryptedBody } from '../src/crypto/migrateStorage';
+import type { EncryptedBody } from '../src/crypto/types';
 import type { DraftDocument } from '../src/document/types';
 
 function documentWith(title: string, nodeCount = 2): DraftDocument {
@@ -15,9 +19,47 @@ function documentWith(title: string, nodeCount = 2): DraftDocument {
   return addNodes(createDocument(title), nodes);
 }
 
+/**
+ * Writes the plaintext `{ id, document }` shape every `bodies` row had
+ * before encryption existed, bypassing `IndexedDbRepository.save()` (which
+ * always encrypts now) — this is the only way left to simulate a record
+ * genuinely written by a build before this phase, since nothing in the
+ * current app can produce that shape anymore.
+ */
+function writeLegacyPlaintextRow(document: unknown): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('draft-canvas');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction('bodies', 'readwrite');
+      tx.objectStore('bodies').put({ id: (document as DraftDocument).metadata.id, document });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+
+/** Reads a raw `bodies` row back, bypassing `load()`'s own decrypt/migrate. */
+function readRawRow(id: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('draft-canvas');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction('bodies', 'readonly');
+      const getReq = tx.objectStore('bodies').get(id);
+      getReq.onsuccess = () => resolve(getReq.result);
+      getReq.onerror = () => reject(getReq.error);
+    };
+  });
+}
+
 beforeEach(() => {
   // A fresh database per test, so ordering assertions cannot leak between them.
   globalThis.indexedDB = new IDBFactory();
+  // The key store caches its db connection and the key itself at module
+  // scope — both must be reset alongside `indexedDB` or a later test would
+  // silently reuse a key tied to an IDBFactory instance no test can see anymore.
+  __resetKeyCacheForTests();
 });
 
 describe('local persistence', () => {
@@ -104,13 +146,13 @@ describe('local persistence', () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('From an older build', 2);
     const [a, b] = doc.nodes;
-    // Simulates a record actually written by pre-anchor code: version 2, and
-    // no sourceAnchor/targetAnchor on the edge at all.
-    await repository.save({
+    // Simulates a record actually written by pre-anchor, pre-encryption
+    // code: plaintext, version 2, no sourceAnchor/targetAnchor at all.
+    await writeLegacyPlaintextRow({
       ...doc,
       version: 2,
       edges: [{ id: 'e1', source: a!.id, target: b!.id, directed: true, routing: 'smoothstep' }],
-    } as never);
+    });
 
     const loaded = await repository.load(doc.metadata.id);
     expect(loaded).not.toBeNull();
@@ -119,33 +161,28 @@ describe('local persistence', () => {
     expect(loaded!.edges[0]!.targetAnchor).toBeDefined();
   });
 
-  it('persists the migrated record, so it is not silently re-migrated every load', async () => {
+  it('persists the migrated record — both schema and encryption — so neither is silently redone every load', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Migrate once', 2);
     const [a, b] = doc.nodes;
-    await repository.save({
+    await writeLegacyPlaintextRow({
       ...doc,
       version: 2,
       edges: [{ id: 'e1', source: a!.id, target: b!.id, directed: true, routing: 'smoothstep' }],
-    } as never);
+    });
 
     await repository.load(doc.metadata.id);
 
     // A second `load()` call would recompute the same migration in memory
     // either way, so it can't distinguish "persisted" from "re-derived every
     // time" — read the raw stored bytes directly instead, bypassing `load`'s
-    // own migration, to confirm the record on disk itself was rewritten.
-    const raw = await new Promise<{ document: { version: number } }>((resolve, reject) => {
-      const req = indexedDB.open('draft-canvas');
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => {
-        const tx = req.result.transaction('bodies', 'readonly');
-        const getReq = tx.objectStore('bodies').get(doc.metadata.id);
-        getReq.onsuccess = () => resolve(getReq.result);
-        getReq.onerror = () => reject(getReq.error);
-      };
-    });
-    expect(raw.document.version).toBe(3);
+    // own decrypt/migrate, to confirm the record on disk was actually rewritten.
+    const raw = await readRawRow(doc.metadata.id);
+    expect(isEncryptedBody(raw)).toBe(true);
+
+    const key = await getOrCreateMasterKey();
+    const decrypted = await decryptDocument(raw as EncryptedBody, key);
+    expect((decrypted as { version: number }).version).toBe(3);
   });
 
   it('returns null for a record too broken to recognise', async () => {

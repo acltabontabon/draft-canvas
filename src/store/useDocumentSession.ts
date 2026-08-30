@@ -3,6 +3,7 @@ import { cloneDocumentAsNew, createDocument } from '../document/factory';
 import type { DraftDocument, DraftSummary } from '../document/types';
 import { Autosave } from '../storage/autosave';
 import { getRepository, type DraftRepository } from '../storage';
+import { IndexedDbRepository } from '../storage/IndexedDbRepository';
 import { useEditorStore } from './editorStore';
 import { useUiStore } from './uiStore';
 
@@ -52,6 +53,16 @@ export function useDocumentSession(): DocumentSession {
           'This browser is not allowing local storage, so diagrams are kept in memory only. Export before closing the tab.',
           'error',
         );
+      }
+      // Encrypts any record still left over from before encryption existed —
+      // not just documents the user happens to open this session. Kicked off
+      // once, fire-and-forget: it never blocks opening or editing anything,
+      // and a diagram it hasn't reached yet is just still plaintext, not
+      // broken (`load()` migrates it lazily the moment it is opened anyway).
+      if (repo instanceof IndexedDbRepository) {
+        void repo.migrateLegacyRecords().catch((error: unknown) => {
+          console.warn('[draft-canvas] Background encryption sweep failed:', error);
+        });
       }
     })();
     return () => {

@@ -11,12 +11,19 @@ This document exists so the privacy claim can be audited rather than believed.
 
 Everything you draw. Two object stores:
 
-| Store | Key | Contents |
-| --- | --- | --- |
-| `documents` | `id` | Title, created and updated timestamps, node and edge counts. Used to render the library list without loading any canvas. |
-| `bodies` | `id` | The full document: nodes, connections, text, code, viewport, settings. |
+| Store | Key | Contents | Encrypted? |
+| --- | --- | --- | --- |
+| `documents` | `id` | Title, created and updated timestamps, node and edge counts. Used to render the library list without loading any canvas. | No — plain text, by design (see below). |
+| `bodies` | `id` | The full document: nodes, connections, text, code, viewport, settings. | Yes — AES-256-GCM, before it ever reaches IndexedDB. |
 
 Written by `src/storage/IndexedDbRepository.ts`, and by nothing else.
+
+The `documents` summary is left unencrypted deliberately: it exists specifically so the library
+screen can list your diagrams — including their titles — without decrypting every one of them just
+to draw a list. That is a real, disclosed tradeoff, not an oversight: a diagram's **title** is
+readable in IndexedDB without the local key; everything else about it — nodes, labels, code,
+connector text — is not. If a title itself would be sensitive to expose this way, name the diagram
+something neutral.
 
 If IndexedDB cannot be opened — a private window, a blocked-storage policy, some embedded
 webviews — the app falls back to an in-memory store, and the status bar says **In memory only**
@@ -90,8 +97,13 @@ Being honest about the limits:
 - **Diagrams are per-browser and per-device.** A diagram made in Chrome is not in Safari, and not
   on your other laptop. Moving one means exporting and importing it.
 - **Private windows usually discard storage** when the window closes.
-- **Anyone with access to your machine and browser profile can read them.** They are not
-  encrypted; they have the same protection as the rest of your browser data.
+- **Diagrams are encrypted at rest** (AES-256-GCM) using a key generated locally and retained
+  non-exportably by this browser profile — Draft Canvas never receives, stores, or has any way to
+  export that key. This protects the stored bytes if they are copied or inspected without the key
+  (e.g. a stolen disk image, or someone browsing IndexedDB files directly). It does **not** protect
+  against someone with full access to an already-unlocked copy of this browser profile: the app
+  itself must be able to use the key to open your diagrams, so anyone who can run the app as you
+  can too.
 - **Storage quotas are finite.** If the browser runs out of space the app tells you and keeps the
   document in memory so you can export it.
 

@@ -1,5 +1,9 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { parseDocument } from '../document/validate';
+import { decryptDocument, encryptDocument } from '../crypto/documentCipher';
+import { getOrCreateMasterKey } from '../crypto/keyStore';
+import { isEncryptedBody, isLegacyBody, migrateLegacyRecord, type LegacyBody } from '../crypto/migrateStorage';
+import type { EncryptedBody } from '../crypto/types';
 import {
   QuotaExceededError,
   StorageUnavailableError,
@@ -16,6 +20,12 @@ const DB_VERSION = 1;
  * Meta and body live in separate stores on purpose: rendering the library only
  * needs titles and timestamps, and pulling a dozen full documents — code cards
  * and all — just to draw a list would make the landing screen sluggish.
+ *
+ * A `bodies` row is `EncryptedBody` for every document written by this build
+ * or later, or the plaintext `LegacyBody` shape (`{ id, document }`) for one
+ * still sitting untouched from before encryption existed. Distinguished by
+ * shape, not a flag — the same repair-don't-reject discipline
+ * `document/validate.ts` already uses. See `crypto/migrateStorage.ts`.
  */
 interface DraftDb extends DBSchema {
   documents: {
@@ -25,7 +35,7 @@ interface DraftDb extends DBSchema {
   };
   bodies: {
     key: string;
-    value: { id: string; document: DraftDocument };
+    value: EncryptedBody | LegacyBody;
   };
 }
 
@@ -72,29 +82,50 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   /**
-   * Loads, migrates, and re-validates. A record can be corrupted by a crashed
-   * write, or be sitting in an older format because it was last saved by an
-   * earlier build of the app — `parseDocument` handles both, the same way it
-   * does for an imported `.draftcanvas` file, so a record written before a
-   * schema change (e.g. before connector anchors existed) gets migrated in
-   * place on next open rather than staying frozen in its old shape forever.
+   * Loads, decrypts, migrates, and re-validates. A record can be corrupted by
+   * a crashed write, be sitting in an older schema because it was last saved
+   * by an earlier build (`parseDocument` handles this, the same way it does
+   * for an imported `.draftcanvas` file), or — before this build — never
+   * have been encrypted at all. All three are repaired here, in place, on
+   * next open, rather than staying frozen in their old shape forever.
    *
-   * A genuine version change is written straight back: "derive it once, then
-   * persist it" only holds if a load that never turns into an edit still
-   * ends up with a current-shape record, rather than silently re-deriving
-   * the same migration on every future open. A same-version repair (e.g. a
-   * dangling edge dropped) is left for the next real edit to persist, same
-   * as always — this is about the version migration specifically.
+   * A genuine change — decrypting a legacy plaintext row for the first time,
+   * or a real schema-version migration — is written straight back: "derive
+   * it once, then persist it" only holds if a load that never turns into an
+   * edit still ends up current on disk, rather than silently re-deriving the
+   * same work on every future open. A same-version repair (e.g. a dangling
+   * edge dropped) is left for the next real edit to persist, same as always.
    */
   async load(id: string): Promise<DraftDocument | null> {
     const row = await this.db.get('bodies', id);
     if (!row) return null;
-    const result = parseDocument(row.document);
+
+    const wasEncrypted = isEncryptedBody(row);
+    let rawDocument: unknown;
+    if (wasEncrypted) {
+      const key = await getOrCreateMasterKey();
+      rawDocument = await decryptDocument(row, key);
+      if (rawDocument === null) {
+        console.warn(
+          `[draft-canvas] Local record ${id} could not be decrypted or has been corrupted.`,
+        );
+        return null;
+      }
+    } else if (isLegacyBody(row)) {
+      rawDocument = row.document;
+    } else {
+      console.warn(`[draft-canvas] Local record ${id} is not in a recognised shape.`);
+      return null;
+    }
+
+    const result = parseDocument(rawDocument);
     if (!result.ok) {
       console.warn(`[draft-canvas] Local record ${id} is unreadable: ${result.error}`);
       return null;
     }
-    if (row.document.version !== result.document.version) {
+
+    const priorVersion = isRecord(rawDocument) ? rawDocument.version : undefined;
+    if (!wasEncrypted || priorVersion !== result.document.version) {
       await this.save(result.document);
     }
     return result.document;
@@ -102,10 +133,12 @@ export class IndexedDbRepository implements DraftRepository {
 
   async save(document: DraftDocument): Promise<void> {
     try {
+      const key = await getOrCreateMasterKey();
+      const encrypted = await encryptDocument(document, key);
       const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
       await Promise.all([
         tx.objectStore('documents').put(summarize(document)),
-        tx.objectStore('bodies').put({ id: document.metadata.id, document }),
+        tx.objectStore('bodies').put(encrypted),
         tx.done,
       ]);
     } catch (error) {
@@ -139,4 +172,43 @@ export class IndexedDbRepository implements DraftRepository {
       return null;
     }
   }
+
+  /**
+   * Encrypts every legacy plaintext record still sitting in storage — not
+   * just the ones the user happens to open. `load()` already migrates a
+   * record the moment it's opened; this closes the rest of the gap, so a
+   * diagram nobody has looked at since before encryption existed doesn't
+   * stay plaintext indefinitely. Meant to be kicked off once, non-blocking,
+   * at app startup (see `src/store/useDocumentSession.ts`) — it does not
+   * block opening or editing any document while it runs.
+   *
+   * Each record is encrypted, verified by decrypting the result back, and
+   * only then written — one atomic `put` per record — exactly the same
+   * encrypt→verify→persist contract `load()`'s lazy path follows. A record
+   * this sweep hasn't reached yet is simply still plaintext; nothing here is
+   * a partially-migrated state.
+   */
+  async migrateLegacyRecords(): Promise<{ migrated: number; failed: number }> {
+    const all = await this.db.getAll('bodies');
+    const legacy = all.filter(isLegacyBody);
+    if (legacy.length === 0) return { migrated: 0, failed: 0 };
+
+    const key = await getOrCreateMasterKey();
+    let migrated = 0;
+    let failed = 0;
+    for (const row of legacy) {
+      try {
+        const encrypted = await migrateLegacyRecord(row, key);
+        await this.db.put('bodies', encrypted);
+        migrated += 1;
+      } catch (error) {
+        failed += 1;
+        console.warn(`[draft-canvas] Could not migrate local record ${row.id} to encrypted storage:`, error);
+      }
+    }
+    return { migrated, failed };
+  }
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
