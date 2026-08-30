@@ -63,6 +63,13 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
   await page.mouse.up();
 }
 
+/** Adds the currently-selected connector to a flow, via the Inspector. */
+async function addToFlow(page: Page, existingFlowTitle?: string) {
+  const select = page.getByLabel('Add to flow');
+  if (existingFlowTitle) await select.selectOption({ label: existingFlowTitle });
+  else await select.selectOption({ label: 'New flow…' });
+}
+
 test.describe('Draft Canvas', () => {
   test('the diagram survives a reload, an export and a re-import', async ({ page }) => {
     await newCanvas(page, 'Payment Flow');
@@ -89,7 +96,9 @@ test.describe('Draft Canvas', () => {
 
     await clickEdgeBetween(page, 0, 1);
     await expect(page.locator('.dc-inspector')).toBeVisible();
-    await page.getByRole('button', { name: 'Add step' }).click();
+    await addToFlow(page);
+    // Adding a step selects its flow for overlay, so the step badge appears
+    // immediately as feedback.
     await expect(page.locator('.dc-edge-step')).toHaveCount(1);
 
     /* --- a code card ------------------------------------------------------ */
@@ -149,7 +158,9 @@ test.describe('Draft Canvas', () => {
     expect(exported.format).toBe('draft-canvas');
     expect(exported.nodes).toHaveLength(4);
     expect(exported.edges).toHaveLength(1);
-    expect(exported.edges[0].sequence).toBe(1);
+    expect(exported.flows).toHaveLength(1);
+    expect(exported.flows[0].steps).toHaveLength(1);
+    expect(exported.flows[0].steps[0].edgeId).toBe(exported.edges[0].id);
 
     /* --- PNG and SVG -------------------------------------------------------- */
 
@@ -189,7 +200,12 @@ test.describe('Draft Canvas', () => {
     expect(await nodeCount(page)).toBe(4);
     await expect(page.locator('.dc-edge-line')).toHaveCount(1);
     await expect(page.getByLabel('Diagram title')).toHaveValue('Payment Flow');
-    await expect(page.locator('.dc-edge-step')).toHaveCount(1);
+
+    // The flow survived the round trip too — not just the raw nodes/edges.
+    await page.getByTitle('Flows').click();
+    await expect(page.locator('.dc-flow-item')).toHaveCount(1);
+    await expect(page.locator('.dc-flow-item')).toContainText('1 steps');
+    await page.getByTitle('Flows').click();
 
     // And it is editable again, not a read-only import.
     await labelNode(page, 0, 'Service A renamed');
@@ -211,7 +227,7 @@ test.describe('Draft Canvas', () => {
     expect(requests).toEqual([]);
   });
 
-  test('walks through ordered steps in Explain Mode', async ({ page }) => {
+  test('walks through ordered steps in a flow', async ({ page }) => {
     await newCanvas(page, 'Walkthrough');
 
     await createNode(page, 'Service', { x: 240, y: 220 });
@@ -226,17 +242,15 @@ test.describe('Draft Canvas', () => {
     await connect(page, 1, 2);
     await expect(page.locator('.dc-edge-line')).toHaveCount(2);
 
-    // Number both connections.
-    for (const [from, to] of [
-      [0, 1],
-      [1, 2],
-    ] as const) {
-      await clickEdgeBetween(page, from, to);
-      await page.getByRole('button', { name: 'Add step' }).click();
-    }
+    // Add both connections to one flow, in order.
+    await clickEdgeBetween(page, 0, 1);
+    await addToFlow(page);
+    await clickEdgeBetween(page, 1, 2);
+    await addToFlow(page, 'Untitled flow');
     await expect(page.locator('.dc-edge-step')).toHaveCount(2);
 
     await page.getByTitle(/^Present/).click();
+    // Exactly one flow exists, so presentation starts it directly.
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
     await expect(page.locator('.dc-canvas[data-explain="on"]')).toBeVisible();

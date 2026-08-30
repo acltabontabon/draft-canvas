@@ -7,6 +7,7 @@ import {
   removeElements,
   updateNode,
 } from '../src/document/operations';
+import { createFlow, explainEdgeTier, stepIndexOf } from '../src/document/flow';
 import { evaluateAttachCandidates, deepestBoundaryAt } from '../src/canvas/dragTargets';
 import { isEdgeFocused } from '../src/store/editorStore';
 import { renderDocumentSvg } from '../src/render/svg/document';
@@ -67,11 +68,23 @@ function largeDocument(): DraftDocument {
       source: nodes[index % NODE_COUNT]!.id,
       target: nodes[(index * 7 + 3) % NODE_COUNT]!.id,
       label: index % 3 === 0 ? `EVENT_${index}` : undefined,
-      sequence: index < 12 ? index + 1 : undefined,
     }),
   ).filter((edge) => edge.source !== edge.target);
 
-  return addEdges(addNodes(createDocument('Large'), nodes), edges);
+  // A few edges carry async/condition annotations, and the first 12 form a
+  // flow — enough to exercise the new rendering/dimming paths at scale
+  // without a dedicated performance test per feature.
+  const annotated = edges.map((edge, index) => {
+    if (index % 11 === 0) return { ...edge, async: true };
+    if (index % 13 === 0) return { ...edge, condition: 'approved' };
+    return edge;
+  });
+
+  const flow = createFlow({ title: 'Walkthrough' });
+  flow.steps = annotated.slice(0, 12).map((edge, index) => ({ id: `fs${index}`, edgeId: edge.id }));
+
+  const withEdges = addEdges(addNodes(createDocument('Large'), nodes), annotated);
+  return { ...withEdges, flows: [flow] };
 }
 
 describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
@@ -211,5 +224,14 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
     const started = performance.now();
     for (const edge of doc.edges) isEdgeFocused(focus, edge);
     expect(performance.now() - started).toBeLessThan(100);
+  });
+
+  it('classifies every edge and node against the active flow step within budget', () => {
+    const flow = doc.flows[0]!;
+    const started = performance.now();
+    for (const edge of doc.edges) explainEdgeTier(stepIndexOf(flow, edge.id), 6);
+    // stepIndexOf is a per-flow linear scan (flows stay small by design), run
+    // once per edge — the same "stays fast even at scale" budget as Focus.
+    expect(performance.now() - started).toBeLessThan(200);
   });
 });

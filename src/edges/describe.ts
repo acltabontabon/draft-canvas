@@ -10,9 +10,14 @@ import { routeEdge, type RoutedEdge, type Side } from './routing';
 export interface EdgeDescribeContext {
   theme: Theme;
   measurer: TextMeasurer;
-  /** Sequence badges can be hidden document-wide. */
+  /** Step badges can be hidden document-wide. */
   showSequence: boolean;
+  /** This edge's 1-based position within the flow currently selected for overlay, if any. */
+  stepIndex?: number;
 }
+
+/** Dashes an asynchronous connector — the one visual distinction sync/async gets. */
+const ASYNC_DASH = [6, 4];
 
 const LABEL_PADDING_X = 6;
 const LABEL_PADDING_Y = 3;
@@ -21,6 +26,10 @@ const BADGE_RADIUS = 8;
 const LABEL_GAP = 5;
 /** How far from the source anchor the step badge sits, in canvas units. */
 const BADGE_OFFSET = 22;
+const CONDITION_PADDING_X = 6;
+const CONDITION_PADDING_Y = 2;
+/** How far below the label chip a condition chip sits, in canvas units. */
+const CONDITION_OFFSET_Y = 18;
 
 export interface DescribedEdge {
   route: RoutedEdge;
@@ -47,14 +56,14 @@ export function describeEdge(
       t: 'path',
       d: route.d,
       fill: 'none',
-      stroke: { color, width: 1.6, linecap: 'round' },
+      stroke: { color, width: 1.6, linecap: 'round', dash: edge.async ? ASYNC_DASH : undefined },
       markerEnd: edge.directed ? markerRef(color) : undefined,
     },
   ];
 
   const overlay: Shape[] = [];
 
-  const hasStep = ctx.showSequence && typeof edge.sequence === 'number';
+  const hasStep = ctx.showSequence && typeof ctx.stepIndex === 'number';
 
   if (edge.label) {
     const layout = layoutText(edge.label, {
@@ -85,7 +94,7 @@ export function describeEdge(
 
     if (hasStep) {
       const cx = left + LABEL_PADDING_X + BADGE_RADIUS;
-      const stepLayout = layoutText(String(edge.sequence), {
+      const stepLayout = layoutText(String(ctx.stepIndex), {
         font: FONTS.sequenceBadge,
         maxWidth: 40,
         lineHeight: FONTS.sequenceBadge.size * LINE_HEIGHTS.label,
@@ -125,7 +134,7 @@ export function describeEdge(
     });
   } else if (hasStep) {
     const at = badgePoint(route, edge.routing);
-    const layout = layoutText(String(edge.sequence), {
+    const layout = layoutText(String(ctx.stepIndex), {
       font: FONTS.sequenceBadge,
       maxWidth: 40,
       lineHeight: FONTS.sequenceBadge.size * LINE_HEIGHTS.label,
@@ -148,6 +157,44 @@ export function describeEdge(
         y: at.y - layout.height / 2,
         layout,
         font: FONTS.sequenceBadge,
+        fill: color,
+        align: 'middle',
+      },
+    );
+  }
+
+  // The condition chip sits below the label/badge, centered on the same
+  // anchor — a small, secondary tag, never competing with the label.
+  if (edge.condition) {
+    const value = `[${edge.condition}]`;
+    const layout = layoutText(value, {
+      font: FONTS.presetTag,
+      maxWidth: 220,
+      lineHeight: FONTS.presetTag.size * LINE_HEIGHTS.label,
+      maxLines: 1,
+      measurer: ctx.measurer,
+    });
+    const w = layout.width + CONDITION_PADDING_X * 2;
+    const h = layout.height + CONDITION_PADDING_Y * 2;
+    const left = route.labelX - w / 2;
+    const y = route.labelY + CONDITION_OFFSET_Y;
+    overlay.push(
+      {
+        t: 'rect',
+        x: left,
+        y,
+        w,
+        h,
+        r: 4,
+        fill: ctx.theme.edgeLabelBg,
+        stroke: { color: ctx.theme.border, width: 1 },
+      },
+      {
+        t: 'text',
+        x: route.labelX,
+        y: y + CONDITION_PADDING_Y,
+        layout,
+        font: FONTS.presetTag,
         fill: color,
         align: 'middle',
       },

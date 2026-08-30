@@ -1,5 +1,6 @@
 import { describeEdge } from '../../edges/describe';
 import { describeNode, describeContext } from '../../nodes/describe';
+import { findFlow, stepIndexOf } from '../../document/flow';
 import { boundsOf } from '../../document/operations';
 import type { DraftDocument, DraftNode } from '../../document/types';
 import { themeFor, type ThemeName } from '../theme/tokens';
@@ -15,6 +16,8 @@ export interface ExportOptions {
   transparent?: boolean;
   /** Restrict the export to these node ids (plus the edges between them). */
   only?: ReadonlySet<string>;
+  /** The flow currently selected for step-badge overlay, if any — "what you see is what you export". */
+  selectedFlowId?: string;
 }
 
 export interface RenderedSvg {
@@ -42,6 +45,7 @@ export function renderDocumentSvg(
   const measurer = getMeasurer();
   const nodeCtx = { theme, measurer };
   const edgeCtx = { theme, measurer, showSequence: document.settings.showSequence };
+  const selectedFlow = options.selectedFlowId ? findFlow(document, options.selectedFlowId) : undefined;
 
   const nodes = options.only
     ? document.nodes.filter((node) => options.only!.has(node.id))
@@ -66,7 +70,8 @@ export function renderDocumentSvg(
   const arrowColors = new Set<string>();
 
   for (const edge of edges) {
-    const described = describeEdge(edge, nodeMap, edgeCtx);
+    const stepIndex = stepIndexOf(selectedFlow, edge.id);
+    const described = describeEdge(edge, nodeMap, { ...edgeCtx, stepIndex });
     if (!described) continue;
     if (edge.directed) arrowColors.add(described.color);
     edgeLines.push(...described.line.flatMap(emitShape));

@@ -21,7 +21,7 @@ the file format outlive any decision made above it.
 
 ```
 src/
-  document/     types · factory · operations · sequence · validate · migrate · limits
+  document/     types · factory · operations · flow · edgeSemantics · validate · migrate · limits
   storage/      DraftRepository · IndexedDbRepository · MemoryRepository · autosave
   history/      HistoryStack
   render/       the shared renderer (see below)
@@ -33,7 +33,7 @@ src/
   nodes/        describe.ts — every node's appearance, as pure functions
   edges/        routing.ts · describe.ts
   canvas/       Canvas · DraftNodeView · DraftEdgeView · projection · snapping · presets
-  presentation/ useExplain
+  presentation/ useFlowPlayback
   store/        editorStore · uiStore · selectors · useDocumentSession
   ui/           Library · Editor · common · theme
 ```
@@ -87,6 +87,19 @@ come from one map in `render/code/theme.ts` that both backends read.
 
 Monospace makes the geometry free: a token's x position is `charWidth × column`, so the code path
 needs no measurement at all and is exactly reproducible.
+
+### Edges are the one exception to "one renderer"
+
+Node appearance is unified through `describeNode`; edge appearance is not. `edges/describe.ts`
+(`describeEdge`) is the pure describer the SVG exporter calls, and `canvas/DraftEdgeView.tsx` is
+an independent, hand-rolled React implementation of the same connector — path, label, step badge,
+async dash, condition chip. They share geometry (`edges/routing.ts`) and marker defs,
+but nothing enforces that a visual addition to one is mirrored in the other. This was true before
+Flows existed and remains true after; it is a known, accepted gap, not an oversight to "fix" in
+passing — unifying it would mean either giving React Flow's edge renderer a pure display-list
+input (a real, larger change) or re-deriving on-screen interactivity (hover, inline editing,
+drag-to-select) from a description format not built for it. If you add a new visual to a
+connector, add it in both places.
 
 ## Canvas boundary
 
@@ -177,7 +190,7 @@ bumping `CURRENT_VERSION` and adding one function there. Nothing in the UI branc
 
 | Layer | Where |
 | --- | --- |
-| Document model, operations, sequencing | `tests/document.test.ts`, `tests/sequence.test.ts` |
+| Document model, operations, flows | `tests/document.test.ts`, `tests/flow.test.ts` |
 | Round trip and file format | `tests/serialization.test.ts` |
 | Hostile and malformed imports | `tests/import-validation.test.ts` |
 | Undo, redo, drag granularity, coalescing | `tests/history.test.ts` |

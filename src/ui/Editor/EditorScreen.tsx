@@ -9,10 +9,11 @@ import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { useEditorStore } from '../../store/editorStore';
 import { pointer, useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
-import { useExplain } from '../../presentation/useExplain';
+import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { useThemeValue } from '../theme/useTheme';
 import { EmptyState } from './EmptyState';
-import { ExplainBar } from './ExplainBar';
+import { FlowBar } from './FlowBar';
+import { FlowPanel } from './FlowPanel';
 import { FocusIndicator } from './FocusIndicator';
 import { ExportDialog } from './ExportDialog';
 import { Inspector } from './Inspector';
@@ -41,7 +42,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
 
   const theme = useThemeValue();
-  const explain = useExplain();
+  const playback = useFlowPlayback();
   const { fitView, screenToFlowPosition } = useReactFlow();
 
   const createAt = useCallback(
@@ -98,7 +99,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
     [createAt, screenToFlowPosition],
   );
 
-  useKeyboard({ createAtPointer, explain });
+  useKeyboard({ createAtPointer, playback });
 
   const onFit = useCallback(() => {
     void fitView({ padding: 0.2, duration: 320 });
@@ -106,9 +107,9 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
 
   const onPresent = useCallback(() => {
     setMode('present');
-    if (explain.canStart) explain.start();
+    if (playback.canStart) playback.start();
     void fitView({ padding: 0.18, duration: 320 });
-  }, [explain, fitView, setMode]);
+  }, [playback, fitView, setMode]);
 
   const presenting = mode === 'present';
 
@@ -142,14 +143,15 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         {!presenting && <AttachmentPopover />}
         <EmptyState />
         {!presenting && <Inspector />}
-        <ExplainBar explain={explain} />
+        {!presenting && <FlowPanel playback={playback} />}
+        <FlowBar playback={playback} />
         <FocusIndicator />
 
         {presenting && (
           <div className="dc-present-exit">
-            {!explain.active && explain.canStart && (
-              <Button variant="quiet" icon="play" onClick={explain.start}>
-                Walk through
+            {!playback.active && playback.canStart && (
+              <Button variant="quiet" icon="play" onClick={playback.start}>
+                Present a flow
               </Button>
             )}
             <Button variant="quiet" icon="close" onClick={() => setMode('edit')}>
@@ -183,10 +185,10 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
  */
 function useKeyboard({
   createAtPointer,
-  explain,
+  playback,
 }: {
   createAtPointer: (preset: Preset) => void;
-  explain: ReturnType<typeof useExplain>;
+  playback: ReturnType<typeof useFlowPlayback>;
 }) {
   const store = useEditorStore;
   const setExportOpen = useUiStore((state) => state.setExportOpen);
@@ -273,7 +275,7 @@ function useKeyboard({
         case 'Escape':
           arm(null);
           if (state.focus.active) state.exitFocus();
-          else if (explain.active) explain.stop();
+          else if (playback.active) playback.stop();
           else state.setSelection({ nodes: [], edges: [] });
           return;
         case '?':
@@ -309,7 +311,7 @@ function useKeyboard({
           // walkthrough and Focus have their own controls; the Quick Connect
           // menu and an open attachment popover have their own Enter/Escape).
           if (event.shiftKey || event.altKey) return;
-          if (explain.active || state.focus.active) return;
+          if (playback.active || state.focus.active) return;
           const uiState = useUiStore.getState();
           if (uiState.quickConnect || uiState.openAttachmentPopover) return;
           const { nodes, edges } = state.selection;
@@ -338,5 +340,5 @@ function useKeyboard({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [arm, createAtPointer, explain, fitView, setExportOpen, setShortcutsOpen, store, zoomIn, zoomOut]);
+  }, [arm, createAtPointer, playback, fitView, setExportOpen, setShortcutsOpen, store, zoomIn, zoomOut]);
 }

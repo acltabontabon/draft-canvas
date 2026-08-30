@@ -12,8 +12,9 @@ function reset() {
     selection: { nodes: [], edges: [] },
     clipboard: null,
     revision: 0,
-    explain: { active: false, step: 0 },
+    flowPlayback: { active: false, flowId: null, step: 0 },
     focus: { active: false, nodeIds: [], edgeIds: [] },
+    selectedFlowId: null,
   });
 }
 
@@ -44,16 +45,16 @@ describe('focus mode', () => {
     expect(store.getState().focus).toEqual({ active: false, nodeIds: [], edgeIds: [] });
   });
 
-  it('is mutually exclusive with Explain Mode', () => {
-    store.getState().setExplain({ active: true, step: 1 });
-    expect(store.getState().explain.active).toBe(true);
+  it('is mutually exclusive with flow playback', () => {
+    store.getState().setFlowPlayback({ active: true, step: 1 });
+    expect(store.getState().flowPlayback.active).toBe(true);
 
     store.getState().enterFocus(['a'], []);
     expect(store.getState().focus.active).toBe(true);
-    expect(store.getState().explain.active).toBe(false);
+    expect(store.getState().flowPlayback.active).toBe(false);
 
-    store.getState().setExplain({ active: true, step: 1 });
-    expect(store.getState().explain.active).toBe(true);
+    store.getState().setFlowPlayback({ active: true, step: 1 });
+    expect(store.getState().flowPlayback.active).toBe(true);
     expect(store.getState().focus.active).toBe(false);
   });
 });

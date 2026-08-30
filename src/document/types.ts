@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 2;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -166,11 +166,6 @@ export interface DraftEdge {
   directed: boolean;
   routing: EdgeRouting;
   accent?: Accent;
-  /**
-   * Position in the ordered walkthrough. `undefined` means the edge is not part
-   * of the sequence. Numbers are kept contiguous from 1 by `sequence.ts`.
-   */
-  sequence?: number;
   /** Expandable technical detail, shown on selection and in Explain Mode. */
   details?: EdgeDetails;
   /**
@@ -178,6 +173,40 @@ export interface DraftEdge {
    * none; never implies or changes `accent` or any other styling.
    */
   semantic?: EdgeSemantic;
+  /**
+   * Free-text condition chip, e.g. "approved", "timeout". Distinct from
+   * `label`: the label describes what the connection represents in general,
+   * the condition describes when this particular branch applies. Never
+   * evaluated — display only.
+   */
+  condition?: string;
+  /** `true` renders a dashed line for an asynchronous interaction. Absent/`false` is synchronous (solid). */
+  async?: boolean;
+}
+
+/**
+ * One step in a Flow: an existing connector, in order, optionally with a
+ * caption specific to this telling of the story. `caption` falls back to the
+ * edge's own `label` when absent — the label describes the connection in
+ * general, the caption explains what's happening at this point in this flow.
+ */
+export interface DraftFlowStep {
+  id: string;
+  edgeId: string;
+  caption?: string;
+}
+
+/**
+ * A named, ordered walkthrough of existing connectors — an explanation layer
+ * over the architecture, not a second copy of it. Multiple flows may share or
+ * diverge on the same connectors; order comes from array position, not a
+ * field on the edge, which is what lets one connector belong to several
+ * flows at different positions simultaneously. See `document/flow.ts`.
+ */
+export interface DraftFlow {
+  id: string;
+  title: string;
+  steps: DraftFlowStep[];
 }
 
 export interface DraftViewport {
@@ -194,6 +223,7 @@ export interface DraftMetadata {
 }
 
 export interface DraftSettings {
+  /** Whether to show a flow's step badges on its connectors when it's selected for overlay. */
   showSequence: boolean;
   grid: GridMode;
 }
@@ -206,6 +236,7 @@ export interface DraftDocument {
   edges: DraftEdge[];
   viewport: DraftViewport;
   settings: DraftSettings;
+  flows: DraftFlow[];
 }
 
 /** Lightweight row for the local library listing. Never holds canvas contents. */

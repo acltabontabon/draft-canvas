@@ -223,7 +223,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
   const document = useEditorStore((state) => state.document);
   const selection = useEditorStore((state) => state.selection);
   const mode = useEditorStore((state) => state.mode);
-  const explainActive = useEditorStore((state) => state.explain.active);
+  const explainActive = useEditorStore((state) => state.flowPlayback.active);
   const focusActive = useEditorStore((state) => state.focus.active);
   const theme = useThemeValue();
 

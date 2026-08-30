@@ -31,12 +31,20 @@ to connect it; drop on empty canvas and the node you were heading for is created
 **Drop in code** — Syntax-highlighted cards for Java, JSON, YAML, XML, SQL, shell, HTTP and log
 output. For reading and explaining, not for writing programs.
 
-**Number the steps** — Any connection can carry a step number. Numbers stay contiguous by
-themselves when you delete or reorder.
+**Tell the story** — A Flow is a named, ordered path through connections you've already drawn:
+select a connector, add it to a Flow, give it an optional caption. Draw your architecture once and
+build as many Flows over it as you have scenarios — *Happy path*, *Payment timeout*, *Retry* — each
+reusing the same nodes and connectors, sharing early steps and diverging later. Switching Flows
+never touches the diagram.
 
-**Walk through it** — Press Present. Explain Mode steps through the numbered connections one at
-a time, lighting the current one and quietening the rest without losing context. Arrow keys move.
-A connection can carry a payload that appears only on its step, so the canvas stays clean.
+**Walk through it** — Press Present, pick a Flow if there's more than one, and step through it one
+connection at a time. The active connector and its two endpoints stay lit, a subtle pulse shows
+which way the conversation is going, and everything else quietens without disappearing. Arrow keys
+move. A connector can carry a payload that appears only on its step, so the canvas stays clean.
+
+**Mark the details** — A connector defaults to a solid line (synchronous); mark it `async` for a
+dashed one — a queue publish, an event, a webhook. A free-text condition chip (`[approved]`,
+`[timeout]`) explains a branch without a decision diamond.
 
 **Keep it** — Edits save to this browser automatically. Export a `.draftcanvas` file to keep a
 copy you control, or a PNG or SVG for a README, a pull request, or Slack.
@@ -94,11 +102,12 @@ The build is path-agnostic (`base: './'`), so `dist/` can be served from any sub
 | `Shift` `1` | Fit to view |
 | `Cmd/Ctrl` `Enter` | Present |
 | `Cmd/Ctrl` `E` | Export |
-| `→` `←` | Next / previous step in a walkthrough |
+| `→` / `Space` `←` | Next / previous step while presenting a Flow |
 | `?` | All shortcuts |
 
 ## Documentation
 
+- [Flows and Presentation Mode](docs/FLOWS.md) — telling a story over a diagram you already drew
 - [Architecture](docs/ARCHITECTURE.md) — how the layers fit together, and why
 - [Document schema](docs/SCHEMA.md) — the `.draftcanvas` format, and how it evolves
 - [Privacy implementation](docs/PRIVACY.md) — what is stored where, auditably

@@ -5,8 +5,8 @@
  * stack keep whole snapshots cheaply.
  */
 import { createId } from './ids';
+import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
-import { compactSequence } from './sequence';
 import type {
   Attachment,
   DraftDocument,
@@ -142,7 +142,11 @@ export function removeElements(
     (e) => !removingEdges.has(e.id) && !removingNodes.has(e.source) && !removingNodes.has(e.target),
   );
   if (nodes.length === doc.nodes.length && edges.length === doc.edges.length) return doc;
-  return compactSequence({ ...doc, nodes, edges });
+
+  const removedEdgeIds = new Set(
+    doc.edges.filter((e) => !edges.includes(e)).map((e) => e.id),
+  );
+  return pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds);
 }
 
 export interface Clipboard {
@@ -183,9 +187,8 @@ export function instantiateFragment(
   });
 
   const edges = fragment.edges.map((edge) => {
-    const { sequence: _dropped, ...rest } = edge;
     return {
-      ...rest,
+      ...edge,
       id: createId('e'),
       source: idMap.get(edge.source)!,
       target: idMap.get(edge.target)!,

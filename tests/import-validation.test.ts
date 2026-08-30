@@ -225,7 +225,7 @@ describe('importing untrusted files', () => {
     expect(result.document.edges).toHaveLength(1);
   });
 
-  it('renumbers a sparse sequence into contiguous steps', () => {
+  it('drops a flow step referencing a connection that does not exist, keeping the rest in order', () => {
     const result = parse({
       ...base,
       nodes: [
@@ -233,15 +233,25 @@ describe('importing untrusted files', () => {
         { id: 'b', type: 'card', x: 100, y: 0 },
       ],
       edges: [
-        { id: 'e1', source: 'a', target: 'b', sequence: 40 },
-        { id: 'e2', source: 'b', target: 'a', sequence: 7 },
+        { id: 'e1', source: 'a', target: 'b' },
+        { id: 'e2', source: 'b', target: 'a' },
+      ],
+      flows: [
+        {
+          id: 'f1',
+          title: 'Walkthrough',
+          steps: [
+            { id: 's1', edgeId: 'e1' },
+            { id: 's2', edgeId: 'missing' },
+            { id: 's3', edgeId: 'e2' },
+          ],
+        },
       ],
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.document.edges.map((edge) => edge.sequence).sort()).toEqual([1, 2]);
-    // Relative order is preserved: the edge numbered 7 becomes step 1.
-    expect(result.document.edges.find((edge) => edge.id === 'e2')!.sequence).toBe(1);
+    expect(result.document.flows).toHaveLength(1);
+    expect(result.document.flows[0]!.steps.map((s) => s.edgeId)).toEqual(['e1', 'e2']);
   });
 
   it('coerces an unknown node variant to its default, and always sets one', () => {

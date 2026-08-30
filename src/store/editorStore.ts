@@ -35,11 +35,15 @@ import {
   type Clipboard,
 } from '../document/operations';
 import {
-  clearSequence,
-  moveInSequence,
-  sequenceAll,
-  toggleSequence,
-} from '../document/sequence';
+  addFlow,
+  createFlow as createFlowEntity,
+  addStepToFlow,
+  deleteFlow,
+  moveStepInFlow,
+  removeStepFromFlow,
+  renameFlow,
+  updateFlowStepCaption as updateFlowStepCaptionOp,
+} from '../document/flow';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import type {
   AttachableType,
@@ -66,18 +70,26 @@ import type { SaveState } from '../storage/autosave';
 
 export type EditorMode = 'edit' | 'present';
 
-export interface ExplainState {
+/**
+ * Presentation Mode's playback state: which flow is being narrated (`null`
+ * while a picker is shown, when playback is active but no flow is chosen
+ * yet) and which step it is on. Never persisted, never pushed to history —
+ * playing a flow is not an editorial action.
+ */
+export interface FlowPlaybackState {
   active: boolean;
+  flowId: string | null;
   step: number;
 }
 
 /**
  * An arbitrary, freely-edited set of nodes/edges to keep lit while everything
- * else fades — a sibling of `ExplainState`, not a variant of it. Explain Mode
- * is ordered and step-indexed; Focus has no ordering and is just as usable in
- * edit mode as in present mode, so folding the two together would force
- * Explain's single-current-step shape to also express an arbitrary set. Never
- * persisted, never pushed to history — the same treatment as `explain`.
+ * else fades — a sibling of `FlowPlaybackState`, not a variant of it. Flow
+ * playback is ordered and step-indexed; Focus has no ordering and is just as
+ * usable in edit mode as in present mode, so folding the two together would
+ * force playback's single-current-step shape to also express an arbitrary
+ * set. Never persisted, never pushed to history — the same treatment as
+ * `flowPlayback`.
  */
 export interface FocusState {
   active: boolean;
@@ -115,8 +127,10 @@ export interface EditorStore {
   clipboard: Clipboard | null;
   save: SaveState;
   mode: EditorMode;
-  explain: ExplainState;
+  flowPlayback: FlowPlaybackState;
   focus: FocusState;
+  /** Which flow's step badges show on the canvas (independent of playback). */
+  selectedFlowId: string | null;
   /** Bumped on every document write; autosave watches this rather than deep-diffing. */
   revision: number;
 
@@ -139,6 +153,9 @@ export interface EditorStore {
   /** Sets (or clears) a semantic type — fills the default label only if the
    *  edge has none, and never touches `accent`. See `document/edgeSemantics.ts`. */
   setEdgeSemantic: (id: string, semantic: EdgeSemantic | undefined) => void;
+  /** Free-text condition chip, e.g. "approved" — display only, never evaluated. */
+  setEdgeCondition: (id: string, condition: string) => void;
+  toggleEdgeAsync: (id: string) => void;
   commitPositions: (positions: Map<string, { x: number; y: number }>) => void;
   /** Moves every selected node by a pixel delta — repeated taps coalesce. */
   nudgeSelection: (dx: number, dy: number) => void;
@@ -166,11 +183,16 @@ export interface EditorStore {
   /** Sets or clears (`boundaryId: null`) a node's containing boundary. */
   reparentNode: (nodeId: string, boundaryId: string | null) => void;
 
-  /* Sequencing */
-  toggleEdgeSequence: (edgeId: string) => void;
-  moveEdgeInSequence: (edgeId: string, direction: -1 | 1) => void;
-  numberAllEdges: () => void;
-  clearAllSequence: () => void;
+  /* Flows */
+  createFlow: (title?: string) => string;
+  renameFlow: (flowId: string, title: string) => void;
+  deleteFlow: (flowId: string) => void;
+  addEdgeToFlow: (flowId: string, edgeId: string, caption?: string) => void;
+  removeFlowStep: (flowId: string, stepId: string) => void;
+  moveFlowStep: (flowId: string, stepId: string, direction: -1 | 1) => void;
+  updateFlowStepCaption: (flowId: string, stepId: string, caption: string) => void;
+  /** Which flow's step badges show on the canvas. `null` shows none. */
+  setSelectedFlowId: (flowId: string | null) => void;
 
   /* Document-level */
   rename: (title: string) => void;
@@ -187,7 +209,7 @@ export interface EditorStore {
   setSelection: (selection: Selection) => void;
   setSaveState: (state: SaveState) => void;
   setMode: (mode: EditorMode) => void;
-  setExplain: (explain: Partial<ExplainState>) => void;
+  setFlowPlayback: (playback: Partial<FlowPlaybackState>) => void;
 
   /* Focus mode */
   enterFocus: (nodeIds: string[], edgeIds: string[]) => void;
@@ -212,8 +234,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   clipboard: null,
   save: { status: 'idle' },
   mode: 'edit',
-  explain: { active: false, step: 0 },
+  flowPlayback: { active: false, flowId: null, step: 0 },
   focus: { active: false, nodeIds: [], edgeIds: [] },
+  selectedFlowId: null,
   revision: 0,
 
   setDocument(document, options) {
@@ -222,8 +245,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       document,
       history: options?.resetHistory === false ? state.history : EMPTY_HISTORY,
       selection: EMPTY_SELECTION,
-      explain: { active: false, step: 0 },
+      flowPlayback: { active: false, flowId: null, step: 0 },
       focus: { active: false, nodeIds: [], edgeIds: [] },
+      // With exactly one flow there's no ambiguity about which one's step
+      // badges to show, so a freshly opened diagram isn't blank of them.
+      // With several, none is auto-selected — guessing wrong would be worse
+      // than showing none until the user picks.
+      selectedFlowId: document.flows.length === 1 ? document.flows[0]!.id : null,
       revision: state.revision + 1,
     }));
   },
@@ -341,6 +369,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // already gave the connection, and never touches `accent` at all.
     if (semantic && !edge.label) patch.label = SEMANTIC_DEFAULTS[semantic].label;
     state.apply('Set connection type', (doc) => updateEdge(doc, id, patch));
+  },
+
+  setEdgeCondition(id, condition) {
+    get().apply('Set condition', (doc) => updateEdge(doc, id, { condition: condition.trim() || undefined }), {
+      coalesceKey: `edge-condition:${id}`,
+    });
+  },
+
+  toggleEdgeAsync(id) {
+    const state = get();
+    const edge = state.document.edges.find((e) => e.id === id);
+    if (!edge) return;
+    state.apply('Toggle async', (doc) => updateEdge(doc, id, { async: edge.async ? undefined : true }));
   },
 
   commitPositions(positions) {
@@ -520,20 +561,46 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
   },
 
-  toggleEdgeSequence(edgeId) {
-    get().apply('Sequence', (doc) => toggleSequence(doc, edgeId));
+  createFlow(title) {
+    const flow = createFlowEntity({ title });
+    get().apply('Create flow', (doc) => addFlow(doc, flow));
+    return flow.id;
   },
 
-  moveEdgeInSequence(edgeId, direction) {
-    get().apply('Reorder step', (doc) => moveInSequence(doc, edgeId, direction));
+  renameFlow(flowId, title) {
+    get().apply('Rename flow', (doc) => renameFlow(doc, flowId, title), {
+      coalesceKey: `flow-title:${flowId}`,
+    });
   },
 
-  numberAllEdges() {
-    get().apply('Number all steps', sequenceAll);
+  deleteFlow(flowId) {
+    get().apply('Delete flow', (doc) => deleteFlow(doc, flowId));
+    set((s) => ({
+      selectedFlowId: s.selectedFlowId === flowId ? null : s.selectedFlowId,
+      flowPlayback: s.flowPlayback.flowId === flowId ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
+    }));
   },
 
-  clearAllSequence() {
-    get().apply('Clear steps', clearSequence);
+  addEdgeToFlow(flowId, edgeId, caption) {
+    get().apply('Add step', (doc) => addStepToFlow(doc, flowId, edgeId, caption));
+  },
+
+  removeFlowStep(flowId, stepId) {
+    get().apply('Remove step', (doc) => removeStepFromFlow(doc, flowId, stepId));
+  },
+
+  moveFlowStep(flowId, stepId, direction) {
+    get().apply('Reorder step', (doc) => moveStepInFlow(doc, flowId, stepId, direction));
+  },
+
+  updateFlowStepCaption(flowId, stepId, caption) {
+    get().apply('Edit caption', (doc) => updateFlowStepCaptionOp(doc, flowId, stepId, caption), {
+      coalesceKey: `flow-step-caption:${stepId}`,
+    });
+  },
+
+  setSelectedFlowId(flowId) {
+    set({ selectedFlowId: flowId });
   },
 
   rename(title) {
@@ -588,7 +655,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setMode(mode) {
     set((s) => ({
       mode,
-      explain: mode === 'edit' ? { active: false, step: 0 } : s.explain,
+      flowPlayback: mode === 'edit' ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
       // A selection ring left over from editing has no meaning in a
       // read-only presentation — nothing there can show why it is
       // highlighted, so it just reads as a stray mark on one box.
@@ -596,19 +663,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }));
   },
 
-  setExplain(explain) {
+  setFlowPlayback(playback) {
     set((s) => ({
-      explain: { ...s.explain, ...explain },
-      // Mutually exclusive with Focus — starting the walkthrough exits it,
-      // rather than the two dimming systems ever needing to combine.
-      focus: explain.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+      flowPlayback: { ...s.flowPlayback, ...playback },
+      // Mutually exclusive with Focus — starting playback exits it, rather
+      // than the two dimming systems ever needing to combine.
+      focus: playback.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
     }));
   },
 
   enterFocus(nodeIds, edgeIds) {
     set((s) => ({
       focus: { active: true, nodeIds, edgeIds },
-      explain: s.explain.active ? { active: false, step: 0 } : s.explain,
+      flowPlayback: s.flowPlayback.active ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
     }));
   },
 
@@ -635,6 +702,7 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
   return (
     a.nodes === b.nodes &&
     a.edges === b.edges &&
+    a.flows === b.flows &&
     a.settings === b.settings &&
     a.viewport === b.viewport &&
     a.metadata.title === b.metadata.title

@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Handle, NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { minSizeFor } from '../document/factory';
-import { explainNodeTier, type ExplainTier } from '../document/sequence';
+import { explainNodeTier, type ExplainTier } from '../document/flow';
 import type { DraftNode } from '../document/types';
 import { CODE_LAYOUT, describeContext, describeNode, naturalCodeSize } from '../nodes/describe';
 import { HANDLE_SIDES, positionForSide } from '../edges/routing';
@@ -287,10 +287,11 @@ function editorStyle(type: string, isCode: boolean): React.CSSProperties {
   };
 }
 
-/** This node's Explain Mode dimming tier — `hidden` whenever Explain is off. */
+/** This node's Presentation Mode dimming tier — `hidden` whenever playback is off. */
 function explainTierFor(state: EditorStore, id: string): ExplainTier {
-  if (!state.explain.active) return 'hidden';
-  return explainNodeTier(edgeIndex(state.document.edges).values(), id, state.explain.step);
+  if (!state.flowPlayback.active || !state.flowPlayback.flowId) return 'hidden';
+  const flow = state.document.flows.find((f) => f.id === state.flowPlayback.flowId);
+  return explainNodeTier(flow, edgeIndex(state.document.edges).values(), id, state.flowPlayback.step);
 }
 
 export type { DraftNodeData };

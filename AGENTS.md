@@ -37,6 +37,9 @@ npm run check      # lint + build + unit tests
   endpoints through them, so hiding them deletes every connector.
 - `nodeTypes` / `edgeTypes` must stay module-scope constants, or React Flow remounts every node
   on every render.
+- **Edges are the one exception to "one renderer."** `src/canvas/DraftEdgeView.tsx` (on-screen)
+  and `src/edges/describe.ts` (SVG export) are two independent implementations of the same
+  connector. A visual addition to a connector must be made in both, by hand.
 
 ## Conventions
 

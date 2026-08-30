@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode, minSizeFor } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
+import { addFlow, createFlow } from '../src/document/flow';
 import { NODE_TYPES } from '../src/document/types';
 import { describeContext, describeNode } from '../src/nodes/describe';
 import { renderDocumentSvg } from '../src/render/svg/document';
@@ -234,9 +235,11 @@ function exportFixture() {
     source: service.id,
     target: queue.id,
     label: 'ORDER_CREATED',
-    sequence: 1,
   });
-  return addEdges(addNodes(createDocument('Export'), [service, queue, code, note]), [edge]);
+  const doc = addEdges(addNodes(createDocument('Export'), [service, queue, code, note]), [edge]);
+  const flow = createFlow({ title: 'Walkthrough' });
+  flow.steps = [{ id: 'fs1', edgeId: edge.id }];
+  return addFlow(doc, flow);
 }
 
 describe('SVG export', () => {
@@ -292,10 +295,14 @@ describe('SVG export', () => {
   });
 
   it('carries connector labels and step numbers into the image', () => {
-    const { svg } = renderDocumentSvg(exportFixture());
+    const doc = exportFixture();
+    const { svg } = renderDocumentSvg(doc, { selectedFlowId: doc.flows[0]!.id });
     expect(svg).toContain('ORDER_CREATED');
     expect(svg).toContain('Order Service');
     expect(svg).toContain('orders.v1');
+    // The label chip carries the flow step badge alongside the label text.
+    const texts = [...parseSvg(svg).querySelectorAll('text')];
+    expect(texts.some((el) => el.textContent === '1')).toBe(true);
   });
 
   it('preserves code content and syntax colours', () => {

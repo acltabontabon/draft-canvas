@@ -31,6 +31,8 @@ export function Toolbar({
   const armed = useUiStore((state) => state.armed);
   const arm = useUiStore((state) => state.arm);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
+  const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
+  const setFlowPanelOpen = useUiStore((state) => state.setFlowPanelOpen);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const past = useEditorStore((state) => state.history.past.length);
@@ -89,6 +91,13 @@ export function Toolbar({
         />
         <Button icon="fit" variant="quiet" onClick={onFit} title="Fit to view (Shift+1)" />
         <span className="dc-toolbar-divider" />
+        <Button
+          icon="sequence"
+          variant="quiet"
+          active={flowPanelOpen}
+          onClick={() => setFlowPanelOpen(!flowPanelOpen)}
+          title="Flows"
+        />
         <Button icon="present" variant="quiet" onClick={onPresent} title="Present (Cmd+Enter)" />
         <Button icon="export" variant="quiet" onClick={onExport} title="Export (Cmd+E)" />
         <Button

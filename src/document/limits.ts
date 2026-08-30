@@ -21,6 +21,10 @@ export const LIMITS = {
   minZoom: 0.1,
   maxZoom: 4,
   maxAttachmentsPerNode: 12,
+  maxFlows: 50,
+  maxStepsPerFlow: 200,
+  maxFlowTitleLength: 100,
+  maxConditionLength: 120,
 } as const;
 
 export const DEFAULTS = {

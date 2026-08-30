@@ -56,6 +56,10 @@ Each of these has a failure mode that is silent, delayed, or both.
   endpoints through them, so hiding them deletes every connector.
 - `nodeTypes` / `edgeTypes` must stay module-scope constants, or React Flow remounts every node
   on every render.
+- **Edges are the one exception to "one renderer."** Unlike nodes, `src/canvas/DraftEdgeView.tsx`
+  (on-screen) and `src/edges/describe.ts` (SVG export) are two independent implementations of the
+  same connector. A visual addition to a connector — a badge, a dash pattern, a chip — must be
+  made in both, by hand; nothing enforces parity. See `docs/ARCHITECTURE.md`.
 
 ## Architecture
 

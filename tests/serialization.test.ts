@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
+import { addFlow, createFlow } from '../src/document/flow';
 import { deserializeDocument, serializeDocument, fileNameFor } from '../src/export/project';
 import { CURRENT_VERSION } from '../src/document/types';
 
@@ -35,13 +36,18 @@ function richDocument() {
     source: service.id,
     target: queue.id,
     label: 'ORDER_CREATED',
-    sequence: 1,
   });
-  const persisted = createEdge({ source: service.id, target: db.id, sequence: 2 });
+  const persisted = createEdge({ source: service.id, target: db.id });
   persisted.details = { language: 'sql', code: 'select * from orders where id = ?' };
 
   let doc = addNodes(createDocument('Payment Flow'), [service, queue, db, code, note]);
   doc = addEdges(doc, [published, persisted]);
+  const flow = createFlow({ title: 'Happy path' });
+  flow.steps = [
+    { id: 'fs1', edgeId: published.id, caption: 'Publish the event' },
+    { id: 'fs2', edgeId: persisted.id },
+  ];
+  doc = addFlow(doc, flow);
   return { ...doc, viewport: { x: -120, y: 40, zoom: 1.25 } };
 }
 
@@ -58,6 +64,7 @@ describe('.draftcanvas round trip', () => {
     expect(result.document.metadata.id).toBe(original.metadata.id);
     expect(result.document.nodes).toEqual(original.nodes);
     expect(result.document.edges).toEqual(original.edges);
+    expect(result.document.flows).toEqual(original.flows);
     expect(result.document.viewport).toEqual(original.viewport);
     expect(result.document.settings).toEqual(original.settings);
   });

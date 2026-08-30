@@ -19,6 +19,7 @@ import type {
   ServiceKind,
 } from '../../document/types';
 import type { AlignEdge } from '../../document/operations';
+import { stepIndexOf } from '../../document/flow';
 import { LANGUAGE_LABELS } from '../../render/code/highlight';
 import { useEditorStore } from '../../store/editorStore';
 import { nodeIndex, edgeIndex } from '../../store/selectors';
@@ -309,28 +310,26 @@ export function Inspector() {
           </select>
           <Button
             variant="ghost"
-            active={typeof onlyEdge.sequence === 'number'}
-            title="Include this connection in the walkthrough"
-            onClick={() => store.getState().toggleEdgeSequence(onlyEdge.id)}
+            active={Boolean(onlyEdge.async)}
+            title="Asynchronous interaction (dashed line)"
+            onClick={() => store.getState().toggleEdgeAsync(onlyEdge.id)}
           >
-            {typeof onlyEdge.sequence === 'number' ? `Step ${onlyEdge.sequence}` : 'Add step'}
+            Async
           </Button>
-          {typeof onlyEdge.sequence === 'number' && (
-            <>
-              <Button
-                icon="back"
-                variant="quiet"
-                aria-label="Move step earlier"
-                onClick={() => store.getState().moveEdgeInSequence(onlyEdge.id, -1)}
-              />
-              <Button
-                icon="forward"
-                variant="quiet"
-                aria-label="Move step later"
-                onClick={() => store.getState().moveEdgeInSequence(onlyEdge.id, 1)}
-              />
-            </>
-          )}
+          <input
+            className="dc-input dc-input-condition"
+            aria-label="Condition"
+            placeholder="Condition…"
+            defaultValue={onlyEdge.condition ?? ''}
+            spellCheck={false}
+            onBlur={(event) => store.getState().setEdgeCondition(onlyEdge.id, event.currentTarget.value)}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === 'Enter') event.currentTarget.blur();
+            }}
+          />
+          <span className="dc-inspector-divider" />
+          <EdgeFlowMembership edgeId={onlyEdge.id} />
         </>
       )}
 
@@ -431,5 +430,93 @@ export function Inspector() {
         onClick={() => store.getState().deleteSelection()}
       />
     </div>
+  );
+}
+
+/**
+ * A connector may belong to several flows at once, each with its own step
+ * position — this renders one compact control per flow it's already in, plus
+ * a select to add it to another (or a brand new one).
+ */
+function EdgeFlowMembership({ edgeId }: { edgeId: string }) {
+  const flows = useEditorStore((state) => state.document.flows);
+  const store = useEditorStore;
+  const memberOf = flows.filter((flow) => stepIndexOf(flow, edgeId) !== undefined);
+  const available = flows.filter((flow) => stepIndexOf(flow, edgeId) === undefined);
+
+  return (
+    <>
+      {memberOf.map((flow) => {
+        const position = stepIndexOf(flow, edgeId)!;
+        const step = flow.steps.find((s) => s.edgeId === edgeId)!;
+        return (
+          <span className="dc-inspector-flow-chip" key={flow.id}>
+            <input
+              className="dc-inspector-flow-chip-input"
+              aria-label={`Rename flow ${flow.title}`}
+              defaultValue={flow.title}
+              spellCheck={false}
+              size={Math.max(4, flow.title.length)}
+              onBlur={(event) => {
+                const value = event.currentTarget.value;
+                if (value.trim() && value !== flow.title) store.getState().renameFlow(flow.id, value);
+              }}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === 'Enter') event.currentTarget.blur();
+                if (event.key === 'Escape') {
+                  event.currentTarget.value = flow.title;
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+            <span className="dc-inspector-flow-chip-step">· {position}</span>
+            <Button
+              icon="back"
+              variant="quiet"
+              aria-label={`Move earlier in ${flow.title}`}
+              onClick={() => store.getState().moveFlowStep(flow.id, step.id, -1)}
+            />
+            <Button
+              icon="forward"
+              variant="quiet"
+              aria-label={`Move later in ${flow.title}`}
+              onClick={() => store.getState().moveFlowStep(flow.id, step.id, 1)}
+            />
+            <Button
+              icon="close"
+              variant="quiet"
+              aria-label={`Remove from ${flow.title}`}
+              onClick={() => store.getState().removeFlowStep(flow.id, step.id)}
+            />
+          </span>
+        );
+      })}
+      <select
+        className="dc-select"
+        aria-label="Add to flow"
+        defaultValue=""
+        onChange={(event) => {
+          const value = event.target.value;
+          if (!value) return;
+          const state = store.getState();
+          const flowId = value === '__new__' ? state.createFlow() : value;
+          state.addEdgeToFlow(flowId, edgeId);
+          // Immediate visual feedback: this flow's step badges are now showing.
+          state.setSelectedFlowId(flowId);
+          event.target.value = '';
+        }}
+      >
+        <option value="" disabled>
+          Add to flow…
+        </option>
+        {available.map((flow) => (
+          <option key={flow.id} value={flow.id}>
+            {flow.title}
+          </option>
+        ))}
+        <option value="__new__">New flow…</option>
+      </select>
+    </>
   );
 }

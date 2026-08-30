@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, useInternalNode, type EdgeProps } from '@xyflow/react';
-import { explainEdgeTier } from '../document/sequence';
+import { explainEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import { accentOf } from '../render/theme/tokens';
 import { routeBetween, type Rect } from '../edges/routing';
@@ -21,7 +21,9 @@ import { useThemeValue } from '../ui/theme/useTheme';
 export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeProps) {
   const edge = useEditorStore((state) => selectEdge(state.document, id));
   const showSequence = useEditorStore((state) => state.document.settings.showSequence);
-  const explain = useEditorStore((state) => state.explain);
+  const flows = useEditorStore((state) => state.document.flows);
+  const flowPlayback = useEditorStore((state) => state.flowPlayback);
+  const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const focus = useEditorStore((state) => state.focus);
   const mode = useEditorStore((state) => state.mode);
   const updateEdgeLabel = useEditorStore((state) => state.updateEdgeLabel);
@@ -53,16 +55,23 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const palette = accentOf(theme, edge.accent);
   const color = edge.accent && edge.accent !== 'neutral' ? palette.chip : theme.edge;
 
-  const tier = explain.active ? explainEdgeTier(edge.sequence, explain.step) : 'hidden';
-  const isActiveStep = explain.active && tier === 'active';
-  const isShownStep = explain.active && tier === 'shown';
-  const dimmed = explain.active && tier === 'hidden';
+  const playingFlow = flowPlayback.active && flowPlayback.flowId
+    ? flows.find((f) => f.id === flowPlayback.flowId)
+    : undefined;
+  const overlayFlow = selectedFlowId ? flows.find((f) => f.id === selectedFlowId) : undefined;
+  const stepNumber = overlayFlow ? stepIndexOf(overlayFlow, edge.id) : undefined;
+
+  const tier = playingFlow ? explainEdgeTier(stepIndexOf(playingFlow, edge.id), flowPlayback.step) : 'hidden';
+  const isActiveStep = flowPlayback.active && tier === 'active';
+  const isShownStep = flowPlayback.active && tier === 'shown';
+  const dimmed = flowPlayback.active && tier === 'hidden';
   const focusDimmed = focus.active && !isEdgeFocused(focus, edge);
 
   const hasLabel = Boolean(edge.label);
-  const hasStep = showSequence && typeof edge.sequence === 'number';
+  const hasStep = showSequence && typeof stepNumber === 'number';
   // The step being explained is the one thing that should stand out.
   const strokeColor = isActiveStep ? theme.selection : color;
+  const conditionText = edge.condition ? `[${edge.condition}]` : null;
 
   return (
     <g
@@ -72,6 +81,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-shown={isShownStep ? 'true' : undefined}
       data-dimmed={dimmed ? 'true' : undefined}
       data-focus-dimmed={focusDimmed ? 'true' : undefined}
+      data-flow-active={isActiveStep ? 'true' : undefined}
     >
 {/*
         `BaseEdge` draws the path and, through `interactionWidth`, a second
@@ -87,6 +97,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           stroke: strokeColor,
           strokeWidth: isActiveStep ? 2.6 : 1.6,
           strokeLinecap: 'round',
+          strokeDasharray: edge.async ? '6 4' : undefined,
         }}
       />
 
@@ -104,7 +115,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           >
             {hasStep && (
               <span className="dc-edge-label-step" style={{ color }}>
-                {edge.sequence}
+                {stepNumber}
               </span>
             )}
             {editing ? (
@@ -149,7 +160,24 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               color,
             }}
           >
-            {edge.sequence}
+            {stepNumber}
+          </div>
+        )}
+
+        {conditionText && (
+          <div
+            className="dc-edge-meta"
+            data-dimmed={dimmed ? 'true' : undefined}
+            data-focus-dimmed={focusDimmed ? 'true' : undefined}
+            data-shown={isShownStep ? 'true' : undefined}
+            data-active={isActiveStep ? 'true' : undefined}
+            style={{
+              transform: `translate(-50%, 0) translate(${route.labelX}px, ${route.labelY + 16}px)`,
+            }}
+          >
+            <span className="dc-edge-condition" style={{ color }}>
+              {conditionText}
+            </span>
           </div>
         )}
       </EdgeLabelRenderer>

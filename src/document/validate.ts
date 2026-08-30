@@ -10,7 +10,6 @@
 import { createId } from './ids';
 import { LIMITS } from './limits';
 import { migrateToCurrent, UnsupportedVersionError } from './migrate';
-import { compactSequence } from './sequence';
 import { defaultSizeFor } from './factory';
 import {
   ACCENTS,
@@ -35,6 +34,8 @@ import {
   type DatabaseKind,
   type DraftDocument,
   type DraftEdge,
+  type DraftFlow,
+  type DraftFlowStep,
   type DraftNode,
   type DraftNodeType,
   type EdgeRouting,
@@ -336,6 +337,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   const seenEdgeIds = new Set<string>();
   const edges: DraftEdge[] = [];
   let droppedEdges = 0;
+  /** Maps the edge id as written in the file to the id we actually used — flows resolve through this. */
+  const edgeIdRemap = new Map<string, string>();
 
   for (const candidate of rawEdges.slice(0, LIMITS.maxEdges)) {
     if (!isRecord(candidate)) {
@@ -351,9 +354,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
       continue;
     }
 
+    const originalEdgeId = typeof candidate.id === 'string' ? candidate.id : null;
     let id = safeId(candidate.id);
     if (!id || seenEdgeIds.has(id)) id = createId('e');
     seenEdgeIds.add(id);
+    if (originalEdgeId && !edgeIdRemap.has(originalEdgeId)) edgeIdRemap.set(originalEdgeId, id);
 
     const edge: DraftEdge = {
       id,
@@ -371,9 +376,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     const accent = oneOfOptional<Accent>(candidate.accent, ACCENTS);
     if (accent !== undefined) edge.accent = accent;
 
-    if (typeof candidate.sequence === 'number' && Number.isFinite(candidate.sequence)) {
-      edge.sequence = Math.max(1, Math.round(candidate.sequence));
-    }
+    const condition = text(candidate.condition, LIMITS.maxConditionLength)?.trim();
+    if (condition) edge.condition = condition;
+
+    if (candidate.async === true) edge.async = true;
 
     if (isRecord(candidate.details)) {
       const code = text(candidate.details.code, LIMITS.maxCodeLength);
@@ -410,6 +416,58 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     repairs.push(`Dropped ${droppedEdges} connection(s) pointing at nodes that do not exist.`);
   }
 
+  /* --------------------------------------------------------------- flows -- */
+
+  const rawFlows = Array.isArray(raw.flows) ? raw.flows : [];
+  const flows: DraftFlow[] = [];
+  let droppedFlows = 0;
+  let droppedFlowSteps = 0;
+
+  for (const candidateFlow of rawFlows.slice(0, LIMITS.maxFlows)) {
+    if (!isRecord(candidateFlow)) {
+      droppedFlows += 1;
+      continue;
+    }
+    const id = safeId(candidateFlow.id) ?? createId('f');
+    const title = text(candidateFlow.title, LIMITS.maxFlowTitleLength)?.trim() || 'Untitled flow';
+    const rawSteps = Array.isArray(candidateFlow.steps) ? candidateFlow.steps : [];
+
+    const steps: DraftFlowStep[] = [];
+    const seenStepEdgeIds = new Set<string>();
+    const seenStepIds = new Set<string>();
+    for (const candidateStep of rawSteps.slice(0, LIMITS.maxStepsPerFlow)) {
+      if (!isRecord(candidateStep)) {
+        droppedFlowSteps += 1;
+        continue;
+      }
+      const rawEdgeId = typeof candidateStep.edgeId === 'string' ? candidateStep.edgeId : undefined;
+      const edgeId = rawEdgeId ? edgeIdRemap.get(rawEdgeId) : undefined;
+      // A step whose connector was dropped, or that duplicates one already in
+      // this flow, is silently repaired away rather than kept dangling.
+      if (!edgeId || seenStepEdgeIds.has(edgeId)) {
+        droppedFlowSteps += 1;
+        continue;
+      }
+      seenStepEdgeIds.add(edgeId);
+
+      let stepId = safeId(candidateStep.id);
+      if (!stepId || seenStepIds.has(stepId)) stepId = createId('fs');
+      seenStepIds.add(stepId);
+
+      const step: DraftFlowStep = { id: stepId, edgeId };
+      const caption = text(candidateStep.caption, LIMITS.maxLabelLength)?.trim();
+      if (caption) step.caption = caption;
+      steps.push(step);
+    }
+
+    flows.push({ id, title, steps });
+  }
+
+  if (droppedFlows > 0) repairs.push(`Dropped ${droppedFlows} unreadable flow(s).`);
+  if (droppedFlowSteps > 0) {
+    repairs.push(`Dropped ${droppedFlowSteps} flow step(s) referencing a missing connection.`);
+  }
+
   /* ------------------------------------------------------------ document -- */
 
   const viewportRaw = isRecord(raw.viewport) ? raw.viewport : {};
@@ -435,7 +493,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
       showSequence: settingsRaw.showSequence !== false,
       grid: oneOf<GridMode>(settingsRaw.grid, GRID_MODES, 'dots'),
     },
+    flows,
   };
 
-  return { ok: true, document: compactSequence(document), repairs };
+  return { ok: true, document, repairs };
 }

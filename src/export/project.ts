@@ -26,6 +26,7 @@ export function serializeDocument(document: DraftDocument): string {
     edges: document.edges,
     viewport: document.viewport,
     settings: document.settings,
+    flows: document.flows,
   };
   return `${JSON.stringify(payload, null, 2)}\n`;
 }

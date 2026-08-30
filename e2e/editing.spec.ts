@@ -504,7 +504,10 @@ test.describe('editing', () => {
     const boundary = page.locator('.dc-node[data-type="group"]');
     const boundaryBox = (await boundary.boundingBox())!;
 
-    await create(page, 'Card', { x: 350, y: 600 });
+    // Placed clear of the bottom-center Inspector, which grows wide enough
+    // for a boundary selection (colour swatches, boundary preset, ungroup,
+    // focus, delete) to reach the lower half of the viewport.
+    await create(page, 'Card', { x: 350, y: 480 });
     const card = page.locator('.dc-node[data-type="card"]');
 
     // A point inside the boundary's own padding, clear of either child.

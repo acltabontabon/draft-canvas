@@ -4,50 +4,97 @@ import { useEditorStore } from '../../store/editorStore';
 import { tokenizeCode } from '../../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../../render/code/theme';
 import { useTheme } from '../theme/useTheme';
-import type { ExplainController } from '../../presentation/useExplain';
+import type { FlowPlaybackController } from '../../presentation/useFlowPlayback';
 import { Button } from '../common/Button';
 
 /**
- * The walkthrough control. Present while stepping through ordered connections,
- * and the only chrome visible in presentation mode.
+ * Presentation Mode's control. Present while playing a flow, and the only
+ * chrome visible in presentation mode — the canvas itself carries the story.
  */
-export function ExplainBar({ explain }: { explain: ExplainController }) {
+export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
   const document = useEditorStore((state) => state.document);
   const mode = useEditorStore((state) => state.mode);
   const setMode = useEditorStore((state) => state.setMode);
 
   useEffect(() => {
-    if (!explain.active) return;
+    if (!playback.active) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (playback.picking) {
+        if (event.key === 'Escape') {
+          playback.stop();
+          if (mode === 'present') setMode('edit');
+        }
+        return;
+      }
       if (event.key === 'ArrowRight' || event.key === ' ') {
         event.preventDefault();
-        explain.next();
+        playback.next();
       } else if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        explain.previous();
+        playback.previous();
       } else if (event.key === 'Escape') {
-        explain.stop();
+        playback.stop();
         if (mode === 'present') setMode('edit');
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [explain, mode, setMode]);
+  }, [playback, mode, setMode]);
 
-  if (!explain.active || !explain.current) return null;
+  if (!playback.active) return null;
+
+  if (playback.picking) {
+    return (
+      <div className="dc-explain dc-flow-picker" role="region" aria-label="Choose a flow">
+        <div className="dc-explain-bar">
+          <span className="dc-explain-count">Present which flow?</span>
+          <span className="dc-inspector-divider" />
+          {playback.flows.map((flow) => (
+            <Button key={flow.id} variant="ghost" onClick={() => playback.pickFlow(flow.id)}>
+              {flow.title}
+            </Button>
+          ))}
+          <span className="dc-inspector-divider" />
+          <Button
+            variant="quiet"
+            onClick={() => {
+              playback.stop();
+              if (mode === 'present') setMode('edit');
+            }}
+          >
+            Exit
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!playback.current || !playback.flow) return null;
 
   const nodes = nodeIndex(document.nodes);
-  const source = nodes.get(explain.current.edge.source);
-  const target = nodes.get(explain.current.edge.target);
-  const details = explain.current.edge.details;
+  const source = nodes.get(playback.current.edge.source);
+  const target = nodes.get(playback.current.edge.target);
+  const details = playback.current.edge.details;
+  const caption = playback.current.caption || playback.current.edge.label;
+  const condition = playback.current.edge.condition;
 
   return (
-    <div className="dc-explain" role="region" aria-label="Walkthrough">
+    <div className="dc-explain" role="region" aria-label="Flow playback">
       {details && <DetailPanel language={details.language} code={details.code} />}
 
       <div className="dc-explain-bar">
+        <span className="dc-explain-flow-title">{playback.flow.title}</span>
         <span className="dc-explain-count">
-          Step {explain.step} / {explain.steps.length}
+          Step {playback.step} / {playback.steps.length}
+        </span>
+        <span className="dc-flow-dots" aria-hidden="true">
+          {playback.steps.map((step) => (
+            <span
+              key={step.step}
+              className="dc-flow-dot"
+              data-filled={step.step <= playback.step ? 'true' : undefined}
+            />
+          ))}
         </span>
         <span className="dc-explain-flow">
           <strong>{source?.text || 'Untitled'}</strong>
@@ -55,29 +102,28 @@ export function ExplainBar({ explain }: { explain: ExplainController }) {
             →
           </span>
           <strong>{target?.text || 'Untitled'}</strong>
-          {explain.current.edge.label && (
-            <em className="dc-explain-label">{explain.current.edge.label}</em>
-          )}
         </span>
+        {caption && <span className="dc-explain-caption">{caption}</span>}
+        {condition && <span className="dc-explain-condition">[{condition}]</span>}
         <span className="dc-inspector-divider" />
         <Button
           icon="back"
           variant="quiet"
           aria-label="Previous step"
-          disabled={explain.step <= 1}
-          onClick={explain.previous}
+          disabled={playback.step <= 1}
+          onClick={playback.previous}
         />
         <Button
           icon="forward"
           variant="quiet"
           aria-label="Next step"
-          disabled={explain.step >= explain.steps.length}
-          onClick={explain.next}
+          disabled={playback.step >= playback.steps.length}
+          onClick={playback.next}
         />
         <Button
           variant="quiet"
           onClick={() => {
-            explain.stop();
+            playback.stop();
             if (mode === 'present') setMode('edit');
           }}
         >

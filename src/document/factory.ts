@@ -170,7 +170,6 @@ export interface CreateEdgeInput {
   directed?: boolean;
   routing?: DraftEdge['routing'];
   accent?: Accent;
-  sequence?: number;
   id?: string;
 }
 
@@ -184,7 +183,6 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
   };
   if (input.label) edge.label = input.label;
   if (input.accent !== undefined) edge.accent = input.accent;
-  if (typeof input.sequence === 'number') edge.sequence = input.sequence;
   return edge;
 }
 
@@ -198,6 +196,7 @@ export function createDocument(title = 'Untitled canvas'): DraftDocument {
     edges: [],
     viewport: { x: 0, y: 0, zoom: 1 },
     settings: { showSequence: true, grid: 'dots' },
+    flows: [],
   };
 }
 

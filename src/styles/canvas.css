@@ -249,6 +249,42 @@
   transform-origin: center;
 }
 
+/* The condition chip sits below the label/badge — a small, secondary tag,
+   never competing with the label for attention. */
+.dc-edge-meta {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.dc-edge-condition {
+  padding: 1px 6px;
+  border: 1px solid var(--dc-border);
+  border-radius: 4px;
+  background: var(--dc-edge-label-bg);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A pulse traveling along the active connector during Presentation Mode —
+   the one thing this animation needs to answer is "who is talking to whom". */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-edge[data-flow-active='true'] .dc-edge-line {
+    stroke-dasharray: 3 9;
+    animation: dc-flow-pulse 900ms linear infinite;
+  }
+}
+
+@keyframes dc-flow-pulse {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
 /* ------------------------------------------------------------ attach -- */
 
 /* A concrete attach target, armed by a drag in progress — subtle, not loud:
@@ -535,13 +571,15 @@
  * connector does not reach them. Without this the quiet steps keep shouting.
  */
 .dc-edge-label[data-dimmed='true'],
-.dc-edge-step[data-dimmed='true'] {
+.dc-edge-step[data-dimmed='true'],
+.dc-edge-meta[data-dimmed='true'] {
   opacity: 0.22;
   transition: opacity 180ms ease;
 }
 
 .dc-edge-label[data-shown='true'],
-.dc-edge-step[data-shown='true'] {
+.dc-edge-step[data-shown='true'],
+.dc-edge-meta[data-shown='true'] {
   opacity: 0.55;
   transition: opacity 180ms ease;
 }
@@ -581,7 +619,8 @@
 }
 
 .dc-edge-label[data-focus-dimmed='true'],
-.dc-edge-step[data-focus-dimmed='true'] {
+.dc-edge-step[data-focus-dimmed='true'],
+.dc-edge-meta[data-focus-dimmed='true'] {
   opacity: 0.22;
   transition: opacity 180ms ease;
 }

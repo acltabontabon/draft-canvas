@@ -26,6 +26,8 @@ interface UiStore {
   attachArmedTarget: string | null;
   /** The host node whose attachment popover is open, if any. */
   openAttachmentPopover: string | null;
+  /** Whether the Flow list drawer is visible. */
+  flowPanelOpen: boolean;
   /**
    * A node or edge id that `Enter` just asked to start editing. There is no
    * ref-based imperative API into the memoized node/edge components, so this
@@ -40,6 +42,7 @@ interface UiStore {
   setQuickConnect: (state: QuickConnectState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
   setOpenAttachmentPopover: (hostId: string | null) => void;
+  setFlowPanelOpen: (open: boolean) => void;
   requestEdit: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone']) => void;
   dismiss: (id: number) => void;
@@ -55,6 +58,7 @@ export const useUiStore = create<UiStore>((set) => ({
   quickConnect: null,
   attachArmedTarget: null,
   openAttachmentPopover: null,
+  flowPanelOpen: false,
   editRequestId: null,
 
   arm: (armed) => set({ armed }),
@@ -64,6 +68,7 @@ export const useUiStore = create<UiStore>((set) => ({
   setAttachArmedTarget: (attachArmedTarget) =>
     set((state) => (state.attachArmedTarget === attachArmedTarget ? state : { attachArmedTarget })),
   setOpenAttachmentPopover: (openAttachmentPopover) => set({ openAttachmentPopover }),
+  setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   requestEdit: (editRequestId) => set({ editRequestId }),
 
   notify(message, tone = 'info') {

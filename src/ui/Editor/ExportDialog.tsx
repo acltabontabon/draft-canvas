@@ -18,6 +18,7 @@ export function ExportDialog() {
   const notify = useUiStore((state) => state.notify);
   const document = useEditorStore((state) => state.document);
   const selection = useEditorStore((state) => state.selection);
+  const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const { name } = useTheme();
 
   const [paletteName, setPaletteName] = useState<ThemeName>(name);
@@ -29,7 +30,12 @@ export function ExportDialog() {
 
   const only =
     selectionOnly && selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
-  const options = { theme: paletteName, transparent, only };
+  const options = {
+    theme: paletteName,
+    transparent,
+    only,
+    selectedFlowId: selectedFlowId ?? undefined,
+  };
 
   const run = async (task: () => void | Promise<void>, what: string) => {
     setBusy(true);

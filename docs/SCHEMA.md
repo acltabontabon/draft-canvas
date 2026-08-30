@@ -11,7 +11,7 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
 ```json
 {
   "format": "draft-canvas",
-  "version": 1,
+  "version": 2,
   "metadata": {
     "id": "d_x8k2m4p9qr7t",
     "title": "Account cancellation",
@@ -42,8 +42,18 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
       "directed": true,
       "routing": "smoothstep",
       "label": "ACCOUNT_CANCELLED",
-      "sequence": 1,
+      "async": true,
+      "condition": "approved",
       "details": { "language": "json", "code": "{ \"status\": \"CANCELLED\" }" }
+    }
+  ],
+  "flows": [
+    {
+      "id": "f_p3q4r5",
+      "title": "Happy path",
+      "steps": [
+        { "id": "fs_1", "edgeId": "e_g7h8i9", "caption": "Publish the cancellation event" }
+      ]
     }
   ],
   "viewport": { "x": 0, "y": 0, "zoom": 1 },
@@ -62,8 +72,9 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
 | `metadata` | object | Identity and timestamps. |
 | `nodes` | array | Elements on the canvas. |
 | `edges` | array | Connections between them. |
+| `flows` | array | Named, ordered walkthroughs of existing connections — see [Flow](#flow) below. |
 | `viewport` | object | `x`, `y`, `zoom` — where the canvas was left. |
-| `settings` | object | `showSequence` (boolean), `grid` (`dots` · `lines` · `none`). |
+| `settings` | object | `showSequence` (boolean — show a flow's step badges on its connectors when it's selected for overlay), `grid` (`dots` · `lines` · `none`). |
 
 ### Node
 
@@ -109,12 +120,25 @@ one restores it as an ordinary node on the canvas.
 | `routing` | enum | `smoothstep` · `bezier` · `straight`. |
 | `label` | string? | |
 | `accent` | enum? | As for nodes. |
-| `sequence` | integer? | Position in the walkthrough. Kept contiguous from 1. Absent means the connection is not part of it. |
-| `details` | object? | `{ language, code }` — expandable detail shown on selection and during its Explain step. |
+| `details` | object? | `{ language, code }` — expandable detail shown on selection and during its playback step. |
 | `semantic` | enum? | `http` · `event` · `command` · `query` · `reads` · `writes` · `publishes` · `consumes` · `calls` · `dependsOn`. Optional convenience only — fills in a default `label` when picked on a labelless edge, never assigned automatically, never changes `accent`. |
+| `async` | boolean? | `true` renders a dashed line for an asynchronous interaction. Absent/`false` is synchronous (solid) — a visual distinction only, no protocol taxonomy. |
+| `condition` | string? | Free-text chip, e.g. `"approved"`, `"timeout"` — displayed, never evaluated. Distinct from `label`: the label describes the connection in general, the condition describes when a particular branch applies. |
 
 Connection anchors are **not** stored. They are recomputed from node positions, so connections
 re-route themselves when things move and a file cannot carry stale geometry.
+
+### Flow
+
+A named, ordered walkthrough of existing connectors — an explanation layer over the architecture,
+not a second copy of it. Multiple flows may reference the same connector at different positions;
+switching flows never changes a node or edge. See [`src/document/flow.ts`](../src/document/flow.ts).
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | string | Unique within the document. |
+| `title` | string | e.g. `"Happy path"`, `"Payment timeout"`. |
+| `steps` | array | Ordered. Each `{ id, edgeId, caption? }` — `edgeId` references an existing connection; order is the array position, not a stored number. `caption` is optional and, when absent, playback falls back to the connector's own `label`. A step whose connector no longer exists is dropped, not left dangling. |
 
 ## Limits
 
@@ -133,6 +157,10 @@ Applied to anything read from a file or from a possibly-corrupted local record. 
 | Coordinates | ±1,000,000 |
 | Node size | 24 – 20,000 |
 | Zoom | 0.1 – 4 |
+| Flows | 50 |
+| Steps per flow | 200 |
+| Flow title | 100 characters |
+| Condition | 120 characters |
 
 ## Reading a file: repair, don't reject
 
@@ -145,7 +173,8 @@ newer format version. Everything else is repaired, and the repairs are reported:
 - Grouping links that dangle, point at themselves, or form a cycle are detached.
 - Non-finite and out-of-range numbers are clamped.
 - Control characters are stripped from text; tabs and newlines are kept.
-- Sequence numbers are renumbered to 1..n, preserving relative order.
+- A flow step referencing a connection that does not exist (or a duplicate step for the same
+  connection within one flow) is dropped, keeping the rest of that flow in order.
 
 A diagram with three broken connections opens with the other ninety-seven intact.
 
@@ -163,3 +192,11 @@ To add a version:
 
 Older files then open through the migration chain. Newer files are refused with a message naming
 both versions, rather than being silently mangled.
+
+**Worked example — v1 → v2:** v1 had a single, document-wide numbered walkthrough
+(`edge.sequence`). v2 replaces it with `flows`, so several independent, named walkthroughs can
+share or diverge on the same connectors — something one number per edge could not represent. The
+migration collects every edge with a `sequence`, sorts by that number, and synthesizes one flow
+titled `"Walkthrough"` from them (skipped entirely if nothing was sequenced), then strips
+`sequence` from the edges. An old file's existing walkthrough opens and plays back exactly as it
+did before; multiple flows are new, additive capability from there.
