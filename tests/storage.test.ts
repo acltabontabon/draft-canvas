@@ -100,6 +100,54 @@ describe('local persistence', () => {
     expect(loaded!.nodes).toHaveLength(2);
   });
 
+  it('migrates a record left in an older format by a previous build of the app', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('From an older build', 2);
+    const [a, b] = doc.nodes;
+    // Simulates a record actually written by pre-anchor code: version 2, and
+    // no sourceAnchor/targetAnchor on the edge at all.
+    await repository.save({
+      ...doc,
+      version: 2,
+      edges: [{ id: 'e1', source: a!.id, target: b!.id, directed: true, routing: 'smoothstep' }],
+    } as never);
+
+    const loaded = await repository.load(doc.metadata.id);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.version).toBe(3);
+    expect(loaded!.edges[0]!.sourceAnchor).toBeDefined();
+    expect(loaded!.edges[0]!.targetAnchor).toBeDefined();
+  });
+
+  it('persists the migrated record, so it is not silently re-migrated every load', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Migrate once', 2);
+    const [a, b] = doc.nodes;
+    await repository.save({
+      ...doc,
+      version: 2,
+      edges: [{ id: 'e1', source: a!.id, target: b!.id, directed: true, routing: 'smoothstep' }],
+    } as never);
+
+    await repository.load(doc.metadata.id);
+
+    // A second `load()` call would recompute the same migration in memory
+    // either way, so it can't distinguish "persisted" from "re-derived every
+    // time" — read the raw stored bytes directly instead, bypassing `load`'s
+    // own migration, to confirm the record on disk itself was rewritten.
+    const raw = await new Promise<{ document: { version: number } }>((resolve, reject) => {
+      const req = indexedDB.open('draft-canvas');
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        const tx = req.result.transaction('bodies', 'readonly');
+        const getReq = tx.objectStore('bodies').get(doc.metadata.id);
+        getReq.onsuccess = () => resolve(getReq.result);
+        getReq.onerror = () => reject(getReq.error);
+      };
+    });
+    expect(raw.document.version).toBe(3);
+  });
+
   it('returns null for a record too broken to recognise', async () => {
     const repository = await IndexedDbRepository.open();
     await repository.save(documentWith('Fine'));

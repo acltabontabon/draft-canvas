@@ -11,7 +11,7 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
 ```json
 {
   "format": "draft-canvas",
-  "version": 2,
+  "version": 3,
   "metadata": {
     "id": "d_x8k2m4p9qr7t",
     "title": "Account cancellation",
@@ -44,7 +44,9 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
       "label": "ACCOUNT_CANCELLED",
       "async": true,
       "condition": "approved",
-      "details": { "language": "json", "code": "{ \"status\": \"CANCELLED\" }" }
+      "details": { "language": "json", "code": "{ \"status\": \"CANCELLED\" }" },
+      "sourceAnchor": { "side": "right", "offset": 0.5 },
+      "targetAnchor": { "side": "left", "offset": 0.35 }
     }
   ],
   "flows": [
@@ -124,9 +126,17 @@ one restores it as an ordinary node on the canvas.
 | `semantic` | enum? | `http` · `event` · `command` · `query` · `reads` · `writes` · `publishes` · `consumes` · `calls` · `dependsOn`. Optional convenience only — fills in a default `label` when picked on a labelless edge, never assigned automatically, never changes `accent`. |
 | `async` | boolean? | `true` renders a dashed line for an asynchronous interaction. Absent/`false` is synchronous (solid) — a visual distinction only, no protocol taxonomy. |
 | `condition` | string? | Free-text chip, e.g. `"approved"`, `"timeout"` — displayed, never evaluated. Distinct from `label`: the label describes the connection in general, the condition describes when a particular branch applies. |
+| `sourceAnchor` `targetAnchor` | object? | `{ side, offset }` — which side of the node (`top` · `right` · `bottom` · `left`) the connector attaches to, and how far along it (`offset`, a 0–1 fraction of the side's length; `0.5` is the midpoint). Captures the side the user actually dragged the connection from or onto — see [Connector anchors](#connector-anchors) below. Absent on either end falls back to picking the nearest side live, the same way every connector worked before this field existed. |
 
-Connection anchors are **not** stored. They are recomputed from node positions, so connections
-re-route themselves when things move and a file cannot carry stale geometry.
+### Connector anchors
+
+An anchor is the user's explicit choice of where a connector starts or lands, not routing
+geometry — nothing here is recomputed and overwritten on load the way, say, a node's rendered
+size is. Once a side is set, routing must never move it to another side on its own; only an
+explicit reconnect (dragging that endpoint elsewhere) changes it. An edge missing an anchor on one
+or both ends — every edge in a file written before v3, and any new edge whose endpoint was a body
+hit rather than a specific handle — just falls back to the live nearest-side heuristic for that
+end, exactly as it always has.
 
 ### Flow
 
@@ -200,3 +210,12 @@ migration collects every edge with a `sequence`, sorts by that number, and synth
 titled `"Walkthrough"` from them (skipped entirely if nothing was sequenced), then strips
 `sequence` from the edges. An old file's existing walkthrough opens and plays back exactly as it
 did before; multiple flows are new, additive capability from there.
+
+**Worked example — v2 → v3:** v2 had no `sourceAnchor`/`targetAnchor` at all — every connector's
+attachment side was picked live, on every render, by the same nearest-side heuristic that still
+serves as today's fallback. The migration runs that identical heuristic once per edge lacking an
+anchor, using the endpoint nodes' geometry as written in the file, and persists the result — so a
+migrated document's on-screen appearance is byte-identical to how it looked in v2, and the anchor
+is computed exactly once rather than re-derived on every future load. An edge whose endpoint no
+longer resolves to a node is left alone; `normalizeDocument` drops it afterward the same way it
+always has.

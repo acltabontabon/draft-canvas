@@ -51,11 +51,94 @@ function migrateSequenceToFlows(doc: Record<string, unknown>): Record<string, un
   return { ...doc, edges: strippedEdges, flows };
 }
 
+type Side = 'top' | 'right' | 'bottom' | 'left';
+interface RawRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * A frozen copy of the nearest-side heuristic `edges/routing.ts`'s
+ * `chooseSides` used at the moment anchors were introduced (v3) — not an
+ * import of that function. `document/` must never depend on `edges/`, and a
+ * migration has to reproduce what it did at the time it ran, unchanged, even
+ * if the live heuristic is later refined for unrelated reasons.
+ */
+function nearestSides(source: RawRect, target: RawRect): { source: Side; target: Side } {
+  const dx = target.x + target.width / 2 - (source.x + source.width / 2);
+  const dy = target.y + target.height / 2 - (source.y + source.height / 2);
+  const gapX = Math.abs(dx) - (source.width + target.width) / 2;
+  const gapY = Math.abs(dy) - (source.height + target.height) / 2;
+  if (gapX >= gapY) {
+    return dx >= 0 ? { source: 'right', target: 'left' } : { source: 'left', target: 'right' };
+  }
+  return dy >= 0 ? { source: 'bottom', target: 'top' } : { source: 'top', target: 'bottom' };
+}
+
+function rectOf(raw: unknown): RawRect | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const { x, y, width, height } = raw as Record<string, unknown>;
+  if (
+    typeof x !== 'number' ||
+    typeof y !== 'number' ||
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height)
+  ) {
+    return null;
+  }
+  return { x, y, width, height };
+}
+
+/**
+ * v2 has no concept of a connector anchor at all — routing always picked the
+ * nearest sides itself, live, on every render. Deriving one now and
+ * persisting it keeps a migrated document's on-screen appearance
+ * byte-identical to before migration (the same heuristic that already ran
+ * live), while satisfying "computed once, then persisted, not silently
+ * re-derived every load" going forward. A dangling edge (an endpoint that no
+ * longer resolves to a node) is left alone — `document/validate.ts` drops it
+ * the same way it always has, migrated or not.
+ */
+function migrateAnchors(doc: Record<string, unknown>): Record<string, unknown> {
+  const rawNodes = Array.isArray(doc.nodes) ? doc.nodes : [];
+  const nodesById = new Map<unknown, unknown>();
+  for (const raw of rawNodes) {
+    if (raw && typeof raw === 'object' && 'id' in raw) nodesById.set((raw as Record<string, unknown>).id, raw);
+  }
+
+  const rawEdges = Array.isArray(doc.edges) ? doc.edges : [];
+  const edges = rawEdges.map((raw) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const edge = raw as Record<string, unknown>;
+    if (edge.sourceAnchor && edge.targetAnchor) return edge;
+
+    const sourceRect = rectOf(nodesById.get(edge.source));
+    const targetRect = rectOf(nodesById.get(edge.target));
+    if (!sourceRect || !targetRect) return edge;
+
+    const sides = nearestSides(sourceRect, targetRect);
+    return {
+      ...edge,
+      sourceAnchor: edge.sourceAnchor ?? { side: sides.source, offset: 0.5 },
+      targetAnchor: edge.targetAnchor ?? { side: sides.target, offset: 0.5 },
+    };
+  });
+
+  return { ...doc, edges };
+}
+
 /**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
   1: migrateSequenceToFlows,
+  2: migrateAnchors,
 };
 
 export class UnsupportedVersionError extends Error {

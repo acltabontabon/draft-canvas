@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 2;
+export const CURRENT_VERSION = 3;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 

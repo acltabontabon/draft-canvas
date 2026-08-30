@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import { normalizeDocument } from '../document/validate';
+import { parseDocument } from '../document/validate';
 import {
   QuotaExceededError,
   StorageUnavailableError,
@@ -72,17 +72,30 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   /**
-   * Loads and re-validates. A record can be corrupted by a crashed write or by
-   * a older/newer build of the app, and it is better to open a repaired diagram
-   * than to show an error page over somebody's only copy.
+   * Loads, migrates, and re-validates. A record can be corrupted by a crashed
+   * write, or be sitting in an older format because it was last saved by an
+   * earlier build of the app — `parseDocument` handles both, the same way it
+   * does for an imported `.draftcanvas` file, so a record written before a
+   * schema change (e.g. before connector anchors existed) gets migrated in
+   * place on next open rather than staying frozen in its old shape forever.
+   *
+   * A genuine version change is written straight back: "derive it once, then
+   * persist it" only holds if a load that never turns into an edit still
+   * ends up with a current-shape record, rather than silently re-deriving
+   * the same migration on every future open. A same-version repair (e.g. a
+   * dangling edge dropped) is left for the next real edit to persist, same
+   * as always — this is about the version migration specifically.
    */
   async load(id: string): Promise<DraftDocument | null> {
     const row = await this.db.get('bodies', id);
     if (!row) return null;
-    const result = normalizeDocument(row.document);
+    const result = parseDocument(row.document);
     if (!result.ok) {
       console.warn(`[draft-canvas] Local record ${id} is unreadable: ${result.error}`);
       return null;
+    }
+    if (row.document.version !== result.document.version) {
+      await this.save(result.document);
     }
     return result.document;
   }

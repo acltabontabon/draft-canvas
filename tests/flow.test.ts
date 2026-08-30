@@ -16,7 +16,7 @@ import {
 } from '../src/document/flow';
 import { removeElements } from '../src/document/operations';
 import { parseDocument } from '../src/document/validate';
-import { DRAFT_FORMAT } from '../src/document/types';
+import { CURRENT_VERSION, DRAFT_FORMAT } from '../src/document/types';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 const store = useEditorStore;
@@ -342,7 +342,9 @@ describe('v1 to v2 migration', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.document.version).toBe(2);
+    // Always migrates all the way to the current format, not just to v2 —
+    // this fixture also exercises the later v2→v3 anchor migration below.
+    expect(result.document.version).toBe(CURRENT_VERSION);
     expect(result.document.flows).toHaveLength(1);
     expect(result.document.flows[0]!.title).toBe('Walkthrough');
     // Relative order preserved: the edge numbered 2 becomes step 1.
