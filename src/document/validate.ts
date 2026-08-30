@@ -16,6 +16,7 @@ import {
   ATTACHABLE_TYPES,
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
+  CONNECTOR_KINDS,
   CURRENT_VERSION,
   DATABASE_KINDS,
   DRAFT_FORMAT,
@@ -32,6 +33,7 @@ import {
   type Attachment,
   type BoundaryPreset,
   type CodeLanguage,
+  type ConnectorKind,
   type DatabaseKind,
   type DraftDocument,
   type DraftEdge,
@@ -410,6 +412,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     // should not silently become e.g. "http".
     const semantic = oneOfOptional<EdgeSemantic>(candidate.semantic, EDGE_SEMANTICS);
     if (semantic) edge.semantic = semantic;
+
+    // Same discipline as semantic: absent or unrecognised stays absent, not
+    // coerced to a fallback kind.
+    const kind = oneOfOptional<ConnectorKind>(candidate.kind, CONNECTOR_KINDS);
+    if (kind) edge.kind = kind;
 
     const sourceAnchor = parseAnchor(candidate.sourceAnchor);
     if (sourceAnchor) edge.sourceAnchor = sourceAnchor;

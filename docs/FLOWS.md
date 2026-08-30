@@ -53,10 +53,26 @@ fire-and-forget call, a webhook. That's the whole model: a visual distinction, n
 taxonomy. Label it however you like — `publish`, `event`, `consume`, `scheduled` — free text on the
 connector's own label.
 
+## Flow kind
+
+For more nuance than plain solid/dashed, a connector can carry a **Flow kind** (in the Inspector,
+next to Connection type): `Sync`, `Async`, `Event`, `Callback`, `Conditional`, `Retry`, `Failure`,
+`Fallback`. Each gets a subtle line treatment — a dotted line and a small dot for an event, a
+dash-dot pattern for a retry, a hollow arrowhead for a callback's return path, a small diamond for
+a conditional branch — so the *shape* of a flow reads at a glance without leaning on colour or a
+label. It's still just line style: choosing a kind never renames the connector, never recolours it,
+and (with one exception) never touches whether it's marked async — the exception is choosing the
+`Async` kind itself, which turns on the dashed line as a starting point, the same way choosing a
+connection type fills in a default label. This is deliberately a small, fixed vocabulary, not a
+protocol taxonomy — if a diagram needs more than these eight words to explain a flow, the label and
+the caption are still the right place for that detail.
+
 ## Callbacks and back-and-forth
 
 A reply is just another connector, drawn in the other direction and optionally added as its own
-Flow step:
+Flow step. Marking the return connector's Flow kind as `Callback` gives it a hollow arrowhead, so
+the two directions read as distinct even before the parallel-lane routing (which keeps them from
+overlapping) or the arrow direction is noticed:
 
 ```
 1. Client → API         "Place order"

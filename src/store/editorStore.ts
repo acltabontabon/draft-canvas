@@ -52,6 +52,7 @@ import type {
   DraftDocument,
   DraftEdge,
   DraftNode,
+  ConnectorKind,
   DraftSettings,
   DraftViewport,
   EdgeSemantic,
@@ -160,6 +161,8 @@ export interface EditorStore {
   /** Free-text condition chip, e.g. "approved" — display only, never evaluated. */
   setEdgeCondition: (id: string, condition: string) => void;
   toggleEdgeAsync: (id: string) => void;
+  /** Sets (or clears) a connector's flow-behaviour kind — see `ConnectorKind`. */
+  setEdgeKind: (id: string, kind: ConnectorKind | undefined) => void;
   commitPositions: (positions: Map<string, { x: number; y: number }>) => void;
   /** Moves every selected node by a pixel delta — repeated taps coalesce. */
   nudgeSelection: (dx: number, dy: number) => void;
@@ -398,6 +401,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const edge = state.document.edges.find((e) => e.id === id);
     if (!edge) return;
     state.apply('Toggle async', (doc) => updateEdge(doc, id, { async: edge.async ? undefined : true }));
+  },
+
+  setEdgeKind(id, kind) {
+    const state = get();
+    const edge = state.document.edges.find((e) => e.id === id);
+    if (!edge) return;
+    const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { kind };
+    // A fill-in-the-blank default, same discipline as semantic→label: choosing
+    // the 'async' kind gives the connector its dashed line via the existing
+    // `async` flag, but never fights the user afterward if they turn it back
+    // off independently, and never touches it for any other kind.
+    if (kind === 'async' && !edge.async) patch.async = true;
+    state.apply('Set connector kind', (doc) => updateEdge(doc, id, patch));
   },
 
   commitPositions(positions) {

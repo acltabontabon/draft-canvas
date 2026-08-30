@@ -2,6 +2,7 @@ import {
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
   ACCENTS,
+  CONNECTOR_KINDS,
   DATABASE_KINDS,
   EDGE_SEMANTICS,
   NOTE_KINDS,
@@ -12,6 +13,7 @@ import type {
   Accent,
   BoundaryPreset,
   CodeLanguage,
+  ConnectorKind,
   DatabaseKind,
   EdgeSemantic,
   NoteKind,
@@ -73,6 +75,17 @@ const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   consumes: 'Consumes',
   calls: 'Calls',
   dependsOn: 'Depends on',
+};
+
+const CONNECTOR_KIND_LABELS: Record<ConnectorKind, string> = {
+  sync: 'Sync',
+  async: 'Async',
+  event: 'Event',
+  callback: 'Callback',
+  conditional: 'Conditional',
+  retry: 'Retry',
+  failure: 'Failure',
+  fallback: 'Fallback',
 };
 
 /**
@@ -305,6 +318,24 @@ export function Inspector() {
             {EDGE_SEMANTICS.map((semantic) => (
               <option key={semantic} value={semantic}>
                 {EDGE_SEMANTIC_LABELS[semantic]}
+              </option>
+            ))}
+          </select>
+          <select
+            className="dc-select"
+            aria-label="Flow kind"
+            title="Flow behaviour — a subtle visual treatment, not a label"
+            value={onlyEdge.kind ?? ''}
+            onChange={(event) =>
+              store
+                .getState()
+                .setEdgeKind(onlyEdge.id, (event.target.value || undefined) as ConnectorKind | undefined)
+            }
+          >
+            <option value="">No kind</option>
+            {CONNECTOR_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {CONNECTOR_KIND_LABELS[kind]}
               </option>
             ))}
           </select>

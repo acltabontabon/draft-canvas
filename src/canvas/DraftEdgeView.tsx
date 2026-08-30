@@ -4,6 +4,7 @@ import { explainEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import { accentOf } from '../render/theme/tokens';
 import { labelLaneOffset, laneIndex, rectOf, routeBetween, type Rect } from '../edges/routing';
+import { dashForEdge, markerVariantForEdge } from '../edges/kindStyle';
 import { isEdgeFocused, useEditorStore } from '../store/editorStore';
 import { selectEdge } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
@@ -121,15 +122,29 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       <BaseEdge
         className="dc-edge-line"
         path={route.d}
-        markerEnd={edge.directed ? markerRef(strokeColor) : undefined}
+        markerEnd={edge.directed ? markerRef(strokeColor, markerVariantForEdge(edge)) : undefined}
         interactionWidth={18}
         style={{
           stroke: strokeColor,
           strokeWidth: isActiveStep ? 2.6 : 1.6,
           strokeLinecap: 'round',
-          strokeDasharray: edge.async ? '6 4' : undefined,
+          strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
       />
+
+      {/* A small glyph at the path's midpoint — see the matching comment in
+          `edges/describe.ts`. Only when nothing else already occupies that spot. */}
+      {!hasLabel && !hasStep && edge.kind === 'event' && (
+        <circle cx={labelX} cy={labelY} r={3} fill={strokeColor} />
+      )}
+      {!hasLabel && !hasStep && edge.kind === 'conditional' && (
+        <polygon
+          points={`${labelX},${labelY - 5} ${labelX + 5},${labelY} ${labelX},${labelY + 5} ${labelX - 5},${labelY}`}
+          fill={theme.edgeLabelBg}
+          stroke={strokeColor}
+          strokeWidth={1.3}
+        />
+      )}
 
       <EdgeLabelRenderer>
         {(hasLabel || editing) && (

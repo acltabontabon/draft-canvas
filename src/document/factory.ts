@@ -8,6 +8,7 @@ import {
   type Attachment,
   type BoundaryPreset,
   type CodeLanguage,
+  type ConnectorKind,
   type DatabaseKind,
   type DraftDocument,
   type DraftEdge,
@@ -175,6 +176,7 @@ export interface CreateEdgeInput {
   /** The side the user actually dragged the connection from/to, if known. */
   sourceAnchor?: EdgeAnchor;
   targetAnchor?: EdgeAnchor;
+  kind?: ConnectorKind;
 }
 
 export function createEdge(input: CreateEdgeInput): DraftEdge {
@@ -189,6 +191,7 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
   if (input.accent !== undefined) edge.accent = input.accent;
   if (input.sourceAnchor) edge.sourceAnchor = input.sourceAnchor;
   if (input.targetAnchor) edge.targetAnchor = input.targetAnchor;
+  if (input.kind) edge.kind = input.kind;
   return edge;
 }
 

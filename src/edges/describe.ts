@@ -6,6 +6,7 @@ import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
 import { labelLaneOffset, rectOf, routeEdge, type RoutedEdge, type Side } from './routing';
+import { dashForEdge, markerVariantForEdge } from './kindStyle';
 
 export interface EdgeDescribeContext {
   theme: Theme;
@@ -17,9 +18,6 @@ export interface EdgeDescribeContext {
   /** This edge's parallel-lane slot — see `laneIndex` in `store/selectors.ts`. */
   lane?: number;
 }
-
-/** Dashes an asynchronous connector — the one visual distinction sync/async gets. */
-const ASYNC_DASH = [6, 4];
 
 const LABEL_PADDING_X = 6;
 const LABEL_PADDING_Y = 3;
@@ -72,14 +70,35 @@ export function describeEdge(
       t: 'path',
       d: route.d,
       fill: 'none',
-      stroke: { color, width: 1.6, linecap: 'round', dash: edge.async ? ASYNC_DASH : undefined },
-      markerEnd: edge.directed ? markerRef(color) : undefined,
+      stroke: { color, width: 1.6, linecap: 'round', dash: dashForEdge(edge) },
+      markerEnd: edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined,
     },
   ];
 
   const overlay: Shape[] = [];
 
   const hasStep = ctx.showSequence && typeof ctx.stepIndex === 'number';
+
+  // A small glyph at the path's midpoint — event's dotted line alone doesn't
+  // read as "an event" the way a tiny circle at the crossing point does, and
+  // conditional's diamond is deliberately distinct from the free-text
+  // `condition` chip (which is display-only and orthogonal to `kind`). Only
+  // when nothing else already occupies that spot: the dash pattern is the
+  // one differentiator that always applies, this is a bonus for the plain
+  // connector case, not something worth fighting a label or step badge over.
+  if (!edge.label && !hasStep) {
+    if (edge.kind === 'event') {
+      overlay.push({ t: 'ellipse', cx: labelX, cy: labelY, rx: 3, ry: 3, fill: color });
+    } else if (edge.kind === 'conditional') {
+      const s = 5;
+      overlay.push({
+        t: 'path',
+        d: `M${labelX},${labelY - s} L${labelX + s},${labelY} L${labelX},${labelY + s} L${labelX - s},${labelY} Z`,
+        fill: ctx.theme.edgeLabelBg,
+        stroke: { color, width: 1.3 },
+      });
+    }
+  }
 
   if (edge.label) {
     const layout = layoutText(edge.label, {

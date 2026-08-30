@@ -8,6 +8,15 @@ import type { EdgeSemantic } from './types';
  * clearer. See the callers in `store/editorStore.ts` for how (and when) this
  * is applied — only to fill an empty label, never to override one, and never
  * touching `accent`.
+ *
+ * `semantic` (this file), `kind` (`ConnectorKind` — see `edges/kindStyle.ts`),
+ * and `async` are three independent dimensions on `DraftEdge`, not layers of
+ * one taxonomy: `semantic` is what the connection carries (a label
+ * convenience), `kind` is its flow behaviour (sync/async/event/callback/
+ * conditional/retry/failure/fallback — visual line treatment), and `async` is
+ * the plain solid/dashed line every edge already had. `kind: 'async'`
+ * defaults `async` to `true` the same way a semantic defaults a label, but
+ * setting one never reads, requires, or implies the other two.
  */
 export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   http: { label: 'HTTP' },

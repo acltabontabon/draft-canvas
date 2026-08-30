@@ -118,6 +118,28 @@ export const EDGE_SEMANTICS = [
 ] as const;
 export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];
 
+/**
+ * A connector's flow behaviour — a lightweight, developer-facing vocabulary,
+ * not UML/BPMN notation. Independent of `semantic` (what the connection
+ * carries, a label convenience) and `async` (the solid/dashed line — `kind:
+ * 'async'` defaults it to `true` the way a semantic defaults a label, but
+ * never forces it, and either can still be changed on its own afterward).
+ * `'event'` exists in both this list and `EDGE_SEMANTICS` — coincidence, not
+ * a shared field; a connector can be `semantic: 'event'` and `kind: 'retry'`
+ * at once.
+ */
+export const CONNECTOR_KINDS = [
+  'sync',
+  'async',
+  'event',
+  'callback',
+  'conditional',
+  'retry',
+  'failure',
+  'fallback',
+] as const;
+export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
+
 /** Node types that can be folded into another node as an attachment. */
 export const ATTACHABLE_TYPES = ['code', 'note', 'text', 'card', 'rounded'] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
@@ -202,6 +224,8 @@ export interface DraftEdge {
    * evaluated — display only.
    */
   condition?: string;
+  /** Flow behaviour — see `ConnectorKind`. Optional; a plain connection has none. */
+  kind?: ConnectorKind;
   /** `true` renders a dashed line for an asynchronous interaction. Absent/`false` is synchronous (solid). */
   async?: boolean;
   /**
