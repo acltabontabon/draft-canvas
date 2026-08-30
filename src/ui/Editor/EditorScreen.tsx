@@ -81,7 +81,13 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         text: preset.text ?? '',
         accent: preset.accent,
       });
-      const edge = createEdge({ source: quickConnect.source, target: created.id });
+      const edge = createEdge({
+        source: quickConnect.source,
+        target: created.id,
+        sourceAnchor: quickConnect.sourceSide
+          ? { side: quickConnect.sourceSide, offset: 0.5 }
+          : undefined,
+      });
       store.getState().addNodesWithEdges([created], [edge], 'Connect to new node');
       setQuickConnect(null);
     },
@@ -129,8 +135,8 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       <div className="dc-editor-canvas">
         <Canvas
           onCreateAt={(position) => createAt(armed ?? CARD_PRESET, position)}
-          onQuickConnectMenu={(source, flowPosition, screenPosition) =>
-            setQuickConnect({ source, flowPosition, screenPosition })
+          onQuickConnectMenu={(source, sourceSide, flowPosition, screenPosition) =>
+            setQuickConnect({ source, sourceSide, flowPosition, screenPosition })
           }
         />
         {quickConnect && (

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Handle, NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { minSizeFor } from '../document/factory';
 import { explainNodeTier, type ExplainTier } from '../document/flow';
@@ -73,11 +73,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
 
   const stopEditing = useCallback(() => setEditing(false), []);
 
-  if (!node) return null;
-
-  const isCode = node.type === 'code';
-  const readOnly = mode === 'present';
-
   /**
    * React Flow updates `width`/`height` on this node live, once per frame,
    * while `NodeResizer` is dragging — that live value is what must drive the
@@ -86,17 +81,38 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
    * gesture ends, so the content would stay frozen at the old size for the
    * whole drag and jump on release.
    */
-  const effectiveWidth = Math.round(width ?? node.width);
-  const effectiveHeight = Math.round(height ?? node.height);
-  const liveNode: DraftNode =
-    effectiveWidth === node.width && effectiveHeight === node.height
+  const effectiveWidth = Math.round(width ?? node?.width ?? 0);
+  const effectiveHeight = Math.round(height ?? node?.height ?? 0);
+  const liveNode: DraftNode | null = !node
+    ? null
+    : effectiveWidth === node.width && effectiveHeight === node.height
       ? node
       : { ...node, width: effectiveWidth, height: effectiveHeight };
 
-  const shapes = (() => {
-    beginClipScope(node.id);
+  /**
+   * React Flow passes a fresh `positionAbsoluteX`/`positionAbsoluteY` prop into
+   * every node component on every frame of a drag, even though this component
+   * never reads them (position is applied by React Flow's own transform on the
+   * wrapper div). `memo()` alone can't tell that change apart from one that
+   * actually affects appearance, so without this `useMemo` the display list —
+   * layout, text measurement, code tokenization lookups — would rebuild on
+   * every dragged frame for content that never changed. Called unconditionally
+   * (ahead of the `!node` early return below) because hooks can't be
+   * conditional; it degrades to an empty list while there is no node.
+   */
+  // `liveNode` only changes identity when width/height actually change (see
+  // the ternary above); that *is* the memoization the linter can't see through.
+  const shapes = useMemo(() => {
+    if (!liveNode) return [];
+    beginClipScope(liveNode.id);
     return emitDisplayList(describeNode(liveNode, describeContext(theme)));
-  })();
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
+  }, [liveNode, theme]);
+
+  if (!node) return null;
+
+  const isCode = node.type === 'code';
+  const readOnly = mode === 'present';
 
   const beginEditing = () => {
     if (readOnly) return;
@@ -144,10 +160,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           handleClassName="dc-resize-handle"
           onResizeStart={() => {
             useEditorStore.getState().beginInteraction('Resize');
+            useUiStore.getState().setInteractionActive(true);
             setResizing(true);
           }}
           onResizeEnd={() => {
             useEditorStore.getState().endInteraction();
+            useUiStore.getState().setInteractionActive(false);
             setResizing(false);
           }}
         />

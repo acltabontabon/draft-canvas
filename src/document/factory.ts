@@ -13,6 +13,7 @@ import {
   type DraftEdge,
   type DraftNode,
   type DraftNodeType,
+  type EdgeAnchor,
   type NoteKind,
   type QueueKind,
   type ServiceKind,
@@ -171,6 +172,9 @@ export interface CreateEdgeInput {
   routing?: DraftEdge['routing'];
   accent?: Accent;
   id?: string;
+  /** The side the user actually dragged the connection from/to, if known. */
+  sourceAnchor?: EdgeAnchor;
+  targetAnchor?: EdgeAnchor;
 }
 
 export function createEdge(input: CreateEdgeInput): DraftEdge {
@@ -183,6 +187,8 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
   };
   if (input.label) edge.label = input.label;
   if (input.accent !== undefined) edge.accent = input.accent;
+  if (input.sourceAnchor) edge.sourceAnchor = input.sourceAnchor;
+  if (input.targetAnchor) edge.targetAnchor = input.targetAnchor;
   return edge;
 }
 

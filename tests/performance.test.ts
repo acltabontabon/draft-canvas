@@ -12,6 +12,7 @@ import { evaluateAttachCandidates, deepestBoundaryAt } from '../src/canvas/dragT
 import { isEdgeFocused } from '../src/store/editorStore';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { projectNodes, projectEdges } from '../src/canvas/projection';
+import { laneIndex, rectOf, routeEdge } from '../src/edges/routing';
 import type { DraftDocument } from '../src/document/types';
 
 /**
@@ -233,5 +234,41 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
     // stepIndexOf is a per-flow linear scan (flows stay small by design), run
     // once per edge — the same "stays fast even at scale" budget as Focus.
     expect(performance.now() - started).toBeLessThan(200);
+  });
+
+  /**
+   * Lanes and obstacle avoidance (Phase 4) add real per-edge work: lane
+   * assignment groups every edge once, and obstacle avoidance scans every
+   * other node per edge. Both are exercised implicitly by the SVG export
+   * budget above; this asserts the cost directly against the full ~180-edge
+   * fixture, matching every node as a candidate obstacle — the worst case
+   * `DraftEdgeView` and the exporter actually run, once per document commit,
+   * not per pointer-move frame (see `interactionActive` in `uiStore.ts`).
+   */
+  it('assigns lanes and routes with obstacle avoidance for every edge within budget', () => {
+    const nodeMap = new Map(doc.nodes.map((node) => [node.id, node]));
+    const obstacles = doc.nodes.map(rectOf);
+
+    const started = performance.now();
+    const lanes = laneIndex(doc.edges);
+    for (const edge of doc.edges) {
+      const lane = lanes.get(edge.id)?.offset ?? 0;
+      routeEdge(edge, nodeMap, {
+        lane,
+        obstacles: obstacles.filter((_, i) => doc.nodes[i]!.id !== edge.source && doc.nodes[i]!.id !== edge.target),
+      });
+    }
+    // Generous, for the same reason as the other budgets here: this exists to
+    // catch an accidental quadratic blowup, not to police milliseconds.
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it('rebuilds the lane index only when the edges array identity actually changes', () => {
+    const first = laneIndex(doc.edges);
+    expect(laneIndex(doc.edges)).toBe(first);
+
+    const moved = moveNodes(doc, new Map([[doc.nodes[0]!.id, { x: 10, y: 10 }]]));
+    // A node move never touches the edges array (structural sharing).
+    expect(laneIndex(moved.edges)).toBe(first);
   });
 });

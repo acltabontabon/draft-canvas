@@ -26,6 +26,7 @@ import {
   EDGE_SEMANTICS,
   QUEUE_KINDS,
   SERVICE_KINDS,
+  SIDES,
   type Accent,
   type AttachableType,
   type Attachment,
@@ -38,6 +39,7 @@ import {
   type DraftFlowStep,
   type DraftNode,
   type DraftNodeType,
+  type EdgeAnchor,
   type EdgeRouting,
   type EdgeSemantic,
   type GridMode,
@@ -105,6 +107,17 @@ function validateAttachableFields(
     fields.code = text(candidate.code, LIMITS.maxCodeLength) ?? '';
   }
   return fields;
+}
+
+/** An edge's `sourceAnchor`/`targetAnchor`: a closed-enum side plus a clamped
+ *  0..1 offset. Absent or malformed collapses to `undefined` — same repair
+ *  discipline as `semantic` — rather than a coerced fallback, since "no
+ *  anchor" is a meaningful, common state (see `EdgeAnchor` in `types.ts`). */
+function parseAnchor(value: unknown): EdgeAnchor | undefined {
+  if (!isRecord(value)) return undefined;
+  const side = oneOfOptional(value.side, SIDES);
+  if (!side) return undefined;
+  return { side, offset: clamp(finite(value.offset, 0.5), 0, 1) };
 }
 
 function safeId(value: unknown): string | null {
@@ -397,6 +410,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     // should not silently become e.g. "http".
     const semantic = oneOfOptional<EdgeSemantic>(candidate.semantic, EDGE_SEMANTICS);
     if (semantic) edge.semantic = semantic;
+
+    const sourceAnchor = parseAnchor(candidate.sourceAnchor);
+    if (sourceAnchor) edge.sourceAnchor = sourceAnchor;
+    const targetAnchor = parseAnchor(candidate.targetAnchor);
+    if (targetAnchor) edge.targetAnchor = targetAnchor;
 
     edges.push(edge);
   }

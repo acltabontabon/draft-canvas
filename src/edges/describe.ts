@@ -5,7 +5,7 @@ import { accentOf, type Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
-import { routeEdge, type RoutedEdge, type Side } from './routing';
+import { rectOf, routeEdge, type RoutedEdge, type Side } from './routing';
 
 export interface EdgeDescribeContext {
   theme: Theme;
@@ -14,6 +14,8 @@ export interface EdgeDescribeContext {
   showSequence: boolean;
   /** This edge's 1-based position within the flow currently selected for overlay, if any. */
   stepIndex?: number;
+  /** This edge's parallel-lane slot — see `laneIndex` in `store/selectors.ts`. */
+  lane?: number;
 }
 
 /** Dashes an asynchronous connector — the one visual distinction sync/async gets. */
@@ -45,7 +47,13 @@ export function describeEdge(
   nodes: Map<string, DraftNode>,
   ctx: EdgeDescribeContext,
 ): DescribedEdge | null {
-  const route = routeEdge(edge, nodes);
+  // Every other real node counts as an obstacle to route around; group
+  // boundaries are big translucent containers, not something a connector
+  // should detour around. Same rule the live canvas uses — see `DraftEdgeView.tsx`.
+  const obstacles = [...nodes.values()]
+    .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
+    .map(rectOf);
+  const route = routeEdge(edge, nodes, { lane: ctx.lane, obstacles });
   if (!route) return null;
 
   const palette = accentOf(ctx.theme, edge.accent);

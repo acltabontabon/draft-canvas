@@ -3,6 +3,7 @@ import { describeNode, describeContext } from '../../nodes/describe';
 import { findFlow, stepIndexOf } from '../../document/flow';
 import { boundsOf } from '../../document/operations';
 import type { DraftDocument, DraftNode } from '../../document/types';
+import { laneIndex } from '../../edges/routing';
 import { themeFor, type ThemeName } from '../theme/tokens';
 import { getMeasurer } from '../text/measure';
 import { el, serialize, n, type SvgEl } from './element';
@@ -62,6 +63,7 @@ export function renderDocumentSvg(
   const originY = bounds.y - padding;
 
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const lanes = laneIndex(edges);
 
   beginClipScope('export');
 
@@ -71,7 +73,8 @@ export function renderDocumentSvg(
 
   for (const edge of edges) {
     const stepIndex = stepIndexOf(selectedFlow, edge.id);
-    const described = describeEdge(edge, nodeMap, { ...edgeCtx, stepIndex });
+    const lane = lanes.get(edge.id)?.offset ?? 0;
+    const described = describeEdge(edge, nodeMap, { ...edgeCtx, stepIndex, lane });
     if (!described) continue;
     if (edge.directed) arrowColors.add(described.color);
     edgeLines.push(...described.line.flatMap(emitShape));

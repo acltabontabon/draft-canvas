@@ -54,6 +54,7 @@ import type {
   DraftSettings,
   DraftViewport,
   EdgeSemantic,
+  Side,
 } from '../document/types';
 import {
   EMPTY_HISTORY,
@@ -145,7 +146,7 @@ export interface EditorStore {
   /* Editing commands */
   addNode: (input: CreateNodeInput) => DraftNode;
   addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string) => void;
-  connect: (source: string, target: string) => DraftEdge | null;
+  connect: (source: string, target: string, sourceSide?: Side, targetSide?: Side) => DraftEdge | null;
   updateNodeById: (id: string, patch: Partial<Omit<DraftNode, 'id'>>, label?: string) => void;
   updateNodeText: (id: string, text: string) => void;
   updateEdgeById: (id: string, patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>, label?: string) => void;
@@ -328,12 +329,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  connect(source, target) {
+  connect(source, target, sourceSide, targetSide) {
     const state = get();
     if (source === target) return null;
     const exists = state.document.edges.some((e) => e.source === source && e.target === target);
     if (exists) return null;
-    const edge = createEdge({ source, target });
+    const edge = createEdge({
+      source,
+      target,
+      // The side the user actually dragged from/dropped onto is intent —
+      // capture it, at the side's midpoint, so routing never has to guess for
+      // this edge again. See `document/types.ts`'s `EdgeAnchor` doc comment.
+      sourceAnchor: sourceSide ? { side: sourceSide, offset: 0.5 } : undefined,
+      targetAnchor: targetSide ? { side: targetSide, offset: 0.5 } : undefined,
+    });
     state.apply('Connect', (doc) => addEdges(doc, [edge]), {
       selection: { nodes: [], edges: [edge.id] },
     });

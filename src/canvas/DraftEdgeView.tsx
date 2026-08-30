@@ -3,11 +3,13 @@ import { BaseEdge, EdgeLabelRenderer, useInternalNode, type EdgeProps } from '@x
 import { explainEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import { accentOf } from '../render/theme/tokens';
-import { routeBetween, type Rect } from '../edges/routing';
+import { laneIndex, rectOf, routeBetween, type Rect } from '../edges/routing';
 import { isEdgeFocused, useEditorStore } from '../store/editorStore';
 import { selectEdge } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
+
+const NO_OBSTACLES: readonly Rect[] = [];
 
 /**
  * Connector rendering.
@@ -28,6 +30,19 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const mode = useEditorStore((state) => state.mode);
   const updateEdgeLabel = useEditorStore((state) => state.updateEdgeLabel);
   const theme = useThemeValue();
+
+  // A primitive, not the `LaneAssignment` object — see `laneIndex`'s comment.
+  // Only the edges whose own lane actually shifts re-render when a sibling
+  // connector is added or removed between the same two nodes.
+  const laneOffset = useEditorStore((state) => laneIndex(state.document.edges).get(id)?.offset ?? 0);
+  // Obstacle avoidance needs every other node's committed geometry, which no
+  // per-edge subscription can narrow down further — so this one re-renders
+  // whenever any node's position/size commits, not only its own endpoints.
+  // Skipping it entirely while a gesture is in flight (see `interactionActive`
+  // below) is what keeps that acceptable: the cost lands once per commit, not
+  // per pointer-move frame, matching "cheap during interaction, refine after."
+  const nodes = useEditorStore((state) => state.document.nodes);
+  const interactionActive = useUiStore((state) => state.interactionActive);
 
   const sourceNode = useInternalNode(edge?.source ?? '');
   const targetNode = useInternalNode(edge?.target ?? '');
@@ -51,7 +66,17 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const targetRect = rectOfInternal(targetNode);
   if (!sourceRect || !targetRect) return null;
 
-  const route = routeBetween(sourceRect, targetRect, edge.routing);
+  const obstacles = interactionActive
+    ? NO_OBSTACLES
+    : nodes
+        .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
+        .map(rectOf);
+
+  const route = routeBetween(sourceRect, targetRect, edge.routing, {
+    anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
+    lane: laneOffset,
+    obstacles,
+  });
   const palette = accentOf(theme, edge.accent);
   const color = edge.accent && edge.accent !== 'neutral' ? palette.chip : theme.edge;
 

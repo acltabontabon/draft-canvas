@@ -61,6 +61,28 @@ export type Accent = (typeof ACCENTS)[number];
 export const EDGE_ROUTINGS = ['smoothstep', 'bezier', 'straight'] as const;
 export type EdgeRouting = (typeof EDGE_ROUTINGS)[number];
 
+/**
+ * The four logical connection edges a node exposes. Lives here, not in
+ * `edges/routing.ts`, because it is now part of the serializable schema (see
+ * `EdgeAnchor`) — `routing.ts` imports it, not the other way around.
+ */
+export const SIDES = ['top', 'right', 'bottom', 'left'] as const;
+export type Side = (typeof SIDES)[number];
+
+/**
+ * Where a connector attaches to a node's boundary: which side, and how far
+ * along it. `offset` is a fraction (0..1) of the side's length rather than a
+ * pixel value so it survives a resize without drifting off the edge; `0.5` —
+ * the side's midpoint — is what every connector used before anchors existed,
+ * so it is the default whenever an anchor is absent. Reading direction sets
+ * the convention: `0` is the left corner of `top`/`bottom`, and the top
+ * corner of `left`/`right`.
+ */
+export interface EdgeAnchor {
+  side: Side;
+  offset: number;
+}
+
 export const GRID_MODES = ['dots', 'lines', 'none'] as const;
 export type GridMode = (typeof GRID_MODES)[number];
 
@@ -182,6 +204,16 @@ export interface DraftEdge {
   condition?: string;
   /** `true` renders a dashed line for an asynchronous interaction. Absent/`false` is synchronous (solid). */
   async?: boolean;
+  /**
+   * Where this connector actually starts/ends, captured from the side the
+   * user dragged from/dropped onto. Absent means "never explicitly chosen" —
+   * routing falls back to picking the nearest sides itself (`chooseSides` in
+   * `edges/routing.ts`), exactly as every edge behaved before this field
+   * existed. Once set, routing must not silently move it; only an explicit
+   * reconnect changes it.
+   */
+  sourceAnchor?: EdgeAnchor;
+  targetAnchor?: EdgeAnchor;
 }
 
 /**

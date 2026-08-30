@@ -131,6 +131,21 @@
   opacity: 1;
 }
 
+/*
+ * React Flow already tracks which handle the pointer is closest to while a
+ * connection is in flight and tags it `.connectingto`/`.valid` — this makes
+ * that one handle read as "release here" without any hit-testing of our own.
+ * The result should feel obvious before the user lets go, not surprise them
+ * after (see docs/ARCHITECTURE.md's connector routing notes).
+ */
+.dc-handle.connectingto.valid {
+  opacity: 1;
+  transform: scale(1.6);
+  background: var(--dc-selection);
+  border-color: var(--dc-selection);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 25%, transparent);
+}
+
 /* Present mode keeps the handles in the DOM but out of sight. */
 .dc-editor[data-mode='present'] .dc-handle {
   opacity: 0 !important;

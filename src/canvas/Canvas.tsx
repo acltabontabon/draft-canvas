@@ -16,8 +16,8 @@ import {
 } from '@xyflow/react';
 import { defaultTextFor } from '../document/factory';
 import { descendantsOf } from '../document/operations';
-import type { DraftDocument } from '../document/types';
-import type { Rect } from '../edges/routing';
+import type { DraftDocument, Side } from '../document/types';
+import { isSide, type Rect } from '../edges/routing';
 import { useEditorStore } from '../store/editorStore';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
@@ -214,6 +214,7 @@ export interface CanvasProps {
    */
   onQuickConnectMenu?: (
     sourceId: string,
+    sourceSide: Side | undefined,
     flowPosition: { x: number; y: number },
     screenPosition: { x: number; y: number },
   ) => void;
@@ -521,6 +522,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
     (_event: unknown, _node: DraftRfNode, dragged: DraftRfNode[]) => {
       const state = store.getState();
       state.beginInteraction('Move');
+      useUiStore.getState().setInteractionActive(true);
 
       const moving = new Set(dragged.map((node) => node.id));
       draggingIds.current = moving;
@@ -598,6 +600,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
     }
 
     state.endInteraction();
+    useUiStore.getState().setInteractionActive(false);
     draggingIds.current = new Set();
     sweptDescendants.current = new Map();
     clearDwell();
@@ -607,7 +610,12 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
-      store.getState().connect(connection.source, connection.target);
+      // Handle ids are the side they sit on ('top'/'right'/'bottom'/'left'),
+      // so this is the drag's actual start/end edge, not a guess — see
+      // `EdgeAnchor` in `document/types.ts`.
+      const sourceSide = isSide(connection.sourceHandle) ? connection.sourceHandle : undefined;
+      const targetSide = isSide(connection.targetHandle) ? connection.targetHandle : undefined;
+      store.getState().connect(connection.source, connection.target, sourceSide, targetSide);
     },
     [store],
   );
@@ -626,6 +634,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
       if (connectionState.isValid) return;
       const source = connectionState.fromNode?.id;
       if (!source) return;
+      const sourceSide = isSide(connectionState.fromHandle?.id) ? connectionState.fromHandle.id : undefined;
 
       const point = 'changedTouches' in event ? event.changedTouches[0] : event;
       if (!point) return;
@@ -648,7 +657,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
         );
 
       if (droppedOn) {
-        if (droppedOn.id !== source) state.connect(source, droppedOn.id);
+        if (droppedOn.id !== source) state.connect(source, droppedOn.id, sourceSide);
         return;
       }
 
@@ -657,6 +666,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
       // decides what appears.
       onQuickConnectMenu?.(
         source,
+        sourceSide,
         { x: Math.round(position.x - 88), y: Math.round(position.y - 34) },
         { x: point.clientX, y: point.clientY },
       );

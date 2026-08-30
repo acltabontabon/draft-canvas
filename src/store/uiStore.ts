@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Preset } from '../canvas/presets';
+import type { Side } from '../document/types';
 
 export type Toast = { id: number; message: string; tone: 'info' | 'error' };
 
@@ -11,6 +12,8 @@ export type Toast = { id: number; message: string; tone: 'info' | 'error' };
  */
 export interface QuickConnectState {
   source: string;
+  /** The side of the source node the user actually dragged from, if known. */
+  sourceSide?: Side;
   flowPosition: { x: number; y: number };
   screenPosition: { x: number; y: number };
 }
@@ -29,6 +32,15 @@ interface UiStore {
   /** Whether the Flow list drawer is visible. */
   flowPanelOpen: boolean;
   /**
+   * True for the duration of a node drag or resize gesture. Distinct from
+   * `editorStore`'s own `interaction` bracket, which only decides history
+   * grouping and is not reactive — this exists so connector rendering can
+   * skip obstacle avoidance (and any other route refinement heavier than a
+   * direct path) while a gesture is in flight, and run it once the gesture
+   * commits. See `edges/routing.ts`'s obstacle-avoidance notes.
+   */
+  interactionActive: boolean;
+  /**
    * A node or edge id that `Enter` just asked to start editing. There is no
    * ref-based imperative API into the memoized node/edge components, so this
    * is the simplest hook: they watch it via an effect and clear it once
@@ -43,6 +55,7 @@ interface UiStore {
   setAttachArmedTarget: (nodeId: string | null) => void;
   setOpenAttachmentPopover: (hostId: string | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
+  setInteractionActive: (active: boolean) => void;
   requestEdit: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone']) => void;
   dismiss: (id: number) => void;
@@ -59,6 +72,7 @@ export const useUiStore = create<UiStore>((set) => ({
   attachArmedTarget: null,
   openAttachmentPopover: null,
   flowPanelOpen: false,
+  interactionActive: false,
   editRequestId: null,
 
   arm: (armed) => set({ armed }),
@@ -69,6 +83,8 @@ export const useUiStore = create<UiStore>((set) => ({
     set((state) => (state.attachArmedTarget === attachArmedTarget ? state : { attachArmedTarget })),
   setOpenAttachmentPopover: (openAttachmentPopover) => set({ openAttachmentPopover }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
+  setInteractionActive: (interactionActive) =>
+    set((state) => (state.interactionActive === interactionActive ? state : { interactionActive })),
   requestEdit: (editRequestId) => set({ editRequestId }),
 
   notify(message, tone = 'info') {
