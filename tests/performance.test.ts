@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
+import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
+import { __resetKeyCacheForTests } from '../src/crypto/keyStore';
 import {
   addEdges,
   addNodes,
@@ -270,5 +273,37 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
     const moved = moveNodes(doc, new Map([[doc.nodes[0]!.id, { x: 10, y: 10 }]]));
     // A node move never touches the edges array (structural sharing).
     expect(laneIndex(moved.edges)).toBe(first);
+  });
+
+  /**
+   * Every autosave now runs through AES-GCM (Phase 8) before it ever reaches
+   * IndexedDB. Re-confirms the save (encrypt + put) and load (get + decrypt)
+   * round trip for the full fixture stays within budget with that extra step
+   * in the path — not just the plaintext operations above.
+   */
+  describe('save path with encryption in the loop', () => {
+    beforeEach(() => {
+      globalThis.indexedDB = new IDBFactory();
+      __resetKeyCacheForTests();
+    });
+
+    it('encrypts and persists, then decrypts and loads, the full document within budget', async () => {
+      const repository = await IndexedDbRepository.open();
+
+      const savedAt = performance.now();
+      await repository.save(doc);
+      const saveElapsed = performance.now() - savedAt;
+      // Generous, for the same reason as the budgets above: this exists to
+      // catch an accidental quadratic in the encrypt-then-put path, not to
+      // police milliseconds on a variable CI machine.
+      expect(saveElapsed).toBeLessThan(2000);
+
+      const loadedAt = performance.now();
+      const loaded = await repository.load(doc.metadata.id);
+      expect(performance.now() - loadedAt).toBeLessThan(2000);
+
+      expect(loaded!.nodes).toHaveLength(NODE_COUNT);
+      expect(loaded!.edges.length).toBe(doc.edges.length);
+    });
   });
 });
