@@ -20,6 +20,7 @@ export const LIMITS = {
   maxNodeSize: 20_000,
   minZoom: 0.1,
   maxZoom: 4,
+  maxAttachmentsPerNode: 12,
 } as const;
 
 export const DEFAULTS = {

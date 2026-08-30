@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDocument } from '../src/document/factory';
-import { orderedEdges, sequenceSteps } from '../src/document/sequence';
+import { createDocument, createEdge } from '../src/document/factory';
+import { explainEdgeTier, explainNodeTier, orderedEdges, sequenceSteps } from '../src/document/sequence';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 const store = useEditorStore;
@@ -112,5 +112,33 @@ describe('ordered interactions', () => {
 
     store.getState().undo();
     expect(orderedEdges(store.getState().document)).toHaveLength(0);
+  });
+});
+
+describe('explain mode tri-state dimming', () => {
+  it('classifies an edge as active, shown, or hidden relative to the current step', () => {
+    expect(explainEdgeTier(3, 3)).toBe('active');
+    expect(explainEdgeTier(1, 3)).toBe('shown');
+    expect(explainEdgeTier(5, 3)).toBe('hidden');
+    // Not part of the walkthrough at all.
+    expect(explainEdgeTier(undefined, 3)).toBe('hidden');
+  });
+
+  it('gives a node the most-lit tier among the edges touching it', () => {
+    const a = createEdge({ source: 'x', target: 'shared', sequence: 1 });
+    const b = createEdge({ source: 'shared', target: 'y', sequence: 4 });
+    const edges = [a, b];
+
+    // At step 3 of 5: step 1 is already shown, step 4 is not reached yet.
+    expect(explainNodeTier(edges, 'shared', 3)).toBe('shown');
+    expect(explainNodeTier(edges, 'x', 3)).toBe('shown');
+    expect(explainNodeTier(edges, 'y', 3)).toBe('hidden');
+
+    // At the active step itself, the endpoint tier is active even though the
+    // same node also touches an already-shown step.
+    expect(explainNodeTier(edges, 'shared', 4)).toBe('active');
+
+    // A node touching nothing in the walkthrough is hidden.
+    expect(explainNodeTier(edges, 'unrelated', 3)).toBe('hidden');
   });
 });

@@ -98,6 +98,19 @@ export const DEV_PRESETS: Preset[] = [
 
 export const ALL_PRESETS = [...PRESETS, ...DEV_PRESETS];
 
+/**
+ * The Quick Connect creation menu's option list — plain data, not JSX, so a
+ * later pass can add keyboard navigation or reorder it to surface a recently
+ * used type first without touching how each option renders.
+ */
+export const QUICK_CONNECT_PRESETS: Preset[] = [
+  DEV_PRESETS.find((preset) => preset.id === 'service')!,
+  DEV_PRESETS.find((preset) => preset.id === 'database')!,
+  DEV_PRESETS.find((preset) => preset.id === 'queue')!,
+  DEV_PRESETS.find((preset) => preset.id === 'actor')!,
+  CARD_PRESET,
+];
+
 export function presetForShortcut(key: string): Preset | undefined {
   const upper = key.toUpperCase();
   return ALL_PRESETS.find((preset) => preset.shortcut === upper);

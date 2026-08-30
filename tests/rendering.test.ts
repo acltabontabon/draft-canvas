@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { createDocument, createEdge, createNode } from '../src/document/factory';
+import { createDocument, createEdge, createNode, minSizeFor } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
+import { NODE_TYPES } from '../src/document/types';
+import { describeContext, describeNode } from '../src/nodes/describe';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { escapeXmlAttr, escapeXmlText, serialize, stripInvalidXml } from '../src/render/svg/element';
 import { tokenizeCode, flattenToLines } from '../src/render/code/highlight';
 import { layoutText, baselineOf } from '../src/render/text/layout';
 import { StaticTextMeasurer } from '../src/render/text/measure';
 import { FONTS } from '../src/render/text/fonts';
+import { LIGHT } from '../src/render/theme/tokens';
 import { routeBetween, chooseSides } from '../src/edges/routing';
 
 const measurer = new StaticTextMeasurer();
@@ -388,5 +391,117 @@ describe('SVG export is safe against hostile content', () => {
     const ids = [...parsed.querySelectorAll('clipPath')].map((el) => el.id);
     expect(ids.length).toBeGreaterThan(1);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('live resize', () => {
+  it('gives every node type a sensible, positive per-type minimum', () => {
+    for (const type of NODE_TYPES) {
+      const min = minSizeFor(type);
+      expect(min.width).toBeGreaterThan(0);
+      expect(min.height).toBeGreaterThan(0);
+    }
+  });
+
+  it('describes a node at its live (in-gesture) size without touching the committed node', () => {
+    const node = createNode({ type: 'code', x: 0, y: 0, code: 'const x = 1;', language: 'plaintext' });
+    const ctx = describeContext(LIGHT);
+    const live = { ...node, width: node.width + 120, height: node.height + 80 };
+
+    const display = describeNode(live, ctx);
+    expect(display.shapes.length).toBeGreaterThan(0);
+    // The committed node itself must be untouched by describing a resized clone.
+    expect(node.width).not.toBe(live.width);
+    expect(node.height).not.toBe(live.height);
+  });
+
+  it('renders a boundary preset as a caption, never mutating the node\'s own text', () => {
+    const ctx = describeContext(LIGHT);
+    const boundary = createNode({
+      type: 'group',
+      x: 0,
+      y: 0,
+      text: 'Payment Platform',
+      boundaryPreset: 'domain',
+    });
+    expect(boundary.text).toBe('Payment Platform');
+
+    const display = describeNode(boundary, ctx);
+    const texts = display.shapes
+      .filter((shape): shape is Extract<typeof shape, { t: 'text' }> => shape.t === 'text')
+      .map((shape) => shape.layout.lines.map((line) => line.text).join(''));
+    expect(texts).toContain('Payment Platform');
+    expect(texts).toContain('DOMAIN');
+    expect(texts.some((text) => text.includes('Domain: Payment Platform'))).toBe(false);
+  });
+
+  it('renders no caption for the default boundary preset', () => {
+    const ctx = describeContext(LIGHT);
+    const boundary = createNode({ type: 'group', x: 0, y: 0, text: 'Untitled area' });
+    expect(boundary.boundaryPreset).toBe('boundary');
+    const display = describeNode(boundary, ctx);
+    const texts = display.shapes
+      .filter((shape): shape is Extract<typeof shape, { t: 'text' }> => shape.t === 'text')
+      .map((shape) => shape.layout.lines.map((line) => line.text).join(''));
+    expect(texts).toEqual(['Untitled area']);
+  });
+
+  it('gives each service/database/queue variant a distinct caption without changing the base category colour', () => {
+    const ctx = describeContext(LIGHT);
+
+    function fillsAndCaptions(node: ReturnType<typeof createNode>) {
+      const display = describeNode(node, ctx);
+      // Only the silhouette's own fill (rect/path/ellipse) — a caption's text
+      // colour is a different visual channel and deliberately uses the
+      // theme's neutral muted colour regardless of accent.
+      const fills = display.shapes
+        .filter((shape) => shape.t !== 'text')
+        .map((shape) => ('fill' in shape ? shape.fill : undefined))
+        .filter((fill): fill is string => typeof fill === 'string');
+      const texts = display.shapes
+        .filter((shape): shape is Extract<typeof shape, { t: 'text' }> => shape.t === 'text')
+        .map((shape) => shape.layout.lines.map((line) => line.text).join(''));
+      return { fills, texts };
+    }
+
+    for (const [type, kindField, kinds] of [
+      ['service', 'serviceKind', ['generic', 'api', 'worker', 'external']],
+      ['database', 'databaseKind', ['generic', 'sql', 'nosql', 'cache']],
+      ['queue', 'queueKind', ['queue', 'topic', 'stream']],
+    ] as const) {
+      const variants = kinds.map((kind) =>
+        createNode({ type, x: 0, y: 0, text: 'Label', [kindField]: kind } as Parameters<
+          typeof createNode
+        >[0]),
+      );
+      const results = variants.map(fillsAndCaptions);
+
+      // The base category's fills (accent-driven silhouette colour) are
+      // identical across every kind of the same type.
+      const [first, ...rest] = results;
+      for (const result of rest) expect(result.fills).toEqual(first!.fills);
+
+      // The default kind renders no extra caption; every named kind adds
+      // exactly one distinguishing caption on top of the shared label.
+      expect(results[0]!.texts).toEqual(['Label']);
+      for (let i = 1; i < results.length; i += 1) {
+        expect(results[i]!.texts).toContain('Label');
+        expect(results[i]!.texts.length).toBe(2);
+      }
+      // Every named kind's caption is distinct from every other's.
+      const captions = results.slice(1).map((r) => r.texts.find((t) => t !== 'Label'));
+      expect(new Set(captions).size).toBe(captions.length);
+    }
+  });
+
+  it('describes every node type at its own per-type minimum without throwing or collapsing geometry', () => {
+    const ctx = describeContext(LIGHT);
+    for (const type of NODE_TYPES) {
+      const min = minSizeFor(type);
+      const node = createNode({ type, x: 0, y: 0, width: min.width, height: min.height, text: 'Label' });
+      expect(() => describeNode(node, ctx)).not.toThrow();
+      const display = describeNode(node, ctx);
+      expect(display.shapes.length).toBeGreaterThan(0);
+    }
   });
 });

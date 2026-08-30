@@ -1,10 +1,12 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, useInternalNode, type EdgeProps } from '@xyflow/react';
+import { explainEdgeTier } from '../document/sequence';
 import { markerRef } from '../render/svg/markers';
 import { accentOf } from '../render/theme/tokens';
 import { routeBetween, type Rect } from '../edges/routing';
-import { useEditorStore } from '../store/editorStore';
+import { isEdgeFocused, useEditorStore } from '../store/editorStore';
 import { selectEdge } from '../store/selectors';
+import { useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
 
 /**
@@ -20,6 +22,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const edge = useEditorStore((state) => selectEdge(state.document, id));
   const showSequence = useEditorStore((state) => state.document.settings.showSequence);
   const explain = useEditorStore((state) => state.explain);
+  const focus = useEditorStore((state) => state.focus);
   const mode = useEditorStore((state) => state.mode);
   const updateEdgeLabel = useEditorStore((state) => state.updateEdgeLabel);
   const theme = useThemeValue();
@@ -29,6 +32,16 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
   const [editing, setEditing] = useState(false);
   const stopEditing = useCallback(() => setEditing(false), []);
+  const editRequested = useUiStore((state) => state.editRequestId === id);
+
+  // Same transient-id hook `DraftNodeView` uses for `Enter` — no ref-based
+  // imperative API exists into this memoized component either.
+  useEffect(() => {
+    if (!editRequested) return;
+    useUiStore.getState().requestEdit(null);
+    // oxlint-disable-next-line set-state-in-effect -- one-shot external command, see comment above.
+    if (mode !== 'present') setEditing(true);
+  }, [editRequested, mode]);
 
   if (!edge || !sourceNode || !targetNode) return null;
 
@@ -40,9 +53,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const palette = accentOf(theme, edge.accent);
   const color = edge.accent && edge.accent !== 'neutral' ? palette.chip : theme.edge;
 
-  const isActiveStep =
-    explain.active && typeof edge.sequence === 'number' && edge.sequence === explain.step;
-  const dimmed = explain.active && !isActiveStep;
+  const tier = explain.active ? explainEdgeTier(edge.sequence, explain.step) : 'hidden';
+  const isActiveStep = explain.active && tier === 'active';
+  const isShownStep = explain.active && tier === 'shown';
+  const dimmed = explain.active && tier === 'hidden';
+  const focusDimmed = focus.active && !isEdgeFocused(focus, edge);
 
   const hasLabel = Boolean(edge.label);
   const hasStep = showSequence && typeof edge.sequence === 'number';
@@ -54,7 +69,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       className="dc-edge"
       data-selected={selected ? 'true' : undefined}
       data-active={isActiveStep ? 'true' : undefined}
+      data-shown={isShownStep ? 'true' : undefined}
       data-dimmed={dimmed ? 'true' : undefined}
+      data-focus-dimmed={focusDimmed ? 'true' : undefined}
     >
 {/*
         `BaseEdge` draws the path and, through `interactionWidth`, a second
@@ -79,6 +96,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             className="dc-edge-label"
             data-editing={editing ? 'true' : undefined}
             data-dimmed={dimmed ? 'true' : undefined}
+            data-focus-dimmed={focusDimmed ? 'true' : undefined}
+            data-shown={isShownStep ? 'true' : undefined}
             data-active={isActiveStep ? 'true' : undefined}
             style={{ transform: `translate(-50%, -50%) translate(${route.labelX}px, ${route.labelY}px)` }}
             onDoubleClick={() => mode === 'edit' && setEditing(true)}
@@ -121,7 +140,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           <div
             className="dc-edge-step"
             data-active={isActiveStep ? 'true' : undefined}
+            data-shown={isShownStep ? 'true' : undefined}
             data-dimmed={dimmed ? 'true' : undefined}
+            data-focus-dimmed={focusDimmed ? 'true' : undefined}
             style={{
               transform: `translate(-50%, -50%) translate(${badgeX(route)}px, ${badgeY(route)}px)`,
               borderColor: color,

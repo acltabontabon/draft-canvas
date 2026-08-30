@@ -2,9 +2,11 @@ import { refractor } from 'refractor/core';
 import bash from 'refractor/bash';
 import http from 'refractor/http';
 import java from 'refractor/java';
+import javascript from 'refractor/javascript';
 import json from 'refractor/json';
 import markup from 'refractor/markup';
 import sql from 'refractor/sql';
+import typescript from 'refractor/typescript';
 import yaml from 'refractor/yaml';
 import type { RootContent, Root as HastRoot } from 'hast';
 import { Lru } from '../../lib/lru';
@@ -23,15 +25,19 @@ import type { CodeLanguage } from '../../document/types';
 refractor.register(bash);
 refractor.register(http);
 refractor.register(java);
+refractor.register(javascript);
 refractor.register(json);
 refractor.register(markup);
 refractor.register(sql);
+refractor.register(typescript);
 refractor.register(yaml);
 
 /** Maps our language ids onto Prism grammar names. */
 const GRAMMARS: Record<CodeLanguage, string | null> = {
   plaintext: null,
   java: 'java',
+  javascript: 'javascript',
+  typescript: 'typescript',
   json: 'json',
   yaml: 'yaml',
   xml: 'markup',
@@ -44,6 +50,8 @@ const GRAMMARS: Record<CodeLanguage, string | null> = {
 export const LANGUAGE_LABELS: Record<CodeLanguage, string> = {
   plaintext: 'Text',
   java: 'Java',
+  javascript: 'JavaScript',
+  typescript: 'TypeScript',
   json: 'JSON',
   yaml: 'YAML',
   xml: 'XML',

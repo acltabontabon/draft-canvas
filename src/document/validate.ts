@@ -14,22 +14,35 @@ import { compactSequence } from './sequence';
 import { defaultSizeFor } from './factory';
 import {
   ACCENTS,
+  ATTACHABLE_TYPES,
+  BOUNDARY_PRESETS,
   CODE_LANGUAGES,
   CURRENT_VERSION,
+  DATABASE_KINDS,
   DRAFT_FORMAT,
   EDGE_ROUTINGS,
   GRID_MODES,
   NODE_TYPES,
   NOTE_KINDS,
+  EDGE_SEMANTICS,
+  QUEUE_KINDS,
+  SERVICE_KINDS,
   type Accent,
+  type AttachableType,
+  type Attachment,
+  type BoundaryPreset,
   type CodeLanguage,
+  type DatabaseKind,
   type DraftDocument,
   type DraftEdge,
   type DraftNode,
   type DraftNodeType,
   type EdgeRouting,
+  type EdgeSemantic,
   type GridMode,
   type NoteKind,
+  type QueueKind,
+  type ServiceKind,
 } from './types';
 
 export type NormalizeResult =
@@ -62,6 +75,35 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback
   return typeof value === 'string' && (allowed as readonly string[]).includes(value)
     ? (value as T)
     : fallback;
+}
+
+/** Like `oneOf`, but an absent or invalid value stays absent rather than being
+ *  coerced to a fallback — used for fields that are optional conveniences
+ *  rather than always-present classifications (e.g. an edge's `semantic`). */
+function oneOfOptional<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
+    ? (value as T)
+    : undefined;
+}
+
+/**
+ * The `note`/`code` field pairs shared by a top-level node and an attachment —
+ * both are "a Note or a Code card's content," so this is the one place that
+ * knows how to read them out of an untrusted candidate object.
+ */
+function validateAttachableFields(
+  candidate: Record<string, unknown>,
+  type: DraftNodeType | AttachableType,
+): Pick<DraftNode, 'noteKind' | 'language' | 'code'> {
+  const fields: Pick<DraftNode, 'noteKind' | 'language' | 'code'> = {};
+  if (type === 'note') {
+    fields.noteKind = oneOf<NoteKind>(candidate.noteKind, NOTE_KINDS, 'note');
+  }
+  if (type === 'code') {
+    fields.language = oneOf<CodeLanguage>(candidate.language, CODE_LANGUAGES, 'plaintext');
+    fields.code = text(candidate.code, LIMITS.maxCodeLength) ?? '';
+  }
+  return fields;
 }
 
 function safeId(value: unknown): string | null {
@@ -144,6 +186,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   const nodes: DraftNode[] = [];
   let droppedNodes = 0;
   let renamedNodes = 0;
+  let droppedAttachments = 0;
+  let truncatedAttachments = 0;
   /** Maps the id as written in the file to the id we actually used. */
   const nodeIdRemap = new Map<string, string>();
 
@@ -186,20 +230,74 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     const label = text(candidate.text, LIMITS.maxTextLength);
     if (label !== undefined) node.text = label;
 
-    const accent = oneOf<Accent>(candidate.accent, ACCENTS, 'neutral');
-    if (accent !== 'neutral') node.accent = accent;
+    // `oneOfOptional`, not `oneOf`, is what this needs: a node's own accent is
+    // an explicit override of its type's default colour, and neutral (grey)
+    // is one of the choices a user can make, not a synonym for "unset". Using
+    // `oneOf`'s forced fallback and then treating that fallback as "leave it
+    // off" made an explicit choice of neutral indistinguishable from never
+    // having set one, so it never survived a save/reload round trip (which
+    // always passes through here) — the node would revert to its type's own
+    // default colour (e.g. teal for a Service) instead of staying grey.
+    const accent = oneOfOptional<Accent>(candidate.accent, ACCENTS);
+    if (accent !== undefined) node.accent = accent;
 
     if (typeof candidate.parentId === 'string') {
       // Resolved in a second pass, once every node id is known.
       node.parentId = candidate.parentId;
     }
 
-    if (type === 'note') {
-      node.noteKind = oneOf<NoteKind>(candidate.noteKind, NOTE_KINDS, 'note');
+    Object.assign(node, validateAttachableFields(candidate, type));
+
+    if (type === 'group') {
+      node.boundaryPreset = oneOf<BoundaryPreset>(candidate.boundaryPreset, BOUNDARY_PRESETS, 'boundary');
     }
-    if (type === 'code') {
-      node.language = oneOf<CodeLanguage>(candidate.language, CODE_LANGUAGES, 'plaintext');
-      node.code = text(candidate.code, LIMITS.maxCodeLength) ?? '';
+    if (type === 'service') {
+      node.serviceKind = oneOf<ServiceKind>(candidate.serviceKind, SERVICE_KINDS, 'generic');
+    }
+    if (type === 'database') {
+      node.databaseKind = oneOf<DatabaseKind>(candidate.databaseKind, DATABASE_KINDS, 'generic');
+    }
+    if (type === 'queue') {
+      node.queueKind = oneOf<QueueKind>(candidate.queueKind, QUEUE_KINDS, 'queue');
+    }
+
+    const rawAttachments = Array.isArray(candidate.attachments) ? candidate.attachments : [];
+    if (rawAttachments.length > LIMITS.maxAttachmentsPerNode) {
+      truncatedAttachments += rawAttachments.length - LIMITS.maxAttachmentsPerNode;
+    }
+    if (rawAttachments.length > 0) {
+      const attachments: Attachment[] = [];
+      const seenAttachmentIds = new Set<string>();
+      for (const rawAttachment of rawAttachments.slice(0, LIMITS.maxAttachmentsPerNode)) {
+        if (!isRecord(rawAttachment)) {
+          droppedAttachments += 1;
+          continue;
+        }
+        let attachmentId = safeId(rawAttachment.id);
+        if (!attachmentId || seenAttachmentIds.has(attachmentId)) attachmentId = createId('a');
+        seenAttachmentIds.add(attachmentId);
+
+        const attachmentType = oneOf<AttachableType>(rawAttachment.type, ATTACHABLE_TYPES, 'note');
+        const attachment: Attachment = { id: attachmentId, type: attachmentType };
+
+        const attachmentLabel = text(rawAttachment.text, LIMITS.maxTextLength);
+        if (attachmentLabel !== undefined) attachment.text = attachmentLabel;
+
+        const attachmentAccent = oneOfOptional<Accent>(rawAttachment.accent, ACCENTS);
+        if (attachmentAccent !== undefined) attachment.accent = attachmentAccent;
+
+        Object.assign(attachment, validateAttachableFields(rawAttachment, attachmentType));
+
+        const width = finite(rawAttachment.width, Number.NaN);
+        const height = finite(rawAttachment.height, Number.NaN);
+        if (Number.isFinite(width) && Number.isFinite(height)) {
+          attachment.width = clamp(width, LIMITS.minNodeSize, LIMITS.maxNodeSize);
+          attachment.height = clamp(height, LIMITS.minNodeSize, LIMITS.maxNodeSize);
+        }
+
+        attachments.push(attachment);
+      }
+      if (attachments.length > 0) node.attachments = attachments;
     }
 
     nodes.push(node);
@@ -268,8 +366,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     const label = text(candidate.label, LIMITS.maxLabelLength);
     if (label) edge.label = label;
 
-    const accent = oneOf<Accent>(candidate.accent, ACCENTS, 'neutral');
-    if (accent !== 'neutral') edge.accent = accent;
+    // See the matching comment on the node's own accent above: `neutral` is a
+    // real, explicit choice here too, not an absence to collapse away.
+    const accent = oneOfOptional<Accent>(candidate.accent, ACCENTS);
+    if (accent !== undefined) edge.accent = accent;
 
     if (typeof candidate.sequence === 'number' && Number.isFinite(candidate.sequence)) {
       edge.sequence = Math.max(1, Math.round(candidate.sequence));
@@ -285,6 +385,13 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
       }
     }
 
+    // Unlike node sub-kinds, an absent or unrecognised semantic stays absent
+    // rather than being coerced to a fallback value — a freshly-drawn edge
+    // has no semantic by default, and an unknown string from a newer format
+    // should not silently become e.g. "http".
+    const semantic = oneOfOptional<EdgeSemantic>(candidate.semantic, EDGE_SEMANTICS);
+    if (semantic) edge.semantic = semantic;
+
     edges.push(edge);
   }
 
@@ -293,6 +400,12 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     repairs.push(`Gave ${renamedNodes} node(s) new ids (missing or duplicate).`);
   }
   if (droppedParents > 0) repairs.push(`Removed ${droppedParents} invalid grouping link(s).`);
+  if (droppedAttachments > 0) {
+    repairs.push(`Dropped ${droppedAttachments} unreadable attachment(s).`);
+  }
+  if (truncatedAttachments > 0) {
+    repairs.push(`A node had too many attachments; kept the first ${LIMITS.maxAttachmentsPerNode}.`);
+  }
   if (droppedEdges > 0) {
     repairs.push(`Dropped ${droppedEdges} connection(s) pointing at nodes that do not exist.`);
   }

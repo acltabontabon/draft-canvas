@@ -79,8 +79,12 @@ test('stays workable with 100 nodes and 180 connections', async ({ page }) => {
 
   await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
   await page.mouse.down();
+  // A short diagonal nudge — enough to prove the drag moved the node, but
+  // short enough (this document is a dense grid) that node n0's own attach-
+  // eligible Code footprint does not end the drag substantially overlapping
+  // a neighbour, which would arm and fold it into an attachment instead.
   for (let step = 1; step <= 40; step += 1) {
-    await page.mouse.move(before.x + before.width / 2 + step * 6, before.y + before.height / 2 + step * 3);
+    await page.mouse.move(before.x + before.width / 2 + step * 3.5, before.y + before.height / 2 + step * 1.75);
   }
   await page.mouse.up();
 

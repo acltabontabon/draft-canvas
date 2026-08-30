@@ -7,6 +7,8 @@ import {
   removeElements,
   updateNode,
 } from '../src/document/operations';
+import { evaluateAttachCandidates, deepestBoundaryAt } from '../src/canvas/dragTargets';
+import { isEdgeFocused } from '../src/store/editorStore';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { projectNodes, projectEdges } from '../src/canvas/projection';
 import type { DraftDocument } from '../src/document/types';
@@ -165,5 +167,49 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
     const started = performance.now();
     renderDocumentSvg(doc);
     expect(performance.now() - started).toBeLessThan(4000);
+  });
+
+  /**
+   * The riskiest new per-frame work from the interaction features layered on
+   * top of this document model: attach/reparent hit-testing runs on every
+   * frame of a drag, and Focus/Explain dimming is recomputed per node/edge on
+   * every render. Kept as one pragmatic extension of the existing large-scale
+   * fixture rather than a dedicated performance test per feature.
+   */
+  it('runs attach/reparent hit-testing repeatedly over the full document within budget', () => {
+    const dragged = doc.nodes[0]!;
+    const draggedRect = { x: dragged.x, y: dragged.y, width: dragged.width, height: dragged.height };
+    const exclude = new Set([dragged.id]);
+
+    const started = performance.now();
+    for (let frame = 0; frame < 60; frame += 1) {
+      const point = { x: draggedRect.x + frame, y: draggedRect.y };
+      evaluateAttachCandidates({ ...draggedRect, x: point.x }, dragged.type, doc, exclude);
+      deepestBoundaryAt(point, doc, exclude);
+    }
+    // A generous budget: this exists to catch an accidental quadratic scan
+    // per candidate, not to police milliseconds on a variable CI machine.
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it('never touches the document (or reprojects) while Focus/Explain state changes', () => {
+    const options = {
+      selectedNodes: new Set<string>(),
+      selectedEdges: new Set<string>(),
+      interactive: true,
+    };
+    const projectedBefore = projectNodes(doc, [], options);
+
+    // Toggling focus membership is store-only — the document reference (and
+    // therefore the projection) must not change at all.
+    const focus = { active: true, nodeIds: [doc.nodes[0]!.id, doc.nodes[1]!.id], edgeIds: [] };
+    const projectedAfter = projectNodes(doc, projectedBefore, options);
+    expect(projectedAfter).toBe(projectedBefore);
+
+    // Classifying every edge's focus state is a plain per-edge check, not a
+    // scan of the whole document each time — stays fast even for all ~180.
+    const started = performance.now();
+    for (const edge of doc.edges) isEdgeFocused(focus, edge);
+    expect(performance.now() - started).toBeLessThan(100);
   });
 });

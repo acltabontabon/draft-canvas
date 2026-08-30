@@ -78,8 +78,26 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
 | `text` | string? | The label. Always plain text — never markup. |
 | `accent` | enum? | `neutral` · `teal` · `blue` · `violet` · `amber` · `rose` · `green`. A closed set, not a colour value. |
 | `noteKind` | enum? | `note` · `question` · `warning` · `decision`. Notes only. |
-| `language` | enum? | `plaintext` · `java` · `json` · `yaml` · `xml` · `sql` · `bash` · `http` · `log`. Code cards only. |
+| `language` | enum? | `plaintext` · `java` · `javascript` · `typescript` · `json` · `yaml` · `xml` · `sql` · `bash` · `http` · `log`. Code cards only. |
 | `code` | string? | Code-card contents. Stored and rendered as text; never executed. |
+| `attachments` | array? | Supporting detail folded into this node — see [Attachment](#attachment) below. Up to `maxAttachmentsPerNode`. |
+| `boundaryPreset` | enum? | `boundary` · `system` · `domain` · `network` · `deployment` · `group`. `group` nodes only. A loose, technology-neutral label rendered as a small caption — never mutates the node's own `text`. |
+| `serviceKind` | enum? | `generic` · `api` · `worker` · `external`. `service` nodes only. Renders as a small caption; the teal silhouette never changes. |
+| `databaseKind` | enum? | `generic` · `sql` · `nosql` · `cache`. `database` nodes only. Renders as a small caption; the blue silhouette never changes. |
+| `queueKind` | enum? | `queue` · `topic` · `stream`. `queue` nodes only. Renders as a small caption; the violet silhouette never changes. |
+
+### Attachment
+
+Supporting detail (a note, a code snippet, free text) collapsed into a host node rather than left
+as an independent element. Reveals in a small popover from the host's attachment badge; detaching
+one restores it as an ordinary node on the canvas.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | string | Unique within the node. Stable across edits and reordering. |
+| `type` | enum | `code` · `note` · `text` · `card` · `rounded`. |
+| `text` `noteKind` `language` `code` `accent` | — | Same meaning as the equivalent `Node` fields. |
+| `width` `height` | number? | Preserved from the source node so detaching restores its size, not a type default. |
 
 ### Edge
 
@@ -93,6 +111,7 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
 | `accent` | enum? | As for nodes. |
 | `sequence` | integer? | Position in the walkthrough. Kept contiguous from 1. Absent means the connection is not part of it. |
 | `details` | object? | `{ language, code }` — expandable detail shown on selection and during its Explain step. |
+| `semantic` | enum? | `http` · `event` · `command` · `query` · `reads` · `writes` · `publishes` · `consumes` · `calls` · `dependsOn`. Optional convenience only — fills in a default `label` when picked on a labelless edge, never assigned automatically, never changes `accent`. |
 
 Connection anchors are **not** stored. They are recomputed from node positions, so connections
 re-route themselves when things move and a file cannot carry stale geometry.

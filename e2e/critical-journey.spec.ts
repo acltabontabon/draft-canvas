@@ -245,12 +245,35 @@ test.describe('Draft Canvas', () => {
 
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 2 / 2');
+    // Step 1 stays visible but subdued now that step 2 is active — not
+    // dimmed the same as something outside the walkthrough entirely.
+    await expect(page.locator('.dc-edge[data-active="true"]')).toHaveCount(1);
+    await expect(page.locator('.dc-edge[data-shown="true"]')).toHaveCount(1);
+    await expect(page.locator('.dc-edge[data-dimmed="true"]')).toHaveCount(0);
 
     await page.keyboard.press('ArrowLeft');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
 
     await page.keyboard.press('Escape');
     await expect(page.locator('.dc-toolbar')).toBeVisible();
+  });
+
+  test('presentation mode shows no editing leftovers: no selection ring, no alignment guides', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Present mode is read-only chrome');
+    await createNode(page, 'Service', { x: 400, y: 300 });
+    await page.locator('.dc-node').first().click();
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
+
+    await page.getByTitle(/^Present/).click();
+    await expect(page.locator('.dc-canvas[data-explain="on"], .react-flow')).toBeVisible();
+    // A selection ring from editing has no meaning in a read-only
+    // presentation, and no drag-in-progress chrome (guides, attach
+    // affordance) can ever be legitimately shown here either.
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(0);
+    await expect(page.locator('.dc-guide')).toHaveCount(0);
+    await expect(page.locator('.dc-attach-affordance')).toHaveCount(0);
   });
 
   test('creates elements from the keyboard and deletes them', async ({ page }) => {

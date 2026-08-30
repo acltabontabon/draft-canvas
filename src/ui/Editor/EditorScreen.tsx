@@ -1,7 +1,10 @@
 import { useCallback, useEffect } from 'react';
 import { useReactFlow } from '@xyflow/react';
+import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { Canvas } from '../../canvas/Canvas';
 import { CARD_PRESET, presetForShortcut, type Preset } from '../../canvas/presets';
+import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
+import { createEdge, createNode } from '../../document/factory';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { useEditorStore } from '../../store/editorStore';
 import { pointer, useUiStore } from '../../store/uiStore';
@@ -10,6 +13,7 @@ import { useExplain } from '../../presentation/useExplain';
 import { useThemeValue } from '../theme/useTheme';
 import { EmptyState } from './EmptyState';
 import { ExplainBar } from './ExplainBar';
+import { FocusIndicator } from './FocusIndicator';
 import { ExportDialog } from './ExportDialog';
 import { Inspector } from './Inspector';
 import { ShortcutSheet } from './ShortcutSheet';
@@ -33,6 +37,8 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   const arm = useUiStore((state) => state.arm);
   const setExportOpen = useUiStore((state) => state.setExportOpen);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
+  const quickConnect = useUiStore((state) => state.quickConnect);
+  const setQuickConnect = useUiStore((state) => state.setQuickConnect);
 
   const theme = useThemeValue();
   const explain = useExplain();
@@ -61,6 +67,24 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       arm(null);
     },
     [arm, store, theme],
+  );
+
+  /** Creates the chosen type at the Quick Connect drop point and connects it. */
+  const onQuickConnectSelect = useCallback(
+    (preset: Preset) => {
+      if (!quickConnect) return;
+      const created = createNode({
+        type: preset.type,
+        x: quickConnect.flowPosition.x,
+        y: quickConnect.flowPosition.y,
+        text: preset.text ?? '',
+        accent: preset.accent,
+      });
+      const edge = createEdge({ source: quickConnect.source, target: created.id });
+      store.getState().addNodesWithEdges([created], [edge], 'Connect to new node');
+      setQuickConnect(null);
+    },
+    [quickConnect, setQuickConnect, store],
   );
 
   /** Places a new element under the cursor, or in the middle of the view. */
@@ -102,10 +126,24 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       )}
 
       <div className="dc-editor-canvas">
-        <Canvas onCreateAt={(position) => createAt(armed ?? CARD_PRESET, position)} />
+        <Canvas
+          onCreateAt={(position) => createAt(armed ?? CARD_PRESET, position)}
+          onQuickConnectMenu={(source, flowPosition, screenPosition) =>
+            setQuickConnect({ source, flowPosition, screenPosition })
+          }
+        />
+        {quickConnect && (
+          <QuickConnectMenu
+            screenPosition={quickConnect.screenPosition}
+            onSelect={onQuickConnectSelect}
+            onDismiss={() => setQuickConnect(null)}
+          />
+        )}
+        {!presenting && <AttachmentPopover />}
         <EmptyState />
         {!presenting && <Inspector />}
         <ExplainBar explain={explain} />
+        <FocusIndicator />
 
         {presenting && (
           <div className="dc-present-exit">
@@ -234,7 +272,8 @@ function useKeyboard({
           return;
         case 'Escape':
           arm(null);
-          if (explain.active) explain.stop();
+          if (state.focus.active) state.exitFocus();
+          else if (explain.active) explain.stop();
           else state.setSelection({ nodes: [], edges: [] });
           return;
         case '?':
@@ -252,6 +291,39 @@ function useKeyboard({
         case '-':
           void zoomOut();
           return;
+        case 'ArrowUp':
+        case 'ArrowDown':
+        case 'ArrowLeft':
+        case 'ArrowRight': {
+          if (state.selection.nodes.length === 0) return;
+          event.preventDefault();
+          const magnitude = event.shiftKey ? 10 : 1;
+          const dx = event.key === 'ArrowLeft' ? -magnitude : event.key === 'ArrowRight' ? magnitude : 0;
+          const dy = event.key === 'ArrowUp' ? -magnitude : event.key === 'ArrowDown' ? magnitude : 0;
+          state.nudgeSelection(dx, dy);
+          return;
+        }
+        case 'Enter': {
+          // Bare Enter only — and only when it is unambiguous what to edit,
+          // and nothing else is already claiming keyboard input (the
+          // walkthrough and Focus have their own controls; the Quick Connect
+          // menu and an open attachment popover have their own Enter/Escape).
+          if (event.shiftKey || event.altKey) return;
+          if (explain.active || state.focus.active) return;
+          const uiState = useUiStore.getState();
+          if (uiState.quickConnect || uiState.openAttachmentPopover) return;
+          const { nodes, edges } = state.selection;
+          if (nodes.length === 1 && edges.length === 0) {
+            const target = state.document.nodes.find((n) => n.id === nodes[0]);
+            if (!target || target.type === 'group') return;
+            event.preventDefault();
+            uiState.requestEdit(target.id);
+          } else if (edges.length === 1 && nodes.length === 0) {
+            event.preventDefault();
+            uiState.requestEdit(edges[0]!);
+          }
+          return;
+        }
         default:
           break;
       }

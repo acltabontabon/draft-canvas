@@ -29,6 +29,34 @@ export function sequenceSteps(doc: DraftDocument): SequenceStep[] {
   }));
 }
 
+/**
+ * Explain Mode's three visual tiers: the step being explained right now, a
+ * step already covered (kept visible but subdued, so the audience can see
+ * how the path got here), or one not reached yet (dimmed the same as
+ * anything outside the walkthrough entirely).
+ */
+export type ExplainTier = 'active' | 'shown' | 'hidden';
+
+/** An edge with no sequence number is not part of the walkthrough — always `hidden`. */
+export function explainEdgeTier(sequence: number | undefined, step: number): ExplainTier {
+  if (typeof sequence !== 'number') return 'hidden';
+  if (sequence === step) return 'active';
+  return sequence < step ? 'shown' : 'hidden';
+}
+
+/** A node's tier is the most-lit tier among the edges touching it — a node on
+ *  both an already-shown step and an untouched one still reads as `shown`. */
+export function explainNodeTier(edges: Iterable<DraftEdge>, nodeId: string, step: number): ExplainTier {
+  let best: ExplainTier = 'hidden';
+  for (const edge of edges) {
+    if (edge.source !== nodeId && edge.target !== nodeId) continue;
+    const tier = explainEdgeTier(edge.sequence, step);
+    if (tier === 'active') return 'active';
+    if (tier === 'shown') best = 'shown';
+  }
+  return best;
+}
+
 /** Renumbers sequenced edges to 1..n while preserving their relative order. */
 export function compactSequence(doc: DraftDocument): DraftDocument {
   const ordered = orderedEdges(doc);

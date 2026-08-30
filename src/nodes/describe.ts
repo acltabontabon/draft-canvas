@@ -1,4 +1,11 @@
-import type { DraftNode, NoteKind } from '../document/types';
+import type {
+  BoundaryPreset,
+  DatabaseKind,
+  DraftNode,
+  NoteKind,
+  QueueKind,
+  ServiceKind,
+} from '../document/types';
 import type { DisplayList, Shape, Stroke } from '../render/displayList';
 import { tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES } from '../render/code/theme';
@@ -45,6 +52,59 @@ const NOTE_LABELS: Record<NoteKind, string> = {
   warning: 'WARNING',
   decision: 'DECISION',
 };
+
+/** The default preset renders no caption at all — a plain boundary needs no label. */
+const BOUNDARY_PRESET_LABELS: Partial<Record<BoundaryPreset, string>> = {
+  system: 'SYSTEM',
+  domain: 'DOMAIN',
+  network: 'NETWORK',
+  deployment: 'DEPLOYMENT',
+  group: 'GROUP',
+};
+
+/**
+ * Sub-kind captions for Service/Database/Queue. Unlike a `NoteKind` (which
+ * does change accent), these never touch `accentOf` — the base category
+ * colour must keep dominating, so the variant only ever adds this small
+ * corner caption, the same restrained treatment a boundary preset gets.
+ * The default kind of each type renders no caption at all.
+ */
+const SERVICE_KIND_LABELS: Partial<Record<ServiceKind, string>> = {
+  api: 'API',
+  worker: 'WORKER',
+  external: 'EXTERNAL',
+};
+const DATABASE_KIND_LABELS: Partial<Record<DatabaseKind, string>> = {
+  sql: 'SQL',
+  nosql: 'NOSQL',
+  cache: 'CACHE',
+};
+const QUEUE_KIND_LABELS: Partial<Record<QueueKind, string>> = {
+  topic: 'TOPIC',
+  stream: 'STREAM',
+};
+
+/** A small, muted corner tag — the one shared visual for every node variant. */
+function variantCaption(node: DraftNode, ctx: DescribeContext, label: string, color: string): Shape[] {
+  const layout = layoutText(label, {
+    font: FONTS.presetTag,
+    maxWidth: Math.max(16, node.width - 12),
+    lineHeight: FONTS.presetTag.size * LINE_HEIGHTS.label,
+    maxLines: 1,
+    measurer: ctx.measurer,
+  });
+  return [
+    {
+      t: 'text',
+      x: node.width - 7,
+      y: node.height - layout.height - 5,
+      layout,
+      font: FONTS.presetTag,
+      fill: color,
+      align: 'end',
+    },
+  ];
+}
 
 export function describeNode(node: DraftNode, ctx: DescribeContext): DisplayList {
   const shapes = shapesFor(node, ctx);
@@ -169,6 +229,7 @@ function ellipse(node: DraftNode, ctx: DescribeContext): Shape[] {
 function service(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'teal');
   const capHeight = 4;
+  const kindLabel = SERVICE_KIND_LABELS[node.serviceKind ?? 'generic'];
   return [
     {
       t: 'rect',
@@ -197,6 +258,7 @@ function service(node: DraftNode, ctx: DescribeContext): Shape[] {
       ],
     },
     ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
+    ...(kindLabel ? variantCaption(node, ctx, kindLabel, ctx.theme.textMuted) : []),
   ];
 }
 
@@ -217,11 +279,13 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
     'Z',
   ].join(' ');
   const lid = `M${x},${y + ry} a${w / 2},${ry} 0 0 0 ${w},0 a${w / 2},${ry} 0 0 0 ${-w},0`;
+  const kindLabel = DATABASE_KIND_LABELS[node.databaseKind ?? 'generic'];
 
   return [
     { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
     { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5 } },
     ...centredLabel(node, ctx, { top: ry * 2, bottom: ry, color: palette.text }),
+    ...(kindLabel ? variantCaption(node, ctx, kindLabel, ctx.theme.textMuted) : []),
   ];
 }
 
@@ -280,6 +344,8 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
       align: 'middle',
     });
   }
+  const kindLabel = QUEUE_KIND_LABELS[node.queueKind ?? 'queue'];
+  if (kindLabel) shapes.push(...variantCaption(node, ctx, kindLabel, ctx.theme.textMuted));
   return shapes;
 }
 
@@ -443,6 +509,31 @@ function group(node: DraftNode, ctx: DescribeContext): Shape[] {
     },
   ];
 
+  // The preset is a small secondary caption, never folded into the node's
+  // own `text` — a Domain boundary labelled "Payment Platform" must still
+  // read "Payment Platform", not "Domain: Payment Platform".
+  const presetLabel = BOUNDARY_PRESET_LABELS[node.boundaryPreset ?? 'boundary'];
+  let titleTop = 9;
+  if (presetLabel) {
+    const captionLayout = layoutText(presetLabel, {
+      font: FONTS.presetTag,
+      maxWidth: Math.max(16, node.width - 24),
+      lineHeight: FONTS.presetTag.size * LINE_HEIGHTS.label,
+      maxLines: 1,
+      measurer: ctx.measurer,
+    });
+    shapes.push({
+      t: 'text',
+      x: 12,
+      y: 8,
+      layout: captionLayout,
+      font: FONTS.presetTag,
+      fill: palette.line,
+      align: 'start',
+    });
+    titleTop = 8 + captionLayout.height + 2;
+  }
+
   const title = node.text ?? '';
   if (title.trim()) {
     const layout = layoutText(title, {
@@ -455,7 +546,7 @@ function group(node: DraftNode, ctx: DescribeContext): Shape[] {
     shapes.push({
       t: 'text',
       x: 12,
-      y: 9,
+      y: titleTop,
       layout,
       font: FONTS.groupTitle,
       fill: ctx.theme.textMuted,

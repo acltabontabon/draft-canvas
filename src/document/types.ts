@@ -42,6 +42,8 @@ export type NoteKind = (typeof NOTE_KINDS)[number];
 export const CODE_LANGUAGES = [
   'plaintext',
   'java',
+  'javascript',
+  'typescript',
   'json',
   'yaml',
   'xml',
@@ -62,6 +64,63 @@ export type EdgeRouting = (typeof EDGE_ROUTINGS)[number];
 export const GRID_MODES = ['dots', 'lines', 'none'] as const;
 export type GridMode = (typeof GRID_MODES)[number];
 
+/** Sub-kinds of the developer presets. Purely a labelling convenience — the
+ *  base type's silhouette and accent always dominate; see `nodes/describe.ts`. */
+export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external'] as const;
+export type ServiceKind = (typeof SERVICE_KINDS)[number];
+
+export const DATABASE_KINDS = ['generic', 'sql', 'nosql', 'cache'] as const;
+export type DatabaseKind = (typeof DATABASE_KINDS)[number];
+
+export const QUEUE_KINDS = ['queue', 'topic', 'stream'] as const;
+export type QueueKind = (typeof QUEUE_KINDS)[number];
+
+/** Loose, technology-neutral presets for a `group` boundary. A preset only
+ *  changes a small secondary caption — never the node's own `text`. */
+export const BOUNDARY_PRESETS = ['boundary', 'system', 'domain', 'network', 'deployment', 'group'] as const;
+export type BoundaryPreset = (typeof BOUNDARY_PRESETS)[number];
+
+/** Optional convenience defaults for a connection's label. Never mandatory,
+ *  and never changes an edge's `accent` — see `document/edgeSemantics.ts`. */
+export const EDGE_SEMANTICS = [
+  'http',
+  'event',
+  'command',
+  'query',
+  'reads',
+  'writes',
+  'publishes',
+  'consumes',
+  'calls',
+  'dependsOn',
+] as const;
+export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];
+
+/** Node types that can be folded into another node as an attachment. */
+export const ATTACHABLE_TYPES = ['code', 'note', 'text', 'card', 'rounded'] as const;
+export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
+
+/**
+ * Supporting detail folded into a host node rather than left as an independent
+ * canvas element. Deliberately a small, closed subset of `DraftNode`'s own
+ * fields — an attachment is "the content of a Code/Note/Card node, minus the
+ * fields that only make sense for something living on the canvas" (position,
+ * z-order, parentage). See `docs/ARCHITECTURE.md` for why this is an embedded
+ * array on the host rather than a second kind of graph node.
+ */
+export interface Attachment {
+  id: string;
+  type: AttachableType;
+  text?: string;
+  noteKind?: NoteKind;
+  language?: CodeLanguage;
+  code?: string;
+  accent?: Accent;
+  /** Preserved from the source node so detaching restores its size, not a default. */
+  width?: number;
+  height?: number;
+}
+
 export interface DraftNode {
   id: string;
   type: DraftNodeType;
@@ -81,6 +140,16 @@ export interface DraftNode {
   /** `code` nodes only. */
   language?: CodeLanguage;
   code?: string;
+  /** `service` nodes only. */
+  serviceKind?: ServiceKind;
+  /** `database` nodes only. */
+  databaseKind?: DatabaseKind;
+  /** `queue` nodes only. */
+  queueKind?: QueueKind;
+  /** `group` nodes only. */
+  boundaryPreset?: BoundaryPreset;
+  /** Supporting detail collapsed into this node. Any node type may host one. */
+  attachments?: Attachment[];
 }
 
 export interface EdgeDetails {
@@ -104,6 +173,11 @@ export interface DraftEdge {
   sequence?: number;
   /** Expandable technical detail, shown on selection and in Explain Mode. */
   details?: EdgeDetails;
+  /**
+   * Optional convenience type. Provides a default label when the edge has
+   * none; never implies or changes `accent` or any other styling.
+   */
+  semantic?: EdgeSemantic;
 }
 
 export interface DraftViewport {

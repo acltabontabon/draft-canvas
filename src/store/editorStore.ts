@@ -1,16 +1,26 @@
 import { create } from 'zustand';
-import { createDocument, createEdge, createNode, type CreateNodeInput } from '../document/factory';
+import {
+  createAttachment,
+  createDocument,
+  createEdge,
+  createNode,
+  type CreateNodeInput,
+} from '../document/factory';
 import {
   addEdges,
   addNodes,
   alignNodes,
+  attachToNode as attachToNodeOp,
   bringForward,
   bringToFront,
+  detachFromNode,
   distributeNodes,
   extractFragment,
   moveNodes,
   pasteFragment,
+  removeAttachment as removeAttachmentOp,
   removeElements,
+  reorderAttachment as reorderAttachmentOp,
   sendBackward,
   sendToBack,
   setParent,
@@ -18,6 +28,7 @@ import {
   setTitle,
   setViewport,
   touch,
+  updateAttachment as updateAttachmentOp,
   updateEdge,
   updateNode,
   type AlignEdge,
@@ -29,12 +40,16 @@ import {
   sequenceAll,
   toggleSequence,
 } from '../document/sequence';
+import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import type {
+  AttachableType,
+  Attachment,
   DraftDocument,
   DraftEdge,
   DraftNode,
   DraftSettings,
   DraftViewport,
+  EdgeSemantic,
 } from '../document/types';
 import {
   EMPTY_HISTORY,
@@ -56,6 +71,37 @@ export interface ExplainState {
   step: number;
 }
 
+/**
+ * An arbitrary, freely-edited set of nodes/edges to keep lit while everything
+ * else fades — a sibling of `ExplainState`, not a variant of it. Explain Mode
+ * is ordered and step-indexed; Focus has no ordering and is just as usable in
+ * edit mode as in present mode, so folding the two together would force
+ * Explain's single-current-step shape to also express an arbitrary set. Never
+ * persisted, never pushed to history — the same treatment as `explain`.
+ */
+export interface FocusState {
+  active: boolean;
+  nodeIds: string[];
+  edgeIds: string[];
+}
+
+/**
+ * An edge counts as focused if it was explicitly added, or if both of its
+ * endpoints are focused nodes — inferred automatically so a user tracing a
+ * path through Focus Mode does not have to click every connecting arrow one
+ * by one. A kept-separate function (rather than folding inferred membership
+ * into `focus.edgeIds` itself) so explicit and inferred membership never get
+ * confused when toggling or exiting.
+ */
+export function isEdgeFocused(
+  focus: FocusState,
+  edge: { id: string; source: string; target: string },
+): boolean {
+  if (!focus.active) return false;
+  if (focus.edgeIds.includes(edge.id)) return true;
+  return focus.nodeIds.includes(edge.source) && focus.nodeIds.includes(edge.target);
+}
+
 interface Interaction {
   label: string;
   document: DraftDocument;
@@ -70,6 +116,7 @@ export interface EditorStore {
   save: SaveState;
   mode: EditorMode;
   explain: ExplainState;
+  focus: FocusState;
   /** Bumped on every document write; autosave watches this rather than deep-diffing. */
   revision: number;
 
@@ -89,7 +136,12 @@ export interface EditorStore {
   updateNodeText: (id: string, text: string) => void;
   updateEdgeById: (id: string, patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>, label?: string) => void;
   updateEdgeLabel: (id: string, label: string) => void;
+  /** Sets (or clears) a semantic type — fills the default label only if the
+   *  edge has none, and never touches `accent`. See `document/edgeSemantics.ts`. */
+  setEdgeSemantic: (id: string, semantic: EdgeSemantic | undefined) => void;
   commitPositions: (positions: Map<string, { x: number; y: number }>) => void;
+  /** Moves every selected node by a pixel delta — repeated taps coalesce. */
+  nudgeSelection: (dx: number, dy: number) => void;
   deleteSelection: () => void;
   duplicateSelection: () => void;
   copySelection: () => void;
@@ -100,6 +152,19 @@ export interface EditorStore {
   ungroupSelection: () => void;
   raise: (toFront?: boolean) => void;
   lower: (toBack?: boolean) => void;
+
+  /* Attachments */
+  attachToNode: (hostId: string, attachment: Attachment, insertIndex?: number) => void;
+  /** Folds an existing canvas node into a host's attachments (drag-to-attach). */
+  attachExistingNode: (nodeId: string, hostId: string) => void;
+  detachAttachment: (hostId: string, attachmentId: string) => void;
+  updateAttachment: (hostId: string, attachmentId: string, patch: Partial<Omit<Attachment, 'id'>>) => void;
+  removeAttachment: (hostId: string, attachmentId: string) => void;
+  reorderAttachment: (hostId: string, attachmentId: string, direction: -1 | 1) => void;
+
+  /* Boundary containment */
+  /** Sets or clears (`boundaryId: null`) a node's containing boundary. */
+  reparentNode: (nodeId: string, boundaryId: string | null) => void;
 
   /* Sequencing */
   toggleEdgeSequence: (edgeId: string) => void;
@@ -123,6 +188,11 @@ export interface EditorStore {
   setSaveState: (state: SaveState) => void;
   setMode: (mode: EditorMode) => void;
   setExplain: (explain: Partial<ExplainState>) => void;
+
+  /* Focus mode */
+  enterFocus: (nodeIds: string[], edgeIds: string[]) => void;
+  toggleFocusMember: (id: string, kind: 'node' | 'edge') => void;
+  exitFocus: () => void;
 }
 
 export interface ApplyOptions {
@@ -143,6 +213,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   save: { status: 'idle' },
   mode: 'edit',
   explain: { active: false, step: 0 },
+  focus: { active: false, nodeIds: [], edgeIds: [] },
   revision: 0,
 
   setDocument(document, options) {
@@ -152,6 +223,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       history: options?.resetHistory === false ? state.history : EMPTY_HISTORY,
       selection: EMPTY_SELECTION,
       explain: { active: false, step: 0 },
+      focus: { active: false, nodeIds: [], edgeIds: [] },
       revision: state.revision + 1,
     }));
   },
@@ -260,8 +332,31 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
+  setEdgeSemantic(id, semantic) {
+    const state = get();
+    const edge = state.document.edges.find((e) => e.id === id);
+    if (!edge) return;
+    const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { semantic };
+    // Only a fill-in-the-blank convenience: never overrides a label the user
+    // already gave the connection, and never touches `accent` at all.
+    if (semantic && !edge.label) patch.label = SEMANTIC_DEFAULTS[semantic].label;
+    state.apply('Set connection type', (doc) => updateEdge(doc, id, patch));
+  },
+
   commitPositions(positions) {
     get().apply('Move', (doc) => moveNodes(doc, positions));
+  },
+
+  nudgeSelection(dx, dy) {
+    const state = get();
+    if (state.selection.nodes.length === 0) return;
+    const positions = new Map(
+      state.selection.nodes
+        .map((id) => state.document.nodes.find((node) => node.id === id))
+        .filter((node) => node !== undefined)
+        .map((node) => [node.id, { x: node.x + dx, y: node.y + dy }] as const),
+    );
+    state.apply('Nudge', (doc) => moveNodes(doc, positions), { coalesceKey: 'nudge' });
   },
 
   deleteSelection() {
@@ -359,6 +454,58 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
   },
 
+  attachToNode(hostId, attachment, insertIndex) {
+    get().apply('Attach', (doc) => attachToNodeOp(doc, hostId, attachment, insertIndex));
+  },
+
+  attachExistingNode(nodeId, hostId) {
+    const state = get();
+    const node = state.document.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    // Callers only invoke this for a node whose type is already attachable
+    // (checked against ATTACHABLE_TYPES before the drag is even armed).
+    const attachment = createAttachment({
+      type: node.type as AttachableType,
+      text: node.text,
+      accent: node.accent,
+      noteKind: node.noteKind,
+      language: node.language,
+      code: node.code,
+      width: node.width,
+      height: node.height,
+    });
+    state.apply(
+      'Attach',
+      (doc) => attachToNodeOp(removeElements(doc, [nodeId]), hostId, attachment),
+      { selection: EMPTY_SELECTION },
+    );
+  },
+
+  detachAttachment(hostId, attachmentId) {
+    const state = get();
+    const result = detachFromNode(state.document, hostId, attachmentId);
+    if (!result.extractedNode) return;
+    state.apply('Detach', () => result.doc, {
+      selection: { nodes: [result.extractedNode!.id], edges: [] },
+    });
+  },
+
+  updateAttachment(hostId, attachmentId, patch) {
+    get().apply('Edit attachment', (doc) => updateAttachmentOp(doc, hostId, attachmentId, patch));
+  },
+
+  removeAttachment(hostId, attachmentId) {
+    get().apply('Remove attachment', (doc) => removeAttachmentOp(doc, hostId, attachmentId));
+  },
+
+  reorderAttachment(hostId, attachmentId, direction) {
+    get().apply('Reorder attachment', (doc) => reorderAttachmentOp(doc, hostId, attachmentId, direction));
+  },
+
+  reparentNode(nodeId, boundaryId) {
+    get().apply('Reparent', (doc) => setParent(doc, [nodeId], boundaryId ?? undefined));
+  },
+
   raise(toFront = false) {
     const { selection, apply } = get();
     apply('Bring forward', (doc) =>
@@ -442,11 +589,41 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((s) => ({
       mode,
       explain: mode === 'edit' ? { active: false, step: 0 } : s.explain,
+      // A selection ring left over from editing has no meaning in a
+      // read-only presentation — nothing there can show why it is
+      // highlighted, so it just reads as a stray mark on one box.
+      selection: mode === 'present' ? EMPTY_SELECTION : s.selection,
     }));
   },
 
   setExplain(explain) {
-    set((s) => ({ explain: { ...s.explain, ...explain } }));
+    set((s) => ({
+      explain: { ...s.explain, ...explain },
+      // Mutually exclusive with Focus — starting the walkthrough exits it,
+      // rather than the two dimming systems ever needing to combine.
+      focus: explain.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+    }));
+  },
+
+  enterFocus(nodeIds, edgeIds) {
+    set((s) => ({
+      focus: { active: true, nodeIds, edgeIds },
+      explain: s.explain.active ? { active: false, step: 0 } : s.explain,
+    }));
+  },
+
+  toggleFocusMember(id, kind) {
+    set((s) => {
+      if (!s.focus.active) return s;
+      const key = kind === 'node' ? 'nodeIds' : 'edgeIds';
+      const current = s.focus[key];
+      const next = current.includes(id) ? current.filter((memberId) => memberId !== id) : [...current, id];
+      return { focus: { ...s.focus, [key]: next } };
+    });
+  },
+
+  exitFocus() {
+    set({ focus: { active: false, nodeIds: [], edgeIds: [] } });
   },
 }));
 

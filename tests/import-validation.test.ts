@@ -40,6 +40,33 @@ describe('importing untrusted files', () => {
     expect(result.document.nodes).toHaveLength(1);
   });
 
+  it('preserves an explicit neutral accent instead of falling back to the type default', () => {
+    // Regression test: a node's accent is an explicit override of its type's
+    // default colour (teal for a service, blue for a database, ...), and
+    // `neutral` (grey) is one of the choices a user can make — not a synonym
+    // for "no accent set". Every save/reload round trip passes through here,
+    // so treating them as the same collapsed an explicit choice of grey back
+    // into the type's own default colour on every reload.
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 'a', type: 'service', x: 0, y: 0, accent: 'neutral' },
+        { id: 'b', type: 'database', x: 200, y: 0, accent: 'rose' },
+        { id: 'c', type: 'card', x: 400, y: 0 },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'b', accent: 'neutral' }],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [service, database, card] = result.document.nodes;
+    expect(service!.accent).toBe('neutral');
+    expect(database!.accent).toBe('rose');
+    // No accent was ever set on this one — it must stay unset, not become
+    // explicitly neutral, so the type's own default still applies to it.
+    expect(card!.accent).toBeUndefined();
+    expect(result.document.edges[0]!.accent).toBe('neutral');
+  });
+
   it('drops connections that point at nodes which do not exist', () => {
     const result = parse({
       ...base,
@@ -215,6 +242,47 @@ describe('importing untrusted files', () => {
     expect(result.document.edges.map((edge) => edge.sequence).sort()).toEqual([1, 2]);
     // Relative order is preserved: the edge numbered 7 becomes step 1.
     expect(result.document.edges.find((edge) => edge.id === 'e2')!.sequence).toBe(1);
+  });
+
+  it('coerces an unknown node variant to its default, and always sets one', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 's1', type: 'service', x: 0, y: 0, serviceKind: 'mainframe' },
+        { id: 's2', type: 'service', x: 0, y: 0, serviceKind: 'api' },
+        { id: 'd1', type: 'database', x: 0, y: 0, databaseKind: 'graphql' },
+        { id: 'd2', type: 'database', x: 0, y: 0, databaseKind: 'sql' },
+        { id: 'q1', type: 'queue', x: 0, y: 0, queueKind: 'mailbox' },
+        { id: 'q2', type: 'queue', x: 0, y: 0, queueKind: 'stream' },
+      ],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byId = (id: string) => result.document.nodes.find((n) => n.id === id)!;
+    expect(byId('s1').serviceKind).toBe('generic');
+    expect(byId('s2').serviceKind).toBe('api');
+    expect(byId('d1').databaseKind).toBe('generic');
+    expect(byId('d2').databaseKind).toBe('sql');
+    expect(byId('q1').queueKind).toBe('queue');
+    expect(byId('q2').queueKind).toBe('stream');
+  });
+
+  it('coerces an unknown boundary preset to the default, and always sets one on a group', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 'g1', type: 'group', x: 0, y: 0, width: 300, height: 200, boundaryPreset: 'kubernetes' },
+        { id: 'g2', type: 'group', x: 0, y: 0, width: 300, height: 200 },
+        { id: 'g3', type: 'group', x: 0, y: 0, width: 300, height: 200, boundaryPreset: 'domain' },
+      ],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.nodes.find((n) => n.id === 'g1')!.boundaryPreset).toBe('boundary');
+    expect(result.document.nodes.find((n) => n.id === 'g2')!.boundaryPreset).toBe('boundary');
+    expect(result.document.nodes.find((n) => n.id === 'g3')!.boundaryPreset).toBe('domain');
   });
 
   it('treats hostile payloads as content, never as code', () => {

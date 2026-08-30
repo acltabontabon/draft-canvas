@@ -8,6 +8,7 @@ import { createId } from './ids';
 import { LIMITS } from './limits';
 import { compactSequence } from './sequence';
 import type {
+  Attachment,
   DraftDocument,
   DraftEdge,
   DraftNode,
@@ -27,6 +28,20 @@ function withNodes(doc: DraftDocument, nodes: DraftNode[]): DraftDocument {
 
 function withEdges(doc: DraftDocument, edges: DraftEdge[]): DraftDocument {
   return edges === doc.edges ? doc : { ...doc, edges };
+}
+
+/**
+ * Spreads `patch` onto `base`, but a key explicitly set to `undefined` in the
+ * patch is deleted rather than kept as an own property with value
+ * `undefined` — the difference matters for optional fields like an edge's
+ * `semantic`, where "clear it" must leave no trace, not a dangling key.
+ */
+function applyPatch<T extends object>(base: T, patch: Partial<T>): T {
+  const next: T = { ...base, ...patch };
+  for (const key of Object.keys(patch) as (keyof T)[]) {
+    if (patch[key] === undefined) delete next[key];
+  }
+  return next;
 }
 
 export function addNodes(doc: DraftDocument, nodes: DraftNode[]): DraftDocument {
@@ -53,7 +68,7 @@ export function updateNode(
   let changed = false;
   const nodes = doc.nodes.map((node) => {
     if (node.id !== id) return node;
-    const next: DraftNode = { ...node, ...patch };
+    const next: DraftNode = applyPatch<DraftNode>(node, patch);
     if (patch.x !== undefined) next.x = clampCoord(patch.x);
     if (patch.y !== undefined) next.y = clampCoord(patch.y);
     if (patch.width !== undefined) next.width = clampSize(patch.width);
@@ -73,7 +88,7 @@ export function updateEdge(
   const edges = doc.edges.map((edge) => {
     if (edge.id !== id) return edge;
     changed = true;
-    return { ...edge, ...patch };
+    return applyPatch<DraftEdge>(edge, patch);
   });
   return changed ? withEdges(doc, edges) : doc;
 }
@@ -300,7 +315,146 @@ export function distributeNodes(
   return moveNodes(doc, positions);
 }
 
+/* ----------------------------------------------------------- attachments --- */
+
+function withAttachments(doc: DraftDocument, hostId: string, attachments: Attachment[]): DraftDocument {
+  let changed = false;
+  const nodes = doc.nodes.map((node) => {
+    if (node.id !== hostId) return node;
+    changed = true;
+    return attachments.length > 0 ? { ...node, attachments } : withoutAttachmentsField(node);
+  });
+  return changed ? withNodes(doc, nodes) : doc;
+}
+
+function withoutAttachmentsField(node: DraftNode): DraftNode {
+  if (!node.attachments) return node;
+  const { attachments: _dropped, ...rest } = node;
+  return rest;
+}
+
+/** Folds an attachment onto a host node. `insertIndex` defaults to the end. */
+export function attachToNode(
+  doc: DraftDocument,
+  hostId: string,
+  attachment: Attachment,
+  insertIndex?: number,
+): DraftDocument {
+  const host = doc.nodes.find((n) => n.id === hostId);
+  if (!host) return doc;
+  const existing = host.attachments ?? [];
+  const capped = Math.max(0, Math.min(insertIndex ?? existing.length, existing.length));
+  const next = [...existing.slice(0, capped), attachment, ...existing.slice(capped)].slice(
+    0,
+    LIMITS.maxAttachmentsPerNode,
+  );
+  return withAttachments(doc, hostId, next);
+}
+
+/**
+ * Removes an attachment and materializes it back into a real, freestanding
+ * node — placed deterministically beside the host, never at its old canvas
+ * position (an attachment has none once it is folded in).
+ */
+export function detachFromNode(
+  doc: DraftDocument,
+  hostId: string,
+  attachmentId: string,
+): { doc: DraftDocument; extractedNode: DraftNode | null } {
+  const host = doc.nodes.find((n) => n.id === hostId);
+  const attachment = host?.attachments?.find((a) => a.id === attachmentId);
+  if (!host || !attachment) return { doc, extractedNode: null };
+
+  const size = {
+    width: attachment.width ?? LIMITS.minNodeSize,
+    height: attachment.height ?? LIMITS.minNodeSize,
+  };
+  let x = host.x + host.width + 32;
+  let y = host.y;
+  if (x + size.width > LIMITS.maxCoordinate) {
+    x = host.x;
+    y = host.y + host.height + 32;
+  }
+
+  const extractedNode: DraftNode = {
+    id: createId('n'),
+    type: attachment.type,
+    x: clampCoord(x),
+    y: clampCoord(y),
+    width: clampSize(size.width),
+    height: clampSize(size.height),
+    z: host.z,
+  };
+  if (attachment.text !== undefined) extractedNode.text = attachment.text;
+  if (attachment.accent) extractedNode.accent = attachment.accent;
+  if (attachment.noteKind) extractedNode.noteKind = attachment.noteKind;
+  if (attachment.language) extractedNode.language = attachment.language;
+  if (attachment.code !== undefined) extractedNode.code = attachment.code;
+
+  const remaining = (host.attachments ?? []).filter((a) => a.id !== attachmentId);
+  const next = addNodes(withAttachments(doc, hostId, remaining), [extractedNode]);
+  return { doc: next, extractedNode };
+}
+
+export function updateAttachment(
+  doc: DraftDocument,
+  hostId: string,
+  attachmentId: string,
+  patch: Partial<Omit<Attachment, 'id'>>,
+): DraftDocument {
+  const host = doc.nodes.find((n) => n.id === hostId);
+  if (!host?.attachments) return doc;
+  let changed = false;
+  const next = host.attachments.map((a) => {
+    if (a.id !== attachmentId) return a;
+    changed = true;
+    return { ...a, ...patch };
+  });
+  return changed ? withAttachments(doc, hostId, next) : doc;
+}
+
+export function removeAttachment(doc: DraftDocument, hostId: string, attachmentId: string): DraftDocument {
+  const host = doc.nodes.find((n) => n.id === hostId);
+  if (!host?.attachments) return doc;
+  const next = host.attachments.filter((a) => a.id !== attachmentId);
+  return next.length === host.attachments.length ? doc : withAttachments(doc, hostId, next);
+}
+
+export function reorderAttachment(
+  doc: DraftDocument,
+  hostId: string,
+  attachmentId: string,
+  direction: -1 | 1,
+): DraftDocument {
+  const host = doc.nodes.find((n) => n.id === hostId);
+  if (!host?.attachments) return doc;
+  const index = host.attachments.findIndex((a) => a.id === attachmentId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= host.attachments.length) return doc;
+  const next = [...host.attachments];
+  [next[index], next[target]] = [next[target]!, next[index]!];
+  return withAttachments(doc, hostId, next);
+}
+
 /* ---------------------------------------------------------------- groups --- */
+
+/** Every node transitively parented under `id` — used so dragging a boundary
+ *  can carry its contents with it, and so a node cannot be reparented under
+ *  its own descendant. */
+export function descendantsOf(doc: DraftDocument, id: string): string[] {
+  const result = new Set<string>();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const node of doc.nodes) {
+      if (node.parentId && (node.parentId === id || result.has(node.parentId)) && !result.has(node.id)) {
+        result.add(node.id);
+        grew = true;
+      }
+    }
+  }
+  return [...result];
+}
 
 export function setParent(
   doc: DraftDocument,

@@ -5,11 +5,13 @@ import {
   addNodes,
   alignNodes,
   boundsOf,
+  descendantsOf,
   distributeNodes,
   extractFragment,
   moveNodes,
   pasteFragment,
   removeElements,
+  setParent,
   setTitle,
   updateNode,
 } from '../src/document/operations';
@@ -126,5 +128,38 @@ describe('document model', () => {
     expect(bounds.x).toBe(0);
     expect(bounds.width).toBeGreaterThan(300);
     expect(boundsOf([])).toBeNull();
+  });
+});
+
+describe('containment', () => {
+  it('finds every transitive descendant of a boundary', () => {
+    const outer = createNode({ type: 'group', x: 0, y: 0, width: 600, height: 600 });
+    const inner = createNode({ type: 'group', x: 50, y: 50, width: 300, height: 300 });
+    const leaf = createNode({ type: 'card', x: 100, y: 100 });
+    let doc = addNodes(createDocument(), [outer, inner, leaf]);
+    doc = setParent(doc, [inner.id], outer.id);
+    doc = setParent(doc, [leaf.id], inner.id);
+
+    expect(new Set(descendantsOf(doc, outer.id))).toEqual(new Set([inner.id, leaf.id]));
+    expect(descendantsOf(doc, inner.id)).toEqual([leaf.id]);
+    expect(descendantsOf(doc, leaf.id)).toEqual([]);
+  });
+
+  it('leaves node coordinates untouched by parenting or unparenting', () => {
+    const boundary = createNode({ type: 'group', x: 0, y: 0, width: 400, height: 400 });
+    const child = createNode({ type: 'card', x: 120, y: 90 });
+    let doc = addNodes(createDocument(), [boundary, child]);
+
+    doc = setParent(doc, [child.id], boundary.id);
+    let stored = doc.nodes.find((n) => n.id === child.id)!;
+    expect(stored.x).toBe(120);
+    expect(stored.y).toBe(90);
+    expect(stored.parentId).toBe(boundary.id);
+
+    doc = setParent(doc, [child.id], undefined);
+    stored = doc.nodes.find((n) => n.id === child.id)!;
+    expect(stored.x).toBe(120);
+    expect(stored.y).toBe(90);
+    expect(stored.parentId).toBeUndefined();
   });
 });
