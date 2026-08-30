@@ -42,6 +42,7 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
       "directed": true,
       "routing": "smoothstep",
       "label": "ACCOUNT_CANCELLED",
+      "kind": "event",
       "async": true,
       "condition": "approved",
       "details": { "language": "json", "code": "{ \"status\": \"CANCELLED\" }" },
@@ -54,7 +55,13 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
       "id": "f_p3q4r5",
       "title": "Happy path",
       "steps": [
-        { "id": "fs_1", "edgeId": "e_g7h8i9", "caption": "Publish the cancellation event" }
+        { "id": "fs_1", "edgeId": "e_g7h8i9", "caption": "Publish the cancellation event" },
+        {
+          "id": "fs_2",
+          "extraNodeIds": ["n_a1b2c3", "n_d4e5f6"],
+          "caption": "Where the account service and its handler live",
+          "viewport": { "x": -80, "y": -40, "zoom": 0.9 }
+        }
       ]
     }
   ],
@@ -124,6 +131,7 @@ one restores it as an ordinary node on the canvas.
 | `accent` | enum? | As for nodes. |
 | `details` | object? | `{ language, code }` — expandable detail shown on selection and during its playback step. |
 | `semantic` | enum? | `http` · `event` · `command` · `query` · `reads` · `writes` · `publishes` · `consumes` · `calls` · `dependsOn`. Optional convenience only — fills in a default `label` when picked on a labelless edge, never assigned automatically, never changes `accent`. |
+| `kind` | enum? | `sync` · `async` · `event` · `callback` · `conditional` · `retry` · `failure` · `fallback`. A connector's flow behaviour — line style and a small glyph, not a protocol taxonomy. Independent of `semantic` (a label convenience) and `async` (solid/dashed); the one exception is `kind: "async"` itself, which defaults `async` to `true` the same way a `semantic` fills in a default label — never forced, and either can still be changed afterward on its own. See [`docs/FLOWS.md`](FLOWS.md#flow-kind). |
 | `async` | boolean? | `true` renders a dashed line for an asynchronous interaction. Absent/`false` is synchronous (solid) — a visual distinction only, no protocol taxonomy. |
 | `condition` | string? | Free-text chip, e.g. `"approved"`, `"timeout"` — displayed, never evaluated. Distinct from `label`: the label describes the connection in general, the condition describes when a particular branch applies. |
 | `sourceAnchor` `targetAnchor` | object? | `{ side, offset }` — which side of the node (`top` · `right` · `bottom` · `left`) the connector attaches to, and how far along it (`offset`, a 0–1 fraction of the side's length; `0.5` is the midpoint). Captures the side the user actually dragged the connection from or onto — see [Connector anchors](#connector-anchors) below. Absent on either end falls back to picking the nearest side live, the same way every connector worked before this field existed. |
@@ -148,7 +156,7 @@ switching flows never changes a node or edge. See [`src/document/flow.ts`](../sr
 | --- | --- | --- |
 | `id` | string | Unique within the document. |
 | `title` | string | e.g. `"Happy path"`, `"Payment timeout"`. |
-| `steps` | array | Ordered. Each `{ id, edgeId, caption? }` — `edgeId` references an existing connection; order is the array position, not a stored number. `caption` is optional and, when absent, playback falls back to the connector's own `label`. A step whose connector no longer exists is dropped, not left dangling. |
+| `steps` | array | Ordered — order is the array position, not a stored number. Each `{ id, edgeId?, extraEdgeIds?, extraNodeIds?, viewport?, caption? }`. `edgeId` is a step's primary connector; optional so a "frame" step can spotlight a group with no single connector driving it. `extraEdgeIds`/`extraNodeIds` are further connectors/nodes the step highlights beyond `edgeId`'s own two endpoints — every member gets the same active/shown/hidden treatment during playback, with no primary/secondary distinction once a step is current. `viewport` (`{ x, y, zoom }`), when present, is shown verbatim during that step instead of the usual fit-to-bounds. `caption` is optional and, when absent on a step with a primary edge, playback falls back to that connector's own `label`. A dangling reference (`edgeId`, or an entry in `extraEdgeIds`/`extraNodeIds`) is dropped from the step, not the whole file; a step left with nothing at all — no primary, no extras, no viewport — is the only one actually removed. |
 
 ## Limits
 
@@ -169,6 +177,7 @@ Applied to anything read from a file or from a possibly-corrupted local record. 
 | Zoom | 0.1 – 4 |
 | Flows | 50 |
 | Steps per flow | 200 |
+| Extra nodes/edges per step | 40 each |
 | Flow title | 100 characters |
 | Condition | 120 characters |
 
@@ -183,8 +192,10 @@ newer format version. Everything else is repaired, and the repairs are reported:
 - Grouping links that dangle, point at themselves, or form a cycle are detached.
 - Non-finite and out-of-range numbers are clamped.
 - Control characters are stripped from text; tabs and newlines are kept.
-- A flow step referencing a connection that does not exist (or a duplicate step for the same
-  connection within one flow) is dropped, keeping the rest of that flow in order.
+- A flow step's dangling reference — a primary connection that no longer exists, a duplicate
+  primary within one flow, or an entry in `extraEdgeIds`/`extraNodeIds` pointing at something
+  gone — is repaired away individually; the step itself is only dropped if nothing is left on it
+  at all.
 
 A diagram with three broken connections opens with the other ninety-seven intact.
 

@@ -77,15 +77,24 @@ right typeface.
 
 ### Exports
 
-`.draftcanvas`, PNG and SVG files are generated in the page and handed to the browser's download
-mechanism. No file passes through a server. What happens to a file after you save it is, of
-course, up to you.
+`.draftcanvas`, `.dcenc`, PNG and SVG files are all generated in the page and handed to the
+browser's download mechanism. No file passes through a server. What happens to a file after you
+save it is, of course, up to you.
+
+A plain `.draftcanvas` export is diffable JSON — anyone who gets the file can read the diagram, the
+same way anyone who gets a source file can read it. `.dcenc` is the alternative when that's not
+acceptable: a passphrase-protected export, encrypted with a key derived from a passphrase you
+choose at export time (PBKDF2, ≥600,000 iterations, a fresh random salt per file), readable only by
+someone who has both the file and that passphrase. Draft Canvas never stores the passphrase and has
+no way to recover a forgotten one — see [`SECURITY.md`](../SECURITY.md) for the full key lifecycle.
 
 ### Imports
 
-Reading a file uses the `File` API on a file you chose. Nothing is uploaded. Imported files are
-treated as untrusted: validated, repaired, and capped before anything reaches the canvas
-(`src/document/validate.ts`).
+Reading a file uses the `File` API on a file you chose. Nothing is uploaded. A plain
+`.draftcanvas` import is validated, repaired, and capped before anything reaches the canvas
+(`src/document/validate.ts`); a `.dcenc` import asks for its passphrase first, decrypts locally,
+and only then feeds the same validator — a wrong passphrase fails cleanly rather than importing
+garbage.
 
 ## What this does not protect you from
 
@@ -103,7 +112,7 @@ Being honest about the limits:
   (e.g. a stolen disk image, or someone browsing IndexedDB files directly). It does **not** protect
   against someone with full access to an already-unlocked copy of this browser profile: the app
   itself must be able to use the key to open your diagrams, so anyone who can run the app as you
-  can too.
+  can too. See [`SECURITY.md`](../SECURITY.md) for the full threat model and key lifecycle.
 - **Storage quotas are finite.** If the browser runs out of space the app tells you and keeps the
   document in memory so you can export it.
 

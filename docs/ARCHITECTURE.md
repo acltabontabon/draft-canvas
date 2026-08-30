@@ -133,6 +133,37 @@ Two details that were bugs first:
 - Dropping a connection anywhere on a node's body connects to it. React Flow only reports a target
   within its connection radius of a handle, so `Canvas.tsx` hit-tests the drop point itself.
 
+#### Anchors, lanes, and obstacle avoidance
+
+A connector's endpoints were originally recomputed from scratch on every render by
+`chooseSides` — the nearest-side heuristic that still serves as the fallback. That heuristic is
+geometry, not intent: it can only ever answer "what looks shortest right now," never "which side
+did the user actually drag this from." `EdgeAnchor` (`document/types.ts`) closes that gap by
+persisting the side and along-side offset a connector was actually dragged from or dropped onto,
+captured once by `Canvas.tsx`'s `onConnect`/quick-connect path and threaded through `connect()` in
+the store. The one rule that makes this worth having: `routeBetween` (`edges/routing.ts`) must
+never silently move a persisted anchor to a different side, no matter how the nodes move
+afterward — only an explicit reconnect (`reconnectEdge`, dragging that endpoint elsewhere) changes
+it. `chooseSides` only ever fills in whichever end has no anchor at all — the live drag preview, or
+any edge from a file written before anchors existed (see the v2→v3 migration in
+[`docs/SCHEMA.md`](SCHEMA.md)).
+
+Two more geometry problems shared the same module because they compose with anchors rather than
+replace them:
+
+- **Parallel edges** between the same node pair (including the callback case, A→B and B→A) would
+  draw exactly on top of one another. `laneIndex` groups edges by their unordered `(source,
+  target)` pair and assigns each a small symmetric offset — `laneNudge` then nudges both endpoints
+  along their own side by that amount, `clampToBoundary` pulling the result back onto the rect's
+  actual edge if the nudge would otherwise walk it past a corner.
+- **Obstacle avoidance** is a single-detour heuristic, not a pathfinder: `detourAround` only
+  handles the case the routing brief actually calls out — source and target share a row or column,
+  and another node sits directly in the corridor between them — and bends the path's one middle
+  segment around whichever side is the shorter detour. A diagonal pairing, or an obstacle outside
+  that direct corridor, is left alone on purpose. Both lanes and obstacle avoidance are skipped
+  during an active drag or resize (`uiStore.ts`'s `interactionActive`) and recomputed once the
+  gesture ends, so the per-frame cost of a drag never grows with the document's edge count.
+
 ## History
 
 Snapshot-based, with structural sharing. Every operation in `document/operations.ts` returns a new
@@ -160,6 +191,38 @@ instant when you have twenty diagrams with code cards in them.
 Autosave (`storage/autosave.ts`) debounces at 700 ms with a 4 s ceiling, never runs two writes at
 once, and flushes on `visibilitychange` and `pagehide`. `beforeunload` is deliberately avoided: it
 disables the back/forward cache.
+
+### The `src/crypto/` boundary
+
+`bodies` rows are encrypted at rest with AES-256-GCM. `src/crypto/` is the only place that touches
+`crypto.subtle`, and `storage/IndexedDbRepository.ts` is the only caller of `src/crypto/` — nothing
+else in the app knows a document is ever anything but plain JSON.
+
+- `keyStore.ts` gets-or-creates a single, profile-wide, **non-extractable** `CryptoKey`, persisted
+  via IndexedDB's native structured-clone support for `CryptoKey` objects in a separate `keys`
+  store (its own database, not `bodies`' — a corrupted or cleared document store can never take the
+  key down with it, and vice versa). Non-extractable means no code path, including this app's own,
+  can ever read the raw key bytes back out; only `encrypt`/`decrypt` operations are possible.
+- `documentCipher.ts` — `encryptDocument`/`decryptDocument`, one fresh random 12-byte IV per
+  record. `save()` always encrypts before `put`; `load()` decrypts after `get`, then feeds the
+  result through the same `normalizeDocument` funnel as every other untrusted input. A GCM
+  authentication failure (tampered ciphertext, wrong key, corruption) is handled exactly like a
+  malformed record always was: `load()` returns `null` and logs a warning, and **never** overwrites
+  the still-encrypted row — a decrypt failure must not look like an invitation to re-save over the
+  only copy.
+- `migrateStorage.ts` — the one-time sweep from the format's plaintext past. A legacy `{ id,
+  document }` row is encrypted in memory, decrypted back and compared, and only then does a single
+  atomic `put` replace it — never a delete followed by a write, which would leave a window where a
+  crash mid-migration destroys data instead of merely failing to upgrade it.
+- `passphraseExport.ts` is a second, independent use of `crypto.subtle` for the optional
+  `.dcenc` portable export format (PBKDF2 → a one-off AES-256-GCM key, used only for that file and
+  never persisted anywhere). It shares no code and no key material with the profile's local
+  storage key — a passphrase typed for export can never become, or leak, the key that protects
+  everything already saved on this device.
+
+No new npm dependency backs any of this: `crypto.subtle` natively covers both AES-GCM and PBKDF2,
+which is also why `tests/privacy.test.ts`'s exact-length dependency-count assertion never had to
+move for encryption to ship.
 
 The status indicator shows "Saving…" only if a write is still running after 300 ms and holds
 "Saved locally" for 1.4 s, so quick saves do not flicker. It says "Unsaved changes" while an edit

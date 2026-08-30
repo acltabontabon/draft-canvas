@@ -109,4 +109,5 @@ Comments explain *why*, not *what*. Several of the ones in `Canvas.tsx`, `autosa
 ## Documentation
 
 `AGENTS.md` (short form of this file) · `docs/ARCHITECTURE.md` (the reasoning behind every
-boundary) · `docs/SCHEMA.md` (the `.draftcanvas` format) · `docs/PRIVACY.md`
+boundary) · `docs/SCHEMA.md` (the `.draftcanvas` format) · `docs/FLOWS.md` (flows and presentation
+mode) · `docs/PRIVACY.md` · `SECURITY.md` (threat model and key lifecycle)

@@ -51,4 +51,4 @@ bugs that were found the hard way — leave them there.
 
 ## Documentation
 
-`docs/ARCHITECTURE.md` · `docs/SCHEMA.md` · `docs/PRIVACY.md`
+`docs/ARCHITECTURE.md` · `docs/SCHEMA.md` · `docs/FLOWS.md` · `docs/PRIVACY.md` · `SECURITY.md`
