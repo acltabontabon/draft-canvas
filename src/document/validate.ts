@@ -466,20 +466,55 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
         continue;
       }
       const rawEdgeId = typeof candidateStep.edgeId === 'string' ? candidateStep.edgeId : undefined;
-      const edgeId = rawEdgeId ? edgeIdRemap.get(rawEdgeId) : undefined;
-      // A step whose connector was dropped, or that duplicates one already in
-      // this flow, is silently repaired away rather than kept dangling.
-      if (!edgeId || seenStepEdgeIds.has(edgeId)) {
+      let edgeId = rawEdgeId ? edgeIdRemap.get(rawEdgeId) : undefined;
+      // A primary connector that was dropped, or that duplicates one already
+      // used as a primary elsewhere in this flow, is repaired away — but
+      // unlike before `extraEdgeIds`/`extraNodeIds`/`viewport` existed, that
+      // no longer means dropping the whole step; see below.
+      if (edgeId && seenStepEdgeIds.has(edgeId)) edgeId = undefined;
+      if (edgeId) seenStepEdgeIds.add(edgeId);
+
+      const rawExtraEdgeIds = Array.isArray(candidateStep.extraEdgeIds) ? candidateStep.extraEdgeIds : [];
+      const extraEdgeIds: string[] = [];
+      for (const raw of rawExtraEdgeIds.slice(0, LIMITS.maxExtraMembersPerStep)) {
+        if (typeof raw !== 'string') continue;
+        const mapped = edgeIdRemap.get(raw);
+        if (mapped && mapped !== edgeId && !extraEdgeIds.includes(mapped)) extraEdgeIds.push(mapped);
+      }
+
+      const rawExtraNodeIds = Array.isArray(candidateStep.extraNodeIds) ? candidateStep.extraNodeIds : [];
+      const extraNodeIds: string[] = [];
+      for (const raw of rawExtraNodeIds.slice(0, LIMITS.maxExtraMembersPerStep)) {
+        if (typeof raw !== 'string') continue;
+        const mapped = nodeIdRemap.get(raw);
+        if (mapped && byId.has(mapped) && !extraNodeIds.includes(mapped)) extraNodeIds.push(mapped);
+      }
+
+      const rawViewport = candidateStep.viewport;
+      const viewport = isRecord(rawViewport)
+        ? {
+            x: clamp(finite(rawViewport.x, 0), -LIMITS.maxCoordinate, LIMITS.maxCoordinate),
+            y: clamp(finite(rawViewport.y, 0), -LIMITS.maxCoordinate, LIMITS.maxCoordinate),
+            zoom: clamp(finite(rawViewport.zoom, 1), LIMITS.minZoom, LIMITS.maxZoom),
+          }
+        : undefined;
+
+      // A step with nothing left to show at all — no primary, no extras, no
+      // explicit view — is the only case actually dropped.
+      if (!edgeId && extraEdgeIds.length === 0 && extraNodeIds.length === 0 && !viewport) {
         droppedFlowSteps += 1;
         continue;
       }
-      seenStepEdgeIds.add(edgeId);
 
       let stepId = safeId(candidateStep.id);
       if (!stepId || seenStepIds.has(stepId)) stepId = createId('fs');
       seenStepIds.add(stepId);
 
-      const step: DraftFlowStep = { id: stepId, edgeId };
+      const step: DraftFlowStep = { id: stepId };
+      if (edgeId) step.edgeId = edgeId;
+      if (extraEdgeIds.length > 0) step.extraEdgeIds = extraEdgeIds;
+      if (extraNodeIds.length > 0) step.extraNodeIds = extraNodeIds;
+      if (viewport) step.viewport = viewport;
       const caption = text(candidateStep.caption, LIMITS.maxLabelLength)?.trim();
       if (caption) step.caption = caption;
       steps.push(step);

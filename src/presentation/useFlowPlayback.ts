@@ -1,15 +1,81 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { getViewportForBounds, useReactFlow, useStore } from '@xyflow/react';
 import { findFlow } from '../document/flow';
-import type { DraftEdge, DraftFlow } from '../document/types';
+import type { DraftEdge, DraftFlowStep, DraftFlow, DraftNode, DraftViewport } from '../document/types';
 import { nodeIndex } from '../store/selectors';
 import { useEditorStore } from '../store/editorStore';
 
 export interface FlowPlaybackStep {
-  edge: DraftEdge;
+  /** The step's primary connector, when it has one — absent for a "frame" step. */
+  edge?: DraftEdge;
+  /** Every connector this step highlights: the primary one (if any) followed by `extraEdgeIds`. */
+  edges: DraftEdge[];
+  /** Nodes this step spotlights beyond its edges' own endpoints. */
+  extraNodes: DraftNode[];
   index: number;
   step: number;
   caption?: string;
+  /** An explicit viewport this step shows verbatim — `focusOn` skips auto-fit when present. */
+  viewport?: DraftViewport;
+}
+
+/**
+ * Resolves one flow step's dangling-safe references into the concrete
+ * edges/nodes it lights up. Shared by the `steps` memo and `pickFlow`, which
+ * needs to resolve a step before the memo (driven by store state one render
+ * behind) has caught up. Exported for unit testing — pure, no React Flow
+ * dependency.
+ */
+export function resolveFlowStep(
+  stepEntry: DraftFlowStep,
+  index: number,
+  step: number,
+  edgesById: Map<string, DraftEdge>,
+  nodesById: Map<string, DraftNode>,
+): FlowPlaybackStep | null {
+  const edge = stepEntry.edgeId ? edgesById.get(stepEntry.edgeId) : undefined;
+  const extraEdges = (stepEntry.extraEdgeIds ?? [])
+    .map((id) => edgesById.get(id))
+    .filter((e): e is DraftEdge => Boolean(e));
+  const edges = edge ? [edge, ...extraEdges] : extraEdges;
+  const extraNodes = (stepEntry.extraNodeIds ?? [])
+    .map((id) => nodesById.get(id))
+    .filter((n): n is DraftNode => Boolean(n));
+  if (edges.length === 0 && extraNodes.length === 0 && !stepEntry.viewport) return null;
+  return { edge, edges, extraNodes, index, step, caption: stepEntry.caption, viewport: stepEntry.viewport };
+}
+
+export interface Bounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The bounding box a step's playback focus fits to: the union of its edges'
+ * endpoints and its `extraNodes`. `null` when the step lights up no members
+ * at all (an explicit-viewport-only step, which `focusOn` handles before
+ * ever calling this). Exported for unit testing.
+ */
+export function stepFocusBounds(target: FlowPlaybackStep, nodesById: Map<string, DraftNode>): Bounds | null {
+  const members: DraftNode[] = [...target.extraNodes];
+  for (const edge of target.edges) {
+    const source = nodesById.get(edge.source);
+    const dest = nodesById.get(edge.target);
+    if (source) members.push(source);
+    if (dest) members.push(dest);
+  }
+  if (members.length === 0) return null;
+
+  const x = Math.min(...members.map((n) => n.x));
+  const y = Math.min(...members.map((n) => n.y));
+  return {
+    x,
+    y,
+    width: Math.max(...members.map((n) => n.x + n.width)) - x,
+    height: Math.max(...members.map((n) => n.y + n.height)) - y,
+  };
 }
 
 export interface FlowPlaybackController {
@@ -57,35 +123,31 @@ export function useFlowPlayback(): FlowPlaybackController {
   const steps = useMemo<FlowPlaybackStep[]>(() => {
     if (!flow) return [];
     const edgesById = new Map(document.edges.map((e) => [e.id, e]));
+    const nodesById = new Map(document.nodes.map((n) => [n.id, n]));
     const result: FlowPlaybackStep[] = [];
     flow.steps.forEach((stepEntry, index) => {
-      const edge = edgesById.get(stepEntry.edgeId);
-      if (!edge) return; // Stale reference — dropped, not crashed on.
-      result.push({ edge, index, step: result.length + 1, caption: stepEntry.caption });
+      const resolved = resolveFlowStep(stepEntry, index, result.length + 1, edgesById, nodesById);
+      if (resolved) result.push(resolved);
     });
     return result;
-  }, [document.edges, flow]);
+  }, [document.edges, document.nodes, flow]);
 
   const current = steps.find((entry) => entry.step === flowPlayback.step) ?? null;
 
   const focusOn = useCallback(
     (target: FlowPlaybackStep | null) => {
       if (!target) return;
-      const nodes = nodeIndex(document.nodes);
-      const source = nodes.get(target.edge.source);
-      const dest = nodes.get(target.edge.target);
-      if (!source || !dest) return;
 
-      const x = Math.min(source.x, dest.x);
-      const y = Math.min(source.y, dest.y);
-      const bounds = {
-        x,
-        y,
-        width: Math.max(source.x + source.width, dest.x + dest.width) - x,
-        height: Math.max(source.y + source.height, dest.y + dest.height) - y,
-      };
+      // An explicit per-step viewport is shown verbatim — no bounds, no fit.
+      if (target.viewport) {
+        void setViewport(target.viewport, { duration: 380 });
+        return;
+      }
 
-      // Skip the animation when both ends are already comfortably on screen.
+      const bounds = stepFocusBounds(target, nodeIndex(document.nodes));
+      if (!bounds) return;
+
+      // Skip the animation when everything is already comfortably on screen.
       // Without this, stepping through a small diagram produces a constant,
       // faintly nauseating micro-pan.
       if (isComfortablyVisible(bounds, getViewport(), viewWidth, viewHeight)) return;
@@ -123,9 +185,17 @@ export function useFlowPlayback(): FlowPlaybackController {
       setFlowPlayback({ active: true, flowId, step: 1 });
       // Canvas step badges follow whichever flow is being presented.
       useEditorStore.getState().setSelectedFlowId(flowId);
+      // `steps` lags one render behind the store update above, so the first
+      // step is resolved by hand rather than read from it.
       const edgesById = new Map(document.edges.map((e) => [e.id, e]));
-      const firstEdge = chosen.steps.map((s) => edgesById.get(s.edgeId)).find(Boolean);
-      if (firstEdge) focusOn({ edge: firstEdge, index: 0, step: 1 });
+      const nodesById = new Map(document.nodes.map((n) => [n.id, n]));
+      for (const stepEntry of chosen.steps) {
+        const resolved = resolveFlowStep(stepEntry, 0, 1, edgesById, nodesById);
+        if (resolved) {
+          focusOn(resolved);
+          break;
+        }
+      }
     },
     [document, focusOn, setFlowPlayback],
   );
@@ -170,13 +240,6 @@ export function useFlowPlayback(): FlowPlaybackController {
     previous,
     goTo,
   };
-}
-
-interface Bounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
 }
 
 function isComfortablyVisible(

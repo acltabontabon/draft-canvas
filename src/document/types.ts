@@ -241,14 +241,30 @@ export interface DraftEdge {
 }
 
 /**
- * One step in a Flow: an existing connector, in order, optionally with a
- * caption specific to this telling of the story. `caption` falls back to the
- * edge's own `label` when absent — the label describes the connection in
- * general, the caption explains what's happening at this point in this flow.
+ * One step in a Flow, in order, optionally with a caption specific to this
+ * telling of the story. `caption` falls back to the primary edge's own
+ * `label` when absent — the label describes the connection in general, the
+ * caption explains what's happening at this point in this flow.
+ *
+ * `edgeId` is a step's primary connector — the one thing every step had
+ * before `extraNodeIds`/`extraEdgeIds` existed, and still the only thing
+ * most steps need. It is optional now specifically so a "frame" step can
+ * spotlight a group of nodes with no single connector driving it (a system
+ * overview, a boundary, a scenario's starting state) — a genuinely different
+ * kind of step, not a variant of `FocusState` (arbitrary, unordered,
+ * available in edit mode too) or `FlowPlaybackState` (which this *is* an
+ * ordered member of) — see `docs/ARCHITECTURE.md`.
  */
 export interface DraftFlowStep {
   id: string;
-  edgeId: string;
+  edgeId?: string;
+  /** Additional connectors this step highlights, beyond the primary one. */
+  extraEdgeIds?: string[];
+  /** Additional nodes this step highlights, beyond the primary connector's own endpoints. */
+  extraNodeIds?: string[];
+  /** An explicit viewport this step shows verbatim — auto-fit-to-bounds is
+   *  skipped entirely when present. */
+  viewport?: DraftViewport;
   caption?: string;
 }
 

@@ -96,6 +96,26 @@ Checkout / Happy path      1 → 2 → 3 → 4 → 7
 Checkout / Declined        1 → 2 → 3 → 5 → 6
 ```
 
+## Frame steps
+
+Most steps are a single connector. Some moments in a story aren't, though — the starting cast of
+characters, a boundary the rest of the flow lives inside, a summary before diving into detail. For
+those, a step can spotlight a group of nodes and connectors instead of, or in addition to, its one
+primary connector:
+
+- In the Flow panel, select whatever the step should highlight on the canvas — any mix of nodes
+  and connectors — then press **+ Add selection** on that step. They show up as removable chips.
+- Press **Set view** to pin the step's own camera position — the exact pan and zoom you're looking
+  at right now — instead of letting Presentation Mode auto-fit to whatever the step highlights.
+  **Update view** replaces it; **Clear view** goes back to auto-fit.
+
+A step with no primary connector at all — just a spotlighted group, or just a pinned view — is a
+"frame" step. It plays back like any other: everything it lights up gets the same active/shown/
+hidden treatment as a step built around one connector, and it takes its place in the same ordered
+list. It isn't a different kind of thing from a regular step, just a step that spotlights more (or
+different) than one connector's own two endpoints — see `docs/ARCHITECTURE.md` for how this relates
+to Focus Mode, which is unordered and available outside presentation entirely.
+
 ## What this isn't
 
 Flows are a communication layer, not a modeling language. There's no expression evaluator, no

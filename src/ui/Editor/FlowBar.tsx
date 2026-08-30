@@ -72,11 +72,12 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
   if (!playback.current || !playback.flow) return null;
 
   const nodes = nodeIndex(document.nodes);
-  const source = nodes.get(playback.current.edge.source);
-  const target = nodes.get(playback.current.edge.target);
-  const details = playback.current.edge.details;
-  const caption = playback.current.caption || playback.current.edge.label;
-  const condition = playback.current.edge.condition;
+  const primary = playback.current.edge;
+  const source = primary ? nodes.get(primary.source) : undefined;
+  const target = primary ? nodes.get(primary.target) : undefined;
+  const details = primary?.details;
+  const caption = playback.current.caption || primary?.label;
+  const condition = primary?.condition;
 
   return (
     <div className="dc-explain" role="region" aria-label="Flow playback">
@@ -96,13 +97,23 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
             />
           ))}
         </span>
-        <span className="dc-explain-flow">
-          <strong>{source?.text || 'Untitled'}</strong>
-          <span className="dc-explain-arrow" aria-hidden="true">
-            →
+        {primary ? (
+          <span className="dc-explain-flow">
+            <strong>{source?.text || 'Untitled'}</strong>
+            <span className="dc-explain-arrow" aria-hidden="true">
+              →
+            </span>
+            <strong>{target?.text || 'Untitled'}</strong>
           </span>
-          <strong>{target?.text || 'Untitled'}</strong>
-        </span>
+        ) : (
+          playback.current.extraNodes.length > 0 && (
+            <span className="dc-explain-flow">
+              <strong>
+                {playback.current.extraNodes.map((n) => n.text || 'Untitled').join(', ')}
+              </strong>
+            </span>
+          )
+        )}
         {caption && <span className="dc-explain-caption">{caption}</span>}
         {condition && <span className="dc-explain-condition">[{condition}]</span>}
         <span className="dc-inspector-divider" />

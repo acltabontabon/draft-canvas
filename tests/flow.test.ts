@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDocument, createEdge } from '../src/document/factory';
+import { createDocument, createEdge, createNode } from '../src/document/factory';
 import {
   addFlow,
+  addStepExtraEdge,
+  addStepExtraNode,
   addStepToFlow,
   createFlow,
   deleteFlow,
@@ -9,12 +11,16 @@ import {
   explainNodeTier,
   moveStepInFlow,
   pruneFlowSteps,
+  removeStepExtraEdge,
+  removeStepExtraNode,
   removeStepFromFlow,
   renameFlow,
+  setStepViewport,
   stepIndexOf,
   updateFlowStepCaption,
 } from '../src/document/flow';
 import { removeElements } from '../src/document/operations';
+import { resolveFlowStep, stepFocusBounds } from '../src/presentation/useFlowPlayback';
 import { parseDocument } from '../src/document/validate';
 import { CURRENT_VERSION, DRAFT_FORMAT } from '../src/document/types';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
@@ -164,6 +170,216 @@ describe('flow.ts pure functions', () => {
     expect(pruned.flows[1]!.steps).toEqual([]);
     // Nothing referenced the removed set — same reference back.
     expect(pruneFlowSteps(doc, new Set(['nonexistent']))).toBe(doc);
+  });
+
+  it('repairs, rather than drops, a step that still has something left after pruning', () => {
+    let doc = addFlow(createDocument('X'), createFlow({ title: 'A', id: 'f1' }));
+    doc = { ...doc, edges: [{ id: 'e1' }, { id: 'e2' }] as never };
+    doc = addStepToFlow(doc, 'f1', 'e1');
+    const stepId = doc.flows[0]!.steps[0]!.id;
+    doc = { ...doc, flows: [{ ...doc.flows[0]!, steps: [{ ...doc.flows[0]!.steps[0]!, extraEdgeIds: ['e2'] }] }] };
+
+    // The primary connector is removed, but `extraEdgeIds` still has `e2` —
+    // the step survives with just that.
+    const pruned = pruneFlowSteps(doc, new Set(['e1']));
+    expect(pruned.flows[0]!.steps).toHaveLength(1);
+    expect(pruned.flows[0]!.steps[0]!.edgeId).toBeUndefined();
+    expect(pruned.flows[0]!.steps[0]!.extraEdgeIds).toEqual(['e2']);
+    expect(pruned.flows[0]!.steps[0]!.id).toBe(stepId);
+
+    // Remove both and the step is actually dropped.
+    const goneToo = pruneFlowSteps(pruned, new Set(['e2']));
+    expect(goneToo.flows[0]!.steps).toEqual([]);
+  });
+
+  it('prunes dangling extraNodeIds via the removedNodeIds set, keeping the step if extraEdgeIds remain', () => {
+    let doc = addFlow(createDocument('X'), createFlow({ title: 'A', id: 'f1' }));
+    doc = { ...doc, edges: [{ id: 'e1' }] as never };
+    doc = {
+      ...doc,
+      flows: [
+        { ...doc.flows[0]!, steps: [{ id: 's1', extraEdgeIds: ['e1'], extraNodeIds: ['n1', 'n2'] }] },
+      ],
+    };
+
+    const pruned = pruneFlowSteps(doc, new Set(), new Set(['n1']));
+    expect(pruned.flows[0]!.steps[0]!.extraNodeIds).toEqual(['n2']);
+    expect(pruned.flows[0]!.steps[0]!.extraEdgeIds).toEqual(['e1']);
+
+    // Losing every remaining node too, with nothing else left, drops the step.
+    let onlyNodes = addFlow(createDocument('X'), createFlow({ title: 'B', id: 'f2' }));
+    onlyNodes = {
+      ...onlyNodes,
+      flows: [{ ...onlyNodes.flows[0]!, steps: [{ id: 's1', extraNodeIds: ['n1'] }] }],
+    };
+    expect(pruneFlowSteps(onlyNodes, new Set(), new Set(['n1'])).flows[0]!.steps).toEqual([]);
+  });
+
+  it('finds a step via extraEdgeIds, not just the primary edgeId', () => {
+    const flow = createFlow({ title: 'X' });
+    flow.steps = [
+      { id: 's1', edgeId: 'e1' },
+      { id: 's2', extraEdgeIds: ['e2', 'e3'] },
+    ];
+    expect(stepIndexOf(flow, 'e2')).toBe(2);
+    expect(stepIndexOf(flow, 'e3')).toBe(2);
+  });
+
+  it('lights up a node via extraNodeIds across every "frame" step it appears in', () => {
+    const flow = createFlow({ title: 'X' });
+    flow.steps = [
+      { id: 's1', extraNodeIds: ['client'] },
+      { id: 'p1', edgeId: 'unrelated' },
+      { id: 's2', extraNodeIds: ['client'] },
+    ];
+    // Node appears in steps 1 and 3; at step 2 it should read as shown
+    // (already covered by step 1), and at step 3 as active.
+    expect(explainNodeTier(flow, [], 'client', 2)).toBe('shown');
+    expect(explainNodeTier(flow, [], 'client', 3)).toBe('active');
+    expect(explainNodeTier(flow, [], 'client', 1)).toBe('active');
+    expect(explainNodeTier(flow, [], 'other', 3)).toBe('hidden');
+  });
+
+  it('adds and removes a step\'s extra nodes/edges, refusing ids that do not exist on the document', () => {
+    const a = createNode({ type: 'card', x: 0, y: 0, id: 'a' });
+    const b = createNode({ type: 'card', x: 100, y: 0, id: 'b' });
+    const edge = createEdge({ source: 'a', target: 'b', id: 'e1' });
+    let doc = { ...createDocument('X'), nodes: [a, b], edges: [edge] };
+    doc = addFlow(doc, createFlow({ title: 'A', id: 'f1' }));
+    doc = addStepToFlow(doc, 'f1', 'e1');
+    const stepId = doc.flows[0]!.steps[0]!.id;
+
+    doc = addStepExtraNode(doc, 'f1', stepId, 'b');
+    expect(doc.flows[0]!.steps[0]!.extraNodeIds).toEqual(['b']);
+    // Already a member, and a nonexistent node — both no-ops.
+    expect(addStepExtraNode(doc, 'f1', stepId, 'b')).toBe(doc);
+    expect(addStepExtraNode(doc, 'f1', stepId, 'nonexistent')).toBe(doc);
+
+    doc = removeStepExtraNode(doc, 'f1', stepId, 'b');
+    expect(doc.flows[0]!.steps[0]!.extraNodeIds).toBeUndefined();
+    expect(removeStepExtraNode(doc, 'f1', stepId, 'b')).toBe(doc);
+  });
+
+  it('adds and removes a step\'s extra edges, refusing the step\'s own primary edge', () => {
+    const edgeA = createEdge({ source: 'a', target: 'b', id: 'e1' });
+    const edgeB = createEdge({ source: 'b', target: 'c', id: 'e2' });
+    let doc = { ...createDocument('X'), edges: [edgeA, edgeB] };
+    doc = addFlow(doc, createFlow({ title: 'A', id: 'f1' }));
+    doc = addStepToFlow(doc, 'f1', 'e1');
+    const stepId = doc.flows[0]!.steps[0]!.id;
+
+    // The primary edge is already covered by `edgeId` — adding it as an
+    // extra would be a redundant duplicate.
+    expect(addStepExtraEdge(doc, 'f1', stepId, 'e1')).toBe(doc);
+
+    doc = addStepExtraEdge(doc, 'f1', stepId, 'e2');
+    expect(doc.flows[0]!.steps[0]!.extraEdgeIds).toEqual(['e2']);
+
+    doc = removeStepExtraEdge(doc, 'f1', stepId, 'e2');
+    expect(doc.flows[0]!.steps[0]!.extraEdgeIds).toBeUndefined();
+  });
+
+  it('caps a step\'s extra members at LIMITS.maxExtraMembersPerStep', () => {
+    const nodes = Array.from({ length: 41 }, (_, i) => createNode({ type: 'card', x: i, y: 0, id: `n${i}` }));
+    let doc = { ...createDocument('X'), nodes };
+    doc = addFlow(doc, createFlow({ title: 'A', id: 'f1' }));
+    doc = { ...doc, flows: [{ ...doc.flows[0]!, steps: [{ id: 's1' }] }] };
+    for (const node of nodes) doc = addStepExtraNode(doc, 'f1', 's1', node.id);
+    expect(doc.flows[0]!.steps[0]!.extraNodeIds).toHaveLength(40);
+  });
+
+  it('sets and clears a step\'s explicit playback viewport', () => {
+    let doc = addFlow(createDocument('X'), createFlow({ title: 'A', id: 'f1' }));
+    doc = { ...doc, flows: [{ ...doc.flows[0]!, steps: [{ id: 's1' }] }] };
+
+    doc = setStepViewport(doc, 'f1', 's1', { x: 10, y: 20, zoom: 1.5 });
+    expect(doc.flows[0]!.steps[0]!.viewport).toEqual({ x: 10, y: 20, zoom: 1.5 });
+
+    doc = setStepViewport(doc, 'f1', 's1', undefined);
+    expect(doc.flows[0]!.steps[0]!.viewport).toBeUndefined();
+    // Clearing an already-clear viewport is a no-op.
+    expect(setStepViewport(doc, 'f1', 's1', undefined)).toBe(doc);
+  });
+});
+
+describe('useFlowPlayback pure helpers', () => {
+  it('resolves a legacy {id, edgeId, caption} step identically to before extras existed', () => {
+    const edge = createEdge({ source: 'a', target: 'b', id: 'e1' });
+    const edgesById = new Map([['e1', edge]]);
+    const resolved = resolveFlowStep({ id: 's1', edgeId: 'e1', caption: 'Go' }, 0, 1, edgesById, new Map());
+    expect(resolved).toEqual({
+      edge,
+      edges: [edge],
+      extraNodes: [],
+      index: 0,
+      step: 1,
+      caption: 'Go',
+      viewport: undefined,
+    });
+  });
+
+  it('resolves a multi-member step, filtering out dangling references', () => {
+    const primary = createEdge({ source: 'a', target: 'b', id: 'e1' });
+    const extra = createEdge({ source: 'c', target: 'd', id: 'e2' });
+    const nodeC = createNode({ type: 'card', x: 0, y: 0, id: 'c' });
+    const edgesById = new Map([['e1', primary], ['e2', extra]]);
+    const nodesById = new Map([['c', nodeC]]);
+
+    const resolved = resolveFlowStep(
+      { id: 's1', edgeId: 'e1', extraEdgeIds: ['e2', 'gone'], extraNodeIds: ['c', 'gone'] },
+      2,
+      3,
+      edgesById,
+      nodesById,
+    );
+    expect(resolved?.edges).toEqual([primary, extra]);
+    expect(resolved?.extraNodes).toEqual([nodeC]);
+  });
+
+  it('returns null for a step with nothing left to show', () => {
+    const resolved = resolveFlowStep({ id: 's1', edgeId: 'gone' }, 0, 1, new Map(), new Map());
+    expect(resolved).toBeNull();
+  });
+
+  it('keeps a frame step (no primary edge) with only extras', () => {
+    const nodeA = createNode({ type: 'card', x: 0, y: 0, id: 'a' });
+    const resolved = resolveFlowStep(
+      { id: 's1', extraNodeIds: ['a'] },
+      0,
+      1,
+      new Map(),
+      new Map([['a', nodeA]]),
+    );
+    expect(resolved?.edge).toBeUndefined();
+    expect(resolved?.extraNodes).toEqual([nodeA]);
+  });
+
+  it('computes focus bounds as the union of edge endpoints and extra nodes', () => {
+    const a = createNode({ type: 'card', x: 0, y: 0, width: 100, height: 50, id: 'a' });
+    const b = createNode({ type: 'card', x: 200, y: 100, width: 100, height: 50, id: 'b' });
+    const c = createNode({ type: 'card', x: -50, y: -50, width: 20, height: 20, id: 'c' });
+    const edge = createEdge({ source: 'a', target: 'b', id: 'e1' });
+    const nodesById = new Map([['a', a], ['b', b], ['c', c]]);
+
+    const step = resolveFlowStep({ id: 's1', edgeId: 'e1', extraNodeIds: ['c'] }, 0, 1, new Map([['e1', edge]]), nodesById)!;
+    const bounds = stepFocusBounds(step, nodesById);
+    expect(bounds).toEqual({ x: -50, y: -50, width: 350, height: 200 });
+  });
+
+  it('honors an explicit step viewport verbatim, distinct from any bounds computation', () => {
+    const resolved = resolveFlowStep(
+      { id: 's1', extraNodeIds: ['a'], viewport: { x: 5, y: 6, zoom: 2 } },
+      0,
+      1,
+      new Map(),
+      new Map(),
+    );
+    expect(resolved?.viewport).toEqual({ x: 5, y: 6, zoom: 2 });
+  });
+
+  it('returns null bounds for a step with no resolvable members', () => {
+    const step = resolveFlowStep({ id: 's1', viewport: { x: 0, y: 0, zoom: 1 } }, 0, 1, new Map(), new Map())!;
+    expect(stepFocusBounds(step, new Map())).toBeNull();
   });
 });
 

@@ -254,6 +254,92 @@ describe('importing untrusted files', () => {
     expect(result.document.flows[0]!.steps.map((s) => s.edgeId)).toEqual(['e1', 'e2']);
   });
 
+  it('reads a "frame" step with extraNodeIds/extraEdgeIds/viewport and no primary edgeId', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 'a', type: 'card', x: 0, y: 0 },
+        { id: 'b', type: 'card', x: 100, y: 0 },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'b' }],
+      flows: [
+        {
+          id: 'f1',
+          title: 'Overview',
+          steps: [
+            {
+              id: 's1',
+              extraNodeIds: ['a', 'b'],
+              extraEdgeIds: ['e1'],
+              viewport: { x: 12, y: -5, zoom: 2 },
+            },
+          ],
+        },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const step = result.document.flows[0]!.steps[0]!;
+    expect(step.edgeId).toBeUndefined();
+    expect(step.extraNodeIds).toEqual(['a', 'b']);
+    expect(step.extraEdgeIds).toEqual(['e1']);
+    expect(step.viewport).toEqual({ x: 12, y: -5, zoom: 2 });
+  });
+
+  it('keeps a step whose primary edge is dangling but whose extras still resolve', () => {
+    const result = parse({
+      ...base,
+      nodes: [{ id: 'a', type: 'card', x: 0, y: 0 }],
+      edges: [],
+      flows: [
+        { id: 'f1', title: 'X', steps: [{ id: 's1', edgeId: 'missing', extraNodeIds: ['a'] }] },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.flows[0]!.steps).toHaveLength(1);
+    expect(result.document.flows[0]!.steps[0]!.edgeId).toBeUndefined();
+    expect(result.document.flows[0]!.steps[0]!.extraNodeIds).toEqual(['a']);
+  });
+
+  it('drops extraNodeIds/extraEdgeIds entries pointing at nodes/edges that do not exist', () => {
+    const result = parse({
+      ...base,
+      nodes: [{ id: 'a', type: 'card', x: 0, y: 0 }],
+      edges: [{ id: 'e1', source: 'a', target: 'a' }],
+      flows: [
+        {
+          id: 'f1',
+          title: 'X',
+          steps: [{ id: 's1', edgeId: 'e1', extraNodeIds: ['a', 'gone'], extraEdgeIds: ['gone'] }],
+        },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.flows[0]!.steps[0]!.extraNodeIds).toEqual(['a']);
+    expect(result.document.flows[0]!.steps[0]!.extraEdgeIds).toBeUndefined();
+  });
+
+  it('caps extraNodeIds/extraEdgeIds at LIMITS.maxExtraMembersPerStep', () => {
+    const nodes = Array.from({ length: 50 }, (_, i) => ({ id: `n${i}`, type: 'card', x: i, y: 0 }));
+    const result = parse({
+      ...base,
+      nodes,
+      edges: [],
+      flows: [
+        {
+          id: 'f1',
+          title: 'X',
+          steps: [{ id: 's1', extraNodeIds: nodes.map((n) => n.id) }],
+        },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.flows[0]!.steps[0]!.extraNodeIds).toHaveLength(LIMITS.maxExtraMembersPerStep);
+  });
+
   it('coerces an unknown node variant to its default, and always sets one', () => {
     const result = parse({
       ...base,

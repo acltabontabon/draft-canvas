@@ -169,6 +169,29 @@ Failures degrade rather than destroy: IndexedDB unavailable falls back to an in-
 and the UI says so plainly; a quota error surfaces a message telling the user to export; a corrupt
 record is repaired through the same validator as an imported file.
 
+## Flows and presentation
+
+A `DraftFlow` is a narration layer over connectors that already exist — it never duplicates a node
+or an edge, only orders references to them. `document/flow.ts` holds the pure operations;
+`presentation/useFlowPlayback.ts` is where playback meets React Flow's viewport.
+
+A `DraftFlowStep` was originally always "one connector" (`edgeId`). It can now also carry
+`extraEdgeIds`/`extraNodeIds` — more members the step spotlights beyond that one connector's own
+endpoints — and an explicit `viewport`, shown verbatim instead of the usual auto-fit-to-bounds. A
+step with `extraNodeIds`/`extraEdgeIds`/`viewport` but no `edgeId` (a "frame" step) is not a special
+case in the data model: `stepIndexOf`/`explainEdgeTier`/`explainNodeTier` treat every member of a
+step identically regardless of whether it arrived via `edgeId` or an extras array, and playback
+resolves a step's members once (`resolveFlowStep` in `useFlowPlayback.ts`) rather than branching on
+which fields happen to be set.
+
+This is a deliberately different concept from **Focus Mode** (`store/editorStore.ts`'s
+`FocusState`):
+Focus is an arbitrary, unordered highlight the user can reach for in edit mode at any time, with no
+relationship to a Flow. A frame step is an ordered member of a specific `DraftFlow`, only visible
+during that flow's playback. Reaching for `FocusState` to model "a step with several members" would
+have collapsed two things that only look similar — one is a story, the other is a spotlight — so
+the two stayed separate, and `DraftFlowStep` grew a richer shape instead.
+
 ## Untrusted input
 
 `document/validate.ts` is the only door into the document model, used for both imported files and
@@ -208,5 +231,5 @@ number it, undo, redo, reload, export all three formats, delete locally, import,
 
 Authentication, accounts, cloud sync, collaboration, comments, AI generation, template libraries,
 and icon packs for any cloud provider. Each would be a reasonable product; none of them is this
-one. Kept out of the way rather than designed for: richer walkthroughs, Mermaid import/export,
-image nodes, and PWA install.
+one. Kept out of the way rather than designed for: Mermaid import/export, image nodes, and PWA
+install.

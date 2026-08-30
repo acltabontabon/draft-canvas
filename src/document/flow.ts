@@ -13,7 +13,7 @@
  */
 import { createId } from './ids';
 import { LIMITS } from './limits';
-import type { DraftDocument, DraftEdge, DraftFlow, DraftFlowStep } from './types';
+import type { DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftViewport } from './types';
 
 export interface CreateFlowInput {
   title?: string;
@@ -32,11 +32,32 @@ export function findFlow(doc: DraftDocument, flowId: string): DraftFlow | undefi
   return doc.flows.find((flow) => flow.id === flowId);
 }
 
-/** 1-based position of an edge within a flow's steps, or `undefined` if it isn't one. */
+/**
+ * 1-based position of an edge within a flow's steps, or `undefined` if it
+ * isn't referenced by any — whether as a step's primary connector or one of
+ * its `extraEdgeIds`. Every edge a step highlights gets the same step
+ * number and the same explain tier; there is no primary/secondary
+ * distinction once a step is active.
+ */
 export function stepIndexOf(flow: DraftFlow | undefined, edgeId: string): number | undefined {
   if (!flow) return undefined;
-  const index = flow.steps.findIndex((step) => step.edgeId === edgeId);
+  const index = flow.steps.findIndex(
+    (step) => step.edgeId === edgeId || step.extraEdgeIds?.includes(edgeId),
+  );
   return index === -1 ? undefined : index + 1;
+}
+
+/** Every 1-based position where a node appears in a flow's steps via
+ *  `extraNodeIds` — plural, unlike `stepIndexOf`, because a node reasonably
+ *  recurs across several "frame" steps (e.g. a client present in most of a
+ *  walkthrough), where a single edge belonging to more than one step of the
+ *  same flow is not a case the data model anticipates. */
+function frameStepPositions(flow: DraftFlow, nodeId: string): number[] {
+  const positions: number[] = [];
+  flow.steps.forEach((step, index) => {
+    if (step.extraNodeIds?.includes(nodeId)) positions.push(index + 1);
+  });
+  return positions;
 }
 
 /**
@@ -54,8 +75,12 @@ export function explainEdgeTier(position: number | undefined, step: number): Exp
   return position < step ? 'shown' : 'hidden';
 }
 
-/** A node's tier is the most-lit tier among the flow's edges touching it — a node on
- *  both an already-shown step and an untouched one still reads as `shown`. */
+/**
+ * A node's tier is the most-lit tier among every step that lights it up —
+ * either as an endpoint of one of the flow's edges, or by name in a "frame"
+ * step's `extraNodeIds`. A node on both an already-shown step and an
+ * untouched one still reads as `shown`.
+ */
 export function explainNodeTier(
   flow: DraftFlow | undefined,
   edges: Iterable<DraftEdge>,
@@ -67,6 +92,11 @@ export function explainNodeTier(
   for (const edge of edges) {
     if (edge.source !== nodeId && edge.target !== nodeId) continue;
     const tier = explainEdgeTier(stepIndexOf(flow, edge.id), step);
+    if (tier === 'active') return 'active';
+    if (tier === 'shown') best = 'shown';
+  }
+  for (const position of frameStepPositions(flow, nodeId)) {
+    const tier = explainEdgeTier(position, step);
     if (tier === 'active') return 'active';
     if (tier === 'shown') best = 'shown';
   }
@@ -168,15 +198,147 @@ export function updateFlowStepCaption(
   return changed ? withFlows(doc, doc.flows.map((f) => (f.id === flowId ? { ...f, steps } : f))) : doc;
 }
 
-/** Strips any flow step referencing one of the given edge ids — used when a connector is deleted. */
-export function pruneFlowSteps(doc: DraftDocument, removedEdgeIds: ReadonlySet<string>): DraftDocument {
-  if (removedEdgeIds.size === 0 || doc.flows.length === 0) return doc;
+function updateStep(
+  doc: DraftDocument,
+  flowId: string,
+  stepId: string,
+  update: (step: DraftFlowStep) => DraftFlowStep,
+): DraftDocument {
+  const flow = findFlow(doc, flowId);
+  if (!flow) return doc;
   let changed = false;
-  const flows = doc.flows.map((flow) => {
-    const steps = flow.steps.filter((step) => !removedEdgeIds.has(step.edgeId));
-    if (steps.length === flow.steps.length) return flow;
+  const steps = flow.steps.map((step) => {
+    if (step.id !== stepId) return step;
+    const next = update(step);
+    if (next === step) return step;
     changed = true;
+    return next;
+  });
+  return changed ? withFlows(doc, doc.flows.map((f) => (f.id === flowId ? { ...f, steps } : f))) : doc;
+}
+
+/** Adds a node to a step's `extraNodeIds` — spotlighting it beyond whatever
+ *  its primary connector's own endpoints already cover. No-op if the node
+ *  doesn't exist, is already a member, or the step is at the cap. */
+export function addStepExtraNode(
+  doc: DraftDocument,
+  flowId: string,
+  stepId: string,
+  nodeId: string,
+): DraftDocument {
+  if (!doc.nodes.some((n) => n.id === nodeId)) return doc;
+  return updateStep(doc, flowId, stepId, (step) => {
+    const extraNodeIds = step.extraNodeIds ?? [];
+    if (extraNodeIds.includes(nodeId) || extraNodeIds.length >= LIMITS.maxExtraMembersPerStep) return step;
+    return { ...step, extraNodeIds: [...extraNodeIds, nodeId] };
+  });
+}
+
+export function removeStepExtraNode(
+  doc: DraftDocument,
+  flowId: string,
+  stepId: string,
+  nodeId: string,
+): DraftDocument {
+  return updateStep(doc, flowId, stepId, (step) => {
+    if (!step.extraNodeIds?.includes(nodeId)) return step;
+    const extraNodeIds = step.extraNodeIds.filter((id) => id !== nodeId);
+    const next = { ...step };
+    if (extraNodeIds.length > 0) next.extraNodeIds = extraNodeIds;
+    else delete next.extraNodeIds;
+    return next;
+  });
+}
+
+/** Adds a connector to a step's `extraEdgeIds`, beyond its primary `edgeId`. */
+export function addStepExtraEdge(
+  doc: DraftDocument,
+  flowId: string,
+  stepId: string,
+  edgeId: string,
+): DraftDocument {
+  if (!doc.edges.some((e) => e.id === edgeId)) return doc;
+  return updateStep(doc, flowId, stepId, (step) => {
+    if (step.edgeId === edgeId) return step;
+    const extraEdgeIds = step.extraEdgeIds ?? [];
+    if (extraEdgeIds.includes(edgeId) || extraEdgeIds.length >= LIMITS.maxExtraMembersPerStep) return step;
+    return { ...step, extraEdgeIds: [...extraEdgeIds, edgeId] };
+  });
+}
+
+export function removeStepExtraEdge(
+  doc: DraftDocument,
+  flowId: string,
+  stepId: string,
+  edgeId: string,
+): DraftDocument {
+  return updateStep(doc, flowId, stepId, (step) => {
+    if (!step.extraEdgeIds?.includes(edgeId)) return step;
+    const extraEdgeIds = step.extraEdgeIds.filter((id) => id !== edgeId);
+    const next = { ...step };
+    if (extraEdgeIds.length > 0) next.extraEdgeIds = extraEdgeIds;
+    else delete next.extraEdgeIds;
+    return next;
+  });
+}
+
+/** Sets, or clears (`undefined`), a step's explicit playback viewport. */
+export function setStepViewport(
+  doc: DraftDocument,
+  flowId: string,
+  stepId: string,
+  viewport: DraftViewport | undefined,
+): DraftDocument {
+  return updateStep(doc, flowId, stepId, (step) => {
+    if (viewport) return { ...step, viewport };
+    if (!step.viewport) return step;
+    const { viewport: _drop, ...rest } = step;
+    return rest;
+  });
+}
+
+/**
+ * Repairs (rather than always dropping) a step referencing a deleted
+ * connector or node: a dangling primary `edgeId` is cleared, and dangling
+ * ids are filtered out of `extraEdgeIds`/`extraNodeIds` — the step survives
+ * if anything is still left for it to show. A step with nothing left at all
+ * is the only one actually removed.
+ */
+export function pruneFlowSteps(
+  doc: DraftDocument,
+  removedEdgeIds: ReadonlySet<string>,
+  removedNodeIds: ReadonlySet<string> = new Set(),
+): DraftDocument {
+  if ((removedEdgeIds.size === 0 && removedNodeIds.size === 0) || doc.flows.length === 0) return doc;
+  let docChanged = false;
+  const flows = doc.flows.map((flow) => {
+    let flowChanged = false;
+    const steps: DraftFlowStep[] = [];
+    for (const step of flow.steps) {
+      const primaryRemoved = step.edgeId !== undefined && removedEdgeIds.has(step.edgeId);
+      const extraEdgeIds = step.extraEdgeIds?.filter((id) => !removedEdgeIds.has(id));
+      const extraEdgesTrimmed = (extraEdgeIds?.length ?? 0) !== (step.extraEdgeIds?.length ?? 0);
+      const extraNodeIds = step.extraNodeIds?.filter((id) => !removedNodeIds.has(id));
+      const extraNodesTrimmed = (extraNodeIds?.length ?? 0) !== (step.extraNodeIds?.length ?? 0);
+
+      if (!primaryRemoved && !extraEdgesTrimmed && !extraNodesTrimmed) {
+        steps.push(step);
+        continue;
+      }
+      flowChanged = true;
+      const next: DraftFlowStep = { ...step };
+      if (primaryRemoved) delete next.edgeId;
+      if (extraEdgeIds && extraEdgeIds.length > 0) next.extraEdgeIds = extraEdgeIds;
+      else delete next.extraEdgeIds;
+      if (extraNodeIds && extraNodeIds.length > 0) next.extraNodeIds = extraNodeIds;
+      else delete next.extraNodeIds;
+
+      if (!next.edgeId && !next.extraEdgeIds?.length && !next.extraNodeIds?.length) continue;
+      steps.push(next);
+    }
+    if (!flowChanged) return flow;
+    docChanged = true;
     return { ...flow, steps };
   });
-  return changed ? withFlows(doc, flows) : doc;
+  return docChanged ? withFlows(doc, flows) : doc;
 }

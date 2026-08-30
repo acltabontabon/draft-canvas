@@ -23,6 +23,8 @@ export const LIMITS = {
   maxAttachmentsPerNode: 12,
   maxFlows: 50,
   maxStepsPerFlow: 200,
+  /** Per step, per array (`extraNodeIds`, `extraEdgeIds`) — a "frame" step spotlighting more than this is not a walkthrough anymore. */
+  maxExtraMembersPerStep: 40,
   maxFlowTitleLength: 100,
   maxConditionLength: 120,
 } as const;

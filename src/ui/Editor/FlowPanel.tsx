@@ -16,6 +16,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
   const document = useEditorStore((state) => state.document);
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const setSelectedFlowId = useEditorStore((state) => state.setSelectedFlowId);
+  const selection = useEditorStore((state) => state.selection);
   const store = useEditorStore;
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -103,42 +104,129 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
               {expanded && (
                 <ol className="dc-flow-steps">
                   {flow.steps.map((step, index) => {
-                    const edge = edges.get(step.edgeId);
-                    if (!edge) return null;
-                    const source = nodes.get(edge.source);
-                    const target = nodes.get(edge.target);
+                    const edge = step.edgeId ? edges.get(step.edgeId) : undefined;
+                    if (step.edgeId && !edge) return null; // dangling — pruned on next edit, not shown meanwhile
+                    const source = edge ? nodes.get(edge.source) : undefined;
+                    const target = edge ? nodes.get(edge.target) : undefined;
+                    const extraNodes = (step.extraNodeIds ?? [])
+                      .map((id) => nodes.get(id))
+                      .filter((n): n is NonNullable<typeof n> => Boolean(n));
+                    const extraEdges = (step.extraEdgeIds ?? [])
+                      .map((id) => edges.get(id))
+                      .filter((e): e is NonNullable<typeof e> => Boolean(e));
+
+                    const canAddSelection = selection.nodes.length > 0 || selection.edges.length > 0;
+
                     return (
-                      <li key={step.id} className="dc-flow-step-row">
-                        <span className="dc-flow-step-index">{index + 1}</span>
-                        <span
-                          className="dc-flow-step-label"
-                          onClick={() =>
-                            store.getState().setSelection({ nodes: [], edges: [edge.id] })
-                          }
-                        >
-                          {source?.text || 'Untitled'} → {target?.text || 'Untitled'}
-                          {step.caption && <em className="dc-flow-step-caption"> — {step.caption}</em>}
-                        </span>
-                        <Button
-                          icon="back"
-                          variant="quiet"
-                          aria-label="Move earlier"
-                          disabled={index === 0}
-                          onClick={() => store.getState().moveFlowStep(flow.id, step.id, -1)}
-                        />
-                        <Button
-                          icon="forward"
-                          variant="quiet"
-                          aria-label="Move later"
-                          disabled={index === flow.steps.length - 1}
-                          onClick={() => store.getState().moveFlowStep(flow.id, step.id, 1)}
-                        />
-                        <Button
-                          icon="close"
-                          variant="quiet"
-                          aria-label="Remove step"
-                          onClick={() => store.getState().removeFlowStep(flow.id, step.id)}
-                        />
+                      <li key={step.id} className="dc-flow-step-row-group">
+                        <div className="dc-flow-step-row">
+                          <span className="dc-flow-step-index">{index + 1}</span>
+                          <span
+                            className="dc-flow-step-label"
+                            onClick={() =>
+                              edge
+                                ? store.getState().setSelection({ nodes: [], edges: [edge.id] })
+                                : undefined
+                            }
+                          >
+                            {edge
+                              ? `${source?.text || 'Untitled'} → ${target?.text || 'Untitled'}`
+                              : extraNodes.length > 0
+                                ? extraNodes.map((n) => n.text || 'Untitled').join(', ')
+                                : step.viewport
+                                  ? 'Custom view'
+                                  : 'Empty step'}
+                            {step.caption && <em className="dc-flow-step-caption"> — {step.caption}</em>}
+                          </span>
+                          <Button
+                            icon="back"
+                            variant="quiet"
+                            aria-label="Move earlier"
+                            disabled={index === 0}
+                            onClick={() => store.getState().moveFlowStep(flow.id, step.id, -1)}
+                          />
+                          <Button
+                            icon="forward"
+                            variant="quiet"
+                            aria-label="Move later"
+                            disabled={index === flow.steps.length - 1}
+                            onClick={() => store.getState().moveFlowStep(flow.id, step.id, 1)}
+                          />
+                          <Button
+                            icon="close"
+                            variant="quiet"
+                            aria-label="Remove step"
+                            onClick={() => store.getState().removeFlowStep(flow.id, step.id)}
+                          />
+                        </div>
+
+                        {(extraNodes.length > 0 || extraEdges.length > 0) && (
+                          <div className="dc-flow-step-extras">
+                            {extraNodes.map((node) => (
+                              <span key={node.id} className="dc-flow-step-chip">
+                                {node.text || 'Untitled'}
+                                <Button
+                                  icon="close"
+                                  variant="quiet"
+                                  aria-label={`Remove ${node.text || 'node'} from step`}
+                                  onClick={() =>
+                                    store.getState().removeFlowStepExtraNode(flow.id, step.id, node.id)
+                                  }
+                                />
+                              </span>
+                            ))}
+                            {extraEdges.map((extraEdge) => (
+                              <span key={extraEdge.id} className="dc-flow-step-chip">
+                                {nodes.get(extraEdge.source)?.text || 'Untitled'} →{' '}
+                                {nodes.get(extraEdge.target)?.text || 'Untitled'}
+                                <Button
+                                  icon="close"
+                                  variant="quiet"
+                                  aria-label="Remove connector from step"
+                                  onClick={() =>
+                                    store.getState().removeFlowStepExtraEdge(flow.id, step.id, extraEdge.id)
+                                  }
+                                />
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="dc-flow-step-tools">
+                          <Button
+                            variant="quiet"
+                            aria-label="Add current selection to this step"
+                            disabled={!canAddSelection}
+                            onClick={() => {
+                              for (const nodeId of selection.nodes) {
+                                store.getState().addFlowStepExtraNode(flow.id, step.id, nodeId);
+                              }
+                              for (const edgeId of selection.edges) {
+                                store.getState().addFlowStepExtraEdge(flow.id, step.id, edgeId);
+                              }
+                            }}
+                          >
+                            + Add selection
+                          </Button>
+                          <Button
+                            variant="quiet"
+                            aria-label="Save the current canvas view to this step"
+                            onClick={() =>
+                              store.getState().setFlowStepViewport(flow.id, step.id, document.viewport)
+                            }
+                          >
+                            {step.viewport ? 'Update view' : 'Set view'}
+                          </Button>
+                          {step.viewport && (
+                            <Button
+                              variant="quiet"
+                              aria-label="Clear this step's saved view"
+                              onClick={() => store.getState().setFlowStepViewport(flow.id, step.id, null)}
+                            >
+                              Clear view
+                            </Button>
+                          )}
+                        </div>
                       </li>
                     );
                   })}

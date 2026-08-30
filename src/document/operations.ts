@@ -183,7 +183,7 @@ export function removeElements(
   const removedEdgeIds = new Set(
     doc.edges.filter((e) => !edges.includes(e)).map((e) => e.id),
   );
-  return pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds);
+  return pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds, removingNodes);
 }
 
 export interface Clipboard {

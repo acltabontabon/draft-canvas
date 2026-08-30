@@ -39,10 +39,15 @@ import {
   addFlow,
   createFlow as createFlowEntity,
   addStepToFlow,
+  addStepExtraEdge,
+  addStepExtraNode,
   deleteFlow,
   moveStepInFlow,
+  removeStepExtraEdge,
+  removeStepExtraNode,
   removeStepFromFlow,
   renameFlow,
+  setStepViewport,
   updateFlowStepCaption as updateFlowStepCaptionOp,
 } from '../document/flow';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
@@ -198,6 +203,13 @@ export interface EditorStore {
   removeFlowStep: (flowId: string, stepId: string) => void;
   moveFlowStep: (flowId: string, stepId: string, direction: -1 | 1) => void;
   updateFlowStepCaption: (flowId: string, stepId: string, caption: string) => void;
+  /** Adds/removes a node from a step's `extraNodeIds` — a "frame" step's spotlight beyond its primary connector. */
+  addFlowStepExtraNode: (flowId: string, stepId: string, nodeId: string) => void;
+  removeFlowStepExtraNode: (flowId: string, stepId: string, nodeId: string) => void;
+  addFlowStepExtraEdge: (flowId: string, stepId: string, edgeId: string) => void;
+  removeFlowStepExtraEdge: (flowId: string, stepId: string, edgeId: string) => void;
+  /** Sets, or clears (`viewport: null`), a step's explicit playback viewport. */
+  setFlowStepViewport: (flowId: string, stepId: string, viewport: DraftViewport | null) => void;
   /** Which flow's step badges show on the canvas. `null` shows none. */
   setSelectedFlowId: (flowId: string | null) => void;
 
@@ -629,6 +641,26 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Edit caption', (doc) => updateFlowStepCaptionOp(doc, flowId, stepId, caption), {
       coalesceKey: `flow-step-caption:${stepId}`,
     });
+  },
+
+  addFlowStepExtraNode(flowId, stepId, nodeId) {
+    get().apply('Add to step', (doc) => addStepExtraNode(doc, flowId, stepId, nodeId));
+  },
+
+  removeFlowStepExtraNode(flowId, stepId, nodeId) {
+    get().apply('Remove from step', (doc) => removeStepExtraNode(doc, flowId, stepId, nodeId));
+  },
+
+  addFlowStepExtraEdge(flowId, stepId, edgeId) {
+    get().apply('Add to step', (doc) => addStepExtraEdge(doc, flowId, stepId, edgeId));
+  },
+
+  removeFlowStepExtraEdge(flowId, stepId, edgeId) {
+    get().apply('Remove from step', (doc) => removeStepExtraEdge(doc, flowId, stepId, edgeId));
+  },
+
+  setFlowStepViewport(flowId, stepId, viewport) {
+    get().apply('Set step view', (doc) => setStepViewport(doc, flowId, stepId, viewport ?? undefined));
   },
 
   setSelectedFlowId(flowId) {

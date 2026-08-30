@@ -842,6 +842,41 @@ kbd {
   font-style: normal;
 }
 
+.dc-flow-step-row-group {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-flow-step-row-group:last-child {
+  border-bottom: none;
+}
+
+.dc-flow-step-extras,
+.dc-flow-step-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 3px 28px;
+}
+
+.dc-flow-step-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 2px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: 999px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.dc-flow-step-tools .dc-button {
+  font-size: 11px;
+}
+
 /* --------------------------------------------------------------- modals -- */
 
 .dc-modal-backdrop {
