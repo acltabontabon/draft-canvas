@@ -418,6 +418,15 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     const kind = oneOfOptional<ConnectorKind>(candidate.kind, CONNECTOR_KINDS);
     if (kind) edge.kind = kind;
 
+    // Same discipline again: absent or unrecognised stays absent — a
+    // connector saved before this field existed reads as legacy-explicit via
+    // `isEligibleForReinference`, not as blank-and-inferrable.
+    const semanticsOrigin = oneOfOptional<'inferred' | 'explicit'>(candidate.semanticsOrigin, [
+      'inferred',
+      'explicit',
+    ]);
+    if (semanticsOrigin) edge.semanticsOrigin = semanticsOrigin;
+
     const sourceAnchor = parseAnchor(candidate.sourceAnchor);
     if (sourceAnchor) edge.sourceAnchor = sourceAnchor;
     const targetAnchor = parseAnchor(candidate.targetAnchor);

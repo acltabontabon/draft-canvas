@@ -1,5 +1,5 @@
 import { useEditorStore } from '../store/editorStore';
-import { accentOf } from '../render/theme/tokens';
+import { resolveEdgeColor } from '../edges/kindStyle';
 import { markerDefs } from '../render/svg/markers';
 import { shadowFilter } from '../render/svg/emit';
 import { serialize } from '../render/svg/element';
@@ -15,13 +15,13 @@ import { useThemeValue } from '../ui/theme/useTheme';
 export function Markers() {
   const theme = useThemeValue();
   const edges = useEditorStore((state) => state.document.edges);
+  const nodes = useEditorStore((state) => state.document.nodes);
 
-  const colors = new Set<string>([theme.edge]);
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const colors = new Set<string>([theme.edge, theme.selection]);
   for (const edge of edges) {
-    const palette = accentOf(theme, edge.accent);
-    colors.add(edge.accent && edge.accent !== 'neutral' ? palette.chip : theme.edge);
+    colors.add(resolveEdgeColor(edge, nodesById.get(edge.source), theme));
   }
-  colors.add(theme.selection);
 
   const markup = [shadowFilter(theme.shadow), ...markerDefs(colors)].map(serialize).join('');
 

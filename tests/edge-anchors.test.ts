@@ -3,7 +3,7 @@ import { createDocument, createEdge, createNode } from '../src/document/factory'
 import { addEdges, addNodes, reconnectEdge } from '../src/document/operations';
 import { normalizeDocument } from '../src/document/validate';
 import { DRAFT_FORMAT, CURRENT_VERSION } from '../src/document/types';
-import { anchorPoint } from '../src/edges/routing';
+import { anchorAt, anchorForDrop, anchorPoint } from '../src/edges/routing';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 describe('connector anchors', () => {
@@ -180,6 +180,70 @@ describe('anchorPoint offsets', () => {
   it('clamps an out-of-range offset rather than leaving the rect', () => {
     expect(anchorPoint(rect, 'top', -3)).toEqual(anchorPoint(rect, 'top', 0));
     expect(anchorPoint(rect, 'top', 9)).toEqual(anchorPoint(rect, 'top', 1));
+  });
+});
+
+describe('anchorAt — the continuous counterpart used for a body-hit drop', () => {
+  const rect = { x: 100, y: 200, width: 80, height: 40 };
+
+  it('picks the nearest side and the midpoint offset for a point dead centre', () => {
+    // Dead centre is equidistant from top and bottom (20) and closer than
+    // left/right (40) — top wins the tie via `SIDES`' declared order.
+    expect(anchorAt(rect, { x: 140, y: 220 })).toEqual({ side: 'top', offset: 0.5 });
+  });
+
+  it('picks a side near a corner and an offset near that corner', () => {
+    const anchor = anchorAt(rect, { x: 105, y: 202 });
+    expect(anchor.side).toBe('top');
+    expect(anchor.offset).toBeCloseTo(0.0625, 3); // (105 - 100) / 80
+  });
+
+  it('picks the opposite corner correctly', () => {
+    const anchor = anchorAt(rect, { x: 175, y: 238 });
+    expect(anchor.side).toBe('bottom');
+    expect(anchor.offset).toBeCloseTo(0.9375, 3); // (175 - 100) / 80
+  });
+
+  it('picks left/right sides and an offset along the vertical axis', () => {
+    expect(anchorAt(rect, { x: 100, y: 210 })).toEqual({ side: 'left', offset: 0.25 });
+    expect(anchorAt(rect, { x: 180, y: 230 })).toEqual({ side: 'right', offset: 0.75 });
+  });
+
+  it('clamps the offset for a point outside the rect along the side axis', () => {
+    // Far to the left, above the rect's own vertical span.
+    const anchor = anchorAt(rect, { x: -50, y: 100 });
+    expect(anchor.side).toBe('left');
+    expect(anchor.offset).toBe(0);
+  });
+
+  it('picks whichever side a point is furthest past when entirely outside the rect', () => {
+    // Well above and slightly right — further past the top than any other side.
+    expect(anchorAt(rect, { x: 150, y: -200 }).side).toBe('top');
+    // Well to the right and roughly centred vertically.
+    expect(anchorAt(rect, { x: 500, y: 220 }).side).toBe('right');
+  });
+});
+
+describe('anchorForDrop — the centre-tolerant gate used for connect/reconnect drops', () => {
+  const rect = { x: 100, y: 200, width: 80, height: 40 };
+
+  it('is undefined for a drop dead centre — no real positional intent to capture', () => {
+    expect(anchorForDrop(rect, { x: 140, y: 220 })).toBeUndefined();
+  });
+
+  it('is undefined for a drop only slightly off centre, within tolerance', () => {
+    // 5px off centre on each axis — well inside the 35%-of-half-extent zone.
+    expect(anchorForDrop(rect, { x: 145, y: 225 })).toBeUndefined();
+  });
+
+  it('captures a real anchor for a drop clearly favouring one side', () => {
+    // Near the right edge, roughly centred vertically.
+    expect(anchorForDrop(rect, { x: 178, y: 220 })).toEqual({ side: 'right', offset: 0.5 });
+  });
+
+  it('captures a real anchor for a drop near a corner', () => {
+    const anchor = anchorForDrop(rect, { x: 105, y: 202 });
+    expect(anchor).toEqual(anchorAt(rect, { x: 105, y: 202 }));
   });
 });
 

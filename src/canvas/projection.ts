@@ -93,6 +93,8 @@ export function projectEdges(
       existing.selected === selected &&
       existing.source === edge.source &&
       existing.target === edge.target &&
+      existing.sourceHandle === edge.sourceAnchor?.side &&
+      existing.targetHandle === edge.targetAnchor?.side &&
       existing.selectable === options.interactive
     ) {
       return existing;
@@ -103,6 +105,14 @@ export function projectEdges(
       type: EDGE_COMPONENT,
       source: edge.source,
       target: edge.target,
+      // React Flow's own position lookups — notably the native reconnect-drag
+      // hit zones — key off these to find the right handle among a node's
+      // four. Leaving them unset (as this used to) makes React Flow fall back
+      // to an arbitrary handle, silently misplacing that hit zone; our own
+      // rendering never used these, since `DraftEdgeView` computes its own
+      // route from the document, which is why this went unnoticed.
+      sourceHandle: edge.sourceAnchor?.side,
+      targetHandle: edge.targetAnchor?.side,
       selected,
       selectable: options.interactive,
       focusable: options.interactive,

@@ -95,6 +95,63 @@ export function chooseSides(source: Rect, target: Rect): { source: Side; target:
   return dy >= 0 ? { source: 'bottom', target: 'top' } : { source: 'top', target: 'bottom' };
 }
 
+/**
+ * The continuous counterpart to `chooseSides`: which side of `rect` a point
+ * is nearest, and where along that side it falls, as an `EdgeAnchor`. Used
+ * when a connect/reconnect drop lands on a node's body rather than precisely
+ * on a handle (see `Canvas.tsx`), so the connector attaches close to where
+ * the user actually dropped it instead of always snapping to a side's
+ * midpoint.
+ *
+ * `point` may be inside or outside `rect` — whichever side it has gone
+ * furthest past (or, for a point inside, is nearest to) wins, the same
+ * distance-per-side comparison whether the point is within bounds or not.
+ */
+export function anchorAt(rect: Rect, point: { x: number; y: number }): EdgeAnchor {
+  const distanceToSide: Record<Side, number> = {
+    top: point.y - rect.y,
+    right: rect.x + rect.width - point.x,
+    bottom: rect.y + rect.height - point.y,
+    left: point.x - rect.x,
+  };
+  const side = SIDES.reduce((nearest, candidate) =>
+    distanceToSide[candidate] < distanceToSide[nearest] ? candidate : nearest,
+  );
+  const offset =
+    side === 'top' || side === 'bottom'
+      ? (point.x - rect.x) / rect.width
+      : (point.y - rect.y) / rect.height;
+  return { side, offset: Math.min(1, Math.max(0, offset)) };
+}
+
+/**
+ * A drop within this fraction of a rect's half-width/half-height from its
+ * centre reads as "just this node," not "this specific spot" — see
+ * `anchorForDrop`.
+ */
+const CENTER_DROP_TOLERANCE = 0.35;
+
+/**
+ * What a connect/reconnect drop onto a node's body should actually capture.
+ *
+ * A drop near dead centre carries no real positional intent — the user
+ * dropped "on this node," not "on this exact point" — so it stays
+ * `undefined` and routing keeps picking the best side dynamically via
+ * `chooseSides`, exactly as it always has for a plain body-hit. Only a drop
+ * that clearly favours one side captures a specific `anchorAt` point, so an
+ * imprecise drop near a wide node's centre (which `anchorAt` alone would
+ * still resolve to its nearer top/bottom side, ignoring the other node's
+ * actual position) doesn't lock in a worse attachment than dynamic routing
+ * would have chosen.
+ */
+export function anchorForDrop(rect: Rect, point: { x: number; y: number }): EdgeAnchor | undefined {
+  const center = centerOf(rect);
+  const dx = Math.abs(point.x - center.x) / (rect.width / 2);
+  const dy = Math.abs(point.y - center.y) / (rect.height / 2);
+  if (Math.max(dx, dy) <= CENTER_DROP_TOLERANCE) return undefined;
+  return anchorAt(rect, point);
+}
+
 export interface RoutedEdge {
   d: string;
   labelX: number;

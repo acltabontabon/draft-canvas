@@ -238,6 +238,16 @@ export interface DraftEdge {
    */
   sourceAnchor?: EdgeAnchor;
   targetAnchor?: EdgeAnchor;
+  /**
+   * Whether `semantic`/`kind` were set by `connectorSemantics.ts`'s inference
+   * or chosen by the user. Absent means "never explicitly chosen" — the same
+   * convention `sourceAnchor`/`targetAnchor` use — so a file saved before this
+   * field existed, even one with a manually-picked `semantic`, is treated as
+   * explicit (see `isEligibleForReinference` in `document/connectorSemantics.ts`)
+   * and never silently rewritten. Only a fresh inference stamps `'inferred'`;
+   * only `setEdgeSemantic`/`setEdgeKind` stamp `'explicit'`.
+   */
+  semanticsOrigin?: 'inferred' | 'explicit';
 }
 
 /**

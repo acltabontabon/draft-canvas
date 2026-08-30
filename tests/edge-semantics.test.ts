@@ -68,8 +68,11 @@ describe('semantic connections', () => {
   });
 
   it('is one undo step', () => {
-    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
-    const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    // Plain cards, not service/database — that pair now infers `writes` on
+    // connect (see `connectorSemantics.ts`), which would muddy what this
+    // test actually checks: that a manual `setEdgeSemantic` undoes cleanly.
+    const a = store.getState().addNode({ type: 'card', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'card', x: 300, y: 0 });
     const edge = store.getState().connect(a.id, b.id)!;
     const before = store.getState().history.past.length;
 

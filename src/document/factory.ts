@@ -15,6 +15,7 @@ import {
   type DraftNode,
   type DraftNodeType,
   type EdgeAnchor,
+  type EdgeSemantic,
   type NoteKind,
   type QueueKind,
   type ServiceKind,
@@ -177,6 +178,8 @@ export interface CreateEdgeInput {
   sourceAnchor?: EdgeAnchor;
   targetAnchor?: EdgeAnchor;
   kind?: ConnectorKind;
+  semantic?: EdgeSemantic;
+  semanticsOrigin?: DraftEdge['semanticsOrigin'];
 }
 
 export function createEdge(input: CreateEdgeInput): DraftEdge {
@@ -192,6 +195,8 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
   if (input.sourceAnchor) edge.sourceAnchor = input.sourceAnchor;
   if (input.targetAnchor) edge.targetAnchor = input.targetAnchor;
   if (input.kind) edge.kind = input.kind;
+  if (input.semantic) edge.semantic = input.semantic;
+  if (input.semanticsOrigin) edge.semanticsOrigin = input.semanticsOrigin;
   return edge;
 }
 

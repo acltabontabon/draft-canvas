@@ -27,6 +27,16 @@ interface UiStore {
   quickConnect: QuickConnectState | null;
   /** The node id a dragged attachable node is currently armed against. */
   attachArmedTarget: string | null;
+  /**
+   * The node id a connector-endpoint drag (see `DraftEdgeView.tsx`) is
+   * currently hovering as a candidate drop target. Node handles always keep
+   * real pointer events (see their own CSS comment), which is what makes a
+   * reconnect drag have to be driven by hand rather than through React
+   * Flow's own reconnect machinery — this is that drag's one piece of
+   * reactive state, kept to "which node" rather than a raw pointer position
+   * so a drag does not re-render anything on every pointer-move frame.
+   */
+  reconnectHoverTarget: string | null;
   /** The host node whose attachment popover is open, if any. */
   openAttachmentPopover: string | null;
   /** Whether the Flow list drawer is visible. */
@@ -53,6 +63,7 @@ interface UiStore {
   setExportOpen: (open: boolean) => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
+  setReconnectHoverTarget: (nodeId: string | null) => void;
   setOpenAttachmentPopover: (hostId: string | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean) => void;
@@ -70,6 +81,7 @@ export const useUiStore = create<UiStore>((set) => ({
   toasts: [],
   quickConnect: null,
   attachArmedTarget: null,
+  reconnectHoverTarget: null,
   openAttachmentPopover: null,
   flowPanelOpen: false,
   interactionActive: false,
@@ -81,6 +93,8 @@ export const useUiStore = create<UiStore>((set) => ({
   setQuickConnect: (quickConnect) => set({ quickConnect }),
   setAttachArmedTarget: (attachArmedTarget) =>
     set((state) => (state.attachArmedTarget === attachArmedTarget ? state : { attachArmedTarget })),
+  setReconnectHoverTarget: (reconnectHoverTarget) =>
+    set((state) => (state.reconnectHoverTarget === reconnectHoverTarget ? state : { reconnectHoverTarget })),
   setOpenAttachmentPopover: (openAttachmentPopover) => set({ openAttachmentPopover }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   setInteractionActive: (interactionActive) =>

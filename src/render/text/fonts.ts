@@ -47,6 +47,7 @@ export const TEXT_SIZES = {
   edgeLabel: 11.5,
   sequenceBadge: 11,
   groupTitle: 12,
+  connectorCaption: 9.5,
 } as const;
 
 /** Line heights are absolute multiples so the exporter can reproduce them exactly. */
@@ -66,4 +67,5 @@ export const FONTS = {
   edgeLabel: { stack: 'sans', size: TEXT_SIZES.edgeLabel, weight: 500 } satisfies FontSpec,
   sequenceBadge: { stack: 'sans', size: TEXT_SIZES.sequenceBadge, weight: 700 } satisfies FontSpec,
   groupTitle: { stack: 'sans', size: TEXT_SIZES.groupTitle, weight: 600 } satisfies FontSpec,
+  connectorCaption: { stack: 'sans', size: TEXT_SIZES.connectorCaption, weight: 500 } satisfies FontSpec,
 } as const;

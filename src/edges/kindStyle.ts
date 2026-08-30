@@ -1,5 +1,6 @@
-import type { DraftEdge } from '../document/types';
+import type { Accent, DraftEdge } from '../document/types';
 import type { MarkerVariant } from '../render/svg/markers';
+import { accentOf, type Theme } from '../render/theme/tokens';
 
 /**
  * A connector's dash pattern, as an array of on/off lengths (SVG
@@ -31,4 +32,28 @@ export function dashForEdge(edge: DraftEdge): number[] | undefined {
  *  distinct even before lane separation or direction is noticed. */
 export function markerVariantForEdge(edge: DraftEdge): MarkerVariant {
   return edge.kind === 'callback' ? 'open' : 'closed';
+}
+
+/**
+ * A connector's colour — shared by both renderers so tracing a flow from its
+ * source node looks the same on screen and in an exported file.
+ *
+ * An explicit `edge.accent` is a deliberate override and keeps using `chip`,
+ * the same vivid tone a manually-recoloured node uses. Absent that, the
+ * connector borrows its source node's own accent at the softer `line`
+ * intensity — connector-appropriate, not attention-grabbing — so tracing a
+ * flow from a coloured node needs no configuration at all. A source with no
+ * accent (or `neutral`, on either the edge or the node) falls back to the
+ * theme's plain connector grey, exactly as an unaccented edge always has.
+ */
+export function resolveEdgeColor(
+  edge: Pick<DraftEdge, 'accent'>,
+  sourceNode: { accent?: Accent } | undefined,
+  theme: Theme,
+): string {
+  const explicit = edge.accent;
+  const effective = explicit ?? sourceNode?.accent ?? 'neutral';
+  if (effective === 'neutral') return theme.edge;
+  const palette = accentOf(theme, effective);
+  return explicit !== undefined ? palette.chip : palette.line;
 }

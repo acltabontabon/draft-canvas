@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
@@ -15,6 +16,8 @@ import type {
   CodeLanguage,
   ConnectorKind,
   DatabaseKind,
+  DraftEdge,
+  DraftNode,
   EdgeSemantic,
   NoteKind,
   QueueKind,
@@ -22,6 +25,7 @@ import type {
 } from '../../document/types';
 import type { AlignEdge } from '../../document/operations';
 import { stepIndexOf } from '../../document/flow';
+import { capabilityFor, categoryOf, type ConnectionCapability } from '../../document/connectorSemantics';
 import { LANGUAGE_LABELS } from '../../render/code/highlight';
 import { useEditorStore } from '../../store/editorStore';
 import { nodeIndex, edgeIndex } from '../../store/selectors';
@@ -106,11 +110,11 @@ export function Inspector() {
     .map((id) => edgeIndex(document.edges).get(id))
     .filter((edge) => edge !== undefined);
 
-  if (nodes.length === 0 && edges.length === 0) return null;
-
   const onlyNode = nodes.length === 1 ? nodes[0] : null;
   const onlyEdge = edges.length === 1 ? edges[0] : null;
   const multiple = nodes.length > 1;
+
+  if (nodes.length === 0 && edges.length === 0) return null;
 
   const setAccent = (accent: Accent) => {
     const state = store.getState();
@@ -141,6 +145,18 @@ export function Inspector() {
             onClick={() => setAccent(accent)}
           />
         ))}
+        {nodes.length === 0 && edges.some((edge) => edge.accent !== undefined) && (
+          <Button
+            variant="ghost"
+            title="Derive this connection's colour from its source node instead of a fixed one"
+            onClick={() => {
+              const state = store.getState();
+              for (const edge of edges) state.updateEdgeById(edge.id, { accent: undefined }, 'Reset colour');
+            }}
+          >
+            Auto
+          </Button>
+        )}
       </div>
 
       {onlyNode?.type === 'note' && (
@@ -274,94 +290,12 @@ export function Inspector() {
       )}
 
       {onlyEdge && (
-        <>
-          <span className="dc-inspector-divider" />
-          <Button
-            variant="ghost"
-            active={onlyEdge.directed}
-            title="Show an arrowhead"
-            onClick={() =>
-              store
-                .getState()
-                .updateEdgeById(onlyEdge.id, { directed: !onlyEdge.directed }, 'Change direction')
-            }
-          >
-            Arrow
-          </Button>
-          <select
-            className="dc-select"
-            aria-label="Connector shape"
-            value={onlyEdge.routing}
-            onChange={(event) =>
-              store.getState().updateEdgeById(
-                onlyEdge.id,
-                { routing: event.target.value as typeof onlyEdge.routing },
-                'Change routing',
-              )
-            }
-          >
-            <option value="smoothstep">Stepped</option>
-            <option value="bezier">Curved</option>
-            <option value="straight">Straight</option>
-          </select>
-          <select
-            className="dc-select"
-            aria-label="Connection type"
-            value={onlyEdge.semantic ?? ''}
-            onChange={(event) =>
-              store
-                .getState()
-                .setEdgeSemantic(onlyEdge.id, (event.target.value || undefined) as EdgeSemantic | undefined)
-            }
-          >
-            <option value="">No type</option>
-            {EDGE_SEMANTICS.map((semantic) => (
-              <option key={semantic} value={semantic}>
-                {EDGE_SEMANTIC_LABELS[semantic]}
-              </option>
-            ))}
-          </select>
-          <select
-            className="dc-select"
-            aria-label="Flow kind"
-            title="Flow behaviour — a subtle visual treatment, not a label"
-            value={onlyEdge.kind ?? ''}
-            onChange={(event) =>
-              store
-                .getState()
-                .setEdgeKind(onlyEdge.id, (event.target.value || undefined) as ConnectorKind | undefined)
-            }
-          >
-            <option value="">No kind</option>
-            {CONNECTOR_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {CONNECTOR_KIND_LABELS[kind]}
-              </option>
-            ))}
-          </select>
-          <Button
-            variant="ghost"
-            active={Boolean(onlyEdge.async)}
-            title="Asynchronous interaction (dashed line)"
-            onClick={() => store.getState().toggleEdgeAsync(onlyEdge.id)}
-          >
-            Async
-          </Button>
-          <input
-            className="dc-input dc-input-condition"
-            aria-label="Condition"
-            placeholder="Condition…"
-            defaultValue={onlyEdge.condition ?? ''}
-            spellCheck={false}
-            onBlur={(event) => store.getState().setEdgeCondition(onlyEdge.id, event.currentTarget.value)}
-            onKeyDown={(event) => {
-              event.stopPropagation();
-              if (event.key === 'Enter') event.currentTarget.blur();
-            }}
-          />
-          <span className="dc-inspector-divider" />
-          <EdgeFlowMembership edgeId={onlyEdge.id} />
-        </>
+        <EdgeControls
+          key={onlyEdge.id}
+          edge={onlyEdge}
+          sourceNode={nodeIndex(document.nodes).get(onlyEdge.source)}
+          targetNode={nodeIndex(document.nodes).get(onlyEdge.target)}
+        />
       )}
 
       {multiple && (
@@ -461,6 +395,166 @@ export function Inspector() {
         onClick={() => store.getState().deleteSelection()}
       />
     </div>
+  );
+}
+
+/** A queue relationship's behaviour reads as an event carried asynchronously
+ *  — spelling both out is more legible in a compact badge than the bare
+ *  `ConnectorKind` label, without adding a second stored field for it. */
+function behaviorBadgeLabel(kind: ConnectorKind): string {
+  return kind === 'event' ? 'Event · Async' : CONNECTOR_KIND_LABELS[kind];
+}
+
+/**
+ * The controls for a single selected connector — contextual on what it
+ * actually connects (see `document/connectorSemantics.ts`'s capability
+ * matrix), which is "the more Draft Canvas knows, the less UI it shows" in
+ * practice:
+ *
+ * - The relation dropdown only lists options relevant to this node pairing,
+ *   plus the edge's current value (even if unusual) and a "Show all…" escape
+ *   hatch — never a hard restriction, since an existing or deliberately
+ *   unusual choice must stay visible and editable.
+ * - When behaviour is predetermined (a queue relation is always event-ish;
+ *   a plain database read/write has no meaningful behaviour at all) and the
+ *   edge's own `kind` doesn't disagree, the picker collapses to a small
+ *   static badge — click it to expand back into the full picker.
+ * - The condition field only appears once there's a real behaviour choice in
+ *   play (contextually, or because the user expanded it), or one is already
+ *   set — a plain database write has nowhere to hang a condition.
+ *
+ * A component of its own (not inline JSX in `Inspector`) specifically so its
+ * two "reveal the advanced controls" toggles can live as ordinary `useState`
+ * and reset for free via `key={edge.id}` at the call site, rather than a
+ * manual effect keyed off the selection.
+ */
+function EdgeControls({
+  edge,
+  sourceNode,
+  targetNode,
+}: {
+  edge: DraftEdge;
+  sourceNode: DraftNode | undefined;
+  targetNode: DraftNode | undefined;
+}) {
+  const store = useEditorStore;
+  const [showAllRelations, setShowAllRelations] = useState(false);
+  const [editingBehavior, setEditingBehavior] = useState(false);
+
+  const capability: ConnectionCapability | undefined =
+    sourceNode && targetNode ? capabilityFor(categoryOf(sourceNode), categoryOf(targetNode)) : undefined;
+
+  const relationBase = capability && !showAllRelations ? capability.relations : EDGE_SEMANTICS;
+  const relationOptions =
+    edge.semantic && !relationBase.includes(edge.semantic) ? [...relationBase, edge.semantic] : relationBase;
+  const canShowAllRelations =
+    Boolean(capability) && !showAllRelations && capability!.relations.length < EDGE_SEMANTICS.length;
+
+  const behaviorIsPredetermined = Boolean(capability) && capability!.behaviors.length === 0;
+  const behaviorMatchesPolicy = !edge.kind || edge.kind === capability?.defaultBehavior;
+  const showBehaviorPicker = !behaviorIsPredetermined || !behaviorMatchesPolicy || editingBehavior;
+  const behaviorBase = capability && capability.behaviors.length > 0 ? capability.behaviors : CONNECTOR_KINDS;
+  // The empty option below is already relabelled "Sync" when that's
+  // contextually the implicit default — listing the real `sync` value too
+  // would just be the same word twice, unless the edge already has it as an
+  // explicit value, in which case dropping it would leave nothing selected.
+  const hideSyncOption = behaviorBase.includes('sync') && edge.kind !== 'sync';
+  const behaviorOptions = hideSyncOption ? behaviorBase.filter((kind) => kind !== 'sync') : behaviorBase;
+  // Once behaviour is worth picking at all, a condition is too — a plain
+  // database write has nowhere meaningful to hang one.
+  const showCondition = showBehaviorPicker || Boolean(edge.condition);
+
+  return (
+    <>
+      <span className="dc-inspector-divider" />
+      <Button
+        variant="ghost"
+        active={edge.directed}
+        title="Show an arrowhead"
+        onClick={() => store.getState().updateEdgeById(edge.id, { directed: !edge.directed }, 'Change direction')}
+      >
+        Arrow
+      </Button>
+      <select
+        className="dc-select"
+        aria-label="Connector shape"
+        value={edge.routing}
+        onChange={(event) =>
+          store
+            .getState()
+            .updateEdgeById(edge.id, { routing: event.target.value as typeof edge.routing }, 'Change routing')
+        }
+      >
+        <option value="smoothstep">Stepped</option>
+        <option value="bezier">Curved</option>
+        <option value="straight">Straight</option>
+      </select>
+      <select
+        className="dc-select"
+        aria-label="Connection type"
+        value={edge.semantic ?? ''}
+        onChange={(event) => {
+          if (event.target.value === '__more__') {
+            setShowAllRelations(true);
+            return;
+          }
+          store.getState().setEdgeSemantic(edge.id, (event.target.value || undefined) as EdgeSemantic | undefined);
+        }}
+      >
+        <option value="">No type</option>
+        {relationOptions.map((semantic) => (
+          <option key={semantic} value={semantic}>
+            {EDGE_SEMANTIC_LABELS[semantic]}
+          </option>
+        ))}
+        {canShowAllRelations && <option value="__more__">Show all…</option>}
+      </select>
+      {showBehaviorPicker ? (
+        <select
+          className="dc-select"
+          aria-label="Flow kind"
+          title="Flow behaviour — a subtle visual treatment, not a label"
+          value={edge.kind ?? ''}
+          onChange={(event) =>
+            store.getState().setEdgeKind(edge.id, (event.target.value || undefined) as ConnectorKind | undefined)
+          }
+        >
+          <option value="">{capability?.behaviors.includes('sync') ? 'Sync' : 'No kind'}</option>
+          {behaviorOptions.map((kind) => (
+            <option key={kind} value={kind}>
+              {CONNECTOR_KIND_LABELS[kind]}
+            </option>
+          ))}
+        </select>
+      ) : (
+        capability?.defaultBehavior && (
+          <button
+            type="button"
+            className="dc-kind-badge"
+            title="Inferred from what this connects — click to change"
+            onClick={() => setEditingBehavior(true)}
+          >
+            {behaviorBadgeLabel(capability.defaultBehavior)}
+          </button>
+        )
+      )}
+      {showCondition && (
+        <input
+          className="dc-input dc-input-condition"
+          aria-label="Condition"
+          placeholder="Condition…"
+          defaultValue={edge.condition ?? ''}
+          spellCheck={false}
+          onBlur={(event) => store.getState().setEdgeCondition(edge.id, event.currentTarget.value)}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === 'Enter') event.currentTarget.blur();
+          }}
+        />
+      )}
+      <span className="dc-inspector-divider" />
+      <EdgeFlowMembership edgeId={edge.id} />
+    </>
   );
 }
 

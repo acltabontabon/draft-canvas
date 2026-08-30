@@ -772,6 +772,25 @@ test.describe('editing', () => {
     await expect(page.locator('.dc-node-editor')).toHaveCount(0);
   });
 
+  test('a connector selects even when clicked a few pixels off its visible line', async ({ page }) => {
+    await newCanvas(page, 'Wide hit target');
+    await create(page, 'Service', { x: 300, y: 250 });
+    await create(page, 'Database', { x: 600, y: 250 });
+    await connect(page, 0, 1);
+
+    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
+    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    const midX = (nodeA.x + nodeA.width + nodeB.x) / 2;
+    const midY = (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2;
+
+    // The visible stroke is under 3px wide; 6px off its centre lands well
+    // outside it but safely inside `BaseEdge`'s invisible `interactionWidth`
+    // corridor (Chromium's own stroke hit-testing gives that a little less
+    // than the raw 18px prop value, but comfortably more than 6px either side).
+    await page.mouse.click(midX, midY - 6);
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+  });
+
   test('Enter is a no-op while the Quick Connect menu or an attachment popover is open', async ({
     page,
   }) => {
@@ -824,5 +843,226 @@ test.describe('editing', () => {
     await page.keyboard.press('Enter');
     await expect(page.locator('.dc-node-editor')).toHaveCount(0);
     await expect(page.locator('.dc-quick-connect')).toBeVisible();
+  });
+});
+
+/** The selected connector's source (0) or target (1) endpoint handle. */
+async function endpointBox(page: Page, which: 0 | 1) {
+  return (await page.locator('.dc-edge-endpoint').nth(which).boundingBox())!;
+}
+
+test.describe('reconnection', () => {
+  test('the connector visibly follows the pointer while an endpoint is being dragged', async ({ page }) => {
+    await newCanvas(page, 'Live drag preview');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await create(page, 'Database', { x: 600, y: 200 });
+    await connect(page, 0, 1);
+
+    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
+    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    await page.mouse.click(
+      (nodeA.x + nodeA.width + nodeB.x) / 2,
+      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
+    );
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+
+    const pathBefore = await page.locator('.dc-edge-line').getAttribute('d');
+    const target = await endpointBox(page, 1);
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
+    await page.mouse.down();
+    // Move partway, well short of any drop target — the path should already
+    // be tracking the pointer before the gesture ends.
+    await page.mouse.move(target.x + 60, target.y + 180, { steps: 5 });
+    await expect(page.locator('.dc-edge-line')).not.toHaveAttribute('d', pathBefore ?? '');
+
+    // Released over empty canvas: a no-op, so the path returns to normal.
+    await page.mouse.up();
+    await expect(page.locator('.dc-edge-line')).toHaveAttribute('d', pathBefore ?? '');
+  });
+
+  test('dragging the target endpoint moves it to a different node and reroutes', async ({ page }) => {
+    await newCanvas(page, 'Reconnect target');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Queue', { x: 600, y: 450 });
+    await connect(page, 0, 1);
+
+    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
+    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    await page.mouse.click(
+      (nodeA.x + nodeA.width + nodeB.x) / 2,
+      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
+    );
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+    await expect(page.locator('.dc-edge-endpoint')).toHaveCount(2);
+
+    const target = await endpointBox(page, 1);
+    const queue = (await page.locator('.dc-node').nth(2).boundingBox())!;
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(queue.x + queue.width / 2, queue.y + queue.height / 2, { steps: 10 });
+    await page.mouse.up();
+
+    // Reconnected onto the queue: the relationship is freshly inferred as an
+    // event publish, and there's still exactly one connector (moved, not duplicated).
+    await expect(page.locator('.dc-edge')).toHaveCount(1);
+    const select = page.getByRole('combobox', { name: 'Connection type' });
+    await expect(select).toHaveValue('publishes');
+  });
+
+  test('dragging an endpoint to a different side of the same node keeps the same connection', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Reconnect same node');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Database', { x: 650, y: 300 });
+    await connect(page, 0, 1);
+
+    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
+    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    await page.mouse.click(
+      (nodeA.x + nodeA.width + nodeB.x) / 2,
+      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
+    );
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+
+    const target = await endpointBox(page, 1);
+    // Drop on the same node's bottom edge instead of its left side.
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(nodeB.x + nodeB.width / 2, nodeB.y + nodeB.height - 4, { steps: 10 });
+    await page.mouse.up();
+
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+    await expect(page.locator('.dc-edge')).toHaveCount(1);
+    // Still the same two nodes connected — a same-node re-side, not a new edge.
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+  });
+
+  test('Escape cancels an in-flight reconnect and restores the original connection', async ({ page }) => {
+    await newCanvas(page, 'Reconnect escape');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Queue', { x: 600, y: 450 });
+    await connect(page, 0, 1);
+
+    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
+    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    await page.mouse.click(
+      (nodeA.x + nodeA.width + nodeB.x) / 2,
+      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
+    );
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+
+    const target = await endpointBox(page, 1);
+    const queue = (await page.locator('.dc-node').nth(2).boundingBox())!;
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(queue.x + queue.width / 2, queue.y + queue.height / 2, { steps: 10 });
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+
+    // Escape's usual, app-wide effect also clears the selection — but the
+    // connection itself is what this test cares about: still exactly one,
+    // and still the original Service → Database pair, never reassigned to
+    // the Queue mid-drag.
+    await expect(page.locator('.dc-edge')).toHaveCount(1);
+    await page.mouse.click(
+      (nodeA.x + nodeA.width + nodeB.x) / 2,
+      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
+    );
+    // Still the original Service → Database pair, which infers `writes`.
+    const select = page.getByRole('combobox', { name: 'Connection type' });
+    await expect(select).toHaveValue('writes');
+  });
+
+  test('dropping a reconnect on empty canvas leaves the original connection intact', async ({ page }) => {
+    await newCanvas(page, 'Reconnect invalid drop');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await create(page, 'Database', { x: 600, y: 200 });
+    await connect(page, 0, 1);
+
+    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
+    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    await page.mouse.click(
+      (nodeA.x + nodeA.width + nodeB.x) / 2,
+      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
+    );
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+
+    const target = await endpointBox(page, 1);
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(target.x + 300, target.y + 250, { steps: 10 });
+    await page.mouse.up();
+
+    // Empty canvas: a clean no-op — unlike drawing a brand-new connection,
+    // reconnecting an existing one to nothing doesn't offer a Quick Connect
+    // picker, it just leaves the original connection exactly as it was.
+    await expect(page.locator('.dc-quick-connect')).toHaveCount(0);
+    await expect(page.locator('.dc-edge')).toHaveCount(1);
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+    await page.mouse.click(
+      (nodeA.x + nodeA.width + nodeB.x) / 2,
+      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
+    );
+    // Still the original Service → Database pair, which infers `writes`.
+    const select = page.getByRole('combobox', { name: 'Connection type' });
+    await expect(select).toHaveValue('writes');
+  });
+
+  test('a reconnect is one undo step and restores the exact prior connection', async ({ page }) => {
+    await newCanvas(page, 'Reconnect undo');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Queue', { x: 600, y: 450 });
+    await connect(page, 0, 1);
+
+    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
+    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    await page.mouse.click(
+      (nodeA.x + nodeA.width + nodeB.x) / 2,
+      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
+    );
+    const target = await endpointBox(page, 1);
+    const queue = (await page.locator('.dc-node').nth(2).boundingBox())!;
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(queue.x + queue.width / 2, queue.y + queue.height / 2, { steps: 10 });
+    await page.mouse.up();
+
+    const select = page.getByRole('combobox', { name: 'Connection type' });
+    await expect(select).toHaveValue('publishes');
+
+    await page.keyboard.press('Meta+z');
+    // Back to the original Service → Database connection, which infers `writes`.
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+    await expect(select).toHaveValue('writes');
+  });
+
+  test('a plain click on an endpoint never reconnects it — only an actual drag does', async ({ page }) => {
+    await newCanvas(page, 'Endpoint click is not a drag');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await create(page, 'Database', { x: 600, y: 200 });
+    await connect(page, 0, 1);
+
+    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
+    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    await page.mouse.click(
+      (nodeA.x + nodeA.width + nodeB.x) / 2,
+      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
+    );
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+    const pathBefore = await page.locator('.dc-edge-line').getAttribute('d');
+
+    // `page.mouse.click` moves to the point and fires down/up with no
+    // movement in between — the plain-click case a real trackpad or mouse
+    // always has a pixel or two of jitter on, which is exactly what the
+    // drag threshold in `EdgeEndpointHandle` exists to absorb.
+    const target = await endpointBox(page, 1);
+    await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+
+    await expect(page.locator('.dc-edge')).toHaveCount(1);
+    await expect(page.locator('.dc-edge-line')).toHaveAttribute('d', pathBefore ?? '');
   });
 });

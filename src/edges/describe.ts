@@ -1,12 +1,13 @@
 import type { DraftEdge, DraftNode, EdgeRouting } from '../document/types';
 import type { Shape } from '../render/displayList';
 import { markerRef } from '../render/svg/markers';
-import { accentOf, type Theme } from '../render/theme/tokens';
+import type { Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
 import { labelLaneOffset, rectOf, routeEdge, type RoutedEdge, type Side } from './routing';
-import { dashForEdge, markerVariantForEdge } from './kindStyle';
+import { dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
+import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 
 export interface EdgeDescribeContext {
   theme: Theme;
@@ -62,8 +63,7 @@ export function describeEdge(
   const labelX = route.labelX + labelNudge.x;
   const labelY = route.labelY + labelNudge.y;
 
-  const palette = accentOf(ctx.theme, edge.accent);
-  const color = edge.accent && edge.accent !== 'neutral' ? palette.chip : ctx.theme.edge;
+  const color = resolveEdgeColor(edge, nodes.get(edge.source), ctx.theme);
 
   const line: Shape[] = [
     {
@@ -96,6 +96,30 @@ export function describeEdge(
         d: `M${labelX},${labelY - s} L${labelX + s},${labelY} L${labelX},${labelY + s} L${labelX - s},${labelY} Z`,
         fill: ctx.theme.edgeLabelBg,
         stroke: { color, width: 1.3 },
+      });
+    }
+    // A subtle caption of the relationship — independent of `kind`'s glyph
+    // above, so a plain call/read/write connector reads just as clearly as
+    // an event one, without spending the connector's actual `label`
+    // (reserved for something like an event's own name, e.g.
+    // "OrderCreated") on a generic operation word. Yields entirely to a real
+    // label the moment the user gives one (the `!edge.label` guard above).
+    if (edge.semantic) {
+      const captionLayout = layoutText(SEMANTIC_DEFAULTS[edge.semantic].label, {
+        font: FONTS.connectorCaption,
+        maxWidth: 120,
+        lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
+        maxLines: 1,
+        measurer: ctx.measurer,
+      });
+      overlay.push({
+        t: 'text',
+        x: labelX,
+        y: labelY + 6,
+        layout: captionLayout,
+        font: FONTS.connectorCaption,
+        fill: ctx.theme.textFaint,
+        align: 'middle',
       });
     }
   }

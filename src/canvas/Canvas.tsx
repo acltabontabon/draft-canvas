@@ -11,14 +11,13 @@ import {
   type Connection,
   type FinalConnectionState,
   type EdgeChange,
-  type HandleType,
   type NodeChange,
   type OnSelectionChangeParams,
 } from '@xyflow/react';
 import { defaultTextFor } from '../document/factory';
 import { descendantsOf } from '../document/operations';
 import type { DraftDocument, Side } from '../document/types';
-import { isSide, type Rect } from '../edges/routing';
+import { anchorForDrop, isSide, rectOf, type Rect } from '../edges/routing';
 import { useEditorStore } from '../store/editorStore';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
@@ -658,7 +657,14 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
         );
 
       if (droppedOn) {
-        if (droppedOn.id !== source) state.connect(source, droppedOn.id, sourceSide);
+        if (droppedOn.id !== source) {
+          // A body-hit, not a handle — a drop that clearly favours one side
+          // attaches close to where the user actually dropped it; a drop near
+          // dead centre keeps the dynamic side choice `chooseSides` would
+          // pick anyway. See `anchorForDrop` in `edges/routing.ts`.
+          const targetAnchor = anchorForDrop(rectOf(droppedOn), position);
+          state.connect(source, droppedOn.id, sourceSide, targetAnchor?.side, undefined, targetAnchor?.offset);
+        }
         return;
       }
 
@@ -675,32 +681,15 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
     [onQuickConnectMenu, screenToFlowPosition, store],
   );
 
-  /**
-   * Dragging an existing connector's endpoint to a new node/side is how a
-   * user explicitly overrides a previously persisted anchor. React Flow's
-   * `onReconnect` reports the *whole* new connection, including the end the
-   * user never touched — `onReconnectStart`'s `handleType` is the only
-   * reliable signal for which one actually moved, so only that endpoint's
-   * anchor changes; see `document/operations.ts`'s `reconnectEdge`.
-   */
-  const reconnectingEndpoint = useRef<HandleType | null>(null);
-  const onReconnectStart = useCallback((_event: unknown, _edge: DraftRfEdge, handleType: HandleType) => {
-    reconnectingEndpoint.current = handleType;
-  }, []);
-  const onReconnect = useCallback(
-    (oldEdge: DraftRfEdge, connection: Connection) => {
-      const endpoint = reconnectingEndpoint.current;
-      reconnectingEndpoint.current = null;
-      if (!endpoint || !connection.source || !connection.target) return;
-      const nodeId = endpoint === 'source' ? connection.source : connection.target;
-      const handle = endpoint === 'source' ? connection.sourceHandle : connection.targetHandle;
-      store.getState().reconnectEdge(oldEdge.id, endpoint, nodeId, isSide(handle) ? handle : undefined);
-    },
-    [store],
-  );
-  const onReconnectEnd = useCallback(() => {
-    reconnectingEndpoint.current = null;
-  }, []);
+  // Reconnecting an existing connector's endpoint is driven entirely by hand
+  // in `DraftEdgeView.tsx`'s `EdgeEndpointHandle`, not through React Flow's
+  // `onReconnect`/`edgesReconnectable` — see the long comment there for why:
+  // a node's own connection handles always keep real pointer events (even
+  // invisible), and being painted later in the DOM than an edge's SVG layer,
+  // they physically intercept a pointer-down aimed at React Flow's built-in
+  // reconnect hit zone whenever the two coincide, which they almost always
+  // do. `document/operations.ts`'s `reconnectEdge` — the actual document
+  // mutation — is unaffected; only what triggers it moved.
 
   const onPaneDoubleClick = useCallback(
     (event: React.MouseEvent) => {
@@ -774,10 +763,6 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
-        onReconnect={onReconnect}
-        onReconnectStart={onReconnectStart}
-        onReconnectEnd={onReconnectEnd}
-        edgesReconnectable={interactive}
         onDoubleClick={onPaneDoubleClick}
         onPaneClick={onPaneClick}
         onPointerMove={onPointerMove}

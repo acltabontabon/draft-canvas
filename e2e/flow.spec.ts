@@ -223,12 +223,18 @@ test.describe('Flows', () => {
 
   test('marks a connector async (dashed) and gives it a condition chip', async ({ page }) => {
     await newCanvas(page, 'Async and conditions');
+    // Two services, not a queue: a service/queue pair is now automatically
+    // inferred as an EVENT connector (see `connectorSemantics.ts`), whose
+    // dash pattern takes priority over the plain `async` flag this test is
+    // actually exercising.
     await createNode(page, 'Service', { x: 300, y: 250 });
-    await createNode(page, 'Queue', { x: 700, y: 250 });
+    await createNode(page, 'Service', { x: 700, y: 250 });
     await connect(page, 0, 1);
 
     await clickEdgeBetween(page, 0, 1);
-    await page.getByRole('button', { name: 'Async' }).click();
+    // The standalone "Async" toggle was removed as redundant — picking the
+    // "Async" kind already sets the flag too (see `setEdgeKind`).
+    await page.getByRole('combobox', { name: 'Flow kind' }).selectOption('async');
     await expect(page.locator('.dc-edge-line')).toHaveCSS('stroke-dasharray', /6.*4/);
 
     const condition = page.getByLabel('Condition');

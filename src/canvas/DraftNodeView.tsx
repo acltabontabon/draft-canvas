@@ -38,6 +38,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // A boolean, not the id itself: every node's selector runs on every drag
   // frame, so only the two nodes whose armed state actually flips re-render.
   const isAttachTarget = useUiStore((state) => state.attachArmedTarget === id);
+  // Same boolean-not-id discipline as `isAttachTarget` — see its comment.
+  const isReconnectTarget = useUiStore((state) => state.reconnectHoverTarget === id);
   const setOpenAttachmentPopover = useUiStore((state) => state.setOpenAttachmentPopover);
   const popoverOpen = useUiStore((state) => state.openAttachmentPopover === id);
   const editRequested = useUiStore((state) => state.editRequestId === id);
@@ -148,6 +150,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-focused={focused ? 'true' : undefined}
       data-editing={editing ? 'true' : undefined}
       data-attach-target={isAttachTarget ? 'true' : undefined}
+      data-reconnect-target={isReconnectTarget ? 'true' : undefined}
       style={{ width: effectiveWidth, height: effectiveHeight }}
       onDoubleClick={beginEditing}
     >

@@ -189,9 +189,50 @@
   cursor: pointer;
 }
 
+/*
+ * A restrained halo, not a bounding box: a soft, close drop-shadow around the
+ * line itself reads clearly at a glance in both themes and while zoomed, with
+ * no extra chrome around the connector's actual path. This is `filter`, not
+ * `stroke`/`stroke-width`, on purpose — `DraftEdgeView.tsx` sets those inline
+ * (via `BaseEdge`'s `style` prop), and an inline style always wins over a
+ * stylesheet rule, selected or not; the stroke colour/width for a selected
+ * connector are decided there, not here.
+ */
 .dc-edge[data-selected='true'] .dc-edge-line {
-  stroke: var(--dc-selection);
-  stroke-width: 2.4;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 60%, transparent));
+}
+
+/*
+ * A selected connector's draggable endpoints — real drag targets (see the
+ * long comment above them in `DraftEdgeView.tsx` for why they're driven by
+ * hand rather than through a node's own handles or React Flow's reconnect
+ * machinery). Present mode hides them the same way it hides node handles.
+ */
+.dc-edge-endpoint {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--dc-canvas);
+  border: 1.5px solid var(--dc-selection);
+  cursor: move;
+  touch-action: none;
+  /* The label-renderer portal that hosts this sets `pointer-events: none` on
+     itself so it never blocks the pane underneath — opt back in explicitly,
+     same as `.dc-edge-label` does. */
+  pointer-events: all;
+}
+
+/* Not `transform: scale` — the endpoint's position is itself an inline
+   `transform`, which a stylesheet rule would silently replace rather than
+   compose with. */
+.dc-edge-endpoint:hover {
+  border-width: 2.5px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 25%, transparent);
+}
+
+.dc-editor[data-mode='present'] .dc-edge-endpoint {
+  display: none;
 }
 
 /* Connector labels read over the diagram, not under it. */
@@ -309,6 +350,17 @@
   position: absolute;
   inset: -4px;
   border: 1.5px dashed var(--dc-selection);
+  border-radius: calc(var(--dc-radius) + 3px);
+  pointer-events: none;
+}
+
+/* A connector-endpoint drag's candidate drop target — solid, not dashed, so
+   it never reads as the same affordance as an attach drag. */
+.dc-node[data-reconnect-target='true']::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1.5px solid var(--dc-selection);
   border-radius: calc(var(--dc-radius) + 3px);
   pointer-events: none;
 }
@@ -652,10 +704,6 @@
 .react-flow__selection {
   background: var(--dc-selection-soft);
   border: 1px solid var(--dc-selection);
-}
-
-.react-flow__edge.selected .dc-edge-line {
-  stroke: var(--dc-selection);
 }
 
 .react-flow__attribution {

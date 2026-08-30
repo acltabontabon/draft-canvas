@@ -114,8 +114,9 @@ export function reconnectEdge(
   endpoint: 'source' | 'target',
   newNodeId: string,
   newSide: Side | undefined,
+  newOffset = 0.5,
 ): DraftDocument {
-  const anchor = newSide ? { side: newSide, offset: 0.5 } : undefined;
+  const anchor = newSide ? { side: newSide, offset: newOffset } : undefined;
   let changed = false;
   const edges = doc.edges.map((edge) => {
     if (edge.id !== id) return edge;

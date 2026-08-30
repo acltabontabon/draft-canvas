@@ -51,6 +51,10 @@ import {
   updateFlowStepCaption as updateFlowStepCaptionOp,
 } from '../document/flow';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import {
+  inferRelationship,
+  isEligibleForReinference,
+} from '../document/connectorSemantics';
 import type {
   AttachableType,
   Attachment,
@@ -153,12 +157,25 @@ export interface EditorStore {
   /* Editing commands */
   addNode: (input: CreateNodeInput) => DraftNode;
   addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string) => void;
-  connect: (source: string, target: string, sourceSide?: Side, targetSide?: Side) => DraftEdge | null;
+  connect: (
+    source: string,
+    target: string,
+    sourceSide?: Side,
+    targetSide?: Side,
+    sourceOffset?: number,
+    targetOffset?: number,
+  ) => DraftEdge | null;
   updateNodeById: (id: string, patch: Partial<Omit<DraftNode, 'id'>>, label?: string) => void;
   updateNodeText: (id: string, text: string) => void;
   updateEdgeById: (id: string, patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>, label?: string) => void;
   /** Dragging an existing connector's endpoint to a new node/side. */
-  reconnectEdge: (id: string, endpoint: 'source' | 'target', newNodeId: string, newSide: Side | undefined) => void;
+  reconnectEdge: (
+    id: string,
+    endpoint: 'source' | 'target',
+    newNodeId: string,
+    newSide: Side | undefined,
+    newOffset?: number,
+  ) => void;
   updateEdgeLabel: (id: string, label: string) => void;
   /** Sets (or clears) a semantic type — fills the default label only if the
    *  edge has none, and never touches `accent`. See `document/edgeSemantics.ts`. */
@@ -347,19 +364,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  connect(source, target, sourceSide, targetSide) {
+  connect(source, target, sourceSide, targetSide, sourceOffset = 0.5, targetOffset = 0.5) {
     const state = get();
     if (source === target) return null;
     const exists = state.document.edges.some((e) => e.source === source && e.target === target);
     if (exists) return null;
+    // Infer a relationship from what's actually being connected — see
+    // `inferRelationship`'s doc comment for exactly which pairings apply.
+    const sourceNode = state.document.nodes.find((n) => n.id === source);
+    const targetNode = state.document.nodes.find((n) => n.id === target);
+    const relationship = sourceNode && targetNode ? inferRelationship(sourceNode, targetNode) : undefined;
     const edge = createEdge({
       source,
       target,
-      // The side the user actually dragged from/dropped onto is intent —
-      // capture it, at the side's midpoint, so routing never has to guess for
-      // this edge again. See `document/types.ts`'s `EdgeAnchor` doc comment.
-      sourceAnchor: sourceSide ? { side: sourceSide, offset: 0.5 } : undefined,
-      targetAnchor: targetSide ? { side: targetSide, offset: 0.5 } : undefined,
+      // The side (and, along it, the position) the user actually dragged
+      // from/dropped onto is intent — capture it so routing never has to
+      // guess for this edge again. See `document/types.ts`'s `EdgeAnchor`
+      // doc comment.
+      sourceAnchor: sourceSide ? { side: sourceSide, offset: sourceOffset } : undefined,
+      targetAnchor: targetSide ? { side: targetSide, offset: targetOffset } : undefined,
+      kind: relationship?.kind,
+      semantic: relationship?.semantic,
+      semanticsOrigin: relationship ? 'inferred' : undefined,
     });
     state.apply('Connect', (doc) => addEdges(doc, [edge]), {
       selection: { nodes: [], edges: [edge.id] },
@@ -381,8 +407,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply(label, (doc) => updateEdge(doc, id, patch));
   },
 
-  reconnectEdge(id, endpoint, newNodeId, newSide) {
-    get().apply('Reconnect', (doc) => reconnectEdgeOp(doc, id, endpoint, newNodeId, newSide));
+  reconnectEdge(id, endpoint, newNodeId, newSide, newOffset = 0.5) {
+    get().apply('Reconnect', (doc) => {
+      const reconnected = reconnectEdgeOp(doc, id, endpoint, newNodeId, newSide, newOffset);
+      const edge = reconnected.edges.find((e) => e.id === id);
+      if (!edge || !isEligibleForReinference(edge)) return reconnected;
+      const sourceNode = reconnected.nodes.find((n) => n.id === edge.source);
+      const targetNode = reconnected.nodes.find((n) => n.id === edge.target);
+      if (!sourceNode || !targetNode) return reconnected;
+      // Only an edge inference already claimed, or one nothing has ever
+      // touched, gets reclassified here — an explicit user choice survives a
+      // reconnect untouched. See `isEligibleForReinference`.
+      const relationship = inferRelationship(sourceNode, targetNode);
+      return updateEdge(reconnected, id, {
+        semantic: relationship?.semantic,
+        kind: relationship?.kind,
+        semanticsOrigin: relationship ? 'inferred' : undefined,
+      });
+    });
   },
 
   updateEdgeLabel(id, label) {
@@ -395,7 +437,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     const edge = state.document.edges.find((e) => e.id === id);
     if (!edge) return;
-    const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { semantic };
+    const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { semantic, semanticsOrigin: 'explicit' };
     // Only a fill-in-the-blank convenience: never overrides a label the user
     // already gave the connection, and never touches `accent` at all.
     if (semantic && !edge.label) patch.label = SEMANTIC_DEFAULTS[semantic].label;
@@ -419,7 +461,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     const edge = state.document.edges.find((e) => e.id === id);
     if (!edge) return;
-    const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { kind };
+    const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { kind, semanticsOrigin: 'explicit' };
     // A fill-in-the-blank default, same discipline as semantic→label: choosing
     // the 'async' kind gives the connector its dashed line via the existing
     // `async` flag, but never fights the user afterward if they turn it back

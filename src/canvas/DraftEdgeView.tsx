@@ -1,16 +1,34 @@
-import { memo, useCallback, useEffect, useState } from 'react';
-import { BaseEdge, EdgeLabelRenderer, useInternalNode, type EdgeProps } from '@xyflow/react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { BaseEdge, EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
+import type { DraftNode } from '../document/types';
 import { explainEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
-import { accentOf } from '../render/theme/tokens';
-import { labelLaneOffset, laneIndex, rectOf, routeBetween, type Rect } from '../edges/routing';
-import { dashForEdge, markerVariantForEdge } from '../edges/kindStyle';
+import { anchorForDrop, labelLaneOffset, laneIndex, rectOf, routeBetween, type Rect } from '../edges/routing';
+import { dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
+import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { isEdgeFocused, useEditorStore } from '../store/editorStore';
-import { selectEdge } from '../store/selectors';
+import { selectEdge, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
+import { FONTS, cssFont } from '../render/text/fonts';
 
 const NO_OBSTACLES: readonly Rect[] = [];
+
+/** Minimum pointer movement, in screen pixels, before an endpoint gesture
+ *  counts as a drag rather than a click — see `EdgeEndpointHandle`. */
+const DRAG_THRESHOLD_PX = 4;
+
+interface DragOverride {
+  endpoint: 'source' | 'target';
+  point: { x: number; y: number };
+}
+
+/** A degenerate rect at a single point — `anchorPoint` resolves it to exactly
+ *  that point regardless of side/offset, which is what lets a live drag point
+ *  stand in for a node's rect in `routeBetween` with no special-casing there. */
+function pointRect(point: { x: number; y: number }): Rect {
+  return { x: point.x, y: point.y, width: 0, height: 0 };
+}
 
 /**
  * Connector rendering.
@@ -23,6 +41,10 @@ const NO_OBSTACLES: readonly Rect[] = [];
  */
 export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeProps) {
   const edge = useEditorStore((state) => selectEdge(state.document, id));
+  // A primitive (an accent, or undefined), not the node object — so this
+  // connector only re-renders when its *source's* colour actually changes,
+  // and automatically follows both a recoloured source and a reconnected one.
+  const sourceAccent = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.accent);
   const showSequence = useEditorStore((state) => state.document.settings.showSequence);
   const flows = useEditorStore((state) => state.document.flows);
   const flowPlayback = useEditorStore((state) => state.flowPlayback);
@@ -52,6 +74,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const stopEditing = useCallback(() => setEditing(false), []);
   const editRequested = useUiStore((state) => state.editRequestId === id);
 
+  // The live pointer position while this edge's own endpoint is being
+  // dragged — local state, not the shared store, so only this one edge
+  // re-renders per pointer-move frame. Exactly the same "stream to the
+  // rendered element for smoothness, commit to the document only at the end"
+  // pattern node dragging already uses (see the module doc comment above).
+  const [dragOverride, setDragOverride] = useState<DragOverride | null>(null);
+
   // Same transient-id hook `DraftNodeView` uses for `Enter` — no ref-based
   // imperative API exists into this memoized component either.
   useEffect(() => {
@@ -73,8 +102,21 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
         .map(rectOf);
 
-  const route = routeBetween(sourceRect, targetRect, edge.routing, {
-    anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
+  // While an endpoint is being dragged, the path tracks the live pointer
+  // position instead of the node it's still (until drop) actually attached
+  // to — a degenerate zero-size rect at that point, which `anchorPoint`
+  // already resolves to exactly that point regardless of side/offset. The
+  // dragged end's persisted anchor is set aside too, so the route picks
+  // whichever side reads best against the live point rather than fighting
+  // to honour an anchor that's about to change anyway.
+  const effectiveSourceRect = dragOverride?.endpoint === 'source' ? pointRect(dragOverride.point) : sourceRect;
+  const effectiveTargetRect = dragOverride?.endpoint === 'target' ? pointRect(dragOverride.point) : targetRect;
+
+  const route = routeBetween(effectiveSourceRect, effectiveTargetRect, edge.routing, {
+    anchors: {
+      source: dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor,
+      target: dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor,
+    },
     lane: laneOffset,
     obstacles,
   });
@@ -83,8 +125,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, laneOffset);
   const labelX = route.labelX + labelNudge.x;
   const labelY = route.labelY + labelNudge.y;
-  const palette = accentOf(theme, edge.accent);
-  const color = edge.accent && edge.accent !== 'neutral' ? palette.chip : theme.edge;
+  const color = resolveEdgeColor(edge, { accent: sourceAccent }, theme);
 
   const playingFlow = flowPlayback.active && flowPlayback.flowId
     ? flows.find((f) => f.id === flowPlayback.flowId)
@@ -101,7 +142,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const hasLabel = Boolean(edge.label);
   const hasStep = showSequence && typeof stepNumber === 'number';
   // The step being explained is the one thing that should stand out.
-  const strokeColor = isActiveStep ? theme.selection : color;
+  // `style` renders as an inline attribute, which always wins over an
+  // external stylesheet rule — so a selected connector's stroke and width
+  // must be decided here, not in CSS (only the halo in `canvas.css` — a
+  // `filter`, never set inline — can safely live there).
+  const strokeColor = isActiveStep || selected ? theme.selection : color;
   const conditionText = edge.condition ? `[${edge.condition}]` : null;
 
   return (
@@ -126,7 +171,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         interactionWidth={18}
         style={{
           stroke: strokeColor,
-          strokeWidth: isActiveStep ? 2.6 : 1.6,
+          strokeWidth: isActiveStep ? 2.6 : selected ? 2.4 : 1.6,
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
@@ -145,8 +190,55 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           strokeWidth={1.3}
         />
       )}
+      {/* A subtle caption of the relationship — independent of `kind`'s glyph
+          above, so a plain call/read/write connector reads just as clearly as
+          an event one. Yields entirely to a real label the moment there is one. */}
+      {!hasLabel && !hasStep && edge.semantic && (
+        <text
+          x={labelX}
+          y={labelY + 14}
+          textAnchor="middle"
+          fill={theme.textFaint}
+          style={{ font: cssFont(FONTS.connectorCaption) }}
+        >
+          {SEMANTIC_DEFAULTS[edge.semantic].label}
+        </text>
+      )}
 
       <EdgeLabelRenderer>
+        {/*
+          Draggable endpoint handles. Rendered here, in React Flow's HTML
+          overlay portal — which always paints above the nodes layer — rather
+          than as SVG elements alongside the path: a node's own connection
+          handles keep real pointer events at every opacity (see their CSS
+          comment) and physically sit at these same coordinates, so anything
+          drawn in the SVG layer underneath the nodes can never win the
+          pointer-down that starts a drag. Driven entirely by hand — not
+          React Flow's `onReconnect`/`edgesReconnectable` — for the same
+          reason: those key off React Flow's own handle-position lookup,
+          which has no notion of this app's per-side offsets or custom routing.
+        */}
+        {selected && mode !== 'present' && (
+          <>
+            <EdgeEndpointHandle
+              edgeId={edge.id}
+              endpoint="source"
+              x={route.source.x}
+              y={route.source.y}
+              nodes={nodes}
+              onDrag={setDragOverride}
+            />
+            <EdgeEndpointHandle
+              edgeId={edge.id}
+              endpoint="target"
+              x={route.target.x}
+              y={route.target.y}
+              nodes={nodes}
+              onDrag={setDragOverride}
+            />
+          </>
+        )}
+
         {(hasLabel || editing) && (
           <div
             className="dc-edge-label"
@@ -229,6 +321,134 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     </g>
   );
 });
+
+/**
+ * One draggable connector endpoint. Grabbing it and dropping it on a node
+ * (the same one, a different side, or an entirely different node) reconnects
+ * that end; dropping on empty canvas is a no-op — the connection is never
+ * touched until a valid drop commits it, and Escape cancels outright.
+ *
+ * Hit-testing mirrors `Canvas.tsx`'s `onConnectEnd`: node rectangles straight
+ * from the document, topmost z first, groups excluded. Target highlighting
+ * only writes to the store when the hovered node id actually changes, so a
+ * drag does not re-render anything on every pointer-move frame.
+ */
+function EdgeEndpointHandle({
+  edgeId,
+  endpoint,
+  x,
+  y,
+  nodes,
+  onDrag,
+}: {
+  edgeId: string;
+  endpoint: 'source' | 'target';
+  x: number;
+  y: number;
+  nodes: DraftNode[];
+  onDrag: (override: DragOverride | null) => void;
+}) {
+  const { screenToFlowPosition } = useReactFlow();
+  const cancelled = useRef(false);
+  const lastHover = useRef<string | null>(null);
+  // A plain click always carries a pixel or two of pointer jitter between
+  // down and up — without a real-movement threshold, that jitter alone was
+  // enough to nudge the connector's anchor or even hop it to a neighbouring
+  // node, which read as "clicking a node drags it." Nothing (the live
+  // preview, target highlighting, the eventual reconnect) engages until the
+  // pointer has actually moved past this distance.
+  const dragStarted = useRef(false);
+  const startClient = useRef<{ x: number; y: number } | null>(null);
+
+  const findDropNode = useCallback(
+    (point: { x: number; y: number }) =>
+      [...nodes]
+        .filter((node) => node.type !== 'group')
+        .sort((a, b) => b.z - a.z)
+        .find(
+          (node) =>
+            point.x >= node.x && point.x <= node.x + node.width && point.y >= node.y && point.y <= node.y + node.height,
+        ),
+    [nodes],
+  );
+
+  const onKeyDownRef = useRef<(event: KeyboardEvent) => void>(undefined);
+
+  const endDrag = useCallback(() => {
+    if (onKeyDownRef.current) window.removeEventListener('keydown', onKeyDownRef.current);
+    useUiStore.getState().setReconnectHoverTarget(null);
+    useUiStore.getState().setInteractionActive(false);
+    lastHover.current = null;
+    dragStarted.current = false;
+    startClient.current = null;
+    onDrag(null);
+  }, [onDrag]);
+
+  const onPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.stopPropagation();
+      cancelled.current = false;
+      dragStarted.current = false;
+      startClient.current = { x: event.clientX, y: event.clientY };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      onKeyDownRef.current = (keyEvent) => {
+        if (keyEvent.key !== 'Escape') return;
+        cancelled.current = true;
+        endDrag();
+      };
+      window.addEventListener('keydown', onKeyDownRef.current);
+    },
+    [endDrag],
+  );
+
+  const onPointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (cancelled.current) return;
+      if (!dragStarted.current) {
+        const start = startClient.current;
+        if (!start) return;
+        const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+        if (moved < DRAG_THRESHOLD_PX) return; // Still just a click so far.
+        dragStarted.current = true;
+        useUiStore.getState().setInteractionActive(true);
+      }
+      const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      onDrag({ endpoint, point });
+      const hoverId = findDropNode(point)?.id ?? null;
+      if (hoverId !== lastHover.current) {
+        lastHover.current = hoverId;
+        useUiStore.getState().setReconnectHoverTarget(hoverId);
+      }
+    },
+    [endpoint, findDropNode, onDrag, screenToFlowPosition],
+  );
+
+  const onPointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      const wasCancelled = cancelled.current;
+      const didDrag = dragStarted.current;
+      endDrag();
+      if (wasCancelled || !didDrag) return; // A plain click never reconnects anything.
+      const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const node = findDropNode(point);
+      if (!node) return; // Empty canvas: leave the connection exactly as it was.
+      const anchor = anchorForDrop(rectOf(node), point);
+      useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, anchor?.side, anchor?.offset);
+    },
+    [edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],
+  );
+
+  return (
+    <div
+      className="dc-edge-endpoint"
+      style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    />
+  );
+}
 
 /** Mirrors `badgePoint` in `edges/describe.ts`, in screen coordinates. */
 const BADGE_OFFSET = 22;

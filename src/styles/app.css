@@ -73,6 +73,29 @@
   cursor: pointer;
 }
 
+/*
+ * A predetermined connector behaviour (see `EdgeControls` in `Inspector.tsx`)
+ * — dashed border reads as "inferred, not a fixed choice," and it's a real
+ * button: clicking it reveals the full picker underneath, so nothing here is
+ * a dead end.
+ */
+.dc-kind-badge {
+  height: 28px;
+  padding: 0 9px;
+  border: 1px dashed var(--dc-border-strong);
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dc-kind-badge:hover {
+  border-style: solid;
+  color: var(--dc-text);
+}
+
 .dc-field {
   display: flex;
   flex-direction: column;

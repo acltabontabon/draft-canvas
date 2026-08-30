@@ -4,6 +4,9 @@ import { addEdges, addNodes } from '../src/document/operations';
 import { normalizeDocument } from '../src/document/validate';
 import { CURRENT_VERSION, DRAFT_FORMAT } from '../src/document/types';
 import { dashForEdge, markerVariantForEdge } from '../src/edges/kindStyle';
+import { describeEdge } from '../src/edges/describe';
+import { getMeasurer } from '../src/render/text/measure';
+import { DARK } from '../src/render/theme/tokens';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import type { ConnectorKind, DraftEdge } from '../src/document/types';
 
@@ -220,5 +223,56 @@ describe('kind survives structural sharing', () => {
     expect(next.edges[0]).not.toBe(doc.edges[0]);
     expect(next.edges[1]).toBe(doc.edges[1]);
     expect(next.nodes).toBe(doc.nodes);
+  });
+});
+
+describe('a connector\'s subtle relationship caption', () => {
+  function described(edge: DraftEdge) {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
+    const b = createNode({ id: 'b', type: 'queue', x: 300, y: 0 });
+    const nodes = new Map([[a.id, a], [b.id, b]]);
+    return describeEdge(edge, nodes, { theme: DARK, measurer: getMeasurer(), showSequence: false })!;
+  }
+
+  it('shows a muted caption of the semantic next to the event dot when there is no label', () => {
+    const edge = createEdge({ source: 'a', target: 'b', kind: 'event', semantic: 'publishes' });
+    const texts = described(edge).overlay.filter((s) => s.t === 'text');
+    expect(texts).toHaveLength(1);
+    expect(texts[0]!.layout.lines.map((l) => l.text).join('')).toBe('publishes');
+    expect(texts[0]!.fill).toBe(DARK.textFaint);
+  });
+
+  it('has no caption when the connector has no semantic to describe', () => {
+    const edge = createEdge({ source: 'a', target: 'b', kind: 'event' });
+    const texts = described(edge).overlay.filter((s) => s.t === 'text');
+    expect(texts).toHaveLength(0);
+  });
+
+  it('yields entirely to a real label — no caption, no dot glyph either', () => {
+    const edge = createEdge({ source: 'a', target: 'b', kind: 'event', semantic: 'publishes', label: 'OrderCreated' });
+    const overlay = described(edge).overlay;
+    // The label itself is still a text shape — what must be gone is the
+    // *caption* (the semantic word) and the event dot.
+    const texts = overlay.filter((s) => s.t === 'text');
+    expect(texts.every((s) => !s.layout.lines.some((l) => l.text.includes('publishes')))).toBe(true);
+    expect(overlay.some((s) => s.t === 'ellipse')).toBe(false);
+  });
+
+  it('shows the caption for a non-event kind too — independent of the glyph', () => {
+    const edge = createEdge({ source: 'a', target: 'b', kind: 'retry', semantic: 'publishes' });
+    const overlay = described(edge).overlay;
+    const texts = overlay.filter((s) => s.t === 'text');
+    expect(texts).toHaveLength(1);
+    expect(texts[0]!.layout.lines.map((l) => l.text).join('')).toBe('publishes');
+    // Retry isn't event/conditional, so it gets no dot or diamond glyph —
+    // the caption alone still carries the relationship.
+    expect(overlay.some((s) => s.t === 'ellipse')).toBe(false);
+  });
+
+  it('shows the caption for a plain connector with no kind at all', () => {
+    const edge = createEdge({ source: 'a', target: 'b', semantic: 'calls' });
+    const texts = described(edge).overlay.filter((s) => s.t === 'text');
+    expect(texts).toHaveLength(1);
+    expect(texts[0]!.layout.lines.map((l) => l.text).join('')).toBe('calls');
   });
 });
