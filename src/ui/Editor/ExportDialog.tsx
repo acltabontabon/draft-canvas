@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { exportPngFile, exportProjectFile, exportSvgFile } from '../../export';
+import { exportPngFile, exportProjectFile, exportSecureProjectFile, exportSvgFile } from '../../export';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { useTheme } from '../theme/useTheme';
@@ -25,6 +25,7 @@ export function ExportDialog() {
   const [transparent, setTransparent] = useState(false);
   const [selectionOnly, setSelectionOnly] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [securePromptOpen, setSecurePromptOpen] = useState(false);
 
   if (!open) return null;
 
@@ -95,10 +96,17 @@ export function ExportDialog() {
       <div className="dc-export-actions">
         <ExportChoice
           title="Editable document"
-          detail=".draftcanvas — everything needed to reopen and keep editing."
+          detail="Anyone with this .draftcanvas file can read the diagram — plain, diffable JSON."
           action="Export document"
           busy={busy}
           onClick={() => void run(() => exportProjectFile(document), 'Document export')}
+        />
+        <ExportChoice
+          title="Secure editable document"
+          detail="A passphrase-protected .dcenc file. Only someone with the passphrase can read it."
+          action="Export securely…"
+          busy={busy}
+          onClick={() => setSecurePromptOpen(true)}
         />
         <ExportChoice
           title="Vector image"
@@ -119,6 +127,93 @@ export function ExportDialog() {
       <p className="dc-muted dc-export-note">
         Exports are generated in this browser and downloaded straight to your machine.
       </p>
+
+      {securePromptOpen && (
+        <SecureExportPrompt
+          busy={busy}
+          onCancel={() => setSecurePromptOpen(false)}
+          onConfirm={(passphrase) =>
+            void run(async () => {
+              await exportSecureProjectFile(document, passphrase);
+              setSecurePromptOpen(false);
+            }, 'Secure export')
+          }
+        />
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * Passphrase entered twice, confirmed match required before the export
+ * button is enabled — the usual "don't let a typo lock you out of your own
+ * file" discipline for a secret with no recovery path.
+ */
+function SecureExportPrompt({
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (passphrase: string) => void;
+}) {
+  const [passphrase, setPassphrase] = useState('');
+  const [confirmPassphrase, setConfirmPassphrase] = useState('');
+
+  const tooShort = passphrase.length > 0 && passphrase.length < 8;
+  const mismatch = confirmPassphrase.length > 0 && passphrase !== confirmPassphrase;
+  const canExport = passphrase.length >= 8 && passphrase === confirmPassphrase;
+
+  return (
+    <Modal
+      title="Export securely"
+      width={420}
+      onClose={onCancel}
+      footer={
+        <>
+          <Button variant="quiet" onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="solid"
+            icon="export"
+            disabled={!canExport || busy}
+            onClick={() => onConfirm(passphrase)}
+          >
+            Export securely
+          </Button>
+        </>
+      }
+    >
+      <p className="dc-muted">
+        Anyone who wants to open this file will need this passphrase. Draft Canvas does not store
+        it and cannot recover it — if it's lost, the file is unreadable.
+      </p>
+      <label className="dc-field">
+        <span>Passphrase</span>
+        <input
+          autoFocus
+          type="password"
+          value={passphrase}
+          onChange={(event) => setPassphrase(event.target.value)}
+          onKeyDown={(event) => event.stopPropagation()}
+        />
+      </label>
+      {tooShort && <p className="dc-muted dc-export-note">At least 8 characters.</p>}
+      <label className="dc-field">
+        <span>Confirm passphrase</span>
+        <input
+          type="password"
+          value={confirmPassphrase}
+          onChange={(event) => setConfirmPassphrase(event.target.value)}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === 'Enter' && canExport) onConfirm(passphrase);
+          }}
+        />
+      </label>
+      {mismatch && <p className="dc-muted dc-export-note">Passphrases don't match.</p>}
     </Modal>
   );
 }

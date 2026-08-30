@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { readProjectFile } from '../../export/project';
+import { looksLikeSecureExport, readSecureProjectFile } from '../../export/secureProject';
 import type { DraftSummary } from '../../document/types';
+import type { NormalizeResult } from '../../document/validate';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
@@ -18,10 +20,9 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<DraftSummary | null>(null);
   const [renaming, setRenaming] = useState<DraftSummary | null>(null);
+  const [securePendingFile, setSecurePendingFile] = useState<File | null>(null);
 
-  const onImport = async (file: File | undefined) => {
-    if (!file) return;
-    const result = await readProjectFile(file);
+  const finishImport = async (result: NormalizeResult) => {
     if (!result.ok) {
       notify(result.error, 'error');
       return;
@@ -30,6 +31,17 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
       notify(`Imported with repairs: ${result.repairs.join(' ')}`);
     }
     await session.adoptDocument(result.document);
+  };
+
+  const onImport = async (file: File | undefined) => {
+    if (!file) return;
+    if (looksLikeSecureExport(file)) {
+      // Reading it needs a passphrase first — hand off to the prompt below
+      // rather than reading (and failing) here.
+      setSecurePendingFile(file);
+      return;
+    }
+    await finishImport(await readProjectFile(file));
   };
 
   return (
@@ -63,7 +75,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
         <input
           ref={fileInput}
           type="file"
-          accept=".draftcanvas,.json,application/json"
+          accept=".draftcanvas,.json,application/json,.dcenc"
           hidden
           onChange={(event) => {
             void onImport(event.target.files?.[0]);
@@ -179,7 +191,78 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
           }}
         />
       )}
+
+      {securePendingFile && (
+        <SecureImportPrompt
+          file={securePendingFile}
+          onCancel={() => setSecurePendingFile(null)}
+          onSubmit={async (passphrase) => {
+            const file = securePendingFile;
+            setSecurePendingFile(null);
+            await finishImport(await readSecureProjectFile(file, passphrase));
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function SecureImportPrompt({
+  file,
+  onCancel,
+  onSubmit,
+}: {
+  file: File;
+  onCancel: () => void;
+  onSubmit: (passphrase: string) => void | Promise<void>;
+}) {
+  const [passphrase, setPassphrase] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!passphrase || busy) return;
+    setBusy(true);
+    try {
+      await onSubmit(passphrase);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="Enter passphrase"
+      width={420}
+      onClose={onCancel}
+      footer={
+        <>
+          <Button variant="quiet" onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+          <Button variant="solid" icon="upload" disabled={!passphrase || busy} onClick={() => void submit()}>
+            Import
+          </Button>
+        </>
+      }
+    >
+      <p className="dc-muted">
+        <strong>{file.name}</strong> is a secure Draft Canvas export. Enter the passphrase it was
+        exported with to open it.
+      </p>
+      <label className="dc-field">
+        <span>Passphrase</span>
+        <input
+          autoFocus
+          type="password"
+          value={passphrase}
+          onChange={(event) => setPassphrase(event.target.value)}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === 'Enter') void submit();
+          }}
+        />
+      </label>
+    </Modal>
   );
 }
 
