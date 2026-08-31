@@ -15,19 +15,25 @@ yet a commitment)
 | [3](#phase-3--flow--presentation) | Flow & Presentation | ✅ Done |
 | [4](#phase-4--export--sharing) | Export & Sharing | ✅ Done (core) — 4.4 optional, not blocking |
 | [5](#phase-5--personalization) | Personalization | ✅ Done |
-| [6](#phase-6--contextual-learning) | Contextual Learning | ⬜ Planned |
-| [7](#phase-7--canvas-command-surface) | Canvas Command Surface | ⬜ Planned |
-| [8](#phase-8--future--experimental) | Future / Experimental | 🧪 Exploratory |
-| [9](#phase-9--support-draft-canvas) | Support Draft Canvas | ⬜ Planned (low priority) |
+| [6](#phase-6--offline-first-application-availability) | Offline-First Application Availability | ⬜ Planned |
+| [7](#phase-7--contextual-learning) | Contextual Learning | ⬜ Planned |
+| [8](#phase-8--canvas-command-surface) | Canvas Command Surface | ⬜ Planned |
+| [9](#phase-9--future--experimental) | Future / Experimental | 🧪 Exploratory |
+| [10](#phase-10--support-draft-canvas) | Support Draft Canvas | ⬜ Planned (low priority) |
 
-**What's next:** [Phase 6](#phase-6--contextual-learning). Phase 5 shipped both 5.1 (custom canvas
-background) and 5.2 (Intentional Roughness), gated by the full test suite and browser verification.
+**What's next:** [Phase 7](#phase-7--contextual-learning) remains the active next build; Phase 6
+(Offline-First Application Availability) was added by dependency order — it needs only Phases 0 and
+4, not Phases 5-7 — but isn't yet prioritized ahead of Contextual Learning. Phase 5 shipped both 5.1
+(custom canvas background) and 5.2 (Intentional Roughness), gated by the full test suite and browser
+verification.
 
 ## Product principle
 
 > The user decides what connects. Draft Canvas decides how to make it look good.
 
 > This is a draft. It should be allowed to look like one.
+
+> Draft Canvas should never lose a meeting because Wi-Fi disappeared.
 
 More broadly: **everything in Draft Canvas should exist with intention.** It's a lightweight,
 local-first, developer-oriented technical whiteboard for sketching and explaining systems during a
@@ -242,13 +248,139 @@ overlay, done.
   - **Acceptance criteria.** Clean renders pixel-identical to today. Switching presets never changes
     a stored coordinate, anchor, or edge endpoint — only the emitted display list. A connector stays
     fully readable at every preset. Presentation Mode and every export format (PNG, SVG, GIF, and
-    any future MP4 per 8.1) preserve the active preset rather than reverting to Clean.
+    any future MP4 per 9.1) preserve the active preset rather than reverting to Clean.
 
   What this will not become: cartoonish wobble, sketch textures that reduce legibility, hard-to-read
   hand-drawn fonts, randomized geometry, or a per-element style editor. If a diagram is harder to
   read in Draft or Sketch than in Clean, that's a bug, not a feature.
 
-## Phase 6 — Contextual Learning
+## Phase 6 — Offline-First Application Availability
+
+*Purpose: local-first has, until now, meant the diagram data — this phase extends the same promise
+to the application itself, so a meeting doesn't end just because Wi-Fi did.*
+
+**Core principle:**
+
+> First visit needs the internet. Every visit after that should consider the internet optional.
+
+After a user successfully loads Draft Canvas once, refreshing or reopening the site while offline
+should still start the application normally, using previously downloaded application resources —
+the same instinct as 0.1's no-network document model, applied one layer up, to how the app itself is
+delivered rather than to what it stores.
+
+- **6.1 Application shell caching** — ⬜ Planned. A Service Worker registers on first successful
+  load and caches the app shell — HTML, JS, CSS, fonts/icons, and other required static assets — in
+  Cache Storage. A subsequent offline refresh or reopen serves the cached shell instead of failing;
+  canvas data keeps living in IndexedDB (0.3) exactly as it does online. No offline expiration: a
+  canvas opened once and left offline for days or weeks keeps working — there is no requirement to
+  periodically reconnect to remain usable.
+  - Fully useful while offline: create and edit diagrams, build and modify Flows, use Presentation
+    Mode (3.2), work with notes/code/attachments (2.7), and save local changes (0.3). Export formats
+    that don't depend on network access (4.1-4.3) keep working — nothing in the app should assume
+    connectivity past the first load.
+  - Requires an HTTPS-hosted static deployment with no backend dependency, consistent with the
+    project's existing hosting model. Depends on 0.1 (no-network architecture — this phase's natural
+    sibling, applied to delivery rather than data).
+- **6.2 Smart application updates** — ⬜ Planned. *Use what you have. Fetch what's newer. Switch
+  when it's safe.* On start, the currently cached application loads and becomes usable immediately —
+  no blocking update check. If the network is available, the Service Worker checks for a newer
+  version in the background and, if one exists, downloads and caches it without touching the active
+  session. The new version never activates itself over a running session — see 6.3.
+- **6.3 Update UX (lightweight, non-intrusive)** — ⬜ Planned. Once an update has finished
+  downloading, a small, unobtrusive indicator appears in an existing status/version area — e.g.
+  `v0.6.2 · Update ready ↑` or `Update ready · Reload` — and nothing else happens. No modal, blocking
+  screen, forced reload, countdown, persistent nagging, or release-note popup on every deployment. If
+  ignored, Draft Canvas keeps running on the current version indefinitely; the new version activates
+  only on an explicit reload the user chooses, or a future clean start when it's safe to do so. This
+  is the phase's central constraint: a deployment must never interrupt someone mid-explanation — no
+  reload, reset, or disruption to an active canvas session just because a new version shipped.
+- **6.4 Canvas schema versioning, independent of app version** — ⬜ Planned. A `schemaVersion` field
+  on the canvas document, versioned separately from the Draft Canvas application version (e.g. app
+  `v0.7` shipping alongside document `schemaVersion 4`, migrated up from `schemaVersion 3`).
+  Migrations run locally, the same way import validation already does
+  (`tests/import-validation.test.ts`) — an application update never requires uploading a diagram
+  anywhere to be migrated. Backward/forward compatibility considered where practical, but the hard
+  requirement is: no update path may let a new application version corrupt canvas data written by an
+  older one.
+- **6.5 Cache versioning & deployment safety** — ⬜ Planned. Hashed/versioned static assets, explicit
+  application-shell cache versioning, stale-asset cleanup on activation, and Service Worker lifecycle
+  management (install/activate/update) that avoids two application versions or schemas interacting
+  unexpectedly during one session. Covers: partially downloaded deployments, failed update recovery
+  (fall back to the last known working cached version whenever technically feasible — Draft Canvas
+  should prefer being slightly outdated over unusable), multiple tabs open on different application
+  versions at once, and avoiding an incompatible application/schema pairing ever loading together.
+  "Atomic-enough" upgrades, not literal atomicity — the target is "never worse than what was already
+  cached," not a formal transaction guarantee.
+- **6.6 Persistent storage request (optional)** — ⬜ Planned. Where supported, request persistent
+  storage via the Storage API (`navigator.storage.persist()`) to reduce eviction risk under storage
+  pressure. Best-effort only, never a requirement — browser approval is optional, and nothing in the
+  app should assume it was granted.
+- **6.7 Installable PWA support** — 🧪 Exploratory, an optional extension of this phase, not a
+  prerequisite for any part of it. Add to Home Screen / Install App, a manifest and app icon,
+  standalone-window chrome, and better OS integration are worth revisiting later, but 6.1-6.6 must
+  work from the normal Draft Canvas website with nothing installed. Building a large PWA project just
+  to get offline support is the wrong shape for this phase — see the standing "PWA install" non-goal
+  below, which this item stays consistent with rather than reopens.
+
+**Storage caveat.** Cache Storage and IndexedDB are not permanent files on disk — browsers may evict
+site data under storage pressure or browser-specific policy, with or without 6.6's persistence
+request granted. That's an acceptable, intentional trade-off for a product that's deliberately a
+*draft* tool, not a system of record — consistent with the "deliberately disposable when
+appropriate" identity this phase reinforces. Existing export functionality (4.1, 4.2) remains the
+durable escape hatch for a diagram someone cares about keeping. Never market this capability as
+"works offline forever" — the accurate claim is **works offline after your first visit.**
+
+**Architectural principle.**
+
+```
+                    Static Host
+                        │
+                 new versions only
+                        │
+                        ▼
+                Service Worker
+                        │
+               cached application
+                        │
+                        ▼
+┌──────────────────────────────────────┐
+│             Draft Canvas             │
+│                                      │
+│ App shell/assets  → Cache Storage    │
+│ Diagrams          → IndexedDB        │
+│ Settings          → browser-local    │
+│ Attachments       → browser-local    │
+└──────────────────────────────────────┘
+
+               NETWORK OPTIONAL
+```
+
+The network's job shrinks to three things: getting Draft Canvas for the first time, fetching newer
+versions, and any explicitly network-dependent future feature. It's never required for everyday
+drafting — Draft Canvas should increasingly behave like a local application that happens to be
+delivered through a URL.
+
+**Dependencies.** 0.1 (no-network invariant, extended from data to delivery), 0.3 (IndexedDB
+persistence, already the home for canvas data under an offline shell), 4.1 (a static, self-contained
+build output a Service Worker can cache wholesale). Independent of Phases 5, 7, and 8 — nothing here
+needs Personalization, Contextual Learning, or the Command Surface to exist first, which is why it's
+sequenced here by dependency rather than held behind them.
+
+**Acceptance criteria.** A user who has loaded Draft Canvas once can go offline, refresh or reopen
+the tab, and reach a working canvas with no error state and no time limit on how long they've been
+offline. An in-progress session is never interrupted, reloaded, or reset by a background deployment.
+A downloaded update is visible only as a small, ignorable indicator until the user reloads. A canvas
+document from an older schema opens correctly under a newer application version, migrated locally. A
+failed or partial update never leaves the app in a broken, uncached state — it falls back to the last
+good cached version.
+
+**What this will not become:** a requirement to periodically reconnect to remain usable, an offline
+expiration window, a forced or auto-triggered reload on deployment, a modal or blocking update
+screen, a countdown, persistent update nagging, release-note popups per deployment, a promise of
+permanent storage, or a full PWA/install-first project. The goal stays narrow: refreshing Draft
+Canvas without internet should not kill Draft Canvas.
+
+## Phase 7 — Contextual Learning
 
 *Purpose: by Phase 4, Draft Canvas has real depth — semantics, connector kinds, attachments,
 conditions, callbacks — and none of it should require reading documentation to find. The product
@@ -263,26 +395,26 @@ blank-canvas empty state (Phase 1.1, `EmptyState.tsx`) is one line and three sho
 — its own doc comment already says "no hint, no tour, no dismissible cards." This phase generalizes
 that instinct into a reusable pattern instead of inventing a separate onboarding flow per feature.
 
-- **6.1 Contextual hints & first-use coachmarks** — ⬜ Planned. Small, dismissible explanations
+- **7.1 Contextual hints & first-use coachmarks** — ⬜ Planned. Small, dismissible explanations
   tied to a specific canvas moment — the first Service node selected ("You can attach notes or code
   to this"), the first connector selected ("Connections can describe HTTP, events, callbacks, and
   other interactions"), an empty attachment slot ("Add context → Note · Code"). Each shown once, in
   place, never as a modal.
-- **6.2 Usage-inferred learning state** — ⬜ Planned. A hint retires the moment its behavior is
+- **7.2 Usage-inferred learning state** — ⬜ Planned. A hint retires the moment its behavior is
   demonstrated, not only when it's dismissed: attach a note once and note-attachment hints never
   show again; edit a connector's label once and connector-semantics hints stop; open the command
   menu once and the hint pointing at `/` disappears. An explicit dismissal (×) is the fallback, not
   the primary path.
-- **6.3 "New" feature indicators** — ⬜ Planned. A small badge on a newly discoverable capability —
+- **7.3 "New" feature indicators** — ⬜ Planned. A small badge on a newly discoverable capability —
   for something too minor to earn its own coachmark, this is the whole treatment.
-- **6.4 "Learn Draft Canvas" mode** — ⬜ Planned. An optional, user-triggered (`?`) mode that
+- **7.4 "Learn Draft Canvas" mode** — ⬜ Planned. An optional, user-triggered (`?`) mode that
   surfaces contextual explanations across the canvas for someone who wants a deliberate pass,
   rather than picking hints up incidentally. Nothing shows unless asked for — this is the opt-in
-  complement to 6.1's opt-out-by-default hints, not a second onboarding system.
+  complement to 7.1's opt-out-by-default hints, not a second onboarding system.
 
 **Guidance behavior, non-negotiable across all four:** contextual (tied to the moment, not a fixed
 sequence), non-blocking, subtle, dismissible, shown only when relevant, shown once, remembered
-locally, easy to rediscover manually (6.4) — and never shown during Presentation Mode. A hint
+locally, easy to rediscover manually (7.4) — and never shown during Presentation Mode. A hint
 appearing mid-explanation is the one failure mode this phase exists to prevent; Presentation Mode
 (3.2) is exactly where "the meeting" is happening.
 
@@ -301,7 +433,7 @@ a tooltip that keeps reappearing after its feature is already learned, or docume
 to leave the canvas to read. If an explanation needs more than a sentence, it belongs in `docs/`,
 not in a hint.
 
-## Phase 7 — Canvas Command Surface
+## Phase 8 — Canvas Command Surface
 
 *Purpose: a developer explaining something during a meeting should be able to keep talking while
 operating Draft Canvas almost entirely from the keyboard — one fast, contextual surface instead of
@@ -315,59 +447,59 @@ Command Palette, Raycast, Spotlight — contextual to a technical canvas — nev
 primary UX built around typing `add-service --name payment-api` is novelty over usability and is
 explicitly out of scope.
 
-- **7.1 Command surface core** — ⬜ Planned. `⌘K`/`Ctrl+K` (and possibly `/` when the canvas is
+- **8.1 Command surface core** — ⬜ Planned. `⌘K`/`Ctrl+K` (and possibly `/` when the canvas is
   focused, echoing 1.7's existing single-key shortcuts) opens a searchable list of deterministic
   commands with fuzzy matching — `db` surfaces "Add Database," `conn` surfaces "Connect selected
   element," `spot` surfaces "Spotlight selection." No command requires memorizing an exact name.
-- **7.2 Contextual commands** — ⬜ Planned. The list adapts to selection state instead of listing
+- **8.2 Contextual commands** — ⬜ Planned. The list adapts to selection state instead of listing
   hundreds of unrelated actions: nothing selected surfaces creation and navigation (Add Service,
   Start Presentation, Find Element); one node selected surfaces Connect to…, Duplicate, Group,
   Spotlight, Start Flow Here (reusing 3.1); one connector selected surfaces Change Relationship,
   Reverse Direction, Reconnect Source/Target (reusing 2.6), Add to Flow; a multi-selection surfaces
   Group, Align, Duplicate, Export Selection (reusing 4.1).
-- **7.3 Canvas search & jump navigation** — ⬜ Planned. The same surface is the fastest way to find
+- **8.3 Canvas search & jump navigation** — ⬜ Planned. The same surface is the fastest way to find
   something on a large canvas — typing a name surfaces matching nodes and Flows; picking one pans to
   it, briefly highlights it, and optionally selects it. No separate search UI. Includes jump
   commands (next/previous flow step, fit canvas, fit selection, jump to bookmark).
-- **7.4 Command history** — ⬜ Planned. `⌘K` then Up Arrow recalls recently used commands; a
+- **8.4 Command history** — ⬜ Planned. `⌘K` then Up Arrow recalls recently used commands; a
   frequently repeated command (Add Service, Add Service, Connect, Connect during rapid diagram
   creation) can rise toward the top. A small local list, not a synced or cross-document history.
-- **7.5 Quick-create shorthand** — 🧪 Exploratory. A lightweight, optional syntax for expert users
+- **8.5 Quick-create shorthand** — 🧪 Exploratory. A lightweight, optional syntax for expert users
   (`+service Payment API`, `+db Ledger`) that never replaces normal command search. Handle with
   care: the shorthand accelerates direct manipulation on the canvas, it does not become a
   text-to-diagram DSL — `Payment API -> Repayment Events`-style chaining is explicitly the kind of
   thing that could tip Draft Canvas toward Mermaid, which is a standing non-goal.
-- **7.6 Contextual action search on named elements** — 🧪 Exploratory. Commands that resolve against
+- **8.6 Contextual action search on named elements** — 🧪 Exploratory. Commands that resolve against
   existing canvas object names — "Connect Payment API to Ledger," "Spotlight Repayment Worker,"
   "Show downstream from Checkout." Deterministic string matching against real node/Flow names, no
   LLM required — a genuine future direction, not a near-term commitment.
-- **7.7 Command recipes** — 🧪 Exploratory. Small, reusable, user-triggered command sequences with
+- **8.7 Command recipes** — 🧪 Exploratory. Small, reusable, user-triggered command sequences with
   sensible defaults — "HTTP Service" creates Service → External API, "Async worker" creates
   Queue → Worker with `consume` semantics (reusing 2.5's kind vocabulary). Templates the user
-  invokes, never automatic architecture generation; not prioritized initially, but 7.1's command
+  invokes, never automatic architecture generation; not prioritized initially, but 8.1's command
   architecture should leave room for it rather than close it off.
 
-**Architectural considerations.** Every command in 7.1-7.4 is a thin, deterministic front-end onto
+**Architectural considerations.** Every command in 8.1-8.4 is a thin, deterministic front-end onto
 an operation Phases 1-4 already expose (`document/operations.ts`, `document/flow.ts`, the export
 pipeline) — the command surface should not grow a parallel way to mutate the document, only a
 faster way to invoke the existing one. This keeps it instant, offline, and fully consistent with
-0.1's no-network invariant: no command, including 7.6's name matching, ever leaves the browser.
+0.1's no-network invariant: no command, including 8.6's name matching, ever leaves the browser.
 
-**Dependencies & sequencing.** 7.1-7.4 depend only on Phases 1-4 already being real capabilities to
-front — they could ship independently of Phase 5 or 6. This phase is still sequenced after
-Contextual Learning specifically for 7.1's own discoverability: "Tip: Press ⌘K from anywhere on the
-canvas," and inline shortcut hints next to menu items, should be built as an instance of 6.1's
-contextual-hint primitive, not a bespoke tooltip invented for this one feature — reusing Phase 6's
+**Dependencies & sequencing.** 8.1-8.4 depend only on Phases 1-4 already being real capabilities to
+front — they could ship independently of Phase 5, 6, or 7. This phase is still sequenced after
+Contextual Learning specifically for 8.1's own discoverability: "Tip: Press ⌘K from anywhere on the
+canvas," and inline shortcut hints next to menu items, should be built as an instance of 7.1's
+contextual-hint primitive, not a bespoke tooltip invented for this one feature — reusing Phase 7's
 primitives is the point, the same way 4.3 reused Presentation Mode instead of building a second
-animation system. Within the phase: 7.1 → 7.2 → 7.3 → 7.4 is the deterministic core and the
-recommended build order; 7.5-7.7 stay exploratory and don't block it.
+animation system. Within the phase: 8.1 → 8.2 → 8.3 → 8.4 is the deterministic core and the
+recommended build order; 8.5-8.7 stay exploratory and don't block it.
 
 **AI should not be required.** Every command listed above — create, connect, rename, group, align,
 spotlight, flow, navigate, search, export — is deterministic. If AI capabilities are ever explored
 for this surface later, they sit on top of this deterministic architecture, not in place of it; the
 instant/offline/predictable core must keep working with AI turned off entirely.
 
-**Acceptance criteria.** Opens and is typeable-in with no perceptible delay. Every 7.2 contextual
+**Acceptance criteria.** Opens and is typeable-in with no perceptible delay. Every 8.2 contextual
 command is reachable with the keyboard alone, start to finish, with no mouse fallback required.
 Fuzzy matching surfaces the intended command within the first few results for the abbreviations
 above. No command makes a network request. Closing the surface without selecting a command leaves
@@ -381,15 +513,15 @@ whole roadmap already applies: would this help a developer sketch or explain an 
 interrupting the conversation? If it mainly helps someone produce a formal specification after
 hours of solo editing, it belongs in another tool, not here.
 
-## Phase 8 — Future / Experimental
+## Phase 9 — Future / Experimental
 
 *Purpose: named so they're not forgotten, not committed to.*
 
-- **8.1 Longer-form export (MP4)** — 🧪 Exploratory. Worth revisiting only if a longer or
+- **9.1 Longer-form export (MP4)** — 🧪 Exploratory. Worth revisiting only if a longer or
   higher-fidelity walkthrough than 4.3's GIF turns out to be genuinely needed. WebM stays out
   entirely unless a concrete need for it shows up — no reason to support it speculatively.
 
-## Phase 9 — Support Draft Canvas
+## Phase 10 — Support Draft Canvas
 
 *Purpose: Draft Canvas is free and stays free — no artificial limits, subscriptions, locked
 features, or watermarks, ever. This phase is the one deliberately small, entirely optional channel
@@ -402,7 +534,7 @@ asking "please upgrade." This is intentionally the lowest-priority phase on the 
 sequencing after the core experience (0-4) is mature enough that support would be a genuine, earned
 reaction rather than an ask.
 
-- **9.1 Support entry point & dialog** — ⬜ Planned (intentionally low priority). A subtle
+- **10.1 Support entry point & dialog** — ⬜ Planned (intentionally low priority). A subtle
   "❤️ Support Draft Canvas" line in the existing About dialog (`AboutDialog.tsx`) — one more
   low-key entry in the signature/links row that's already there, not a new surface. Selecting it
   opens a small dialog: *"Draft Canvas is free and independently built. If it helped you survive a
@@ -440,3 +572,10 @@ Unchanged, from `docs/ARCHITECTURE.md`'s "Deliberately not built": authenticatio
 sync, collaboration, comments, AI generation, template libraries, provider icon packs, Mermaid
 import/export, image nodes, PWA install. This roadmap doesn't revisit any of them, and nothing
 above — including 5.1's background image — reopens that list.
+
+**A note on 6.1-6.6 and "PWA install."** Phase 6 uses a Service Worker and Cache Storage to keep the
+application shell available offline — that's an offline-availability capability, not an installable
+one. It adds no install prompt, manifest-driven Home Screen icon, or standalone-window chrome, and
+works entirely from the normal browser tab someone already has open. "PWA install" stays a non-goal
+exactly as before; 6.7 names the installable-PWA idea explicitly and keeps it 🧪 Exploratory,
+consistent with — not a reopening of — the standing list above.
