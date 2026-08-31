@@ -41,8 +41,10 @@ export const DEFAULTS = {
   noteHeight: 108,
   textWidth: 200,
   textHeight: 36,
-  ellipseWidth: 132,
-  ellipseHeight: 132,
+  /** A Junction is a routing/convergence point, not a component — kept compact enough to read
+   *  as punctuation in the diagram rather than a shape competing with Service/Data Store/Queue. */
+  ellipseWidth: 36,
+  ellipseHeight: 36,
   groupWidth: 420,
   groupHeight: 300,
   /** Sized to give Actor real presence as a first-class participant — big enough for a clearly

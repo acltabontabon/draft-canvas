@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Handle, NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
-import { minSizeFor } from '../document/factory';
+import { maxSizeFor, minSizeFor } from '../document/factory';
 import { explainNodeTier, lensNodeTier, type ExplainTier } from '../document/flow';
 import type { DraftNode } from '../document/types';
 import { CODE_LAYOUT, describeContext, describeNode, naturalCodeSize } from '../nodes/describe';
@@ -153,6 +153,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   };
 
   const min = minSizeFor(node.type);
+  const max = maxSizeFor(node.type);
   const attachmentCount = node.attachments?.length ?? 0;
 
   return (
@@ -175,6 +176,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           isVisible={Boolean(selected)}
           minWidth={min.width}
           minHeight={min.height}
+          maxWidth={max?.width}
+          maxHeight={max?.height}
+          keepAspectRatio={node.type === 'ellipse'}
           lineClassName="dc-resize-line"
           handleClassName="dc-resize-handle"
           onResizeStart={() => {
@@ -273,23 +277,29 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         equivalent in its `Position` enum, so it's set here via an inline
         percentage instead, layered on top of React Flow's own 50% centering
         transform.
+
+        A Junction (`ellipse`) is a compact routing point, not a component —
+        it keeps only the one midpoint anchor per side (offset 0.5) so its
+        handles don't visually overwhelm a shape this small.
       */}
-      {HANDLE_ANCHORS.map((anchor) => (
-        <Handle
-          key={anchor.id}
-          id={anchor.id}
-          type="source"
-          position={anchor.position}
-          className="dc-handle"
-          data-armed={armedAnchorKey === `${anchor.side}:${anchor.offset}` ? 'true' : undefined}
-          style={
-            anchor.side === 'top' || anchor.side === 'bottom'
-              ? { left: `${anchor.offset * 100}%` }
-              : { top: `${anchor.offset * 100}%` }
-          }
-          isConnectable={!readOnly}
-        />
-      ))}
+      {(node.type === 'ellipse' ? HANDLE_ANCHORS.filter((anchor) => anchor.offset === 0.5) : HANDLE_ANCHORS).map(
+        (anchor) => (
+          <Handle
+            key={anchor.id}
+            id={anchor.id}
+            type="source"
+            position={anchor.position}
+            className="dc-handle"
+            data-armed={armedAnchorKey === `${anchor.side}:${anchor.offset}` ? 'true' : undefined}
+            style={
+              anchor.side === 'top' || anchor.side === 'bottom'
+                ? { left: `${anchor.offset * 100}%` }
+                : { top: `${anchor.offset * 100}%` }
+            }
+            isConnectable={!readOnly}
+          />
+        ),
+      )}
     </div>
   );
 });

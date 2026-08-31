@@ -57,7 +57,7 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
     case 'text':
       return { width: 80, height: 28 };
     case 'ellipse':
-      return { width: 72, height: 72 };
+      return { width: 24, height: 24 };
     case 'actor':
       return { width: 88, height: 84 };
     case 'queue':
@@ -70,6 +70,20 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
       return { width: 160, height: 120 };
     default:
       return { width: 96, height: 48 };
+  }
+}
+
+/**
+ * Interactive resize ceiling. Unlike `minSizeFor`, most types have none — only
+ * Junction (`ellipse`) does, so a routing point can't be dragged back into the
+ * large, ambiguous "Circle" shape it used to be.
+ */
+export function maxSizeFor(type: DraftNodeType): { width: number; height: number } | undefined {
+  switch (type) {
+    case 'ellipse':
+      return { width: 64, height: 64 };
+    default:
+      return undefined;
   }
 }
 
@@ -130,7 +144,7 @@ export function displayNameFor(
     case 'text':
       return 'Text';
     case 'ellipse':
-      return 'Circle';
+      return 'Junction';
     default:
       return 'Untitled';
   }

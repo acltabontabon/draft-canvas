@@ -78,10 +78,10 @@ export const DEV_PRESETS: Preset[] = [
   },
   {
     id: 'ellipse',
-    label: 'Circle',
+    label: 'Junction',
     type: 'ellipse',
-    shortcut: 'O',
-    hint: 'A circle or state',
+    shortcut: 'J',
+    hint: 'Where connections branch or converge',
   },
 ];
 

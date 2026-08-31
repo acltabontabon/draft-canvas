@@ -94,7 +94,7 @@ The build is path-agnostic (`base: './'`), so `dist/` can be served from any sub
 | Key | Action |
 | --- | --- |
 | `T` `N` `C` | Text · Note · Code, created under the cursor |
-| `S` `D` `Q` `A` `O` | Service · Database · Queue · Actor · Circle |
+| `S` `D` `Q` `A` `J` | Service · Database · Queue · Actor · Junction |
 | Double-click | Pick a type to create on empty canvas, or edit an element's text |
 | Drag from an edge | Connect — drop on empty canvas to create the target |
 | `Cmd/Ctrl` `Z` / `⇧Z` | Undo / redo |

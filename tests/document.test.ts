@@ -192,7 +192,7 @@ describe('displayNameFor', () => {
     expect(displayNameFor({ type: 'note', text: '' })).toBe('Note');
     expect(displayNameFor({ type: 'code', text: '' })).toBe('Code');
     expect(displayNameFor({ type: 'text', text: '' })).toBe('Text');
-    expect(displayNameFor({ type: 'ellipse', text: '' })).toBe('Circle');
+    expect(displayNameFor({ type: 'ellipse', text: '' })).toBe('Junction');
     expect(displayNameFor({ type: 'actor', text: '' })).toBe('Actor');
     expect(displayNameFor({ type: 'group', text: '' })).toBe('Boundary');
   });
