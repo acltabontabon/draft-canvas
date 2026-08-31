@@ -852,13 +852,6 @@ async function endpointBox(page: Page, which: 0 | 1) {
   return (await page.locator('.dc-edge-endpoint').nth(which).boundingBox())!;
 }
 
-/** Opens the connector popover's single expanded editor, where the relation
- *  picker lives — see `connector-semantics.spec.ts`'s file doc comment for
- *  why a click is needed here at all. */
-async function openRelationPanel(page: Page) {
-  await page.getByRole('button', { name: 'More connector options' }).click();
-}
-
 test.describe('reconnection', () => {
   test('the connector visibly follows the pointer while an endpoint is being dragged', async ({ page }) => {
     await newCanvas(page, 'Live drag preview');
@@ -914,7 +907,6 @@ test.describe('reconnection', () => {
     // Reconnected onto the queue: the relationship is freshly inferred as an
     // event publish, and there's still exactly one connector (moved, not duplicated).
     await expect(page.locator('.dc-edge')).toHaveCount(1);
-    await openRelationPanel(page);
     const select = page.getByRole('button', { name: 'Interaction type' });
     await expect(select).toHaveText('Publishes');
   });
@@ -981,7 +973,6 @@ test.describe('reconnection', () => {
       (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
     );
     // Still the original Service → Database pair, which infers `writes`.
-    await openRelationPanel(page);
     const select = page.getByRole('button', { name: 'Interaction type' });
     await expect(select).toHaveText('Writes');
   });
@@ -1017,7 +1008,6 @@ test.describe('reconnection', () => {
       (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
     );
     // Still the original Service → Database pair, which infers `writes`.
-    await openRelationPanel(page);
     const select = page.getByRole('button', { name: 'Interaction type' });
     await expect(select).toHaveText('Writes');
   });
@@ -1042,7 +1032,6 @@ test.describe('reconnection', () => {
     await page.mouse.move(queue.x + queue.width / 2, queue.y + queue.height / 2, { steps: 10 });
     await page.mouse.up();
 
-    await openRelationPanel(page);
     const select = page.getByRole('button', { name: 'Interaction type' });
     await expect(select).toHaveText('Publishes');
     // Belt-and-braces: the app's own global shortcut guard (deliberately) ignores Meta+Z while

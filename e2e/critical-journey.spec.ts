@@ -98,7 +98,10 @@ async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: stri
   await clickEdgeBetween(page, edgeIndex);
   await page.locator('[title="Flow membership"]').click();
 
-  const panel = page.locator('.dc-edge-inspector-panel');
+  // Not `.dc-edge-inspector-panel` — that base class is now shared with the connector's own
+  // always-visible contextual editor too; `.dc-edge-inspector-membership` is this checklist's
+  // own distinguishing class.
+  const panel = page.locator('.dc-edge-inspector-membership');
   await expect(panel).toBeVisible();
   if (existingFlowTitle) {
     const checkbox = page.getByRole('checkbox', { name: existingFlowTitle });

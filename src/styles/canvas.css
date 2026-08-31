@@ -968,9 +968,67 @@
 }
 
 /*
- * The full editor behind "⋯" — labelled sections stacked vertically instead
- * of one flat wrapped row of unrelated-looking controls. Deliberately capped
- * narrower than the popover's own 320px ceiling: a column of compact rows
+ * `ElementInspectorPopover`'s own box — same chrome as `.dc-edge-inspector` (surface, shadow,
+ * radius, fade animation) but a separate class so the two popovers can never accidentally share
+ * a styling regression.
+ */
+.dc-element-inspector {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  max-width: 320px;
+  border: 1px solid var(--dc-border);
+  border-radius: 8px;
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  pointer-events: all;
+}
+
+.dc-element-inspector-inner {
+  display: flex;
+  flex-direction: column;
+  animation: dc-attachment-card-in 120ms ease;
+}
+
+.dc-element-inspector[data-closing='true'] .dc-element-inspector-inner {
+  animation: dc-attachment-card-out 120ms ease forwards;
+}
+
+/* While fading out, this is a ghost of the previous selection — never clickable, and hidden from
+   the accessibility tree so its "Focus"/"⋯" controls can't collide with whatever now-current
+   selection UI (e.g. the bottom bar, for a multi-selection) mounted in the same instant. */
+.dc-element-inspector[data-closing='true'] {
+  pointer-events: none;
+}
+
+.dc-element-inspector-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+}
+
+.dc-element-inspector-row .dc-button {
+  height: 22px;
+  padding: 0 7px;
+  font-size: 12px;
+}
+
+.dc-element-inspector-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--dc-border);
+}
+
+/*
+ * The connector's contextual editor, shown immediately beneath the compact row — labelled
+ * sections stacked vertically instead of one flat wrapped row of unrelated-looking controls.
+ * Deliberately capped narrower than the popover's own 320px ceiling: a column of compact rows
  * reads better tall-and-narrow than wide-and-wrapped.
  */
 .dc-edge-inspector-expanded {

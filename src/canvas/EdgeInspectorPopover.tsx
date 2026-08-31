@@ -66,8 +66,6 @@ const POPOVER_GAP = 28;
  *  above the connector must never mean sitting *behind* the toolbar. */
 const TOOLBAR_CLEARANCE = 56;
 
-type PanelKind = 'membership' | 'expanded';
-
 /**
  * The contextual control for a single selected connector — anchored at its
  * own label point instead of docked at the bottom of the screen (the thing
@@ -76,12 +74,12 @@ type PanelKind = 'membership' | 'expanded';
  * no longer renders anything for that case, so this is the only edge UI a
  * single-connector selection shows.
  *
- * The compact row (label chip, flow chip, `⋯`) is the entire UI for the common case — renaming,
- * flow membership, and a glance at what this connector is. `⋯` is the one door to everything
- * else (interaction type, request/response, routing, style), grouped into labelled sections
- * rather than one flat control grid; `+ Flow` opens its own small checklist. At most one of the
- * two expands at a time, mirroring the one-thing-open-at-once discipline `EdgeAttachmentChip`
- * already uses for attachment cards.
+ * Selecting a connector shows its full contextual editor immediately — no extra "More options"
+ * step. The compact header (label, flow-membership chip) sits above sections (Interaction,
+ * Request/Response, Route, Style) that only include what's relevant to *this* connector's actual
+ * pairing — see `ExpandedPanel`'s own comment. "+ Flow" is the one remaining, genuinely optional
+ * disclosure: a small membership checklist, since listing every flow permanently would be the
+ * wrong default for a document with several.
  */
 export function EdgeInspectorPopover() {
   const document = useEditorStore((state) => state.document);
@@ -105,7 +103,7 @@ export function EdgeInspectorPopover() {
   const [mounted, setMounted] = useState(open);
   const [closing, setClosing] = useState(false);
   const hideTimer = useRef<number | null>(null);
-  const [panel, setPanel] = useState<PanelKind | null>(null);
+  const [membershipOpen, setMembershipOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // A real measurement, not a guess: which side to sit on (see the `flipBelow` calculation
@@ -134,13 +132,12 @@ export function EdgeInspectorPopover() {
     lastTargetRef.current = targetInternal;
   }
 
-  // Selecting a *different* connector while a sub-panel is open must close
-  // it — otherwise it keeps showing the connector it was opened for. This is
-  // not covered by the `open`-keyed effect below: clicking straight from one
-  // edge to another never makes `open` itself go false, since a new edge is
-  // selected in the same tick the old one is deselected.
+  // Selecting a *different* connector while the membership checklist is open must close it —
+  // otherwise it keeps showing the connector it was opened for. This is not covered by the
+  // `open`-keyed effect below: clicking straight from one edge to another never makes `open`
+  // itself go false, since a new edge is selected in the same tick the old one is deselected.
   useEffect(() => {
-    setPanel(null);
+    setMembershipOpen(false);
   }, [edgeId]);
 
   useEffect(() => {
@@ -153,7 +150,7 @@ export function EdgeInspectorPopover() {
       setMounted(true);
       return;
     }
-    setPanel(null);
+    setMembershipOpen(false);
     if (!mounted) return;
     setClosing(true);
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -175,11 +172,11 @@ export function EdgeInspectorPopover() {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Escape closes an open sub-panel first, without touching the selection —
-  // the global Escape handler still clears selection on a second press.
-  // Click-away closes the sub-panel the same way, but never deselects.
+  // Escape closes the open membership checklist first, without touching the selection — the
+  // global Escape handler still clears selection on a second press. Click-away closes it the
+  // same way, but never deselects.
   useEffect(() => {
-    if (!panel) return;
+    if (!membershipOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       // This listener runs in the *capture* phase (see the `addEventListener` call below) so
@@ -187,15 +184,15 @@ export function EdgeInspectorPopover() {
       // order — but capture on `window` necessarily fires before the event ever reaches an
       // open `InspectorSelect` menu's own (bubble-phase) Escape handling, no matter which
       // mounted first. Defer to it when one is open: closing just the menu, not the whole
-      // sub-panel, is what a single Escape press should do there.
+      // checklist, is what a single Escape press should do there.
       // `window.document`, not the bare global: this component's own top-level `document` is
       // the store's `DraftDocument`, shadowing it.
       if (window.document.querySelector('.dc-inspector-select-menu')) return;
       event.stopPropagation();
-      setPanel(null);
+      setMembershipOpen(false);
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (panelRef.current && !panelRef.current.contains(event.target as Node)) setPanel(null);
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) setMembershipOpen(false);
     };
     window.addEventListener('keydown', onKeyDown, true);
     const id = window.setTimeout(() => window.addEventListener('pointerdown', onPointerDown), 0);
@@ -204,7 +201,7 @@ export function EdgeInspectorPopover() {
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };
-  }, [panel]);
+  }, [membershipOpen]);
 
   if (!mounted) return null;
   const displayEdge = open ? edge : lastEdgeRef.current;
@@ -250,12 +247,17 @@ export function EdgeInspectorPopover() {
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="dc-edge-inspector-inner">
+          {/* Keyed on the edge id: the editor below is now always mounted (no more "⋯" to
+              unmount it on collapse), so switching to a different connector must remount this
+              subtree fresh — otherwise `ExpandedPanel`'s own local state (the colour palette,
+              "show all behaviours") would leak from the previously-selected connector. */}
           <EdgeInspectorRow
+            key={displayEdge.id}
             edge={displayEdge}
             sourceNode={sourceDraftNode}
             targetNode={targetDraftNode}
-            panel={panel}
-            setPanel={setPanel}
+            membershipOpen={membershipOpen}
+            setMembershipOpen={setMembershipOpen}
             theme={theme}
             store={store}
           />
@@ -269,16 +271,16 @@ function EdgeInspectorRow({
   edge,
   sourceNode,
   targetNode,
-  panel,
-  setPanel,
+  membershipOpen,
+  setMembershipOpen,
   theme,
   store,
 }: {
   edge: DraftEdge;
   sourceNode: DraftNode | undefined;
   targetNode: DraftNode | undefined;
-  panel: PanelKind | null;
-  setPanel: (panel: PanelKind | null) => void;
+  membershipOpen: boolean;
+  setMembershipOpen: (open: boolean) => void;
   theme: ReturnType<typeof useThemeValue>;
   store: typeof useEditorStore;
 }) {
@@ -293,8 +295,6 @@ function EdgeInspectorRow({
       : memberOf.length === 1
         ? memberOf[0]!.title
         : `${memberOf[0]!.title} +${memberOf.length - 1}`;
-
-  const toggle = (next: PanelKind) => setPanel(panel === next ? null : next);
 
   return (
     <>
@@ -319,9 +319,9 @@ function EdgeInspectorRow({
             }}
           />
         ) : (
-          // Directly editable — no need to open the full editor just to rename a connector.
-          // See `ExpandedPanel`'s own "Interaction" section for the semantic *type* picker,
-          // a distinct concept this chip no longer doubles as a shortcut to.
+          // Directly editable — no need to open anything just to rename a connector. See
+          // `ExpandedPanel`'s own "Interaction" section for the semantic *type* picker, a
+          // distinct concept this chip no longer doubles as a shortcut to.
           <button
             type="button"
             className="dc-edge-inspector-caption"
@@ -337,25 +337,14 @@ function EdgeInspectorRow({
           className="dc-edge-inspector-flows"
           data-empty={memberOf.length === 0 ? 'true' : undefined}
           title="Flow membership"
-          onClick={() => toggle('membership')}
+          onClick={() => setMembershipOpen(!membershipOpen)}
         >
           {flowChipLabel}
         </button>
-        <Button
-          variant="quiet"
-          aria-label="More connector options"
-          title="More options"
-          active={panel === 'expanded'}
-          onClick={() => toggle('expanded')}
-        >
-          ⋯
-        </Button>
       </div>
 
-      {panel === 'membership' && <MembershipPanel edgeId={edge.id} store={store} />}
-      {panel === 'expanded' && (
-        <ExpandedPanel edge={edge} sourceNode={sourceNode} targetNode={targetNode} theme={theme} store={store} />
-      )}
+      {membershipOpen && <MembershipPanel edgeId={edge.id} store={store} />}
+      <ExpandedPanel edge={edge} sourceNode={sourceNode} targetNode={targetNode} theme={theme} store={store} />
     </>
   );
 }
@@ -371,7 +360,10 @@ function MembershipPanel({ edgeId, store }: { edgeId: string; store: typeof useE
   const flows = useEditorStore((state) => state.document.flows);
 
   return (
-    <div className="dc-edge-inspector-panel">
+    // `dc-edge-inspector-membership` (alongside the shared `dc-edge-inspector-panel` box style)
+    // is a bare selector hook — `ExpandedPanel`'s own box now permanently shares the same base
+    // class, so tests/tools that need *this* panel specifically need a distinguishing one.
+    <div className="dc-edge-inspector-panel dc-edge-inspector-membership">
       <ul className="dc-edge-inspector-membership-list">
         {flows.map((flow) => {
           const stepId = flow.steps.find(
@@ -759,12 +751,13 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
 }
 
 /**
- * Everything beyond the compact row, grouped into labelled sections rather than one flat control
- * grid — see this file's own top comment. Only the sections/fields relevant to *this* connector
- * render: a generic connector never sees Request/Response, a predetermined-behaviour pairing
- * never sees a bare "no kind" picker, and so on — the same conditions `AdvancedPanel` (this
- * component's predecessor) already computed, just composed into readable groups instead of a
- * single wrapped row.
+ * The connector's contextual editor — shown immediately under the compact row for every selected
+ * connector, no click required (see this file's own top comment) — grouped into labelled sections
+ * rather than one flat control grid. Only the sections/fields relevant to *this* connector render:
+ * a generic connector never sees Request/Response, a predetermined-behaviour pairing never sees a
+ * bare "no kind" picker, the Interaction type list itself narrows to what the pairing actually
+ * supports (falling back to the full vocabulary for an unclassified/generic pairing with no
+ * capability-matrix entry), and so on.
  */
 function ExpandedPanel({
   edge,
@@ -812,6 +805,26 @@ function ExpandedPanel({
 
   const currentAccentChip = edge.accent !== undefined ? theme.accents[edge.accent].chip : undefined;
 
+  // Narrowed to what this pairing actually supports (`capability.relations`, already in display
+  // order) instead of the full `EdgeSemantic` vocabulary — Service→Queue sees only
+  // Publishes/Event/Depends on, Queue→Service only Consumes/Event/Depends on, and so on. A
+  // pairing with no capability-matrix entry at all (generic/unclassified shapes) keeps the full
+  // list, exactly as before. Same "never clobber an unusual existing value" principle
+  // `ServiceInteractionSection`'s own Protocol/Mode selects already follow: a pre-existing
+  // `edge.semantic` outside the narrowed set stays selectable as an extra option.
+  const relationOptions: InspectorSelectOption[] = capability
+    ? [
+        { value: '', label: 'No type' },
+        ...capability.relations.map((semantic) => ({ value: semantic, label: EDGE_SEMANTIC_LABELS[semantic] })),
+        ...(edge.semantic && !capability.relations.includes(edge.semantic)
+          ? [{ value: edge.semantic, label: EDGE_SEMANTIC_LABELS[edge.semantic] }]
+          : []),
+      ]
+    : [
+        { value: '', label: 'No type' },
+        ...EDGE_SEMANTICS.map((semantic) => ({ value: semantic, label: EDGE_SEMANTIC_LABELS[semantic] })),
+      ];
+
   const routingOptions: InspectorSelectOption[] = [
     { value: 'smoothstep', label: 'Stepped' },
     { value: 'bezier', label: 'Curved' },
@@ -830,10 +843,7 @@ function ExpandedPanel({
               <InspectorSelect
                 value={edge.semantic ?? ''}
                 ariaLabel="Interaction type"
-                options={[
-                  { value: '', label: 'No type' },
-                  ...EDGE_SEMANTICS.map((semantic) => ({ value: semantic, label: EDGE_SEMANTIC_LABELS[semantic] })),
-                ]}
+                options={relationOptions}
                 onChange={(value) =>
                   store.getState().setEdgeSemantic(edge.id, (value || undefined) as EdgeSemantic | undefined)
                 }

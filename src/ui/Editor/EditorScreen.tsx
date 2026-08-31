@@ -3,6 +3,7 @@ import { useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { Canvas } from '../../canvas/Canvas';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
+import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { createEdge, createNode } from '../../document/factory';
@@ -169,6 +170,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         )}
         {!presenting && <AttachmentPopover />}
         {!presenting && <EdgeInspectorPopover />}
+        {!presenting && <ElementInspectorPopover />}
         <EmptyState />
         {!presenting && <Inspector />}
         {!presenting && <FlowPanel playback={playback} />}

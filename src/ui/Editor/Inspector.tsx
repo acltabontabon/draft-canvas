@@ -22,42 +22,13 @@ import { useEditorStore } from '../../store/editorStore';
 import { nodeIndex, edgeIndex } from '../../store/selectors';
 import { useThemeValue } from '../theme/useTheme';
 import { Button } from '../common/Button';
-
-const NOTE_LABELS: Record<NoteKind, string> = {
-  note: 'Note',
-  question: 'Question',
-  warning: 'Warning',
-  decision: 'Decision',
-};
-
-const BOUNDARY_PRESET_OPTION_LABELS: Record<BoundaryPreset, string> = {
-  boundary: 'Boundary',
-  system: 'System',
-  domain: 'Domain',
-  network: 'Network',
-  deployment: 'Deployment',
-  group: 'Group',
-};
-
-const SERVICE_KIND_OPTION_LABELS: Record<ServiceKind, string> = {
-  generic: 'Generic',
-  api: 'API',
-  worker: 'Worker',
-  external: 'External',
-};
-
-const DATABASE_KIND_OPTION_LABELS: Record<DatabaseKind, string> = {
-  generic: 'Generic',
-  sql: 'SQL',
-  nosql: 'NoSQL',
-  cache: 'Cache',
-};
-
-const QUEUE_KIND_OPTION_LABELS: Record<QueueKind, string> = {
-  queue: 'Queue',
-  topic: 'Topic',
-  stream: 'Stream',
-};
+import {
+  NOTE_LABELS,
+  BOUNDARY_PRESET_OPTION_LABELS,
+  SERVICE_KIND_OPTION_LABELS,
+  DATABASE_KIND_OPTION_LABELS,
+  QUEUE_KIND_OPTION_LABELS,
+} from './nodeKindLabels';
 
 /**
  * A contextual strip that appears only when something is selected, and shows
@@ -86,6 +57,11 @@ export function Inspector() {
   // node-selection territory now. Any other combination (a node, multiple
   // edges, or a mix) still lands here exactly as before.
   if (nodes.length === 0 && edges.length === 1) return null;
+  // A single element, selected alone, gets its own anchored control
+  // (`ElementInspectorPopover`) instead of this bottom-docked strip — mirrors
+  // the single-edge case above. Multi-selection and mixed selections still
+  // land here exactly as before.
+  if (nodes.length === 1 && edges.length === 0) return null;
 
   const setAccent = (accent: Accent) => {
     const state = store.getState();

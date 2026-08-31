@@ -7,18 +7,20 @@ import { expect, test, type Page } from '@playwright/test';
  * `tests/connector-semantics.test.ts`; these cover the popover actually
  * showing the right controls for a real pointer-driven connection.
  *
- * The popover shows a compact row (label chip, flow-membership chip, "⋯")
- * with at most one of two sub-panels open at a time: "+ Flow" opens a small
- * membership checklist, "⋯" opens a single expanded editor with every other
- * control grouped into labelled sections. Two different Interaction sections
- * live behind "⋯" depending on the pairing: Service→Service (and
- * Service↔External) gets the opinionated `ServiceInteractionSection`
- * (Protocol/Mode, `InspectorSelect`s named "Protocol"/"Interaction mode");
- * every other pairing keeps the generic, unrestricted Interaction section
- * ("Interaction type"/"Flow kind"). Every dropdown in this popover is a
- * custom `InspectorSelect` (`canvas/InspectorSelect.tsx`), not a native
- * `<select>` — its closed state is a `role="button"` showing the selected
- * option's label as its text, and opening it (a click) reveals a
+ * Selecting a connector shows its full contextual editor immediately, right
+ * under the compact row (label chip, flow-membership chip) — no extra click.
+ * "+ Flow" is the one remaining disclosure: a small membership checklist.
+ * Two different Interaction sections render depending on the pairing:
+ * Service→Service (and Service↔External) gets the opinionated
+ * `ServiceInteractionSection` (Protocol/Mode, `InspectorSelect`s named
+ * "Protocol"/"Interaction mode"); every other pairing gets the generic
+ * Interaction section ("Interaction type"/"Flow kind"), whose "Interaction
+ * type" options are themselves narrowed to what that pairing's capability
+ * entry actually supports (falling back to the full vocabulary for a
+ * pairing with no capability-matrix entry at all). Every dropdown in this
+ * popover is a custom `InspectorSelect` (`canvas/InspectorSelect.tsx`), not
+ * a native `<select>` — its closed state is a `role="button"` showing the
+ * selected option's label as its text, and opening it (a click) reveals a
  * `role="listbox"` of `role="option"` entries also identified by label text,
  * not by value — see the `inspectorSelect`/`chooseInspectorOption` helpers
  * below.
@@ -50,12 +52,6 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
   await page.mouse.up();
 }
 
-/** Opens the popover's single expanded editor — interaction type, behaviour, request/response,
- *  routing, and colour all live here together now. */
-async function openExpandedPanel(page: Page) {
-  await page.getByRole('button', { name: 'More connector options' }).click();
-}
-
 /** An `InspectorSelect`'s closed button, identified the same way a native `<select>`'s
  *  accessible name would be — but its visible text is the selected option's *label*, not its
  *  raw value (e.g. "Writes", not "writes"). */
@@ -76,7 +72,6 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Database', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await openExpandedPanel(page);
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Writes');
     await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
     await expect(page.locator('.dc-inspector-badge')).toHaveCount(0);
@@ -89,23 +84,34 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Service', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await openExpandedPanel(page);
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Reads');
   });
 
-  test('the Interaction type select lists every relation, unfiltered by node pairing', async ({ page }) => {
-    // The popover's relation picker is a plain, full `EDGE_SEMANTICS` list —
-    // unlike the older side-panel toolbar it replaced, it no longer narrows
-    // options by capability (and so has no "Show all…" escape hatch either).
-    await newCanvas(page, 'Full relation list');
+  test('the Interaction type select is narrowed to what the pairing actually supports', async ({ page }) => {
+    // Service→Database's capability entry lists exactly `['writes', 'reads', 'query',
+    // 'dependsOn']` (see `document/connectorSemantics.ts`'s `MATRIX`) — the picker reflects that
+    // instead of the full, unfiltered `EDGE_SEMANTICS` vocabulary (HTTP, Event, Command, …, none
+    // of which describe a database interaction).
+    await newCanvas(page, 'Filtered relation list');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Database', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await openExpandedPanel(page);
     const relation = inspectorSelect(page, 'Interaction type');
     await expect(relation).toHaveText('Writes');
     await relation.click();
+    await expect(page.getByRole('option')).toHaveText(['No type', 'Writes', 'Reads', 'Query', 'Depends on']);
+  });
+
+  test('the Interaction type select keeps the full vocabulary for an unclassified pairing', async ({ page }) => {
+    // Two plain, unclassified shapes have no capability-matrix entry at all — the generic
+    // Interaction section falls back to the full, unrestricted `EDGE_SEMANTICS` list.
+    await newCanvas(page, 'Unfiltered relation list');
+    await create(page, 'Circle', { x: 300, y: 200 });
+    await create(page, 'Circle', { x: 600, y: 200 });
+    await connect(page, 0, 1);
+
+    await inspectorSelect(page, 'Interaction type').click();
     await expect(page.getByRole('option')).toHaveText([
       'No type',
       'HTTP',
@@ -127,7 +133,6 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Queue', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await openExpandedPanel(page);
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Publishes');
     await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
     const badge = page.getByRole('button', { name: 'Event · Async' });
@@ -147,7 +152,6 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Service', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await openExpandedPanel(page);
     // Service→Service gets the opinionated editor, not the generic Interaction section — its
     // Protocol/Mode selects replace "Interaction type"/"Flow kind" entirely for this pairing.
     await expect(page.getByRole('button', { name: 'Interaction type' })).toHaveCount(0);
@@ -178,7 +182,6 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Service', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await openExpandedPanel(page);
     await chooseInspectorOption(page, 'Protocol', 'HTTP');
 
     const method = inspectorSelect(page, 'Request method');
@@ -203,7 +206,6 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Service', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await openExpandedPanel(page);
     await expect(page.getByTitle('Draw a quieter reply line back to the caller')).toHaveText('On');
     await expect(page.locator('.dc-edge-async-marker')).toHaveCount(0);
 
@@ -236,7 +238,6 @@ test.describe('contextual connector toolbar', () => {
       (nodeA.x + nodeA.width + nodeB.x) / 2,
       (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
     );
-    await openExpandedPanel(page);
     await expect(inspectorSelect(page, 'Protocol')).toHaveText('Generic Call');
     await expect(inspectorSelect(page, 'Interaction mode')).toHaveText('Sync');
 
