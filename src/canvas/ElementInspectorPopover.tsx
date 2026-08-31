@@ -34,6 +34,13 @@ import {
 } from '../ui/Editor/nodeKindLabels';
 import { rectOfInternal } from './edgeGeometry';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
+import {
+  anchorsForRect,
+  placementTransform,
+  resolvePlacement,
+  type Placement,
+  type PlacementClearances,
+} from './popoverPlacement';
 
 const NOTE_OPTIONS: InspectorSelectOption[] = NOTE_KINDS.map((kind) => ({
   value: kind,
@@ -83,11 +90,6 @@ const LEFT_CLEARANCE = 12;
  *  in `uiStore` — it's dismissible, not always on screen); otherwise just the same small margin
  *  as the left edge. */
 const RIGHT_CLEARANCE_WITH_FLOW_PANEL = 312;
-
-type Placement = 'above' | 'below' | 'right' | 'left';
-const PLACEMENT_ORDER: Placement[] = ['above', 'below', 'right', 'left'];
-
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 /**
  * The contextual control for a single selected element — anchored right at its own rendered
@@ -216,32 +218,14 @@ export function ElementInspectorPopover() {
   const displayInternal = open ? internal : lastInternalRef.current;
   const rect = displayInternal ? rectOfInternal(displayInternal) : null;
 
-  const anchors: Record<Placement, { x: number; y: number }> | null = rect
-    ? {
-        above: { x: rect.x + rect.width / 2, y: rect.y },
-        below: { x: rect.x + rect.width / 2, y: rect.y + rect.height },
-        right: { x: rect.x + rect.width, y: rect.y + rect.height / 2 },
-        left: { x: rect.x, y: rect.y + rect.height / 2 },
-      }
-    : null;
-
-  const fits = (candidate: Placement): boolean => {
-    if (!anchors) return false;
-    const screenAnchor = flowToScreenPosition(anchors[candidate]);
-    const { width, height } = measuredSize;
-    switch (candidate) {
-      case 'above':
-        return screenAnchor.y - GAP - height >= TOP_CLEARANCE;
-      case 'below':
-        return screenAnchor.y + GAP + height <= window.innerHeight - BOTTOM_CLEARANCE;
-      case 'right':
-        return screenAnchor.x + GAP + width <= window.innerWidth - rightClearance;
-      case 'left':
-        return screenAnchor.x - GAP - width >= LEFT_CLEARANCE;
-      default:
-        return false;
-    }
+  const clearances: PlacementClearances = {
+    gap: GAP,
+    top: TOP_CLEARANCE,
+    bottom: BOTTOM_CLEARANCE,
+    left: LEFT_CLEARANCE,
+    right: rightClearance,
   };
+  const anchors: Record<Placement, { x: number; y: number }> | null = rect ? anchorsForRect(rect) : null;
 
   // Stable by construction: only search for a new placement when the current one has genuinely
   // stopped fitting, instead of re-picking the "best" one every render — that's what keeps this
@@ -249,7 +233,9 @@ export function ElementInspectorPopover() {
   // element is selected on the very first render, so there's no single dependency list that
   // covers "recompute whenever the resolved placement disagrees with stored state"); the
   // `effectivePlacement !== placement` guard is what keeps it from looping.
-  const effectivePlacement = fits(placement) ? placement : (PLACEMENT_ORDER.find(fits) ?? placement);
+  const effectivePlacement = anchors
+    ? resolvePlacement(placement, anchors, flowToScreenPosition, measuredSize, clearances)
+    : placement;
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (effectivePlacement !== placement) setPlacement(effectivePlacement);
@@ -272,36 +258,14 @@ export function ElementInspectorPopover() {
     bottom: flowToScreenPosition({ x: rect.x, y: rect.y + rect.height }).y,
   };
 
-  let transform: string;
-  if (effectivePlacement === 'above' || effectivePlacement === 'below') {
-    const anchor = anchors[effectivePlacement];
-    const screenAnchor = flowToScreenPosition(anchor);
-    const halfWidth = measuredSize.width / 2;
-    const clampedScreenX = clamp(
-      screenAnchor.x,
-      LEFT_CLEARANCE + halfWidth,
-      window.innerWidth - rightClearance - halfWidth,
-    );
-    const flowX = screenToFlowPosition({ x: clampedScreenX, y: screenAnchor.y }).x;
-    transform =
-      effectivePlacement === 'above'
-        ? `translate(-50%, -100%) translate(${flowX}px, ${anchor.y - GAP}px)`
-        : `translate(-50%, 0) translate(${flowX}px, ${anchor.y + GAP}px)`;
-  } else {
-    const anchor = anchors[effectivePlacement];
-    const screenAnchor = flowToScreenPosition(anchor);
-    const halfHeight = measuredSize.height / 2;
-    const clampedScreenY = clamp(
-      screenAnchor.y,
-      TOP_CLEARANCE + halfHeight,
-      window.innerHeight - BOTTOM_CLEARANCE - halfHeight,
-    );
-    const flowY = screenToFlowPosition({ x: screenAnchor.x, y: clampedScreenY }).y;
-    transform =
-      effectivePlacement === 'right'
-        ? `translate(0, -50%) translate(${anchor.x + GAP}px, ${flowY}px)`
-        : `translate(-100%, -50%) translate(${anchor.x - GAP}px, ${flowY}px)`;
-  }
+  const transform = placementTransform(
+    effectivePlacement,
+    anchors,
+    measuredSize,
+    clearances,
+    flowToScreenPosition,
+    screenToFlowPosition,
+  );
 
   return (
     <ViewportPortal>
