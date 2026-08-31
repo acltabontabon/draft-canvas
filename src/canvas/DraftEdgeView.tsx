@@ -773,12 +773,18 @@ function EdgeAttachmentChip({
       }
       style={chipVars}
       onClick={(event) => {
-        // The card (delete button, textarea) is a DOM child of this chip, so a click anywhere
+        // The card (edit/delete glyphs, textarea) is a DOM child of this chip, so a click anywhere
         // inside it bubbles up here too — only clicks that did *not* originate inside the card
         // should toggle pin. Checking the card specifically (not `target === currentTarget`)
         // matters: a real click on the chip's own icon/label spans also has to work, and those
-        // are non-card descendants of this same div.
-        if ((event.target as HTMLElement).closest('.dc-edge-attachment-card')) return;
+        // are non-card descendants of this same div. Still stopping propagation either way: without
+        // it, a click on the edit/delete glyph kept bubbling past this handler's early return and
+        // selected the underlying connector, popping the connector's own popover open behind the
+        // card that was just opened to look at (or edit) one attachment.
+        if ((event.target as HTMLElement).closest('.dc-edge-attachment-card')) {
+          event.stopPropagation();
+          return;
+        }
         event.stopPropagation();
         togglePin();
       }}
