@@ -642,7 +642,9 @@ function EdgeAttachmentChip({
   const updateEdgeAttachment = useEditorStore((state) => state.updateEdgeAttachment);
   const removeEdgeAttachment = useEditorStore((state) => state.removeEdgeAttachment);
 
-  const cardRef = useRef<HTMLDivElement>(null);
+  // Spans the whole chip (icon, label, and — once open — the card itself),
+  // not just the card: see the outside-pointerdown effect below for why.
+  const chipRef = useRef<HTMLDivElement>(null);
 
   // The textarea is uncontrolled (`defaultValue`) for smooth typing, but its live value must
   // survive whatever closes the card — Escape, a click anywhere outside, or the chip itself.
@@ -679,9 +681,16 @@ function EdgeAttachmentChip({
   }, [pinned]);
 
   // Same precedent as `AttachmentPopover`: a capture-phase Escape (so it preempts
-  // `EditorScreen`'s own bubble-phase chain), plus a click anywhere outside the card closes it —
+  // `EditorScreen`'s own bubble-phase chain), plus a click anywhere outside the chip closes it —
   // registered a tick late so the very click that opened the card doesn't immediately close it.
   // Covers both edit-mode pinning and a presenter's own reveal — whichever is active.
+  //
+  // Checked against the *whole chip* (`chipRef`), not just the card: a pointerdown on the chip's
+  // own icon/label is "outside the card" too, so checking only `cardRef` used to close it here on
+  // `pointerdown` — then the chip's own `onClick` (which fires after, on `pointerup`) reopened it
+  // a moment later using its `pinned` closure from *before* this handler's update landed, netting
+  // a no-op. Re-clicking the chip to close it is `onClick`'s job alone; this handler only needs to
+  // catch a click genuinely outside the chip altogether (the pane, another chip, and so on).
   useEffect(() => {
     if (!pinned && !revealed) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -691,7 +700,7 @@ function EdgeAttachmentChip({
       if (revealed) setPresentationReveal(null);
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
+      if (chipRef.current && !chipRef.current.contains(event.target as Node)) {
         if (pinned) setOpenEdgeDetail(null);
         if (revealed) setPresentationReveal(null);
       }
@@ -771,6 +780,7 @@ function EdgeAttachmentChip({
 
   return (
     <div
+      ref={chipRef}
       className="dc-edge-attachment-chip"
       data-kind={kind}
       // Suppresses the chip's own hover-pop while its card is showing — the card is a DOM child of
@@ -836,7 +846,6 @@ function EdgeAttachmentChip({
 
       {cardMounted && (
         <div
-          ref={cardRef}
           className="dc-edge-attachment-card"
           data-pinned={pinned ? 'true' : undefined}
           data-closing={cardClosing ? 'true' : undefined}

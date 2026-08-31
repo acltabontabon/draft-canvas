@@ -197,7 +197,12 @@ test.describe('connection-attached details', () => {
     await expect(card).toBeVisible();
     await expect(card.locator('textarea')).toHaveCount(0);
 
-    const textarea = await openForEditing(page, chip);
+    // Already pinned open from the click above — a second click on the chip
+    // now correctly toggles it *closed* (see the regression test further
+    // down), so only the pencil glyph itself is clicked here, not the full
+    // `openForEditing` helper (which assumes a not-yet-open chip).
+    await page.getByRole('button', { name: 'Edit attached detail' }).click();
+    const textarea = page.locator('.dc-edge-attachment-card textarea');
     await expect(textarea).toBeVisible();
     await expect(page.getByRole('button', { name: 'Delete attached detail' })).toBeVisible();
 
@@ -229,12 +234,6 @@ test.describe('connection-attached details', () => {
   });
 
   test('Escape closes an open chip\'s card', async ({ page }) => {
-    // Not re-clicking the chip itself to close it — that specific gesture has
-    // a known, separately-tracked issue (the outside-pointerdown-close
-    // listener and the chip's own click handler race and net out to a
-    // no-op). Escape and an outside click are the two paths confirmed to
-    // actually close it; outside-click is already covered by the "typing
-    // then clicking outside" test above.
     await servicePublishingToTopic(page, 'Escape closes');
     await create(page, 'Note', { x: 500, y: 500 });
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
@@ -245,6 +244,30 @@ test.describe('connection-attached details', () => {
     await expect(card).toBeVisible();
 
     await page.keyboard.press('Escape');
+    await expect(card).toHaveCount(0);
+  });
+
+  test('clicking an open chip again closes its card', async ({ page }) => {
+    // Regression test: the outside-pointerdown-close listener used to check
+    // only against the card (`cardRef`), so a pointerdown on the chip's own
+    // label — genuinely outside the card — closed it first; then the click
+    // phase's own `togglePin()` reopened it from a `pinned` closure captured
+    // before that close landed, netting a no-op. Fixed by checking against
+    // the whole chip (`chipRef`) instead, so a click on the chip itself is
+    // `onClick`'s job alone.
+    await servicePublishingToTopic(page, 'Toggle closed');
+    await create(page, 'Note', { x: 500, y: 500 });
+    await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
+
+    const chip = page.locator('.dc-edge-attachment-chip');
+    await chip.click();
+    const card = page.locator('.dc-edge-attachment-card');
+    await expect(card).toBeVisible();
+
+    // The chip's own label span specifically, not a raw offset into the
+    // chip's outer box — once open, that box also contains the card (a DOM
+    // child positioned off it, per `EdgeAttachmentChip`'s own comment).
+    await page.locator('.dc-edge-attachment-chip-label').click();
     await expect(card).toHaveCount(0);
   });
 
