@@ -232,6 +232,9 @@ test.describe('Flows', () => {
     await connect(page, 0, 1);
 
     await clickEdgeBetween(page, 0, 1);
+    // The connector popover's behaviour picker lives behind "⋯" — see
+    // `connector-semantics.spec.ts`'s file doc comment.
+    await page.getByRole('button', { name: 'More connector options' }).click();
     // The standalone "Async" toggle was removed as redundant — picking the
     // "Async" kind already sets the flag too (see `setEdgeKind`).
     await page.getByRole('combobox', { name: 'Flow kind' }).selectOption('async');

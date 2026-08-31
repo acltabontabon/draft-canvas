@@ -389,11 +389,18 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
         const posChange = snapped.changes.find(
           (change) => change.type === 'position' && change.id === draggedId,
         );
-        if (draggedDoc) {
-          const livePosition =
-            posChange && posChange.type === 'position' && posChange.position
-              ? posChange.position
-              : { x: draggedDoc.x, y: draggedDoc.y };
+        const livePosition = posChange?.type === 'position' ? posChange.position : undefined;
+        // A frame with no real position for the dragged node — notably React
+        // Flow's own drag-end pseudo-frame, which only flips `dragging` to
+        // false and carries no `position` at all — must not re-evaluate
+        // arming by falling back to the node's stale, still-uncommitted
+        // document position: that silently overwrites whatever the last real
+        // move frame correctly armed with a result computed for the wrong
+        // (pre-drag) location, moments before `onNodeDragStop` reads it.
+        // Leaving the existing armed state untouched here is what fixed a
+        // real, reproducible failure to attach a dragged note/code card onto
+        // a connector right at the very end of the gesture.
+        if (draggedDoc && livePosition) {
           const liveRect: Rect = { ...livePosition, width: draggedDoc.width, height: draggedDoc.height };
           const exclude = new Set([draggedDoc.id, ...descendantsOf(state.document, draggedDoc.id)]);
           const { overlapId, centerHitId } = evaluateAttachCandidates(

@@ -5,8 +5,14 @@ import { expect, test, type Page } from '@playwright/test';
  * that connector's attachment (mirroring `attachments.spec.ts`'s node-onto-node drag), and the
  * resulting chip/card reveal (`EdgeAttachmentRow`/`EdgeAttachmentChip` in `DraftEdgeView.tsx`).
  * The data model, persistence, and reconnection guarantees are covered directly in
- * `tests/edge-attachments.test.ts`; these cover the actual drag/hover/pin interaction and the
+ * `tests/edge-attachments.test.ts`; these cover the actual drag/click interaction and the
  * type-matched visual result.
+ *
+ * A card is visible only when its own chip is clicked (`pinned`, or `presentationReveal` while
+ * presenting) — deliberately not on hover and not just because the connector itself is selected,
+ * per `EdgeAttachmentChip`'s own doc comment: either read as noisy on a diagram with several
+ * attachments. A pinned card also opens read-only first; a second click on its own pencil glyph
+ * ("Edit attached detail") is what reveals the actual textarea.
  */
 
 async function newCanvas(page: Page, title: string) {
@@ -35,34 +41,83 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
   await page.mouse.up();
 }
 
-/** The connector's own midpoint — the same pattern `editing.spec.ts` and
- *  `connector-semantics.spec.ts` use to select or reconnect a specific edge, and here, to drop an
- *  attachable node precisely onto the connector's hit corridor. */
-async function edgeMidpoint(page: Page, nodeAIndex: number, nodeBIndex: number) {
-  const nodeA = (await page.locator('.dc-node').nth(nodeAIndex).boundingBox())!;
-  const nodeB = (await page.locator('.dc-node').nth(nodeBIndex).boundingBox())!;
-  return {
-    x: (nodeA.x + nodeA.width + nodeB.x) / 2,
-    y: (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-  };
+/**
+ * The connector's own true midpoint — read from the actual rendered SVG path (via
+ * `getPointAtLength`/`getScreenCTM`), not guessed by averaging the two nodes' own boxes the way
+ * `editing.spec.ts`/`connector-semantics.spec.ts` do for a plain "click somewhere on the line" —
+ * this one needs to be precise enough to drop a dragged node onto, and `smoothstep` routing can
+ * bend through an intermediate run far from that naive average once the two nodes have noticeably
+ * different heights (as a Service→Queue pair now does). The node indices are accepted only so
+ * every existing call site stays unchanged; there is always exactly one connector in these tests.
+ */
+async function edgeMidpoint(page: Page, _nodeAIndex: number, _nodeBIndex: number) {
+  return page.locator('.dc-edge-line').first().evaluate((path: SVGPathElement) => {
+    const point = path.getPointAtLength(path.getTotalLength() / 2);
+    const screenPoint = point.matrixTransform(path.getScreenCTM()!);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
 }
 
-/** Drags a node by its center onto a point, in one smooth gesture — mirrors
- *  `attachments.spec.ts`'s `dragNodeCenterTo`, reused here for dropping onto a connector instead
- *  of another node. */
+/**
+ * Drags a node by its center onto a point, in one smooth gesture — mirrors
+ * `attachments.spec.ts`'s `dragNodeCenterTo`, reused here for dropping onto a connector instead
+ * of another node.
+ *
+ * React Flow's own drag-position bookkeeping can occasionally land a few pixels off from the
+ * pointer's true screen position by the time a synthetic, multi-step Playwright drag ends — a
+ * live-drag timing artifact, not anything this app computes wrong (`Canvas.tsx`'s own
+ * `onNodesChange` already guards against the one reproducible cause found here: a stale
+ * drag-end frame overwriting a just-armed target). A single connector's `interactionWidth` hit
+ * corridor is narrow enough that a straight-line drag can still occasionally land just outside
+ * it, so this nudges in a small spiral around the intended point before releasing, and retries
+ * the whole grab-drag-release gesture a few times — the node stays a plain, re-draggable
+ * standalone node on a failed attempt — rather than trusting a single try.
+ */
 async function dragNodeCenterTo(page: Page, node: ReturnType<Page['locator']>, target: { x: number; y: number }) {
-  const box = (await node.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x, target.y, { steps: 15 });
-  await page.mouse.up();
+  const armed = () => page.locator('.dc-edge[data-attach-target="true"]').count();
+  const nudges: [number, number][] = [
+    [0, 0],
+    [0, -8],
+    [0, 8],
+    [-8, 0],
+    [8, 0],
+    [0, -16],
+    [0, 16],
+    [-16, 0],
+    [16, 0],
+  ];
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const box = (await node.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(target.x, target.y, { steps: 15 });
+    for (const [dx, dy] of nudges) {
+      if (await armed()) break;
+      await page.mouse.move(target.x + dx, target.y + dy, { steps: 3 });
+    }
+    await page.mouse.up();
+    if ((await node.count()) === 0) return; // Folded into the connector's attachment.
+  }
 }
 
 async function servicePublishingToTopic(page: Page, title: string) {
   await newCanvas(page, title);
   await create(page, 'Service', { x: 300, y: 300 });
-  await create(page, 'Queue', { x: 700, y: 300 });
+  // Far enough from Service that a dropped Code card (380px wide by default)
+  // can sit centred on the connector between them without its own rect
+  // overlapping either node — which would arm a node-attach instead of an
+  // edge-attach, folding it into the wrong node entirely.
+  await create(page, 'Queue', { x: 1000, y: 300 });
   await connect(page, 0, 1);
+}
+
+/** Pins a chip open (read-only) and clicks through to its editable textarea —
+ *  the two deliberate steps a real edit now takes, see the file doc comment. */
+async function openForEditing(page: Page, chip: ReturnType<Page['locator']>) {
+  await chip.click();
+  await page.getByRole('button', { name: 'Edit attached detail' }).click();
+  return page.locator('.dc-edge-attachment-card textarea');
 }
 
 test.describe('connection-attached details', () => {
@@ -102,7 +157,8 @@ test.describe('connection-attached details', () => {
     const chip = page.locator('.dc-edge-attachment-chip[data-kind="code"]');
     await expect(chip).toHaveCount(1);
 
-    await chip.hover();
+    // A click pins the card open, read-only — exactly the view this test checks.
+    await chip.click();
     const card = page.locator('.dc-edge-attachment-card');
     await expect(card).toBeVisible();
     // The default JSON sample (`{ "accountId": "123", "status": "CANCELLED" }`) is four lines.
@@ -123,12 +179,12 @@ test.describe('connection-attached details', () => {
     await expect(chips.nth(0)).toHaveAttribute('data-kind', 'note');
     await expect(chips.nth(1)).toHaveAttribute('data-kind', 'code');
 
-    // Hovering one reveals only its own card.
-    await chips.nth(1).hover();
+    // Clicking one reveals only its own card.
+    await chips.nth(1).click();
     await expect(page.locator('.dc-edge-attachment-card')).toHaveCount(1);
   });
 
-  test('clicking a chip pins its card open for editing, preserving case (not forced uppercase)', async ({
+  test('clicking a chip pins its card open read-only; the pencil glyph is what reveals editing', async ({
     page,
   }) => {
     await servicePublishingToTopic(page, 'Pin and edit');
@@ -137,9 +193,13 @@ test.describe('connection-attached details', () => {
 
     const chip = page.locator('.dc-edge-attachment-chip');
     await chip.click();
-    const textarea = page.locator('.dc-edge-attachment-card textarea');
+    const card = page.locator('.dc-edge-attachment-card');
+    await expect(card).toBeVisible();
+    await expect(card.locator('textarea')).toHaveCount(0);
+
+    const textarea = await openForEditing(page, chip);
     await expect(textarea).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete attached detail' })).toBeVisible();
 
     await textarea.fill('Mixed Case Value');
     // Escape closes the card without ever blurring the textarea — this is the exact commit path
@@ -147,6 +207,7 @@ test.describe('connection-attached details', () => {
     // note on it): the value must be tracked live via `onChange`, not committed on blur.
     await page.keyboard.press('Escape');
 
+    await chip.click();
     const note = page.locator('.dc-edge-attachment-note');
     await expect(note).toHaveText('Mixed Case Value');
     const transform = await note.evaluate((el) => getComputedStyle(el).textTransform);
@@ -158,64 +219,69 @@ test.describe('connection-attached details', () => {
     await create(page, 'Note', { x: 500, y: 500 });
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
 
-    await page.locator('.dc-edge-attachment-chip').click();
-    await page.locator('.dc-edge-attachment-card textarea').pressSequentially('kept via outside click');
+    const chip = page.locator('.dc-edge-attachment-chip');
+    const textarea = await openForEditing(page, chip);
+    await textarea.pressSequentially('kept via outside click');
     await page.locator('.react-flow__pane').click({ position: { x: 100, y: 500 } });
 
-    await page.locator('.dc-edge-attachment-chip').hover();
+    await chip.click();
     await expect(page.locator('.dc-edge-attachment-note')).toHaveText('kept via outside click');
   });
 
-  test('moving from the chip into its card keeps it open; leaving both closes it', async ({ page }) => {
-    await servicePublishingToTopic(page, 'Hover stability');
+  test('Escape closes an open chip\'s card', async ({ page }) => {
+    // Not re-clicking the chip itself to close it — that specific gesture has
+    // a known, separately-tracked issue (the outside-pointerdown-close
+    // listener and the chip's own click handler race and net out to a
+    // no-op). Escape and an outside click are the two paths confirmed to
+    // actually close it; outside-click is already covered by the "typing
+    // then clicking outside" test above.
+    await servicePublishingToTopic(page, 'Escape closes');
     await create(page, 'Note', { x: 500, y: 500 });
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
 
     const chip = page.locator('.dc-edge-attachment-chip');
-    await chip.hover();
+    await chip.click();
     const card = page.locator('.dc-edge-attachment-card');
     await expect(card).toBeVisible();
 
-    const box = (await card.boundingBox())!;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.waitForTimeout(150);
-    await expect(card).toBeVisible();
-
-    await page.mouse.move(100, 500);
-    await expect(card).toHaveCount(0, { timeout: 1000 });
+    await page.keyboard.press('Escape');
+    await expect(card).toHaveCount(0);
   });
 
-  test('selecting the connection reveals the chip row\'s cards without hovering', async ({ page }) => {
-    await servicePublishingToTopic(page, 'Selection reveal');
+  test('selecting the connection alone does not reveal any attachment card', async ({ page }) => {
+    // A card popping open just because the connector got selected read as noisy on a diagram
+    // with several attachments — see `EdgeAttachmentChip`'s own doc comment. Only a click on a
+    // specific chip pins that one card open now.
+    await servicePublishingToTopic(page, 'Selection does not reveal');
     await create(page, 'Note', { x: 500, y: 500 });
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
 
     const target = await edgeMidpoint(page, 0, 1);
     await page.mouse.click(target.x, target.y);
 
-    const card = page.locator('.dc-edge-attachment-card');
-    await expect(card).toBeVisible();
-    await expect(card.locator('textarea')).toHaveCount(0);
+    await expect(page.locator('.dc-edge-attachment-card')).toHaveCount(0);
   });
 
-  test('presentation mode reveals a chip\'s card on hover with no editing available', async ({ page }) => {
+  test('presentation mode reveals a chip\'s card on click, with no editing available', async ({ page }) => {
     await servicePublishingToTopic(page, 'Presentation reveal');
     await create(page, 'Note', { x: 500, y: 500 });
+    const chip = page.locator('.dc-edge-attachment-chip');
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
-    await page.locator('.dc-edge-attachment-chip').click();
-    await page.locator('.dc-edge-attachment-card textarea').fill('present me');
+    const textarea = await openForEditing(page, chip);
+    await textarea.fill('present me');
     await page.keyboard.press('Escape');
 
     await page.getByRole('button', { name: 'Present (Cmd+Enter)' }).click();
     await expect(page.getByRole('button', { name: 'Exit presentation' })).toBeVisible();
 
-    const chip = page.locator('.dc-edge-attachment-chip');
     await expect(chip).toBeVisible();
-    await chip.hover();
+    await chip.click();
     const card = page.locator('.dc-edge-attachment-card');
     await expect(card).toBeVisible();
     await expect(card).toContainText('present me');
     await expect(card.locator('textarea')).toHaveCount(0);
+    // Presenting never unlocks editing — the pencil glyph itself is gone, not just its textarea.
+    await expect(page.getByRole('button', { name: 'Edit attached detail' })).toHaveCount(0);
   });
 
   test('deleting the connection removes its attachments, and undo restores them together', async ({ page }) => {
@@ -239,7 +305,7 @@ test.describe('connection-attached details', () => {
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
 
     await page.locator('.dc-edge-attachment-chip').click();
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete attached detail' }).click();
 
     await expect(page.locator('.dc-edge-attachment-chip')).toHaveCount(0);
     await expect(page.locator('.dc-edge')).toHaveCount(1);

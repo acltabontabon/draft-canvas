@@ -851,6 +851,13 @@ async function endpointBox(page: Page, which: 0 | 1) {
   return (await page.locator('.dc-edge-endpoint').nth(which).boundingBox())!;
 }
 
+/** Opens the connector popover's collapsed-by-default relation picker —
+ *  see `connector-semantics.spec.ts`'s file doc comment for why a click is
+ *  needed here at all. */
+async function openRelationPanel(page: Page) {
+  await page.locator('.dc-edge-inspector-caption').click();
+}
+
 test.describe('reconnection', () => {
   test('the connector visibly follows the pointer while an endpoint is being dragged', async ({ page }) => {
     await newCanvas(page, 'Live drag preview');
@@ -906,6 +913,7 @@ test.describe('reconnection', () => {
     // Reconnected onto the queue: the relationship is freshly inferred as an
     // event publish, and there's still exactly one connector (moved, not duplicated).
     await expect(page.locator('.dc-edge')).toHaveCount(1);
+    await openRelationPanel(page);
     const select = page.getByRole('combobox', { name: 'Connection type' });
     await expect(select).toHaveValue('publishes');
   });
@@ -972,6 +980,7 @@ test.describe('reconnection', () => {
       (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
     );
     // Still the original Service → Database pair, which infers `writes`.
+    await openRelationPanel(page);
     const select = page.getByRole('combobox', { name: 'Connection type' });
     await expect(select).toHaveValue('writes');
   });
@@ -1007,6 +1016,7 @@ test.describe('reconnection', () => {
       (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
     );
     // Still the original Service → Database pair, which infers `writes`.
+    await openRelationPanel(page);
     const select = page.getByRole('combobox', { name: 'Connection type' });
     await expect(select).toHaveValue('writes');
   });
@@ -1031,8 +1041,14 @@ test.describe('reconnection', () => {
     await page.mouse.move(queue.x + queue.width / 2, queue.y + queue.height / 2, { steps: 10 });
     await page.mouse.up();
 
+    await openRelationPanel(page);
     const select = page.getByRole('combobox', { name: 'Connection type' });
     await expect(select).toHaveValue('publishes');
+    // The relation `<select>` autofocuses when its panel opens — the app's
+    // own global shortcut guard (deliberately) ignores Meta+Z while an
+    // INPUT/TEXTAREA/SELECT is focused, so it must be blurred first or the
+    // undo below would silently do nothing.
+    await select.blur();
 
     await page.keyboard.press('Meta+z');
     // Back to the original Service → Database connection, which infers `writes`.

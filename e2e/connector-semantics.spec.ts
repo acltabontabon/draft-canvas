@@ -2,10 +2,17 @@ import { expect, test, type Page } from '@playwright/test';
 
 /**
  * The contextual connector toolbar — see `document/connectorSemantics.ts`'s
- * capability matrix and `Inspector.tsx`'s `EdgeControls`. Domain rules
- * (which pairing infers what) are unit-tested directly in
- * `tests/connector-semantics.test.ts`; these cover the toolbar actually
+ * capability matrix and `EdgeInspectorPopover.tsx`'s `EdgeInspectorRow`.
+ * Domain rules (which pairing infers what) are unit-tested directly in
+ * `tests/connector-semantics.test.ts`; these cover the popover actually
  * showing the right controls for a real pointer-driven connection.
+ *
+ * The popover shows a compact row (caption, flow-membership chip, "⋯") with
+ * at most one of three sub-panels open at a time — the relation `<select>`
+ * lives behind the caption ("semantic" panel), the behaviour/routing/colour
+ * controls behind "⋯" ("advanced" panel). Opening one panel closes whichever
+ * other was open, so a test that needs to check both switches between them
+ * rather than expecting both mounted at once.
  */
 
 async function newCanvas(page: Page, title: string) {
@@ -34,38 +41,68 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
   await page.mouse.up();
 }
 
+/** Opens the popover's collapsed-by-default relation picker. */
+async function openRelationPanel(page: Page) {
+  await page.locator('.dc-edge-inspector-caption').click();
+}
+
+/** Opens the popover's "⋯" behaviour/routing/colour panel — switches away
+ *  from the relation panel if that one was open, since only one shows at once. */
+async function openAdvancedPanel(page: Page) {
+  await page.getByRole('button', { name: 'More connector options' }).click();
+}
+
 test.describe('contextual connector toolbar', () => {
-  test('Service → Database infers Writes and collapses the kind picker and condition field', async ({ page }) => {
+  test('Service → Database infers Writes, with no flow-kind picker or condition needed', async ({ page }) => {
     await newCanvas(page, 'Service to database toolbar');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Database', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    const relation = page.getByRole('combobox', { name: 'Connection type' });
-    await expect(relation).toHaveValue('writes');
-    // Only the four relations the matrix considers relevant for this pairing.
-    await expect(relation.locator('option')).toHaveText([
-      'No type',
-      'Writes',
-      'Reads',
-      'Query',
-      'Depends on',
-      'Show all…',
-    ]);
+    await openRelationPanel(page);
+    await expect(page.getByRole('combobox', { name: 'Connection type' })).toHaveValue('writes');
+
+    await openAdvancedPanel(page);
     await expect(page.getByRole('combobox', { name: 'Flow kind' })).toHaveCount(0);
+    await expect(page.locator('.dc-kind-badge')).toHaveCount(0);
     await expect(page.getByLabel('Condition')).toHaveCount(0);
   });
 
-  test('Database → Service infers Reads, with no messaging semantics offered', async ({ page }) => {
+  test('Database → Service infers Reads', async ({ page }) => {
     await newCanvas(page, 'Database to service toolbar');
     await create(page, 'Database', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
+    await openRelationPanel(page);
+    await expect(page.getByRole('combobox', { name: 'Connection type' })).toHaveValue('reads');
+  });
+
+  test('the Connection type select lists every relation, unfiltered by node pairing', async ({ page }) => {
+    // The popover's relation picker is a plain, full `EDGE_SEMANTICS` list —
+    // unlike the older side-panel toolbar it replaced, it no longer narrows
+    // options by capability (and so has no "Show all…" escape hatch either).
+    await newCanvas(page, 'Full relation list');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await create(page, 'Database', { x: 600, y: 200 });
+    await connect(page, 0, 1);
+
+    await openRelationPanel(page);
     const relation = page.getByRole('combobox', { name: 'Connection type' });
-    await expect(relation).toHaveValue('reads');
-    await expect(relation.locator('option', { hasText: 'Publishes' })).toHaveCount(0);
-    await expect(relation.locator('option', { hasText: 'Consumes' })).toHaveCount(0);
+    await expect(relation).toHaveValue('writes');
+    await expect(relation.locator('option')).toHaveText([
+      'No type',
+      'HTTP',
+      'Event',
+      'Command',
+      'Query',
+      'Reads',
+      'Writes',
+      'Publishes',
+      'Consumes',
+      'Calls',
+      'Depends on',
+    ]);
   });
 
   test('Service → Queue infers Publishes and shows a compact, expandable behaviour badge', async ({ page }) => {
@@ -74,7 +111,10 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Queue', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
+    await openRelationPanel(page);
     await expect(page.getByRole('combobox', { name: 'Connection type' })).toHaveValue('publishes');
+
+    await openAdvancedPanel(page);
     await expect(page.getByRole('combobox', { name: 'Flow kind' })).toHaveCount(0);
     const badge = page.getByRole('button', { name: 'Event · Async' });
     await expect(badge).toHaveAttribute('title', /Inferred from what this connects/);
@@ -93,7 +133,10 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Service', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
+    await openRelationPanel(page);
     await expect(page.getByRole('combobox', { name: 'Connection type' })).toHaveValue('calls');
+
+    await openAdvancedPanel(page);
     const kind = page.getByRole('combobox', { name: 'Flow kind' });
     await expect(kind).toBeVisible();
     // The unset value reads as "Sync" here, not the generic "No kind" —
@@ -103,19 +146,6 @@ test.describe('contextual connector toolbar', () => {
     await expect(kind.locator('option').first()).toHaveText('Sync');
     await expect(kind.locator('option', { hasText: /^Sync$/ })).toHaveCount(1);
     await expect(page.getByLabel('Condition')).toBeVisible();
-  });
-
-  test('"Show all…" reveals every relation without changing the current value', async ({ page }) => {
-    await newCanvas(page, 'Show all relations');
-    await create(page, 'Service', { x: 300, y: 200 });
-    await create(page, 'Database', { x: 600, y: 200 });
-    await connect(page, 0, 1);
-
-    const relation = page.getByRole('combobox', { name: 'Connection type' });
-    await relation.selectOption('__more__');
-    await expect(relation).toHaveValue('writes');
-    await expect(relation.locator('option', { hasText: 'Publishes' })).toHaveCount(1);
-    await expect(relation.locator('option', { hasText: 'Calls' })).toHaveCount(1);
   });
 
   test('reconnecting a Service → Service call onto a Database re-infers Writes and re-collapses the toolbar', async ({
@@ -133,7 +163,9 @@ test.describe('contextual connector toolbar', () => {
       (nodeA.x + nodeA.width + nodeB.x) / 2,
       (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
     );
+    await openRelationPanel(page);
     await expect(page.getByRole('combobox', { name: 'Connection type' })).toHaveValue('calls');
+    await openAdvancedPanel(page);
     await expect(page.getByRole('combobox', { name: 'Flow kind' })).toBeVisible();
 
     const target = (await page.locator('.dc-edge-endpoint').nth(1).boundingBox())!;
@@ -143,7 +175,9 @@ test.describe('contextual connector toolbar', () => {
     await page.mouse.move(database.x + database.width / 2, database.y + database.height / 2, { steps: 10 });
     await page.mouse.up();
 
+    await openRelationPanel(page);
     await expect(page.getByRole('combobox', { name: 'Connection type' })).toHaveValue('writes');
+    await openAdvancedPanel(page);
     await expect(page.getByRole('combobox', { name: 'Flow kind' })).toHaveCount(0);
     await expect(page.getByLabel('Condition')).toHaveCount(0);
   });
