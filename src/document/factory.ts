@@ -36,7 +36,7 @@ export function defaultSizeFor(type: DraftNodeType): { width: number; height: nu
     case 'actor':
       return { width: DEFAULTS.actorWidth, height: DEFAULTS.actorHeight };
     case 'queue':
-      return { width: DEFAULTS.nodeWidth, height: DEFAULTS.queueHeight };
+      return { width: DEFAULTS.queueWidth, height: DEFAULTS.queueHeight };
     default:
       return { width: DEFAULTS.nodeWidth, height: DEFAULTS.nodeHeight };
   }

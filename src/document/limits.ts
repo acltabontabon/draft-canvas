@@ -49,6 +49,9 @@ export const DEFAULTS = {
   /** The tube is a compact glyph anchored to the top, with only its kind
    *  caption (no editable name — see `defaultTextFor`) sitting snugly below
    *  it — sized to leave just enough margin below the caption for a
-   *  top/bottom-anchored connector to meet the node without a visible gap. */
+   *  top/bottom-anchored connector to meet the node without a visible gap.
+   *  Narrower than the standard node width too, now that it's this short —
+   *  the full 176px read as a stretched bar around a much smaller glyph. */
+  queueWidth: 140,
   queueHeight: 48,
 } as const;
