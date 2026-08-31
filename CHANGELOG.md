@@ -8,6 +8,39 @@ break as we settle on a stable 1.0 shape.
 
 ## [Unreleased]
 
+### Added
+
+- Actor now has three kinds — Human, System, and Device — each drawn with its own distinct glyph
+  (a bust silhouette, a small system window, or a device outline) inside a shared, lightweight
+  outlined card, instead of one generic head-and-shoulders figure with no container.
+- Selecting a single shape now shows a compact, collision-aware popover anchored right at the
+  shape (color, type, Focus, Delete), matching how selecting a connector already works. Multi and
+  mixed selections keep the existing bottom bar.
+- A connector's Interaction dropdown is now narrowed to what that specific pairing actually
+  supports (e.g. Service-Queue only offers Publish/Event) instead of always listing every
+  semantic.
+
+### Changed
+
+- Both the connector and element popovers show their full relevant editor as soon as you select
+  something, instead of requiring an extra click on a "..." to reveal it.
+- Database is now labeled "Data Store" throughout the UI (the underlying `database` type is
+  unchanged, so existing diagrams are unaffected); its SQL/NoSQL/Cache subtype now reads as a
+  quiet line under the primary label instead of a corner badge.
+- Queue, Topic, and Stream now look visually distinct from one another (waiting/broadcast/flowing)
+  instead of sharing one identical tube glyph.
+- Actor is now sized and composed as a proper participant card — a large glyph filling most of
+  the container with its name close beneath it — instead of a small icon lost in empty space.
+- Data Store gets its own default footprint (narrower, taller) and a shallower cylinder cap,
+  instead of inheriting the generic node size and reading as a stretched database icon.
+- The generic "Circle" shape is now "Junction" — a compact routing/convergence point sized to read
+  as punctuation in a diagram, not a component on par with Service or Data Store.
+- Dropdown menus (in the connector popover and elsewhere) now flip or shrink to stay clear of the
+  viewport and the element they're editing, instead of sometimes covering it.
+- Toolbar buttons now distinguish creation tools from utility actions, with a clearer active-tool
+  state and ellipsis truncation for long titles; "Flows" is now visually separate from "Diagram"
+  mode.
+
 ## [0.1.0-alpha.2] - 2026-08-31
 
 ### Added
