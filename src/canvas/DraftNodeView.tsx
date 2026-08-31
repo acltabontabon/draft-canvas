@@ -53,8 +53,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       ? `${state.armedAnchor.side}:${state.armedAnchor.offset}`
       : null,
   );
-  const setOpenAttachmentPopover = useUiStore((state) => state.setOpenAttachmentPopover);
-  const popoverOpen = useUiStore((state) => state.openAttachmentPopover === id);
+  const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
+  const popoverOpen = useUiStore(
+    (state) => state.openAttachmentDetail?.hostKind === 'node' && state.openAttachmentDetail?.hostId === id,
+  );
   const editRequested = useUiStore((state) => state.editRequestId === id);
 
   const [editing, setEditing] = useState(false);
@@ -227,7 +229,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
-            setOpenAttachmentPopover(popoverOpen ? null : node.id);
+            setOpenAttachmentDetail(popoverOpen ? null : { hostKind: 'node', hostId: node.id, attachmentId: null });
           }}
         >
           {'<>'} {attachmentCount}

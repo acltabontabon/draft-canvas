@@ -77,20 +77,24 @@ interface UiStore {
    * which only exists for its native connection-creation drag.
    */
   armedAnchor: ArmedAnchor | null;
-  /** The host node whose attachment popover is open, if any. */
-  openAttachmentPopover: string | null;
-  /** The specific attachment (an edge can carry several) currently pinned open for editing, if
-   *  any — see `EdgeAttachmentChip` in `DraftEdgeView.tsx`. Hover reveals a chip's card
-   *  independently of this; only a click pins one open for editing. */
-  openEdgeDetail: { edgeId: string; attachmentId: string } | null;
+  /**
+   * The attachment UI currently open, shared by both node and edge hosts — see `AttachmentChip`/
+   * `AttachmentChipRow` in `AttachmentPresentation.tsx`. For an edge, `attachmentId` is always
+   * non-null when this is set (one click pins one specific chip's card open for editing). For a
+   * node, `attachmentId: null` means "the badge was clicked, the chip row is open, nothing pinned
+   * yet"; non-null means a specific chip is additionally pinned open — a node's badge click and an
+   * edge's chip click both write here, just at different granularity.
+   */
+  openAttachmentDetail: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null;
   /**
    * The single attachment a presenter has intentionally revealed for the
-   * current step — a read-only counterpart to `openEdgeDetail`, kept as a
-   * separate field rather than overloading that one: `openEdgeDetail` also
+   * current step — a read-only counterpart to `openAttachmentDetail`, kept as a
+   * separate field rather than overloading that one: `openAttachmentDetail` also
    * unlocks the attachment's edit textarea, which presentation must never
    * do. Cleared automatically on every step change (see `FlowBar.tsx`) —
    * there is no persistent pin across steps in this pass, so a revealed
-   * attachment never survives into an unrelated later step.
+   * attachment never survives into an unrelated later step. Edge-only: there is no analogous
+   * "current step" reveal for a node attachment.
    */
   presentationReveal: { edgeId: string; attachmentId: string } | null;
   /** Whether the Flow list drawer is visible. */
@@ -126,8 +130,9 @@ interface UiStore {
   setReconnectHoverTarget: (nodeId: string | null) => void;
   setReconnectDragActive: (active: boolean) => void;
   setArmedAnchor: (anchor: ArmedAnchor | null) => void;
-  setOpenAttachmentPopover: (hostId: string | null) => void;
-  setOpenEdgeDetail: (target: { edgeId: string; attachmentId: string } | null) => void;
+  setOpenAttachmentDetail: (
+    target: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null,
+  ) => void;
   setPresentationReveal: (target: { edgeId: string; attachmentId: string } | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
   setFlowSwitcherOpen: (open: boolean) => void;
@@ -153,8 +158,7 @@ export const useUiStore = create<UiStore>((set) => ({
   reconnectHoverTarget: null,
   reconnectDragActive: false,
   armedAnchor: null,
-  openAttachmentPopover: null,
-  openEdgeDetail: null,
+  openAttachmentDetail: null,
   presentationReveal: null,
   flowPanelOpen: false,
   flowSwitcherOpen: false,
@@ -188,8 +192,7 @@ export const useUiStore = create<UiStore>((set) => ({
           current.offset === next.offset);
       return same ? state : { armedAnchor: next };
     }),
-  setOpenAttachmentPopover: (openAttachmentPopover) => set({ openAttachmentPopover }),
-  setOpenEdgeDetail: (openEdgeDetail) => set({ openEdgeDetail }),
+  setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   setFlowSwitcherOpen: (flowSwitcherOpen) => set({ flowSwitcherOpen }),

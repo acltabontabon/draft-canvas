@@ -354,7 +354,7 @@ function useKeyboard({
           if (event.shiftKey || event.altKey) return;
           if (playback.active || state.focus.active) return;
           const uiState = useUiStore.getState();
-          if (uiState.quickConnect || uiState.openAttachmentPopover || uiState.openEdgeDetail) return;
+          if (uiState.quickConnect || uiState.openAttachmentDetail) return;
           const { nodes, edges } = state.selection;
           if (nodes.length === 1 && edges.length === 0) {
             const target = state.document.nodes.find((n) => n.id === nodes[0]);

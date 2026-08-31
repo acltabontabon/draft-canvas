@@ -430,8 +430,11 @@
 /* The row of attachment chips — positioned above the connector by default (or below, via
    `[data-flip='below']`, when "above" would land on the connector's own source/target node).
    `gap` is what keeps several chips from touching when an edge carries more than one. */
-.dc-edge-attachment-row {
-  position: absolute;
+/* No `position` here on purpose — an edge anchors this row itself (absolute, flow-coordinate
+   `transform`, set inline in `DraftEdgeView.tsx`); a node's attachment popover instead lets it flow
+   normally inside its own already-positioned panel. Baking `position: absolute` in here would pull
+   the row out of the popover's layout flow and collapse the panel's measured height. */
+.dc-attachment-chip-row {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -441,7 +444,7 @@
    the app (`nodes/describe.ts`'s `note`/`codeCard`) via `--dc-chip-*` custom properties set inline
    per chip in `DraftEdgeView.tsx` — a Note attachment reads as a note, a Code one as code, not as
    one generic box for every kind. */
-.dc-edge-attachment-chip {
+.dc-attachment-chip {
   position: relative;
   display: flex;
   align-items: center;
@@ -462,8 +465,8 @@
   transition: transform 90ms ease, box-shadow 90ms ease;
 }
 
-.dc-edge-attachment-chip:hover,
-.dc-edge-attachment-chip:focus-visible {
+.dc-attachment-chip:hover,
+.dc-attachment-chip:focus-visible {
   outline: none;
 }
 
@@ -471,29 +474,29 @@
    chip, so this scale would otherwise run alongside the card's own independent open/close fade,
    two unsynchronized transforms on nested elements. See the matching comment in
    `DraftEdgeView.tsx`. */
-.dc-edge-attachment-chip:hover:not([data-open]),
-.dc-edge-attachment-chip:focus-visible:not([data-open]) {
+.dc-attachment-chip:hover:not([data-open]),
+.dc-attachment-chip:focus-visible:not([data-open]) {
   transform: scale(1.06);
 }
 
 /* A note's icon is the same "colour bar, not a sticky-note skeuomorph" idea its real card uses,
    shrunk to a dot; code gets a literal glyph instead, so the two kinds are distinguishable even
    with the row's uppercase label style making every chip's text look similar. */
-.dc-edge-attachment-chip-icon {
+.dc-attachment-chip-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.dc-edge-attachment-chip[data-kind='note'] .dc-edge-attachment-chip-icon {
+.dc-attachment-chip[data-kind='note'] .dc-attachment-chip-icon {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--dc-chip-accent);
 }
 
-.dc-edge-attachment-chip[data-kind='code'] .dc-edge-attachment-chip-icon {
+.dc-attachment-chip[data-kind='code'] .dc-attachment-chip-icon {
   font-family: var(--dc-mono);
   font-size: 10px;
   font-weight: 400;
@@ -501,7 +504,7 @@
   letter-spacing: normal;
 }
 
-.dc-edge-attachment-card {
+.dc-attachment-card {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -517,18 +520,18 @@
   font-weight: 400;
 }
 
-.dc-edge-attachment-row:not([data-flip='below']) .dc-edge-attachment-card {
+.dc-attachment-chip-row:not([data-flip='below']) .dc-attachment-card {
   bottom: calc(100% + 6px);
 }
 
-.dc-edge-attachment-row[data-flip='below'] .dc-edge-attachment-card {
+.dc-attachment-chip-row[data-flip='below'] .dc-attachment-card {
   top: calc(100% + 6px);
 }
 
 /* The animation lives here, separate from the positioned outer element above — see the matching
    comment in `DraftEdgeView.tsx`: a CSS animation replaces the whole `transform` property for its
    duration, so animating scale on the same element as the positioning translate would clobber it. */
-.dc-edge-attachment-card-inner {
+.dc-attachment-card-inner {
   display: flex;
   flex-direction: column;
   width: 220px;
@@ -542,19 +545,19 @@
 }
 
 /* The note card's own left colour bar, shown at full size once the chip expands into its card. */
-.dc-edge-attachment-card-inner[data-kind='note'] {
+.dc-attachment-card-inner[data-kind='note'] {
   border-left: 3px solid var(--dc-chip-accent);
 }
 
 /* Mirrors `dc-attachment-card-in` for hiding — `data-closing` is set by `DraftEdgeView.tsx`,
    which keeps the card mounted for the animation's duration instead of unmounting it instantly. */
-.dc-edge-attachment-card[data-closing='true'] .dc-edge-attachment-card-inner {
+.dc-attachment-card[data-closing='true'] .dc-attachment-card-inner {
   animation: dc-attachment-card-out 120ms ease forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dc-edge-attachment-card-inner,
-  .dc-edge-attachment-card[data-closing='true'] .dc-edge-attachment-card-inner,
+  .dc-attachment-card-inner,
+  .dc-attachment-card[data-closing='true'] .dc-attachment-card-inner,
   .dc-attachment-popover-inner,
   .dc-attachment-popover[data-closing='true'] .dc-attachment-popover-inner {
     animation: none;
@@ -583,7 +586,7 @@
   }
 }
 
-.dc-edge-attachment-card-header {
+.dc-attachment-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -596,13 +599,13 @@
   letter-spacing: 0.04em;
 }
 
-.dc-edge-attachment-card-actions {
+.dc-attachment-card-actions {
   display: flex;
   align-items: center;
   gap: 2px;
 }
 
-.dc-edge-attachment-card-action {
+.dc-attachment-card-action {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -611,16 +614,23 @@
   border-radius: 4px;
   background: none;
   color: inherit;
+  font-size: 11px;
+  line-height: 1;
   opacity: 0.75;
   cursor: pointer;
 }
 
-.dc-edge-attachment-card-action:hover {
+.dc-attachment-card-action:hover:not(:disabled) {
   opacity: 1;
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
-.dc-edge-attachment-note {
+.dc-attachment-card-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.dc-attachment-note {
   padding: 8px 10px;
   overflow-y: auto;
   color: var(--dc-text);
@@ -629,7 +639,7 @@
   white-space: pre-wrap;
 }
 
-.dc-edge-attachment-code {
+.dc-attachment-code {
   margin: 0;
   padding: 8px 10px;
   overflow: auto;
@@ -761,7 +771,7 @@
 }
 
 /* The animation lives here, separate from the positioned outer element above — same split as
-   `.dc-edge-attachment-card-inner`, and for the same reason: a CSS `animation` touching `transform`
+   `.dc-attachment-card-inner`, and for the same reason: a CSS `animation` touching `transform`
    would otherwise clobber the outer div's own inline positioning `transform`. */
 .dc-attachment-popover-inner {
   display: flex;

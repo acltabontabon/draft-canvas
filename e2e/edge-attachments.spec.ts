@@ -117,7 +117,7 @@ async function servicePublishingToTopic(page: Page, title: string) {
 async function openForEditing(page: Page, chip: ReturnType<Page['locator']>) {
   await chip.click();
   await page.getByRole('button', { name: 'Edit attached detail' }).click();
-  return page.locator('.dc-edge-attachment-card textarea');
+  return page.locator('.dc-attachment-card textarea');
 }
 
 test.describe('connection-attached details', () => {
@@ -135,7 +135,7 @@ test.describe('connection-attached details', () => {
     // The standalone node is gone — it became the connector's own attachment.
     await expect(page.locator('.dc-node[data-type="note"]')).toHaveCount(0);
 
-    const chip = page.locator('.dc-edge-attachment-chip');
+    const chip = page.locator('.dc-attachment-chip');
     await expect(chip).toHaveCount(1);
     await expect(chip).toHaveText('NOTE');
     await expect(chip).toHaveAttribute('data-kind', 'note');
@@ -154,12 +154,12 @@ test.describe('connection-attached details', () => {
     await dragNodeCenterTo(page, code, target);
 
     await expect(page.locator('.dc-node[data-type="code"]')).toHaveCount(0);
-    const chip = page.locator('.dc-edge-attachment-chip[data-kind="code"]');
+    const chip = page.locator('.dc-attachment-chip[data-kind="code"]');
     await expect(chip).toHaveCount(1);
 
     // A click pins the card open, read-only — exactly the view this test checks.
     await chip.click();
-    const card = page.locator('.dc-edge-attachment-card');
+    const card = page.locator('.dc-attachment-card');
     await expect(card).toBeVisible();
     // The default JSON sample (`{ "accountId": "123", "status": "CANCELLED" }`) is four lines.
     await expect(card.locator('.dc-code-line')).toHaveCount(4);
@@ -174,14 +174,14 @@ test.describe('connection-attached details', () => {
     await create(page, 'Code', { x: 500, y: 500 });
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="code"]'), await edgeMidpoint(page, 0, 1));
 
-    const chips = page.locator('.dc-edge-attachment-chip');
+    const chips = page.locator('.dc-attachment-chip');
     await expect(chips).toHaveCount(2);
     await expect(chips.nth(0)).toHaveAttribute('data-kind', 'note');
     await expect(chips.nth(1)).toHaveAttribute('data-kind', 'code');
 
     // Clicking one reveals only its own card.
     await chips.nth(1).click();
-    await expect(page.locator('.dc-edge-attachment-card')).toHaveCount(1);
+    await expect(page.locator('.dc-attachment-card')).toHaveCount(1);
   });
 
   test('clicking a chip pins its card open read-only; the pencil glyph is what reveals editing', async ({
@@ -191,9 +191,9 @@ test.describe('connection-attached details', () => {
     await create(page, 'Note', { x: 500, y: 500 });
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
 
-    const chip = page.locator('.dc-edge-attachment-chip');
+    const chip = page.locator('.dc-attachment-chip');
     await chip.click();
-    const card = page.locator('.dc-edge-attachment-card');
+    const card = page.locator('.dc-attachment-card');
     await expect(card).toBeVisible();
     await expect(card.locator('textarea')).toHaveCount(0);
 
@@ -202,7 +202,7 @@ test.describe('connection-attached details', () => {
     // down), so only the pencil glyph itself is clicked here, not the full
     // `openForEditing` helper (which assumes a not-yet-open chip).
     await page.getByRole('button', { name: 'Edit attached detail' }).click();
-    const textarea = page.locator('.dc-edge-attachment-card textarea');
+    const textarea = page.locator('.dc-attachment-card textarea');
     await expect(textarea).toBeVisible();
     await expect(page.getByRole('button', { name: 'Delete attached detail' })).toBeVisible();
 
@@ -213,7 +213,7 @@ test.describe('connection-attached details', () => {
     await page.keyboard.press('Escape');
 
     await chip.click();
-    const note = page.locator('.dc-edge-attachment-note');
+    const note = page.locator('.dc-attachment-note');
     await expect(note).toHaveText('Mixed Case Value');
     const transform = await note.evaluate((el) => getComputedStyle(el).textTransform);
     expect(transform).toBe('none');
@@ -224,13 +224,13 @@ test.describe('connection-attached details', () => {
     await create(page, 'Note', { x: 500, y: 500 });
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
 
-    const chip = page.locator('.dc-edge-attachment-chip');
+    const chip = page.locator('.dc-attachment-chip');
     const textarea = await openForEditing(page, chip);
     await textarea.pressSequentially('kept via outside click');
     await page.locator('.react-flow__pane').click({ position: { x: 100, y: 500 } });
 
     await chip.click();
-    await expect(page.locator('.dc-edge-attachment-note')).toHaveText('kept via outside click');
+    await expect(page.locator('.dc-attachment-note')).toHaveText('kept via outside click');
   });
 
   test('Escape closes an open chip\'s card', async ({ page }) => {
@@ -238,9 +238,9 @@ test.describe('connection-attached details', () => {
     await create(page, 'Note', { x: 500, y: 500 });
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
 
-    const chip = page.locator('.dc-edge-attachment-chip');
+    const chip = page.locator('.dc-attachment-chip');
     await chip.click();
-    const card = page.locator('.dc-edge-attachment-card');
+    const card = page.locator('.dc-attachment-card');
     await expect(card).toBeVisible();
 
     await page.keyboard.press('Escape');
@@ -259,15 +259,15 @@ test.describe('connection-attached details', () => {
     await create(page, 'Note', { x: 500, y: 500 });
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
 
-    const chip = page.locator('.dc-edge-attachment-chip');
+    const chip = page.locator('.dc-attachment-chip');
     await chip.click();
-    const card = page.locator('.dc-edge-attachment-card');
+    const card = page.locator('.dc-attachment-card');
     await expect(card).toBeVisible();
 
     // The chip's own label span specifically, not a raw offset into the
     // chip's outer box — once open, that box also contains the card (a DOM
     // child positioned off it, per `EdgeAttachmentChip`'s own comment).
-    await page.locator('.dc-edge-attachment-chip-label').click();
+    await page.locator('.dc-attachment-chip-label').click();
     await expect(card).toHaveCount(0);
   });
 
@@ -282,13 +282,13 @@ test.describe('connection-attached details', () => {
     const target = await edgeMidpoint(page, 0, 1);
     await page.mouse.click(target.x, target.y);
 
-    await expect(page.locator('.dc-edge-attachment-card')).toHaveCount(0);
+    await expect(page.locator('.dc-attachment-card')).toHaveCount(0);
   });
 
   test('presentation mode reveals a chip\'s card on click, with no editing available', async ({ page }) => {
     await servicePublishingToTopic(page, 'Presentation reveal');
     await create(page, 'Note', { x: 500, y: 500 });
-    const chip = page.locator('.dc-edge-attachment-chip');
+    const chip = page.locator('.dc-attachment-chip');
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
     const textarea = await openForEditing(page, chip);
     await textarea.fill('present me');
@@ -299,7 +299,7 @@ test.describe('connection-attached details', () => {
 
     await expect(chip).toBeVisible();
     await chip.click();
-    const card = page.locator('.dc-edge-attachment-card');
+    const card = page.locator('.dc-attachment-card');
     await expect(card).toBeVisible();
     await expect(card).toContainText('present me');
     await expect(card.locator('textarea')).toHaveCount(0);
@@ -319,7 +319,7 @@ test.describe('connection-attached details', () => {
 
     await page.keyboard.press('Meta+z');
     await expect(page.locator('.dc-edge')).toHaveCount(1);
-    await expect(page.locator('.dc-edge-attachment-chip')).toHaveCount(1);
+    await expect(page.locator('.dc-attachment-chip')).toHaveCount(1);
   });
 
   test('the card\'s own Delete button removes just that attachment', async ({ page }) => {
@@ -327,10 +327,10 @@ test.describe('connection-attached details', () => {
     await create(page, 'Note', { x: 500, y: 500 });
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
 
-    await page.locator('.dc-edge-attachment-chip').click();
+    await page.locator('.dc-attachment-chip').click();
     await page.getByRole('button', { name: 'Delete attached detail' }).click();
 
-    await expect(page.locator('.dc-edge-attachment-chip')).toHaveCount(0);
+    await expect(page.locator('.dc-attachment-chip')).toHaveCount(0);
     await expect(page.locator('.dc-edge')).toHaveCount(1);
   });
 });

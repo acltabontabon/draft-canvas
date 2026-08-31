@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ViewportPortal } from '@xyflow/react';
 import {
   ATTACHABLE_TYPES,
@@ -37,13 +37,19 @@ const POPOVER_EXIT_MS = 120;
 
 /**
  * The lightweight floating panel a node's attachment badge opens. Deliberately
- * not a permanent inspector — it exists only while `openAttachmentPopover`
- * names a host, anchored to that node in flow space (so it pans and zooms
- * with the canvas, the same as an edge label) rather than docked anywhere.
+ * not a permanent inspector — it exists only while `openAttachmentDetail`
+ * names this node as the open host, anchored to that node in flow space (so
+ * it pans and zooms with the canvas, the same as an edge label) rather than
+ * docked anywhere.
  */
 export function AttachmentPopover() {
-  const hostId = useUiStore((state) => state.openAttachmentPopover);
-  const setOpen = useUiStore((state) => state.setOpenAttachmentPopover);
+  const hostId = useUiStore((state) => (state.openAttachmentDetail?.hostKind === 'node' ? state.openAttachmentDetail.hostId : null));
+  const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
+  const setOpen = useCallback(
+    (next: string | null) =>
+      setOpenAttachmentDetail(next ? { hostKind: 'node', hostId: next, attachmentId: null } : null),
+    [setOpenAttachmentDetail],
+  );
   const host = useEditorStore((state) => (hostId ? selectNode(state.document, hostId) : undefined));
   const updateAttachment = useEditorStore((state) => state.updateAttachment);
   const detachAttachment = useEditorStore((state) => state.detachAttachment);
@@ -62,8 +68,8 @@ export function AttachmentPopover() {
 
   const open = Boolean(hostId && host?.attachments?.length);
 
-  // Mirrors `EdgeAttachmentChip` in `DraftEdgeView.tsx`: closing this panel is a state flip
-  // (`openAttachmentPopover` going null), and React would otherwise remove the DOM node the
+  // Mirrors `AttachmentChip` in `AttachmentPresentation.tsx`: closing this panel is a state flip
+  // (`openAttachmentDetail` going null), and React would otherwise remove the DOM node the
   // instant that happens, cutting off any fade-out mid-frame. So the panel stays mounted for one
   // more tick, marked `data-closing`, so `canvas.css` can play the reverse animation first.
   const [mounted, setMounted] = useState(open);
