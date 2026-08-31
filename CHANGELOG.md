@@ -8,6 +8,8 @@ break as we settle on a stable 1.0 shape.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3] - 2026-09-01
+
 ### Added
 
 - Actor now has three kinds — Human, System, and Device — each drawn with its own distinct glyph
@@ -165,6 +167,7 @@ break as we settle on a stable 1.0 shape.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.2...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.3...main
+[0.1.0-alpha.3]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/acltabontabon/draft-canvas/commits/v0.1.0-alpha.1
