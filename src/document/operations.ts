@@ -529,6 +529,72 @@ export function removeEdgeAttachment(doc: DraftDocument, edgeId: string, attachm
   return next.length === edge.attachments.length ? doc : withEdgeAttachments(doc, edgeId, next);
 }
 
+/** Mirrors `reorderAttachment` — see its own comment for why an edge attachment shares the node
+ *  version's exact logic, just against `edge.attachments`/`withEdgeAttachments`. */
+export function reorderEdgeAttachment(
+  doc: DraftDocument,
+  edgeId: string,
+  attachmentId: string,
+  direction: -1 | 1,
+): DraftDocument {
+  const edge = doc.edges.find((e) => e.id === edgeId);
+  if (!edge?.attachments) return doc;
+  const index = edge.attachments.findIndex((a) => a.id === attachmentId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= edge.attachments.length) return doc;
+  const next = [...edge.attachments];
+  [next[index], next[target]] = [next[target]!, next[index]!];
+  return withEdgeAttachments(doc, edgeId, next);
+}
+
+/**
+ * Removes an attachment and materializes it back into a real, freestanding node — mirrors
+ * `detachFromNode`'s shape and field-copy logic exactly, but placement differs: an edge has no
+ * single host rect to sit "beside," so this uses the midpoint between the source and target
+ * nodes' own rect centers instead, offset up slightly off the line. Deliberately not
+ * `routeBetween`'s live label point — pulling the full routing engine (anchors, lanes, obstacle
+ * avoidance) into a pure document op for a one-time placement heuristic isn't worth the coupling.
+ */
+export function detachFromEdge(
+  doc: DraftDocument,
+  edgeId: string,
+  attachmentId: string,
+): { doc: DraftDocument; extractedNode: DraftNode | null } {
+  const edge = doc.edges.find((e) => e.id === edgeId);
+  const attachment = edge?.attachments?.find((a) => a.id === attachmentId);
+  const source = edge ? doc.nodes.find((n) => n.id === edge.source) : undefined;
+  const target = edge ? doc.nodes.find((n) => n.id === edge.target) : undefined;
+  if (!edge || !attachment || !source || !target) return { doc, extractedNode: null };
+
+  const size = {
+    width: attachment.width ?? LIMITS.minNodeSize,
+    height: attachment.height ?? LIMITS.minNodeSize,
+  };
+  const midX = (source.x + source.width / 2 + target.x + target.width / 2) / 2;
+  const midY = (source.y + source.height / 2 + target.y + target.height / 2) / 2;
+  const x = midX - size.width / 2;
+  const y = midY - size.height / 2 - 60;
+
+  const extractedNode: DraftNode = {
+    id: createId('n'),
+    type: attachment.type,
+    x: clampCoord(x),
+    y: clampCoord(y),
+    width: clampSize(size.width),
+    height: clampSize(size.height),
+    z: Math.max(source.z, target.z),
+  };
+  if (attachment.text !== undefined) extractedNode.text = attachment.text;
+  if (attachment.accent) extractedNode.accent = attachment.accent;
+  if (attachment.noteKind) extractedNode.noteKind = attachment.noteKind;
+  if (attachment.language) extractedNode.language = attachment.language;
+  if (attachment.code !== undefined) extractedNode.code = attachment.code;
+
+  const remaining = edge.attachments!.filter((a) => a.id !== attachmentId);
+  const next = addNodes(withEdgeAttachments(doc, edgeId, remaining), [extractedNode]);
+  return { doc: next, extractedNode };
+}
+
 /* ---------------------------------------------------------------- groups --- */
 
 /** Every node transitively parented under `id` — used so dragging a boundary

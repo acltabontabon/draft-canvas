@@ -137,16 +137,19 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const updateEdgeLabel = useEditorStore((state) => state.updateEdgeLabel);
   const updateEdgeAttachment = useEditorStore((state) => state.updateEdgeAttachment);
   const removeEdgeAttachment = useEditorStore((state) => state.removeEdgeAttachment);
-  // Edges don't get detach/reorder parity with node attachments yet — omitting those keys is how
-  // `AttachmentChip` knows not to render those actions for an edge-hosted attachment. Bound to
-  // this edge's own id here, since `AttachmentActions` takes only an attachment id — the host id
-  // is already known to the caller, not something every attachment mutation should have to repeat.
+  const detachEdgeAttachment = useEditorStore((state) => state.detachEdgeAttachment);
+  const reorderEdgeAttachment = useEditorStore((state) => state.reorderEdgeAttachment);
+  // Bound to this edge's own id here, since `AttachmentActions` takes only an attachment id — the
+  // host id is already known to the caller, not something every attachment mutation should have
+  // to repeat.
   const attachmentActions: AttachmentActions = useMemo(
     () => ({
       update: (attachmentId, patch) => updateEdgeAttachment(id, attachmentId, patch),
       remove: (attachmentId) => removeEdgeAttachment(id, attachmentId),
+      detach: (attachmentId) => detachEdgeAttachment(id, attachmentId),
+      reorder: (attachmentId, direction) => reorderEdgeAttachment(id, attachmentId, direction),
     }),
-    [id, updateEdgeAttachment, removeEdgeAttachment],
+    [id, updateEdgeAttachment, removeEdgeAttachment, detachEdgeAttachment, reorderEdgeAttachment],
   );
   const theme = useThemeValue();
   const { preset } = usePersonality();

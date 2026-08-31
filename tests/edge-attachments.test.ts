@@ -4,9 +4,11 @@ import {
   addEdges,
   addNodes,
   attachToEdge,
+  detachFromEdge,
   reconnectEdge,
   removeEdgeAttachment,
   removeElements,
+  reorderEdgeAttachment,
   updateEdgeAttachment,
 } from '../src/document/operations';
 import { normalizeDocument } from '../src/document/validate';
@@ -72,6 +74,53 @@ describe('edge attachment operations', () => {
     const attached = attachToEdge(doc, edge.id, attachment);
     const afterDelete = removeElements(attached, [], [edge.id]);
     expect(afterDelete.edges).toHaveLength(0);
+  });
+
+  it('reorders edge attachments and clamps at the ends', () => {
+    const { edge, doc } = docWithEdge();
+    const a = createAttachment({ type: 'note', text: 'A' });
+    const b = createAttachment({ type: 'note', text: 'B' });
+    let next = attachToEdge(doc, edge.id, a);
+    next = attachToEdge(next, edge.id, b);
+
+    // Already first: moving up is a no-op, not an error.
+    const unchanged = reorderEdgeAttachment(next, edge.id, a.id, -1);
+    expect(unchanged).toBe(next);
+
+    const moved = reorderEdgeAttachment(next, edge.id, a.id, 1);
+    expect(moved.edges[0]!.attachments!.map((att) => att.id)).toEqual([b.id, a.id]);
+  });
+
+  it('detaches into a real, freestanding node placed at the midpoint between the two endpoints', () => {
+    const { a, b, edge, doc } = docWithEdge();
+    const attachment = createAttachment({
+      type: 'code',
+      language: 'json',
+      code: '{}',
+      width: 300,
+      height: 150,
+    });
+    const attached = attachToEdge(doc, edge.id, attachment);
+
+    const { doc: detached, extractedNode } = detachFromEdge(attached, edge.id, attachment.id);
+    expect(extractedNode).not.toBeNull();
+    expect(extractedNode!.width).toBe(300);
+    expect(extractedNode!.height).toBe(150);
+    const midX = (a.x + a.width / 2 + b.x + b.width / 2) / 2;
+    const midY = (a.y + a.height / 2 + b.y + b.height / 2) / 2;
+    expect(extractedNode!.x).toBe(Math.round(midX - 150));
+    expect(extractedNode!.y).toBe(Math.round(midY - 75 - 60));
+    expect(detached.edges.find((e) => e.id === edge.id)!.attachments ?? []).toHaveLength(0);
+    expect(detached.nodes.some((n) => n.id === extractedNode!.id)).toBe(true);
+  });
+
+  it('detaching an unknown attachment id is a no-op', () => {
+    const { edge, doc } = docWithEdge();
+    const attachment = createAttachment({ type: 'note', text: 'kept' });
+    const attached = attachToEdge(doc, edge.id, attachment);
+    const result = detachFromEdge(attached, edge.id, 'not-a-real-id');
+    expect(result.extractedNode).toBeNull();
+    expect(result.doc).toBe(attached);
   });
 
   it('reconnecting an edge preserves its attachment untouched', () => {
@@ -185,6 +234,23 @@ describe('edge attachments through the store', () => {
     store.getState().undo();
     expect(store.getState().document.edges.find((e) => e.id === edge.id)!.attachments ?? []).toHaveLength(0);
     store.getState().redo();
+    expect(store.getState().document.edges.find((e) => e.id === edge.id)!.attachments).toHaveLength(1);
+  });
+
+  it('detaching an edge attachment selects the newly-materialized node, and undo restores it', () => {
+    const edge = connectedEdge();
+    const attachment = createAttachment({ type: 'code', language: 'json', code: '{}' });
+    store.getState().attachToEdge(edge.id, attachment);
+
+    store.getState().detachEdgeAttachment(edge.id, attachment.id);
+    const doc = store.getState().document;
+    expect(doc.nodes).toHaveLength(3);
+    const detachedId = doc.nodes.find((n) => n.id !== edge.source && n.id !== edge.target)!.id;
+    expect(store.getState().selection.nodes).toEqual([detachedId]);
+    expect(store.getState().document.edges.find((e) => e.id === edge.id)!.attachments ?? []).toHaveLength(0);
+
+    store.getState().undo();
+    expect(store.getState().document.nodes).toHaveLength(2);
     expect(store.getState().document.edges.find((e) => e.id === edge.id)!.attachments).toHaveLength(1);
   });
 

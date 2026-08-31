@@ -74,9 +74,9 @@ function attachmentLookFor(theme: Theme, attachment: Attachment): AttachmentLook
 /** The mutations a chip/card can perform on its own attachment, injected by the caller so this
  *  module stays host-agnostic — `DraftEdgeView.tsx` binds these to `updateEdgeAttachment`/
  *  `removeEdgeAttachment`/etc., the node attachment popover binds them to the node-hosted
- *  equivalents. `detach`/`reorder` are optional: edges only gained parity operations for them
- *  after this module already had to support edges without them (see `docs`/plan history) — a
- *  caller that omits either simply doesn't get that action rendered. */
+ *  equivalents. `detach`/`reorder` stay optional even though both hosts provide them today: a
+ *  caller that omits either simply doesn't get that action rendered, which keeps this module
+ *  usable for a future host that might not have a sensible "detach"/"reorder" concept. */
 export interface AttachmentActions {
   update: (attachmentId: string, patch: Partial<Omit<Attachment, 'id'>>) => void;
   remove: (attachmentId: string) => void;

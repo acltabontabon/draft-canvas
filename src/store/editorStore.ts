@@ -14,6 +14,7 @@ import {
   attachToNode as attachToNodeOp,
   bringForward,
   bringToFront,
+  detachFromEdge as detachFromEdgeOp,
   detachFromNode,
   distributeNodes,
   extractFragment,
@@ -24,6 +25,7 @@ import {
   removeEdgeAttachment as removeEdgeAttachmentOp,
   removeElements,
   reorderAttachment as reorderAttachmentOp,
+  reorderEdgeAttachment as reorderEdgeAttachmentOp,
   sendBackward,
   sendToBack,
   setParent,
@@ -251,6 +253,8 @@ export interface EditorStore {
   attachExistingNodeToEdge: (nodeId: string, edgeId: string) => void;
   updateEdgeAttachment: (edgeId: string, attachmentId: string, patch: Partial<Omit<Attachment, 'id'>>) => void;
   removeEdgeAttachment: (edgeId: string, attachmentId: string) => void;
+  detachEdgeAttachment: (edgeId: string, attachmentId: string) => void;
+  reorderEdgeAttachment: (edgeId: string, attachmentId: string, direction: -1 | 1) => void;
 
   /* Boundary containment */
   /** Sets or clears (`boundaryId: null`) a node's containing boundary. */
@@ -727,6 +731,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   removeEdgeAttachment(edgeId, attachmentId) {
     get().apply('Remove attachment', (doc) => removeEdgeAttachmentOp(doc, edgeId, attachmentId));
+  },
+
+  detachEdgeAttachment(edgeId, attachmentId) {
+    const state = get();
+    const result = detachFromEdgeOp(state.document, edgeId, attachmentId);
+    if (!result.extractedNode) return;
+    state.apply('Detach', () => result.doc, {
+      selection: { nodes: [result.extractedNode!.id], edges: [] },
+    });
+  },
+
+  reorderEdgeAttachment(edgeId, attachmentId, direction) {
+    get().apply('Reorder attachment', (doc) => reorderEdgeAttachmentOp(doc, edgeId, attachmentId, direction));
   },
 
   reparentNode(nodeId, boundaryId) {

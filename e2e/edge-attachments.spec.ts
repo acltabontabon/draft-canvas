@@ -333,4 +333,26 @@ test.describe('connection-attached details', () => {
     await expect(page.locator('.dc-attachment-chip')).toHaveCount(0);
     await expect(page.locator('.dc-edge')).toHaveCount(1);
   });
+
+  test('the card\'s own Detach button materializes the attachment as a standalone node, and undo restores it', async ({
+    page,
+  }) => {
+    await servicePublishingToTopic(page, 'Detach edge attachment');
+    await create(page, 'Note', { x: 500, y: 500 });
+    await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
+    await expect(page.locator('.dc-node[data-type="note"]')).toHaveCount(0);
+
+    await page.locator('.dc-attachment-chip').click();
+    await page.getByRole('button', { name: 'Detach onto the canvas' }).click();
+
+    await expect(page.locator('.dc-attachment-chip')).toHaveCount(0);
+    const detached = page.locator('.dc-node[data-type="note"]');
+    await expect(detached).toHaveCount(1);
+    // Selected immediately on detach — same convention as detaching from an element.
+    await expect(detached).toHaveAttribute('data-selected', 'true');
+
+    await page.keyboard.press('Meta+z');
+    await expect(page.locator('.dc-node[data-type="note"]')).toHaveCount(0);
+    await expect(page.locator('.dc-attachment-chip')).toHaveCount(1);
+  });
 });
