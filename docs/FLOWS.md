@@ -17,19 +17,39 @@ Flow that used it; nothing crashes or dangles.
 ## Explain a flow
 
 1. Draw your architecture — the usual nodes and connectors.
-2. Select a connector and, in the Inspector, add it to a Flow (an existing one, or "New flow…").
-   Give the Flow a name — *"Checkout — Happy path"*.
-3. Select the next connector in the story and add it to the same Flow. Repeat for as many steps as
-   the scenario needs. The Flow panel (toolbar → Flows) shows every step in order, with move-up /
-   move-down and remove controls.
-4. Optionally add a caption to a step — *"Authorize payment"* — distinct from the connector's own
-   label, which describes what the connection represents in general. The caption is what's
-   happening *at this point in this particular story*; if you leave it blank, playback shows the
-   connector's label instead.
+2. Select a connector — a small control anchored right at it opens. Click its **Flows** chip and
+   check a flow to add this connector to it (an existing one, or **+ New flow**).
+3. Select the next connector in the story and check the same flow. Repeat for as many steps as the
+   scenario needs. Order comes from the sequence you add connectors in; reorder or rename from
+   **Flows · ▾ → Manage flows…**, which opens the full flow drawer (move-up/move-down, captions,
+   per-step camera).
+4. Optionally add a caption to a step, from that same drawer — *"Authorize payment"* — distinct
+   from the connector's own label, which describes what the connection represents in general. The
+   caption is what's happening *at this point in this particular story*; if you leave it blank,
+   playback shows the connector's label instead.
 5. Press **Present**. If the diagram has more than one Flow, pick which one to walk through.
 6. Step through it: **→** or **Space** for the next interaction, **←** for the previous one,
    **Esc** to exit. The active connector and its two endpoints stay lit; everything else quietens
    without disappearing, so you never lose the surrounding architecture.
+
+## The flow switcher and the lens
+
+The toolbar always shows **Flows · Diagram ▾** (press **F** to open it) — a constant, honest
+answer to "what am I looking at right now?" **Diagram** is a real, intentional state, not an
+absence: the plain architecture, nothing narrated. Picking a flow from the dropdown *selects* it —
+a lens, not a presentation. Its member connectors and their endpoints stay fully lit; everything
+else gently dims (never hidden), and the flow's own connectors pulse once so the path reads at a
+glance. Selecting a flow never starts Presentation Mode — **▶ Present** next to the switcher is the
+separate, explicit way to do that.
+
+## Editing a flow deliberately
+
+Membership editing (the checkbox list under a connector's **Flows** chip) is already a deliberate,
+one-click, reversible action — normal browsing never mutates it by accident. For a stretch of
+meeting time where you're actively restructuring one flow's membership, hover a flow row in the
+switcher and press its **Edit** link: a small **Editing: ⟨flow⟩ · Done** banner appears, making
+that intent visible on screen. **Esc** or **Done** exits it; nothing about what you can click
+changes underneath — it's a visible marker of intent, not a separate mode of interaction.
 
 ## Multiple scenarios, one diagram
 
@@ -47,16 +67,16 @@ never changes a node or a connector; it only changes which order you're walking 
 
 ## Synchronous vs. asynchronous
 
-A connector defaults to a solid line — a synchronous, request/response-style interaction. Mark it
-**Async** (in the Inspector) for a dashed line instead — a queue publish, an event, a
-fire-and-forget call, a webhook. That's the whole model: a visual distinction, not a protocol
-taxonomy. Label it however you like — `publish`, `event`, `consume`, `scheduled` — free text on the
-connector's own label.
+A connector defaults to a solid line — a synchronous, request/response-style interaction. Select
+it, open its **⋯** overflow, and mark it **Async** for a dashed line instead — a queue publish, an
+event, a fire-and-forget call, a webhook. That's the whole model: a visual distinction, not a
+protocol taxonomy. Label it however you like — `publish`, `event`, `consume`, `scheduled` — free
+text on the connector's own label.
 
 ## Flow kind
 
-For more nuance than plain solid/dashed, a connector can carry a **Flow kind** (in the Inspector,
-next to Connection type): `Sync`, `Async`, `Event`, `Callback`, `Conditional`, `Retry`, `Failure`,
+For more nuance than plain solid/dashed, a connector can carry a **Flow kind** (in that same **⋯**
+overflow, next to Connection type): `Sync`, `Async`, `Event`, `Callback`, `Conditional`, `Retry`, `Failure`,
 `Fallback`. Each gets a subtle line treatment — a dotted line and a small dot for an event, a
 dash-dot pattern for a retry, a hollow arrowhead for a callback's return path, a small diamond for
 a conditional branch — so the *shape* of a flow reads at a glance without leaning on colour or a
@@ -103,8 +123,9 @@ characters, a boundary the rest of the flow lives inside, a summary before divin
 those, a step can spotlight a group of nodes and connectors instead of, or in addition to, its one
 primary connector:
 
-- In the Flow panel, select whatever the step should highlight on the canvas — any mix of nodes
-  and connectors — then press **+ Add selection** on that step. They show up as removable chips.
+- In the flow drawer (**Flows · ▾ → Manage flows…**), select whatever the step should highlight on
+  the canvas — any mix of nodes and connectors — then press **+ Add selection** on that step. They
+  show up as removable chips.
 - Press **Set view** to pin the step's own camera position — the exact pan and zoom you're looking
   at right now — instead of letting Presentation Mode auto-fit to whatever the step highlights.
   **Update view** replaces it; **Clear view** goes back to auto-fit.
@@ -115,6 +136,22 @@ hidden treatment as a step built around one connector, and it takes its place in
 list. It isn't a different kind of thing from a regular step, just a step that spotlights more (or
 different) than one connector's own two endpoints — see `docs/ARCHITECTURE.md` for how this relates
 to Focus Mode, which is unordered and available outside presentation entirely.
+
+## Attachments while presenting
+
+A connector can carry a note, code, or JSON attachment — quiet by default, an indicator only
+(`📎 2`) both on the plain canvas and while presenting. During Presentation Mode, click the
+indicator to reveal that attachment as a temporary read-only card — the presenter's own call on
+when extra context helps, never automatic. Advancing or going back a step always collapses it
+again, so nothing revealed for one step lingers into an unrelated later one.
+
+## Flow colour
+
+A flow can carry an optional accent (from the same restrained palette as a node or connector's own
+colour) — never a permanent colour on any one connector, since a connector can belong to several
+flows at once. It shows up only while that flow is the active lens: every member connector while
+merely selected, or just the one connector being explained right now while presenting. Deselect the
+flow, or move past that step, and its connectors return to their own normal styling.
 
 ## What this isn't
 

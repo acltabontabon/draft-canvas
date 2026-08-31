@@ -504,20 +504,26 @@
   letter-spacing: 0.04em;
 }
 
-.dc-edge-attachment-delete {
-  padding: 1px 6px;
+.dc-edge-attachment-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dc-edge-attachment-card-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
   border: 0;
   border-radius: 4px;
   background: none;
   color: inherit;
   opacity: 0.75;
-  font-size: 10.5px;
-  text-transform: none;
-  letter-spacing: normal;
   cursor: pointer;
 }
 
-.dc-edge-attachment-delete:hover {
+.dc-edge-attachment-card-action:hover {
   opacity: 1;
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
@@ -553,6 +559,17 @@
 @keyframes dc-flow-pulse {
   to {
     stroke-dashoffset: -24;
+  }
+}
+
+/* The same travelling-pulse idea, but a single pass rather than a loop — the
+   brief "here's the path" flash a connector gets the moment it newly joins
+   the selected-flow lens (switching flows, or picking one for the first
+   time), never retriggered by anything else. */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-edge[data-lens-pulse='true'] .dc-edge-line {
+    stroke-dasharray: 3 9;
+    animation: dc-flow-pulse 650ms ease-out 1;
   }
 }
 
@@ -752,6 +769,104 @@
   white-space: pre;
 }
 
+/* ------------------------------------------------------ edge inspector -- */
+
+/*
+ * The contextual control for a single selected connector — anchored at its
+ * own label point (see `EdgeInspectorPopover.tsx`) instead of docked at the
+ * bottom of the screen. Same shell as `.dc-attachment-popover`, just sized
+ * to a row of controls rather than a list of cards.
+ */
+.dc-edge-inspector {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  max-width: 320px;
+  border: 1px solid var(--dc-border);
+  border-radius: 8px;
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  pointer-events: all;
+}
+
+.dc-edge-inspector-inner {
+  display: flex;
+  flex-direction: column;
+  animation: dc-attachment-card-in 120ms ease;
+}
+
+.dc-edge-inspector[data-closing='true'] .dc-edge-inspector-inner {
+  animation: dc-attachment-card-out 120ms ease forwards;
+}
+
+.dc-edge-inspector-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+}
+
+.dc-edge-inspector-caption,
+.dc-edge-inspector-flows {
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.dc-edge-inspector-caption:hover,
+.dc-edge-inspector-flows:hover {
+  border-color: var(--dc-border);
+}
+
+.dc-edge-inspector-caption[data-empty='true'],
+.dc-edge-inspector-flows[data-empty='true'] {
+  color: var(--dc-text-faint);
+}
+
+.dc-edge-inspector-attachments {
+  flex-shrink: 0;
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.dc-edge-inspector-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-edge-inspector-membership-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.dc-edge-inspector-membership-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dc-text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
 /* ------------------------------------------------------- quick connect -- */
 
 .dc-quick-connect {
@@ -919,6 +1034,33 @@
 .dc-edge-step[data-focus-dimmed='true'],
 .dc-edge-meta[data-focus-dimmed='true'] {
   opacity: 0.22;
+  transition: opacity 180ms ease;
+}
+
+/* ---------------------------------------------------------------- lens --- */
+
+/*
+ * A flow merely *selected* (not presented) is a gentler preview than either
+ * Explain or Focus above: the point is to keep everything on the canvas
+ * legible while still making the flow's own path stand out, not to black out
+ * the rest of the architecture. No grayscale, and a much softer floor than
+ * Explain's 0.22 — this should read as "quietly nudged aside," not "hidden."
+ * Same one-attribute-on-the-container technique as the other two.
+ */
+.dc-canvas[data-lens='on'] .react-flow__node:not(:has(.dc-node[data-lens-member='true'])) {
+  opacity: 0.65;
+  transition: opacity 180ms ease;
+}
+
+.dc-canvas[data-lens='on'] .dc-edge[data-lens-dimmed='true'] {
+  opacity: 0.6;
+  transition: opacity 180ms ease;
+}
+
+.dc-edge-label[data-lens-dimmed='true'],
+.dc-edge-step[data-lens-dimmed='true'],
+.dc-edge-meta[data-lens-dimmed='true'] {
+  opacity: 0.6;
   transition: opacity 180ms ease;
 }
 

@@ -50,6 +50,7 @@ import {
   removeStepExtraNode,
   removeStepFromFlow,
   renameFlow,
+  setFlowAccent as setFlowAccentOp,
   setStepViewport,
   updateFlowStepCaption as updateFlowStepCaptionOp,
 } from '../document/flow';
@@ -59,6 +60,7 @@ import {
   isEligibleForReinference,
 } from '../document/connectorSemantics';
 import type {
+  Accent,
   AttachableType,
   Attachment,
   DraftDocument,
@@ -129,6 +131,21 @@ export function isEdgeFocused(
   return focus.nodeIds.includes(edge.source) && focus.nodeIds.includes(edge.target);
 }
 
+/**
+ * The deliberate, entered-on-purpose state for editing a specific flow's
+ * membership/order — distinct from merely *selecting* a flow to inspect it
+ * (`selectedFlowId`, which never mutates anything). Mutually exclusive with
+ * both `flowPlayback` and `focus`, the same way those two already exclude
+ * each other: entering any one of the three exits whichever of the other two
+ * was active. Never persisted, never pushed to history — the document
+ * mutations it enables go through `apply()` and are undoable individually;
+ * this flag itself is pure UI state.
+ */
+export interface FlowEditState {
+  active: boolean;
+  flowId: string | null;
+}
+
 interface Interaction {
   label: string;
   document: DraftDocument;
@@ -144,6 +161,7 @@ export interface EditorStore {
   mode: EditorMode;
   flowPlayback: FlowPlaybackState;
   focus: FocusState;
+  flowEdit: FlowEditState;
   /** Which flow's step badges show on the canvas (independent of playback). */
   selectedFlowId: string | null;
   /** Bumped on every document write; autosave watches this rather than deep-diffing. */
@@ -226,11 +244,16 @@ export interface EditorStore {
   /* Flows */
   createFlow: (title?: string) => string;
   renameFlow: (flowId: string, title: string) => void;
+  /** Sets, or clears (`accent: null`), a flow's lens accent — see `DraftFlow.accent`. */
+  setFlowAccent: (flowId: string, accent: Accent | null) => void;
   deleteFlow: (flowId: string) => void;
   addEdgeToFlow: (flowId: string, edgeId: string, caption?: string) => void;
   removeFlowStep: (flowId: string, stepId: string) => void;
   moveFlowStep: (flowId: string, stepId: string, direction: -1 | 1) => void;
   updateFlowStepCaption: (flowId: string, stepId: string, caption: string) => void;
+  /** Enters intentional flow-editing mode — see `FlowEditState`'s own comment. */
+  enterFlowEdit: (flowId: string) => void;
+  exitFlowEdit: () => void;
   /** Adds/removes a node from a step's `extraNodeIds` — a "frame" step's spotlight beyond its primary connector. */
   addFlowStepExtraNode: (flowId: string, stepId: string, nodeId: string) => void;
   removeFlowStepExtraNode: (flowId: string, stepId: string, nodeId: string) => void;
@@ -283,6 +306,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   mode: 'edit',
   flowPlayback: { active: false, flowId: null, step: 0 },
   focus: { active: false, nodeIds: [], edgeIds: [] },
+  flowEdit: { active: false, flowId: null },
   selectedFlowId: null,
   revision: 0,
 
@@ -294,6 +318,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: EMPTY_SELECTION,
       flowPlayback: { active: false, flowId: null, step: 0 },
       focus: { active: false, nodeIds: [], edgeIds: [] },
+      flowEdit: { active: false, flowId: null },
       // With exactly one flow there's no ambiguity about which one's step
       // badges to show, so a freshly opened diagram isn't blank of them.
       // With several, none is auto-selected — guessing wrong would be worse
@@ -702,11 +727,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
+  setFlowAccent(flowId, accent) {
+    get().apply('Set flow colour', (doc) => setFlowAccentOp(doc, flowId, accent ?? undefined), {
+      coalesceKey: `flow-accent:${flowId}`,
+    });
+  },
+
   deleteFlow(flowId) {
     get().apply('Delete flow', (doc) => deleteFlow(doc, flowId));
     set((s) => ({
       selectedFlowId: s.selectedFlowId === flowId ? null : s.selectedFlowId,
       flowPlayback: s.flowPlayback.flowId === flowId ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
+      flowEdit: s.flowEdit.flowId === flowId ? { active: false, flowId: null } : s.flowEdit,
     }));
   },
 
@@ -805,6 +837,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((s) => ({
       mode,
       flowPlayback: mode === 'edit' ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
+      // Flow-editing is an edit-mode-only concept — presenting exits it, the
+      // same way it exits playback's own picker state.
+      flowEdit: mode === 'present' ? { active: false, flowId: null } : s.flowEdit,
       // A selection ring left over from editing has no meaning in a
       // read-only presentation — nothing there can show why it is
       // highlighted, so it just reads as a stray mark on one box.
@@ -815,9 +850,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setFlowPlayback(playback) {
     set((s) => ({
       flowPlayback: { ...s.flowPlayback, ...playback },
-      // Mutually exclusive with Focus — starting playback exits it, rather
-      // than the two dimming systems ever needing to combine.
+      // Mutually exclusive with Focus and flow-editing — starting playback
+      // exits both, rather than any two of the three dimming/editing systems
+      // ever needing to combine.
       focus: playback.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+      flowEdit: playback.active ? { active: false, flowId: null } : s.flowEdit,
     }));
   },
 
@@ -825,6 +862,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((s) => ({
       focus: { active: true, nodeIds, edgeIds },
       flowPlayback: s.flowPlayback.active ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
+      flowEdit: s.flowEdit.active ? { active: false, flowId: null } : s.flowEdit,
     }));
   },
 
@@ -840,6 +878,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   exitFocus() {
     set({ focus: { active: false, nodeIds: [], edgeIds: [] } });
+  },
+
+  enterFlowEdit(flowId) {
+    set((s) => ({
+      flowEdit: { active: true, flowId },
+      focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+      flowPlayback: s.flowPlayback.active ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
+    }));
+  },
+
+  exitFlowEdit() {
+    set({ flowEdit: { active: false, flowId: null } });
   },
 }));
 

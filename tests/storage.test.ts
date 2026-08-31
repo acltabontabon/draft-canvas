@@ -10,7 +10,7 @@ import { decryptDocument } from '../src/crypto/documentCipher';
 import { getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/keyStore';
 import { isEncryptedBody } from '../src/crypto/migrateStorage';
 import type { EncryptedBody } from '../src/crypto/types';
-import type { DraftDocument } from '../src/document/types';
+import { CURRENT_VERSION, type DraftDocument } from '../src/document/types';
 
 function documentWith(title: string, nodeCount = 2): DraftDocument {
   const nodes = Array.from({ length: nodeCount }, (_, index) =>
@@ -156,7 +156,7 @@ describe('local persistence', () => {
 
     const loaded = await repository.load(doc.metadata.id);
     expect(loaded).not.toBeNull();
-    expect(loaded!.version).toBe(3);
+    expect(loaded!.version).toBe(CURRENT_VERSION);
     expect(loaded!.edges[0]!.sourceAnchor).toBeDefined();
     expect(loaded!.edges[0]!.targetAnchor).toBeDefined();
   });
@@ -182,7 +182,7 @@ describe('local persistence', () => {
 
     const key = await getOrCreateMasterKey();
     const decrypted = await decryptDocument(raw as EncryptedBody, key);
-    expect((decrypted as { version: number }).version).toBe(3);
+    expect((decrypted as { version: number }).version).toBe(CURRENT_VERSION);
   });
 
   it('returns null for a record too broken to recognise', async () => {

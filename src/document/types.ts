@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 3;
+export const CURRENT_VERSION = 4;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -299,6 +299,15 @@ export interface DraftFlow {
   id: string;
   title: string;
   steps: DraftFlowStep[];
+  /**
+   * Optional identity colour, applied to this flow's member connectors only
+   * while the flow is the active lens (selected or presenting) — never a
+   * permanent per-edge colour, since a connector can belong to several flows
+   * at once. Absent renders exactly as before this field existed: every
+   * member connector keeps its own normal styling. Same restrained `Accent`
+   * vocabulary as nodes/edges, not a colour picker.
+   */
+  accent?: Accent;
 }
 
 export interface DraftViewport {

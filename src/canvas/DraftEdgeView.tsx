@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { BaseEdge, EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import type { Attachment, DraftEdge, DraftNode } from '../document/types';
-import { explainEdgeTier, stepIndexOf } from '../document/flow';
+import { explainEdgeTier, lensEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import {
   LABEL_LINE_GAP,
@@ -14,6 +14,7 @@ import {
   type Side,
 } from '../edges/routing';
 import { dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
+import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { NOTE_ACCENTS, NOTE_LABELS } from '../nodes/describe';
 import { LANGUAGE_LABELS, tokenizeCode } from '../render/code/highlight';
@@ -23,6 +24,7 @@ import { isEdgeFocused, useEditorStore } from '../store/editorStore';
 import { selectEdge, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { useTheme, useThemeValue } from '../ui/theme/useTheme';
+import { Icon } from '../ui/common/Icon';
 import { FONTS, cssFont } from '../render/text/fonts';
 
 const NO_OBSTACLES: readonly Rect[] = [];
@@ -93,30 +95,10 @@ function conditionTransform(side: Side, x: number, y: number): string {
 }
 
 /** Gap between the connector's own label point and the attachment chip row — small, since a chip
- *  row is compact and doesn't need the same clearance a full label chip does. */
+ *  row is compact and doesn't need the same clearance a full label chip does. Matches the gap
+ *  `attachmentRowBelowsSourceOrTarget` (in `edgeGeometry.ts`) itself probes from, and the one
+ *  `EdgeInspectorPopover` uses for its own row, so nothing along this edge uses a different ruler. */
 const ATTACHMENT_ROW_GAP = 12;
-
-/** The row sits above the connector by default — the natural, expected spot per a connection's
- *  own reading direction — and only flips below when "above" would land inside the very node the
- *  connector is attached to (a short connector's most common failure mode). The probe distance
- *  covers a typical *open card*, not just the chip: a card opens further in the same direction the
- *  row already chose, so checking only the chip's own small height let a card on a short connector
- *  reach back into the node even when the chip itself had cleared it — caught by testing an actual
- *  short vertical connector in the browser, not by reasoning about it. A single point check against
- *  this nominal reach is deliberately approximate, not a real box-overlap test: a full collision
- *  solver is exactly what this project's connector work has consistently avoided. */
-const ATTACHMENT_ROW_NOMINAL_REACH = 150;
-
-function attachmentRowBelowsSourceOrTarget(x: number, y: number, sourceRect: Rect, targetRect: Rect): boolean {
-  // The full span a card might occupy, not just its far edge — a node overlapping any part of
-  // this vertical range (not only sitting exactly at its top) is what actually causes the
-  // overlap this function exists to avoid.
-  const bottom = y - ATTACHMENT_ROW_GAP;
-  const top = bottom - ATTACHMENT_ROW_NOMINAL_REACH;
-  const overlapsRect = (rect: Rect) =>
-    x > rect.x && x < rect.x + rect.width && rect.y < bottom && rect.y + rect.height > top;
-  return overlapsRect(sourceRect) || overlapsRect(targetRect);
-}
 
 function attachmentRowTransform(x: number, y: number, flipBelow: boolean): string {
   return flipBelow
@@ -185,6 +167,67 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     if (mode !== 'present') setEditing(true);
   }, [editRequested, mode]);
 
+  // Computed here, ahead of the early returns below, purely so the hooks
+  // that follow (`lensPulsing`'s state/ref/effect) never run conditionally —
+  // React requires the same hooks in the same order on every render, even
+  // one where this edge (or a node it references) has just been deleted and
+  // this component is about to render nothing. `edge` may still be
+  // undefined at this point, hence the optional-chained guards throughout.
+  const playingFlow = flowPlayback.active && flowPlayback.flowId
+    ? flows.find((f) => f.id === flowPlayback.flowId)
+    : undefined;
+  const overlayFlow = selectedFlowId ? flows.find((f) => f.id === selectedFlowId) : undefined;
+  const stepNumber = overlayFlow && edge ? stepIndexOf(overlayFlow, edge.id) : undefined;
+
+  const tier = playingFlow && edge ? explainEdgeTier(stepIndexOf(playingFlow, edge.id), flowPlayback.step) : 'hidden';
+  const isActiveStep = flowPlayback.active && tier === 'active';
+  const isShownStep = flowPlayback.active && tier === 'shown';
+  const dimmed = flowPlayback.active && tier === 'hidden';
+  const focusDimmed = focus.active && edge ? !isEdgeFocused(focus, edge) : false;
+
+  // Merely *selecting* a flow (not presenting it) is a gentler lens: every
+  // member reads equally lit, there is no step progression — see
+  // `lensEdgeTier`'s own comment for why this is a distinct primitive from
+  // `explainEdgeTier` above, not a degenerate case of it. Suppressed while
+  // Presentation or Focus already own the dimming.
+  const lensActive = Boolean(overlayFlow) && !flowPlayback.active && !focus.active;
+  const lensTier = lensActive && edge ? lensEdgeTier(overlayFlow, edge.id) : 'dimmed';
+  const lensMember = lensActive && lensTier === 'member';
+  const lensDimmed = lensActive && lensTier === 'dimmed';
+  // The flow's own identity colour, temporarily worn by its member
+  // connectors while it's the active lens — never a permanent per-edge
+  // colour, since a connector can belong to several flows. See
+  // `DraftFlow.accent`.
+  const lensAccent = lensMember && overlayFlow?.accent ? accentOf(theme, overlayFlow.accent).chip : undefined;
+  // Presentation gets the same identity colour, but only on the one
+  // connector actively being explained right now — not every member at
+  // once, the way the selection lens above does. Presentation already layers
+  // its own active/shown/hidden opacity tiers; tinting all of them with the
+  // flow's colour at the same time would read as busy rather than calm.
+  const presentationAccent =
+    isActiveStep && playingFlow?.accent ? accentOf(theme, playingFlow.accent).chip : undefined;
+  const color =
+    presentationAccent ?? lensAccent ?? (edge ? resolveEdgeColor(edge, { accent: sourceAccent }, theme) : theme.edge);
+
+  // A brief, one-shot path pulse the moment this connector newly joins the
+  // active lens (switching flows, or a flow being selected for the first
+  // time) — not a loop like Presentation's `dc-flow-pulse`, and not
+  // retriggered by anything else that causes a re-render.
+  const [lensPulsing, setLensPulsing] = useState(false);
+  const prevSelectedFlowRef = useRef(selectedFlowId);
+  useEffect(() => {
+    // The `switched` guard, not the dependency array, is what actually
+    // decides whether to pulse — so listing `lensMember` here only means the
+    // effect also runs (and immediately no-ops) when it flips on its own
+    // (e.g. presenting starts/stops) without `selectedFlowId` changing.
+    const switched = prevSelectedFlowRef.current !== selectedFlowId;
+    prevSelectedFlowRef.current = selectedFlowId;
+    if (!switched || !lensMember) return;
+    setLensPulsing(true);
+    const timeout = setTimeout(() => setLensPulsing(false), 650);
+    return () => clearTimeout(timeout);
+  }, [selectedFlowId, lensMember]);
+
   if (!edge || !sourceNode || !targetNode) return null;
 
   const sourceRect = rectOfInternal(sourceNode);
@@ -220,19 +263,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, laneOffset);
   const labelX = route.labelX + labelNudge.x;
   const labelY = route.labelY + labelNudge.y;
-  const color = resolveEdgeColor(edge, { accent: sourceAccent }, theme);
-
-  const playingFlow = flowPlayback.active && flowPlayback.flowId
-    ? flows.find((f) => f.id === flowPlayback.flowId)
-    : undefined;
-  const overlayFlow = selectedFlowId ? flows.find((f) => f.id === selectedFlowId) : undefined;
-  const stepNumber = overlayFlow ? stepIndexOf(overlayFlow, edge.id) : undefined;
-
-  const tier = playingFlow ? explainEdgeTier(stepIndexOf(playingFlow, edge.id), flowPlayback.step) : 'hidden';
-  const isActiveStep = flowPlayback.active && tier === 'active';
-  const isShownStep = flowPlayback.active && tier === 'shown';
-  const dimmed = flowPlayback.active && tier === 'hidden';
-  const focusDimmed = focus.active && !isEdgeFocused(focus, edge);
 
   const hasLabel = Boolean(edge.label);
   const hasStep = showSequence && typeof stepNumber === 'number';
@@ -240,8 +270,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // `style` renders as an inline attribute, which always wins over an
   // external stylesheet rule — so a selected connector's stroke and width
   // must be decided here, not in CSS (only the halo in `canvas.css` — a
-  // `filter`, never set inline — can safely live there).
-  const strokeColor = isActiveStep || selected || attachTarget ? theme.selection : color;
+  // `filter`, never set inline — can safely live there). The active step
+  // wears its flow's own accent when it has one (`presentationAccent`,
+  // already folded into `color`); with no accent set, it falls back to the
+  // plain selection colour exactly as it always has.
+  const strokeColor =
+    selected || attachTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
   const conditionText = edge.condition ? `[${edge.condition}]` : null;
 
   return (
@@ -254,6 +288,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-focus-dimmed={focusDimmed ? 'true' : undefined}
       data-flow-active={isActiveStep ? 'true' : undefined}
       data-attach-target={attachTarget ? 'true' : undefined}
+      data-lens-member={lensMember ? 'true' : undefined}
+      data-lens-dimmed={lensDimmed ? 'true' : undefined}
+      data-lens-pulse={lensPulsing ? 'true' : undefined}
     >
 {/*
         `BaseEdge` draws the path and, through `interactionWidth`, a second
@@ -347,6 +384,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-focus-dimmed={focusDimmed ? 'true' : undefined}
             data-shown={isShownStep ? 'true' : undefined}
             data-active={isActiveStep ? 'true' : undefined}
+            data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{ transform: labelChipTransform(route.labelSide, labelX, labelY) }}
             onDoubleClick={() => mode === 'edit' && setEditing(true)}
           >
@@ -391,6 +429,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-shown={isShownStep ? 'true' : undefined}
             data-dimmed={dimmed ? 'true' : undefined}
             data-focus-dimmed={focusDimmed ? 'true' : undefined}
+            data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{
               transform: `translate(-50%, -50%) translate(${badgeX(route)}px, ${badgeY(route)}px)`,
               borderColor: color,
@@ -408,6 +447,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-focus-dimmed={focusDimmed ? 'true' : undefined}
             data-shown={isShownStep ? 'true' : undefined}
             data-active={isActiveStep ? 'true' : undefined}
+            data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{
               transform: conditionTransform(route.labelSide, labelX, labelY),
             }}
@@ -419,15 +459,14 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         )}
 
         {/* Mounted only when there is something to reveal — no cost, no listeners, when an
-            edge has no attachment. Stays mounted in presentation mode (hover still works
-            there); only pinning into edit mode is gated to edit mode, below. */}
+            edge has no attachment. Stays mounted in presentation mode (click-to-reveal still
+            works there); only pinning into edit mode is gated to edit mode, below. */}
         {edge.attachments?.length ? (
           <EdgeAttachmentRow
             edge={edge}
             x={labelX}
             y={labelY}
             flipBelow={attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect)}
-            selected={Boolean(selected)}
             editable={mode !== 'present'}
           />
         ) : null}
@@ -435,11 +474,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     </g>
   );
 });
-
-/** How long after the pointer leaves both the marker and the card before it closes — long
- *  enough that moving from one to the other never flickers shut, short enough that it doesn't
- *  linger once the user has clearly moved on. */
-const ATTACHMENT_CLOSE_DELAY_MS = 250;
 
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css` — the card
  *  stays mounted this long after `visible` goes false so the CSS fade-out has time to play
@@ -506,28 +540,23 @@ function attachmentLookFor(theme: Theme, attachment: Attachment): AttachmentLook
 
 /**
  * The row of small chips floating above (or, if that would land on the connector's own source/
- * target node, below) its label point — one chip per attachment, each independently
- * hoverable/pinnable, so several attachments sit side by side rather than competing for one card.
+ * target node, below) its label point — one chip per attachment, each independently clickable, so
+ * several attachments sit side by side rather than competing for one card.
  */
 function EdgeAttachmentRow({
   edge,
   x,
   y,
   flipBelow,
-  selected,
   editable,
 }: {
   edge: DraftEdge;
   x: number;
   y: number;
   flipBelow: boolean;
-  selected: boolean;
   editable: boolean;
 }) {
   const attachments = edge.attachments;
-  const pinnedAttachmentId = useUiStore((state) =>
-    state.openEdgeDetail?.edgeId === edge.id ? state.openEdgeDetail.attachmentId : null,
-  );
   if (!attachments?.length) return null;
   return (
     <div
@@ -536,14 +565,7 @@ function EdgeAttachmentRow({
       style={{ transform: attachmentRowTransform(x, y, flipBelow) }}
     >
       {attachments.map((attachment) => (
-        <EdgeAttachmentChip
-          key={attachment.id}
-          edge={edge}
-          attachment={attachment}
-          selected={selected}
-          editable={editable}
-          suppressHover={pinnedAttachmentId !== null && pinnedAttachmentId !== attachment.id}
-        />
+        <EdgeAttachmentChip key={attachment.id} edge={edge} attachment={attachment} editable={editable} />
       ))}
     </div>
   );
@@ -555,63 +577,42 @@ function EdgeAttachmentRow({
  * own box, flipped by `.dc-edge-attachment-row[data-flip]` in `canvas.css` — which is what keeps
  * every card opening away from the connector's line regardless of how many chips sit beside it.
  *
- * Visible when `pinned || selected || (hovering && !suppressHover)`. Hover uses a close-delay timer
- * (not React state per tick) so moving from the chip into its card never flickers shut —
- * `pointerenter`/`leave` don't fire on crossing into a DOM descendant, so this only bridges the
- * small CSS gap between chip and card, not the whole hand-off. Selection makes the read-only
- * preview reachable by keyboard for free (selecting an edge already is) with no new key bindings;
- * pinning (`uiStore`'s `openEdgeDetail`, naming both the edge and this specific attachment) is the
- * only state that enables editing, and only when `editable` (i.e. not presenting).
- *
- * `suppressHover` exists because cards are wide relative to the small gap between chips in a row:
- * with two-plus attachments on one edge, simply resting the pointer on a sibling chip while another
- * is pinned open for editing popped that sibling's own card up on top of the one being typed into,
- * visually burying it mid-edit. `EdgeAttachmentRow` passes `true` here for every chip except the
- * pinned one, so a sibling's hover card cannot render at all while this edge has anything pinned —
- * an explicit click on a sibling still switches the pin (and its own `suppressHover` then flips),
- * only *hover* is blocked.
+ * Visible when `pinned || revealed` — a deliberate, purely per-attachment click reveal, not hover
+ * and not selection: a card popping open just from resting the pointer nearby (or from every
+ * attachment on the edge showing at once just because the edge itself got selected) read as noisy
+ * on a diagram with several attachments. Each chip is independently keyboard-reachable
+ * (`role="button" tabIndex={0}`, Enter/Space activates it) so dropping the old selection-reveals-
+ * everything shortcut doesn't cost keyboard access. Pinning (`uiStore`'s `openEdgeDetail`, naming
+ * both the edge and this specific attachment) is the only state that enables editing — and even
+ * then, only once the pencil glyph is clicked (see `editing`, below); opening a card first always
+ * shows it read-only, only when `editable` (i.e. not presenting) does the pencil glyph appear at
+ * all. Presenting instead sets `presentationReveal`, always read-only, cleared automatically on
+ * the next step.
  */
 function EdgeAttachmentChip({
   edge,
   attachment,
-  selected,
   editable,
-  suppressHover,
 }: {
   edge: DraftEdge;
   attachment: Attachment;
-  selected: boolean;
   editable: boolean;
-  /** Another attachment on this same edge is pinned open for editing — this
-   *  chip's own hover card must stay closed regardless of pointer position,
-   *  or it visually covers whatever the user is actually typing into. */
-  suppressHover: boolean;
 }) {
   const theme = useThemeValue();
   const look = attachmentLookFor(theme, attachment);
   const pinned = useUiStore(
     (state) => state.openEdgeDetail?.edgeId === edge.id && state.openEdgeDetail?.attachmentId === attachment.id,
   );
+  const revealed = useUiStore(
+    (state) =>
+      state.presentationReveal?.edgeId === edge.id && state.presentationReveal?.attachmentId === attachment.id,
+  );
   const setOpenEdgeDetail = useUiStore((state) => state.setOpenEdgeDetail);
+  const setPresentationReveal = useUiStore((state) => state.setPresentationReveal);
   const updateEdgeAttachment = useEditorStore((state) => state.updateEdgeAttachment);
   const removeEdgeAttachment = useEditorStore((state) => state.removeEdgeAttachment);
 
-  const [hovering, setHovering] = useState(false);
-  const closeTimer = useRef<number | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-
-  const cancelClose = useCallback(() => {
-    if (closeTimer.current === null) return;
-    window.clearTimeout(closeTimer.current);
-    closeTimer.current = null;
-  }, []);
-
-  const scheduleClose = useCallback(() => {
-    cancelClose();
-    closeTimer.current = window.setTimeout(() => setHovering(false), ATTACHMENT_CLOSE_DELAY_MS);
-  }, [cancelClose]);
-
-  useEffect(() => cancelClose, [cancelClose]);
 
   // The textarea is uncontrolled (`defaultValue`) for smooth typing, but its live value must
   // survive whatever closes the card — Escape, a click anywhere outside, or the chip itself.
@@ -637,18 +638,33 @@ function EdgeAttachmentChip({
     wasPinned.current = pinned;
   }, [pinned, attachment, edge.id, updateEdgeAttachment]);
 
+  // A click on the chip reveals the card read-only first — the earlier "click opens straight into
+  // an editable textarea, cursor already blinking" behavior read as the card silently rewriting
+  // itself out from under a click that was only meant to view it. Editing is now a deliberate
+  // second step (the pencil glyph in the header), and always resets shut the moment the card
+  // itself closes, so re-opening a pinned attachment never resumes mid-edit by surprise.
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!pinned) setEditing(false);
+  }, [pinned]);
+
   // Same precedent as `AttachmentPopover`: a capture-phase Escape (so it preempts
   // `EditorScreen`'s own bubble-phase chain), plus a click anywhere outside the card closes it —
   // registered a tick late so the very click that opened the card doesn't immediately close it.
+  // Covers both edit-mode pinning and a presenter's own reveal — whichever is active.
   useEffect(() => {
-    if (!pinned) return;
+    if (!pinned && !revealed) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
-      setOpenEdgeDetail(null);
+      if (pinned) setOpenEdgeDetail(null);
+      if (revealed) setPresentationReveal(null);
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (cardRef.current && !cardRef.current.contains(event.target as Node)) setOpenEdgeDetail(null);
+      if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
+        if (pinned) setOpenEdgeDetail(null);
+        if (revealed) setPresentationReveal(null);
+      }
     };
     window.addEventListener('keydown', onKeyDown, true);
     const id = window.setTimeout(() => window.addEventListener('pointerdown', onPointerDown), 0);
@@ -657,9 +673,9 @@ function EdgeAttachmentChip({
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };
-  }, [pinned, setOpenEdgeDetail]);
+  }, [pinned, revealed, setOpenEdgeDetail, setPresentationReveal]);
 
-  const visible = pinned || selected || (hovering && !suppressHover);
+  const visible = pinned || revealed;
   const kind = attachment.type === 'code' ? 'code' : 'note';
 
   // The card's own reveal animation is a CSS `animation` on mount, but hiding it is not the
@@ -703,8 +719,18 @@ function EdgeAttachmentChip({
   }, [visible]);
 
   const togglePin = () => {
-    if (!editable) return;
-    setOpenEdgeDetail(pinned ? null : { edgeId: edge.id, attachmentId: attachment.id });
+    // Not presenting: a click pins the card open for editing — the existing
+    // edit-mode behavior, unchanged.
+    if (editable) {
+      setOpenEdgeDetail(pinned ? null : { edgeId: edge.id, attachmentId: attachment.id });
+      return;
+    }
+    // Presenting: a click intentionally reveals the card read-only instead —
+    // the presenter's own call on when extra context is useful, not an
+    // automatic reveal. Auto-collapses on the next step change (`FlowBar.tsx`),
+    // never unlocks the textarea below (that stays gated on `pinned`, which
+    // presentation never sets).
+    setPresentationReveal(revealed ? null : { edgeId: edge.id, attachmentId: attachment.id });
   };
 
   const chipVars = {
@@ -719,26 +745,33 @@ function EdgeAttachmentChip({
       data-kind={kind}
       // Suppresses the chip's own hover-pop while its card is showing — the card is a DOM child of
       // this chip, so without this, the chip's `:hover` scale (which reverts the instant the
-      // pointer leaves, ~90ms) and the card's own open/close fade (250ms close-delay, then a
-      // separate 120ms animation) run as two independent, unsynchronized transforms on nested
-      // elements — the chip visibly "un-pops" while the card is still lingering open, then the card
-      // fades out separately on its own schedule. Reads as one unexplained extra zoom. See
+      // pointer leaves, ~90ms) and the card's own open/close fade (a separate 120ms animation) run
+      // as two independent, unsynchronized transforms on nested elements — the chip visibly
+      // "un-pops" while the card is still lingering open, then the card fades out separately on its
+      // own schedule. Reads as one unexplained extra zoom. See
       // `.dc-edge-attachment-chip:hover:not([data-open])` in `canvas.css`.
       data-open={cardMounted ? 'true' : undefined}
       role="button"
       tabIndex={0}
-      title={pinned ? 'Close attached detail' : kind === 'code' ? 'View attached code' : 'View attached note'}
+      title={
+        pinned || revealed
+          ? 'Close attached detail'
+          : kind === 'code'
+            ? 'View attached code'
+            : 'View attached note'
+      }
       // Set explicitly rather than left to default content-based computation: the card (with its
       // own, possibly lengthy, note/code content) is a DOM child of this chip for simple
       // CSS-relative positioning, and without this, that content would bleed into the chip's own
       // accessible name whenever it's open.
-      aria-label={pinned ? 'Close attached detail' : kind === 'code' ? 'View attached code' : 'View attached note'}
+      aria-label={
+        pinned || revealed
+          ? 'Close attached detail'
+          : kind === 'code'
+            ? 'View attached code'
+            : 'View attached note'
+      }
       style={chipVars}
-      onPointerEnter={() => {
-        cancelClose();
-        setHovering(true);
-      }}
-      onPointerLeave={scheduleClose}
       onClick={(event) => {
         // The card (delete button, textarea) is a DOM child of this chip, so a click anywhere
         // inside it bubbles up here too — only clicks that did *not* originate inside the card
@@ -771,11 +804,6 @@ function EdgeAttachmentChip({
           className="dc-edge-attachment-card"
           data-pinned={pinned ? 'true' : undefined}
           data-closing={cardClosing ? 'true' : undefined}
-          onPointerEnter={() => {
-            cancelClose();
-            setHovering(true);
-          }}
-          onPointerLeave={scheduleClose}
           onPointerDown={(event) => event.stopPropagation()}
         >
           {/* The reveal animation lives on this inner wrapper, not the positioned outer div —
@@ -788,20 +816,34 @@ function EdgeAttachmentChip({
             >
               <span>{look.label}</span>
               {pinned && (
-                <button
-                  type="button"
-                  className="dc-edge-attachment-delete"
-                  title="Delete attached detail"
-                  onClick={() => {
-                    removeEdgeAttachment(edge.id, attachment.id);
-                    setOpenEdgeDetail(null);
-                  }}
-                >
-                  Delete
-                </button>
+                <span className="dc-edge-attachment-card-actions">
+                  {!editing && editable && (
+                    <button
+                      type="button"
+                      className="dc-edge-attachment-card-action"
+                      aria-label="Edit attached detail"
+                      title="Edit"
+                      onClick={() => setEditing(true)}
+                    >
+                      <Icon name="pencil" size={13} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="dc-edge-attachment-card-action"
+                    aria-label="Delete attached detail"
+                    title="Delete"
+                    onClick={() => {
+                      removeEdgeAttachment(edge.id, attachment.id);
+                      setOpenEdgeDetail(null);
+                    }}
+                  >
+                    <Icon name="trash" size={13} />
+                  </button>
+                </span>
               )}
             </header>
-            {pinned ? (
+            {pinned && editing ? (
               attachment.type === 'code' ? (
                 <textarea
                   autoFocus
@@ -979,16 +1021,3 @@ function badgeY(route: ReturnType<typeof routeBetween>): number {
   return route.source.y;
 }
 
-type InternalNode = NonNullable<ReturnType<typeof useInternalNode>>;
-
-function rectOfInternal(node: InternalNode): Rect | null {
-  const width = node.measured?.width ?? node.width;
-  const height = node.measured?.height ?? node.height;
-  if (width == null || height == null) return null;
-  return {
-    x: node.internals.positionAbsolute.x,
-    y: node.internals.positionAbsolute.y,
-    width,
-    height,
-  };
-}

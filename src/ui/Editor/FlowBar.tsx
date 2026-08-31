@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { nodeIndex } from '../../store/selectors';
 import { useEditorStore } from '../../store/editorStore';
+import { useUiStore } from '../../store/uiStore';
 import { tokenizeCode } from '../../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../../render/code/theme';
 import { useTheme } from '../theme/useTheme';
@@ -40,6 +41,14 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [playback, mode, setMode]);
+
+  // A presenter-revealed attachment (see `EdgeAttachmentChip`'s
+  // `presentationReveal`) is scoped to the step it was revealed on — advancing
+  // or retreating a step always collapses it, so nothing stray survives into
+  // an unrelated later step. No persistent pin across steps in this pass.
+  useEffect(() => {
+    useUiStore.getState().setPresentationReveal(null);
+  }, [playback.step]);
 
   if (!playback.active) return null;
 

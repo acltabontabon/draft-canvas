@@ -44,7 +44,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
 
       {document.flows.length === 0 && (
         <p className="dc-muted dc-flow-panel-empty">
-          No flows yet. Select a connector and add it to a new flow from the Inspector.
+          No flows yet. Select a connector and add it to a new flow from its own popover.
         </p>
       )}
 
@@ -232,7 +232,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                   })}
                   {flow.steps.length === 0 && (
                     <li className="dc-muted dc-flow-panel-empty">
-                      No steps yet — select a connector on the canvas and add it from the Inspector.
+                      No steps yet — select a connector on the canvas and add it from its own popover.
                     </li>
                   )}
                 </ol>

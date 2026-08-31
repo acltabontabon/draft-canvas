@@ -126,3 +126,61 @@ describe('v2 to v3 migration: connector anchors', () => {
     expect(result.document.edges[0]!.targetAnchor).toBeDefined();
   });
 });
+
+/**
+ * The v3→v4 migration: v3 has no concept of a flow accent at all, so there is
+ * nothing to backfill — the migration is a structural no-op. Its only job is
+ * to exist as an explicit `MIGRATIONS` entry so the version funnel does not
+ * throw "missing migration" for a v3 document, and so a v3 flow keeps loading
+ * with no accent, rendering exactly as it always did.
+ */
+describe('v3 to v4 migration: flow accent', () => {
+  function v3Fixture(flowOverrides: Record<string, unknown> = {}) {
+    return {
+      format: DRAFT_FORMAT,
+      version: 3,
+      metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0 },
+      nodes: [
+        { id: 'a', type: 'service', x: 0, y: 0, width: 120, height: 60 },
+        { id: 'b', type: 'database', x: 400, y: 0, width: 120, height: 60 },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: 'a',
+          target: 'b',
+          directed: true,
+          routing: 'smoothstep',
+          sourceAnchor: { side: 'right', offset: 0.5 },
+          targetAnchor: { side: 'left', offset: 0.5 },
+        },
+      ],
+      flows: [{ id: 'f1', title: 'Checkout', steps: [{ id: 's1', edgeId: 'e1' }], ...flowOverrides }],
+    };
+  }
+
+  it('migrates a v3 flow to the current version, unchanged except for version and a missing accent', () => {
+    const result = parseDocument(JSON.stringify(v3Fixture()));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.version).toBe(CURRENT_VERSION);
+    expect(result.document.flows).toHaveLength(1);
+    expect(result.document.flows[0]!.title).toBe('Checkout');
+    expect(result.document.flows[0]!.steps).toEqual([{ id: 's1', edgeId: 'e1' }]);
+    expect(result.document.flows[0]!.accent).toBeUndefined();
+  });
+
+  it('accepts a valid accent on a hand-authored v3-shaped-but-v4-aware fixture', () => {
+    const result = parseDocument(JSON.stringify(v3Fixture({ accent: 'violet' })));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.flows[0]!.accent).toBe('violet');
+  });
+
+  it('drops an invalid accent rather than coercing it, same discipline as node/edge accents', () => {
+    const result = parseDocument(JSON.stringify(v3Fixture({ accent: 'not-a-real-colour' })));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.flows[0]!.accent).toBeUndefined();
+  });
+});

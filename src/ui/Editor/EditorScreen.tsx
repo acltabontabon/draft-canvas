@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { Canvas } from '../../canvas/Canvas';
+import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { CARD_PRESET, presetForShortcut, type Preset } from '../../canvas/presets';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { createEdge, createNode } from '../../document/factory';
@@ -11,6 +12,7 @@ import { pointer, useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { useThemeValue } from '../theme/useTheme';
+import { EditingFlowBanner } from './EditingFlowBanner';
 import { EmptyState } from './EmptyState';
 import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
@@ -147,11 +149,13 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
           />
         )}
         {!presenting && <AttachmentPopover />}
+        {!presenting && <EdgeInspectorPopover />}
         <EmptyState />
         {!presenting && <Inspector />}
         {!presenting && <FlowPanel playback={playback} />}
         <FlowBar playback={playback} />
         <FocusIndicator />
+        {!presenting && <EditingFlowBanner />}
 
         {presenting && (
           <div className="dc-present-exit">
@@ -200,6 +204,7 @@ function useKeyboard({
   const setExportOpen = useUiStore((state) => state.setExportOpen);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const arm = useUiStore((state) => state.arm);
+  const setFlowSwitcherOpen = useUiStore((state) => state.setFlowSwitcherOpen);
   const { fitView, zoomIn, zoomOut } = useReactFlow();
 
   useEffect(() => {
@@ -281,11 +286,19 @@ function useKeyboard({
         case 'Escape':
           arm(null);
           if (state.focus.active) state.exitFocus();
+          else if (state.flowEdit.active) state.exitFlowEdit();
           else if (playback.active) playback.stop();
           else state.setSelection({ nodes: [], edges: [] });
           return;
         case '?':
           setShortcutsOpen(true);
+          return;
+        case 'f':
+          // Plain F only — Cmd/Ctrl+F already returned above via the `meta`
+          // branch; Shift+F falls through unhandled rather than toggling.
+          if (event.shiftKey || event.altKey) break;
+          event.preventDefault();
+          setFlowSwitcherOpen(!useUiStore.getState().flowSwitcherOpen);
           return;
         case '!':
           // Shift+1 — the conventional fit-to-view chord.
@@ -346,5 +359,16 @@ function useKeyboard({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [arm, createAtPointer, playback, fitView, setExportOpen, setShortcutsOpen, store, zoomIn, zoomOut]);
+  }, [
+    arm,
+    createAtPointer,
+    playback,
+    fitView,
+    setExportOpen,
+    setFlowSwitcherOpen,
+    setShortcutsOpen,
+    store,
+    zoomIn,
+    zoomOut,
+  ]);
 }

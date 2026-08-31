@@ -47,8 +47,20 @@ interface UiStore {
    *  any — see `EdgeAttachmentChip` in `DraftEdgeView.tsx`. Hover reveals a chip's card
    *  independently of this; only a click pins one open for editing. */
   openEdgeDetail: { edgeId: string; attachmentId: string } | null;
+  /**
+   * The single attachment a presenter has intentionally revealed for the
+   * current step — a read-only counterpart to `openEdgeDetail`, kept as a
+   * separate field rather than overloading that one: `openEdgeDetail` also
+   * unlocks the attachment's edit textarea, which presentation must never
+   * do. Cleared automatically on every step change (see `FlowBar.tsx`) —
+   * there is no persistent pin across steps in this pass, so a revealed
+   * attachment never survives into an unrelated later step.
+   */
+  presentationReveal: { edgeId: string; attachmentId: string } | null;
   /** Whether the Flow list drawer is visible. */
   flowPanelOpen: boolean;
+  /** Whether the compact toolbar flow switcher's dropdown is open — see `FlowSwitcher.tsx`. */
+  flowSwitcherOpen: boolean;
   /**
    * True for the duration of a node drag or resize gesture. Distinct from
    * `editorStore`'s own `interaction` bracket, which only decides history
@@ -76,7 +88,9 @@ interface UiStore {
   setReconnectHoverTarget: (nodeId: string | null) => void;
   setOpenAttachmentPopover: (hostId: string | null) => void;
   setOpenEdgeDetail: (target: { edgeId: string; attachmentId: string } | null) => void;
+  setPresentationReveal: (target: { edgeId: string; attachmentId: string } | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
+  setFlowSwitcherOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean) => void;
   requestEdit: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone']) => void;
@@ -97,7 +111,9 @@ export const useUiStore = create<UiStore>((set) => ({
   reconnectHoverTarget: null,
   openAttachmentPopover: null,
   openEdgeDetail: null,
+  presentationReveal: null,
   flowPanelOpen: false,
+  flowSwitcherOpen: false,
   interactionActive: false,
   editRequestId: null,
 
@@ -114,7 +130,9 @@ export const useUiStore = create<UiStore>((set) => ({
     set((state) => (state.reconnectHoverTarget === reconnectHoverTarget ? state : { reconnectHoverTarget })),
   setOpenAttachmentPopover: (openAttachmentPopover) => set({ openAttachmentPopover }),
   setOpenEdgeDetail: (openEdgeDetail) => set({ openEdgeDetail }),
+  setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
+  setFlowSwitcherOpen: (flowSwitcherOpen) => set({ flowSwitcherOpen }),
   setInteractionActive: (interactionActive) =>
     set((state) => (state.interactionActive === interactionActive ? state : { interactionActive })),
   requestEdit: (editRequestId) => set({ editRequestId }),

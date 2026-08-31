@@ -134,11 +134,25 @@ function migrateAnchors(doc: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
+ * v3 has no concept of a flow accent at all — a flow simply has none, and
+ * every version before v4 rendered it exactly the same way: each member
+ * connector kept its own normal styling. There is no v3 data to derive an
+ * accent from, so this migration is a structural no-op; it exists as an
+ * explicit entry anyway so `migrateToCurrent`'s "every version has an entry"
+ * invariant holds, and so a future migration author has a template if v4
+ * ever needs a real backfill added retroactively.
+ */
+function migrateFlowAccent(doc: Record<string, unknown>): Record<string, unknown> {
+  return doc;
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
   1: migrateSequenceToFlows,
   2: migrateAnchors,
+  3: migrateFlowAccent,
 };
 
 export class UnsupportedVersionError extends Error {

@@ -9,12 +9,15 @@ import {
   deleteFlow,
   explainEdgeTier,
   explainNodeTier,
+  lensEdgeTier,
+  lensNodeTier,
   moveStepInFlow,
   pruneFlowSteps,
   removeStepExtraEdge,
   removeStepExtraNode,
   removeStepFromFlow,
   renameFlow,
+  setFlowAccent,
   setStepViewport,
   stepIndexOf,
   updateFlowStepCaption,
@@ -111,6 +114,40 @@ describe('flow.ts pure functions', () => {
     const doc = addFlow(createDocument('X'), createFlow({ title: 'A', id: 'f1' }));
     expect(deleteFlow(doc, 'f1').flows).toHaveLength(0);
     expect(deleteFlow(doc, 'missing')).toBe(doc);
+  });
+
+  it('sets and clears a flow accent, no-op for an unknown id or unchanged value', () => {
+    const doc = addFlow(createDocument('X'), createFlow({ title: 'A', id: 'f1' }));
+    const accented = setFlowAccent(doc, 'f1', 'violet');
+    expect(accented.flows[0]!.accent).toBe('violet');
+    expect(setFlowAccent(accented, 'f1', 'violet')).toBe(accented);
+    const cleared = setFlowAccent(accented, 'f1', undefined);
+    expect(cleared.flows[0]!.accent).toBeUndefined();
+    expect(setFlowAccent(doc, 'missing', 'teal')).toBe(doc);
+  });
+
+  it('binary lens membership: a connector is either part of the flow or dimmed, no "no flow" crash', () => {
+    const flow = createFlow({ title: 'X' });
+    flow.steps = [{ id: 's1', edgeId: 'e1' }];
+    expect(lensEdgeTier(flow, 'e1')).toBe('member');
+    expect(lensEdgeTier(flow, 'missing')).toBe('dimmed');
+    expect(lensEdgeTier(undefined, 'e1')).toBe('dimmed');
+  });
+
+  it('lens node tier: member via a member edge endpoint or a frame-step extraNodeIds listing', () => {
+    const memberEdge = createEdge({ source: 'a', target: 'b', id: 'e1' });
+    const otherEdge = createEdge({ source: 'c', target: 'd', id: 'e2' });
+    const flow = createFlow({ title: 'X' });
+    flow.steps = [
+      { id: 's1', edgeId: 'e1' },
+      { id: 's2', extraNodeIds: ['z'] },
+    ];
+    const edges = [memberEdge, otherEdge];
+    expect(lensNodeTier(flow, edges, 'a')).toBe('member');
+    expect(lensNodeTier(flow, edges, 'b')).toBe('member');
+    expect(lensNodeTier(flow, edges, 'z')).toBe('member');
+    expect(lensNodeTier(flow, edges, 'c')).toBe('dimmed');
+    expect(lensNodeTier(undefined, edges, 'a')).toBe('dimmed');
   });
 
   it('adds a step to a flow, refusing a duplicate edge or an edge that does not exist', () => {
@@ -507,6 +544,16 @@ describe('flows through the store', () => {
     store.getState().renameFlow(flowId, 'Happy path');
     expect(store.getState().history.past.length).toBe(before + 1);
     expect(store.getState().document.flows[0]!.title).toBe('Happy path');
+  });
+
+  it('sets a flow accent through the store, undoably', () => {
+    const flowId = store.getState().createFlow('A');
+    const before = store.getState().history.past.length;
+    store.getState().setFlowAccent(flowId, 'amber');
+    expect(store.getState().document.flows[0]!.accent).toBe('amber');
+    expect(store.getState().history.past.length).toBe(before + 1);
+    store.getState().undo();
+    expect(store.getState().document.flows[0]!.accent).toBeUndefined();
   });
 
   it('never touches history when playback or the selected flow overlay changes', () => {

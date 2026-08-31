@@ -11,7 +11,7 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
 ```json
 {
   "format": "draft-canvas",
-  "version": 3,
+  "version": 4,
   "metadata": {
     "id": "d_x8k2m4p9qr7t",
     "title": "Account cancellation",
@@ -158,6 +158,7 @@ switching flows never changes a node or edge. See [`src/document/flow.ts`](../sr
 | `id` | string | Unique within the document. |
 | `title` | string | e.g. `"Happy path"`, `"Payment timeout"`. |
 | `steps` | array | Ordered — order is the array position, not a stored number. Each `{ id, edgeId?, extraEdgeIds?, extraNodeIds?, viewport?, caption? }`. `edgeId` is a step's primary connector; optional so a "frame" step can spotlight a group with no single connector driving it. `extraEdgeIds`/`extraNodeIds` are further connectors/nodes the step highlights beyond `edgeId`'s own two endpoints — every member gets the same active/shown/hidden treatment during playback, with no primary/secondary distinction once a step is current. `viewport` (`{ x, y, zoom }`), when present, is shown verbatim during that step instead of the usual fit-to-bounds. `caption` is optional and, when absent on a step with a primary edge, playback falls back to that connector's own `label`. A dangling reference (`edgeId`, or an entry in `extraEdgeIds`/`extraNodeIds`) is dropped from the step, not the whole file; a step left with nothing at all — no primary, no extras, no viewport — is the only one actually removed. |
+| `accent` | enum? | As for nodes/edges. Applied to this flow's member connectors only while it's the active lens (selected or presenting) — never a permanent per-edge colour, since a connector can belong to several flows. Absent renders every member with its own normal styling, exactly as before this field existed (v4). |
 
 ## Limits
 

@@ -13,6 +13,28 @@ break as we settle on a stable 1.0 shape.
 - Export a Presentation Mode flow as an animated GIF — the same camera moves, connector pulse,
   and step-by-step highlighting you see on screen, dropped straight into a ticket or chat without
   reopening Draft Canvas.
+- A compact flow switcher (`Flows · ⟨name⟩ ▾`) always visible in the toolbar, with "Diagram" as
+  its own explicit state — press `F` to jump between flows without opening the full drawer.
+- Selecting a flow now acts as a lens on the diagram: its connectors and nodes stay lit, everything
+  else gently dims, with a brief one-time pulse when you switch — no need to enter Presentation
+  Mode just to see what belongs to a flow.
+- A contextual control anchored right at a selected connector, for editing its type, flow
+  membership, and other details in place instead of from a panel docked at the bottom of the
+  screen.
+- A connector can belong to several flows at once, joined or left from a simple checkbox list on
+  that same contextual control.
+- An explicit "Editing: ⟨flow⟩" mode, entered deliberately from the flow switcher, for
+  restructuring a flow's membership with the state clearly visible on screen.
+- During Presentation Mode, click a connector's attachment indicator to reveal it as a temporary
+  card — it collapses automatically on the next step unless you reveal it again.
+- Flows can carry an optional accent color, shown only while that flow is the active lens
+  (selected, or being presented) — existing flows are unaffected.
+
+### Changed
+
+- A connector's attached notes and code now reveal on click instead of on hover, and open
+  read-only first — a separate edit glyph switches to editing, so opening one to look at it no
+  longer drops you straight into an editable text field.
 
 ## [0.1.0-alpha.1] - 2026-08-31
 

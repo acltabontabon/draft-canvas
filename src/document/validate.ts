@@ -506,6 +506,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     }
     const id = safeId(candidateFlow.id) ?? createId('f');
     const title = text(candidateFlow.title, LIMITS.maxFlowTitleLength)?.trim() || 'Untitled flow';
+    // Same discipline as a node/edge's own accent: absent or unrecognised
+    // stays absent rather than being coerced to a fallback.
+    const flowAccent = oneOfOptional<Accent>(candidateFlow.accent, ACCENTS);
     const rawSteps = Array.isArray(candidateFlow.steps) ? candidateFlow.steps : [];
 
     const steps: DraftFlowStep[] = [];
@@ -571,7 +574,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
       steps.push(step);
     }
 
-    flows.push({ id, title, steps });
+    const flow: DraftFlow = { id, title, steps };
+    if (flowAccent !== undefined) flow.accent = flowAccent;
+    flows.push(flow);
   }
 
   if (droppedFlows > 0) repairs.push(`Dropped ${droppedFlows} unreadable flow(s).`);

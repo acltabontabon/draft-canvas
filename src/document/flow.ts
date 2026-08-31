@@ -13,7 +13,7 @@
  */
 import { createId } from './ids';
 import { LIMITS } from './limits';
-import type { DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftViewport } from './types';
+import type { Accent, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftViewport } from './types';
 
 export interface CreateFlowInput {
   title?: string;
@@ -103,6 +103,34 @@ export function explainNodeTier(
   return best;
 }
 
+/**
+ * The lens's two tiers: a connector is either part of the currently-inspected
+ * flow or it isn't. Deliberately distinct from `ExplainTier`: that type is
+ * step-progression-based ("explained yet, explaining now, not yet reached")
+ * and only meaningful once a flow is actively being *presented*. Merely
+ * *selecting* a flow to inspect it has no "current step" — every member of
+ * the flow is equally part of the story, so a binary membership check is the
+ * right primitive, not a degenerate case of the three-tier one.
+ */
+export type LensTier = 'member' | 'dimmed';
+
+/** A connector's lens tier for the given flow — `'dimmed'` if no flow is given. */
+export function lensEdgeTier(flow: DraftFlow | undefined, edgeId: string): LensTier {
+  if (!flow) return 'dimmed';
+  return stepIndexOf(flow, edgeId) !== undefined ? 'member' : 'dimmed';
+}
+
+/** A node's lens tier: `'member'` if it touches a member edge, or is spotlit
+ *  by a "frame" step's `extraNodeIds`, for the given flow. */
+export function lensNodeTier(flow: DraftFlow | undefined, edges: Iterable<DraftEdge>, nodeId: string): LensTier {
+  if (!flow) return 'dimmed';
+  for (const edge of edges) {
+    if (edge.source !== nodeId && edge.target !== nodeId) continue;
+    if (lensEdgeTier(flow, edge.id) === 'member') return 'member';
+  }
+  return frameStepPositions(flow, nodeId).length > 0 ? 'member' : 'dimmed';
+}
+
 function withFlows(doc: DraftDocument, flows: DraftFlow[]): DraftDocument {
   return flows === doc.flows ? doc : { ...doc, flows };
 }
@@ -126,6 +154,19 @@ export function renameFlow(doc: DraftDocument, flowId: string, title: string): D
 export function deleteFlow(doc: DraftDocument, flowId: string): DraftDocument {
   const flows = doc.flows.filter((flow) => flow.id !== flowId);
   return flows.length === doc.flows.length ? doc : withFlows(doc, flows);
+}
+
+/** Sets, or clears (`undefined`), a flow's lens accent — see `DraftFlow.accent`. */
+export function setFlowAccent(doc: DraftDocument, flowId: string, accent: Accent | undefined): DraftDocument {
+  const flow = findFlow(doc, flowId);
+  if (!flow || flow.accent === accent) return doc;
+  const next = { ...flow };
+  if (accent) next.accent = accent;
+  else delete next.accent;
+  return withFlows(
+    doc,
+    doc.flows.map((f) => (f.id === flowId ? next : f)),
+  );
 }
 
 /** Appends an existing connector to the end of a flow. No-op if it's already a step of that flow. */

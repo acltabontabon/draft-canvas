@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Handle, NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { minSizeFor } from '../document/factory';
-import { explainNodeTier, type ExplainTier } from '../document/flow';
+import { explainNodeTier, lensNodeTier, type ExplainTier } from '../document/flow';
 import type { DraftNode } from '../document/types';
 import { CODE_LAYOUT, describeContext, describeNode, naturalCodeSize } from '../nodes/describe';
 import { HANDLE_SIDES, positionForSide } from '../edges/routing';
@@ -31,6 +31,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // change, and only the nodes whose tier actually flips re-render.
   const explainTier = useEditorStore((state) => explainTierFor(state, id));
   const focused = useEditorStore((state) => state.focus.active && state.focus.nodeIds.includes(id));
+  const lensMember = useEditorStore((state) => lensMemberFor(state, id));
   const updateNodeText = useEditorStore((state) => state.updateNodeText);
   const updateNodeById = useEditorStore((state) => state.updateNodeById);
   const theme = useThemeValue();
@@ -148,6 +149,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-explain-active={explainTier === 'active' ? 'true' : undefined}
       data-explain-shown={explainTier === 'shown' ? 'true' : undefined}
       data-focused={focused ? 'true' : undefined}
+      data-lens-member={lensMember ? 'true' : undefined}
       data-editing={editing ? 'true' : undefined}
       data-attach-target={isAttachTarget ? 'true' : undefined}
       data-reconnect-target={isReconnectTarget ? 'true' : undefined}
@@ -313,6 +315,14 @@ function explainTierFor(state: EditorStore, id: string): ExplainTier {
   if (!state.flowPlayback.active || !state.flowPlayback.flowId) return 'hidden';
   const flow = state.document.flows.find((f) => f.id === state.flowPlayback.flowId);
   return explainNodeTier(flow, edgeIndex(state.document.edges).values(), id, state.flowPlayback.step);
+}
+
+/** Whether this node belongs to the selected (not presented) flow's lens —
+ *  suppressed whenever Presentation or Focus already own the dimming. */
+function lensMemberFor(state: EditorStore, id: string): boolean {
+  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active) return false;
+  const flow = state.document.flows.find((f) => f.id === state.selectedFlowId);
+  return lensNodeTier(flow, edgeIndex(state.document.edges).values(), id) === 'member';
 }
 
 export type { DraftNodeData };
