@@ -520,6 +520,9 @@ function EdgeAttachmentRow({
   editable: boolean;
 }) {
   const attachments = edge.attachments;
+  const pinnedAttachmentId = useUiStore((state) =>
+    state.openEdgeDetail?.edgeId === edge.id ? state.openEdgeDetail.attachmentId : null,
+  );
   if (!attachments?.length) return null;
   return (
     <div
@@ -528,7 +531,14 @@ function EdgeAttachmentRow({
       style={{ transform: attachmentRowTransform(x, y, flipBelow) }}
     >
       {attachments.map((attachment) => (
-        <EdgeAttachmentChip key={attachment.id} edge={edge} attachment={attachment} selected={selected} editable={editable} />
+        <EdgeAttachmentChip
+          key={attachment.id}
+          edge={edge}
+          attachment={attachment}
+          selected={selected}
+          editable={editable}
+          suppressHover={pinnedAttachmentId !== null && pinnedAttachmentId !== attachment.id}
+        />
       ))}
     </div>
   );
@@ -540,24 +550,37 @@ function EdgeAttachmentRow({
  * own box, flipped by `.dc-edge-attachment-row[data-flip]` in `canvas.css` — which is what keeps
  * every card opening away from the connector's line regardless of how many chips sit beside it.
  *
- * Visible when `hovering || selected || pinned`. Hover uses a close-delay timer (not React state
- * per tick) so moving from the chip into its card never flickers shut — `pointerenter`/`leave`
- * don't fire on crossing into a DOM descendant, so this only bridges the small CSS gap between
- * chip and card, not the whole hand-off. Selection makes the read-only preview reachable by
- * keyboard for free (selecting an edge already is) with no new key bindings; pinning (`uiStore`'s
- * `openEdgeDetail`, naming both the edge and this specific attachment) is the only state that
- * enables editing, and only when `editable` (i.e. not presenting).
+ * Visible when `pinned || selected || (hovering && !suppressHover)`. Hover uses a close-delay timer
+ * (not React state per tick) so moving from the chip into its card never flickers shut —
+ * `pointerenter`/`leave` don't fire on crossing into a DOM descendant, so this only bridges the
+ * small CSS gap between chip and card, not the whole hand-off. Selection makes the read-only
+ * preview reachable by keyboard for free (selecting an edge already is) with no new key bindings;
+ * pinning (`uiStore`'s `openEdgeDetail`, naming both the edge and this specific attachment) is the
+ * only state that enables editing, and only when `editable` (i.e. not presenting).
+ *
+ * `suppressHover` exists because cards are wide relative to the small gap between chips in a row:
+ * with two-plus attachments on one edge, simply resting the pointer on a sibling chip while another
+ * is pinned open for editing popped that sibling's own card up on top of the one being typed into,
+ * visually burying it mid-edit. `EdgeAttachmentRow` passes `true` here for every chip except the
+ * pinned one, so a sibling's hover card cannot render at all while this edge has anything pinned —
+ * an explicit click on a sibling still switches the pin (and its own `suppressHover` then flips),
+ * only *hover* is blocked.
  */
 function EdgeAttachmentChip({
   edge,
   attachment,
   selected,
   editable,
+  suppressHover,
 }: {
   edge: DraftEdge;
   attachment: Attachment;
   selected: boolean;
   editable: boolean;
+  /** Another attachment on this same edge is pinned open for editing — this
+   *  chip's own hover card must stay closed regardless of pointer position,
+   *  or it visually covers whatever the user is actually typing into. */
+  suppressHover: boolean;
 }) {
   const theme = useThemeValue();
   const look = attachmentLookFor(theme, attachment);
@@ -631,7 +654,7 @@ function EdgeAttachmentChip({
     };
   }, [pinned, setOpenEdgeDetail]);
 
-  const visible = hovering || selected || pinned;
+  const visible = pinned || selected || (hovering && !suppressHover);
   const kind = attachment.type === 'code' ? 'code' : 'note';
 
   const togglePin = () => {
