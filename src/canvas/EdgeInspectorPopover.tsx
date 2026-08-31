@@ -222,7 +222,6 @@ function EdgeInspectorRow({
 }) {
   const flows = useEditorStore((state) => state.document.flows);
   const memberOf = flows.filter((flow) => stepIndexOf(flow, edge.id) !== undefined);
-  const attachmentCount = edge.attachments?.length ?? 0;
 
   const caption = edge.label || (edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : null);
   const flowChipLabel =
@@ -255,14 +254,6 @@ function EdgeInspectorRow({
         >
           {flowChipLabel}
         </button>
-        {attachmentCount > 0 && (
-          <span
-            className="dc-edge-inspector-attachments"
-            title={`${attachmentCount} attachment(s) — hover the connector to view`}
-          >
-            📎 {attachmentCount}
-          </span>
-        )}
         <Button
           variant="quiet"
           aria-label="More connector options"
