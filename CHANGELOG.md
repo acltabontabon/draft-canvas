@@ -8,6 +8,8 @@ break as we settle on a stable 1.0 shape.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.4] - 2026-09-01
+
 ### Added
 
 - Sharing the app's link now shows a title, a "For meetings that suddenly need a diagram." tagline,
@@ -173,7 +175,8 @@ break as we settle on a stable 1.0 shape.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.3...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.4...main
+[0.1.0-alpha.4]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.3...v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/acltabontabon/draft-canvas/commits/v0.1.0-alpha.1
