@@ -229,6 +229,11 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
+            // Presenting never opens the popover — editing attachments mid-presentation is exactly
+            // what `AttachmentChip`'s own `editable` gate also exists to prevent; guarding here too
+            // keeps the badge's own `data-open` state from claiming "open" for a popover that
+            // `AttachmentPopover` itself refuses to render while presenting.
+            if (mode === 'present') return;
             setOpenAttachmentDetail(popoverOpen ? null : { hostKind: 'node', hostId: node.id, attachmentId: null });
           }}
         >

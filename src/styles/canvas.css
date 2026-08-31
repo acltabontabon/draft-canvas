@@ -752,18 +752,13 @@
   border-color: var(--dc-selection);
 }
 
+/* Chrome-free on purpose: this now wraps the same floating chip row a connector's attachments
+   use (`AttachmentChipRow`), which already carries its own border/background/shadow per chip via
+   `--dc-chip-*` — an outer panel box around it would double up on that framing instead of reading
+   as the same feature. Purely a positioning + animation container now, not a visible panel. */
 .dc-attachment-popover {
   position: absolute;
   z-index: 7;
-  display: flex;
-  flex-direction: column;
-  width: 260px;
-  max-height: 320px;
-  border: 1px solid var(--dc-border);
-  border-radius: 8px;
-  background: var(--dc-surface);
-  box-shadow: var(--dc-shadow-panel);
-  overflow: hidden;
   /* `.react-flow__viewport` (its portal ancestor) is `pointer-events: none`
      so panning/marquee-select can reach through empty canvas — this panel is
      interactive content, so it must opt back in explicitly. */
@@ -774,10 +769,6 @@
    `.dc-attachment-card-inner`, and for the same reason: a CSS `animation` touching `transform`
    would otherwise clobber the outer div's own inline positioning `transform`. */
 .dc-attachment-popover-inner {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
   animation: dc-attachment-card-in 120ms ease;
 }
 

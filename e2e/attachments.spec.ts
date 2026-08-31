@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-/** Node attachments: drag-to-attach arming, the badge/popover, detach, delete. */
+/** Node attachments: drag-to-attach arming, the badge opening a connector-style chip row/card
+ *  (`AttachmentPresentation.tsx`, shared with `DraftEdgeView.tsx`), detach, delete. */
 
 async function newCanvas(page: Page, title: string) {
   await page.goto('/');
@@ -131,7 +132,7 @@ test.describe('attachments', () => {
     await expect(page.locator('.dc-attachment-badge')).toContainText('1');
   });
 
-  test('opens the popover, edits, detaches with original size preserved, and deletes with undo', async ({
+  test('opens the badge into a chip row, edits via its card, detaches with original size preserved, and deletes with undo', async ({
     page,
   }) => {
     await newCanvas(page, 'Attach popover');
@@ -148,15 +149,32 @@ test.describe('attachments', () => {
     await release();
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
 
+    // Badge click reveals the (connector-style) chip row, matching a connector's own attachments —
+    // not the old always-expanded list popover.
     await page.locator('.dc-attachment-badge').click();
-    const popover = page.locator('.dc-attachment-popover');
-    await expect(popover).toBeVisible();
+    const chip = page.locator('.dc-attachment-chip');
+    await expect(chip).toHaveCount(1);
 
-    const editor = popover.locator('.dc-attachment-editor-code');
+    // Chip click pins its card open read-only first.
+    await chip.click();
+    const card = page.locator('.dc-attachment-card');
+    await expect(card).toBeVisible();
+    await expect(card.locator('.dc-attachment-code')).toBeVisible();
+
+    // The pencil glyph is what reveals editing — same as a connector attachment's card.
+    await card.getByRole('button', { name: 'Edit attached detail' }).click();
+    const editor = card.locator('.dc-attachment-editor-code');
     await editor.fill('const attached = true;');
-    await editor.blur();
+    // Commit via outside click, not blur — the ref-based commit-on-close pattern shared with
+    // connector attachments. This closes the whole popover (row + card), not just the card, since
+    // a node has no intermediate "row open, nothing pinned" state to fall back to.
+    await page.mouse.click(60, 60);
+    await expect(card).toHaveCount(0);
 
-    await popover.getByRole('button', { name: 'Detach', exact: true }).click();
+    // Reopen to Detach — action lives in the card's own (now shared) action row.
+    await page.locator('.dc-attachment-badge').click();
+    await chip.click();
+    await card.getByRole('button', { name: 'Detach onto the canvas' }).click();
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(0);
     await expect(page.locator('.dc-node')).toHaveCount(2);
 
@@ -169,24 +187,23 @@ test.describe('attachments', () => {
     await expect(detached).toHaveAttribute('data-selected', 'true');
 
     // Re-attach, then delete the attachment outright, with one undo restoring it.
-    const detachedCenter2 = (await detached.boundingBox())!;
     const release2 = await dragNodeCenterTo(page, detached, {
       x: serviceCenter.x,
       y: serviceCenter.y,
     });
-    void detachedCenter2;
     await release2();
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
 
     await page.locator('.dc-attachment-badge').click();
-    await page.locator('.dc-attachment-popover').getByRole('button', { name: 'Delete' }).click();
+    await chip.click();
+    await card.getByRole('button', { name: 'Delete attached detail' }).click();
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(0);
 
     await page.keyboard.press('Meta+z');
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
   });
 
-  test('an attachment survives a reload — content, language, and dimensions all round-trip', async ({
+  test('an attachment survives a reload — content, chip label, and dimensions all round-trip', async ({
     page,
   }) => {
     await newCanvas(page, 'Attachment persistence');
@@ -204,13 +221,15 @@ test.describe('attachments', () => {
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
 
     await page.locator('.dc-attachment-badge').click();
-    const popover = page.locator('.dc-attachment-popover');
-    await expect(popover).toBeVisible();
-    await popover.getByLabel('Attachment language').selectOption('sql');
-    const editor = popover.locator('.dc-attachment-editor-code');
+    const chip = page.locator('.dc-attachment-chip');
+    const chipLabelBefore = await chip.locator('.dc-attachment-chip-label').innerText();
+    await chip.click();
+    const card = page.locator('.dc-attachment-card');
+    await card.getByRole('button', { name: 'Edit attached detail' }).click();
+    const editor = card.locator('.dc-attachment-editor-code');
     await editor.fill('SELECT * FROM accounts;');
-    await editor.blur();
     await page.keyboard.press('Escape');
+    await expect(card).toHaveCount(0);
 
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
     await page.reload();
@@ -220,17 +239,21 @@ test.describe('attachments', () => {
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
 
     await page.locator('.dc-attachment-badge').click();
-    const reopened = page.locator('.dc-attachment-popover');
-    await expect(reopened).toBeVisible();
-    await expect(reopened.getByLabel('Attachment language')).toHaveValue('sql');
-    await expect(reopened.locator('.dc-attachment-editor-code')).toHaveValue('SELECT * FROM accounts;');
+    const reopenedChip = page.locator('.dc-attachment-chip');
+    await expect(reopenedChip.locator('.dc-attachment-chip-label')).toHaveText(chipLabelBefore);
+    await reopenedChip.click();
+    const reopenedCard = page.locator('.dc-attachment-card');
+    await expect(reopenedCard).toBeVisible();
+    await expect(reopenedCard.locator('.dc-attachment-code')).toContainText('SELECT * FROM accounts;');
     await page.keyboard.press('Escape');
+    await expect(reopenedCard).toHaveCount(0);
 
     // Detach after reload: still recreated at its preserved size, not the
     // type default — the round-trip through IndexedDB must not have dropped
     // the width/height captured at attach time.
     await page.locator('.dc-attachment-badge').click();
-    await page.locator('.dc-attachment-popover').getByRole('button', { name: 'Detach', exact: true }).click();
+    await reopenedChip.click();
+    await reopenedCard.getByRole('button', { name: 'Detach onto the canvas' }).click();
 
     const detached = page.locator('.dc-node[data-type="code"]');
     const detachedBox = (await detached.boundingBox())!;
@@ -260,5 +283,36 @@ test.describe('attachments', () => {
     // Attached to the Service, not reparented into the boundary.
     await expect(page.locator('.dc-node[data-type="note"]')).toHaveCount(0);
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
+  });
+
+  test('several attachments on one element render as separate chips, matching a connector\'s own', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Multiple element attachments');
+    await create(page, 'Service', { x: 350, y: 320 });
+    const service = page.locator('.dc-node[data-type="service"]');
+    const serviceBox = (await service.boundingBox())!;
+    const serviceCenter = { x: serviceBox.x + serviceBox.width / 2, y: serviceBox.y + serviceBox.height / 2 };
+
+    await create(page, 'Note', { x: 750, y: 200 });
+    const releaseNote = await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), serviceCenter);
+    await releaseNote();
+
+    await create(page, 'Code', { x: 750, y: 440 });
+    const releaseCode = await dragNodeCenterTo(page, page.locator('.dc-node[data-type="code"]'), serviceCenter);
+    await releaseCode();
+
+    await expect(page.locator('.dc-attachment-badge')).toContainText('2');
+
+    await page.locator('.dc-attachment-badge').click();
+    const chips = page.locator('.dc-attachment-chip');
+    await expect(chips).toHaveCount(2);
+    await expect(chips.nth(0)).toHaveAttribute('data-kind', 'note');
+    await expect(chips.nth(1)).toHaveAttribute('data-kind', 'code');
+
+    // Clicking one reveals only its own card — same "compact list, one active card" behaviour a
+    // connector's own attachments already have.
+    await chips.nth(1).click();
+    await expect(page.locator('.dc-attachment-card')).toHaveCount(1);
   });
 });

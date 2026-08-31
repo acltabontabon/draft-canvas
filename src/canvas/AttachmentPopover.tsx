@@ -1,88 +1,100 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ViewportPortal } from '@xyflow/react';
-import {
-  ATTACHABLE_TYPES,
-  CODE_LANGUAGES,
-  NOTE_KINDS,
-  type Attachment,
-  type CodeLanguage,
-  type NoteKind,
-} from '../document/types';
-import { LANGUAGE_LABELS } from '../render/code/highlight';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ViewportPortal, useInternalNode, useReactFlow } from '@xyflow/react';
 import { useEditorStore } from '../store/editorStore';
 import { selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
-
-const NOTE_LABELS: Record<NoteKind, string> = {
-  note: 'Note',
-  question: 'Question',
-  warning: 'Warning',
-  decision: 'Decision',
-};
-
-const TYPE_LABELS: Record<(typeof ATTACHABLE_TYPES)[number], string> = {
-  code: 'Code',
-  note: 'Note',
-  text: 'Text',
-};
-
-function summarize(attachment: Attachment): string {
-  const body = attachment.type === 'code' ? attachment.code : attachment.text;
-  const trimmed = (body ?? '').trim().replace(/\s+/g, ' ');
-  return trimmed.length > 0 ? trimmed : `Empty ${TYPE_LABELS[attachment.type].toLowerCase()}`;
-}
+import { rectOfInternal } from './edgeGeometry';
+import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
+import {
+  anchorsForRect,
+  placementTransform,
+  resolvePlacement,
+  type Placement,
+  type PlacementClearances,
+} from './popoverPlacement';
 
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css`. */
 const POPOVER_EXIT_MS = 120;
 
+/** Same basis as `ElementInspectorPopover`'s own clearances — independently declared (not
+ *  imported) so tuning one popover's fit can never regress another's, the same isolation
+ *  `EdgeInspectorPopover.tsx` already established as house style for this codebase. */
+const GAP = 14;
+const TOP_CLEARANCE = 56;
+const BOTTOM_CLEARANCE = 44;
+const LEFT_CLEARANCE = 12;
+const RIGHT_CLEARANCE_WITH_FLOW_PANEL = 312;
+
 /**
- * The lightweight floating panel a node's attachment badge opens. Deliberately
- * not a permanent inspector — it exists only while `openAttachmentDetail`
- * names this node as the open host, anchored to that node in flow space (so
- * it pans and zooms with the canvas, the same as an edge label) rather than
- * docked anywhere.
+ * The contextual popover a node's attachment badge opens — anchored at the node's own rendered
+ * bounds (`popoverPlacement.ts`'s collision-aware beside/above/below/left/right search, the same
+ * algorithm `ElementInspectorPopover` uses for its own placement) rather than a fixed offset, and
+ * hosting the same chip/card presentation `DraftEdgeView.tsx` uses for connector attachments
+ * (`AttachmentChipRow`/`AttachmentChip` from `AttachmentPresentation.tsx`) instead of a separate,
+ * always-expanded list UI.
  */
 export function AttachmentPopover() {
-  const hostId = useUiStore((state) => (state.openAttachmentDetail?.hostKind === 'node' ? state.openAttachmentDetail.hostId : null));
+  const openDetail = useUiStore((state) => state.openAttachmentDetail);
+  const mode = useEditorStore((state) => state.mode);
+  const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
-  const setOpen = useCallback(
-    (next: string | null) =>
-      setOpenAttachmentDetail(next ? { hostKind: 'node', hostId: next, attachmentId: null } : null),
-    [setOpenAttachmentDetail],
-  );
+  const { flowToScreenPosition, screenToFlowPosition } = useReactFlow();
+  const rightClearance = flowPanelOpen ? RIGHT_CLEARANCE_WITH_FLOW_PANEL : LEFT_CLEARANCE;
+
+  // Presenting never opens this popover at all — see the matching comment on the badge itself in
+  // `DraftNodeView.tsx`. Gating here, at the source, is what makes entering Presentation Mode while
+  // the popover happens to already be open close it automatically too: `open` below depends on
+  // `hostId`, so it simply goes false the same way it would on an outside click.
+  const hostId = mode !== 'present' && openDetail?.hostKind === 'node' ? openDetail.hostId : null;
   const host = useEditorStore((state) => (hostId ? selectNode(state.document, hostId) : undefined));
+  const internal = useInternalNode(hostId ?? '');
   const updateAttachment = useEditorStore((state) => state.updateAttachment);
-  const detachAttachment = useEditorStore((state) => state.detachAttachment);
   const removeAttachment = useEditorStore((state) => state.removeAttachment);
+  const detachAttachment = useEditorStore((state) => state.detachAttachment);
   const reorderAttachment = useEditorStore((state) => state.reorderAttachment);
 
-  const panel = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState<Placement>('right');
 
   // Detaching or deleting the last attachment must close the popover, not
   // just stop rendering it — otherwise the open state lingers and the next
   // click on the badge (which toggles) reads as "already open" and closes
   // instead of opening.
   useEffect(() => {
-    if (hostId && host && !host.attachments?.length) setOpen(null);
-  }, [hostId, host, setOpen]);
+    if (hostId && host && !host.attachments?.length) setOpenAttachmentDetail(null);
+  }, [hostId, host, setOpenAttachmentDetail]);
 
-  const open = Boolean(hostId && host?.attachments?.length);
+  const open = Boolean(hostId && host?.attachments?.length && internal);
 
-  // Mirrors `AttachmentChip` in `AttachmentPresentation.tsx`: closing this panel is a state flip
-  // (`openAttachmentDetail` going null), and React would otherwise remove the DOM node the
-  // instant that happens, cutting off any fade-out mid-frame. So the panel stays mounted for one
-  // more tick, marked `data-closing`, so `canvas.css` can play the reverse animation first.
+  // Same delayed-unmount fade `ElementInspectorPopover`/`EdgeInspectorPopover` use: the panel
+  // stays mounted one more tick after `open` flips false so `canvas.css` can play the reverse
+  // animation instead of the DOM node vanishing mid-frame.
   const [mounted, setMounted] = useState(open);
   const [closing, setClosing] = useState(false);
   const hideTimer = useRef<number | null>(null);
 
-  // `host`/`host.attachments` go away the instant `open` flips false (the store id is cleared, or
-  // the node itself was deleted) — so the last live values are cached here for the panel to keep
-  // rendering *something* coherent while it fades out, instead of going blank a frame early.
+  // Self-measured, not guessed: fit checks depend on the popover's own current width and height —
+  // see `ElementInspectorPopover`'s identical comment on why this re-measures every render.
+  const [measuredSize, setMeasuredSize] = useState({ width: 0, height: 0 });
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    if (rect.width > 0 && rect.height > 0 && (rect.width !== measuredSize.width || rect.height !== measuredSize.height)) {
+      setMeasuredSize({ width: rect.width, height: rect.height });
+    }
+  });
+
+  // `host`/`host.attachments`/`internal` go away the instant `open` flips false (the store id is
+  // cleared, or the node itself was deleted) — so the last live values are cached here for the
+  // panel to keep rendering *something* coherent while it fades out, instead of going blank a
+  // frame early.
   const lastHostRef = useRef(host);
+  const lastInternalRef = useRef(internal);
   const lastAttachmentsRef = useRef(host?.attachments);
   if (open) {
     lastHostRef.current = host;
+    lastInternalRef.current = internal;
     lastAttachmentsRef.current = host?.attachments;
   }
 
@@ -118,16 +130,22 @@ export function AttachmentPopover() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Closes the whole popover (row and any pinned card together) on Escape or a click genuinely
+  // outside it. An individual chip's own card also has this same pattern scoped to just that chip
+  // (see `AttachmentChip` in `AttachmentPresentation.tsx`) — the two don't conflict: both may fire
+  // for the same event (plain `stopPropagation` on one `window` listener does not suppress a
+  // sibling listener on the same target), and both end up wanting `openAttachmentDetail` cleared
+  // regardless, so a harmless redundant call is the worst case, not a race.
   useEffect(() => {
     if (!hostId) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        setOpen(null);
+        setOpenAttachmentDetail(null);
       }
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (panel.current && !panel.current.contains(event.target as Node)) setOpen(null);
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) setOpenAttachmentDetail(null);
     };
     window.addEventListener('keydown', onKeyDown, true);
     const id = window.setTimeout(() => window.addEventListener('pointerdown', onPointerDown), 0);
@@ -136,141 +154,81 @@ export function AttachmentPopover() {
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };
-  }, [hostId, setOpen]);
+  }, [hostId, setOpenAttachmentDetail]);
+
+  const displayHost = open ? host : lastHostRef.current;
+  const displayInternal = open ? internal : lastInternalRef.current;
+  const attachments = (open ? host?.attachments : lastAttachmentsRef.current) ?? [];
+  const rect = displayInternal ? rectOfInternal(displayInternal) : null;
+
+  const clearances: PlacementClearances = {
+    gap: GAP,
+    top: TOP_CLEARANCE,
+    bottom: BOTTOM_CLEARANCE,
+    left: LEFT_CLEARANCE,
+    right: rightClearance,
+  };
+  const anchors = rect ? anchorsForRect(rect) : null;
+
+  // Same "only re-picks placement when the current one genuinely stops fitting" stability rule
+  // `ElementInspectorPopover` uses — keeps this from flipping mid-drag or mid-resize.
+  const effectivePlacement = anchors
+    ? resolvePlacement(placement, anchors, flowToScreenPosition, measuredSize, clearances)
+    : placement;
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (effectivePlacement !== placement) setPlacement(effectivePlacement);
+  });
+
+  const attachmentActions: AttachmentActions | null = displayHost
+    ? {
+        update: (attachmentId, patch) => updateAttachment(displayHost.id, attachmentId, patch),
+        remove: (attachmentId) => removeAttachment(displayHost.id, attachmentId),
+        detach: (attachmentId) => detachAttachment(displayHost.id, attachmentId),
+        reorder: (attachmentId, direction) => reorderAttachment(displayHost.id, attachmentId, direction),
+      }
+    : null;
 
   if (!mounted) return null;
-  const displayHost = open ? host : lastHostRef.current;
-  const attachments = (open ? host?.attachments : lastAttachmentsRef.current) ?? [];
-  if (!displayHost || !attachments.length) return null;
+  if (!displayHost || !attachments.length || !anchors || !attachmentActions) return null;
+
+  const transform = placementTransform(
+    effectivePlacement,
+    anchors,
+    measuredSize,
+    clearances,
+    flowToScreenPosition,
+    screenToFlowPosition,
+  );
+  // A dropdown/card should open away from the node, mirroring whichever side the popover itself
+  // placed on — 'left'/'right' placement has no above/below relationship to the node at all, so
+  // 'below' is the sensible default there, same precedent as `ElementInspectorPopover`'s own
+  // `menuDirection` default in the same situation.
+  const cardSide: 'above' | 'below' = effectivePlacement === 'above' ? 'above' : 'below';
 
   return (
     <ViewportPortal>
       <div
-        ref={panel}
+        ref={panelRef}
         className="dc-attachment-popover"
         role="dialog"
         aria-label={`Attachments for ${displayHost.text || 'this node'}`}
         data-closing={closing ? 'true' : undefined}
-        style={{ transform: `translate(${displayHost.x + displayHost.width + 14}px, ${displayHost.y}px)` }}
+        style={{ transform }}
         onPointerDown={(event) => event.stopPropagation()}
       >
         {/* The reveal/close animation lives on this inner wrapper, not the positioned outer div —
             a CSS animation replaces the whole `transform` property for its duration, so animating
             scale here would otherwise clobber the outer div's own positioning translate. */}
         <div className="dc-attachment-popover-inner">
-          <header className="dc-attachment-popover-header">
-            Attachments
-            <button type="button" className="dc-attachment-popover-close" onClick={() => setOpen(null)}>
-              ×
-            </button>
-          </header>
-          <ul className="dc-attachment-list">
-            {attachments.map((attachment, index) => (
-              <li key={attachment.id} className="dc-attachment-row">
-                <div className="dc-attachment-row-head">
-                  <span className="dc-attachment-type">{TYPE_LABELS[attachment.type]}</span>
-
-                  {attachment.type === 'code' && (
-                    <select
-                      className="dc-select"
-                      aria-label="Attachment language"
-                      value={attachment.language ?? 'plaintext'}
-                      onChange={(event) =>
-                        updateAttachment(displayHost.id, attachment.id, {
-                          language: event.target.value as CodeLanguage,
-                        })
-                      }
-                    >
-                      {CODE_LANGUAGES.map((language) => (
-                        <option key={language} value={language}>
-                          {LANGUAGE_LABELS[language]}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-
-                  {attachment.type === 'note' && (
-                    <select
-                      className="dc-select"
-                      aria-label="Attachment note kind"
-                      value={attachment.noteKind ?? 'note'}
-                      onChange={(event) =>
-                        updateAttachment(displayHost.id, attachment.id, {
-                          noteKind: event.target.value as NoteKind,
-                        })
-                      }
-                    >
-                      {NOTE_KINDS.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {NOTE_LABELS[kind]}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-
-                  <div className="dc-attachment-row-actions">
-                    <button
-                      type="button"
-                      title="Move up"
-                      disabled={index === 0}
-                      onClick={() => reorderAttachment(displayHost.id, attachment.id, -1)}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      title="Move down"
-                      disabled={index === attachments.length - 1}
-                      onClick={() => reorderAttachment(displayHost.id, attachment.id, 1)}
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      title="Detach onto the canvas"
-                      onClick={() => detachAttachment(displayHost.id, attachment.id)}
-                    >
-                      Detach
-                    </button>
-                    <button
-                      type="button"
-                      title="Delete"
-                      onClick={() => removeAttachment(displayHost.id, attachment.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-
-                {attachment.type === 'code' ? (
-                  <textarea
-                    className="dc-attachment-editor dc-attachment-editor-code"
-                    spellCheck={false}
-                    defaultValue={attachment.code ?? ''}
-                    placeholder={summarize(attachment)}
-                    onBlur={(event) => {
-                      const value = event.currentTarget.value;
-                      if (value !== (attachment.code ?? '')) {
-                        updateAttachment(displayHost.id, attachment.id, { code: value });
-                      }
-                    }}
-                  />
-                ) : (
-                  <textarea
-                    className="dc-attachment-editor"
-                    defaultValue={attachment.text ?? ''}
-                    placeholder={summarize(attachment)}
-                    onBlur={(event) => {
-                      const value = event.currentTarget.value;
-                      if (value !== (attachment.text ?? '')) {
-                        updateAttachment(displayHost.id, attachment.id, { text: value });
-                      }
-                    }}
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
+          <AttachmentChipRow
+            hostKind="node"
+            hostId={displayHost.id}
+            attachments={attachments}
+            cardSide={cardSide}
+            editable={mode !== 'present'}
+            actions={attachmentActions}
+          />
         </div>
       </div>
     </ViewportPortal>
