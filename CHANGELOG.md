@@ -8,6 +8,12 @@ break as we settle on a stable 1.0 shape.
 
 ## [Unreleased]
 
+### Added
+
+- Export a Presentation Mode flow as an animated GIF — the same camera moves, connector pulse,
+  and step-by-step highlighting you see on screen, dropped straight into a ticket or chat without
+  reopening Draft Canvas.
+
 ## [0.1.0-alpha.1] - 2026-08-31
 
 ### Added
