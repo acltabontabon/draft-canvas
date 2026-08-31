@@ -26,6 +26,21 @@ async function createNode(page: Page, tool: string, at: { x: number; y: number }
   await page.locator(CANVAS).click({ position: at });
 }
 
+/**
+ * Opens the full Flow management panel (rename, reorder, remove steps) via
+ * the compact flow switcher's "Manage flows…" action — the switcher itself
+ * (`Flows · ⟨name⟩ ▾`, title "Switch flows (F)") is a different, lighter
+ * surface for just picking which flow is the active lens.
+ */
+async function openFlowPanel(page: Page) {
+  await page.getByTitle('Switch flows (F)').click();
+  await page.getByRole('button', { name: 'Manage flows…' }).click();
+}
+
+async function closeFlowPanel(page: Page) {
+  await page.locator('.dc-flow-panel').getByRole('button', { name: 'Close' }).click();
+}
+
 async function labelNode(page: Page, index: number, text: string) {
   const node = page.locator('.dc-node').nth(index);
   await node.dblclick();
@@ -40,14 +55,24 @@ async function nodeCount(page: Page) {
   return page.locator('.dc-node').count();
 }
 
-/** Clicks a connector at the midpoint between the two nodes it joins. */
-async function clickEdgeBetween(page: Page, fromIndex: number, toIndex: number) {
-  const from = (await page.locator('.dc-node').nth(fromIndex).boundingBox())!;
-  const to = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
-  await page.mouse.click(
-    (from.x + from.width + to.x) / 2,
-    (from.y + from.height / 2 + to.y + to.height / 2) / 2,
-  );
+/**
+ * Clicks a connector at its own rendered path's true midpoint — not the
+ * naive average of its two endpoint nodes' centers, which drifts off the
+ * actual (possibly stepped/curved) path whenever the two nodes differ
+ * noticeably in height. `edgeIndex` is this edge's position in
+ * `document.edges` creation order, matching `.dc-edge-line`'s DOM order —
+ * not a node index.
+ */
+async function clickEdgeBetween(page: Page, edgeIndex: number) {
+  const path = page.locator('.dc-edge-line').nth(edgeIndex);
+  const point = await path.evaluate((el: SVGPathElement) => {
+    const len = el.getTotalLength();
+    const p = el.getPointAtLength(len / 2);
+    const ctm = el.getScreenCTM()!;
+    const screenPoint = new DOMPoint(p.x, p.y).matrixTransform(ctm);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
+  await page.mouse.click(point.x, point.y);
 }
 
 /** Drags from a node's right-hand handle onto another node. */
@@ -63,11 +88,26 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
   await page.mouse.up();
 }
 
-/** Adds the currently-selected connector to a flow, via the Inspector. */
-async function addToFlow(page: Page, existingFlowTitle?: string) {
-  const select = page.getByLabel('Add to flow');
-  if (existingFlowTitle) await select.selectOption({ label: existingFlowTitle });
-  else await select.selectOption({ label: 'New flow…' });
+/**
+ * Selects a connector (by its position in `document.edges` creation order —
+ * see `clickEdgeBetween`) and adds it to a flow via the popover's
+ * flow-membership panel — checking an existing flow's box, or starting a
+ * brand new one.
+ */
+async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: string) {
+  await clickEdgeBetween(page, edgeIndex);
+  await page.locator('[title="Flow membership"]').click();
+
+  const panel = page.locator('.dc-edge-inspector-panel');
+  await expect(panel).toBeVisible();
+  if (existingFlowTitle) {
+    const checkbox = page.getByRole('checkbox', { name: existingFlowTitle });
+    await expect(checkbox).not.toBeChecked();
+    await checkbox.check();
+    await expect(checkbox).toBeChecked();
+  } else {
+    await page.getByRole('button', { name: '+ New flow' }).click();
+  }
 }
 
 test.describe('Draft Canvas', () => {
@@ -94,9 +134,8 @@ test.describe('Draft Canvas', () => {
 
     /* --- label the connection -------------------------------------------- */
 
-    await clickEdgeBetween(page, 0, 1);
-    await expect(page.locator('.dc-inspector')).toBeVisible();
-    await addToFlow(page);
+    await addToFlow(page, 0);
+    await expect(page.locator('.dc-edge-inspector')).toBeVisible();
     // Adding a step selects its flow for overlay, so the step badge appears
     // immediately as feedback.
     await expect(page.locator('.dc-edge-step')).toHaveCount(1);
@@ -213,10 +252,10 @@ test.describe('Draft Canvas', () => {
     await expect(page.getByLabel('Diagram title')).toHaveValue('Payment Flow');
 
     // The flow survived the round trip too — not just the raw nodes/edges.
-    await page.getByTitle('Flows').click();
+    await openFlowPanel(page);
     await expect(page.locator('.dc-flow-item')).toHaveCount(1);
     await expect(page.locator('.dc-flow-item')).toContainText('1 steps');
-    await page.getByTitle('Flows').click();
+    await closeFlowPanel(page);
 
     // And it is editable again, not a read-only import.
     await labelNode(page, 0, 'Service A renamed');
@@ -254,10 +293,8 @@ test.describe('Draft Canvas', () => {
     await expect(page.locator('.dc-edge-line')).toHaveCount(2);
 
     // Add both connections to one flow, in order.
-    await clickEdgeBetween(page, 0, 1);
-    await addToFlow(page);
-    await clickEdgeBetween(page, 1, 2);
-    await addToFlow(page, 'Untitled flow');
+    await addToFlow(page, 0);
+    await addToFlow(page, 1, 'Untitled flow');
     await expect(page.locator('.dc-edge-step')).toHaveCount(2);
 
     await page.getByTitle(/^Present/).click();
@@ -324,12 +361,17 @@ test.describe('Draft Canvas', () => {
     await expect(page.locator('.dc-node')).toHaveCount(3);
   });
 
-  test('double-clicking empty canvas starts a card immediately', async ({ page }) => {
+  test('double-clicking empty canvas opens a type picker, and choosing a type creates it', async ({ page }) => {
     await newCanvas(page, 'Quick start');
     await expect(page.getByText('Double-click anywhere to start.')).toBeVisible();
 
     await page.locator(CANVAS).dblclick({ position: { x: 500, y: 320 } });
-    await expect(page.locator('.dc-node')).toHaveCount(1);
+    await expect(page.locator('.dc-node')).toHaveCount(0);
+    const menu = page.getByRole('menu', { name: 'Add element' });
+    await expect(menu).toBeVisible();
+
+    await menu.getByRole('menuitem', { name: 'Service' }).click();
+    await expect(page.locator('.dc-node[data-type="service"]')).toHaveCount(1);
     await expect(page.getByText('Double-click anywhere to start.')).toBeHidden();
   });
 });

@@ -370,7 +370,7 @@ describe('detourAround: routing avoids an obstacle sitting directly in the way',
   it('routeEdge builds the obstacle list from the node map automatically', () => {
     const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, width: 100, height: 60 });
     const b = createNode({ id: 'b', type: 'database', x: 400, y: 0, width: 100, height: 60 });
-    const blocker = createNode({ id: 'obstacle', type: 'card', x: 150, y: 0, width: 100, height: 60 });
+    const blocker = createNode({ id: 'obstacle', type: 'note', x: 150, y: 0, width: 100, height: 60 });
     const boundary = createNode({ id: 'grp', type: 'group', x: 140, y: -20, width: 320, height: 100 });
     const edge = createEdge({ source: 'a', target: 'b' });
     const nodes = new Map([

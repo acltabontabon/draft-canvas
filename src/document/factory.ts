@@ -91,6 +91,47 @@ export function defaultTextFor(type: DraftNodeType): string {
   }
 }
 
+const QUEUE_KIND_NAMES: Record<QueueKind, string> = { queue: 'Queue', topic: 'Topic', stream: 'Stream' };
+const SERVICE_KIND_NAMES: Partial<Record<ServiceKind, string>> = { api: 'API', worker: 'Worker', external: 'External service' };
+const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = { sql: 'SQL database', nosql: 'NoSQL database', cache: 'Cache' };
+
+/**
+ * A human-readable fallback identity for a node with no custom `text` of its
+ * own. A Queue's name is *always* just its kind (see `DraftNodeView.tsx`'s
+ * text-edit gate — there is no text field to type into), and Note/Code/a
+ * fresh boundary are commonly left blank too, relying on their on-canvas
+ * kind caption for identity instead (`nodes/describe.ts`). Anywhere a node
+ * must be named in a list — the Flow panel, Presentation Mode's step
+ * breadcrumb — needs that same fallback, not a bare "Untitled".
+ */
+export function displayNameFor(
+  node: Pick<DraftNode, 'type' | 'text' | 'queueKind' | 'serviceKind' | 'databaseKind'>,
+): string {
+  if (node.text && node.text.trim()) return node.text;
+  switch (node.type) {
+    case 'queue':
+      return QUEUE_KIND_NAMES[node.queueKind ?? 'queue'];
+    case 'service':
+      return (node.serviceKind && SERVICE_KIND_NAMES[node.serviceKind]) || 'Service';
+    case 'database':
+      return (node.databaseKind && DATABASE_KIND_NAMES[node.databaseKind]) || 'Database';
+    case 'actor':
+      return 'Actor';
+    case 'group':
+      return 'Boundary';
+    case 'note':
+      return 'Note';
+    case 'code':
+      return 'Code';
+    case 'text':
+      return 'Text';
+    case 'ellipse':
+      return 'Circle';
+    default:
+      return 'Untitled';
+  }
+}
+
 export interface CreateNodeInput {
   type: DraftNodeType;
   x: number;

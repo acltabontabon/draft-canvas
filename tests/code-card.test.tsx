@@ -60,7 +60,7 @@ describe('code cards render content, never markup', () => {
 
   it('does not create elements from markup in a node label', () => {
     const node = createNode({
-      type: 'card',
+      type: 'note',
       x: 0,
       y: 0,
       text: '<img src=x onerror="globalThis.__pwnedByLabel = true">',
@@ -75,7 +75,7 @@ describe('code cards render content, never markup', () => {
 
   it('does not let an attribute-breaking payload out of a text node', () => {
     const node = createNode({
-      type: 'card',
+      type: 'note',
       x: 0,
       y: 0,
       text: '" onload="globalThis.__pwnedByAttr = true" x="',

@@ -19,12 +19,12 @@ function textOf(node: ReturnType<typeof createNode>, ctx: typeof clean) {
 
 describe('Intentional Roughness — Clean stays byte-for-byte unchanged', () => {
   it('describeContext defaults to clean, matching an explicit clean preset', () => {
-    const node = createNode({ type: 'card', x: 0, y: 0, text: 'Card' });
+    const node = createNode({ type: 'note', x: 0, y: 0, text: 'Note' });
     expect(describeNode(node, describeContext(LIGHT))).toEqual(describeNode(node, clean));
   });
 
-  it('box/note/group/ellipse/code outlines stay plain rect/ellipse shapes at Clean, never a path', () => {
-    for (const type of ['card', 'rounded', 'note', 'group', 'ellipse', 'code'] as const) {
+  it('note/group/ellipse/code outlines stay plain rect/ellipse shapes at Clean, never a path', () => {
+    for (const type of ['note', 'group', 'ellipse', 'code'] as const) {
       const node = createNode({ type, x: 0, y: 0, text: 'Label' });
       const outline = outlineShapes(node, clean)[0]!;
       expect(outline.t === 'rect' || outline.t === 'ellipse').toBe(true);
@@ -32,7 +32,7 @@ describe('Intentional Roughness — Clean stays byte-for-byte unchanged', () => 
   });
 
   it('switches to a jittered path outline at Draft/Sketch for rect-based nodes', () => {
-    for (const type of ['card', 'note', 'group'] as const) {
+    for (const type of ['note', 'group'] as const) {
       const node = createNode({ type, x: 0, y: 0, text: 'Label' });
       expect(outlineShapes(node, draft)[0]!.t).toBe('path');
       expect(outlineShapes(node, sketch)[0]!.t).toBe('path');
@@ -40,7 +40,7 @@ describe('Intentional Roughness — Clean stays byte-for-byte unchanged', () => 
   });
 
   it('text/label position and content never change across presets', () => {
-    for (const type of ['card', 'note', 'group', 'service', 'database', 'queue', 'actor'] as const) {
+    for (const type of ['note', 'group', 'service', 'database', 'queue', 'actor'] as const) {
       const node = createNode({ type, x: 0, y: 0, text: 'Order Service' });
       expect(textOf(node, draft)).toEqual(textOf(node, clean));
       expect(textOf(node, sketch)).toEqual(textOf(node, clean));
@@ -50,15 +50,15 @@ describe('Intentional Roughness — Clean stays byte-for-byte unchanged', () => 
 
 describe('Intentional Roughness — determinism', () => {
   it('the same node id and preset always produces the same outline path', () => {
-    const node = createNode({ type: 'card', id: 'n1', x: 0, y: 0, width: 160, height: 80 });
+    const node = createNode({ type: 'note', id: 'n1', x: 0, y: 0, width: 160, height: 80 });
     const a = describeNode(node, sketch);
     const b = describeNode(node, sketch);
     expect(a).toEqual(b);
   });
 
   it('different node ids at the same preset produce different jitter', () => {
-    const a = createNode({ type: 'card', id: 'n1', x: 0, y: 0, width: 160, height: 80 });
-    const b = createNode({ type: 'card', id: 'n2', x: 0, y: 0, width: 160, height: 80 });
+    const a = createNode({ type: 'note', id: 'n1', x: 0, y: 0, width: 160, height: 80 });
+    const b = createNode({ type: 'note', id: 'n2', x: 0, y: 0, width: 160, height: 80 });
     const shapeA = outlineShapes(a, sketch)[0];
     const shapeB = outlineShapes(b, sketch)[0];
     expect(shapeA).not.toEqual(shapeB);

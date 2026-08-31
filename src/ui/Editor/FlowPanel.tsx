@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { displayNameFor } from '../../document/factory';
 import { useEditorStore } from '../../store/editorStore';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
@@ -130,9 +131,9 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                             }
                           >
                             {edge
-                              ? `${source?.text || 'Untitled'} → ${target?.text || 'Untitled'}`
+                              ? `${source ? displayNameFor(source) : 'Untitled'} → ${target ? displayNameFor(target) : 'Untitled'}`
                               : extraNodes.length > 0
-                                ? extraNodes.map((n) => n.text || 'Untitled').join(', ')
+                                ? extraNodes.map((n) => displayNameFor(n)).join(', ')
                                 : step.viewport
                                   ? 'Custom view'
                                   : 'Empty step'}
@@ -164,31 +165,35 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                           <div className="dc-flow-step-extras">
                             {extraNodes.map((node) => (
                               <span key={node.id} className="dc-flow-step-chip">
-                                {node.text || 'Untitled'}
+                                {displayNameFor(node)}
                                 <Button
                                   icon="close"
                                   variant="quiet"
-                                  aria-label={`Remove ${node.text || 'node'} from step`}
+                                  aria-label={`Remove ${displayNameFor(node)} from step`}
                                   onClick={() =>
                                     store.getState().removeFlowStepExtraNode(flow.id, step.id, node.id)
                                   }
                                 />
                               </span>
                             ))}
-                            {extraEdges.map((extraEdge) => (
-                              <span key={extraEdge.id} className="dc-flow-step-chip">
-                                {nodes.get(extraEdge.source)?.text || 'Untitled'} →{' '}
-                                {nodes.get(extraEdge.target)?.text || 'Untitled'}
-                                <Button
-                                  icon="close"
-                                  variant="quiet"
-                                  aria-label="Remove connector from step"
-                                  onClick={() =>
-                                    store.getState().removeFlowStepExtraEdge(flow.id, step.id, extraEdge.id)
-                                  }
-                                />
-                              </span>
-                            ))}
+                            {extraEdges.map((extraEdge) => {
+                              const extraSource = nodes.get(extraEdge.source);
+                              const extraTarget = nodes.get(extraEdge.target);
+                              return (
+                                <span key={extraEdge.id} className="dc-flow-step-chip">
+                                  {extraSource ? displayNameFor(extraSource) : 'Untitled'} →{' '}
+                                  {extraTarget ? displayNameFor(extraTarget) : 'Untitled'}
+                                  <Button
+                                    icon="close"
+                                    variant="quiet"
+                                    aria-label="Remove connector from step"
+                                    onClick={() =>
+                                      store.getState().removeFlowStepExtraEdge(flow.id, step.id, extraEdge.id)
+                                    }
+                                  />
+                                </span>
+                              );
+                            })}
                           </div>
                         )}
 

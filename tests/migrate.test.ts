@@ -113,8 +113,8 @@ describe('v2 to v3 migration: connector anchors', () => {
       version: 1,
       metadata: { id: 'd1', title: 'Very old', createdAt: 0, updatedAt: 0 },
       nodes: [
-        { id: 'a', type: 'card', x: 0, y: 0, width: 100, height: 60 },
-        { id: 'b', type: 'card', x: 300, y: 0, width: 100, height: 60 },
+        { id: 'a', type: 'note', x: 0, y: 0, width: 100, height: 60 },
+        { id: 'b', type: 'note', x: 300, y: 0, width: 100, height: 60 },
       ],
       edges: [{ id: 'e1', source: 'a', target: 'b', sequence: 1 }],
     };
@@ -285,8 +285,8 @@ describe('v5 to v6 migration: request/response connectors', () => {
       version: 1,
       metadata: { id: 'd1', title: 'Very old', createdAt: 0, updatedAt: 0 },
       nodes: [
-        { id: 'a', type: 'card', x: 0, y: 0, width: 100, height: 60 },
-        { id: 'b', type: 'card', x: 300, y: 0, width: 100, height: 60 },
+        { id: 'a', type: 'note', x: 0, y: 0, width: 100, height: 60 },
+        { id: 'b', type: 'note', x: 300, y: 0, width: 100, height: 60 },
       ],
       edges: [{ id: 'e1', source: 'a', target: 'b', sequence: 1 }],
     };
@@ -294,5 +294,102 @@ describe('v5 to v6 migration: request/response connectors', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.document.version).toBe(CURRENT_VERSION);
+  });
+});
+
+/**
+ * The v6→v7 migration: v6 still has the `card`/`rounded` node types, which v7
+ * removes — there is no blank, semantics-free box primitive anymore. Existing
+ * `card`/`rounded` elements (nodes, and attachments folded into a node or
+ * edge) retype to `note`, the closest surviving "just hold some text"
+ * primitive, keeping every other field untouched so an old diagram keeps
+ * showing the same content in the same place, just under a different type.
+ */
+describe('v6 to v7 migration: Card and rounded removal', () => {
+  function v6Fixture(overrides: { nodes?: unknown[]; edges?: unknown[] } = {}) {
+    return {
+      format: DRAFT_FORMAT,
+      version: 6,
+      metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0 },
+      nodes: overrides.nodes ?? [],
+      edges: overrides.edges ?? [],
+      settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
+      flows: [],
+    };
+  }
+
+  it('retypes card and rounded nodes to note, preserving text/position/size/accent', () => {
+    const raw = v6Fixture({
+      nodes: [
+        { id: 'a', type: 'card', x: 10, y: 20, width: 140, height: 70, text: 'Keep me', accent: 'amber' },
+        { id: 'b', type: 'rounded', x: 300, y: 0, width: 120, height: 60, text: 'And me' },
+      ],
+    });
+    const result = parseDocument(JSON.stringify(raw));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.version).toBe(CURRENT_VERSION);
+    const [a, b] = result.document.nodes;
+    expect(a).toMatchObject({ type: 'note', x: 10, y: 20, width: 140, height: 70, text: 'Keep me', accent: 'amber' });
+    expect(b).toMatchObject({ type: 'note', x: 300, y: 0, width: 120, height: 60, text: 'And me' });
+  });
+
+  it('retypes card/rounded attachments folded into a node to note', () => {
+    const raw = v6Fixture({
+      nodes: [
+        {
+          id: 'a',
+          type: 'service',
+          x: 0,
+          y: 0,
+          attachments: [{ id: 'att1', type: 'card', text: 'Attached detail' }],
+        },
+      ],
+    });
+    const result = parseDocument(JSON.stringify(raw));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.nodes[0]!.attachments).toEqual([
+      { id: 'att1', type: 'note', text: 'Attached detail', noteKind: 'note' },
+    ]);
+  });
+
+  it('retypes card/rounded attachments folded into an edge to note', () => {
+    const raw = v6Fixture({
+      nodes: [
+        { id: 'a', type: 'service', x: 0, y: 0 },
+        { id: 'b', type: 'service', x: 300, y: 0 },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: 'a',
+          target: 'b',
+          directed: true,
+          routing: 'smoothstep',
+          attachments: [{ id: 'att1', type: 'rounded', text: 'Edge detail' }],
+        },
+      ],
+    });
+    const result = parseDocument(JSON.stringify(raw));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.edges[0]!.attachments).toEqual([
+      { id: 'att1', type: 'note', text: 'Edge detail', noteKind: 'note' },
+    ]);
+  });
+
+  it('leaves every other node type untouched', () => {
+    const raw = v6Fixture({
+      nodes: [
+        { id: 'a', type: 'service', x: 0, y: 0, text: 'Untouched' },
+        { id: 'b', type: 'group', x: 0, y: 0, boundaryPreset: 'system' },
+      ],
+    });
+    const result = parseDocument(JSON.stringify(raw));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.nodes[0]!.type).toBe('service');
+    expect(result.document.nodes[1]!.type).toBe('group');
   });
 });

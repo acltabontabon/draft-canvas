@@ -24,9 +24,10 @@ diagram than explaining the idea, the tool has failed.
 
 ## What it does
 
-**Draw** — Double-click anywhere to start. A small, deliberate set of shapes: cards, text,
-notes, and developer presets for services, databases, queues and actors. Drag from a node's edge
-to connect it; drop on empty canvas and the node you were heading for is created for you.
+**Draw** — Double-click anywhere to start and pick what you need. A small, deliberate set of
+shapes: text, notes, and developer presets for services, databases, queues and actors. Drag from
+a node's edge to connect it; drop on empty canvas and the node you were heading for is created for
+you.
 
 **Drop in code** — Syntax-highlighted cards for Java, JSON, YAML, XML, SQL, shell, HTTP and log
 output. For reading and explaining, not for writing programs.
@@ -92,9 +93,9 @@ The build is path-agnostic (`base: './'`), so `dist/` can be served from any sub
 
 | Key | Action |
 | --- | --- |
-| `R` `T` `N` `C` | Card · Text · Note · Code, created under the cursor |
+| `T` `N` `C` | Text · Note · Code, created under the cursor |
 | `S` `D` `Q` `A` `O` | Service · Database · Queue · Actor · Circle |
-| Double-click | Create on empty canvas, or edit an element's text |
+| Double-click | Pick a type to create on empty canvas, or edit an element's text |
 | Drag from an edge | Connect — drop on empty canvas to create the target |
 | `Cmd/Ctrl` `Z` / `⇧Z` | Undo / redo |
 | `Cmd/Ctrl` `C` `V` `D` | Copy · paste · duplicate |

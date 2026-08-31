@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { displayNameFor } from '../../document/factory';
 import { nodeIndex } from '../../store/selectors';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -108,17 +109,17 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
         </span>
         {primary ? (
           <span className="dc-explain-flow">
-            <strong>{source?.text || 'Untitled'}</strong>
+            <strong>{source ? displayNameFor(source) : 'Untitled'}</strong>
             <span className="dc-explain-arrow" aria-hidden="true">
               →
             </span>
-            <strong>{target?.text || 'Untitled'}</strong>
+            <strong>{target ? displayNameFor(target) : 'Untitled'}</strong>
           </span>
         ) : (
           playback.current.extraNodes.length > 0 && (
             <span className="dc-explain-flow">
               <strong>
-                {playback.current.extraNodes.map((n) => n.text || 'Untitled').join(', ')}
+                {playback.current.extraNodes.map((n) => displayNameFor(n)).join(', ')}
               </strong>
             </span>
           )

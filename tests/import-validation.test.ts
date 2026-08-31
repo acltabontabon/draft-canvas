@@ -29,7 +29,7 @@ describe('importing untrusted files', () => {
     const result = parse({
       ...base,
       metadata: { id: 'doc1', title: 'Flow', createdAt: 1, updatedAt: 2 },
-      nodes: [{ id: 'a', type: 'card', x: 0, y: 0, width: 100, height: 50, z: 0, text: 'A' }],
+      nodes: [{ id: 'a', type: 'note', x: 0, y: 0, width: 100, height: 50, z: 0, text: 'A' }],
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1 },
       settings: { showSequence: true, grid: 'dots' },
@@ -52,25 +52,25 @@ describe('importing untrusted files', () => {
       nodes: [
         { id: 'a', type: 'service', x: 0, y: 0, accent: 'neutral' },
         { id: 'b', type: 'database', x: 200, y: 0, accent: 'rose' },
-        { id: 'c', type: 'card', x: 400, y: 0 },
+        { id: 'c', type: 'note', x: 400, y: 0 },
       ],
       edges: [{ id: 'e1', source: 'a', target: 'b', accent: 'neutral' }],
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const [service, database, card] = result.document.nodes;
+    const [service, database, plain] = result.document.nodes;
     expect(service!.accent).toBe('neutral');
     expect(database!.accent).toBe('rose');
     // No accent was ever set on this one — it must stay unset, not become
     // explicitly neutral, so the type's own default still applies to it.
-    expect(card!.accent).toBeUndefined();
+    expect(plain!.accent).toBeUndefined();
     expect(result.document.edges[0]!.accent).toBe('neutral');
   });
 
   it('drops connections that point at nodes which do not exist', () => {
     const result = parse({
       ...base,
-      nodes: [{ id: 'a', type: 'card', x: 0, y: 0 }],
+      nodes: [{ id: 'a', type: 'note', x: 0, y: 0 }],
       edges: [
         { id: 'e1', source: 'a', target: 'ghost' },
         { id: 'e2', source: 'ghost', target: 'a' },
@@ -86,8 +86,8 @@ describe('importing untrusted files', () => {
     const result = parse({
       ...base,
       nodes: [
-        { id: 'same', type: 'card', x: 0, y: 0 },
-        { id: 'same', type: 'card', x: 100, y: 0 },
+        { id: 'same', type: 'note', x: 0, y: 0 },
+        { id: 'same', type: 'note', x: 100, y: 0 },
       ],
       edges: [],
     });
@@ -102,10 +102,10 @@ describe('importing untrusted files', () => {
     const result = parse({
       ...base,
       nodes: [
-        { id: 'a', type: 'card', x: 0, y: 0, parentId: 'missing' },
-        { id: 'b', type: 'card', x: 0, y: 0, parentId: 'b' },
-        { id: 'c', type: 'card', x: 0, y: 0, parentId: 'd' },
-        { id: 'd', type: 'card', x: 0, y: 0, parentId: 'c' },
+        { id: 'a', type: 'note', x: 0, y: 0, parentId: 'missing' },
+        { id: 'b', type: 'note', x: 0, y: 0, parentId: 'b' },
+        { id: 'c', type: 'note', x: 0, y: 0, parentId: 'd' },
+        { id: 'd', type: 'note', x: 0, y: 0, parentId: 'c' },
       ],
       edges: [],
     });
@@ -133,7 +133,7 @@ describe('importing untrusted files', () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.document.nodes[0]!.type).toBe('card');
+    expect(result.document.nodes[0]!.type).toBe('note');
     expect(result.document.nodes[0]!.text).toBe('Keep me');
   });
 
@@ -143,7 +143,7 @@ describe('importing untrusted files', () => {
       nodes: [
         {
           id: 'a',
-          type: 'card',
+          type: 'note',
           x: 'over there',
           y: null,
           width: -50,
@@ -197,7 +197,7 @@ describe('importing untrusted files', () => {
     const result = parse({
       ...base,
       metadata: { title: 'T'.repeat(5000) },
-      nodes: [{ id: 'a', type: 'card', x: 0, y: 0, text: 'x'.repeat(LIMITS.maxTextLength + 500) }],
+      nodes: [{ id: 'a', type: 'note', x: 0, y: 0, text: 'x'.repeat(LIMITS.maxTextLength + 500) }],
       edges: [],
     });
     expect(result.ok).toBe(true);
@@ -216,7 +216,7 @@ describe('importing untrusted files', () => {
   it('survives malformed entries in the node and edge arrays', () => {
     const result = parse({
       ...base,
-      nodes: [null, 'a string', 42, { id: 'ok', type: 'card', x: 0, y: 0 }],
+      nodes: [null, 'a string', 42, { id: 'ok', type: 'note', x: 0, y: 0 }],
       edges: [null, { id: 'e', source: 'ok', target: 'ok' }],
     });
     expect(result.ok).toBe(true);
@@ -229,8 +229,8 @@ describe('importing untrusted files', () => {
     const result = parse({
       ...base,
       nodes: [
-        { id: 'a', type: 'card', x: 0, y: 0 },
-        { id: 'b', type: 'card', x: 100, y: 0 },
+        { id: 'a', type: 'note', x: 0, y: 0 },
+        { id: 'b', type: 'note', x: 100, y: 0 },
       ],
       edges: [
         { id: 'e1', source: 'a', target: 'b' },
@@ -258,8 +258,8 @@ describe('importing untrusted files', () => {
     const result = parse({
       ...base,
       nodes: [
-        { id: 'a', type: 'card', x: 0, y: 0 },
-        { id: 'b', type: 'card', x: 100, y: 0 },
+        { id: 'a', type: 'note', x: 0, y: 0 },
+        { id: 'b', type: 'note', x: 100, y: 0 },
       ],
       edges: [{ id: 'e1', source: 'a', target: 'b' }],
       flows: [
@@ -289,7 +289,7 @@ describe('importing untrusted files', () => {
   it('keeps a step whose primary edge is dangling but whose extras still resolve', () => {
     const result = parse({
       ...base,
-      nodes: [{ id: 'a', type: 'card', x: 0, y: 0 }],
+      nodes: [{ id: 'a', type: 'note', x: 0, y: 0 }],
       edges: [],
       flows: [
         { id: 'f1', title: 'X', steps: [{ id: 's1', edgeId: 'missing', extraNodeIds: ['a'] }] },
@@ -305,7 +305,7 @@ describe('importing untrusted files', () => {
   it('drops extraNodeIds/extraEdgeIds entries pointing at nodes/edges that do not exist', () => {
     const result = parse({
       ...base,
-      nodes: [{ id: 'a', type: 'card', x: 0, y: 0 }],
+      nodes: [{ id: 'a', type: 'note', x: 0, y: 0 }],
       edges: [{ id: 'e1', source: 'a', target: 'a' }],
       flows: [
         {
@@ -322,7 +322,7 @@ describe('importing untrusted files', () => {
   });
 
   it('caps extraNodeIds/extraEdgeIds at LIMITS.maxExtraMembersPerStep', () => {
-    const nodes = Array.from({ length: 50 }, (_, i) => ({ id: `n${i}`, type: 'card', x: i, y: 0 }));
+    const nodes = Array.from({ length: 50 }, (_, i) => ({ id: `n${i}`, type: 'note', x: i, y: 0 }));
     const result = parse({
       ...base,
       nodes,

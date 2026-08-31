@@ -12,7 +12,7 @@ import { expect, test } from '@playwright/test';
 function buildDocument() {
   const nodes: unknown[] = [];
   const edges: unknown[] = [];
-  const types = ['service', 'database', 'queue', 'actor', 'card'];
+  const types = ['service', 'database', 'queue', 'actor', 'ellipse'];
 
   for (let i = 0; i < 100; i += 1) {
     const column = i % 10;

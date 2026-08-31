@@ -9,10 +9,13 @@ export interface QuickConnectMenuProps {
 }
 
 /**
- * The tiny type picker offered when a connection is dragged onto empty
- * canvas. Deliberately a plain list driven by `QUICK_CONNECT_PRESETS` — not
- * bespoke JSX per option — so a later pass can add arrow-key navigation or
- * promote a recently-used type without restructuring this component.
+ * The tiny type picker offered whenever Draft Canvas needs the user to
+ * choose a type rather than guess one: a connection dragged onto empty
+ * canvas, or a double-click on empty canvas with no tool armed — see
+ * `QuickConnectState` in `store/uiStore.ts`. Deliberately a plain list
+ * driven by `QUICK_CONNECT_PRESETS` — not bespoke JSX per option — so a
+ * later pass can add arrow-key navigation or promote a recently-used type
+ * without restructuring this component.
  */
 export function QuickConnectMenu({ screenPosition, onSelect, onDismiss }: QuickConnectMenuProps) {
   const panel = useRef<HTMLDivElement>(null);
@@ -43,7 +46,7 @@ export function QuickConnectMenu({ screenPosition, onSelect, onDismiss }: QuickC
       ref={panel}
       className="dc-quick-connect"
       role="menu"
-      aria-label="Create and connect"
+      aria-label="Add element"
       style={{ left: screenPosition.x, top: screenPosition.y }}
     >
       {QUICK_CONNECT_PRESETS.map((preset) => (

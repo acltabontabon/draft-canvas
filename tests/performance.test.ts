@@ -60,7 +60,7 @@ function largeDocument(): DraftDocument {
       });
     }
     return createNode({
-      type: (['service', 'database', 'queue', 'actor', 'card'] as const)[index % 5]!,
+      type: (['service', 'database', 'queue', 'actor', 'ellipse'] as const)[index % 5]!,
       x: column * 460,
       y: row * 320,
       text: `Component ${index}`,

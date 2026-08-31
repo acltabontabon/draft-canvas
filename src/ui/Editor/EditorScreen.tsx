@@ -3,7 +3,7 @@ import { useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { Canvas } from '../../canvas/Canvas';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
-import { CARD_PRESET, presetForShortcut, type Preset } from '../../canvas/presets';
+import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { createEdge, createNode } from '../../document/factory';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
@@ -74,10 +74,19 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
     [arm, store, theme],
   );
 
-  /** Creates the chosen type at the Quick Connect drop point and connects it. */
+  /**
+   * Creates the chosen type at the Quick Connect drop point. Also wires it
+   * to `quickConnect.source` when present — absent means this menu was
+   * opened by a plain double-click-to-create, not a connector drop.
+   */
   const onQuickConnectSelect = useCallback(
     (preset: Preset) => {
       if (!quickConnect) return;
+      if (!quickConnect.source) {
+        createAt(preset, quickConnect.flowPosition);
+        setQuickConnect(null);
+        return;
+      }
       const created = createNode({
         type: preset.type,
         x: quickConnect.flowPosition.x,
@@ -95,7 +104,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       store.getState().addNodesWithEdges([created], [edge], 'Connect to new node');
       setQuickConnect(null);
     },
-    [quickConnect, setQuickConnect, store],
+    [createAt, quickConnect, setQuickConnect, store],
   );
 
   /** Places a new element under the cursor, or in the middle of the view. */
@@ -143,9 +152,12 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
 
       <div className="dc-editor-canvas">
         <Canvas
-          onCreateAt={(position) => createAt(armed ?? CARD_PRESET, position)}
+          onCreateAt={(position) => armed && createAt(armed, position)}
           onQuickConnectMenu={(source, sourceSide, sourceOffset, flowPosition, screenPosition) =>
             setQuickConnect({ source, sourceSide, sourceOffset, flowPosition, screenPosition })
+          }
+          onEmptyCanvasMenu={(flowPosition, screenPosition) =>
+            setQuickConnect({ flowPosition, screenPosition })
           }
         />
         {quickConnect && (

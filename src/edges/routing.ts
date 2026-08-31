@@ -291,11 +291,16 @@ const LANE_SPACING = 10;
  * when this edge already has parallel siblings. A caller computes the
  * response's route by calling `routeBetween` a second time with source/target
  * (and their anchors) swapped and `lane: laneOffset + RESPONSE_LANE_DELTA` —
- * see `DraftEdgeView.tsx`/`edges/describe.ts`. Fractional on purpose: real
- * siblings land on (whole or half) integers via `laneIndex`, so a fraction
- * minimizes (not eliminates) landing on an actual neighboring connector's lane.
+ * see `DraftEdgeView.tsx`/`edges/describe.ts`. `laneIndex` only ever assigns
+ * real siblings a (positive or negative) multiple of 0.5, so any delta whose
+ * remainder mod 0.5 is non-zero can never land exactly on a real neighbour's
+ * lane, regardless of this edge's own offset — 1.25 satisfies that while
+ * giving the line (~12.5px) and its label (~25px) enough clearance from the
+ * request line/label to read as two distinct lines rather than a smudge; a
+ * smaller fractional delta (e.g. the original 0.35) technically satisfied
+ * the same non-collision invariant but left too little room for the label.
  */
-export const RESPONSE_LANE_DELTA = 0.35;
+export const RESPONSE_LANE_DELTA = 1.25;
 
 /**
  * Shifts an anchor point along its own side by `lane` slots, clamped so a

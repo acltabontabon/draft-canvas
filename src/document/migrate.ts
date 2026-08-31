@@ -166,6 +166,39 @@ function migrateResponse(doc: Record<string, unknown>): Record<string, unknown> 
 }
 
 /**
+ * v6 removed the `card` and `rounded` node types — Draft Canvas no longer has
+ * a blank, semantics-free box primitive. The closest surviving primitive is
+ * `note`: it holds free text with no structural implications (no boundary,
+ * no service/database/queue kind, no language). This migration retypes any
+ * `card`/`rounded` node — and any `card`/`rounded` attachment folded into a
+ * node or edge — to `note`, leaving every other field (text, position, size,
+ * accent) untouched.
+ */
+function migrateCardAndRoundedToNote(doc: Record<string, unknown>): Record<string, unknown> {
+  const retype = (raw: unknown): unknown => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const item = raw as Record<string, unknown>;
+    if (item.type !== 'card' && item.type !== 'rounded') return item;
+    return { ...item, type: 'note' };
+  };
+
+  const retypeAttachments = (raw: unknown): unknown => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const item = raw as Record<string, unknown>;
+    if (!Array.isArray(item.attachments)) return item;
+    return { ...item, attachments: item.attachments.map(retype) };
+  };
+
+  const rawNodes = Array.isArray(doc.nodes) ? doc.nodes : [];
+  const nodes = rawNodes.map((raw) => retypeAttachments(retype(raw)));
+
+  const rawEdges = Array.isArray(doc.edges) ? doc.edges : [];
+  const edges = rawEdges.map((raw) => retypeAttachments(raw));
+
+  return { ...doc, nodes, edges };
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
@@ -174,6 +207,7 @@ const MIGRATIONS: Record<number, Migration> = {
   3: migrateFlowAccent,
   4: migrateBackground,
   5: migrateResponse,
+  6: migrateCardAndRoundedToNote,
 };
 
 export class UnsupportedVersionError extends Error {

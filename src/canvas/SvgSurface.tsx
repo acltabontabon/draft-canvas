@@ -20,7 +20,7 @@ interface SvgSurfaceProps {
  * The markup is safe to inject: every attribute value is machine-generated and
  * every piece of user text is escaped and stripped of control characters by
  * `serialize`, so a node labelled `<script>alert(1)</script>` is displayed as
- * that literal text. See `tests/svg-escaping.test.ts`.
+ * that literal text. See the "XML escaping" tests in `tests/rendering.test.ts`.
  */
 export const SvgSurface = memo(function SvgSurface({
   width,

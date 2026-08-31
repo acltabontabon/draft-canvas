@@ -20,8 +20,8 @@ describe('undo and redo', () => {
 
   it('records one entry per discrete command', () => {
     const state = store.getState();
-    state.addNode({ type: 'card', x: 0, y: 0, text: 'A' });
-    state.addNode({ type: 'card', x: 200, y: 0, text: 'B' });
+    state.addNode({ type: 'note', x: 0, y: 0, text: 'A' });
+    state.addNode({ type: 'note', x: 200, y: 0, text: 'B' });
     expect(store.getState().history.past).toHaveLength(2);
 
     store.getState().undo();
@@ -36,7 +36,7 @@ describe('undo and redo', () => {
   });
 
   it('collapses a whole drag into a single undo step', () => {
-    const node = store.getState().addNode({ type: 'card', x: 0, y: 0 });
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0 });
     const historyBefore = store.getState().history.past.length;
 
     store.getState().beginInteraction('Move');
@@ -55,7 +55,7 @@ describe('undo and redo', () => {
   });
 
   it('creates no entry for a click that moved nothing', () => {
-    const node = store.getState().addNode({ type: 'card', x: 10, y: 10 });
+    const node = store.getState().addNode({ type: 'note', x: 10, y: 10 });
     const before = store.getState().history.past.length;
 
     store.getState().beginInteraction('Move');
@@ -66,7 +66,7 @@ describe('undo and redo', () => {
   });
 
   it('coalesces consecutive text edits on the same node', () => {
-    const node = store.getState().addNode({ type: 'card', x: 0, y: 0, text: '' });
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0, text: '' });
     const before = store.getState().history.past.length;
 
     for (const text of ['O', 'Or', 'Ord', 'Orde', 'Order']) {
@@ -81,8 +81,8 @@ describe('undo and redo', () => {
   });
 
   it('does not coalesce edits to different nodes', () => {
-    const a = store.getState().addNode({ type: 'card', x: 0, y: 0 });
-    const b = store.getState().addNode({ type: 'card', x: 100, y: 0 });
+    const a = store.getState().addNode({ type: 'note', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'note', x: 100, y: 0 });
     const before = store.getState().history.past.length;
 
     store.getState().updateNodeText(a.id, 'A');
@@ -92,7 +92,7 @@ describe('undo and redo', () => {
   });
 
   it('restores the selection an action was performed with', () => {
-    const node = store.getState().addNode({ type: 'card', x: 0, y: 0 });
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0 });
     store.getState().setSelection({ nodes: [node.id], edges: [] });
     store.getState().deleteSelection();
 
@@ -102,7 +102,7 @@ describe('undo and redo', () => {
   });
 
   it('discards the redo branch once a new action is taken', () => {
-    store.getState().addNode({ type: 'card', x: 0, y: 0 });
+    store.getState().addNode({ type: 'note', x: 0, y: 0 });
     store.getState().undo();
     expect(store.getState().history.future).toHaveLength(1);
 
@@ -136,8 +136,8 @@ describe('undo and redo', () => {
   });
 
   it('refuses to connect a node to itself, or to duplicate a connection', () => {
-    const a = store.getState().addNode({ type: 'card', x: 0, y: 0 });
-    const b = store.getState().addNode({ type: 'card', x: 200, y: 0 });
+    const a = store.getState().addNode({ type: 'note', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'note', x: 200, y: 0 });
     expect(store.getState().connect(a.id, a.id)).toBeNull();
     expect(store.getState().connect(a.id, b.id)).not.toBeNull();
     expect(store.getState().connect(a.id, b.id)).toBeNull();
@@ -160,7 +160,7 @@ describe('undo and redo', () => {
   });
 
   it('copies and pastes across the clipboard', () => {
-    const node = store.getState().addNode({ type: 'card', x: 0, y: 0, text: 'Copy me' });
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0, text: 'Copy me' });
     store.getState().setSelection({ nodes: [node.id], edges: [] });
     store.getState().copySelection();
     store.getState().paste({ x: 60, y: 60 });

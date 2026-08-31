@@ -1050,15 +1050,26 @@ function EdgeEndpointHandle({
   const dragStarted = useRef(false);
   const startClient = useRef<{ x: number; y: number } | null>(null);
 
+  // A single pass tracking the highest-z match is equivalent to (and cheaper
+  // than) copying + sorting the whole array on every pointer-move frame of a
+  // reconnect drag — same result, no allocation, no O(n log n) sort.
   const findDropNode = useCallback(
-    (point: { x: number; y: number }) =>
-      [...nodes]
-        .filter((node) => node.type !== 'group')
-        .sort((a, b) => b.z - a.z)
-        .find(
-          (node) =>
-            point.x >= node.x && point.x <= node.x + node.width && point.y >= node.y && point.y <= node.y + node.height,
-        ),
+    (point: { x: number; y: number }) => {
+      let best: DraftNode | undefined;
+      for (const node of nodes) {
+        if (node.type === 'group') continue;
+        if (
+          point.x < node.x ||
+          point.x > node.x + node.width ||
+          point.y < node.y ||
+          point.y > node.y + node.height
+        ) {
+          continue;
+        }
+        if (!best || node.z > best.z) best = node;
+      }
+      return best;
+    },
     [nodes],
   );
 
@@ -1075,6 +1086,15 @@ function EdgeEndpointHandle({
     startClient.current = null;
     onDrag(null);
   }, [onDrag]);
+
+  // `endDrag` already removes this on a normal pointer-up/Escape, but if the
+  // component unmounts mid-drag (e.g. this edge is deleted while its
+  // endpoint is being dragged), that path never runs — this is the backstop.
+  useEffect(() => {
+    return () => {
+      if (onKeyDownRef.current) window.removeEventListener('keydown', onKeyDownRef.current);
+    };
+  }, []);
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {

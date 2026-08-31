@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 6;
+export const CURRENT_VERSION = 7;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -21,8 +21,6 @@ export type DraftFormat = typeof DRAFT_FORMAT;
  * of behaviours.
  */
 export const NODE_TYPES = [
-  'card',
-  'rounded',
   'ellipse',
   'text',
   'note',
@@ -146,13 +144,13 @@ export const CONNECTOR_KINDS = [
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
 /** Node types that can be folded into another node as an attachment. */
-export const ATTACHABLE_TYPES = ['code', 'note', 'text', 'card', 'rounded'] as const;
+export const ATTACHABLE_TYPES = ['code', 'note', 'text'] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
 
 /**
  * Supporting detail folded into a host node rather than left as an independent
  * canvas element. Deliberately a small, closed subset of `DraftNode`'s own
- * fields — an attachment is "the content of a Code/Note/Card node, minus the
+ * fields — an attachment is "the content of a Code/Note node, minus the
  * fields that only make sense for something living on the canvas" (position,
  * z-order, parentage). See `docs/ARCHITECTURE.md` for why this is an embedded
  * array on the host rather than a second kind of graph node.

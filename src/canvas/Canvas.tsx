@@ -211,7 +211,7 @@ function sweepDescendants(
 }
 
 export interface CanvasProps {
-  /** Called when the user asks for a new element at a point on the canvas. */
+  /** Called when an armed tool is placed at a point on the canvas (toolbar click, or double-click with a tool armed). */
   onCreateAt?: (position: { x: number; y: number }) => void;
   /**
    * Called instead of creating a node when a connection is dragged onto empty
@@ -225,9 +225,19 @@ export interface CanvasProps {
     flowPosition: { x: number; y: number },
     screenPosition: { x: number; y: number },
   ) => void;
+  /**
+   * Called instead of `onCreateAt` when the canvas is double-clicked with no
+   * tool armed — there is no default "blank" type to guess, so the caller
+   * opens the same type picker `onQuickConnectMenu` uses, just with no
+   * source node to wire up afterward.
+   */
+  onEmptyCanvasMenu?: (
+    flowPosition: { x: number; y: number },
+    screenPosition: { x: number; y: number },
+  ) => void;
 }
 
-export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
+export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: CanvasProps) {
   const document = useEditorStore((state) => state.document);
   const selection = useEditorStore((state) => state.selection);
   const mode = useEditorStore((state) => state.mode);
@@ -760,14 +770,24 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
       if (!interactive) return;
       // React Flow has no `onPaneDoubleClick`, so this fires for the whole
       // canvas — including double-clicks on a node, which mean "edit this
-      // label" and must not also drop a new card underneath it.
+      // label" and must not also drop a new element underneath it.
       const target = event.target as HTMLElement | null;
       if (!target?.classList.contains('react-flow__pane')) return;
 
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) });
+      const flowPosition = { x: Math.round(position.x - 88), y: Math.round(position.y - 34) };
+
+      // A tool already armed (toolbar click) places that specific type, same
+      // as a single click would. With nothing armed there is no default
+      // "blank" type to guess anymore, so the caller opens a type picker
+      // instead — see `onEmptyCanvasMenu`.
+      if (useUiStore.getState().armed) {
+        onCreateAt?.(flowPosition);
+        return;
+      }
+      onEmptyCanvasMenu?.(flowPosition, { x: event.clientX, y: event.clientY });
     },
-    [interactive, onCreateAt, screenToFlowPosition],
+    [interactive, onCreateAt, onEmptyCanvasMenu, screenToFlowPosition],
   );
 
   /** A toolbar button arms a tool; the next click on empty canvas places it. */

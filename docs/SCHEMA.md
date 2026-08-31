@@ -90,7 +90,7 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | string | Unique within the document. |
-| `type` | enum | `card` · `rounded` · `ellipse` · `text` · `note` · `code` · `group` · `service` · `database` · `queue` · `actor` |
+| `type` | enum | `ellipse` · `text` · `note` · `code` · `group` · `service` · `database` · `queue` · `actor` |
 | `x` `y` | number | Absolute canvas coordinates — never relative to a parent. |
 | `width` `height` | number | |
 | `z` | number | Stacking order. Boundaries always render behind their contents regardless. |
@@ -115,7 +115,7 @@ one restores it as an ordinary node on the canvas.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | string | Unique within the node. Stable across edits and reordering. |
-| `type` | enum | `code` · `note` · `text` · `card` · `rounded`. |
+| `type` | enum | `code` · `note` · `text`. |
 | `text` `noteKind` `language` `code` `accent` | — | Same meaning as the equivalent `Node` fields. |
 | `width` `height` | number? | Preserved from the source node so detaching restores its size, not a type default. |
 
@@ -188,7 +188,7 @@ Applied to anything read from a file or from a possibly-corrupted local record. 
 Imports are untrusted. A file is refused outright only when it is unrecognisable or comes from a
 newer format version. Everything else is repaired, and the repairs are reported:
 
-- Unknown node types become `card`, keeping their text rather than losing the content.
+- Unknown node types become `note`, keeping their text rather than losing the content.
 - Missing or duplicate ids are replaced.
 - Connections pointing at absent nodes are dropped.
 - Grouping links that dangle, point at themselves, or form a cycle are detached.
@@ -232,3 +232,12 @@ migrated document's on-screen appearance is byte-identical to how it looked in v
 is computed exactly once rather than re-derived on every future load. An edge whose endpoint no
 longer resolves to a node is left alone; `normalizeDocument` drops it afterward the same way it
 always has.
+
+**Worked example — v6 → v7:** v6 had two blank, semantics-free box node types, `card` and
+`rounded` — near-duplicates of each other, differing only in corner radius. v7 removes both; there
+is no generic "just a box" primitive anymore. The migration retypes any `card`/`rounded` node — and
+any `card`/`rounded` attachment folded into a node or edge — to `note`, the closest surviving
+primitive that holds free text with no other implications. Every other field (text, position, size,
+accent) is left untouched, so a migrated document keeps showing the same content in the same place,
+just under a different type. `normalizeDocument`'s fallback for an unrecognised type also changed
+from `card` to `note` to match.

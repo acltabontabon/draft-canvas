@@ -5,13 +5,17 @@ import type { Side } from '../document/types';
 export type Toast = { id: number; message: string; tone: 'info' | 'error' };
 
 /**
- * A drag from a connection handle released on empty canvas — the source node,
- * where the new node should land (flow coordinates, for creation) and where
- * the menu itself should appear (screen coordinates, fixed for the life of
- * the menu so it does not drift if the user pans while choosing).
+ * Drives the small type-picker menu (`QuickConnectMenu`) for the two
+ * gestures that need to ask "what should appear here?" rather than guessing:
+ * a connection handle dragged onto empty canvas (`source` present — the
+ * chosen type is created *and* wired to `source`), and a double-click on
+ * empty canvas with no tool armed (`source` absent — the chosen type is
+ * simply created at `flowPosition`). Screen coordinates are fixed for the
+ * life of the menu so it does not drift if the user pans while choosing.
  */
 export interface QuickConnectState {
-  source: string;
+  /** Absent for a plain double-click-to-create; present for a connector dropped on empty canvas. */
+  source?: string;
   /** The side of the source node the user actually dragged from, if known. */
   sourceSide?: Side;
   /** How far along that side, if known — one of `ANCHOR_OFFSETS` (`edges/routing.ts`). */

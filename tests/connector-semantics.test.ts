@@ -29,7 +29,7 @@ describe('categoryOf', () => {
   });
 
   it('reads every other node type as generic', () => {
-    for (const type of ['card', 'rounded', 'ellipse', 'text', 'note', 'code', 'group'] as const) {
+    for (const type of ['ellipse', 'text', 'note', 'code', 'group'] as const) {
       expect(categoryOf({ type })).toBe('generic');
     }
   });
@@ -175,7 +175,7 @@ describe('inferRelationship — a thin wrapper over capabilityFor\'s default', (
   it('stays neutral for undocumented pairs and for queue → queue', () => {
     expect(inferRelationship({ type: 'queue' }, { type: 'queue' })).toBeUndefined();
     expect(inferRelationship({ type: 'actor' }, { type: 'note' })).toBeUndefined();
-    expect(inferRelationship({ type: 'card' }, { type: 'card' })).toBeUndefined();
+    expect(inferRelationship({ type: 'text' }, { type: 'text' })).toBeUndefined();
   });
 
   it('a topic and a stream infer exactly like a plain queue — Draft Canvas doesn\'t over-differentiate messaging kinds', () => {

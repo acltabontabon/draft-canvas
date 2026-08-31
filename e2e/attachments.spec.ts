@@ -54,7 +54,7 @@ test.describe('attachments', () => {
     await expect(page.locator('.dc-node')).toHaveCount(2);
   });
 
-  test('a large card dropped fully onto a small target arms and attaches instantly', async ({ page }) => {
+  test('a large attachable node dropped fully onto a small target arms and attaches instantly', async ({ page }) => {
     await newCanvas(page, 'Attach large onto small');
     await create(page, 'Service', { x: 300, y: 300 });
     await create(page, 'Code', { x: 700, y: 300 });
@@ -77,12 +77,12 @@ test.describe('attachments', () => {
     await expect(page.locator('.dc-node')).toHaveCount(1);
   });
 
-  test('a small card dropped fully onto a large target arms and attaches instantly', async ({ page }) => {
+  test('a small attachable node dropped fully onto a large target arms and attaches instantly', async ({ page }) => {
     await newCanvas(page, 'Attach small onto large');
-    await create(page, 'Card', { x: 300, y: 300 });
+    await create(page, 'Note', { x: 300, y: 300 });
     await create(page, 'Text', { x: 700, y: 300 });
 
-    // Resize the target card up considerably so the dragged text node is the
+    // Resize the target node up considerably so the dragged text node is the
     // smaller of the two areas.
     const target = page.locator('.dc-node').first();
     await target.click();
@@ -110,24 +110,24 @@ test.describe('attachments', () => {
     await create(page, 'Service', { x: 300, y: 300 });
     // Same default footprint as the target (176×68), which keeps the overlap
     // arithmetic simple and symmetric.
-    await create(page, 'Card', { x: 700, y: 300 });
+    await create(page, 'Note', { x: 700, y: 300 });
 
-    const card = page.locator('.dc-node[data-type="card"]');
+    const note = page.locator('.dc-node[data-type="note"]');
     const service = page.locator('.dc-node[data-type="service"]');
     const serviceBox = (await service.boundingBox())!;
 
-    // Offset the card's centre 110px in from the target's left edge (same
+    // Offset the note's centre 110px in from the target's left edge (same
     // width, so this leaves ~37% area overlap — comfortably under the 65%
     // instant-arm threshold) and well clear of SNAP_THRESHOLD (6px) around
     // any of the target's edges or centre, so alignment snapping cannot pull
     // the drop point somewhere this test didn't intend.
     const dwellPoint = { x: serviceBox.x + 110, y: serviceBox.y + serviceBox.height / 2 };
 
-    const release = await dragNodeCenterTo(page, card, dwellPoint, { holdMs: 400 });
+    const release = await dragNodeCenterTo(page, note, dwellPoint, { holdMs: 400 });
     await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
     await release();
 
-    await expect(page.locator('.dc-node[data-type="card"]')).toHaveCount(0);
+    await expect(page.locator('.dc-node[data-type="note"]')).toHaveCount(0);
     await expect(page.locator('.dc-attachment-badge')).toContainText('1');
   });
 

@@ -35,6 +35,28 @@ break as we settle on a stable 1.0 shape.
 - A connector's attached notes and code now reveal on click instead of on hover, and open
   read-only first — a separate edit glyph switches to editing, so opening one to look at it no
   longer drops you straight into an editable text field.
+- Double-clicking empty canvas with no tool armed now opens a type picker instead of instantly
+  placing a shape, matching how dropping a connector on empty canvas already worked.
+
+### Removed
+
+- The Card shape, and the never-user-facing `rounded` type it duplicated. Draft Canvas no longer
+  has a generic, semantics-free box — Note, Text, and the developer presets already cover what a
+  blank box was standing in for. Existing diagrams are unaffected: any Card on load becomes a Note,
+  keeping its text, position, size, and color exactly as they were.
+
+### Fixed
+
+- A Queue (or Topic/Stream) in Presentation Mode's step breadcrumb, or in the Flow panel, showed
+  as "Untitled" instead of its kind — a Queue has no editable name field at all, so the fallback
+  that assumed blank text meant an unnamed node was always wrong for it.
+- A request/response connector's reply line was rendered at an opacity too low to actually see
+  against the canvas background, and — once fixed — sat too close to the request line and its
+  label to read as two distinct things. Both now have proper contrast and spacing.
+- Selecting a different connector while one of its popover's sub-panels (flow membership,
+  connection type, ⋯) was open no longer leaves that sub-panel showing the *previous*
+  connector's data — it now closes automatically on selection change, matching every other
+  popover in the app.
 
 ## [0.1.0-alpha.1] - 2026-08-31
 

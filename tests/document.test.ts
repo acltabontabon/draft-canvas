@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDocument, createEdge, createNode } from '../src/document/factory';
+import { createDocument, createEdge, createNode, displayNameFor } from '../src/document/factory';
 import {
   addEdges,
   addNodes,
@@ -70,7 +70,7 @@ describe('document model', () => {
 
   it('deletes the contents of a boundary along with it', () => {
     const boundary = createNode({ type: 'group', x: 0, y: 0 });
-    const child = createNode({ type: 'card', x: 20, y: 20, parentId: boundary.id });
+    const child = createNode({ type: 'note', x: 20, y: 20, parentId: boundary.id });
     const doc = addNodes(createDocument(), [boundary, child]);
     expect(removeElements(doc, [boundary.id]).nodes).toHaveLength(0);
   });
@@ -110,9 +110,9 @@ describe('document model', () => {
 
   it('aligns and distributes selections', () => {
     const nodes = [
-      createNode({ type: 'card', x: 0, y: 0, width: 100, height: 50 }),
-      createNode({ type: 'card', x: 130, y: 40, width: 100, height: 50 }),
-      createNode({ type: 'card', x: 400, y: 90, width: 100, height: 50 }),
+      createNode({ type: 'note', x: 0, y: 0, width: 100, height: 50 }),
+      createNode({ type: 'note', x: 130, y: 40, width: 100, height: 50 }),
+      createNode({ type: 'note', x: 400, y: 90, width: 100, height: 50 }),
     ];
     const doc = addNodes(createDocument(), nodes);
     const ids = nodes.map((node) => node.id);
@@ -141,7 +141,7 @@ describe('containment', () => {
   it('finds every transitive descendant of a boundary', () => {
     const outer = createNode({ type: 'group', x: 0, y: 0, width: 600, height: 600 });
     const inner = createNode({ type: 'group', x: 50, y: 50, width: 300, height: 300 });
-    const leaf = createNode({ type: 'card', x: 100, y: 100 });
+    const leaf = createNode({ type: 'note', x: 100, y: 100 });
     let doc = addNodes(createDocument(), [outer, inner, leaf]);
     doc = setParent(doc, [inner.id], outer.id);
     doc = setParent(doc, [leaf.id], inner.id);
@@ -153,7 +153,7 @@ describe('containment', () => {
 
   it('leaves node coordinates untouched by parenting or unparenting', () => {
     const boundary = createNode({ type: 'group', x: 0, y: 0, width: 400, height: 400 });
-    const child = createNode({ type: 'card', x: 120, y: 90 });
+    const child = createNode({ type: 'note', x: 120, y: 90 });
     let doc = addNodes(createDocument(), [boundary, child]);
 
     doc = setParent(doc, [child.id], boundary.id);
@@ -167,5 +167,37 @@ describe('containment', () => {
     expect(stored.x).toBe(120);
     expect(stored.y).toBe(90);
     expect(stored.parentId).toBeUndefined();
+  });
+});
+
+describe('displayNameFor', () => {
+  it('prefers the node\'s own text when set', () => {
+    expect(displayNameFor({ type: 'service', text: 'Order Service' })).toBe('Order Service');
+  });
+
+  it('falls back to a Queue\'s kind, never "Untitled" — a Queue has no text field to type into', () => {
+    expect(displayNameFor({ type: 'queue', text: '' })).toBe('Queue');
+    expect(displayNameFor({ type: 'queue', text: '', queueKind: 'topic' })).toBe('Topic');
+    expect(displayNameFor({ type: 'queue', text: '', queueKind: 'stream' })).toBe('Stream');
+  });
+
+  it('falls back to a sub-kind label for Service/Database when text is blank', () => {
+    expect(displayNameFor({ type: 'service', text: '', serviceKind: 'external' })).toBe('External service');
+    expect(displayNameFor({ type: 'database', text: '', databaseKind: 'cache' })).toBe('Cache');
+    expect(displayNameFor({ type: 'service', text: '' })).toBe('Service');
+    expect(displayNameFor({ type: 'database', text: '' })).toBe('Database');
+  });
+
+  it('falls back to a generic type name for every other blank-text type', () => {
+    expect(displayNameFor({ type: 'note', text: '' })).toBe('Note');
+    expect(displayNameFor({ type: 'code', text: '' })).toBe('Code');
+    expect(displayNameFor({ type: 'text', text: '' })).toBe('Text');
+    expect(displayNameFor({ type: 'ellipse', text: '' })).toBe('Circle');
+    expect(displayNameFor({ type: 'actor', text: '' })).toBe('Actor');
+    expect(displayNameFor({ type: 'group', text: '' })).toBe('Boundary');
+  });
+
+  it('treats whitespace-only text the same as blank', () => {
+    expect(displayNameFor({ type: 'queue', text: '   ' })).toBe('Queue');
   });
 });

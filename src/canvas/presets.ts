@@ -21,17 +21,7 @@ export interface Preset {
  * idea" into "choose a shape", which is the failure mode this tool exists to
  * avoid.
  */
-/** The default: what a double-click on empty canvas produces. */
-export const CARD_PRESET: Preset = {
-  id: 'card',
-  label: 'Card',
-  type: 'card',
-  shortcut: 'R',
-  hint: 'A plain box',
-};
-
 export const PRESETS: Preset[] = [
-  CARD_PRESET,
   { id: 'text', label: 'Text', type: 'text', shortcut: 'T', hint: 'Label with no box' },
   {
     id: 'note',
@@ -107,7 +97,6 @@ export const QUICK_CONNECT_PRESETS: Preset[] = [
   DEV_PRESETS.find((preset) => preset.id === 'database')!,
   DEV_PRESETS.find((preset) => preset.id === 'queue')!,
   DEV_PRESETS.find((preset) => preset.id === 'actor')!,
-  CARD_PRESET,
 ];
 
 export function presetForShortcut(key: string): Preset | undefined {

@@ -278,8 +278,8 @@ describe('flow.ts pure functions', () => {
   });
 
   it('adds and removes a step\'s extra nodes/edges, refusing ids that do not exist on the document', () => {
-    const a = createNode({ type: 'card', x: 0, y: 0, id: 'a' });
-    const b = createNode({ type: 'card', x: 100, y: 0, id: 'b' });
+    const a = createNode({ type: 'note', x: 0, y: 0, id: 'a' });
+    const b = createNode({ type: 'note', x: 100, y: 0, id: 'b' });
     const edge = createEdge({ source: 'a', target: 'b', id: 'e1' });
     let doc = { ...createDocument('X'), nodes: [a, b], edges: [edge] };
     doc = addFlow(doc, createFlow({ title: 'A', id: 'f1' }));
@@ -317,7 +317,7 @@ describe('flow.ts pure functions', () => {
   });
 
   it('caps a step\'s extra members at LIMITS.maxExtraMembersPerStep', () => {
-    const nodes = Array.from({ length: 41 }, (_, i) => createNode({ type: 'card', x: i, y: 0, id: `n${i}` }));
+    const nodes = Array.from({ length: 41 }, (_, i) => createNode({ type: 'note', x: i, y: 0, id: `n${i}` }));
     let doc = { ...createDocument('X'), nodes };
     doc = addFlow(doc, createFlow({ title: 'A', id: 'f1' }));
     doc = { ...doc, flows: [{ ...doc.flows[0]!, steps: [{ id: 's1' }] }] };
@@ -358,7 +358,7 @@ describe('useFlowPlayback pure helpers', () => {
   it('resolves a multi-member step, filtering out dangling references', () => {
     const primary = createEdge({ source: 'a', target: 'b', id: 'e1' });
     const extra = createEdge({ source: 'c', target: 'd', id: 'e2' });
-    const nodeC = createNode({ type: 'card', x: 0, y: 0, id: 'c' });
+    const nodeC = createNode({ type: 'note', x: 0, y: 0, id: 'c' });
     const edgesById = new Map([['e1', primary], ['e2', extra]]);
     const nodesById = new Map([['c', nodeC]]);
 
@@ -379,7 +379,7 @@ describe('useFlowPlayback pure helpers', () => {
   });
 
   it('keeps a frame step (no primary edge) with only extras', () => {
-    const nodeA = createNode({ type: 'card', x: 0, y: 0, id: 'a' });
+    const nodeA = createNode({ type: 'note', x: 0, y: 0, id: 'a' });
     const resolved = resolveFlowStep(
       { id: 's1', extraNodeIds: ['a'] },
       0,
@@ -392,9 +392,9 @@ describe('useFlowPlayback pure helpers', () => {
   });
 
   it('computes focus bounds as the union of edge endpoints and extra nodes', () => {
-    const a = createNode({ type: 'card', x: 0, y: 0, width: 100, height: 50, id: 'a' });
-    const b = createNode({ type: 'card', x: 200, y: 100, width: 100, height: 50, id: 'b' });
-    const c = createNode({ type: 'card', x: -50, y: -50, width: 20, height: 20, id: 'c' });
+    const a = createNode({ type: 'note', x: 0, y: 0, width: 100, height: 50, id: 'a' });
+    const b = createNode({ type: 'note', x: 200, y: 100, width: 100, height: 50, id: 'b' });
+    const c = createNode({ type: 'note', x: -50, y: -50, width: 20, height: 20, id: 'c' });
     const edge = createEdge({ source: 'a', target: 'b', id: 'e1' });
     const nodesById = new Map([['a', a], ['b', b], ['c', c]]);
 
@@ -590,9 +590,9 @@ describe('v1 to v2 migration', () => {
       version: 1,
       metadata: { id: 'd1', title: 'Old', createdAt: 0, updatedAt: 0 },
       nodes: [
-        { id: 'a', type: 'card', x: 0, y: 0 },
-        { id: 'b', type: 'card', x: 100, y: 0 },
-        { id: 'c', type: 'card', x: 200, y: 0 },
+        { id: 'a', type: 'note', x: 0, y: 0 },
+        { id: 'b', type: 'note', x: 100, y: 0 },
+        { id: 'c', type: 'note', x: 200, y: 0 },
       ],
       edges: [
         { id: 'e1', source: 'a', target: 'b', sequence: 5 },
@@ -621,7 +621,7 @@ describe('v1 to v2 migration', () => {
       format: DRAFT_FORMAT,
       version: 1,
       metadata: { id: 'd1', title: 'Old', createdAt: 0, updatedAt: 0 },
-      nodes: [{ id: 'a', type: 'card', x: 0, y: 0 }],
+      nodes: [{ id: 'a', type: 'note', x: 0, y: 0 }],
       edges: [],
     };
     const result = parseDocument(JSON.stringify(raw));

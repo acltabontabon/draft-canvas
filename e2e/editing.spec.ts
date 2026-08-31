@@ -32,7 +32,7 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
 test.describe('editing', () => {
   test('resizes a node and keeps the new size after a reload', async ({ page }) => {
     await newCanvas(page, 'Resizing');
-    await create(page, 'Card', { x: 400, y: 300 });
+    await create(page, 'Service', { x: 400, y: 300 });
 
     const node = page.locator('.dc-node').first();
     await node.click();
@@ -62,7 +62,7 @@ test.describe('editing', () => {
 
   test('a resize is one undo step', async ({ page }) => {
     await newCanvas(page, 'Resize undo');
-    await create(page, 'Card', { x: 400, y: 300 });
+    await create(page, 'Service', { x: 400, y: 300 });
 
     const node = page.locator('.dc-node').first();
     await node.click();
@@ -85,7 +85,7 @@ test.describe('editing', () => {
     page,
   }) => {
     await newCanvas(page, 'Live resize');
-    await create(page, 'Card', { x: 400, y: 300 });
+    await create(page, 'Service', { x: 400, y: 300 });
 
     const node = page.locator('.dc-node').first();
     await node.click();
@@ -117,7 +117,7 @@ test.describe('editing', () => {
 
   test('resize never shrinks a node below its per-type minimum', async ({ page }) => {
     await newCanvas(page, 'Resize minimum');
-    await create(page, 'Card', { x: 500, y: 400 });
+    await create(page, 'Service', { x: 500, y: 400 });
 
     const node = page.locator('.dc-node').first();
     await node.click();
@@ -130,7 +130,8 @@ test.describe('editing', () => {
     await page.mouse.up();
 
     const after = (await node.boundingBox())!;
-    // `minSizeFor('card')` — see src/document/factory.ts.
+    // The generic-default floor `minSizeFor` falls back to for a type with no
+    // type-specific minimum (Service included) — see src/document/factory.ts.
     expect(after.width).toBeGreaterThanOrEqual(96 - 2);
     expect(after.height).toBeGreaterThanOrEqual(48 - 2);
   });
@@ -139,7 +140,7 @@ test.describe('editing', () => {
     page,
   }) => {
     await newCanvas(page, 'Quick connect');
-    await create(page, 'Card', { x: 300, y: 300 });
+    await create(page, 'Service', { x: 300, y: 300 });
     await expect(page.locator('.dc-node')).toHaveCount(1);
 
     const source = page.locator('.dc-node').first();
@@ -152,7 +153,7 @@ test.describe('editing', () => {
 
     const menu = page.locator('.dc-quick-connect');
     await expect(menu).toBeVisible();
-    await expect(menu.getByRole('menuitem')).toHaveCount(5);
+    await expect(menu.getByRole('menuitem')).toHaveCount(4);
 
     await menu.getByRole('menuitem', { name: 'Database', exact: true }).click();
     await expect(menu).toBeHidden();
@@ -163,7 +164,7 @@ test.describe('editing', () => {
 
   test('quick connect: Escape dismisses the picker without creating anything', async ({ page }) => {
     await newCanvas(page, 'Quick connect escape');
-    await create(page, 'Card', { x: 300, y: 300 });
+    await create(page, 'Service', { x: 300, y: 300 });
 
     const source = page.locator('.dc-node').first();
     await source.hover();
@@ -183,8 +184,8 @@ test.describe('editing', () => {
 
   test('snaps a resized edge into alignment with a neighbour', async ({ page }) => {
     await newCanvas(page, 'Resize snapping');
-    await create(page, 'Card', { x: 350, y: 250 });
-    await create(page, 'Card', { x: 700, y: 250 });
+    await create(page, 'Service', { x: 350, y: 250 });
+    await create(page, 'Service', { x: 700, y: 250 });
 
     const neighbour = (await page.locator('.dc-node').nth(1).boundingBox())!;
     const resizing = page.locator('.dc-node').nth(0);
@@ -200,7 +201,7 @@ test.describe('editing', () => {
     await page.mouse.move(targetRight, corner.y + corner.height / 2, { steps: 12 });
     await page.waitForTimeout(150);
 
-    // Both cards share a height, so the unmoved bottom edge coincidentally
+    // Both nodes share a height, so the unmoved bottom edge coincidentally
     // lines up with the neighbour's too — assert the x-axis guide this test
     // is actually about, rather than an exact guide count.
     await expect(page.locator('.dc-guide[data-axis="x"]')).toHaveCount(1);
@@ -216,12 +217,12 @@ test.describe('editing', () => {
     // React Flow fires a `dimensions` change for every node as it is first
     // measured after mount, with no `resizing` field at all — indistinguishable
     // from a resize's own dimension changes unless that field is checked. Two
-    // same-sized cards share top/bottom edges by construction, so the mount-time
+    // same-sized nodes share top/bottom edges by construction, so the mount-time
     // measurement alone used to compute a bogus resize-snap guide and render it
     // with nothing being dragged or resized.
     await newCanvas(page, 'No stale guides on load');
-    await create(page, 'Card', { x: 350, y: 250 });
-    await create(page, 'Card', { x: 700, y: 250 });
+    await create(page, 'Service', { x: 350, y: 250 });
+    await create(page, 'Service', { x: 700, y: 250 });
 
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
     await page.reload();
@@ -233,9 +234,9 @@ test.describe('editing', () => {
 
   test('multi-selects with a marquee and moves the selection together', async ({ page }) => {
     await newCanvas(page, 'Multi-select');
-    await create(page, 'Card', { x: 300, y: 250 });
-    await create(page, 'Card', { x: 600, y: 250 });
-    await create(page, 'Card', { x: 900, y: 250 });
+    await create(page, 'Service', { x: 300, y: 250 });
+    await create(page, 'Service', { x: 600, y: 250 });
+    await create(page, 'Service', { x: 900, y: 250 });
 
     // Rubber-band across the first two.
     await page.mouse.move(200, 150);
@@ -295,7 +296,7 @@ test.describe('editing', () => {
     // perceive the result as yet another change, looping forever and
     // crashing with "Maximum update depth exceeded" the moment a marquee
     // drag captured any node with a connected edge — which a marquee
-    // spanning only unconnected `Card`s (the test above) never exercises.
+    // spanning only unconnected nodes (the test above) never exercises.
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
 
@@ -319,9 +320,9 @@ test.describe('editing', () => {
 
   test('aligns and distributes a multi-selection via the Inspector', async ({ page }) => {
     await newCanvas(page, 'Align and distribute');
-    await create(page, 'Card', { x: 300, y: 220 });
-    await create(page, 'Card', { x: 600, y: 340 });
-    await create(page, 'Card', { x: 900, y: 480 });
+    await create(page, 'Service', { x: 300, y: 220 });
+    await create(page, 'Service', { x: 600, y: 340 });
+    await create(page, 'Service', { x: 900, y: 480 });
 
     await page.keyboard.press('Meta+a');
     await expect(page.locator('.dc-inspector')).toContainText('3 elements');
@@ -507,59 +508,59 @@ test.describe('editing', () => {
     // Placed clear of the bottom-center Inspector, which grows wide enough
     // for a boundary selection (colour swatches, boundary preset, ungroup,
     // focus, delete) to reach the lower half of the viewport.
-    await create(page, 'Card', { x: 350, y: 480 });
-    const card = page.locator('.dc-node[data-type="card"]');
+    await create(page, 'Actor', { x: 350, y: 480 });
+    const extra = page.locator('.dc-node[data-type="actor"]');
 
     // A point inside the boundary's own padding, clear of either child.
     const dropPoint = { x: boundaryBox.x + boundaryBox.width - 15, y: boundaryBox.y + boundaryBox.height / 2 };
-    const cardStart = (await card.boundingBox())!;
-    await page.mouse.move(cardStart.x + cardStart.width / 2, cardStart.y + cardStart.height / 2);
+    const extraStart = (await extra.boundingBox())!;
+    await page.mouse.move(extraStart.x + extraStart.width / 2, extraStart.y + extraStart.height / 2);
     await page.mouse.down();
     await page.mouse.move(dropPoint.x, dropPoint.y, { steps: 15 });
 
-    const justBeforeDrop = (await card.boundingBox())!;
+    const justBeforeDrop = (await extra.boundingBox())!;
     await page.mouse.up();
-    const justAfterDrop = (await card.boundingBox())!;
+    const justAfterDrop = (await extra.boundingBox())!;
 
     // The critical invariant: assigning parentId must not move the node.
     expect(Math.abs(justAfterDrop.x - justBeforeDrop.x)).toBeLessThan(1.5);
     expect(Math.abs(justAfterDrop.y - justBeforeDrop.y)).toBeLessThan(1.5);
 
     // Behavioural proof of containment: dragging the boundary now carries
-    // the card with it too, alongside the two original members.
+    // the extra node with it too, alongside the two original members.
     const grab = { x: boundaryBox.x + 8, y: boundaryBox.y + 8 };
-    const cardBeforeSweep = (await card.boundingBox())!;
+    const extraBeforeSweep = (await extra.boundingBox())!;
     await page.mouse.move(grab.x, grab.y);
     await page.mouse.down();
     await page.mouse.move(grab.x + 90, grab.y + 40, { steps: 10 });
     await page.mouse.up();
-    const cardAfterSweep = (await card.boundingBox())!;
-    expect(cardAfterSweep.x - cardBeforeSweep.x).toBeGreaterThan(60);
-    expect(cardAfterSweep.y - cardBeforeSweep.y).toBeGreaterThan(20);
+    const extraAfterSweep = (await extra.boundingBox())!;
+    expect(extraAfterSweep.x - extraBeforeSweep.x).toBeGreaterThan(60);
+    expect(extraAfterSweep.y - extraBeforeSweep.y).toBeGreaterThan(20);
 
-    // Drag the card back out onto bare canvas — no jump leaving either.
+    // Drag the extra node back out onto bare canvas — no jump leaving either.
     const outside = { x: 200, y: 600 };
-    const cardNow = (await card.boundingBox())!;
-    await page.mouse.move(cardNow.x + cardNow.width / 2, cardNow.y + cardNow.height / 2);
+    const extraNow = (await extra.boundingBox())!;
+    await page.mouse.move(extraNow.x + extraNow.width / 2, extraNow.y + extraNow.height / 2);
     await page.mouse.down();
     await page.mouse.move(outside.x, outside.y, { steps: 15 });
-    const justBeforeExit = (await card.boundingBox())!;
+    const justBeforeExit = (await extra.boundingBox())!;
     await page.mouse.up();
-    const justAfterExit = (await card.boundingBox())!;
+    const justAfterExit = (await extra.boundingBox())!;
     expect(Math.abs(justAfterExit.x - justBeforeExit.x)).toBeLessThan(1.5);
     expect(Math.abs(justAfterExit.y - justBeforeExit.y)).toBeLessThan(1.5);
 
     // Now outside the boundary: dragging the boundary no longer moves it.
     const boundaryBox2 = (await boundary.boundingBox())!;
     const grab2 = { x: boundaryBox2.x + 8, y: boundaryBox2.y + 8 };
-    const cardBeforeSweep2 = (await card.boundingBox())!;
+    const extraBeforeSweep2 = (await extra.boundingBox())!;
     await page.mouse.move(grab2.x, grab2.y);
     await page.mouse.down();
     await page.mouse.move(grab2.x + 90, grab2.y + 40, { steps: 10 });
     await page.mouse.up();
-    const cardAfterSweep2 = (await card.boundingBox())!;
-    expect(Math.abs(cardAfterSweep2.x - cardBeforeSweep2.x)).toBeLessThan(1.5);
-    expect(Math.abs(cardAfterSweep2.y - cardBeforeSweep2.y)).toBeLessThan(1.5);
+    const extraAfterSweep2 = (await extra.boundingBox())!;
+    expect(Math.abs(extraAfterSweep2.x - extraBeforeSweep2.x)).toBeLessThan(1.5);
+    expect(Math.abs(extraAfterSweep2.y - extraBeforeSweep2.y)).toBeLessThan(1.5);
   });
 
   test('boundary reparent: nested boundaries resolve to the innermost one', async ({ page }) => {
@@ -591,38 +592,38 @@ test.describe('editing', () => {
     await page.getByRole('button', { name: 'Group', exact: true }).click();
     await expect(page.locator('.dc-node[data-type="group"]')).toHaveCount(2);
 
-    // Drop a plain card into the inner boundary's new empty region (its
+    // Drop a plain extra node into the inner boundary's new empty region (its
     // bottom-right quadrant, away from the Service/Database pair).
     const dropPoint = { x: box.x + box.width - 40, y: box.y + box.height - 40 };
-    await create(page, 'Card', { x: 60, y: 550 });
-    const card = page.locator('.dc-node[data-type="card"]');
-    const cardStart = (await card.boundingBox())!;
-    await page.mouse.move(cardStart.x + cardStart.width / 2, cardStart.y + cardStart.height / 2);
+    await create(page, 'Queue', { x: 60, y: 550 });
+    const extra = page.locator('.dc-node[data-type="queue"]');
+    const extraStart = (await extra.boundingBox())!;
+    await page.mouse.move(extraStart.x + extraStart.width / 2, extraStart.y + extraStart.height / 2);
     await page.mouse.down();
     await page.mouse.move(dropPoint.x, dropPoint.y, { steps: 15 });
     await page.mouse.up();
 
     // Grab the inner boundary at an empty point (its own top-left padding —
-    // clear of Service, Database, and the dropped card) and drag it alone.
+    // clear of Service, Database, and the dropped extra node) and drag it alone.
     const innerBox = (await inner.boundingBox())!;
     const grab = { x: innerBox.x + 8, y: innerBox.y + 8 };
-    const cardBefore = (await card.boundingBox())!;
+    const extraBefore = (await extra.boundingBox())!;
     await page.mouse.move(grab.x, grab.y);
     await page.mouse.down();
     await page.mouse.move(grab.x + 70, grab.y + 50, { steps: 10 });
     await page.mouse.up();
-    const cardAfter = (await card.boundingBox())!;
+    const extraAfter = (await extra.boundingBox())!;
 
-    // The card moved with the *inner* boundary specifically — proof it
+    // The extra node moved with the *inner* boundary specifically — proof it
     // resolved to the innermost containing boundary, not the outer one.
-    expect(cardAfter.x - cardBefore.x).toBeGreaterThan(50);
-    expect(cardAfter.y - cardBefore.y).toBeGreaterThan(30);
+    expect(extraAfter.x - extraBefore.x).toBeGreaterThan(50);
+    expect(extraAfter.y - extraBefore.y).toBeGreaterThan(30);
   });
 
   test('snaps a dragged node into alignment with its neighbour', async ({ page }) => {
     await newCanvas(page, 'Snapping');
-    await create(page, 'Card', { x: 350, y: 250 });
-    await create(page, 'Card', { x: 700, y: 460 });
+    await create(page, 'Service', { x: 350, y: 250 });
+    await create(page, 'Service', { x: 700, y: 460 });
 
     const anchor = (await page.locator('.dc-node').nth(0).boundingBox())!;
     const mover = page.locator('.dc-node').nth(1);
@@ -707,7 +708,7 @@ test.describe('editing', () => {
     page,
   }) => {
     await newCanvas(page, 'Keyboard nudge');
-    await create(page, 'Card', { x: 400, y: 300 });
+    await create(page, 'Service', { x: 400, y: 300 });
 
     const node = page.locator('.dc-node').first();
     await node.click();

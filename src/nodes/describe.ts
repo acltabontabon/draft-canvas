@@ -145,10 +145,9 @@ function shapesFor(node: DraftNode, ctx: DescribeContext): Shape[] {
       return actor(node, ctx);
     case 'service':
       return service(node, ctx);
-    case 'rounded':
-      return box(node, ctx, 18);
-    case 'card':
     default:
+      // Defensive fallback for a node type that somehow bypassed
+      // `document/validate.ts` — every valid `DraftNodeType` is handled above.
       return box(node, ctx, 8);
   }
 }

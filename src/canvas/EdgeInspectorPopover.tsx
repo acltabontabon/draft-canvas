@@ -100,6 +100,15 @@ export function EdgeInspectorPopover() {
     lastTargetRef.current = targetInternal;
   }
 
+  // Selecting a *different* connector while a sub-panel is open must close
+  // it — otherwise it keeps showing the connector it was opened for. This is
+  // not covered by the `open`-keyed effect below: clicking straight from one
+  // edge to another never makes `open` itself go false, since a new edge is
+  // selected in the same tick the old one is deselected.
+  useEffect(() => {
+    setPanel(null);
+  }, [edgeId]);
+
   useEffect(() => {
     if (open) {
       if (hideTimer.current !== null) {

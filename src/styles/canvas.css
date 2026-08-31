@@ -381,7 +381,12 @@
    attributes above are explicit props rather than inherited from a parent. */
 .dc-edge-response-line {
   pointer-events: none;
-  opacity: 0.28;
+  /* 0.28 measured as effectively invisible — a 1px stroke at that opacity
+     blends to within a few RGB steps of a light-theme canvas background,
+     defeating the "never fully invisible" intent above. 0.5 keeps it
+     clearly softer than the 0.85 revealed state while staying perceptible
+     against either theme's background. */
+  opacity: 0.5;
   transition: opacity 120ms ease;
 }
 
@@ -396,7 +401,7 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
-  opacity: 0.4;
+  opacity: 0.5;
   transition: opacity 120ms ease;
 }
 

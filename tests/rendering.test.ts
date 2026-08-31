@@ -456,7 +456,7 @@ describe('SVG export is safe against hostile content', () => {
   const hostile = '</text><script>globalThis.__pwned = true</script><text>';
 
   function hostileDocument() {
-    const node = createNode({ type: 'card', x: 0, y: 0, text: hostile });
+    const node = createNode({ type: 'note', x: 0, y: 0, text: hostile });
     const code = createNode({
       type: 'code',
       x: 0,

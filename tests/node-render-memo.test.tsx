@@ -17,7 +17,7 @@ import * as describeModule from '../src/nodes/describe';
  */
 describe('DraftNodeView does not rebuild its display list on position-only re-renders', () => {
   it('skips describeNode when only positionAbsoluteX/Y change', () => {
-    const node = createNode({ type: 'card', x: 0, y: 0, text: 'Order Service' });
+    const node = createNode({ type: 'note', x: 0, y: 0, text: 'Order Service' });
     const doc = addNodes(createDocument('Perf'), [node]);
     useEditorStore.getState().setDocument(doc, { resetHistory: true });
 

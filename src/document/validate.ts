@@ -226,7 +226,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     seenNodeIds.add(id);
     if (originalId && !nodeIdRemap.has(originalId)) nodeIdRemap.set(originalId, id);
 
-    const type = oneOf<DraftNodeType>(candidate.type, NODE_TYPES, 'card');
+    const type = oneOf<DraftNodeType>(candidate.type, NODE_TYPES, 'note');
     const fallbackSize = defaultSizeFor(type);
 
     const node: DraftNode = {

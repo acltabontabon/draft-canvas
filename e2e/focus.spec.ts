@@ -91,8 +91,8 @@ test.describe('focus mode', () => {
     page,
   }) => {
     await newCanvas(page, 'Focus exit button');
-    await create(page, 'Card', { x: 300, y: 300 });
-    await create(page, 'Card', { x: 600, y: 300 });
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Service', { x: 600, y: 300 });
 
     await page.keyboard.press('Meta+a');
     await page.getByRole('button', { name: 'Focus', exact: true }).click();
@@ -104,7 +104,7 @@ test.describe('focus mode', () => {
 
     // Entering and exiting focus left no entry on the undo stack: a single
     // Undo reaches straight past it to the last real edit (creating the
-    // second card), rather than needing two.
+    // second node), rather than needing two.
     const before = await page.locator('.dc-node').count();
     await page.keyboard.press('Meta+z');
     await expect(page.locator('.dc-node')).toHaveCount(before - 1);

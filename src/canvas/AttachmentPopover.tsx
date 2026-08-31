@@ -24,8 +24,6 @@ const TYPE_LABELS: Record<(typeof ATTACHABLE_TYPES)[number], string> = {
   code: 'Code',
   note: 'Note',
   text: 'Text',
-  card: 'Card',
-  rounded: 'Card',
 };
 
 function summarize(attachment: Attachment): string {

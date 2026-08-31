@@ -19,6 +19,21 @@ async function createNode(page: Page, tool: string, at: { x: number; y: number }
   await page.locator('.react-flow__pane').click({ position: at });
 }
 
+/**
+ * Opens the full Flow management panel (rename, reorder, remove steps) via
+ * the compact flow switcher's "Manage flows…" action — the switcher itself
+ * (`Flows · ⟨name⟩ ▾`, title "Switch flows (F)") is a different, lighter
+ * surface for just picking which flow is the active lens.
+ */
+async function openFlowPanel(page: Page) {
+  await page.getByTitle('Switch flows (F)').click();
+  await page.getByRole('button', { name: 'Manage flows…' }).click();
+}
+
+async function closeFlowPanel(page: Page) {
+  await page.locator('.dc-flow-panel').getByRole('button', { name: 'Close' }).click();
+}
+
 async function labelNode(page: Page, index: number, text: string) {
   const node = page.locator('.dc-node').nth(index);
   await node.dblclick();
@@ -41,22 +56,54 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
   await page.mouse.up();
 }
 
-async function clickEdgeBetween(page: Page, fromIndex: number, toIndex: number) {
-  const from = (await page.locator('.dc-node').nth(fromIndex).boundingBox())!;
-  const to = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
-  await page.mouse.click(
-    (from.x + from.width + to.x) / 2,
-    (from.y + from.height / 2 + to.y + to.height / 2) / 2,
-  );
+/**
+ * Clicks a connector at its own rendered path's true midpoint — not the
+ * naive average of its two endpoint nodes' centers, which drifts off the
+ * actual (possibly stepped/curved) path whenever the two nodes differ
+ * noticeably in height, exactly as a Service (68px tall by default) and a
+ * Queue (48px) do. `edgeIndex` is this edge's position in `document.edges`
+ * creation order — matching `.dc-edge-line`'s DOM order — not a node index.
+ */
+async function clickEdgeBetween(page: Page, edgeIndex: number) {
+  const path = page.locator('.dc-edge-line').nth(edgeIndex);
+  const point = await path.evaluate((el: SVGPathElement) => {
+    const len = el.getTotalLength();
+    const p = el.getPointAtLength(len / 2);
+    const ctm = el.getScreenCTM()!;
+    const screenPoint = new DOMPoint(p.x, p.y).matrixTransform(ctm);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
+  await page.mouse.click(point.x, point.y);
 }
 
-async function addToFlow(page: Page, existingFlowTitle?: string) {
-  const select = page.getByLabel('Add to flow');
-  if (existingFlowTitle) await select.selectOption({ label: existingFlowTitle });
-  else await select.selectOption({ label: 'New flow…' });
+/**
+ * Selects a connector (by its position in `document.edges` creation order —
+ * see `clickEdgeBetween`) and adds it to a flow via the popover's
+ * flow-membership panel — checking an existing flow's box, or starting a
+ * brand new one.
+ */
+async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: string) {
+  await clickEdgeBetween(page, edgeIndex);
+  await page.locator('[title="Flow membership"]').click();
+
+  const panel = page.locator('.dc-edge-inspector-panel');
+  await expect(panel).toBeVisible();
+  if (existingFlowTitle) {
+    const checkbox = page.getByRole('checkbox', { name: existingFlowTitle });
+    await expect(checkbox).not.toBeChecked();
+    await checkbox.check();
+    await expect(checkbox).toBeChecked();
+  } else {
+    await page.getByRole('button', { name: '+ New flow' }).click();
+  }
 }
 
-/** Builds Client -> API -> Payment -> Queue, four nodes and three connectors. */
+/**
+ * Builds Client -> API -> Payment -> Queue, four nodes and three connectors.
+ * The Queue is deliberately left unlabeled: a Queue has no editable name at
+ * all (see `DraftNodeView.tsx`'s `beginEditing` — its identity is always just
+ * its kind, "Queue"/"Topic"/"Stream"), so there's nothing here to type.
+ */
 async function buildArchitecture(page: Page) {
   await createNode(page, 'Actor', { x: 150, y: 180 });
   await labelNode(page, 0, 'Client');
@@ -65,7 +112,6 @@ async function buildArchitecture(page: Page) {
   await createNode(page, 'Service', { x: 710, y: 180 });
   await labelNode(page, 2, 'Payment');
   await createNode(page, 'Queue', { x: 990, y: 180 });
-  await labelNode(page, 3, 'orders.v1');
 
   await connect(page, 0, 1); // Client -> API
   await connect(page, 1, 2); // API -> Payment
@@ -79,21 +125,18 @@ test.describe('Flows', () => {
     await buildArchitecture(page);
 
     // Add all three connectors, in order, to one flow.
-    await clickEdgeBetween(page, 0, 1);
-    await addToFlow(page);
-    await clickEdgeBetween(page, 1, 2);
-    await addToFlow(page, 'Untitled flow');
-    await clickEdgeBetween(page, 2, 3);
-    await addToFlow(page, 'Untitled flow');
+    await addToFlow(page, 0);
+    await addToFlow(page, 1, 'Untitled flow');
+    await addToFlow(page, 2, 'Untitled flow');
     await expect(page.locator('.dc-edge-step')).toHaveCount(3);
 
     // Rename it from the Flow panel.
-    await page.getByTitle('Flows').click();
+    await openFlowPanel(page);
     const titleField = page.locator('.dc-flow-title-input');
     await titleField.fill('Happy path');
     await titleField.blur();
     await expect(page.locator('.dc-flow-item')).toContainText('3 steps');
-    await page.getByTitle('Flows').click();
+    await closeFlowPanel(page);
 
     // Present it — a single flow starts directly, no picker.
     await page.getByTitle(/^Present/).click();
@@ -113,42 +156,34 @@ test.describe('Flows', () => {
     await expect(page.locator('.dc-toolbar')).toBeVisible();
   });
 
-  test('renames a flow inline from the Inspector chip, not just the Flow panel', async ({ page }) => {
-    await newCanvas(page, 'Inline rename');
+  test('renaming a flow from the Flow panel is a document edit that survives a reload', async ({ page }) => {
+    await newCanvas(page, 'Rename persistence');
     await buildArchitecture(page);
 
-    await clickEdgeBetween(page, 0, 1);
-    await addToFlow(page);
-
-    // The chip on the edge's own Inspector row is an editable field, not a
-    // static label — renaming from wherever the connector is selected must
-    // work, not only from the separate Flow panel.
-    const chipInput = page.locator('.dc-inspector-flow-chip-input');
-    await chipInput.fill('Renamed from chip');
-    await chipInput.blur();
+    await addToFlow(page, 0);
 
     // The title lives in an input's value, not text content.
-    await page.getByTitle('Flows').click();
-    await expect(page.locator('.dc-flow-title-input')).toHaveValue('Renamed from chip');
+    await openFlowPanel(page);
+    await page.locator('.dc-flow-title-input').fill('Renamed flow');
+    await page.locator('.dc-flow-title-input').blur();
+    await expect(page.locator('.dc-flow-title-input')).toHaveValue('Renamed flow');
 
     // Survives a reload — this is a document edit, not transient UI state.
     // A reload lands back on the library, so re-open the diagram first, and
     // wait for autosave to actually persist before reloading at all.
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
     await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'Inline rename' }).click();
+    await page.locator('.dc-library-item', { hasText: 'Rename persistence' }).click();
     await expect(page.locator('.dc-editor')).toBeVisible();
-    await page.getByTitle('Flows').click();
-    await expect(page.locator('.dc-flow-title-input')).toHaveValue('Renamed from chip');
+    await openFlowPanel(page);
+    await expect(page.locator('.dc-flow-title-input')).toHaveValue('Renamed flow');
   });
 
   test('a freshly opened document with one flow shows its step badges immediately', async ({ page }) => {
     await newCanvas(page, 'Fresh open badges');
     await buildArchitecture(page);
-    await clickEdgeBetween(page, 0, 1);
-    await addToFlow(page);
-    await clickEdgeBetween(page, 1, 2);
-    await addToFlow(page, 'Untitled flow');
+    await addToFlow(page, 0);
+    await addToFlow(page, 1, 'Untitled flow');
     await expect(page.locator('.dc-edge-step')).toHaveCount(2);
 
     // Reopening from the library is the "fresh open" this guards — a reload
@@ -165,13 +200,11 @@ test.describe('Flows', () => {
     await newCanvas(page, 'Reordering');
     await buildArchitecture(page);
 
-    await clickEdgeBetween(page, 0, 1);
-    await addToFlow(page);
+    await addToFlow(page, 0);
     await page.getByLabel('Diagram title').click();
-    await clickEdgeBetween(page, 1, 2);
-    await addToFlow(page, 'Untitled flow');
+    await addToFlow(page, 1, 'Untitled flow');
 
-    await page.getByTitle('Flows').click();
+    await openFlowPanel(page);
     await page.locator('.dc-flow-expand').click();
     const steps = page.locator('.dc-flow-step-row');
     await expect(steps).toHaveCount(2);
@@ -190,25 +223,21 @@ test.describe('Flows', () => {
   test('multiple flows reuse the same architecture and diverge independently', async ({ page }) => {
     await newCanvas(page, 'Two scenarios');
     await buildArchitecture(page);
-    await page.getByTitle('Flows').click();
+    await openFlowPanel(page);
 
     // Flow A: Client -> API -> Payment.
-    await clickEdgeBetween(page, 0, 1);
-    await addToFlow(page);
+    await addToFlow(page, 0);
     await page.locator('.dc-flow-title-input').fill('Happy path');
     await page.locator('.dc-flow-title-input').blur();
-    await clickEdgeBetween(page, 1, 2);
-    await addToFlow(page, 'Happy path');
+    await addToFlow(page, 1, 'Happy path');
 
     // Flow B: shares the first step, then goes straight from API to the queue.
-    await clickEdgeBetween(page, 0, 1);
-    await page.getByLabel('Add to flow').selectOption({ label: 'New flow…' });
+    await addToFlow(page, 0);
     const titles = page.locator('.dc-flow-title-input');
     await expect(titles).toHaveCount(2);
     await titles.nth(1).fill('Fast path');
     await titles.nth(1).blur();
-    await clickEdgeBetween(page, 2, 3);
-    await addToFlow(page, 'Fast path');
+    await addToFlow(page, 2, 'Fast path');
 
     await expect(page.locator('.dc-flow-item')).toHaveCount(2);
     await expect(page.locator('.dc-flow-item').nth(0)).toContainText('2 steps');
@@ -231,7 +260,7 @@ test.describe('Flows', () => {
     await createNode(page, 'Service', { x: 700, y: 250 });
     await connect(page, 0, 1);
 
-    await clickEdgeBetween(page, 0, 1);
+    await clickEdgeBetween(page, 0);
     // The connector popover's behaviour picker lives behind "⋯" — see
     // `connector-semantics.spec.ts`'s file doc comment.
     await page.getByRole('button', { name: 'More connector options' }).click();
