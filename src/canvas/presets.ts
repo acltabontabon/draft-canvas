@@ -77,7 +77,6 @@ export const DEV_PRESETS: Preset[] = [
     shortcut: 'Q',
     hint: 'A queue, topic, or event stream',
     accent: 'violet',
-    text: 'Queue',
   },
   {
     id: 'actor',

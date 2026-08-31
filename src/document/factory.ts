@@ -58,7 +58,7 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
     case 'actor':
       return { width: 64, height: 72 };
     case 'queue':
-      return { width: 120, height: 72 };
+      return { width: 120, height: 56 };
     case 'note':
       return { width: 120, height: 72 };
     case 'code':
@@ -77,7 +77,7 @@ export function defaultTextFor(type: DraftNodeType): string {
     case 'database':
       return 'Database';
     case 'queue':
-      return 'Queue';
+      return '';
     case 'actor':
       return 'User';
     case 'group':
@@ -213,7 +213,11 @@ export function createDocument(title = 'Untitled canvas'): DraftDocument {
     nodes: [],
     edges: [],
     viewport: { x: 0, y: 0, zoom: 1 },
-    settings: { showSequence: true, grid: 'dots' },
+    settings: {
+      showSequence: true,
+      grid: 'dots',
+      background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 },
+    },
     flows: [],
   };
 }

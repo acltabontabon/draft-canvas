@@ -10,10 +10,14 @@ import type { DisplayList, Shape, Stroke } from '../render/displayList';
 import { tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
+import { PRESET_AMPLITUDE } from '../render/roughness/presets';
+import { roughEllipsePath, roughRectPath } from '../render/roughness/roughRect';
+import { jitter } from '../render/roughness/seed';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
+import type { PersonalityPreset } from '../ui/personality/usePersonality';
 
 /**
  * Turns a node from the document model into a display list.
@@ -26,10 +30,14 @@ import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 export interface DescribeContext {
   theme: Theme;
   measurer: TextMeasurer;
+  /** Phase 5.2 — Intentional Roughness. Defaults to `'clean'`, today's exact
+   *  appearance, so every existing call site that only passes a theme keeps
+   *  compiling and keeps producing byte-identical output. */
+  preset: PersonalityPreset;
 }
 
-export function describeContext(theme: Theme): DescribeContext {
-  return { theme, measurer: getMeasurer() };
+export function describeContext(theme: Theme, preset: PersonalityPreset = 'clean'): DescribeContext {
+  return { theme, measurer: getMeasurer(), preset };
 }
 
 const PADDING = 12;
@@ -189,37 +197,57 @@ function surfaceStroke(ctx: DescribeContext, node: DraftNode): Stroke {
   return { color: accentOf(ctx.theme, node.accent).line, width: 1.5 };
 }
 
+/**
+ * A rounded-rect outline that stays a plain `RectShape` at Clean (so Clean's
+ * emitted SVG element type never changes) and switches to a jittered
+ * `PathShape` only when Draft/Sketch's amplitude is above zero — see
+ * `render/roughness/roughRect.ts`. Shared by every node whose outline is a
+ * plain rounded rectangle: `box`, `note`, `group`, and `codeCard`.
+ */
+function outlineShape(
+  seedId: string,
+  ctx: DescribeContext,
+  rect: { x: number; y: number; w: number; h: number; r: number },
+  paint: { fill?: string; opacity?: number; stroke?: Stroke; shadow?: boolean },
+): Shape {
+  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
+  if (amplitude === 0) {
+    return { t: 'rect', x: rect.x, y: rect.y, w: rect.w, h: rect.h, r: rect.r, ...paint };
+  }
+  return {
+    t: 'path',
+    d: roughRectPath(rect.x, rect.y, rect.w, rect.h, rect.r, seedId, amplitude),
+    ...paint,
+  };
+}
+
 function box(node: DraftNode, ctx: DescribeContext, radius: number): Shape[] {
   const palette = accentOf(ctx.theme, node.accent);
   return [
-    {
-      t: 'rect',
-      x: 0.75,
-      y: 0.75,
-      w: node.width - 1.5,
-      h: node.height - 1.5,
-      r: radius,
-      fill: palette.fill,
-      stroke: surfaceStroke(ctx, node),
-      shadow: true,
-    },
+    outlineShape(
+      node.id,
+      ctx,
+      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: radius },
+      { fill: palette.fill, stroke: surfaceStroke(ctx, node), shadow: true },
+    ),
     ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
   ];
 }
 
 function ellipse(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent);
+  const cx = node.width / 2;
+  const cy = node.height / 2;
+  const rx = node.width / 2 - 0.75;
+  const ry = node.height / 2 - 0.75;
+  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
+  const paint = { fill: palette.fill, stroke: surfaceStroke(ctx, node), shadow: true };
+  const outline: Shape =
+    amplitude === 0
+      ? { t: 'ellipse', cx, cy, rx, ry, ...paint }
+      : { t: 'path', d: roughEllipsePath(cx, cy, rx, ry, node.id, amplitude), ...paint };
   return [
-    {
-      t: 'ellipse',
-      cx: node.width / 2,
-      cy: node.height / 2,
-      rx: node.width / 2 - 0.75,
-      ry: node.height / 2 - 0.75,
-      fill: palette.fill,
-      stroke: surfaceStroke(ctx, node),
-      shadow: true,
-    },
+    outline,
     ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
   ];
 }
@@ -238,18 +266,16 @@ function service(node: DraftNode, ctx: DescribeContext): Shape[] {
   const capHeight = 4;
   const kindLabel = SERVICE_KIND_LABELS[node.serviceKind ?? 'generic'];
   return [
-    {
-      t: 'rect',
-      x: 0.75,
-      y: 0.75,
-      w: node.width - 1.5,
-      h: node.height - 1.5,
-      r: 8,
-      fill: palette.fill,
-      stroke: { color: palette.line, width: 1.5 },
-      shadow: true,
-    },
-    // The cap is clipped to the card's rounded top so it never overhangs.
+    outlineShape(
+      node.id,
+      ctx,
+      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
+      { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
+    ),
+    // The cap is clipped to the card's rounded top so it never overhangs —
+    // the clip region itself always stays the exact rounded rect regardless
+    // of preset (a `GroupShape` clip is analytic-only, never a jittered
+    // path), so the cap's edge stays crisp even when the outline above wobbles.
     {
       t: 'group',
       clip: { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
@@ -276,16 +302,44 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
   const ry = Math.min(12, h * 0.18);
   const x = 0.75;
   const y = 0.75;
+  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
 
-  // Cylinder: an elliptical top, straight sides, an elliptical bottom.
-  const body = [
-    `M${x},${y + ry}`,
-    `a${w / 2},${ry} 0 0 1 ${w},0`,
-    `l0,${h - ry * 2}`,
-    `a${w / 2},${ry} 0 0 1 ${-w},0`,
-    'Z',
-  ].join(' ');
-  const lid = `M${x},${y + ry} a${w / 2},${ry} 0 0 0 ${w},0 a${w / 2},${ry} 0 0 0 ${-w},0`;
+  let body: string;
+  let lid: string;
+  if (amplitude === 0) {
+    // Cylinder: an elliptical top, straight sides, an elliptical bottom.
+    body = [
+      `M${x},${y + ry}`,
+      `a${w / 2},${ry} 0 0 1 ${w},0`,
+      `l0,${h - ry * 2}`,
+      `a${w / 2},${ry} 0 0 1 ${-w},0`,
+      'Z',
+    ].join(' ');
+    lid = `M${x},${y + ry} a${w / 2},${ry} 0 0 0 ${w},0 a${w / 2},${ry} 0 0 0 ${-w},0`;
+  } else {
+    // Each defining point of the cylinder — top/bottom cap height, left/right
+    // walls — jitters independently, so the cap height and overall width stay
+    // close to their Clean values (still recognisably a cylinder) while the
+    // drawn curve gets a hand-drawn wobble.
+    const j = (i: number) => jitter(node.id, i, amplitude);
+    const topRy = ry + j(0);
+    const bottomRy = ry + j(1);
+    const left = x + j(2);
+    const right = x + w + j(3);
+    const top = y + j(4);
+    const bottom = y + h + j(5);
+    const bodyW = right - left;
+    body = [
+      `M${left},${top + topRy}`,
+      `A${bodyW / 2},${topRy} 0 0 1 ${right},${top + topRy}`,
+      `L${right},${bottom - bottomRy}`,
+      `A${bodyW / 2},${bottomRy} 0 0 1 ${left},${bottom - bottomRy}`,
+      'Z',
+    ].join(' ');
+    lid =
+      `M${left},${top + topRy} A${bodyW / 2},${topRy} 0 0 0 ${right},${top + topRy} ` +
+      `A${bodyW / 2},${topRy} 0 0 0 ${left},${top + topRy}`;
+  }
   const kindLabel = DATABASE_KIND_LABELS[node.databaseKind ?? 'generic'];
 
   return [
@@ -309,19 +363,45 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // kept small enough that even a pre-existing (shorter) queue node has room
   // for both lines without them running into the tube.
   const tubeH = Math.min(32, h * 0.5);
+  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
 
   // A horizontal cylinder — a pipe messages travel through — built the same
   // way `database()` builds its (vertical) one: elliptical caps joined by
   // straight edges, with one cap's seam drawn again on top as a "lid" so it
   // reads as an open tube rather than a solid capsule.
-  const body = [
-    `M${x + rx},${y}`,
-    `a${rx},${tubeH / 2} 0 0 0 0,${tubeH}`,
-    `l${w - rx * 2},0`,
-    `a${rx},${tubeH / 2} 0 0 0 0,${-tubeH}`,
-    'Z',
-  ].join(' ');
-  const lid = `M${x + w - rx},${y} a${rx},${tubeH / 2} 0 0 1 0,${tubeH} a${rx},${tubeH / 2} 0 0 1 0,${-tubeH}`;
+  let body: string;
+  let lid: string;
+  if (amplitude === 0) {
+    body = [
+      `M${x + rx},${y}`,
+      `a${rx},${tubeH / 2} 0 0 0 0,${tubeH}`,
+      `l${w - rx * 2},0`,
+      `a${rx},${tubeH / 2} 0 0 0 0,${-tubeH}`,
+      'Z',
+    ].join(' ');
+    lid = `M${x + w - rx},${y} a${rx},${tubeH / 2} 0 0 1 0,${tubeH} a${rx},${tubeH / 2} 0 0 1 0,${-tubeH}`;
+  } else {
+    // Each defining point of the tube — left/right cap radius, top/bottom
+    // walls — jitters independently, same discipline as `database()`.
+    const j = (i: number) => jitter(node.id, i, amplitude);
+    const leftRx = rx + j(0);
+    const rightRx = rx + j(1);
+    const top = y + j(2);
+    const bottom = y + tubeH + j(3);
+    const halfH = (bottom - top) / 2;
+    const leftCapX = x + leftRx;
+    const rightCapX = x + w - rightRx;
+    body = [
+      `M${leftCapX},${top}`,
+      `A${leftRx},${halfH} 0 0 0 ${leftCapX},${bottom}`,
+      `L${rightCapX},${bottom}`,
+      `A${rightRx},${halfH} 0 0 0 ${rightCapX},${top}`,
+      'Z',
+    ].join(' ');
+    lid =
+      `M${rightCapX},${top} A${rightRx},${halfH} 0 0 1 ${rightCapX},${bottom} ` +
+      `A${rightRx},${halfH} 0 0 1 ${rightCapX},${top}`;
+  }
 
   // A few envelope glyphs, centred in the tube — messages in transit. Kept to
   // a fixed count and size regardless of node size, like a real icon would be.
@@ -369,8 +449,11 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
     measurer: ctx.measurer,
   });
 
+  // Anchored right under the tube (not centred in whatever height the node
+  // happens to be) — the tube is a small fixed-size glyph, not something that
+  // grows to fill a resized node, so the caption stays close to the shape it
+  // labels instead of drifting toward the middle of a tall box.
   const top = tubeH + 4;
-  const available = Math.max(12, node.height - top);
   const text = node.text ?? '';
   const nameGap = 2;
 
@@ -383,14 +466,12 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
       maxLines: 1,
       measurer: ctx.measurer,
     });
-    const blockHeight = nameLayout.height + nameGap + kindLayout.height;
-    const blockTop = top + (available - blockHeight) / 2;
 
     shapes.push(
       {
         t: 'text',
         x: node.width / 2,
-        y: blockTop,
+        y: top,
         layout: nameLayout,
         font: FONTS.nodeLabel,
         fill: palette.text,
@@ -399,7 +480,7 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
       {
         t: 'text',
         x: node.width / 2,
-        y: blockTop + nameLayout.height + nameGap,
+        y: top + nameLayout.height + nameGap,
         layout: kindLayout,
         font: kindFont,
         fill: ctx.theme.textMuted,
@@ -407,11 +488,12 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
       },
     );
   } else {
-    // No name yet — the kind still shows on its own, centred.
+    // No name — a queue node can no longer be given one — so the kind is the
+    // only label, sitting right under the tube.
     shapes.push({
       t: 'text',
       x: node.width / 2,
-      y: top + (available - kindLayout.height) / 2,
+      y: top,
       layout: kindLayout,
       font: kindFont,
       fill: ctx.theme.textMuted,
@@ -429,23 +511,31 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
   const headCy = 14;
   const shoulderY = headCy + headR + 4;
   const shoulderW = 26;
+  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
+  const stroke: Stroke = { color: palette.line, width: 1.6 };
 
-  const shoulders = [
-    `M${cx - shoulderW / 2},${shoulderY + 10}`,
-    `a${shoulderW / 2},12 0 0 1 ${shoulderW},0`,
-  ].join(' ');
+  let shoulders: string;
+  if (amplitude === 0) {
+    shoulders = [
+      `M${cx - shoulderW / 2},${shoulderY + 10}`,
+      `a${shoulderW / 2},12 0 0 1 ${shoulderW},0`,
+    ].join(' ');
+  } else {
+    const j = (i: number) => jitter(node.id, i, amplitude);
+    const left = { x: cx - shoulderW / 2 + j(0), y: shoulderY + 10 + j(1) };
+    const right = { x: cx + shoulderW / 2 + j(2), y: shoulderY + 10 + j(3) };
+    const ry = 12 + j(4);
+    shoulders = `M${left.x},${left.y} A${(right.x - left.x) / 2},${ry} 0 0 1 ${right.x},${right.y}`;
+  }
+
+  const headOutline: Shape =
+    amplitude === 0
+      ? { t: 'ellipse', cx, cy: headCy, rx: headR, ry: headR, fill: 'none', stroke }
+      : { t: 'path', d: roughEllipsePath(cx, headCy, headR, headR, `${node.id}:head`, amplitude), fill: 'none', stroke };
 
   const shapes: Shape[] = [
-    {
-      t: 'ellipse',
-      cx,
-      cy: headCy,
-      rx: headR,
-      ry: headR,
-      fill: 'none',
-      stroke: { color: palette.line, width: 1.6 },
-    },
-    { t: 'path', d: shoulders, fill: 'none', stroke: { color: palette.line, width: 1.6 } },
+    headOutline,
+    { t: 'path', d: shoulders, fill: 'none', stroke },
   ];
 
   const text = node.text ?? '';
@@ -478,17 +568,12 @@ function note(node: DraftNode, ctx: DescribeContext): Shape[] {
   const kind = node.noteKind ?? 'note';
   const palette = accentOf(ctx.theme, node.accent ?? NOTE_ACCENTS[kind]);
   const shapes: Shape[] = [
-    {
-      t: 'rect',
-      x: 0.5,
-      y: 0.5,
-      w: node.width - 1,
-      h: node.height - 1,
-      r: 6,
-      fill: palette.fill,
-      stroke: { color: palette.line, width: 1 },
-      shadow: true,
-    },
+    outlineShape(
+      node.id,
+      ctx,
+      { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 6 },
+      { fill: palette.fill, stroke: { color: palette.line, width: 1 }, shadow: true },
+    ),
     // A colour bar rather than a sticky-note skeuomorph.
     {
       t: 'group',
@@ -569,17 +654,12 @@ function freeText(node: DraftNode, ctx: DescribeContext): Shape[] {
 function group(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent);
   const shapes: Shape[] = [
-    {
-      t: 'rect',
-      x: 1,
-      y: 1,
-      w: node.width - 2,
-      h: node.height - 2,
-      r: 12,
-      fill: ctx.theme.surface,
-      opacity: 0.35,
-      stroke: { color: palette.line, width: 1.25, dash: [6, 5] },
-    },
+    outlineShape(
+      node.id,
+      ctx,
+      { x: 1, y: 1, w: node.width - 2, h: node.height - 2, r: 12 },
+      { fill: ctx.theme.surface, opacity: 0.35, stroke: { color: palette.line, width: 1.25, dash: [6, 5] } },
+    ),
   ];
 
   // The preset is a small secondary caption, never folded into the node's
@@ -655,17 +735,12 @@ function codeCard(node: DraftNode, ctx: DescribeContext): Shape[] {
   const visibleLines = Math.max(0, Math.floor(bodyHeight / metrics.lineHeight));
 
   const shapes: Shape[] = [
-    {
-      t: 'rect',
-      x: 0.5,
-      y: 0.5,
-      w: node.width - 1,
-      h: node.height - 1,
-      r: 8,
-      fill: ctx.theme.codeBg,
-      stroke: { color: ctx.theme.codeBorder, width: 1 },
-      shadow: true,
-    },
+    outlineShape(
+      node.id,
+      ctx,
+      { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 8 },
+      { fill: ctx.theme.codeBg, stroke: { color: ctx.theme.codeBorder, width: 1 }, shadow: true },
+    ),
     {
       t: 'group',
       clip: { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 8 },
