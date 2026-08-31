@@ -34,6 +34,7 @@ export function Toolbar({
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
+  const updateReady = useUiStore((state) => state.updateReady);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const past = useEditorStore((state) => state.history.past.length);
@@ -108,12 +109,15 @@ export function Toolbar({
           onClick={() => setShortcutsOpen(true)}
           title="Keyboard shortcuts (?)"
         />
-        <Button
-          icon="info"
-          variant="quiet"
-          onClick={() => setAboutOpen(true)}
-          title="About Draft Canvas"
-        />
+        <span className="dc-badge-anchor">
+          <Button
+            icon="info"
+            variant="quiet"
+            onClick={() => setAboutOpen(true)}
+            title={updateReady ? 'About Draft Canvas — update ready' : 'About Draft Canvas'}
+          />
+          {updateReady && <span className="dc-update-dot" aria-hidden="true" />}
+        </span>
         <Button
           variant="quiet"
           onClick={toggle}

@@ -57,11 +57,13 @@ copy you control, or a PNG or SVG for a README, a pull request, or Slack.
 
 That is a technical statement, not a marketing one, and it is enforced rather than promised:
 
-- The application makes **no network requests at all** after it loads. There is no backend.
-- The production build ships a `connect-src 'none'` Content Security Policy, so the browser
-  itself blocks any request — a dependency could not phone home even if it tried.
+- **No request ever carries anything you draw.** There is no backend, no API, no analytics.
+- The production build ships a `connect-src 'self'` Content Security Policy, so the browser
+  itself blocks any request to another origin — a dependency could not phone home even if it
+  tried. The only same-origin traffic that exists is the offline Service Worker (Phase 6)
+  fetching the app's own assets and checking for updates — never your diagrams.
 - A test walks the whole source tree and fails the build if `fetch`, `XMLHttpRequest`,
-  `WebSocket`, `EventSource` or `sendBeacon` appear anywhere.
+  `WebSocket`, `EventSource` or `sendBeacon` appear anywhere in the app's own code.
 - There is no analytics, no telemetry, and no error reporting.
 
 Diagrams live in IndexedDB in this browser. `localStorage` holds nothing but your theme choice.

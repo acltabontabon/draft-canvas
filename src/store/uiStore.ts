@@ -117,6 +117,10 @@ interface UiStore {
    * editing has actually started.
    */
   editRequestId: string | null;
+  /** True once a newer app build has finished downloading in the background
+   *  and is waiting to be activated (Phase 6.2/6.3) — see `serviceWorker.ts`
+   *  and `AboutDialog.tsx`'s update-ready state. */
+  updateReady: boolean;
 
   arm: (preset: Preset | null) => void;
   setShortcutsOpen: (open: boolean) => void;
@@ -140,9 +144,21 @@ interface UiStore {
   requestEdit: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone']) => void;
   dismiss: (id: number) => void;
+  /** Marks an update as downloaded and ready to activate on the next reload. */
+  setUpdateReady: () => void;
+  /** Wired once by `main.tsx` at startup to the Service Worker's own
+   *  activate-and-reload function — see `serviceWorker.ts`. */
+  registerActivateUpdate: (activate: (() => void) | null) => void;
+  /** Reloads onto the downloaded update. A no-op until `registerActivateUpdate`
+   *  has run (e.g. unsupported browser, or no update staged). */
+  activateUpdate: () => void;
 }
 
 let toastId = 0;
+
+/** Set by `registerActivateUpdate`; kept outside the store's own state since
+ *  it's a function reference, not something a component should re-render on. */
+let activateFn: (() => void) | null = null;
 
 export const useUiStore = create<UiStore>((set) => ({
   armed: null,
@@ -164,6 +180,7 @@ export const useUiStore = create<UiStore>((set) => ({
   flowSwitcherOpen: false,
   interactionActive: false,
   editRequestId: null,
+  updateReady: false,
 
   arm: (armed) => set({ armed }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
@@ -210,6 +227,12 @@ export const useUiStore = create<UiStore>((set) => ({
   },
 
   dismiss: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+
+  setUpdateReady: () => set({ updateReady: true }),
+  registerActivateUpdate: (activate) => {
+    activateFn = activate;
+  },
+  activateUpdate: () => activateFn?.(),
 }));
 
 /**

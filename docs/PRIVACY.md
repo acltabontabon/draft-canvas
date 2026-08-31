@@ -29,6 +29,13 @@ If IndexedDB cannot be opened — a private window, a blocked-storage policy, so
 webviews — the app falls back to an in-memory store, and the status bar says **In memory only**
 instead of claiming your work is saved.
 
+### Cache Storage — the offline app shell (Phase 6)
+
+The compiled HTML, JS, CSS, and fonts/icons that make up Draft Canvas itself — never anything you
+draw. Populated and managed entirely by the generated Service Worker (`dist/sw.js`, built by
+`vite-plugin-pwa` from `vite.config.ts`), so a refresh or reopen works with no internet connection
+after the first successful visit. See `docs/ROADMAP.md`'s Phase 6 for the full design.
+
 ### localStorage
 
 One key, `draft-canvas.theme`, holding `dark` or `light`.
@@ -44,28 +51,37 @@ is persisted anywhere; closing the tab discards it.
 
 ## What leaves your machine
 
-Nothing.
+Nothing you draw. Ever.
 
-Draft Canvas makes **no network requests at all** once the page has loaded. There is no backend,
-no API, no analytics endpoint, and no error reporting.
+Draft Canvas makes no request that carries a diagram, a label, or anything else you've typed. There
+is no backend, no API, no analytics endpoint, and no error reporting.
 
-Three independent mechanisms keep it that way:
+The one exception is delivery, not content: since Phase 6 (offline-first application availability),
+a Service Worker may make a same-origin request to fetch a newer build of the app itself, in the
+background, only while online — see `docs/ROADMAP.md`'s Phase 6. It never touches IndexedDB, never
+sees a document, and only ever talks to the same origin Draft Canvas is served from.
 
-1. **No network code exists.** `tests/privacy.test.ts` walks every file in `src/` and fails if it
-   finds `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, `importScripts`, or a
-   dynamic import of a remote URL. The same test fails on `eval` or the `Function` constructor.
+Three independent mechanisms keep the actual promise — nothing you draw leaves your machine — true:
+
+1. **No network code exists in the app.** `tests/privacy.test.ts` walks every file in `src/` and
+   fails if it finds `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`,
+   `importScripts`, or a dynamic import of a remote URL. The same test fails on `eval` or the
+   `Function` constructor. (The Service Worker above is generated separately, at build time, by
+   `vite-plugin-pwa` — it never runs inside, or has access to, the app's own document/canvas code.)
 
 2. **The browser enforces it.** The production build ships this Content Security Policy:
 
    ```
    default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
-   img-src 'self' data: blob:; font-src 'self'; connect-src 'none';
+   img-src 'self' data: blob:; font-src 'self'; connect-src 'self';
    form-action 'none'; base-uri 'self'; object-src 'none'
    ```
 
-   `connect-src 'none'` means the browser blocks every outbound request, including any a
-   dependency might attempt. It is injected at build time only — the same directive would block
-   Vite's hot-reload socket during development.
+   `connect-src 'self'` means the browser blocks every request to any other origin, including any
+   a dependency might attempt — only a request back to Draft Canvas's own host is possible at all,
+   and that's exactly the Service Worker's own asset-caching and update-check traffic. It is
+   injected at build time only — the same directive would block Vite's hot-reload socket during
+   development.
 
 3. **A browser test asserts it.** `e2e/critical-journey.spec.ts` builds a diagram containing a
    deliberately sensitive label and asserts that no request carrying a body is ever made.

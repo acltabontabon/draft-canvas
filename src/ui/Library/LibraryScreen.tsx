@@ -19,6 +19,7 @@ import { PrivacyNote } from '../PrivacyNote';
 export function LibraryScreen({ session }: { session: DocumentSession }) {
   const notify = useUiStore((state) => state.notify);
   const setAboutOpen = useUiStore((state) => state.setAboutOpen);
+  const updateReady = useUiStore((state) => state.updateReady);
   const fileInput = useRef<HTMLInputElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<DraftSummary | null>(null);
   const [renaming, setRenaming] = useState<DraftSummary | null>(null);
@@ -53,15 +54,18 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
           <div>
             <div className="dc-brand">
               <h1>Draft Canvas</h1>
-              <button
-                type="button"
-                className="dc-brand-about"
-                onClick={() => setAboutOpen(true)}
-                aria-label="About Draft Canvas"
-                title="About Draft Canvas"
-              >
-                <Icon name="info" size={14} />
-              </button>
+              <span className="dc-badge-anchor">
+                <button
+                  type="button"
+                  className="dc-brand-about"
+                  onClick={() => setAboutOpen(true)}
+                  aria-label="About Draft Canvas"
+                  title={updateReady ? 'About Draft Canvas — update ready' : 'About Draft Canvas'}
+                >
+                  <Icon name="info" size={14} />
+                </button>
+                {updateReady && <span className="dc-update-dot" aria-hidden="true" />}
+              </span>
             </div>
             <p className="dc-lede">A local-first canvas for explaining software.</p>
           </div>

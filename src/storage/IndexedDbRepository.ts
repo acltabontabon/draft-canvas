@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { requestPersistentStorage } from '../lib/storagePersistence';
 import { parseDocument } from '../document/validate';
 import { decryptDocument, encryptDocument } from '../crypto/documentCipher';
 import { getOrCreateMasterKey } from '../crypto/keyStore';
@@ -15,6 +16,10 @@ import type { DraftDocument, DraftSummary } from '../document/types';
 
 const DB_NAME = 'draft-canvas';
 const DB_VERSION = 2;
+
+/** Ask for persistent storage once there's something worth protecting, not
+ *  on every save — see `requestPersistentStorage`. */
+let persistenceRequested = false;
 
 /**
  * Meta and body live in separate stores on purpose: rendering the library only
@@ -164,6 +169,10 @@ export class IndexedDbRepository implements DraftRepository {
         tx.objectStore('bodies').put(encrypted),
         tx.done,
       ]);
+      if (!persistenceRequested) {
+        persistenceRequested = true;
+        requestPersistentStorage();
+      }
     } catch (error) {
       if (isQuotaError(error)) throw new QuotaExceededError(error);
       throw error;

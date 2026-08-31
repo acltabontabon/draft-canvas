@@ -15,17 +15,18 @@ yet a commitment)
 | [3](#phase-3--flow--presentation) | Flow & Presentation | ✅ Done |
 | [4](#phase-4--export--sharing) | Export & Sharing | ✅ Done (core) — 4.4 optional, not blocking |
 | [5](#phase-5--personalization) | Personalization | ✅ Done |
-| [6](#phase-6--offline-first-application-availability) | Offline-First Application Availability | ⬜ Planned |
+| [6](#phase-6--offline-first-application-availability) | Offline-First Application Availability | ✅ Done — 6.7 exploratory, not blocking |
 | [7](#phase-7--contextual-learning) | Contextual Learning | ⬜ Planned |
 | [8](#phase-8--canvas-command-surface) | Canvas Command Surface | ⬜ Planned |
 | [9](#phase-9--future--experimental) | Future / Experimental | 🧪 Exploratory |
 | [10](#phase-10--support-draft-canvas) | Support Draft Canvas | ⬜ Planned (low priority) |
 
-**What's next:** [Phase 7](#phase-7--contextual-learning) remains the active next build; Phase 6
-(Offline-First Application Availability) was added by dependency order — it needs only Phases 0 and
-4, not Phases 5-7 — but isn't yet prioritized ahead of Contextual Learning. Phase 5 shipped both 5.1
-(custom canvas background) and 5.2 (Intentional Roughness), gated by the full test suite and browser
-verification.
+**What's next:** [Phase 7](#phase-7--contextual-learning) is the active next build. Phase 6
+(Offline-First Application Availability) shipped 6.1-6.6, gated by the full test suite, a new
+`dist`-backed Playwright suite (`playwright.dist.config.ts`, `e2e/offline.spec.ts`), and manual
+browser verification against a killed origin server; 6.7 (installable PWA) stays 🧪 Exploratory,
+unchanged. Phase 5 shipped both 5.1 (custom canvas background) and 5.2 (Intentional Roughness),
+gated by the full test suite and browser verification.
 
 ## Product principle
 
@@ -51,8 +52,10 @@ rendering.
 *Purpose: a diagram you can trust with real work — private by construction, never silently lost.*
 
 - **0.1 Local-first, no-network architecture** — ✅ Done. No backend, no accounts. A build-time test
-  fails on `fetch`/`XMLHttpRequest`/`WebSocket`/etc. appearing anywhere; production CSP sets
-  `connect-src 'none'`.
+  fails on `fetch`/`XMLHttpRequest`/`WebSocket`/etc. appearing anywhere in the app's own source;
+  production CSP sets `connect-src 'self'` — no request to any other origin is possible. (Narrowed
+  from `'none'` by Phase 6's offline Service Worker, which needs same-origin requests for its own
+  asset caching and update checks — see Phase 6.)
 - **0.2 One renderer** — ✅ Done. `nodes/describe.ts` produces the same display list the canvas
   paints and the exporter serializes — an export is what you saw, not a reinterpretation of it.
 - **0.3 Local persistence & autosave** — ✅ Done. IndexedDB, debounced autosave, a summary store so
@@ -268,7 +271,7 @@ should still start the application normally, using previously downloaded applica
 the same instinct as 0.1's no-network document model, applied one layer up, to how the app itself is
 delivered rather than to what it stores.
 
-- **6.1 Application shell caching** — ⬜ Planned. A Service Worker registers on first successful
+- **6.1 Application shell caching** — ✅ Done. A Service Worker registers on first successful
   load and caches the app shell — HTML, JS, CSS, fonts/icons, and other required static assets — in
   Cache Storage. A subsequent offline refresh or reopen serves the cached shell instead of failing;
   canvas data keeps living in IndexedDB (0.3) exactly as it does online. No offline expiration: a
@@ -281,12 +284,12 @@ delivered rather than to what it stores.
   - Requires an HTTPS-hosted static deployment with no backend dependency, consistent with the
     project's existing hosting model. Depends on 0.1 (no-network architecture — this phase's natural
     sibling, applied to delivery rather than data).
-- **6.2 Smart application updates** — ⬜ Planned. *Use what you have. Fetch what's newer. Switch
+- **6.2 Smart application updates** — ✅ Done. *Use what you have. Fetch what's newer. Switch
   when it's safe.* On start, the currently cached application loads and becomes usable immediately —
   no blocking update check. If the network is available, the Service Worker checks for a newer
   version in the background and, if one exists, downloads and caches it without touching the active
   session. The new version never activates itself over a running session — see 6.3.
-- **6.3 Update UX (lightweight, non-intrusive)** — ⬜ Planned. Once an update has finished
+- **6.3 Update UX (lightweight, non-intrusive)** — ✅ Done. Once an update has finished
   downloading, a small, unobtrusive indicator appears in an existing status/version area — e.g.
   `v0.6.2 · Update ready ↑` or `Update ready · Reload` — and nothing else happens. No modal, blocking
   screen, forced reload, countdown, persistent nagging, or release-note popup on every deployment. If
@@ -294,7 +297,7 @@ delivered rather than to what it stores.
   only on an explicit reload the user chooses, or a future clean start when it's safe to do so. This
   is the phase's central constraint: a deployment must never interrupt someone mid-explanation — no
   reload, reset, or disruption to an active canvas session just because a new version shipped.
-- **6.4 Canvas schema versioning, independent of app version** — ⬜ Planned. A `schemaVersion` field
+- **6.4 Canvas schema versioning, independent of app version** — ✅ Done. A `schemaVersion` field
   on the canvas document, versioned separately from the Draft Canvas application version (e.g. app
   `v0.7` shipping alongside document `schemaVersion 4`, migrated up from `schemaVersion 3`).
   Migrations run locally, the same way import validation already does
@@ -302,7 +305,7 @@ delivered rather than to what it stores.
   anywhere to be migrated. Backward/forward compatibility considered where practical, but the hard
   requirement is: no update path may let a new application version corrupt canvas data written by an
   older one.
-- **6.5 Cache versioning & deployment safety** — ⬜ Planned. Hashed/versioned static assets, explicit
+- **6.5 Cache versioning & deployment safety** — ✅ Done. Hashed/versioned static assets, explicit
   application-shell cache versioning, stale-asset cleanup on activation, and Service Worker lifecycle
   management (install/activate/update) that avoids two application versions or schemas interacting
   unexpectedly during one session. Covers: partially downloaded deployments, failed update recovery
@@ -311,7 +314,7 @@ delivered rather than to what it stores.
   versions at once, and avoiding an incompatible application/schema pairing ever loading together.
   "Atomic-enough" upgrades, not literal atomicity — the target is "never worse than what was already
   cached," not a formal transaction guarantee.
-- **6.6 Persistent storage request (optional)** — ⬜ Planned. Where supported, request persistent
+- **6.6 Persistent storage request (optional)** — ✅ Done. Where supported, request persistent
   storage via the Storage API (`navigator.storage.persist()`) to reduce eviction risk under storage
   pressure. Best-effort only, never a requirement — browser approval is optional, and nothing in the
   app should assume it was granted.

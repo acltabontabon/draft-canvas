@@ -23,6 +23,8 @@ function Mark() {
 export function AboutDialog() {
   const open = useUiStore((state) => state.aboutOpen);
   const setOpen = useUiStore((state) => state.setAboutOpen);
+  const updateReady = useUiStore((state) => state.updateReady);
+  const activateUpdate = useUiStore((state) => state.activateUpdate);
   if (!open) return null;
 
   return (
@@ -38,7 +40,18 @@ export function AboutDialog() {
         <p className="dc-muted dc-about-privacy">{PRODUCT.privacy}</p>
 
         <div className="dc-about-tags">
-          <code>v{PRODUCT.version}</code>
+          {updateReady ? (
+            <button
+              type="button"
+              className="dc-about-update"
+              onClick={activateUpdate}
+              title="Reload to finish updating"
+            >
+              v{PRODUCT.version} · Update ready ↑
+            </button>
+          ) : (
+            <code>v{PRODUCT.version}</code>
+          )}
           <span className="dc-dot" />
           <code>Local-first</code>
         </div>

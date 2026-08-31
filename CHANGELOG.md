@@ -8,6 +8,14 @@ break as we settle on a stable 1.0 shape.
 
 ## [Unreleased]
 
+### Added
+
+- Draft Canvas now works offline. After the first successful visit, refreshing or reopening the
+  app with no internet connection loads normally from a cached app shell — your diagrams were
+  already local (IndexedDB), and now the app itself is too. A newer version downloads quietly in
+  the background when you're online and never interrupts a session in progress; a small
+  "Update ready" indicator appears once it's safe to reload.
+
 ## [0.1.0-alpha.4] - 2026-09-01
 
 ### Added

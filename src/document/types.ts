@@ -389,6 +389,11 @@ export interface DraftSettings {
 
 export interface DraftDocument {
   format: DraftFormat;
+  /** The document's schema version — see `CURRENT_VERSION` and `migrate.ts`.
+   *  Deliberately independent of the app's own version (`PRODUCT.version`,
+   *  Phase 6): a diagram written by an old build stays readable by opening it
+   *  through the migrations below, with no relation to which app release
+   *  wrote it. */
   version: number;
   metadata: DraftMetadata;
   nodes: DraftNode[];

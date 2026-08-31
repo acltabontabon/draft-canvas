@@ -1326,6 +1326,43 @@ kbd {
   font-size: 11px;
 }
 
+/* A downloaded update (Phase 6.3) is a plain button styled like the other
+   tags, so it never reads as a nag — just a fact you can act on. */
+.dc-about-update {
+  padding: 1px 6px;
+  border: 1px solid var(--dc-selection);
+  border-radius: 4px;
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.dc-about-update:hover {
+  background: var(--dc-selection);
+  color: var(--dc-surface);
+}
+
+/* The small discoverability marker on whatever button opens this dialog —
+   see Toolbar.tsx / LibraryScreen.tsx. */
+.dc-badge-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.dc-update-dot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dc-selection);
+  box-shadow: 0 0 0 2px var(--dc-surface);
+  pointer-events: none;
+}
+
 .dc-about-signature {
   display: flex;
   align-items: center;

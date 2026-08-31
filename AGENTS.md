@@ -40,11 +40,14 @@ Each of these has a failure mode that is silent, delayed, or both.
 - **Never wrap text anywhere but `src/render/text/layout.ts`.** The DOM renders the lines it
   produced. Two layout implementations would agree most of the time, which is worse than not
   agreeing at all.
-- **Never add a network call.** `tests/privacy.test.ts` fails the build on `fetch`,
-  `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, `eval`, or `new Function`. The
-  production CSP (injected by a Vite plugin in `vite.config.ts`) sets `connect-src 'none'`.
-  No webfonts either — an SVG rasterized through `<canvas>` cannot resolve them, so every PNG
-  would export in the wrong typeface.
+- **Never add a network call in `src/`.** `tests/privacy.test.ts` fails the build on `fetch`,
+  `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, `eval`, or `new Function` anywhere
+  in the app's own code. The production CSP (injected by a Vite plugin in `vite.config.ts`) sets
+  `connect-src 'self'` — no request to any other origin is possible. The one legitimate
+  same-origin exception is the offline Service Worker (`vite-plugin-pwa`, Phase 6), which fetches
+  the app's own assets and checks for updates in the background; it never touches IndexedDB or
+  canvas content. No webfonts either — an SVG rasterized through `<canvas>` cannot resolve them,
+  so every PNG would export in the wrong typeface.
 - **`localStorage` is only for tiny preferences**, and only through `src/lib/preferences.ts`.
   Documents go in IndexedDB.
 - **`version` is read only in `src/document/migrate.ts`.** Nothing else may branch on it.
