@@ -15,7 +15,8 @@ yet a commitment)
 | [3](#phase-3--flow--presentation) | Flow & Presentation | ✅ Done |
 | [4](#phase-4--export--sharing) | Export & Sharing | 🚧 Static export done, animated export next |
 | [5](#phase-5--personalization) | Personalization | ⬜ Planned |
-| [6](#phase-6--future--experimental) | Future / Experimental | 🧪 Exploratory |
+| [6](#phase-6--contextual-learning) | Contextual Learning | ⬜ Planned |
+| [7](#phase-7--future--experimental) | Future / Experimental | 🧪 Exploratory |
 
 **What's next:** [4.3 Animated Flow Export](#43-animated-flow-export-gif--planned-next).
 
@@ -178,11 +179,64 @@ Canva-style design tool, stickers or a decorative object library, photo filters/
 builders, animated wallpapers, a background marketplace, or dozens of themes. One image, one
 overlay, done.
 
-## Phase 6 — Future / Experimental
+## Phase 6 — Contextual Learning
+
+*Purpose: by Phase 4, Draft Canvas has real depth — semantics, connector kinds, attachments,
+conditions, callbacks — and none of it should require reading documentation to find. The product
+should teach itself, in the moment a question would naturally come up, without ever interrupting a
+meeting.*
+
+**Core principle: documentation should appear where the question happens.** Not a walkthrough that
+runs once at the start and is gone, not a growing pile of tooltips — a small set of contextual,
+dismissible primitives placed exactly where a specific question would occur, retired automatically
+once the answer is no longer needed. Draft Canvas already has one instance of this instinct: the
+blank-canvas empty state (Phase 1.1, `EmptyState.tsx`) is one line and three shortcuts, not a tour
+— its own doc comment already says "no hint, no tour, no dismissible cards." This phase generalizes
+that instinct into a reusable pattern instead of inventing a separate onboarding flow per feature.
+
+- **6.1 Contextual hints & first-use coachmarks** — ⬜ Planned. Small, dismissible explanations
+  tied to a specific canvas moment — the first Service node selected ("You can attach notes or code
+  to this"), the first connector selected ("Connections can describe HTTP, events, callbacks, and
+  other interactions"), an empty attachment slot ("Add context → Note · Code"). Each shown once, in
+  place, never as a modal.
+- **6.2 Usage-inferred learning state** — ⬜ Planned. A hint retires the moment its behavior is
+  demonstrated, not only when it's dismissed: attach a note once and note-attachment hints never
+  show again; edit a connector's label once and connector-semantics hints stop; open the command
+  menu once and the hint pointing at `/` disappears. An explicit dismissal (×) is the fallback, not
+  the primary path.
+- **6.3 "New" feature indicators** — ⬜ Planned. A small badge on a newly discoverable capability —
+  for something too minor to earn its own coachmark, this is the whole treatment.
+- **6.4 "Learn Draft Canvas" mode** — ⬜ Planned. An optional, user-triggered (`?`) mode that
+  surfaces contextual explanations across the canvas for someone who wants a deliberate pass,
+  rather than picking hints up incidentally. Nothing shows unless asked for — this is the opt-in
+  complement to 6.1's opt-out-by-default hints, not a second onboarding system.
+
+**Guidance behavior, non-negotiable across all four:** contextual (tied to the moment, not a fixed
+sequence), non-blocking, subtle, dismissible, shown only when relevant, shown once, remembered
+locally, easy to rediscover manually (6.4) — and never shown during Presentation Mode. A hint
+appearing mid-explanation is the one failure mode this phase exists to prevent; Presentation Mode
+(3.2) is exactly where "the meeting" is happening.
+
+**Persistence** reuses `src/lib/preferences.ts` (0.3) — which hints have already fired is a small,
+local, non-document fact, the same shape as the existing theme preference, not a reason to
+introduce a new store.
+
+**Architecture:** small, reusable primitives — a hint component, a first-use flag, empty-state
+guidance, feature-discovery metadata — not a generic tutorial framework. A future feature that
+needs to introduce something new (4.3's export dialog, 5.1's background setting) should reach for
+these same primitives rather than invent its own tooltip or walkthrough system; this phase exists
+partly to make that the obvious default.
+
+What this will not become: a forced walkthrough or multi-step product tour, a large welcome modal,
+a tooltip that keeps reappearing after its feature is already learned, or documentation someone has
+to leave the canvas to read. If an explanation needs more than a sentence, it belongs in `docs/`,
+not in a hint.
+
+## Phase 7 — Future / Experimental
 
 *Purpose: named so they're not forgotten, not committed to.*
 
-- **6.1 Longer-form export (MP4)** — 🧪 Exploratory. Worth revisiting only if a longer or
+- **7.1 Longer-form export (MP4)** — 🧪 Exploratory. Worth revisiting only if a longer or
   higher-fidelity walkthrough than 4.3's GIF turns out to be genuinely needed. WebM stays out
   entirely unless a concrete need for it shows up — no reason to support it speculatively.
 
