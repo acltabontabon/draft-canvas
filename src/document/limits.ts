@@ -48,6 +48,7 @@ export const DEFAULTS = {
   actorHeight: 92,
   /** The tube is a compact glyph anchored to the top, with only its kind
    *  caption (no editable name — see `defaultTextFor`) sitting snugly below
-   *  it, so this no longer needs to be taller than a plain node's default. */
-  queueHeight: 64,
+   *  it — sized to leave just enough margin below the caption for a
+   *  top/bottom-anchored connector to meet the node without a visible gap. */
+  queueHeight: 48,
 } as const;

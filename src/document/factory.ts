@@ -58,7 +58,7 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
     case 'actor':
       return { width: 64, height: 72 };
     case 'queue':
-      return { width: 120, height: 56 };
+      return { width: 120, height: 40 };
     case 'note':
       return { width: 120, height: 72 };
     case 'code':
