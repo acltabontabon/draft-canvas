@@ -53,12 +53,12 @@ export const DEV_PRESETS: Preset[] = [
   },
   {
     id: 'database',
-    label: 'Database',
+    label: 'Data Store',
     type: 'database',
     shortcut: 'D',
-    hint: 'A datastore',
+    hint: 'A data store',
     accent: 'blue',
-    text: 'Database',
+    text: 'Data Store',
   },
   {
     id: 'queue',

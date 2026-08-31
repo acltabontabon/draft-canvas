@@ -69,7 +69,7 @@ test.describe('contextual connector toolbar', () => {
   test('Service → Database infers Writes, with no flow-kind picker or condition needed', async ({ page }) => {
     await newCanvas(page, 'Service to database toolbar');
     await create(page, 'Service', { x: 300, y: 200 });
-    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Data Store', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Writes');
@@ -80,7 +80,7 @@ test.describe('contextual connector toolbar', () => {
 
   test('Database → Service infers Reads', async ({ page }) => {
     await newCanvas(page, 'Database to service toolbar');
-    await create(page, 'Database', { x: 300, y: 200 });
+    await create(page, 'Data Store', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
@@ -94,7 +94,7 @@ test.describe('contextual connector toolbar', () => {
     // of which describe a database interaction).
     await newCanvas(page, 'Filtered relation list');
     await create(page, 'Service', { x: 300, y: 200 });
-    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Data Store', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
     const relation = inspectorSelect(page, 'Interaction type');
@@ -229,7 +229,7 @@ test.describe('contextual connector toolbar', () => {
     await newCanvas(page, 'Reconnect re-inference toolbar');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
-    await create(page, 'Database', { x: 600, y: 450 });
+    await create(page, 'Data Store', { x: 600, y: 450 });
     await connect(page, 0, 1);
 
     const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;

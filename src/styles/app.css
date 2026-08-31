@@ -36,8 +36,27 @@
 
 .dc-button[data-active='true'] {
   background: var(--dc-selection-soft);
-  border-color: color-mix(in srgb, var(--dc-selection) 40%, transparent);
+  border-color: color-mix(in srgb, var(--dc-selection) 55%, transparent);
   color: var(--dc-selection);
+  font-weight: 600;
+}
+
+/* Without this, `:hover` (higher specificity) wins the `background`/`color` tug-of-war against
+   `[data-active='true']` and reverts the active tool to the plain hover grey while its border
+   stays teal — a mismatched half-active, half-hover look. This keeps hover reading as "active,
+   and now also hovered" instead. */
+.dc-button[data-active='true']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-selection) 22%, transparent);
+  color: var(--dc-selection);
+}
+
+/* `ghost` (the default) is today's full-weight look; `quiet` is a step dimmer, for actions that
+   should read as lower-priority than creation tools (Undo/Redo/Fit/Export/Settings/Keyboard/Info/
+   Theme) — hover still brightens to the same `--dc-text`/`--dc-surface-raised` every button gets
+   (see `.dc-button:hover` above, which wins on specificity regardless of variant), so quiet
+   buttons get a relatively stronger hover contrast for free. */
+.dc-button-quiet {
+  color: var(--dc-text-faint);
 }
 
 .dc-button-solid {
@@ -388,6 +407,9 @@ kbd {
   color: var(--dc-text);
   font: inherit;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dc-title-input:hover {
@@ -764,6 +786,18 @@ kbd {
 .dc-flow-switcher {
   position: relative;
   display: inline-flex;
+}
+
+/* Wider than the default 6px icon/label gap — "Flows" and the current mode need to read as two
+   distinct things, not one run-on phrase. */
+.dc-flow-switcher .dc-button {
+  gap: 8px;
+}
+
+/* The fixed word; the mode itself ("Diagram", or a flow's title) keeps the button's own colour
+   and weight, so it's the part that visually reads as selectable. */
+.dc-flow-switcher-label {
+  color: var(--dc-text-faint);
 }
 
 .dc-flow-switcher-menu {

@@ -54,7 +54,7 @@ test.describe('element inspector popover', () => {
   test('selecting two elements still shows the shared bottom bar, not the popover', async ({ page }) => {
     await newCanvas(page, 'Element popover multi-select');
     await create(page, 'Service', { x: 300, y: 300 });
-    await create(page, 'Database', { x: 600, y: 300 });
+    await create(page, 'Data Store', { x: 600, y: 300 });
 
     await page.locator('.dc-node').first().click();
     await expect(page.locator('.dc-element-inspector')).toBeVisible();

@@ -93,7 +93,8 @@ export function Toolbar({
         <Button icon="fit" variant="quiet" onClick={onFit} title="Fit to view (Shift+1)" />
         <span className="dc-toolbar-divider" />
         <FlowSwitcher />
-        <Button icon="present" variant="quiet" onClick={onPresent} title="Present (Cmd+Enter)" />
+        <Button icon="present" variant="ghost" onClick={onPresent} title="Present (Cmd+Enter)" />
+        <span className="dc-toolbar-divider" />
         <Button icon="export" variant="quiet" onClick={onExport} title="Export (Cmd+E)" />
         <Button
           icon="settings"

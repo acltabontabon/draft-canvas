@@ -241,7 +241,7 @@ test.describe('attachments', () => {
   test('a concrete attach target wins over an enclosing boundary', async ({ page }) => {
     await newCanvas(page, 'Attach beats boundary');
     await create(page, 'Service', { x: 350, y: 300 });
-    await create(page, 'Database', { x: 600, y: 300 });
+    await create(page, 'Data Store', { x: 600, y: 300 });
 
     // Group both into a boundary, so the Service now sits inside a Domain.
     await page.keyboard.press('Meta+a');

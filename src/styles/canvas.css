@@ -1131,7 +1131,6 @@
 .dc-inspector-select-menu {
   position: absolute;
   z-index: 1;
-  top: calc(100% + 4px);
   left: 0;
   right: 0;
   margin: 0;
@@ -1144,6 +1143,14 @@
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
   outline: none;
+}
+
+.dc-inspector-select-menu[data-direction='down'] {
+  top: calc(100% + 4px);
+}
+
+.dc-inspector-select-menu[data-direction='up'] {
+  bottom: calc(100% + 4px);
 }
 
 .dc-inspector-select-option {

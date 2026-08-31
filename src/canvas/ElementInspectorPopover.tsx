@@ -251,6 +251,20 @@ export function ElementInspectorPopover() {
   if (!mounted) return null;
   if (!displayNode || !displayInternal || !rect || !anchors) return null;
 
+  // A dropdown inside this popover should open away from the element, not toward it — mirror
+  // whichever side the popover itself placed on. Left/right placement has no above/below
+  // relationship to the element at all, so 'down' (today's only direction) is the sensible
+  // default there; `InspectorSelect`'s own collision check (below) is what actually keeps a
+  // dropdown uncovered/unclipped in that case, and as a backstop when the preferred side turns
+  // out too cramped even for an 'above' or 'below' popover.
+  const menuDirection: 'up' | 'down' = effectivePlacement === 'above' ? 'up' : 'down';
+  // The element's own screen-space vertical bounds, so a dropdown can shrink/flip rather than
+  // cover it even when the popover itself barely had room to fit on its preferred side.
+  const menuAvoidRect = {
+    top: flowToScreenPosition({ x: rect.x, y: rect.y }).y,
+    bottom: flowToScreenPosition({ x: rect.x, y: rect.y + rect.height }).y,
+  };
+
   let transform: string;
   if (effectivePlacement === 'above' || effectivePlacement === 'below') {
     const anchor = anchors[effectivePlacement];
@@ -299,6 +313,8 @@ export function ElementInspectorPopover() {
             node={displayNode}
             paletteOpen={paletteOpen}
             setPaletteOpen={setPaletteOpen}
+            menuDirection={menuDirection}
+            menuAvoidRect={menuAvoidRect}
             theme={theme}
             store={store}
           />
@@ -312,12 +328,16 @@ function ElementInspectorRow({
   node,
   paletteOpen,
   setPaletteOpen,
+  menuDirection,
+  menuAvoidRect,
   theme,
   store,
 }: {
   node: DraftNode;
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
+  menuDirection: 'up' | 'down';
+  menuAvoidRect: { top: number; bottom: number };
   theme: ReturnType<typeof useThemeValue>;
   store: typeof useEditorStore;
 }) {
@@ -353,9 +373,11 @@ function ElementInspectorRow({
         return {
           options: DATABASE_OPTIONS,
           value: node.databaseKind ?? 'generic',
-          ariaLabel: 'Database type',
+          ariaLabel: 'Data Store type',
           onChange: (value) =>
-            store.getState().updateNodeById(node.id, { databaseKind: value as DatabaseKind }, 'Change database type'),
+            store
+              .getState()
+              .updateNodeById(node.id, { databaseKind: value as DatabaseKind }, 'Change data store type'),
         };
       case 'queue':
         return {
@@ -396,6 +418,8 @@ function ElementInspectorRow({
             value={typeControl.value}
             options={typeControl.options}
             onChange={typeControl.onChange}
+            preferredDirection={menuDirection}
+            avoidRect={menuAvoidRect}
           />
         )}
         {node.type === 'group' && (

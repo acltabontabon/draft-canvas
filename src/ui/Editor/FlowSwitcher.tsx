@@ -5,8 +5,9 @@ import { Button } from '../common/Button';
 
 /**
  * The always-visible, compact indicator of which flow (if any) is the
- * active lens — "Flows · Checkout Flow ▾" — and the primary way to switch
- * it. Replaces the old icon-only "Flows" toolbar button, which only opened
+ * active lens — "Flows" (a quiet, fixed label) beside "Checkout Flow ▾" (the
+ * actual selectable mode) — and the primary way to switch it. Replaces the
+ * old icon-only "Flows" toolbar button, which only opened
  * the full `FlowPanel` drawer and gave no at-a-glance answer to "what am I
  * looking at right now?" "Diagram" is a real, first-class row here, not an
  * absence — selecting it is exactly how you leave a flow's lens.
@@ -90,7 +91,8 @@ export function FlowSwitcher() {
         title="Switch flows (F)"
         onClick={() => setOpen(!open)}
       >
-        Flows · {label} ▾
+        <span className="dc-flow-switcher-label">Flows</span>
+        <span>{label} ▾</span>
       </Button>
       {open && (
         <div className="dc-flow-switcher-menu" role="menu" aria-label="Flows">

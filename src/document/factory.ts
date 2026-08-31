@@ -75,7 +75,7 @@ export function defaultTextFor(type: DraftNodeType): string {
     case 'service':
       return 'Service';
     case 'database':
-      return 'Database';
+      return 'Data Store';
     case 'queue':
       return '';
     case 'actor':
@@ -93,7 +93,7 @@ export function defaultTextFor(type: DraftNodeType): string {
 
 const QUEUE_KIND_NAMES: Record<QueueKind, string> = { queue: 'Queue', topic: 'Topic', stream: 'Stream' };
 const SERVICE_KIND_NAMES: Partial<Record<ServiceKind, string>> = { api: 'API', worker: 'Worker', external: 'External service' };
-const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = { sql: 'SQL database', nosql: 'NoSQL database', cache: 'Cache' };
+const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = { sql: 'SQL data store', nosql: 'NoSQL data store', cache: 'Cache' };
 
 /**
  * A human-readable fallback identity for a node with no custom `text` of its
@@ -114,7 +114,7 @@ export function displayNameFor(
     case 'service':
       return (node.serviceKind && SERVICE_KIND_NAMES[node.serviceKind]) || 'Service';
     case 'database':
-      return (node.databaseKind && DATABASE_KIND_NAMES[node.databaseKind]) || 'Database';
+      return (node.databaseKind && DATABASE_KIND_NAMES[node.databaseKind]) || 'Data Store';
     case 'actor':
       return 'Actor';
     case 'group':

@@ -36,7 +36,7 @@ test.describe('focus mode', () => {
     await newCanvas(page, 'Focus dimming');
     await create(page, 'Service', { x: 250, y: 250 });
     await create(page, 'Service', { x: 550, y: 250 });
-    await create(page, 'Database', { x: 850, y: 250 });
+    await create(page, 'Data Store', { x: 850, y: 250 });
 
     // A -> B, B -> C. Only A and B will be focused.
     await connect(page, 0, 1);

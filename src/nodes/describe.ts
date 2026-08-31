@@ -298,7 +298,7 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'blue');
   const w = node.width - 1.5;
   const h = node.height - 1.5;
-  const ry = Math.min(12, h * 0.18);
+  const ry = Math.min(14, h * 0.2);
   const x = 0.75;
   const y = 0.75;
   const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
@@ -340,13 +340,69 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
       `A${bodyW / 2},${topRy} 0 0 0 ${left},${top + topRy}`;
   }
   const kindLabel = DATABASE_KIND_LABELS[node.databaseKind ?? 'generic'];
+  const innerTop = ry * 2;
+  const innerBottom = ry;
 
-  return [
+  const shapes: Shape[] = [
     { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
     { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5 } },
-    ...centredLabel(node, ctx, { top: ry * 2, bottom: ry, color: palette.text }),
-    ...(kindLabel ? variantCaption(node, ctx, kindLabel, ctx.theme.textMuted) : []),
   ];
+
+  // A named kind (SQL/NoSQL/Cache) reads as a quiet second line directly under the primary
+  // label — not a corner badge like Service's, which has a real corner to badge; a cylinder
+  // doesn't. The pair is centred as one block in the cylinder's inner window so it stays
+  // balanced regardless of node height. The default ("generic") kind keeps the single-line
+  // `centredLabel` path exactly as before — untouched, since there's nothing to stack.
+  if (kindLabel) {
+    const text = node.text ?? '';
+    if (text.trim()) {
+      const nameLineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
+      const nameLayout = layoutText(text, {
+        font: FONTS.nodeLabel,
+        maxWidth: Math.max(16, node.width - PADDING * 2),
+        lineHeight: nameLineHeight,
+        maxLines: 1,
+        measurer: ctx.measurer,
+      });
+      const kindFont = FONTS.variantTag;
+      const kindLineHeight = kindFont.size * LINE_HEIGHTS.label;
+      const kindLayout = layoutText(kindLabel, {
+        font: kindFont,
+        maxWidth: Math.max(16, node.width - PADDING * 2),
+        lineHeight: kindLineHeight,
+        maxLines: 1,
+        measurer: ctx.measurer,
+      });
+      const nameGap = 2;
+      const available = node.height - innerTop - innerBottom;
+      const groupHeight = nameLayout.height + nameGap + kindLayout.height;
+      const groupTop = innerTop + (available - groupHeight) / 2;
+      shapes.push(
+        {
+          t: 'text',
+          x: node.width / 2,
+          y: groupTop,
+          layout: nameLayout,
+          font: FONTS.nodeLabel,
+          fill: palette.text,
+          align: 'middle',
+        },
+        {
+          t: 'text',
+          x: node.width / 2,
+          y: groupTop + nameLayout.height + nameGap,
+          layout: kindLayout,
+          font: kindFont,
+          fill: ctx.theme.textMuted,
+          align: 'middle',
+        },
+      );
+    }
+  } else {
+    shapes.push(...centredLabel(node, ctx, { top: innerTop, bottom: innerBottom, color: palette.text }));
+  }
+
+  return shapes;
 }
 
 function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
@@ -406,29 +462,71 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
       `A${rightRx},${halfH} 0 0 1 ${rightCapX},${top}`;
   }
 
-  // A few envelope glyphs, centred in the tube — messages in transit. Kept to
-  // a fixed count and size regardless of node size, like a real icon would be.
-  const iconCount = 3;
-  const iconW = 17;
-  const iconH = 13;
-  const iconGap = 6;
-  const iconY = y + tubeH / 2 - iconH / 2;
-  const iconsStartX = x + (w - (iconW * iconCount + iconGap * (iconCount - 1))) / 2;
-  function envelope(ex: number): string {
+  // The message-icon cluster inside the tube is the one thing that differs between Queue,
+  // Topic, and Stream — same tube, same lid, same stroke weight, so the three stay clearly one
+  // Messaging family while still being distinguishable at a glance without reading the caption.
+  function envelope(ex: number, ey: number, iw: number, ih: number): string {
     return [
-      `M${ex},${iconY}`,
-      `h${iconW}`,
-      `v${iconH}`,
-      `h${-iconW}`,
+      `M${ex},${ey}`,
+      `h${iw}`,
+      `v${ih}`,
+      `h${-iw}`,
       'Z',
-      `M${ex},${iconY}`,
-      `L${ex + iconW / 2},${iconY + iconH * 0.6}`,
-      `L${ex + iconW},${iconY}`,
+      `M${ex},${ey}`,
+      `L${ex + iw / 2},${ey + ih * 0.6}`,
+      `L${ex + iw},${ey}`,
     ].join(' ');
   }
-  const icons = Array.from({ length: iconCount }, (_, i) =>
-    envelope(iconsStartX + i * (iconW + iconGap)),
-  ).join(' ');
+
+  // Queue: a small number of envelopes in a row — messages waiting their turn, in order.
+  function queueIcons(): string {
+    const iconCount = 3;
+    const iconW = 17;
+    const iconH = 13;
+    const iconGap = 6;
+    const iconY = y + tubeH / 2 - iconH / 2;
+    const startX = x + (w - (iconW * iconCount + iconGap * (iconCount - 1))) / 2;
+    return Array.from({ length: iconCount }, (_, i) =>
+      envelope(startX + i * (iconW + iconGap), iconY, iconW, iconH),
+    ).join(' ');
+  }
+
+  // Topic: one source message with a small broadcast cue beside it (two nested, right-opening
+  // arcs — a signal glyph, not an arrow) — fan-out to many subscribers, not a line of things
+  // waiting.
+  function topicIcons(): string {
+    const iconW = 17;
+    const iconH = 13;
+    const iconY = y + tubeH / 2 - iconH / 2;
+    const arcGap = 8;
+    const outerArcR = 7;
+    const groupWidth = iconW + arcGap + outerArcR;
+    const startX = x + (w - groupWidth) / 2;
+    const arcCx = startX + iconW + arcGap;
+    const arcCy = y + tubeH / 2;
+    const fanArc = (r: number) => `M${arcCx},${arcCy - r} A${r},${r} 0 0 1 ${arcCx},${arcCy + r}`;
+    return [envelope(startX, iconY, iconW, iconH), fanArc(4), fanArc(outerArcR)].join(' ');
+  }
+
+  // Stream: small plain segments (no envelope fold — reads as data, not mail), gently staggered
+  // to suggest continuous motion rather than a neat, stationary row.
+  function streamIcons(): string {
+    const segCount = 3;
+    const segW = 14;
+    const segH = 10;
+    const segGap = 7;
+    const stagger = 3;
+    const offsets = [-stagger, stagger, -stagger];
+    const baseY = y + tubeH / 2 - segH / 2;
+    const startX = x + (w - (segW * segCount + segGap * (segCount - 1))) / 2;
+    return Array.from(
+      { length: segCount },
+      (_, i) => `M${startX + i * (segW + segGap)},${baseY + offsets[i]!} h${segW} v${segH} h${-segW} Z`,
+    ).join(' ');
+  }
+
+  const icons =
+    node.queueKind === 'topic' ? topicIcons() : node.queueKind === 'stream' ? streamIcons() : queueIcons();
 
   const shapes: Shape[] = [
     { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
@@ -455,8 +553,10 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // Anchored right under the tube (not centred in whatever height the node
   // happens to be) — the tube is a small fixed-size glyph, not something that
   // grows to fill a resized node, so the caption stays close to the shape it
-  // labels instead of drifting toward the middle of a tall box.
-  const top = tubeH + 4;
+  // labels instead of drifting toward the middle of a tall box. Deliberately
+  // tight (not a generic paragraph gap) so the icon and its caption read as
+  // one element, not an icon plus a detached line of text underneath it.
+  const top = tubeH + 2;
   const text = node.text ?? '';
   const nameGap = 2;
 
@@ -515,7 +615,9 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
   const shoulderY = headCy + headR + 4;
   const shoulderW = 26;
   const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
-  const stroke: Stroke = { color: palette.line, width: 1.6 };
+  // 1.5 — same body stroke weight as Service/Data Store/Queue, for one consistent line weight
+  // across every technical shape.
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
 
   let shoulders: string;
   if (amplitude === 0) {

@@ -22,7 +22,7 @@ async function createNode(page: Page, tool: string, at: { x: number; y: number }
 /**
  * Opens the full Flow management panel (rename, reorder, remove steps) via
  * the compact flow switcher's "Manage flows…" action — the switcher itself
- * (`Flows · ⟨name⟩ ▾`, title "Switch flows (F)") is a different, lighter
+ * (`Flows ⟨name⟩ ▾`, title "Switch flows (F)") is a different, lighter
  * surface for just picking which flow is the active lens.
  */
 async function openFlowPanel(page: Page) {

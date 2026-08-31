@@ -29,7 +29,7 @@ async function createNode(page: Page, tool: string, at: { x: number; y: number }
 /**
  * Opens the full Flow management panel (rename, reorder, remove steps) via
  * the compact flow switcher's "Manage flows…" action — the switcher itself
- * (`Flows · ⟨name⟩ ▾`, title "Switch flows (F)") is a different, lighter
+ * (`Flows ⟨name⟩ ▾`, title "Switch flows (F)") is a different, lighter
  * surface for just picking which flow is the active lens.
  */
 async function openFlowPanel(page: Page) {
@@ -125,7 +125,7 @@ test.describe('Draft Canvas', () => {
     await createNode(page, 'Service', { x: 700, y: 200 });
     await labelNode(page, 1, 'Service B');
 
-    await createNode(page, 'Database', { x: 700, y: 430 });
+    await createNode(page, 'Data Store', { x: 700, y: 430 });
     await labelNode(page, 2, 'orders');
 
     expect(await nodeCount(page)).toBe(3);
@@ -287,7 +287,7 @@ test.describe('Draft Canvas', () => {
     await labelNode(page, 0, 'Client');
     await createNode(page, 'Service', { x: 640, y: 220 });
     await labelNode(page, 1, 'API');
-    await createNode(page, 'Database', { x: 1040, y: 220 });
+    await createNode(page, 'Data Store', { x: 1040, y: 220 });
     await labelNode(page, 2, 'Store');
 
     // Connect Client to API, then API to Store, by dragging between them.

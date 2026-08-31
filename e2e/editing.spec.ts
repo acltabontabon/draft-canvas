@@ -155,7 +155,7 @@ test.describe('editing', () => {
     await expect(menu).toBeVisible();
     await expect(menu.getByRole('menuitem')).toHaveCount(4);
 
-    await menu.getByRole('menuitem', { name: 'Database', exact: true }).click();
+    await menu.getByRole('menuitem', { name: 'Data Store', exact: true }).click();
     await expect(menu).toBeHidden();
     await expect(page.locator('.dc-node')).toHaveCount(2);
     await expect(page.locator('.dc-node[data-type="database"]')).toHaveCount(1);
@@ -302,7 +302,7 @@ test.describe('editing', () => {
 
     await newCanvas(page, 'Marquee over connected nodes');
     await create(page, 'Service', { x: 300, y: 250 });
-    await create(page, 'Database', { x: 600, y: 250 });
+    await create(page, 'Data Store', { x: 600, y: 250 });
     await connect(page, 0, 1);
 
     // A rubber-band spanning both connected nodes — the exact shape that
@@ -367,7 +367,7 @@ test.describe('editing', () => {
   test('groups a selection into a boundary and ungroups it', async ({ page }) => {
     await newCanvas(page, 'Grouping');
     await create(page, 'Service', { x: 350, y: 280 });
-    await create(page, 'Database', { x: 650, y: 280 });
+    await create(page, 'Data Store', { x: 650, y: 280 });
 
     await page.keyboard.press('Meta+a');
     await expect(page.locator('.dc-inspector')).toContainText('2 elements');
@@ -384,7 +384,7 @@ test.describe('editing', () => {
   test('dragging a boundary moves its contained nodes along with it', async ({ page }) => {
     await newCanvas(page, 'Boundary drag');
     await create(page, 'Service', { x: 350, y: 280 });
-    await create(page, 'Database', { x: 650, y: 280 });
+    await create(page, 'Data Store', { x: 650, y: 280 });
     await connect(page, 0, 1);
 
     await page.keyboard.press('Meta+a');
@@ -434,7 +434,7 @@ test.describe('editing', () => {
   }) => {
     await newCanvas(page, 'Nested boundary drag');
     await create(page, 'Service', { x: 350, y: 280 });
-    await create(page, 'Database', { x: 650, y: 280 });
+    await create(page, 'Data Store', { x: 650, y: 280 });
     await create(page, 'Note', { x: 650, y: 500 });
 
     // Inner boundary around the Database and the Note (Group needs 2+ nodes
@@ -498,7 +498,7 @@ test.describe('editing', () => {
   test('boundary reparent: entering and leaving a boundary never jumps the node', async ({ page }) => {
     await newCanvas(page, 'Reparent invariant');
     await create(page, 'Service', { x: 350, y: 280 });
-    await create(page, 'Database', { x: 650, y: 280 });
+    await create(page, 'Data Store', { x: 650, y: 280 });
     await page.keyboard.press('Meta+a');
     await page.getByRole('button', { name: 'Group', exact: true }).click();
 
@@ -566,7 +566,7 @@ test.describe('editing', () => {
   test('boundary reparent: nested boundaries resolve to the innermost one', async ({ page }) => {
     await newCanvas(page, 'Nested boundaries');
     await create(page, 'Service', { x: 300, y: 250 });
-    await create(page, 'Database', { x: 560, y: 250 });
+    await create(page, 'Data Store', { x: 560, y: 250 });
     await page.keyboard.press('Meta+a');
     await page.getByRole('button', { name: 'Group', exact: true }).click();
 
@@ -735,7 +735,7 @@ test.describe('editing', () => {
   test('Enter edits a single selected node or edge, and is a no-op otherwise', async ({ page }) => {
     await newCanvas(page, 'Keyboard enter');
     await create(page, 'Service', { x: 300, y: 250 });
-    await create(page, 'Database', { x: 600, y: 250 });
+    await create(page, 'Data Store', { x: 600, y: 250 });
     await connect(page, 0, 1);
 
     // A single selected node.
@@ -776,7 +776,7 @@ test.describe('editing', () => {
   test('a connector selects even when clicked a few pixels off its visible line', async ({ page }) => {
     await newCanvas(page, 'Wide hit target');
     await create(page, 'Service', { x: 300, y: 250 });
-    await create(page, 'Database', { x: 600, y: 250 });
+    await create(page, 'Data Store', { x: 600, y: 250 });
     await connect(page, 0, 1);
 
     const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
@@ -856,7 +856,7 @@ test.describe('reconnection', () => {
   test('the connector visibly follows the pointer while an endpoint is being dragged', async ({ page }) => {
     await newCanvas(page, 'Live drag preview');
     await create(page, 'Service', { x: 300, y: 200 });
-    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Data Store', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
     const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
@@ -884,7 +884,7 @@ test.describe('reconnection', () => {
   test('dragging the target endpoint moves it to a different node and reroutes', async ({ page }) => {
     await newCanvas(page, 'Reconnect target');
     await create(page, 'Service', { x: 300, y: 200 });
-    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Data Store', { x: 600, y: 200 });
     await create(page, 'Queue', { x: 600, y: 450 });
     await connect(page, 0, 1);
 
@@ -916,7 +916,7 @@ test.describe('reconnection', () => {
   }) => {
     await newCanvas(page, 'Reconnect same node');
     await create(page, 'Service', { x: 300, y: 300 });
-    await create(page, 'Database', { x: 650, y: 300 });
+    await create(page, 'Data Store', { x: 650, y: 300 });
     await connect(page, 0, 1);
 
     const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
@@ -943,7 +943,7 @@ test.describe('reconnection', () => {
   test('Escape cancels an in-flight reconnect and restores the original connection', async ({ page }) => {
     await newCanvas(page, 'Reconnect escape');
     await create(page, 'Service', { x: 300, y: 200 });
-    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Data Store', { x: 600, y: 200 });
     await create(page, 'Queue', { x: 600, y: 450 });
     await connect(page, 0, 1);
 
@@ -980,7 +980,7 @@ test.describe('reconnection', () => {
   test('dropping a reconnect on empty canvas leaves the original connection intact', async ({ page }) => {
     await newCanvas(page, 'Reconnect invalid drop');
     await create(page, 'Service', { x: 300, y: 200 });
-    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Data Store', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
     const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
@@ -1015,7 +1015,7 @@ test.describe('reconnection', () => {
   test('a reconnect is one undo step and restores the exact prior connection', async ({ page }) => {
     await newCanvas(page, 'Reconnect undo');
     await create(page, 'Service', { x: 300, y: 200 });
-    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Data Store', { x: 600, y: 200 });
     await create(page, 'Queue', { x: 600, y: 450 });
     await connect(page, 0, 1);
 
@@ -1047,7 +1047,7 @@ test.describe('reconnection', () => {
   test('a plain click on an endpoint never reconnects it — only an actual drag does', async ({ page }) => {
     await newCanvas(page, 'Endpoint click is not a drag');
     await create(page, 'Service', { x: 300, y: 200 });
-    await create(page, 'Database', { x: 600, y: 200 });
+    await create(page, 'Data Store', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
     const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;

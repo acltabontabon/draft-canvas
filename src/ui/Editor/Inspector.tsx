@@ -189,7 +189,7 @@ export function Inspector() {
           <span className="dc-inspector-divider" />
           <select
             className="dc-select"
-            aria-label="Database type"
+            aria-label="Data Store type"
             value={onlyNode.databaseKind ?? 'generic'}
             onChange={(event) =>
               store
@@ -197,7 +197,7 @@ export function Inspector() {
                 .updateNodeById(
                   onlyNode.id,
                   { databaseKind: event.target.value as DatabaseKind },
-                  'Change database type',
+                  'Change data store type',
                 )
             }
           >

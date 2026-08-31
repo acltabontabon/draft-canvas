@@ -185,7 +185,7 @@ describe('displayNameFor', () => {
     expect(displayNameFor({ type: 'service', text: '', serviceKind: 'external' })).toBe('External service');
     expect(displayNameFor({ type: 'database', text: '', databaseKind: 'cache' })).toBe('Cache');
     expect(displayNameFor({ type: 'service', text: '' })).toBe('Service');
-    expect(displayNameFor({ type: 'database', text: '' })).toBe('Database');
+    expect(displayNameFor({ type: 'database', text: '' })).toBe('Data Store');
   });
 
   it('falls back to a generic type name for every other blank-text type', () => {
