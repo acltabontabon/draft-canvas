@@ -8,6 +8,12 @@ break as we settle on a stable 1.0 shape.
 
 ## [Unreleased]
 
+### Added
+
+- Sharing the app's link now shows a title, a "For meetings that suddenly need a diagram." tagline,
+  and a branded preview image in Slack, iMessage, and other link previews, instead of a bare URL
+  with nothing else.
+
 ## [0.1.0-alpha.3] - 2026-09-01
 
 ### Added
