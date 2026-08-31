@@ -5,6 +5,16 @@
   "type": "module",
   "description": "A local-first canvas for developers to explain software visually.",
   "license": "MIT",
+  "author": {
+    "name": "Alvin Cris Tabontabon",
+    "email": "me@acltabontabon.com",
+    "url": "https://acltabontabon.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/acltabontabon/draft-canvas.git"
+  },
+  "homepage": "https://github.com/acltabontabon/draft-canvas",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

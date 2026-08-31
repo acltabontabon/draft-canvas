@@ -173,6 +173,29 @@ kbd {
   letter-spacing: -0.02em;
 }
 
+.dc-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dc-brand-about {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-faint);
+  cursor: pointer;
+}
+
+.dc-brand-about:hover {
+  color: var(--dc-text-muted);
+  background: var(--dc-surface-raised);
+}
+
 .dc-lede {
   margin: 6px 0 0;
   color: var(--dc-text-muted);
@@ -1042,6 +1065,112 @@ kbd {
 
 .dc-shortcuts dd {
   margin: 0;
+}
+
+/* ----------------------------------------------------------------- about -- */
+
+.dc-about {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.dc-about-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-about-mark-a {
+  fill: none;
+  stroke: var(--dc-selection);
+  stroke-width: 2;
+}
+
+.dc-about-mark-b {
+  fill: none;
+  stroke: var(--dc-text-faint);
+  stroke-width: 2;
+}
+
+.dc-about-name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.dc-about .dc-about-tagline {
+  margin: 10px 0 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--dc-text);
+}
+
+.dc-about .dc-about-desc {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.dc-about .dc-about-privacy {
+  margin: 5px 0 0;
+  font-size: 12px;
+}
+
+.dc-about-tags {
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+  font-size: 11.5px;
+}
+
+.dc-about-tags code {
+  padding: 1px 6px;
+  border: 1px solid var(--dc-border);
+  border-radius: 4px;
+  background: var(--dc-code-bg);
+  color: var(--dc-text-muted);
+  font-size: 11px;
+}
+
+.dc-about-signature {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dc-border);
+  font-size: 12.5px;
+  color: var(--dc-text-muted);
+}
+
+.dc-about-signature strong {
+  color: var(--dc-text);
+  font-weight: 600;
+}
+
+.dc-about-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dc-about-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border-radius: var(--dc-radius-sm);
+  color: var(--dc-text-faint);
+}
+
+.dc-about-link:hover {
+  color: var(--dc-selection);
+  background: var(--dc-surface-raised);
 }
 
 /* --------------------------------------------------------------- toasts -- */

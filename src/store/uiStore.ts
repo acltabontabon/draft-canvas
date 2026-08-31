@@ -23,6 +23,7 @@ interface UiStore {
   armed: Preset | null;
   shortcutsOpen: boolean;
   exportOpen: boolean;
+  aboutOpen: boolean;
   toasts: Toast[];
   quickConnect: QuickConnectState | null;
   /** The node id a dragged attachable node is currently armed against. */
@@ -68,6 +69,7 @@ interface UiStore {
   arm: (preset: Preset | null) => void;
   setShortcutsOpen: (open: boolean) => void;
   setExportOpen: (open: boolean) => void;
+  setAboutOpen: (open: boolean) => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
   setAttachArmedEdgeTarget: (edgeId: string | null) => void;
@@ -87,6 +89,7 @@ export const useUiStore = create<UiStore>((set) => ({
   armed: null,
   shortcutsOpen: false,
   exportOpen: false,
+  aboutOpen: false,
   toasts: [],
   quickConnect: null,
   attachArmedTarget: null,
@@ -101,6 +104,7 @@ export const useUiStore = create<UiStore>((set) => ({
   arm: (armed) => set({ armed }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setExportOpen: (exportOpen) => set({ exportOpen }),
+  setAboutOpen: (aboutOpen) => set({ aboutOpen }),
   setQuickConnect: (quickConnect) => set({ quickConnect }),
   setAttachArmedTarget: (attachArmedTarget) =>
     set((state) => (state.attachArmedTarget === attachArmedTarget ? state : { attachArmedTarget })),

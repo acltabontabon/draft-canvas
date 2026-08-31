@@ -2,6 +2,7 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { useDocumentSession } from './store/useDocumentSession';
 import { EditorScreen } from './ui/Editor/EditorScreen';
 import { LibraryScreen } from './ui/Library/LibraryScreen';
+import { AboutDialog } from './ui/common/AboutDialog';
 import { Toasts } from './ui/common/Toasts';
 import { ThemeProvider } from './ui/theme/ThemeProvider';
 
@@ -25,6 +26,7 @@ function Shell() {
         <LibraryScreen session={session} />
       )}
       <Toasts />
+      <AboutDialog />
     </>
   );
 }

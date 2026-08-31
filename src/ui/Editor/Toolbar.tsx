@@ -31,6 +31,7 @@ export function Toolbar({
   const armed = useUiStore((state) => state.armed);
   const arm = useUiStore((state) => state.arm);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
+  const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const setFlowPanelOpen = useUiStore((state) => state.setFlowPanelOpen);
   const undo = useEditorStore((state) => state.undo);
@@ -105,6 +106,12 @@ export function Toolbar({
           variant="quiet"
           onClick={() => setShortcutsOpen(true)}
           title="Keyboard shortcuts (?)"
+        />
+        <Button
+          icon="info"
+          variant="quiet"
+          onClick={() => setAboutOpen(true)}
+          title="About Draft Canvas"
         />
         <Button
           variant="quiet"
