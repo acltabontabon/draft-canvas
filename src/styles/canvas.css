@@ -372,8 +372,16 @@
 
 .dc-edge-attachment-chip:hover,
 .dc-edge-attachment-chip:focus-visible {
-  transform: scale(1.06);
   outline: none;
+}
+
+/* Suppressed while the chip's own card is showing (`data-open`) — the card is a DOM child of this
+   chip, so this scale would otherwise run alongside the card's own independent open/close fade,
+   two unsynchronized transforms on nested elements. See the matching comment in
+   `DraftEdgeView.tsx`. */
+.dc-edge-attachment-chip:hover:not([data-open]),
+.dc-edge-attachment-chip:focus-visible:not([data-open]) {
+  transform: scale(1.06);
 }
 
 /* A note's icon is the same "colour bar, not a sticky-note skeuomorph" idea its real card uses,
@@ -446,8 +454,17 @@
   border-left: 3px solid var(--dc-chip-accent);
 }
 
+/* Mirrors `dc-attachment-card-in` for hiding — `data-closing` is set by `DraftEdgeView.tsx`,
+   which keeps the card mounted for the animation's duration instead of unmounting it instantly. */
+.dc-edge-attachment-card[data-closing='true'] .dc-edge-attachment-card-inner {
+  animation: dc-attachment-card-out 120ms ease forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .dc-edge-attachment-card-inner {
+  .dc-edge-attachment-card-inner,
+  .dc-edge-attachment-card[data-closing='true'] .dc-edge-attachment-card-inner,
+  .dc-attachment-popover-inner,
+  .dc-attachment-popover[data-closing='true'] .dc-attachment-popover-inner {
     animation: none;
   }
 }
@@ -460,6 +477,17 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes dc-attachment-card-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97);
   }
 }
 
@@ -610,6 +638,21 @@
      so panning/marquee-select can reach through empty canvas — this panel is
      interactive content, so it must opt back in explicitly. */
   pointer-events: all;
+}
+
+/* The animation lives here, separate from the positioned outer element above — same split as
+   `.dc-edge-attachment-card-inner`, and for the same reason: a CSS `animation` touching `transform`
+   would otherwise clobber the outer div's own inline positioning `transform`. */
+.dc-attachment-popover-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  animation: dc-attachment-card-in 120ms ease;
+}
+
+.dc-attachment-popover[data-closing='true'] .dc-attachment-popover-inner {
+  animation: dc-attachment-card-out 120ms ease forwards;
 }
 
 .dc-attachment-popover-header {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ViewportPortal } from '@xyflow/react';
 import {
   ATTACHABLE_TYPES,
@@ -34,6 +34,9 @@ function summarize(attachment: Attachment): string {
   return trimmed.length > 0 ? trimmed : `Empty ${TYPE_LABELS[attachment.type].toLowerCase()}`;
 }
 
+/** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css`. */
+const POPOVER_EXIT_MS = 120;
+
 /**
  * The lightweight floating panel a node's attachment badge opens. Deliberately
  * not a permanent inspector — it exists only while `openAttachmentPopover`
@@ -59,6 +62,58 @@ export function AttachmentPopover() {
     if (hostId && host && !host.attachments?.length) setOpen(null);
   }, [hostId, host, setOpen]);
 
+  const open = Boolean(hostId && host?.attachments?.length);
+
+  // Mirrors `EdgeAttachmentChip` in `DraftEdgeView.tsx`: closing this panel is a state flip
+  // (`openAttachmentPopover` going null), and React would otherwise remove the DOM node the
+  // instant that happens, cutting off any fade-out mid-frame. So the panel stays mounted for one
+  // more tick, marked `data-closing`, so `canvas.css` can play the reverse animation first.
+  const [mounted, setMounted] = useState(open);
+  const [closing, setClosing] = useState(false);
+  const hideTimer = useRef<number | null>(null);
+
+  // `host`/`host.attachments` go away the instant `open` flips false (the store id is cleared, or
+  // the node itself was deleted) — so the last live values are cached here for the panel to keep
+  // rendering *something* coherent while it fades out, instead of going blank a frame early.
+  const lastHostRef = useRef(host);
+  const lastAttachmentsRef = useRef(host?.attachments);
+  if (open) {
+    lastHostRef.current = host;
+    lastAttachmentsRef.current = host?.attachments;
+  }
+
+  useEffect(() => {
+    if (open) {
+      if (hideTimer.current !== null) {
+        window.clearTimeout(hideTimer.current);
+        hideTimer.current = null;
+      }
+      setClosing(false);
+      setMounted(true);
+      return;
+    }
+    if (!mounted) return;
+    setClosing(true);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    hideTimer.current = window.setTimeout(
+      () => {
+        setMounted(false);
+        setClosing(false);
+        hideTimer.current = null;
+      },
+      reduceMotion ? 0 : POPOVER_EXIT_MS,
+    );
+    return () => {
+      if (hideTimer.current !== null) {
+        window.clearTimeout(hideTimer.current);
+        hideTimer.current = null;
+      }
+    };
+    // mounted intentionally excluded: it's only ever flipped by this effect's own timeout, so
+    // reacting to it here would just re-run the same branch redundantly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   useEffect(() => {
     if (!hostId) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -79,8 +134,10 @@ export function AttachmentPopover() {
     };
   }, [hostId, setOpen]);
 
-  if (!hostId || !host || !host.attachments?.length) return null;
-  const attachments = host.attachments;
+  if (!mounted) return null;
+  const displayHost = open ? host : lastHostRef.current;
+  const attachments = (open ? host?.attachments : lastAttachmentsRef.current) ?? [];
+  if (!displayHost || !attachments.length) return null;
 
   return (
     <ViewportPortal>
@@ -88,123 +145,129 @@ export function AttachmentPopover() {
         ref={panel}
         className="dc-attachment-popover"
         role="dialog"
-        aria-label={`Attachments for ${host.text || 'this node'}`}
-        style={{ transform: `translate(${host.x + host.width + 14}px, ${host.y}px)` }}
+        aria-label={`Attachments for ${displayHost.text || 'this node'}`}
+        data-closing={closing ? 'true' : undefined}
+        style={{ transform: `translate(${displayHost.x + displayHost.width + 14}px, ${displayHost.y}px)` }}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <header className="dc-attachment-popover-header">
-          Attachments
-          <button type="button" className="dc-attachment-popover-close" onClick={() => setOpen(null)}>
-            ×
-          </button>
-        </header>
-        <ul className="dc-attachment-list">
-          {attachments.map((attachment, index) => (
-            <li key={attachment.id} className="dc-attachment-row">
-              <div className="dc-attachment-row-head">
-                <span className="dc-attachment-type">{TYPE_LABELS[attachment.type]}</span>
+        {/* The reveal/close animation lives on this inner wrapper, not the positioned outer div —
+            a CSS animation replaces the whole `transform` property for its duration, so animating
+            scale here would otherwise clobber the outer div's own positioning translate. */}
+        <div className="dc-attachment-popover-inner">
+          <header className="dc-attachment-popover-header">
+            Attachments
+            <button type="button" className="dc-attachment-popover-close" onClick={() => setOpen(null)}>
+              ×
+            </button>
+          </header>
+          <ul className="dc-attachment-list">
+            {attachments.map((attachment, index) => (
+              <li key={attachment.id} className="dc-attachment-row">
+                <div className="dc-attachment-row-head">
+                  <span className="dc-attachment-type">{TYPE_LABELS[attachment.type]}</span>
 
-                {attachment.type === 'code' && (
-                  <select
-                    className="dc-select"
-                    aria-label="Attachment language"
-                    value={attachment.language ?? 'plaintext'}
-                    onChange={(event) =>
-                      updateAttachment(host.id, attachment.id, {
-                        language: event.target.value as CodeLanguage,
-                      })
-                    }
-                  >
-                    {CODE_LANGUAGES.map((language) => (
-                      <option key={language} value={language}>
-                        {LANGUAGE_LABELS[language]}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                  {attachment.type === 'code' && (
+                    <select
+                      className="dc-select"
+                      aria-label="Attachment language"
+                      value={attachment.language ?? 'plaintext'}
+                      onChange={(event) =>
+                        updateAttachment(displayHost.id, attachment.id, {
+                          language: event.target.value as CodeLanguage,
+                        })
+                      }
+                    >
+                      {CODE_LANGUAGES.map((language) => (
+                        <option key={language} value={language}>
+                          {LANGUAGE_LABELS[language]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
 
-                {attachment.type === 'note' && (
-                  <select
-                    className="dc-select"
-                    aria-label="Attachment note kind"
-                    value={attachment.noteKind ?? 'note'}
-                    onChange={(event) =>
-                      updateAttachment(host.id, attachment.id, {
-                        noteKind: event.target.value as NoteKind,
-                      })
-                    }
-                  >
-                    {NOTE_KINDS.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {NOTE_LABELS[kind]}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                  {attachment.type === 'note' && (
+                    <select
+                      className="dc-select"
+                      aria-label="Attachment note kind"
+                      value={attachment.noteKind ?? 'note'}
+                      onChange={(event) =>
+                        updateAttachment(displayHost.id, attachment.id, {
+                          noteKind: event.target.value as NoteKind,
+                        })
+                      }
+                    >
+                      {NOTE_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {NOTE_LABELS[kind]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
 
-                <div className="dc-attachment-row-actions">
-                  <button
-                    type="button"
-                    title="Move up"
-                    disabled={index === 0}
-                    onClick={() => reorderAttachment(host.id, attachment.id, -1)}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    title="Move down"
-                    disabled={index === attachments.length - 1}
-                    onClick={() => reorderAttachment(host.id, attachment.id, 1)}
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    title="Detach onto the canvas"
-                    onClick={() => detachAttachment(host.id, attachment.id)}
-                  >
-                    Detach
-                  </button>
-                  <button
-                    type="button"
-                    title="Delete"
-                    onClick={() => removeAttachment(host.id, attachment.id)}
-                  >
-                    Delete
-                  </button>
+                  <div className="dc-attachment-row-actions">
+                    <button
+                      type="button"
+                      title="Move up"
+                      disabled={index === 0}
+                      onClick={() => reorderAttachment(displayHost.id, attachment.id, -1)}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      title="Move down"
+                      disabled={index === attachments.length - 1}
+                      onClick={() => reorderAttachment(displayHost.id, attachment.id, 1)}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      title="Detach onto the canvas"
+                      onClick={() => detachAttachment(displayHost.id, attachment.id)}
+                    >
+                      Detach
+                    </button>
+                    <button
+                      type="button"
+                      title="Delete"
+                      onClick={() => removeAttachment(displayHost.id, attachment.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {attachment.type === 'code' ? (
-                <textarea
-                  className="dc-attachment-editor dc-attachment-editor-code"
-                  spellCheck={false}
-                  defaultValue={attachment.code ?? ''}
-                  placeholder={summarize(attachment)}
-                  onBlur={(event) => {
-                    const value = event.currentTarget.value;
-                    if (value !== (attachment.code ?? '')) {
-                      updateAttachment(host.id, attachment.id, { code: value });
-                    }
-                  }}
-                />
-              ) : (
-                <textarea
-                  className="dc-attachment-editor"
-                  defaultValue={attachment.text ?? ''}
-                  placeholder={summarize(attachment)}
-                  onBlur={(event) => {
-                    const value = event.currentTarget.value;
-                    if (value !== (attachment.text ?? '')) {
-                      updateAttachment(host.id, attachment.id, { text: value });
-                    }
-                  }}
-                />
-              )}
-            </li>
-          ))}
-        </ul>
+                {attachment.type === 'code' ? (
+                  <textarea
+                    className="dc-attachment-editor dc-attachment-editor-code"
+                    spellCheck={false}
+                    defaultValue={attachment.code ?? ''}
+                    placeholder={summarize(attachment)}
+                    onBlur={(event) => {
+                      const value = event.currentTarget.value;
+                      if (value !== (attachment.code ?? '')) {
+                        updateAttachment(displayHost.id, attachment.id, { code: value });
+                      }
+                    }}
+                  />
+                ) : (
+                  <textarea
+                    className="dc-attachment-editor"
+                    defaultValue={attachment.text ?? ''}
+                    placeholder={summarize(attachment)}
+                    onBlur={(event) => {
+                      const value = event.currentTarget.value;
+                      if (value !== (attachment.text ?? '')) {
+                        updateAttachment(displayHost.id, attachment.id, { text: value });
+                      }
+                    }}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </ViewportPortal>
   );

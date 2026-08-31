@@ -441,6 +441,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
  *  linger once the user has clearly moved on. */
 const ATTACHMENT_CLOSE_DELAY_MS = 250;
 
+/** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css` — the card
+ *  stays mounted this long after `visible` goes false so the CSS fade-out has time to play
+ *  instead of the DOM node just vanishing mid-animation. */
+const ATTACHMENT_CARD_EXIT_MS = 120;
+
 /**
  * Read-only, syntax-highlighted code — the same `tokenizeCode`/`colorForScope` primitives
  * `FlowBar.tsx`'s `DetailPanel` uses for a connection's legacy `details` field during playback,
@@ -657,6 +662,46 @@ function EdgeAttachmentChip({
   const visible = pinned || selected || (hovering && !suppressHover);
   const kind = attachment.type === 'code' ? 'code' : 'note';
 
+  // The card's own reveal animation is a CSS `animation` on mount, but hiding it is not the
+  // mirror image of that: React would otherwise remove the DOM node the instant `visible` goes
+  // false, cutting off any fade-out mid-frame. So the node stays mounted for one more tick,
+  // marked `data-closing`, so `canvas.css` can play the reverse animation before it's gone.
+  const [cardMounted, setCardMounted] = useState(visible);
+  const [cardClosing, setCardClosing] = useState(false);
+  const hideTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      if (hideTimer.current !== null) {
+        window.clearTimeout(hideTimer.current);
+        hideTimer.current = null;
+      }
+      setCardClosing(false);
+      setCardMounted(true);
+      return;
+    }
+    if (!cardMounted) return;
+    setCardClosing(true);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    hideTimer.current = window.setTimeout(
+      () => {
+        setCardMounted(false);
+        setCardClosing(false);
+        hideTimer.current = null;
+      },
+      reduceMotion ? 0 : ATTACHMENT_CARD_EXIT_MS,
+    );
+    return () => {
+      if (hideTimer.current !== null) {
+        window.clearTimeout(hideTimer.current);
+        hideTimer.current = null;
+      }
+    };
+    // cardMounted intentionally excluded: it's only ever flipped by this effect's own timeout, so
+    // reacting to it here would just re-run the same branch redundantly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
   const togglePin = () => {
     if (!editable) return;
     setOpenEdgeDetail(pinned ? null : { edgeId: edge.id, attachmentId: attachment.id });
@@ -672,6 +717,14 @@ function EdgeAttachmentChip({
     <div
       className="dc-edge-attachment-chip"
       data-kind={kind}
+      // Suppresses the chip's own hover-pop while its card is showing — the card is a DOM child of
+      // this chip, so without this, the chip's `:hover` scale (which reverts the instant the
+      // pointer leaves, ~90ms) and the card's own open/close fade (250ms close-delay, then a
+      // separate 120ms animation) run as two independent, unsynchronized transforms on nested
+      // elements — the chip visibly "un-pops" while the card is still lingering open, then the card
+      // fades out separately on its own schedule. Reads as one unexplained extra zoom. See
+      // `.dc-edge-attachment-chip:hover:not([data-open])` in `canvas.css`.
+      data-open={cardMounted ? 'true' : undefined}
       role="button"
       tabIndex={0}
       title={pinned ? 'Close attached detail' : kind === 'code' ? 'View attached code' : 'View attached note'}
@@ -712,11 +765,12 @@ function EdgeAttachmentChip({
       </span>
       <span className="dc-edge-attachment-chip-label">{look.label}</span>
 
-      {visible && (
+      {cardMounted && (
         <div
           ref={cardRef}
           className="dc-edge-attachment-card"
           data-pinned={pinned ? 'true' : undefined}
+          data-closing={cardClosing ? 'true' : undefined}
           onPointerEnter={() => {
             cancelClose();
             setHovering(true);
