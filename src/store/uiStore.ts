@@ -14,8 +14,18 @@ export interface QuickConnectState {
   source: string;
   /** The side of the source node the user actually dragged from, if known. */
   sourceSide?: Side;
+  /** How far along that side, if known — one of `ANCHOR_OFFSETS` (`edges/routing.ts`). */
+  sourceOffset?: number;
   flowPosition: { x: number; y: number };
   screenPosition: { x: number; y: number };
+}
+
+/** The specific anchor (side + offset, one of `ANCHOR_OFFSETS`) a reconnect
+ *  drag is currently hovering, and which node it's on — see `armedAnchor`. */
+export interface ArmedAnchor {
+  nodeId: string;
+  side: Side;
+  offset: number;
 }
 
 interface UiStore {
@@ -24,6 +34,12 @@ interface UiStore {
   shortcutsOpen: boolean;
   exportOpen: boolean;
   aboutOpen: boolean;
+  /** Canvas Settings — background image and personality preset (Phase 5). */
+  settingsOpen: boolean;
+  /** Bumped whenever the background image blob is replaced, so `CanvasBackground`
+   *  knows to reload it even when `enabled` itself didn't change (e.g. "Replace image…"
+   *  while already enabled) — see `CanvasSettingsDialog.tsx`/`CanvasBackground.tsx`. */
+  backgroundImageVersion: number;
   toasts: Toast[];
   quickConnect: QuickConnectState | null;
   /** The node id a dragged attachable node is currently armed against. */
@@ -41,6 +57,22 @@ interface UiStore {
    * so a drag does not re-render anything on every pointer-move frame.
    */
   reconnectHoverTarget: string | null;
+  /**
+   * True for the duration of a reconnect drag (dragging an existing
+   * connector's endpoint) — distinct from `reconnectHoverTarget` (which node,
+   * if any, it's currently over): this is "is one happening at all,"
+   * regardless of node, so every node's handles can reveal for it the same
+   * way they already do for React Flow's own `.react-flow.connecting` during
+   * a fresh connection drag. See `DraftEdgeView.tsx`'s `EdgeEndpointHandle`.
+   */
+  reconnectDragActive: boolean;
+  /**
+   * The specific anchor (not just the node) a reconnect drag is currently
+   * hovering, so the one matching handle can highlight as "release here" —
+   * the hand-rolled counterpart to React Flow's own `.connectingto.valid`,
+   * which only exists for its native connection-creation drag.
+   */
+  armedAnchor: ArmedAnchor | null;
   /** The host node whose attachment popover is open, if any. */
   openAttachmentPopover: string | null;
   /** The specific attachment (an edge can carry several) currently pinned open for editing, if
@@ -82,10 +114,14 @@ interface UiStore {
   setShortcutsOpen: (open: boolean) => void;
   setExportOpen: (open: boolean) => void;
   setAboutOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean) => void;
+  bumpBackgroundImageVersion: () => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
   setAttachArmedEdgeTarget: (edgeId: string | null) => void;
   setReconnectHoverTarget: (nodeId: string | null) => void;
+  setReconnectDragActive: (active: boolean) => void;
+  setArmedAnchor: (anchor: ArmedAnchor | null) => void;
   setOpenAttachmentPopover: (hostId: string | null) => void;
   setOpenEdgeDetail: (target: { edgeId: string; attachmentId: string } | null) => void;
   setPresentationReveal: (target: { edgeId: string; attachmentId: string } | null) => void;
@@ -104,11 +140,15 @@ export const useUiStore = create<UiStore>((set) => ({
   shortcutsOpen: false,
   exportOpen: false,
   aboutOpen: false,
+  settingsOpen: false,
+  backgroundImageVersion: 0,
   toasts: [],
   quickConnect: null,
   attachArmedTarget: null,
   attachArmedEdgeTarget: null,
   reconnectHoverTarget: null,
+  reconnectDragActive: false,
+  armedAnchor: null,
   openAttachmentPopover: null,
   openEdgeDetail: null,
   presentationReveal: null,
@@ -121,6 +161,8 @@ export const useUiStore = create<UiStore>((set) => ({
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setExportOpen: (exportOpen) => set({ exportOpen }),
   setAboutOpen: (aboutOpen) => set({ aboutOpen }),
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  bumpBackgroundImageVersion: () => set((state) => ({ backgroundImageVersion: state.backgroundImageVersion + 1 })),
   setQuickConnect: (quickConnect) => set({ quickConnect }),
   setAttachArmedTarget: (attachArmedTarget) =>
     set((state) => (state.attachArmedTarget === attachArmedTarget ? state : { attachArmedTarget })),
@@ -128,6 +170,20 @@ export const useUiStore = create<UiStore>((set) => ({
     set((state) => (state.attachArmedEdgeTarget === attachArmedEdgeTarget ? state : { attachArmedEdgeTarget })),
   setReconnectHoverTarget: (reconnectHoverTarget) =>
     set((state) => (state.reconnectHoverTarget === reconnectHoverTarget ? state : { reconnectHoverTarget })),
+  setReconnectDragActive: (reconnectDragActive) =>
+    set((state) => (state.reconnectDragActive === reconnectDragActive ? state : { reconnectDragActive })),
+  setArmedAnchor: (next) =>
+    set((state) => {
+      const current = state.armedAnchor;
+      const same =
+        current === next ||
+        (current !== null &&
+          next !== null &&
+          current.nodeId === next.nodeId &&
+          current.side === next.side &&
+          current.offset === next.offset);
+      return same ? state : { armedAnchor: next };
+    }),
   setOpenAttachmentPopover: (openAttachmentPopover) => set({ openAttachmentPopover }),
   setOpenEdgeDetail: (openEdgeDetail) => set({ openEdgeDetail }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),

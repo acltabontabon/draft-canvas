@@ -5,11 +5,11 @@ import { explainEdgeTier, lensEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import {
   LABEL_LINE_GAP,
-  anchorForDrop,
   labelLaneOffset,
   laneIndex,
   rectOf,
   routeBetween,
+  snappedAnchorForDrop,
   type Rect,
   type Side,
 } from '../edges/routing';
@@ -19,10 +19,13 @@ import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { NOTE_ACCENTS, NOTE_LABELS } from '../nodes/describe';
 import { LANGUAGE_LABELS, tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
+import { PRESET_AMPLITUDE } from '../render/roughness/presets';
+import { roughenPath } from '../render/roughness/roughPath';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { isEdgeFocused, useEditorStore } from '../store/editorStore';
 import { selectEdge, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
+import { usePersonality } from '../ui/personality/usePersonality';
 import { useTheme, useThemeValue } from '../ui/theme/useTheme';
 import { Icon } from '../ui/common/Icon';
 import { FONTS, cssFont } from '../render/text/fonts';
@@ -129,6 +132,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const mode = useEditorStore((state) => state.mode);
   const updateEdgeLabel = useEditorStore((state) => state.updateEdgeLabel);
   const theme = useThemeValue();
+  const { preset } = usePersonality();
 
   // A primitive, not the `LaneAssignment` object — see `laneIndex`'s comment.
   // Only the edges whose own lane actually shifts re-render when a sibling
@@ -278,6 +282,18 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     selected || attachTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
   const conditionText = edge.condition ? `[${edge.condition}]` : null;
 
+  // Only the drawn stroke wobbles — every geometry value above (`route`,
+  // `labelX`/`labelY`, attachment points) already reads from the unperturbed
+  // route, matching `edges/describe.ts`'s dual-renderer contract. The
+  // amplitude is small enough relative to `interactionWidth` below that
+  // hit-testing (which necessarily follows whichever path `BaseEdge` draws)
+  // stays effectively unaffected.
+  const roughAmplitude = PRESET_AMPLITUDE[preset];
+  const drawnPath =
+    roughAmplitude.outline === 0 ? route.d : roughenPath(route.d, `${edge.id}:0`, roughAmplitude.outline);
+  const secondStrokePath =
+    roughAmplitude.strokes === 2 ? roughenPath(route.d, `${edge.id}:1`, roughAmplitude.outline) : null;
+
   return (
     <g
       className="dc-edge"
@@ -299,7 +315,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       */}
       <BaseEdge
         className="dc-edge-line"
-        path={route.d}
+        path={drawnPath}
         markerEnd={edge.directed ? markerRef(strokeColor, markerVariantForEdge(edge)) : undefined}
         interactionWidth={18}
         style={{
@@ -309,6 +325,20 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
       />
+      {secondStrokePath && (
+        <path
+          className="dc-edge-line-second"
+          d={secondStrokePath}
+          fill="none"
+          pointerEvents="none"
+          style={{
+            stroke: strokeColor,
+            strokeWidth: 1,
+            strokeLinecap: 'round',
+            opacity: 0.5,
+          }}
+        />
+      )}
 
       {/* A small glyph at the path's midpoint — see the matching comment in
           `edges/describe.ts`. Only when nothing else already occupies that spot. */}
@@ -944,6 +974,8 @@ function EdgeEndpointHandle({
   const endDrag = useCallback(() => {
     if (onKeyDownRef.current) window.removeEventListener('keydown', onKeyDownRef.current);
     useUiStore.getState().setReconnectHoverTarget(null);
+    useUiStore.getState().setReconnectDragActive(false);
+    useUiStore.getState().setArmedAnchor(null);
     useUiStore.getState().setInteractionActive(false);
     lastHover.current = null;
     dragStarted.current = false;
@@ -978,14 +1010,24 @@ function EdgeEndpointHandle({
         if (moved < DRAG_THRESHOLD_PX) return; // Still just a click so far.
         dragStarted.current = true;
         useUiStore.getState().setInteractionActive(true);
+        useUiStore.getState().setReconnectDragActive(true);
       }
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       onDrag({ endpoint, point });
-      const hoverId = findDropNode(point)?.id ?? null;
+      const node = findDropNode(point);
+      const hoverId = node?.id ?? null;
       if (hoverId !== lastHover.current) {
         lastHover.current = hoverId;
         useUiStore.getState().setReconnectHoverTarget(hoverId);
       }
+      // Live "release here" preview — the hand-rolled counterpart to React
+      // Flow's own `.connectingto.valid`, which only tracks its native
+      // connection-creation drag, not this one. Snapped, and `undefined`
+      // exactly when the eventual drop would leave the anchor dynamic (see
+      // `snappedAnchorForDrop`), so the highlight never promises a specific
+      // point the commit wouldn't actually capture.
+      const anchor = node ? snappedAnchorForDrop(rectOf(node), point) : undefined;
+      useUiStore.getState().setArmedAnchor(anchor && node ? { nodeId: node.id, ...anchor } : null);
     },
     [endpoint, findDropNode, onDrag, screenToFlowPosition],
   );
@@ -1000,7 +1042,7 @@ function EdgeEndpointHandle({
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const node = findDropNode(point);
       if (!node) return; // Empty canvas: leave the connection exactly as it was.
-      const anchor = anchorForDrop(rectOf(node), point);
+      const anchor = snappedAnchorForDrop(rectOf(node), point);
       useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, anchor?.side, anchor?.offset);
     },
     [edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],

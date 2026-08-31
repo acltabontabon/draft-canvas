@@ -17,10 +17,11 @@ import {
 import { defaultTextFor } from '../document/factory';
 import { descendantsOf } from '../document/operations';
 import type { DraftDocument, Side } from '../document/types';
-import { anchorForDrop, isSide, rectOf, type Rect } from '../edges/routing';
+import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
 import { useEditorStore } from '../store/editorStore';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
+import { CanvasBackground } from './CanvasBackground';
 import { ATTACH_DWELL_MS, deepestBoundaryAt, evaluateAttachCandidates } from './dragTargets';
 import { findEdgeDropCandidate } from './edgeDropTarget';
 import { DraftEdgeView } from './DraftEdgeView';
@@ -45,6 +46,10 @@ const nodeTypes = { [NODE_COMPONENT]: DraftNodeView };
 const edgeTypes = { [EDGE_COMPONENT]: DraftEdgeView };
 
 const PRO_OPTIONS = { hideAttribution: true } as const;
+
+/** How much further Presentation Mode dims a configured background, on top of
+ *  the user's own setting — enough to recede further without disappearing. */
+const PRESENTATION_EXTRA_DIM = 0.2;
 
 interface ProjectionState {
   nodes: DraftRfNode[];
@@ -216,6 +221,7 @@ export interface CanvasProps {
   onQuickConnectMenu?: (
     sourceId: string,
     sourceSide: Side | undefined,
+    sourceOffset: number | undefined,
     flowPosition: { x: number; y: number },
     screenPosition: { x: number; y: number },
   ) => void;
@@ -642,12 +648,22 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
-      // Handle ids are the side they sit on ('top'/'right'/'bottom'/'left'),
-      // so this is the drag's actual start/end edge, not a guess — see
-      // `EdgeAnchor` in `document/types.ts`.
-      const sourceSide = isSide(connection.sourceHandle) ? connection.sourceHandle : undefined;
-      const targetSide = isSide(connection.targetHandle) ? connection.targetHandle : undefined;
-      store.getState().connect(connection.source, connection.target, sourceSide, targetSide);
+      // A handle id encodes exactly which of the 12 anchors it is (see
+      // `HANDLE_ANCHORS`/`parseAnchorId` in `edges/routing.ts`), so this is
+      // the drag's actual start/end point, not a guess — see `EdgeAnchor` in
+      // `document/types.ts`.
+      const sourceAnchor = parseAnchorId(connection.sourceHandle);
+      const targetAnchor = parseAnchorId(connection.targetHandle);
+      store
+        .getState()
+        .connect(
+          connection.source,
+          connection.target,
+          sourceAnchor?.side,
+          targetAnchor?.side,
+          sourceAnchor?.offset,
+          targetAnchor?.offset,
+        );
     },
     [store],
   );
@@ -666,7 +682,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
       if (connectionState.isValid) return;
       const source = connectionState.fromNode?.id;
       if (!source) return;
-      const sourceSide = isSide(connectionState.fromHandle?.id) ? connectionState.fromHandle.id : undefined;
+      const sourceAnchor = parseAnchorId(connectionState.fromHandle?.id);
 
       const point = 'changedTouches' in event ? event.changedTouches[0] : event;
       if (!point) return;
@@ -691,11 +707,19 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
       if (droppedOn) {
         if (droppedOn.id !== source) {
           // A body-hit, not a handle — a drop that clearly favours one side
-          // attaches close to where the user actually dropped it; a drop near
-          // dead centre keeps the dynamic side choice `chooseSides` would
-          // pick anyway. See `anchorForDrop` in `edges/routing.ts`.
-          const targetAnchor = anchorForDrop(rectOf(droppedOn), position);
-          state.connect(source, droppedOn.id, sourceSide, targetAnchor?.side, undefined, targetAnchor?.offset);
+          // attaches close to where the user actually dropped it (snapped to
+          // the same 3-point grid a real handle sits on); a drop near dead
+          // centre keeps the dynamic side choice `chooseSides` would pick
+          // anyway. See `snappedAnchorForDrop` in `edges/routing.ts`.
+          const targetAnchor = snappedAnchorForDrop(rectOf(droppedOn), position);
+          state.connect(
+            source,
+            droppedOn.id,
+            sourceAnchor?.side,
+            targetAnchor?.side,
+            sourceAnchor?.offset,
+            targetAnchor?.offset,
+          );
         }
         return;
       }
@@ -705,7 +729,8 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
       // decides what appears.
       onQuickConnectMenu?.(
         source,
-        sourceSide,
+        sourceAnchor?.side,
+        sourceAnchor?.offset,
         { x: Math.round(position.x - 88), y: Math.round(position.y - 34) },
         { x: point.clientX, y: point.clientY },
       );
@@ -781,6 +806,11 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
       data-focus={focusActive ? 'on' : undefined}
       data-lens={lensActive ? 'on' : undefined}
     >
+      <CanvasBackground
+        settings={document.settings.background}
+        documentId={document.metadata.id}
+        extraDim={explainActive ? PRESENTATION_EXTRA_DIM : 0}
+      />
       <Markers />
       <ReactFlow
         nodes={nodes}
@@ -807,6 +837,14 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
         // force the user to aim at the one handle designated as a target, which
         // is exactly the fiddling this tool exists to avoid.
         connectionMode={ConnectionMode.Loose}
+        // Slightly past React Flow's own default (20px) — with 3 handles per
+        // side now sitting closer together, this is what lets its native
+        // nearest-handle highlight/snap (`.connectingto.valid`) still engage
+        // without pixel-precision aim, while staying short enough that a drop
+        // near a small node's centre still falls through to `onConnectEnd`'s
+        // own dynamic-routing dead zone (`CENTER_DROP_TOLERANCE`) instead of
+        // always resolving to one specific handle.
+        connectionRadius={28}
         nodesDraggable={interactive}
         nodesConnectable={interactive}
         elementsSelectable={interactive}
@@ -826,6 +864,12 @@ export function Canvas({ onCreateAt, onQuickConnectMenu }: CanvasProps) {
             gap={grid === 'lines' ? 32 : 22}
             size={grid === 'lines' ? 1 : 1.4}
             color={theme.grid}
+            // React Flow's own grid layer paints an opaque backdrop by
+            // default — without this, it silently covers `.dc-canvas`'s own
+            // background (and, since Phase 5.1, a configured background
+            // image) with its own dark fill, coincidentally close enough to
+            // the app's dark theme that this went unnoticed until now.
+            bgColor="transparent"
           />
         )}
 

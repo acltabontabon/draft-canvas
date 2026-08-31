@@ -4,12 +4,13 @@ import { minSizeFor } from '../document/factory';
 import { explainNodeTier, lensNodeTier, type ExplainTier } from '../document/flow';
 import type { DraftNode } from '../document/types';
 import { CODE_LAYOUT, describeContext, describeNode, naturalCodeSize } from '../nodes/describe';
-import { HANDLE_SIDES, positionForSide } from '../edges/routing';
+import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
 import { useEditorStore, type EditorStore } from '../store/editorStore';
 import { edgeIndex, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
+import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 import type { DraftNodeData } from './projection';
@@ -35,12 +36,23 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const updateNodeText = useEditorStore((state) => state.updateNodeText);
   const updateNodeById = useEditorStore((state) => state.updateNodeById);
   const theme = useThemeValue();
+  const { preset } = usePersonality();
   const updateNodeInternals = useUpdateNodeInternals();
   // A boolean, not the id itself: every node's selector runs on every drag
   // frame, so only the two nodes whose armed state actually flips re-render.
   const isAttachTarget = useUiStore((state) => state.attachArmedTarget === id);
   // Same boolean-not-id discipline as `isAttachTarget` — see its comment.
   const isReconnectTarget = useUiStore((state) => state.reconnectHoverTarget === id);
+  // Which specific anchor (side + offset) a reconnect drag is currently
+  // hovering, if any is on this node — null on every other node, so only the
+  // one matching handle (see the render below) ever re-renders when this
+  // changes. A plain string, not the `armedAnchor` object itself, so zustand's
+  // default equality still skips a re-render when it hasn't actually changed.
+  const armedAnchorKey = useUiStore((state) =>
+    state.armedAnchor && state.armedAnchor.nodeId === id
+      ? `${state.armedAnchor.side}:${state.armedAnchor.offset}`
+      : null,
+  );
   const setOpenAttachmentPopover = useUiStore((state) => state.setOpenAttachmentPopover);
   const popoverOpen = useUiStore((state) => state.openAttachmentPopover === id);
   const editRequested = useUiStore((state) => state.editRequestId === id);
@@ -63,8 +75,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     if (!editRequested) return;
     useUiStore.getState().requestEdit(null);
     // oxlint-disable-next-line set-state-in-effect -- one-shot external command, see comment above.
-    if (mode !== 'present') setEditing(true);
-  }, [editRequested, mode]);
+    if (mode !== 'present' && node?.type !== 'queue') setEditing(true);
+  }, [editRequested, mode, node?.type]);
 
   useLayoutEffect(() => {
     if (!editing) return;
@@ -108,9 +120,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const shapes = useMemo(() => {
     if (!liveNode) return [];
     beginClipScope(liveNode.id);
-    return emitDisplayList(describeNode(liveNode, describeContext(theme)));
+    return emitDisplayList(describeNode(liveNode, describeContext(theme, preset)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
-  }, [liveNode, theme]);
+  }, [liveNode, theme, preset]);
 
   if (!node) return null;
 
@@ -118,7 +130,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const readOnly = mode === 'present';
 
   const beginEditing = () => {
-    if (readOnly) return;
+    // A queue's name is always just its kind (Queue/Topic/Stream) — see
+    // `nodes/describe.ts`'s `queue()` — so there is nothing here to type.
+    if (readOnly || node.type === 'queue') return;
     setEditing(true);
   };
 
@@ -252,14 +266,27 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         Handles are rendered in every mode, including presentation. React Flow
         resolves an edge's endpoints through them, so a node without handles
         silently drops all of its connectors. They are hidden with CSS instead.
+
+        Three per side (25%/50%/75%, see `HANDLE_ANCHORS`) rather than one at
+        the midpoint — `position` still carries React Flow's own side
+        classification, but a handle's precise place *along* that side has no
+        equivalent in its `Position` enum, so it's set here via an inline
+        percentage instead, layered on top of React Flow's own 50% centering
+        transform.
       */}
-      {HANDLE_SIDES.map((side) => (
+      {HANDLE_ANCHORS.map((anchor) => (
         <Handle
-          key={side}
-          id={side}
+          key={anchor.id}
+          id={anchor.id}
           type="source"
-          position={positionForSide(side)}
+          position={anchor.position}
           className="dc-handle"
+          data-armed={armedAnchorKey === `${anchor.side}:${anchor.offset}` ? 'true' : undefined}
+          style={
+            anchor.side === 'top' || anchor.side === 'bottom'
+              ? { left: `${anchor.offset * 100}%` }
+              : { top: `${anchor.offset * 100}%` }
+          }
           isConnectable={!readOnly}
         />
       ))}

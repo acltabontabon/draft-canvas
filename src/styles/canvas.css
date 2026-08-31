@@ -15,6 +15,27 @@
   background: transparent;
 }
 
+/* ------------------------------------------------------- 5.1 background -- */
+
+.dc-canvas-background {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.dc-canvas-background-image {
+  position: absolute;
+  inset: 0;
+}
+
+.dc-canvas-background-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--dc-canvas);
+  transition: opacity 200ms ease;
+}
+
 .dc-defs {
   position: absolute;
   width: 0;
@@ -131,14 +152,28 @@
   opacity: 1;
 }
 
+/* Repointing an existing connector's endpoint (`DraftEdgeView.tsx`'s
+   hand-rolled `EdgeEndpointHandle`) has no equivalent of React Flow's own
+   `.connecting` class, since it never goes through React Flow's connection
+   machinery — this is that gesture's own reveal trigger. */
+.dc-editor[data-reconnecting='true'] .dc-handle {
+  opacity: 1;
+}
+
 /*
  * React Flow already tracks which handle the pointer is closest to while a
  * connection is in flight and tags it `.connectingto`/`.valid` — this makes
  * that one handle read as "release here" without any hit-testing of our own.
  * The result should feel obvious before the user lets go, not surprise them
  * after (see docs/ARCHITECTURE.md's connector routing notes).
+ *
+ * `[data-armed='true']` is the same idea for a reconnect drag, which has no
+ * native equivalent — `DraftEdgeView.tsx`'s `EdgeEndpointHandle` sets it by
+ * hand on whichever handle its own live hit-testing currently favours, so
+ * both gestures read as the same "here's where it'll land" language.
  */
-.dc-handle.connectingto.valid {
+.dc-handle.connectingto.valid,
+.dc-handle[data-armed='true'] {
   opacity: 1;
   transform: scale(1.6);
   background: var(--dc-selection);

@@ -152,6 +152,34 @@ export function anchorForDrop(rect: Rect, point: { x: number; y: number }): Edge
   return anchorAt(rect, point);
 }
 
+/**
+ * The three anchor points offered per side (25% / 50% / 75%) — the fixed grid
+ * every rendered handle sits on (see `HANDLE_ANCHORS`). `anchorAt`/
+ * `anchorForDrop` above stay fully continuous on purpose (used as-is
+ * elsewhere, and covered by their own tests); snapping to this grid only
+ * happens where an interactive drag actually captures a point, via
+ * `snappedAnchorForDrop` below.
+ */
+export const ANCHOR_OFFSETS = [0.25, 0.5, 0.75] as const;
+
+function snapOffset(offset: number): number {
+  return ANCHOR_OFFSETS.reduce((nearest, candidate) =>
+    Math.abs(candidate - offset) < Math.abs(nearest - offset) ? candidate : nearest,
+  );
+}
+
+/**
+ * `anchorForDrop`, snapped to the fixed 3-point grid — what a connect or
+ * reconnect drag onto a node's body actually captures, and what a live
+ * "nearest anchor" preview during that drag should highlight. Stays
+ * `undefined` exactly when `anchorForDrop` does, so a drop dead-centre still
+ * keeps routing dynamic rather than locking a specific (snapped) point.
+ */
+export function snappedAnchorForDrop(rect: Rect, point: { x: number; y: number }): EdgeAnchor | undefined {
+  const anchor = anchorForDrop(rect, point);
+  return anchor ? { side: anchor.side, offset: snapOffset(anchor.offset) } : undefined;
+}
+
 export interface RoutedEdge {
   d: string;
   labelX: number;
@@ -594,8 +622,6 @@ export function routeEdge(
   });
 }
 
-export const HANDLE_SIDES: readonly Side[] = SIDES;
-
 export function positionForSide(side: Side): Position {
   return SIDE_TO_POSITION[side];
 }
@@ -603,4 +629,55 @@ export function positionForSide(side: Side): Position {
 /** Type guard for a handle id / stored value that should be one of the four sides. */
 export function isSide(value: unknown): value is Side {
   return typeof value === 'string' && (SIDES as readonly string[]).includes(value);
+}
+
+export interface HandleAnchor {
+  /** Parseable id encoding both side and offset index — see `parseAnchorId`. */
+  id: string;
+  side: Side;
+  offset: number;
+  position: Position;
+}
+
+/**
+ * Which `ANCHOR_OFFSETS` index to emit first, second, third, for each side —
+ * `1` (the midpoint, `0.5`) leads so this array's first four entries are
+ * exactly the one-per-side, centre-only handles that existed before this
+ * grid, in the same `SIDES` order (top, right, bottom, left) they always
+ * rendered in. Nothing reads `HANDLE_ANCHORS` by position — this is purely so
+ * `.dc-handle`'s DOM order doesn't shift under existing positional lookups
+ * (e.g. an e2e spec's `.nth(1)` for "the source's right-side handle").
+ */
+const OFFSET_INDEX_ORDER = [1, 0, 2] as const;
+
+/** Every real, renderable connection point on a node: 3 per side (`ANCHOR_OFFSETS`), 12 total. */
+export const HANDLE_ANCHORS: readonly HandleAnchor[] = OFFSET_INDEX_ORDER.flatMap((offsetIndex) =>
+  SIDES.map((side) => ({
+    id: `${side}@${offsetIndex}`,
+    side,
+    offset: ANCHOR_OFFSETS[offsetIndex],
+    position: SIDE_TO_POSITION[side],
+  })),
+);
+
+/** Decodes a `HANDLE_ANCHORS` id (e.g. `"top@1"`) back into the `EdgeAnchor` it represents. */
+export function parseAnchorId(value: unknown): EdgeAnchor | undefined {
+  if (typeof value !== 'string') return undefined;
+  const [side, indexPart] = value.split('@');
+  if (!isSide(side)) return undefined;
+  const offset = ANCHOR_OFFSETS[Number(indexPart)];
+  return offset === undefined ? undefined : { side, offset };
+}
+
+/** The inverse of `parseAnchorId` — an `EdgeAnchor` back into the `HANDLE_ANCHORS` id it names,
+ *  snapping to the nearest of the three offsets a stored anchor doesn't land exactly on. `undefined`
+ *  in, `undefined` out: an edge with no explicit anchor has no specific handle to point React Flow
+ *  at either, and should keep resolving dynamically. */
+export function handleIdForAnchor(anchor: EdgeAnchor | undefined): string | undefined {
+  if (!anchor) return undefined;
+  const index = ANCHOR_OFFSETS.reduce(
+    (best, candidate, i) => (Math.abs(candidate - anchor.offset) < Math.abs(ANCHOR_OFFSETS[best]! - anchor.offset) ? i : best),
+    0,
+  );
+  return `${anchor.side}@${index}`;
 }

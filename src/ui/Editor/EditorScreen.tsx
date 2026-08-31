@@ -17,6 +17,7 @@ import { EmptyState } from './EmptyState';
 import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
 import { FocusIndicator } from './FocusIndicator';
+import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { ExportDialog } from './ExportDialog';
 import { Inspector } from './Inspector';
 import { ShortcutSheet } from './ShortcutSheet';
@@ -42,6 +43,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const quickConnect = useUiStore((state) => state.quickConnect);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
+  const reconnecting = useUiStore((state) => state.reconnectDragActive);
 
   const theme = useThemeValue();
   const playback = useFlowPlayback();
@@ -87,7 +89,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         source: quickConnect.source,
         target: created.id,
         sourceAnchor: quickConnect.sourceSide
-          ? { side: quickConnect.sourceSide, offset: 0.5 }
+          ? { side: quickConnect.sourceSide, offset: quickConnect.sourceOffset ?? 0.5 }
           : undefined,
       });
       store.getState().addNodesWithEdges([created], [edge], 'Connect to new node');
@@ -122,7 +124,12 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   const presenting = mode === 'present';
 
   return (
-    <div className="dc-editor" data-mode={mode} data-armed={armed ? 'true' : undefined}>
+    <div
+      className="dc-editor"
+      data-mode={mode}
+      data-armed={armed ? 'true' : undefined}
+      data-reconnecting={reconnecting ? 'true' : undefined}
+    >
       {!presenting && (
         <Toolbar
           title={title}
@@ -137,8 +144,8 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       <div className="dc-editor-canvas">
         <Canvas
           onCreateAt={(position) => createAt(armed ?? CARD_PRESET, position)}
-          onQuickConnectMenu={(source, sourceSide, flowPosition, screenPosition) =>
-            setQuickConnect({ source, sourceSide, flowPosition, screenPosition })
+          onQuickConnectMenu={(source, sourceSide, sourceOffset, flowPosition, screenPosition) =>
+            setQuickConnect({ source, sourceSide, sourceOffset, flowPosition, screenPosition })
           }
         />
         {quickConnect && (
@@ -175,6 +182,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
 
       <ShortcutSheet />
       <ExportDialog />
+      <CanvasSettingsDialog />
 
       {/* Hidden control kept reachable for screen readers in presentation mode. */}
       {presenting && (

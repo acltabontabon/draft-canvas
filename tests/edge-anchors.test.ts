@@ -3,7 +3,15 @@ import { createDocument, createEdge, createNode } from '../src/document/factory'
 import { addEdges, addNodes, reconnectEdge } from '../src/document/operations';
 import { normalizeDocument } from '../src/document/validate';
 import { DRAFT_FORMAT, CURRENT_VERSION } from '../src/document/types';
-import { anchorAt, anchorForDrop, anchorPoint } from '../src/edges/routing';
+import {
+  ANCHOR_OFFSETS,
+  HANDLE_ANCHORS,
+  anchorAt,
+  anchorForDrop,
+  anchorPoint,
+  parseAnchorId,
+  snappedAnchorForDrop,
+} from '../src/edges/routing';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 describe('connector anchors', () => {
@@ -244,6 +252,89 @@ describe('anchorForDrop — the centre-tolerant gate used for connect/reconnect 
   it('captures a real anchor for a drop near a corner', () => {
     const anchor = anchorForDrop(rect, { x: 105, y: 202 });
     expect(anchor).toEqual(anchorAt(rect, { x: 105, y: 202 }));
+  });
+});
+
+describe('HANDLE_ANCHORS — the 12 rendered connection points', () => {
+  it('offers exactly 3 anchors per side, 12 total', () => {
+    expect(HANDLE_ANCHORS).toHaveLength(12);
+    for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+      const onSide = HANDLE_ANCHORS.filter((anchor) => anchor.side === side);
+      expect(onSide.map((anchor) => anchor.offset).sort()).toEqual([...ANCHOR_OFFSETS]);
+    }
+  });
+
+  it('every id is unique and parses back to its own side and offset', () => {
+    const ids = new Set(HANDLE_ANCHORS.map((anchor) => anchor.id));
+    expect(ids.size).toBe(12);
+    for (const anchor of HANDLE_ANCHORS) {
+      expect(parseAnchorId(anchor.id)).toEqual({ side: anchor.side, offset: anchor.offset });
+    }
+  });
+});
+
+describe('parseAnchorId', () => {
+  it('rejects a bare side, an unknown side, and non-string values', () => {
+    expect(parseAnchorId('top')).toBeUndefined();
+    expect(parseAnchorId('north@0')).toBeUndefined();
+    expect(parseAnchorId(undefined)).toBeUndefined();
+    expect(parseAnchorId(null)).toBeUndefined();
+  });
+
+  it('rejects an out-of-range or malformed offset index', () => {
+    expect(parseAnchorId('top@3')).toBeUndefined();
+    expect(parseAnchorId('top@-1')).toBeUndefined();
+    expect(parseAnchorId('top@x')).toBeUndefined();
+  });
+});
+
+describe('snappedAnchorForDrop — what an interactive drag actually captures', () => {
+  const rect = { x: 100, y: 200, width: 80, height: 40 };
+
+  it('snaps a near-corner drop to the nearest of the 3 fixed offsets', () => {
+    // Continuous anchorAt would give ~0.0625 here (see the anchorAt tests
+    // above) — the nearest fixed point is 0.25.
+    expect(snappedAnchorForDrop(rect, { x: 105, y: 202 })).toEqual({ side: 'top', offset: 0.25 });
+  });
+
+  it('snaps a drop past the far corner to the nearest fixed offset, not the raw extreme', () => {
+    // Continuous offset ~0.9375 — nearest fixed point is 0.75.
+    expect(snappedAnchorForDrop(rect, { x: 175, y: 238 })).toEqual({ side: 'bottom', offset: 0.75 });
+  });
+
+  it('stays undefined for a dead-centre drop, exactly like the unsnapped version', () => {
+    expect(snappedAnchorForDrop(rect, { x: 140, y: 220 })).toBeUndefined();
+  });
+
+  it('every possible offset in 0..1 snaps to one of the 3 fixed points', () => {
+    for (let x = rect.x; x <= rect.x + rect.width; x += 1) {
+      const anchor = snappedAnchorForDrop(rect, { x, y: rect.y });
+      if (anchor) expect(ANCHOR_OFFSETS).toContain(anchor.offset);
+    }
+  });
+});
+
+describe('connect() with an explicit non-centre offset — the actual bug a real handle-drawn connection used to hit', () => {
+  const store = useEditorStore;
+
+  beforeEach(() => {
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Anchors'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+  });
+
+  it('honours a non-0.5 offset for both endpoints, the way a real 25%/75% handle now supplies', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    const edge = store.getState().connect(a.id, b.id, 'right', 'left', 0.25, 0.75)!;
+
+    expect(edge.sourceAnchor).toEqual({ side: 'right', offset: 0.25 });
+    expect(edge.targetAnchor).toEqual({ side: 'left', offset: 0.75 });
   });
 });
 
