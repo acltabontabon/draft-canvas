@@ -185,6 +185,17 @@ test.describe('Draft Canvas', () => {
     // Real SVG primitives, so the file renders in a README.
     expect(svgText).not.toContain('foreignObject');
 
+    /* --- animated flow (GIF) ------------------------------------------------- */
+
+    await page.getByTitle(/^Export/).click();
+    const gifDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export GIF' }).click();
+    const gif = await gifDownload;
+    expect(gif.suggestedFilename()).toBe('payment-flow.gif');
+    const gifBytes = readFileSync(await gif.path());
+    expect(gifBytes.subarray(0, 6).toString('ascii')).toBe('GIF89a');
+    expect(gifBytes.byteLength).toBeGreaterThan(500);
+
     /* --- delete locally, then import back ----------------------------------- */
 
     await page.getByTitle('Back to your diagrams').click();

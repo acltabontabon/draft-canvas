@@ -7,6 +7,7 @@ import { FILE_MIME, fileNameFor, serializeDocument } from './project';
 
 export * from './project';
 export * from './secureProject';
+export * from './gif';
 export { downloadBlob, downloadText } from './download';
 
 export function exportProjectFile(document: DraftDocument): void {

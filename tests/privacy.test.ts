@@ -72,10 +72,18 @@ describe('nothing on the canvas can reach a network', () => {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
     const deps = Object.keys(pkg.dependencies ?? {});
     expect(deps).toEqual(
-      expect.arrayContaining(['@xyflow/react', 'idb', 'react', 'react-dom', 'refractor', 'zustand']),
+      expect.arrayContaining([
+        '@xyflow/react',
+        'gifenc',
+        'idb',
+        'react',
+        'react-dom',
+        'refractor',
+        'zustand',
+      ]),
     );
     // A short, auditable dependency list is part of the promise.
-    expect(deps).toHaveLength(6);
+    expect(deps).toHaveLength(7);
     for (const name of deps) {
       expect(name).not.toMatch(/analytics|telemetry|sentry|tracking|posthog|mixpanel|segment/i);
     }

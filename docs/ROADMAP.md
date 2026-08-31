@@ -13,12 +13,13 @@ yet a commitment)
 | [1](#phase-1--core-canvas-experience) | Core Canvas Experience | ✅ Done |
 | [2](#phase-2--developer-diagram-semantics) | Developer Diagram Semantics | ✅ Done |
 | [3](#phase-3--flow--presentation) | Flow & Presentation | ✅ Done |
-| [4](#phase-4--export--sharing) | Export & Sharing | 🚧 Static export done, animated export next |
+| [4](#phase-4--export--sharing) | Export & Sharing | 🚧 Animated export done, ticket export next |
 | [5](#phase-5--personalization) | Personalization | ⬜ Planned |
 | [6](#phase-6--contextual-learning) | Contextual Learning | ⬜ Planned |
 | [7](#phase-7--future--experimental) | Future / Experimental | 🧪 Exploratory |
 
-**What's next:** [4.3 Animated Flow Export](#43-animated-flow-export-gif--planned-next).
+**What's next:** [4.4 Export for Ticket](#44-export-for-ticket--planned-later), or start on
+[Phase 5](#phase-5--personalization) — 4.4 isn't scheduled ahead of it.
 
 ## Product principle
 
@@ -122,7 +123,7 @@ engineering work actually happens — a PR, a ticket, a Slack thread.*
   list Phase 0.2 established.
 - **4.2 Secure export/import** — ✅ Done. Passphrase-protected `.dcenc` (independent key material,
   ≥600k-iteration PBKDF2), with a warning on plain export.
-- **4.3 Animated Flow Export (GIF)** — ⬜ Planned (next). Export a Presentation Mode walkthrough
+- **4.3 Animated Flow Export (GIF)** — ✅ Done. Export a Presentation Mode walkthrough
   (Phase 3) as a GIF someone can open in a ticket without reopening Draft Canvas. Key constraints:
   - **GIF only, first.** Not a general media pipeline — a GIF behaves like an image (no player
     chrome, loops on its own), which matches how a short step-by-step walk should be consumed.
@@ -131,12 +132,15 @@ engineering work actually happens — a PR, a ticket, a Slack thread.*
     frames. No keyframe editor, timeline, transition designer, or a parallel diagram copy built for
     animation. If a step needs to look different for a good export, that's a Presentation Mode
     change, not an export-only branch.
-  - **Small export UI.** Speed and loop are plausibly the entire surface; no FPS, codec, or bitrate
-    exposed to the user.
+  - **Small export UI.** Speed and loop are the entire surface; no FPS, codec, or bitrate exposed
+    to the user.
 
-  This is next specifically because everything it depends on — connectors that mean something
-  (Phase 2), Presentation Mode, and a Flow vocabulary rich enough to be worth watching (Phase 3) —
-  is already shipped. It does not require a formal sequence-diagram language to be worth building.
+  Built headlessly rather than by screen-capturing the live canvas: a per-frame renderer
+  (`render/svg/flowFrame.ts`) reuses the same display-list pipeline as 4.1/4.2, decorated with the
+  same active/shown/hidden tiers and connector pulse Presentation Mode itself computes
+  (`explainNodeTier`/`explainEdgeTier`, `dc-flow-pulse`), so a frame can never drift from what
+  Presentation Mode looks like live, and stays deterministic rather than sampled off wall-clock
+  CSS animation.
 - **4.4 Export for Ticket** — ⬜ Planned (later). One action producing both `architecture.png` (the
   structural reference) and `flow.gif` (the interaction explanation) for the current Flow. A
   packaging convenience on top of 4.1 and 4.3, not a separate export architecture — not scheduled

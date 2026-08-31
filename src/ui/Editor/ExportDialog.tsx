@@ -1,5 +1,12 @@
-import { useState } from 'react';
-import { exportPngFile, exportProjectFile, exportSecureProjectFile, exportSvgFile } from '../../export';
+import { useState, type ReactNode } from 'react';
+import {
+  exportFlowGifFile,
+  exportPngFile,
+  exportProjectFile,
+  exportSecureProjectFile,
+  exportSvgFile,
+  type GifSpeed,
+} from '../../export';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { useTheme } from '../theme/useTheme';
@@ -26,8 +33,21 @@ export function ExportDialog() {
   const [selectionOnly, setSelectionOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [securePromptOpen, setSecurePromptOpen] = useState(false);
+  const [gifFlowIdChoice, setGifFlowIdChoice] = useState<string | null>(null);
+  const [gifSpeed, setGifSpeed] = useState<GifSpeed>('normal');
+  const [gifLoop, setGifLoop] = useState(true);
 
   if (!open) return null;
+
+  // Re-derived every render rather than a `useState` default: a flow created
+  // after this dialog first mounted must still show up without a remount.
+  const gifFlowId =
+    (gifFlowIdChoice && document.flows.some((flow) => flow.id === gifFlowIdChoice)
+      ? gifFlowIdChoice
+      : null) ??
+    selectedFlowId ??
+    document.flows[0]?.id ??
+    '';
 
   const only =
     selectionOnly && selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
@@ -122,6 +142,53 @@ export function ExportDialog() {
           busy={busy}
           onClick={() => void run(() => exportPngFile(document, options), 'PNG export')}
         />
+        {document.flows.length > 0 && (
+          <ExportChoice
+            title="Animated flow"
+            detail="A GIF walkthrough of a Flow's steps — camera moves, connectors pulse, drop it in a ticket."
+            action="Export GIF"
+            busy={busy || !gifFlowId}
+            onClick={() =>
+              void run(
+                () => exportFlowGifFile(document, gifFlowId, { theme: paletteName, speed: gifSpeed, loop: gifLoop }),
+                'GIF export',
+              )
+            }
+          >
+            {document.flows.length > 1 && (
+              <label className="dc-field dc-field-inline">
+                <span>Flow</span>
+                <select
+                  className="dc-select"
+                  value={gifFlowId}
+                  onChange={(event) => setGifFlowIdChoice(event.target.value)}
+                >
+                  {document.flows.map((flow) => (
+                    <option key={flow.id} value={flow.id}>
+                      {flow.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="dc-field dc-field-inline">
+              <span>Speed</span>
+              <select
+                className="dc-select"
+                value={gifSpeed}
+                onChange={(event) => setGifSpeed(event.target.value as GifSpeed)}
+              >
+                <option value="slow">Slow</option>
+                <option value="normal">Normal</option>
+                <option value="fast">Fast</option>
+              </select>
+            </label>
+            <label className="dc-check">
+              <input type="checkbox" checked={gifLoop} onChange={(event) => setGifLoop(event.target.checked)} />
+              <span>Loop continuously</span>
+            </label>
+          </ExportChoice>
+        )}
       </div>
 
       <p className="dc-muted dc-export-note">
@@ -224,18 +291,21 @@ function ExportChoice({
   action,
   busy,
   onClick,
+  children,
 }: {
   title: string;
   detail: string;
   action: string;
   busy: boolean;
   onClick: () => void;
+  children?: ReactNode;
 }) {
   return (
     <div className="dc-export-choice">
       <div>
         <strong>{title}</strong>
         <p className="dc-muted">{detail}</p>
+        {children && <div className="dc-export-choice-options">{children}</div>}
       </div>
       <Button variant="solid" icon="export" disabled={busy} onClick={onClick}>
         {action}

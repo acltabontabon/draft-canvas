@@ -19,11 +19,8 @@ export interface RasterizeOptions {
   background?: string;
 }
 
-export async function rasterizeSvg(
-  svg: string,
-  options: RasterizeOptions,
-): Promise<Blob> {
-  const scale = options.scale ?? 2;
+async function drawSvgToCanvas(svg: string, options: RasterizeOptions): Promise<HTMLCanvasElement> {
+  const scale = options.scale ?? 1;
   const width = Math.max(1, Math.round(options.width * scale));
   const height = Math.max(1, Math.round(options.height * scale));
 
@@ -40,6 +37,14 @@ export async function rasterizeSvg(
     ctx.fillRect(0, 0, width, height);
   }
   ctx.drawImage(image, 0, 0, width, height);
+  return canvas;
+}
+
+export async function rasterizeSvg(
+  svg: string,
+  options: RasterizeOptions,
+): Promise<Blob> {
+  const canvas = await drawSvgToCanvas(svg, { ...options, scale: options.scale ?? 2 });
 
   return new Promise<Blob>((resolve, reject) => {
     try {
@@ -52,6 +57,28 @@ export async function rasterizeSvg(
       reject(new RasterizeError('This browser refused to export the image.', error));
     }
   });
+}
+
+export interface RasterizedPixels {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+}
+
+/**
+ * Same rasterization `rasterizeSvg` uses, but returns raw RGBA pixels instead
+ * of an encoded PNG — what the Phase 4.3 GIF exporter feeds to `gifenc`'s
+ * quantizer one frame at a time.
+ */
+export async function rasterizeSvgToPixels(
+  svg: string,
+  options: RasterizeOptions,
+): Promise<RasterizedPixels> {
+  const canvas = await drawSvgToCanvas(svg, options);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new RasterizeError('This browser did not provide a 2D canvas context.');
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  return { data, width: canvas.width, height: canvas.height };
 }
 
 function loadSvgImage(svg: string): Promise<HTMLImageElement> {

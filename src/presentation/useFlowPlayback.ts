@@ -102,6 +102,27 @@ const MAX_STEP_ZOOM = 1.15;
 const STEP_PADDING = 0.4;
 
 /**
+ * Resolves the camera viewport a step's playback focus should show: its
+ * explicit `viewport` verbatim, or a bounds-fit of its members capped at
+ * `MAX_STEP_ZOOM`. `null` when the step has neither (nothing to focus on).
+ *
+ * Pure — no React Flow instance required — so the headless GIF exporter
+ * (`src/export/gif.ts`) computes the exact same camera path Presentation
+ * Mode itself would, rather than reimplementing this math.
+ */
+export function resolveStepViewport(
+  target: FlowPlaybackStep,
+  nodesById: Map<string, DraftNode>,
+  viewWidth: number,
+  viewHeight: number,
+): DraftViewport | null {
+  if (target.viewport) return target.viewport;
+  const bounds = stepFocusBounds(target, nodesById);
+  if (!bounds) return null;
+  return getViewportForBounds(bounds, viewWidth, viewHeight, 0.1, MAX_STEP_ZOOM, STEP_PADDING);
+}
+
+/**
  * Presentation Mode: walking someone through a flow, one connection at a time.
  *
  * Reads directly from the selected flow's ordered steps — there is no
@@ -153,16 +174,10 @@ export function useFlowPlayback(): FlowPlaybackController {
       if (isComfortablyVisible(bounds, getViewport(), viewWidth, viewHeight)) return;
 
       // `fitBounds` has no maximum zoom, so a step between two adjacent nodes
-      // would fill the screen with them. Computing the viewport directly is the
-      // only way to cap it.
-      const next = getViewportForBounds(
-        bounds,
-        viewWidth,
-        viewHeight,
-        0.1,
-        MAX_STEP_ZOOM,
-        STEP_PADDING,
-      );
+      // would fill the screen with them. `resolveStepViewport` computes it
+      // directly, which is the only way to cap it.
+      const next = resolveStepViewport(target, nodeIndex(document.nodes), viewWidth, viewHeight);
+      if (!next) return;
       void setViewport(next, { duration: 380 });
     },
     [document.nodes, getViewport, setViewport, viewHeight, viewWidth],

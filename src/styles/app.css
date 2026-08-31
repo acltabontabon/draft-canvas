@@ -1020,6 +1020,18 @@ kbd {
   line-height: 1.5;
 }
 
+.dc-export-choice-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.dc-export-choice-options .dc-field-inline {
+  gap: 6px;
+}
+
 .dc-export-note {
   margin: 14px 0 0;
   font-size: 12px;
