@@ -252,12 +252,15 @@ test.describe('Flows', () => {
 
   test('marks a connector async (dashed) and gives it a condition chip', async ({ page }) => {
     await newCanvas(page, 'Async and conditions');
-    // Two services, not a queue: a service/queue pair is now automatically
-    // inferred as an EVENT connector (see `connectorSemantics.ts`), whose
-    // dash pattern takes priority over the plain `async` flag this test is
-    // actually exercising.
-    await createNode(page, 'Service', { x: 300, y: 250 });
-    await createNode(page, 'Service', { x: 700, y: 250 });
+    // Two plain, unclassified shapes — not two Services (which now get the opinionated
+    // Service→Service editor, whose own Sync/Async choice deliberately never dashes the line —
+    // see `connector-semantics.spec.ts`'s "never dashes the primary request line" test), and not
+    // a service/queue pair (auto-inferred as an EVENT connector, whose dash pattern would take
+    // priority over the plain `async` flag this test is actually exercising). Two `Circle` nodes
+    // have no capability-matrix entry at all, so they keep the generic, unrestricted "Flow kind"
+    // picker this coupling still applies to.
+    await createNode(page, 'Circle', { x: 300, y: 250 });
+    await createNode(page, 'Circle', { x: 700, y: 250 });
     await connect(page, 0, 1);
 
     await clickEdgeBetween(page, 0);
@@ -265,8 +268,12 @@ test.describe('Flows', () => {
     // `connector-semantics.spec.ts`'s file doc comment.
     await page.getByRole('button', { name: 'More connector options' }).click();
     // The standalone "Async" toggle was removed as redundant — picking the
-    // "Async" kind already sets the flag too (see `setEdgeKind`).
-    await page.getByRole('combobox', { name: 'Flow kind' }).selectOption('async');
+    // "Async" kind already sets the flag too (see `setEdgeKind`). Every dropdown in this
+    // popover is a custom `InspectorSelect`, not a native `<select>` — see
+    // `connector-semantics.spec.ts`'s file doc comment for the click-to-open, click-option
+    // interaction pattern.
+    await page.getByRole('button', { name: 'Flow kind' }).click();
+    await page.getByRole('option', { name: 'Async', exact: true }).click();
     await expect(page.locator('.dc-edge-line')).toHaveCSS('stroke-dasharray', /6.*4/);
 
     const condition = page.getByLabel('Condition');

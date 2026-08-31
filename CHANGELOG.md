@@ -8,6 +8,8 @@ break as we settle on a stable 1.0 shape.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.2] - 2026-08-31
+
 ### Added
 
 - Export a Presentation Mode flow as an animated GIF — the same camera moves, connector pulse,
@@ -29,6 +31,21 @@ break as we settle on a stable 1.0 shape.
   card — it collapses automatically on the next step unless you reveal it again.
 - Flows can carry an optional accent color, shown only while that flow is the active lens
   (selected, or being presented) — existing flows are unaffected.
+- A direct Service-to-Service connection now defaults to a synchronous request/response
+  interaction — a solid request line with a quiet, dashed reply line — instead of a generic arrow,
+  since that's what a direct service call overwhelmingly means. Every other shape pairing keeps
+  its own sensible default.
+- The connector popover is compact by default (type, flow membership, and a single "⋯"), with the
+  full editor tucked behind "⋯" and grouped into clear Interaction, Request, Response, Route, and
+  Style sections instead of one flat grid of controls. The connector's label is editable right from
+  the compact row.
+- Service-to-Service connectors get their own focused Interaction editor: a Protocol choice (HTTP
+  or Generic Call) and a Mode choice (Sync or Async). HTTP splits its Request and Response into a
+  method or status dropdown plus free text; Generic Call stays a single free-text field. Switching
+  to Async hides the Response section — it isn't part of that interaction — without ever dashing
+  the primary request line, since sync/async is a semantic choice, not a visual style.
+- A small "//" marker appears directly on an async connector, on both horizontal and vertical
+  routes, as a subtle at-a-glance cue for how a call happens — the label still says what happens.
 
 ### Changed
 
@@ -37,6 +54,10 @@ break as we settle on a stable 1.0 shape.
   longer drops you straight into an editable text field.
 - Double-clicking empty canvas with no tool armed now opens a type picker instead of instantly
   placing a shape, matching how dropping a connector on empty canvas already worked.
+- Dropdowns inside the connector popover are now custom-styled controls consistent with the rest
+  of the popover's chrome, instead of the browser's own unstyled native select menus.
+- Request and response lines sit a little further apart, so a busy diagram with several
+  request/response connectors reads as clearly separated pairs rather than a tight, crowded cluster.
 
 ### Removed
 
@@ -57,6 +78,17 @@ break as we settle on a stable 1.0 shape.
   connection type, ⋯) was open no longer leaves that sub-panel showing the *previous*
   connector's data — it now closes automatically on selection change, matching every other
   popover in the app.
+- A response connector's label could render well below its own line instead of hugging it, because
+  its position was nudged twice by two different spacing rules; it now derives directly from the
+  reply line's own path.
+- Two real edges sharing the same pair of shapes could interleave — a reply line drifting into the
+  neighboring connector's lane instead of staying paired with its own request line.
+- The connector popover could end up covering the very connection it was editing; it now measures
+  itself and flips above or below to stay clear.
+- Pressing Escape to close an open dropdown inside the popover's editor could close the whole
+  editor panel instead of just the dropdown.
+- The Generic Call request field rendered noticeably shorter than every other row in the editor;
+  it now matches the height, padding, and type of the rest of the form.
 
 ## [0.1.0-alpha.1] - 2026-08-31
 
@@ -95,5 +127,6 @@ break as we settle on a stable 1.0 shape.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.2...main
+[0.1.0-alpha.2]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/acltabontabon/draft-canvas/commits/v0.1.0-alpha.1

@@ -1033,6 +1033,93 @@
   flex: 1;
 }
 
+/*
+ * `InspectorSelect` — a custom dropdown replacing every native `<select>` in this popover
+ * (see `canvas/InspectorSelect.tsx`'s own doc comment for why: a native select's open popup is
+ * OS-rendered chrome no stylesheet can restyle, and a half-native, half-custom popover would
+ * undercut the whole point of a deliberately-designed compact editor).
+ */
+.dc-inspector-select {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.dc-inspector-select-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-inspector-select-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dc-inspector-select-chevron {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-right: 1.4px solid var(--dc-text-muted);
+  border-bottom: 1.4px solid var(--dc-text-muted);
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.dc-inspector-select-menu {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--dc-border);
+  border-radius: 8px;
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  outline: none;
+}
+
+.dc-inspector-select-option {
+  padding: 6px 8px;
+  border-radius: 5px;
+  color: var(--dc-text);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.dc-inspector-select-option[data-highlighted='true'] {
+  background: var(--dc-surface-raised);
+}
+
+.dc-inspector-select-option[aria-selected='true'] {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+/* An `InspectorSelect` standing in for `.dc-inspector-split-first`'s plain text input — e.g. the
+ * Service→Service Request editor's HTTP method dropdown — narrow and seamed into whatever
+ * follows it, same as the text-input version. */
+.dc-inspector-select-split-first {
+  flex: 0 0 68px;
+}
+
+.dc-inspector-select-split-first .dc-inspector-select-button {
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+}
+
 /* A request/response line's own "verb + subject" split — see `SplitTextEditor`. Visually one
  * field with an internal seam, not two separate boxes, so it still reads as a single value. */
 .dc-inspector-split {

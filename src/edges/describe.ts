@@ -294,6 +294,35 @@ export function describeEdge(
     }
   }
 
+  // Async's own visual cue — two short diagonal ticks at the path's midpoint, the
+  // conventional "cable break" glyph, so an async call reads as one at a glance without
+  // resorting to a dashed *request* line (that's `edge.async`'s own, deliberately separate,
+  // concern). Unlike the event/conditional glyphs above, this shows *alongside* a real label —
+  // it sits on the line itself, not in the label chip's own off-path spot — so, unlike those,
+  // it's outside the `!edge.label` guard. Mirrors `DraftEdgeView.tsx`'s identical marker exactly;
+  // see its own comment for why the tilt is fixed and why a vertical connector additionally gets
+  // a small masked gap behind the ticks (`isVerticalConnector`, reusing `labelSideFor`'s own
+  // vertical-vs-horizontal call via `route.labelSide` so the two can never disagree).
+  if (edge.kind === 'async' && !edge.async) {
+    const isVerticalConnector = route.labelSide === 'left' || route.labelSide === 'right';
+    if (isVerticalConnector) {
+      overlay.push({
+        t: 'rect',
+        x: labelX - 4,
+        y: labelY - 8,
+        w: 8,
+        h: 16,
+        fill: ctx.theme.canvas,
+      });
+    }
+    overlay.push({
+      t: 'path',
+      d: `M${labelX - 5.5},${labelY + 5} L${labelX - 1.5},${labelY - 5} M${labelX + 1.5},${labelY + 5} L${labelX + 5.5},${labelY - 5}`,
+      fill: 'none',
+      stroke: { color, width: 1.6, linecap: 'round' },
+    });
+  }
+
   if (edge.label) {
     const layout = layoutText(edge.label, {
       font: FONTS.edgeLabel,

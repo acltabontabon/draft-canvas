@@ -915,8 +915,8 @@ test.describe('reconnection', () => {
     // event publish, and there's still exactly one connector (moved, not duplicated).
     await expect(page.locator('.dc-edge')).toHaveCount(1);
     await openRelationPanel(page);
-    const select = page.getByRole('combobox', { name: 'Interaction type' });
-    await expect(select).toHaveValue('publishes');
+    const select = page.getByRole('button', { name: 'Interaction type' });
+    await expect(select).toHaveText('Publishes');
   });
 
   test('dragging an endpoint to a different side of the same node keeps the same connection', async ({
@@ -982,8 +982,8 @@ test.describe('reconnection', () => {
     );
     // Still the original Service → Database pair, which infers `writes`.
     await openRelationPanel(page);
-    const select = page.getByRole('combobox', { name: 'Interaction type' });
-    await expect(select).toHaveValue('writes');
+    const select = page.getByRole('button', { name: 'Interaction type' });
+    await expect(select).toHaveText('Writes');
   });
 
   test('dropping a reconnect on empty canvas leaves the original connection intact', async ({ page }) => {
@@ -1018,8 +1018,8 @@ test.describe('reconnection', () => {
     );
     // Still the original Service → Database pair, which infers `writes`.
     await openRelationPanel(page);
-    const select = page.getByRole('combobox', { name: 'Interaction type' });
-    await expect(select).toHaveValue('writes');
+    const select = page.getByRole('button', { name: 'Interaction type' });
+    await expect(select).toHaveText('Writes');
   });
 
   test('a reconnect is one undo step and restores the exact prior connection', async ({ page }) => {
@@ -1043,8 +1043,8 @@ test.describe('reconnection', () => {
     await page.mouse.up();
 
     await openRelationPanel(page);
-    const select = page.getByRole('combobox', { name: 'Interaction type' });
-    await expect(select).toHaveValue('publishes');
+    const select = page.getByRole('button', { name: 'Interaction type' });
+    await expect(select).toHaveText('Publishes');
     // Belt-and-braces: the app's own global shortcut guard (deliberately) ignores Meta+Z while
     // an INPUT/TEXTAREA/SELECT is focused, so make sure the select isn't before relying on undo.
     await select.blur();
@@ -1052,7 +1052,7 @@ test.describe('reconnection', () => {
     await page.keyboard.press('Meta+z');
     // Back to the original Service → Database connection, which infers `writes`.
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
-    await expect(select).toHaveValue('writes');
+    await expect(select).toHaveText('Writes');
   });
 
   test('a plain click on an endpoint never reconnects it — only an actual drag does', async ({ page }) => {

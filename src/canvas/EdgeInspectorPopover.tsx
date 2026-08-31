@@ -10,7 +10,13 @@ import {
   type EdgeSemantic,
 } from '../document/types';
 import { stepIndexOf } from '../document/flow';
-import { capabilityFor, categoryOf, isSyncPairing, type ConnectionCapability } from '../document/connectorSemantics';
+import {
+  capabilityFor,
+  categoryOf,
+  defaultsToResponse,
+  isSyncPairing,
+  type ConnectionCapability,
+} from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { routeBetween } from '../edges/routing';
 import { useEditorStore } from '../store/editorStore';
@@ -18,6 +24,7 @@ import { edgeIndex, nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
 import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
+import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   http: 'HTTP',
@@ -175,6 +182,15 @@ export function EdgeInspectorPopover() {
     if (!panel) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      // This listener runs in the *capture* phase (see the `addEventListener` call below) so
+      // it reliably beats the app's own global Escape-deselect handler regardless of mount
+      // order — but capture on `window` necessarily fires before the event ever reaches an
+      // open `InspectorSelect` menu's own (bubble-phase) Escape handling, no matter which
+      // mounted first. Defer to it when one is open: closing just the menu, not the whole
+      // sub-panel, is what a single Escape press should do there.
+      // `window.document`, not the bare global: this component's own top-level `document` is
+      // the store's `DraftDocument`, shadowing it.
+      if (window.document.querySelector('.dc-inspector-select-menu')) return;
       event.stopPropagation();
       setPanel(null);
     };
@@ -493,6 +509,255 @@ function SplitTextEditor({
   );
 }
 
+/** A single free-text field for a request/response value with no "verb + subject" shape to
+ *  split — Generic Call's Request/Response, which (unlike HTTP) has no fixed vocabulary to
+ *  decompose into two boxes. `key`-remounted by the caller on external changes, same discipline
+ *  as `SplitTextEditor`'s own inputs. */
+function SingleTextEditor({
+  value,
+  onCommit,
+  placeholder,
+  ariaLabel,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+  placeholder: string;
+  ariaLabel: string;
+}) {
+  return (
+    <input
+      className="dc-inspector-control"
+      aria-label={ariaLabel}
+      defaultValue={value}
+      placeholder={placeholder}
+      spellCheck={false}
+      onBlur={(event) => onCommit(event.currentTarget.value.trim())}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key === 'Enter') event.currentTarget.blur();
+      }}
+    />
+  );
+}
+
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+
+/**
+ * Like `SplitTextEditor`, but the first field is a fixed-vocabulary `InspectorSelect` (HTTP
+ * verbs) instead of free text — used only for a Service→Service Request in HTTP mode. Commits
+ * to the same single string field `SplitTextEditor` does (`"METHOD resource"`, e.g. "GET
+ * Customers"); switching protocols back to Generic Call just changes how this one string is
+ * *edited*, never its shape.
+ */
+function HttpRequestEditor({ value, onCommit }: { value: string; onCommit: (next: string) => void }) {
+  const restRef = useRef<HTMLInputElement>(null);
+  const trimmed = value.trim();
+  const spaceIndex = trimmed.indexOf(' ');
+  const rawMethod = (spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex)).toUpperCase();
+  const initialRest = spaceIndex === -1 ? '' : trimmed.slice(spaceIndex + 1).trim();
+  const method = rawMethod || 'GET';
+
+  // A pre-existing label whose first word isn't a real HTTP verb (free text written before
+  // switching into HTTP mode) stays selectable rather than silently discarded — the same
+  // "never clobber an unusual existing value" principle `ServiceInteractionSection`'s own
+  // Protocol/Mode selects follow.
+  const isKnownMethod = (HTTP_METHODS as readonly string[]).includes(method);
+  const methodOptions: InspectorSelectOption[] = [
+    ...(isKnownMethod ? [] : [{ value: method, label: method }]),
+    ...HTTP_METHODS.map((m) => ({ value: m, label: m })),
+  ];
+
+  const commit = (nextMethod: string, rest: string) => onCommit([nextMethod, rest].filter(Boolean).join(' '));
+
+  return (
+    <div className="dc-inspector-split" aria-label="Request">
+      <InspectorSelect
+        className="dc-inspector-select-split-first"
+        value={method}
+        options={methodOptions}
+        ariaLabel="Request method"
+        onChange={(nextMethod) => commit(nextMethod, restRef.current?.value.trim() ?? initialRest)}
+      />
+      <input
+        ref={restRef}
+        className="dc-inspector-control dc-inspector-split-rest"
+        defaultValue={initialRest}
+        placeholder="Customers"
+        spellCheck={false}
+        onBlur={(event) => commit(method, event.currentTarget.value)}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
+      />
+    </div>
+  );
+}
+
+const SERVICE_PROTOCOL_OPTIONS: InspectorSelectOption[] = [
+  { value: 'http', label: 'HTTP' },
+  { value: 'calls', label: 'Generic Call' },
+];
+
+const SERVICE_MODE_OPTIONS: InspectorSelectOption[] = [
+  { value: 'sync', label: 'Sync' },
+  { value: 'async', label: 'Async' },
+];
+
+/**
+ * The opinionated Service→Service editor — replaces the generic Interaction section (the full
+ * `EdgeSemantic`/`ConnectorKind` vocabulary: Event, Publishes, Reads, Retry, Fallback, …) with
+ * just the handful of concepts that actually apply to two services talking to each other: HTTP
+ * or a Generic Call, Sync or Async. Gated by `defaultsToResponse` at the call site below — every
+ * other pairing (Queue, Database, Actor, generic shapes) keeps the generic section untouched.
+ *
+ * Sync/Async is deliberately *not* wired through `setEdgeKind` — that action's `kind: 'async'`
+ * → `edge.async: true` side effect (see its own comment in `editorStore.ts`) is exactly right
+ * for the generic kind picker, where "async" and "dashed line" are meant to read as one thing,
+ * but wrong here: a request line's solid/dashed styling is a Style concern, not what Sync/Async
+ * means for a service call. This section updates `kind` directly via `updateEdgeById` instead,
+ * so the primary line never dashes just because Async was chosen.
+ */
+function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: typeof useEditorStore }) {
+  // Generic Call ('calls') is the fallback reading for anything outside {http, calls} too —
+  // including an edge that predates this editor and was left on some other `EdgeSemantic`.
+  const protocol = edge.semantic === 'http' ? 'http' : 'calls';
+  const protocolOptions: InspectorSelectOption[] =
+    edge.semantic === undefined || edge.semantic === 'http' || edge.semantic === 'calls'
+      ? SERVICE_PROTOCOL_OPTIONS
+      : [...SERVICE_PROTOCOL_OPTIONS, { value: edge.semantic, label: EDGE_SEMANTIC_LABELS[edge.semantic] }];
+
+  const isAsync = edge.kind === 'async';
+  const modeOptions: InspectorSelectOption[] =
+    edge.kind === undefined || edge.kind === 'sync' || edge.kind === 'async'
+      ? SERVICE_MODE_OPTIONS
+      : [...SERVICE_MODE_OPTIONS, { value: edge.kind, label: CONNECTOR_KIND_LABELS[edge.kind] }];
+
+  const isHttp = protocol === 'http';
+
+  return (
+    <>
+      <section className="dc-inspector-section">
+        <span className="dc-inspector-section-label">Interaction</span>
+        <div className="dc-inspector-section-row">
+          <InspectorSelect
+            value={edge.semantic ?? 'calls'}
+            options={protocolOptions}
+            ariaLabel="Protocol"
+            // Deliberately not `setEdgeSemantic` — that action's "fill in the blank" convenience
+            // (auto-labelling an unlabelled edge with the semantic's own default text, e.g.
+            // "HTTP") is right for the generic vocabulary but wrong here: Protocol and Request
+            // are independent fields in this editor, and choosing a protocol must never
+            // overwrite the Request text underneath it.
+            onChange={(value) =>
+              store
+                .getState()
+                .updateEdgeById(edge.id, { semantic: value as EdgeSemantic, semanticsOrigin: 'explicit' }, 'Set protocol')
+            }
+          />
+          <InspectorSelect
+            value={edge.kind ?? 'sync'}
+            options={modeOptions}
+            ariaLabel="Interaction mode"
+            onChange={(value) => {
+              const nowAsync = value === 'async';
+              store.getState().updateEdgeById(
+                edge.id,
+                {
+                  kind: nowAsync ? 'async' : undefined,
+                  // An async interaction doesn't pretend to share a synchronous response —
+                  // turning the line's own response off (never `edge.response`'s text: the
+                  // user's typed value survives, ready the moment they switch back to Sync).
+                  hasResponse: nowAsync ? undefined : edge.hasResponse,
+                  semanticsOrigin: 'explicit',
+                },
+                'Set interaction mode',
+              );
+            }}
+          />
+        </div>
+      </section>
+
+      <section className="dc-inspector-section">
+        <span className="dc-inspector-section-label">Request</span>
+        {isHttp ? (
+          <HttpRequestEditor
+            key={edge.label ?? ''}
+            value={edge.label ?? ''}
+            onCommit={(next) => store.getState().updateEdgeLabel(edge.id, next)}
+          />
+        ) : (
+          // Wrapped in the same `.dc-inspector-section-row` every other single-control row in
+          // this panel uses (Response's own Generic Call field included) — `.dc-inspector-control`'s
+          // `flex: 1` assumes a *row* flex context to size its width; as a bare child of this
+          // section's own *column* flex container, `flex: 1` instead governs the column's main
+          // (vertical) axis, collapsing the input's height down to its content minimum instead of
+          // the intended 32px.
+          <div className="dc-inspector-section-row">
+            <SingleTextEditor
+              key={edge.label ?? ''}
+              value={edge.label ?? ''}
+              placeholder="Validate customer"
+              ariaLabel="Request"
+              onCommit={(next) => store.getState().updateEdgeLabel(edge.id, next)}
+            />
+          </div>
+        )}
+      </section>
+
+      {!isAsync && (
+        <section className="dc-inspector-section">
+          <div className="dc-inspector-section-header">
+            <span className="dc-inspector-section-label">Response</span>
+            <button
+              type="button"
+              className="dc-inspector-toggle"
+              data-active={edge.hasResponse ? 'true' : undefined}
+              aria-pressed={Boolean(edge.hasResponse)}
+              title="Draw a quieter reply line back to the caller"
+              onClick={() => store.getState().setEdgeHasResponse(edge.id, !edge.hasResponse)}
+            >
+              {edge.hasResponse ? 'On' : 'Off'}
+            </button>
+          </div>
+          {edge.hasResponse && (
+            <div className="dc-inspector-section-row">
+              {isHttp ? (
+                <SplitTextEditor
+                  key={edge.response ?? ''}
+                  ariaLabel="Response"
+                  value={edge.response ?? ''}
+                  firstPlaceholder="200"
+                  restPlaceholder="Customers"
+                  onCommit={(next) => store.getState().setEdgeResponse(edge.id, next)}
+                />
+              ) : (
+                <SingleTextEditor
+                  key={edge.response ?? ''}
+                  value={edge.response ?? ''}
+                  placeholder="OK"
+                  ariaLabel="Response"
+                  onCommit={(next) => store.getState().setEdgeResponse(edge.id, next)}
+                />
+              )}
+              {isHttp && !edge.response && (
+                <button
+                  type="button"
+                  className="dc-inspector-hint"
+                  title="Guess a response from the request's own verb"
+                  onClick={() => store.getState().setEdgeResponse(edge.id, inferSuccessResponse(edge.label))}
+                >
+                  Guess
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+
 /**
  * Everything beyond the compact row, grouped into labelled sections rather than one flat control
  * grid — see this file's own top comment. Only the sections/fields relevant to *this* connector
@@ -538,131 +803,137 @@ function ExpandedPanel({
     (edge.kind === undefined || edge.kind === 'sync');
   const showRequestResponse = canHaveResponse || Boolean(edge.hasResponse);
 
+  // The opinionated editor (`ServiceInteractionSection`) replaces the generic Interaction
+  // section below for exactly the pairing `defaultsToResponse` already means "two services
+  // talking to each other" for (see its own doc comment) — everything else, Actor→Service
+  // included, keeps the generic, unrestricted vocabulary exactly as it reads today.
+  const isServiceToService =
+    Boolean(sourceNode && targetNode) && defaultsToResponse(categoryOf(sourceNode!), categoryOf(targetNode!));
+
   const currentAccentChip = edge.accent !== undefined ? theme.accents[edge.accent].chip : undefined;
+
+  const routingOptions: InspectorSelectOption[] = [
+    { value: 'smoothstep', label: 'Stepped' },
+    { value: 'bezier', label: 'Curved' },
+    { value: 'straight', label: 'Straight' },
+  ];
 
   return (
     <div className="dc-edge-inspector-panel dc-edge-inspector-expanded">
-      <section className="dc-inspector-section">
-        <span className="dc-inspector-section-label">Interaction</span>
-        <div className="dc-inspector-section-row">
-          <select
-            className="dc-inspector-control"
-            aria-label="Interaction type"
-            value={edge.semantic ?? ''}
-            onChange={(event) =>
-              store.getState().setEdgeSemantic(edge.id, (event.target.value || undefined) as EdgeSemantic | undefined)
-            }
-          >
-            <option value="">No type</option>
-            {EDGE_SEMANTICS.map((semantic) => (
-              <option key={semantic} value={semantic}>
-                {EDGE_SEMANTIC_LABELS[semantic]}
-              </option>
-            ))}
-          </select>
-          {showBehaviorPicker ? (
-            <select
-              className="dc-inspector-control"
-              aria-label="Flow kind"
-              title="Flow behaviour — a subtle visual treatment, not a label"
-              value={edge.kind ?? ''}
-              onChange={(event) =>
-                store.getState().setEdgeKind(edge.id, (event.target.value || undefined) as ConnectorKind | undefined)
-              }
-            >
-              <option value="">{capability?.behaviors.includes('sync') ? 'Sync' : 'No kind'}</option>
-              {behaviorOptions.map((kind) => (
-                <option key={kind} value={kind}>
-                  {CONNECTOR_KIND_LABELS[kind]}
-                </option>
-              ))}
-            </select>
-          ) : (
-            capability?.defaultBehavior && (
-              <button
-                type="button"
-                className="dc-inspector-badge"
-                title="Inferred from what this connects — click to change"
-                onClick={() => setEditingBehavior(true)}
-              >
-                {behaviorBadgeLabel(capability.defaultBehavior)}
-              </button>
-            )
-          )}
-        </div>
-      </section>
-
-      {showRequestResponse && (
+      {isServiceToService ? (
+        <ServiceInteractionSection edge={edge} store={store} />
+      ) : (
         <>
           <section className="dc-inspector-section">
-            <span className="dc-inspector-section-label">Request</span>
-            <SplitTextEditor
-              key={edge.label ?? ''}
-              ariaLabel="Request"
-              value={edge.label ?? ''}
-              firstPlaceholder="GET"
-              restPlaceholder="Customer"
-              onCommit={(next) => store.getState().updateEdgeLabel(edge.id, next)}
-            />
-          </section>
-
-          <section className="dc-inspector-section">
-            <div className="dc-inspector-section-header">
-              <span className="dc-inspector-section-label">Response</span>
-              <button
-                type="button"
-                className="dc-inspector-toggle"
-                data-active={edge.hasResponse ? 'true' : undefined}
-                aria-pressed={Boolean(edge.hasResponse)}
-                title="Draw a quieter reply line back to the caller"
-                onClick={() => store.getState().setEdgeHasResponse(edge.id, !edge.hasResponse)}
-              >
-                {edge.hasResponse ? 'On' : 'Off'}
-              </button>
-            </div>
-            {edge.hasResponse && (
-              <div className="dc-inspector-section-row">
-                <SplitTextEditor
-                  key={edge.response ?? ''}
-                  ariaLabel="Response"
-                  value={edge.response ?? ''}
-                  firstPlaceholder="200"
-                  restPlaceholder="Customer"
-                  onCommit={(next) => store.getState().setEdgeResponse(edge.id, next)}
+            <span className="dc-inspector-section-label">Interaction</span>
+            <div className="dc-inspector-section-row">
+              <InspectorSelect
+                value={edge.semantic ?? ''}
+                ariaLabel="Interaction type"
+                options={[
+                  { value: '', label: 'No type' },
+                  ...EDGE_SEMANTICS.map((semantic) => ({ value: semantic, label: EDGE_SEMANTIC_LABELS[semantic] })),
+                ]}
+                onChange={(value) =>
+                  store.getState().setEdgeSemantic(edge.id, (value || undefined) as EdgeSemantic | undefined)
+                }
+              />
+              {showBehaviorPicker ? (
+                <InspectorSelect
+                  value={edge.kind ?? ''}
+                  ariaLabel="Flow kind"
+                  options={[
+                    { value: '', label: capability?.behaviors.includes('sync') ? 'Sync' : 'No kind' },
+                    ...behaviorOptions.map((kind) => ({ value: kind, label: CONNECTOR_KIND_LABELS[kind] })),
+                  ]}
+                  onChange={(value) =>
+                    store.getState().setEdgeKind(edge.id, (value || undefined) as ConnectorKind | undefined)
+                  }
                 />
-                {!edge.response && (
+              ) : (
+                capability?.defaultBehavior && (
                   <button
                     type="button"
-                    className="dc-inspector-hint"
-                    title="Guess a response from the request's own verb"
-                    onClick={() => store.getState().setEdgeResponse(edge.id, inferSuccessResponse(edge.label))}
+                    className="dc-inspector-badge"
+                    title="Inferred from what this connects — click to change"
+                    onClick={() => setEditingBehavior(true)}
                   >
-                    Guess
+                    {behaviorBadgeLabel(capability.defaultBehavior)}
                   </button>
-                )}
-              </div>
-            )}
+                )
+              )}
+            </div>
           </section>
+
+          {showRequestResponse && (
+            <>
+              <section className="dc-inspector-section">
+                <span className="dc-inspector-section-label">Request</span>
+                <SplitTextEditor
+                  key={edge.label ?? ''}
+                  ariaLabel="Request"
+                  value={edge.label ?? ''}
+                  firstPlaceholder="GET"
+                  restPlaceholder="Customer"
+                  onCommit={(next) => store.getState().updateEdgeLabel(edge.id, next)}
+                />
+              </section>
+
+              <section className="dc-inspector-section">
+                <div className="dc-inspector-section-header">
+                  <span className="dc-inspector-section-label">Response</span>
+                  <button
+                    type="button"
+                    className="dc-inspector-toggle"
+                    data-active={edge.hasResponse ? 'true' : undefined}
+                    aria-pressed={Boolean(edge.hasResponse)}
+                    title="Draw a quieter reply line back to the caller"
+                    onClick={() => store.getState().setEdgeHasResponse(edge.id, !edge.hasResponse)}
+                  >
+                    {edge.hasResponse ? 'On' : 'Off'}
+                  </button>
+                </div>
+                {edge.hasResponse && (
+                  <div className="dc-inspector-section-row">
+                    <SplitTextEditor
+                      key={edge.response ?? ''}
+                      ariaLabel="Response"
+                      value={edge.response ?? ''}
+                      firstPlaceholder="200"
+                      restPlaceholder="Customer"
+                      onCommit={(next) => store.getState().setEdgeResponse(edge.id, next)}
+                    />
+                    {!edge.response && (
+                      <button
+                        type="button"
+                        className="dc-inspector-hint"
+                        title="Guess a response from the request's own verb"
+                        onClick={() => store.getState().setEdgeResponse(edge.id, inferSuccessResponse(edge.label))}
+                      >
+                        Guess
+                      </button>
+                    )}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
         </>
       )}
 
       <section className="dc-inspector-section">
         <span className="dc-inspector-section-label">Route</span>
         <div className="dc-inspector-section-row">
-          <select
-            className="dc-inspector-control"
-            aria-label="Connector shape"
+          <InspectorSelect
             value={edge.routing}
-            onChange={(event) =>
+            ariaLabel="Connector shape"
+            options={routingOptions}
+            onChange={(value) =>
               store
                 .getState()
-                .updateEdgeById(edge.id, { routing: event.target.value as typeof edge.routing }, 'Change routing')
+                .updateEdgeById(edge.id, { routing: value as typeof edge.routing }, 'Change routing')
             }
-          >
-            <option value="smoothstep">Stepped</option>
-            <option value="bezier">Curved</option>
-            <option value="straight">Straight</option>
-          </select>
+          />
         </div>
       </section>
 

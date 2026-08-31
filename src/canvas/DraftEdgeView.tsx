@@ -428,6 +428,43 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           strokeWidth={1.3}
         />
       )}
+      {/* Async's own visual cue — two short diagonal ticks at the path's midpoint, the
+          conventional "cable break" glyph, so an async call reads as one at a glance without
+          resorting to a dashed *request* line (that's `edge.async`'s own, deliberately separate,
+          concern — see `setEdgeKind`'s doc comment in `editorStore.ts`). Unlike the event/
+          conditional glyphs above, this shows *alongside* a real label — it sits on the line
+          itself, not in the label chip's own off-path spot, so the two never compete for room.
+          Deliberately not rotated to match the local path tangent: the same fixed diagonal glyph
+          reads fine crossing a horizontal run, but for a vertical one it would visually merge
+          into the line it's meant to interrupt — see the `isVerticalConnector` branch below,
+          which is the one thing that *does* differ by orientation, and only to keep the glyph
+          itself looking identical either way. */}
+      {edge.kind === 'async' &&
+        !edge.async &&
+        (() => {
+          // `labelSideFor` (`edges/routing.ts`) already resolved this exact question when it
+          // picked the label's own side: 'left'/'right' means it read the connector as more
+          // vertical than horizontal, 'top'/'bottom' the reverse — reusing it here keeps the
+          // marker's orientation call and the label's own placement never able to disagree.
+          const isVerticalConnector = route.labelSide === 'left' || route.labelSide === 'right';
+          return (
+            <g className="dc-edge-async-marker">
+              {isVerticalConnector && (
+                // A small masked gap so the two ticks sit *inside* a break in the line rather
+                // than crossing an unbroken run — on a vertical connector the fixed-diagonal
+                // glyph would otherwise read as a stray zigzag on top of the line instead of an
+                // interruption of it. Filled with the theme's own canvas colour, the same
+                // "erase, don't compute a real path split" trick the edge labels' own halo
+                // already relies on — see `styles/canvas.css`'s `.dc-edge-label`.
+                <rect x={labelX - 4} y={labelY - 8} width={8} height={16} fill={theme.canvas} />
+              )}
+              <g stroke={strokeColor} strokeWidth={1.6} strokeLinecap="round">
+                <line x1={labelX - 5.5} y1={labelY + 5} x2={labelX - 1.5} y2={labelY - 5} />
+                <line x1={labelX + 1.5} y1={labelY + 5} x2={labelX + 5.5} y2={labelY - 5} />
+              </g>
+            </g>
+          );
+        })()}
       {/* A subtle caption of the relationship — independent of `kind`'s glyph
           above, so a plain call/read/write connector reads just as clearly as
           an event one. Yields entirely to a real label the moment there is one,
