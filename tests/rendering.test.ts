@@ -269,9 +269,54 @@ describe('SVG export', () => {
   it('references no external resource of any kind', () => {
     const { svg } = renderDocumentSvg(exportFixture());
     expect(svg).not.toMatch(/https?:\/\/(?!www\.w3\.org)/);
-    expect(svg).not.toContain('<image');
     expect(svg).not.toContain('@font-face');
     expect(svg).not.toContain('xlink:');
+  });
+
+  it('emits no <image> element when no background is configured', () => {
+    const { svg } = renderDocumentSvg(exportFixture());
+    expect(svg).not.toContain('<image');
+  });
+
+  it('embeds a configured background as an inline data URI, never a remote or blob reference', () => {
+    const background = {
+      dataUri: 'data:image/png;base64,AAAA',
+      fit: 'cover' as const,
+      dim: 0.4,
+      blur: 0,
+      naturalWidth: 200,
+      naturalHeight: 100,
+    };
+    const { svg } = renderDocumentSvg(exportFixture(), { background });
+    const hrefs = [...svg.matchAll(/<image[^>]*href="([^"]*)"/g)].map((m) => m[1]);
+    expect(hrefs.length).toBeGreaterThan(0);
+    for (const href of hrefs) expect(href).toMatch(/^data:image\//);
+  });
+
+  it('paints a configured background behind everything else', () => {
+    const background = {
+      dataUri: 'data:image/png;base64,AAAA',
+      fit: 'cover' as const,
+      dim: 0.4,
+      blur: 0,
+      naturalWidth: 200,
+      naturalHeight: 100,
+    };
+    const { svg } = renderDocumentSvg(exportFixture(), { background });
+    expect(svg.indexOf('<image')).toBeLessThan(svg.indexOf('Order Service'));
+  });
+
+  it('omits the background when includeBackground is explicitly false', () => {
+    const background = {
+      dataUri: 'data:image/png;base64,AAAA',
+      fit: 'cover' as const,
+      dim: 0.4,
+      blur: 0,
+      naturalWidth: 200,
+      naturalHeight: 100,
+    };
+    const { svg } = renderDocumentSvg(exportFixture(), { background, includeBackground: false });
+    expect(svg).not.toContain('<image');
   });
 
   it('resolves every internal reference it emits', () => {
@@ -357,6 +402,53 @@ describe('SVG export', () => {
   it('is deterministic — the same document exports byte-identically', () => {
     const doc = exportFixture();
     expect(renderDocumentSvg(doc).svg).toBe(renderDocumentSvg(doc).svg);
+  });
+});
+
+function responseFixture(response?: string) {
+  const serviceA = createNode({ type: 'service', x: 0, y: 0, text: 'Service A' });
+  const serviceB = createNode({ type: 'service', x: 320, y: 0, text: 'Service B' });
+  // `response`, like `condition`, is only ever set post-creation via `setEdgeResponse` —
+  // `createEdge`/`CreateEdgeInput` deliberately don't accept it, matching `condition`'s own
+  // precedent — so a test fixture spreads it on directly, same as other tests do for
+  // `semantic`/`kind`/`semanticsOrigin`.
+  const edge = { ...createEdge({ source: serviceA.id, target: serviceB.id, label: 'GET Customer' }), response };
+  return addEdges(addNodes(createDocument('Export'), [serviceA, serviceB]), [edge]);
+}
+
+describe('SVG export — request/response connectors', () => {
+  it('draws a second, resolving reply path with an open-variant marker when a response is set', () => {
+    const { svg } = renderDocumentSvg(responseFixture('200 Customer'));
+    const parsed = parseSvg(svg);
+    const paths = [...parsed.querySelectorAll('path[marker-end]')];
+    expect(paths.length).toBe(2);
+
+    const ids = new Set([...parsed.querySelectorAll('[id]')].map((el) => el.id));
+    for (const path of paths) {
+      const match = path.getAttribute('marker-end')!.match(/url\(#([^)]+)\)/);
+      expect(match).not.toBeNull();
+      expect(ids.has(match![1]!)).toBe(true);
+    }
+    expect(svg).toContain('200 Customer');
+  });
+
+  it('adds nothing to the export when the edge has no response', () => {
+    const { svg } = renderDocumentSvg(responseFixture());
+    const paths = [...parseSvg(svg).querySelectorAll('path[marker-end]')];
+    expect(paths.length).toBe(1);
+    expect(svg).not.toContain('200 Customer');
+  });
+
+  it('positions the response label away from the primary label, not stacked on it', () => {
+    const { svg } = renderDocumentSvg(responseFixture('200 Customer'));
+    const texts = [...parseSvg(svg).querySelectorAll('text')];
+    const primaryText = texts.find((t) => t.textContent === 'GET Customer');
+    const responseText = texts.find((t) => t.textContent === '200 Customer');
+    expect(primaryText).toBeDefined();
+    expect(responseText).toBeDefined();
+    // The response route's own lane offset (`RESPONSE_LANE_DELTA`) is what keeps the two label
+    // chips from landing on the same point — proof it actually took effect, not just in theory.
+    expect(responseText!.getAttribute('y')).not.toBe(primaryText!.getAttribute('y'));
   });
 });
 

@@ -284,6 +284,20 @@ const isVerticalSide = (side: Side) => side === 'top' || side === 'bottom';
 const LANE_SPACING = 10;
 
 /**
+ * How far a request/response connector's own reply line sits from its
+ * request line — reuses the lane fan-out mechanism above (`laneNudge`) that
+ * already separates real parallel edges, added on top of this edge's own
+ * lane slot rather than a fixed pixel offset, so it still reads correctly
+ * when this edge already has parallel siblings. A caller computes the
+ * response's route by calling `routeBetween` a second time with source/target
+ * (and their anchors) swapped and `lane: laneOffset + RESPONSE_LANE_DELTA` —
+ * see `DraftEdgeView.tsx`/`edges/describe.ts`. Fractional on purpose: real
+ * siblings land on (whole or half) integers via `laneIndex`, so a fraction
+ * minimizes (not eliminates) landing on an actual neighboring connector's lane.
+ */
+export const RESPONSE_LANE_DELTA = 0.35;
+
+/**
  * Shifts an anchor point along its own side by `lane` slots, clamped so a
  * node with many parallel siblings still keeps the whole fan-out comfortably
  * inside its own side rather than sprouting past a corner.

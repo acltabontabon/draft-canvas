@@ -14,11 +14,19 @@ import { getMeasurer } from '../text/measure';
 import { el, serialize, n } from './element';
 import { shadowFilter } from './emit';
 import { markerDefs } from './markers';
-import { buildScene, type Decoration } from './document';
+import { backgroundEls, buildScene, type Decoration, type ResolvedBackground } from './document';
 import type { RenderedSvg } from './document';
+import type { PersonalityPreset } from '../../ui/personality/usePersonality';
 
 export interface FlowFrameOptions {
   theme?: ThemeName;
+  /** Whether to draw a configured background. Defaults to `true`. */
+  includeBackground?: boolean;
+  background?: ResolvedBackground;
+  /** An additional scrim multiplier — e.g. Presentation Mode's extra dim. */
+  extraDim?: number;
+  /** Phase 5.2 — Intentional Roughness preset. Defaults to `'clean'`. */
+  preset?: PersonalityPreset;
 }
 
 /** Mirrors `.react-flow__node`'s explain-mode opacity/filter in `canvas.css`. */
@@ -38,7 +46,9 @@ const EDGE_TIER_DECORATION: Record<ExplainTier, Decoration> = {
 /**
  * Renders a single animation frame: `document`, camera-cropped to `camera`
  * at `canvasSize` pixels, with `flow`'s tiers for `step` and the active
- * connector's pulse at `pulsePhase` (0–1, wrapping).
+ * connector's pulse at `pulsePhase` (0–1, wrapping). `framePhase` picks which of a request/response
+ * connector's two lines that pulse animates (see `FlowPlaybackState.phase`) — irrelevant, and
+ * ignored, for a step whose edge has no `response`.
  */
 export function renderFlowFrameSvg(
   document: DraftDocument,
@@ -47,20 +57,25 @@ export function renderFlowFrameSvg(
   camera: DraftViewport,
   canvasSize: { width: number; height: number },
   pulsePhase: number,
+  framePhase: 'request' | 'response' = 'request',
   options: FlowFrameOptions = {},
 ): RenderedSvg {
   const theme = themeFor(options.theme ?? 'dark');
   const measurer = getMeasurer();
-  const nodeCtx = { theme, measurer };
-  const edgeCtx = { theme, measurer, showSequence: document.settings.showSequence };
+  const preset = options.preset ?? 'clean';
+  const nodeCtx = { theme, measurer, preset };
+  const edgeCtx = { theme, measurer, showSequence: document.settings.showSequence, preset };
 
   const decorateNode = (node: DraftNode): Decoration =>
     NODE_TIER_DECORATION[explainNodeTier(flow, document.edges, node.id, step)];
 
-  const decorateEdge = (edge: DraftEdge): Decoration & { pulsePhase?: number } => {
+  const decorateEdge = (
+    edge: DraftEdge,
+  ): Decoration & { pulsePhase?: number; pulseTarget?: 'request' | 'response' } => {
     const tier = explainEdgeTier(stepIndexOf(flow, edge.id), step);
     const decoration = EDGE_TIER_DECORATION[tier];
-    return tier === 'active' ? { ...decoration, pulsePhase } : decoration;
+    if (tier !== 'active') return decoration;
+    return { ...decoration, pulsePhase, pulseTarget: edge.response ? framePhase : 'request' };
   };
 
   const scene = buildScene(document, nodeCtx, edgeCtx, {
@@ -68,8 +83,6 @@ export function renderFlowFrameSvg(
     decorateNode,
     decorateEdge,
   });
-
-  const defs = [el('defs', undefined, [shadowFilter(theme.shadow), ...markerDefs(scene.arrowColors)])];
 
   // The camera viewBox is the whole story: unlike `renderDocumentSvg`'s
   // bounds-fit export, nothing here is translated to a local origin — every
@@ -80,9 +93,26 @@ export function renderFlowFrameSvg(
   const camW = canvasSize.width / camera.zoom;
   const camH = canvasSize.height / camera.zoom;
 
+  const showBackground = options.includeBackground !== false && options.background !== undefined;
+  // Sized to the camera's own viewBox — the background fills the frame like
+  // a wallpaper, exactly what a viewer sees at this step, not a rectangle
+  // pinned to document coordinates that panning/zooming could reveal past.
+  const background = showBackground
+    ? backgroundEls(options.background!, theme.canvas, { x: camX, y: camY, width: camW, height: camH }, options.extraDim ?? 0)
+    : undefined;
+
+  const defs = [
+    el('defs', undefined, [
+      shadowFilter(theme.shadow),
+      ...markerDefs(scene.arrowColors),
+      ...(background?.defs ?? []),
+    ]),
+  ];
+
   const children = [
     ...defs,
     el('rect', { x: n(camX), y: n(camY), width: n(camW), height: n(camH), fill: theme.canvas }),
+    ...(background?.els ?? []),
     ...scene.backdropEls,
     ...scene.edgeLines,
     ...scene.nodeEls,

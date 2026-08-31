@@ -33,6 +33,7 @@ export function Toolbar({
   const arm = useUiStore((state) => state.arm);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const setAboutOpen = useUiStore((state) => state.setAboutOpen);
+  const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const past = useEditorStore((state) => state.history.past.length);
@@ -94,6 +95,12 @@ export function Toolbar({
         <FlowSwitcher />
         <Button icon="present" variant="quiet" onClick={onPresent} title="Present (Cmd+Enter)" />
         <Button icon="export" variant="quiet" onClick={onExport} title="Export (Cmd+E)" />
+        <Button
+          icon="settings"
+          variant="quiet"
+          onClick={() => setSettingsOpen(true)}
+          title="Canvas settings"
+        />
         <Button
           icon="keyboard"
           variant="quiet"

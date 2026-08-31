@@ -20,6 +20,21 @@ export interface DraftRepository {
   rename(id: string, title: string): Promise<void>;
   /** Estimated bytes used, when the browser will tell us. */
   usage(): Promise<{ usage: number; quota: number } | null>;
+
+  /**
+   * Phase 5.1 — one background image per document, stored separately from
+   * the document body itself (see `document/types.ts`'s `BackgroundSettings`
+   * doc comment for why). `remove(id)` deletes this row too.
+   */
+  saveBackgroundImage(
+    documentId: string,
+    blob: Blob,
+    dims: { width: number; height: number },
+  ): Promise<void>;
+  loadBackgroundImage(
+    documentId: string,
+  ): Promise<{ blob: Blob; width: number; height: number } | null>;
+  removeBackgroundImage(documentId: string): Promise<void>;
 }
 
 export class StorageUnavailableError extends Error {

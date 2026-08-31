@@ -4,6 +4,7 @@ import { findFlow } from '../document/flow';
 import type { DraftEdge, DraftFlowStep, DraftFlow, DraftNode, DraftViewport } from '../document/types';
 import { nodeIndex } from '../store/selectors';
 import { useEditorStore } from '../store/editorStore';
+import { RESPONSE_PHASE_DELAY_MS } from './responsePhase';
 
 export interface FlowPlaybackStep {
   /** The step's primary connector, when it has one — absent for a "frame" step. */
@@ -238,6 +239,21 @@ export function useFlowPlayback(): FlowPlaybackController {
     }
     if (flowPlayback.step > steps.length) setFlowPlayback({ step: steps.length });
   }, [flowPlayback.active, flowPlayback.flowId, flowPlayback.step, setFlowPlayback, steps.length]);
+
+  // A step's own two-phase request/response pulse (see `DraftEdge.response`, `FlowPlaybackState.phase`).
+  // Reset happens here, in exactly one place, keyed only on what actually identifies "a new step to
+  // animate" — not scattered across `goTo`/`pickFlow`/the reconciliation effect/the edit-mode reset
+  // above, which would need to individually remember to also patch `phase` (`setFlowPlayback`'s
+  // shallow merge otherwise lets a stale `'response'` bleed into the next step). `current` is
+  // deliberately not a dependency: it's derived from these same three values one render later, and
+  // listing it would just double-fire this effect on the render where it catches up.
+  useEffect(() => {
+    setFlowPlayback({ phase: 'request' });
+    if (!current?.edge?.response) return;
+    const timer = window.setTimeout(() => setFlowPlayback({ phase: 'response' }), RESPONSE_PHASE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- current intentionally excluded, see comment above.
+  }, [flowPlayback.step, flowPlayback.flowId, flowPlayback.active, setFlowPlayback]);
 
   return {
     flows: document.flows,

@@ -5,6 +5,7 @@ import { explainEdgeTier, lensEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import {
   LABEL_LINE_GAP,
+  RESPONSE_LANE_DELTA,
   labelLaneOffset,
   laneIndex,
   rectOf,
@@ -155,6 +156,15 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const stopEditing = useCallback(() => setEditing(false), []);
   const editRequested = useUiStore((state) => state.editRequestId === id);
 
+  // Tracked in JS, not left to a pure `.dc-edge:hover` CSS rule: the response label lives in React
+  // Flow's `EdgeLabelRenderer` portal, a sibling overlay div elsewhere in the DOM tree, not a real
+  // descendant of this `<g>` — so no ancestor-based CSS selector can ever reach it, the same reason
+  // `.dc-edge-label`'s own `data-active`/`data-dimmed`/etc. are passed as explicit props rather than
+  // relied on to cascade from a parent. This one boolean covers both the response line (a real SVG
+  // child, which *could* use plain `:hover`, but sharing one mechanism avoids two divergent ones)
+  // and its portaled label.
+  const [hoveringResponse, setHoveringResponse] = useState(false);
+
   // The live pointer position while this edge's own endpoint is being
   // dragged — local state, not the shared store, so only this one edge
   // re-renders per pointer-move frame. Exactly the same "stream to the
@@ -187,6 +197,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const isActiveStep = flowPlayback.active && tier === 'active';
   const isShownStep = flowPlayback.active && tier === 'shown';
   const dimmed = flowPlayback.active && tier === 'hidden';
+  // Which of a request/response connector's two lines the active step's pulse animates — see
+  // `FlowPlaybackState.phase`. Irrelevant, and always `'request'`, for a plain edge (no `response`)
+  // or one not the active step, so existing single-line playback is entirely unchanged.
+  const pulseTarget: 'request' | 'response' =
+    isActiveStep && edge?.response && flowPlayback.phase === 'response' ? 'response' : 'request';
   const focusDimmed = focus.active && edge ? !isEdgeFocused(focus, edge) : false;
 
   // Merely *selecting* a flow (not presenting it) is a gentler lens: every
@@ -294,6 +309,36 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const secondStrokePath =
     roughAmplitude.strokes === 2 ? roughenPath(route.d, `${edge.id}:1`, roughAmplitude.outline) : null;
 
+  // The reply half of a request/response connector — reuses `routeBetween` a second time with
+  // source/target (and their anchors) swapped, so the path naturally runs target → source, and a
+  // small addition to this edge's own lane slot, so it reads as a quieter sibling of the request
+  // line rather than a whole new routing system. `responseRoute.target` therefore lands on the
+  // *original source* node — that's what makes its `markerEnd` correctly point back at A; don't
+  // "fix" the apparent reversal. See `RESPONSE_LANE_DELTA`'s own doc comment in `edges/routing.ts`.
+  const responseRoute = edge.response
+    ? routeBetween(effectiveTargetRect, effectiveSourceRect, edge.routing, {
+        anchors: {
+          source: dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor,
+          target: dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor,
+        },
+        lane: laneOffset + RESPONSE_LANE_DELTA,
+        obstacles,
+      })
+    : null;
+  const responseDrawnPath = responseRoute
+    ? roughAmplitude.outline === 0
+      ? responseRoute.d
+      : roughenPath(responseRoute.d, `${edge.id}:response`, roughAmplitude.outline)
+    : null;
+  const responseLabelNudge = responseRoute
+    ? labelLaneOffset(responseRoute.source.side, responseRoute.target.side, laneOffset + RESPONSE_LANE_DELTA)
+    : null;
+  const responseLabelX = responseRoute && responseLabelNudge ? responseRoute.labelX + responseLabelNudge.x : 0;
+  const responseLabelY = responseRoute && responseLabelNudge ? responseRoute.labelY + responseLabelNudge.y : 0;
+  // Compact by default; the response's own half of a two-phase presentation pulse also counts as
+  // "useful to see right now", same as hover/selection.
+  const responseRevealed = selected || hoveringResponse || pulseTarget === 'response';
+
   return (
     <g
       className="dc-edge"
@@ -302,11 +347,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-shown={isShownStep ? 'true' : undefined}
       data-dimmed={dimmed ? 'true' : undefined}
       data-focus-dimmed={focusDimmed ? 'true' : undefined}
-      data-flow-active={isActiveStep ? 'true' : undefined}
+      data-flow-active={isActiveStep ? pulseTarget : undefined}
       data-attach-target={attachTarget ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
       data-lens-pulse={lensPulsing ? 'true' : undefined}
+      onPointerEnter={responseRoute ? () => setHoveringResponse(true) : undefined}
+      onPointerLeave={responseRoute ? () => setHoveringResponse(false) : undefined}
     >
 {/*
         `BaseEdge` draws the path and, through `interactionWidth`, a second
@@ -336,6 +383,21 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             strokeWidth: 1,
             strokeLinecap: 'round',
             opacity: 0.5,
+          }}
+        />
+      )}
+      {responseDrawnPath && (
+        <path
+          className="dc-edge-response-line"
+          data-revealed={responseRevealed ? 'true' : undefined}
+          d={responseDrawnPath}
+          fill="none"
+          markerEnd={edge.directed ? markerRef(strokeColor, 'open') : undefined}
+          style={{
+            stroke: strokeColor,
+            strokeWidth: 1,
+            strokeLinecap: 'round',
+            strokeDasharray: dashForEdge(edge)?.join(' '),
           }}
         />
       )}
@@ -485,6 +547,28 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             <span className="dc-edge-condition" style={{ color }}>
               {conditionText}
             </span>
+          </div>
+        )}
+
+        {/* The reply half of a request/response connector — anchored to the response route's own
+            label point (already offset from the primary by `RESPONSE_LANE_DELTA`), not the
+            primary's, so it never stacks on the label/condition/step/attachment cluster above.
+            Compact by default, revealed on hover/selection via `canvas.css`, not a new piece of
+            React state. */}
+        {edge.response && (
+          <div
+            className="dc-edge-response-label"
+            data-revealed={responseRevealed ? 'true' : undefined}
+            data-dimmed={dimmed ? 'true' : undefined}
+            data-focus-dimmed={focusDimmed ? 'true' : undefined}
+            data-shown={isShownStep ? 'true' : undefined}
+            data-active={isActiveStep ? 'true' : undefined}
+            data-lens-dimmed={lensDimmed ? 'true' : undefined}
+            style={{
+              transform: labelChipTransform(responseRoute!.labelSide, responseLabelX, responseLabelY),
+            }}
+          >
+            {edge.response}
           </div>
         )}
 

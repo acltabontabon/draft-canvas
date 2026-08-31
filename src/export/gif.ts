@@ -9,19 +9,30 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { findFlow } from '../document/flow';
 import type { DraftDocument, DraftViewport } from '../document/types';
 import { resolveFlowStep, resolveStepViewport, type FlowPlaybackStep } from '../presentation/useFlowPlayback';
+import { RESPONSE_PHASE_DELAY_MS } from '../presentation/responsePhase';
 import { renderFlowFrameSvg } from '../render/svg/flowFrame';
 import { rasterizeSvgToPixels } from '../render/png/rasterize';
 import { themeFor, type ThemeName } from '../render/theme/tokens';
+import { resolveExportBackground } from './background';
 import { downloadBlob } from './download';
 import { fileNameFor } from './project';
+import type { PersonalityPreset } from '../ui/personality/usePersonality';
 
 export type GifSpeed = 'slow' | 'normal' | 'fast';
+
+/** Mirrors `Canvas.tsx`'s live Presentation Mode dim — a GIF is always a
+ *  captured presentation, so it always applies. */
+const PRESENTATION_EXTRA_DIM = 0.2;
 
 export interface GifExportOptions {
   speed?: GifSpeed;
   /** Loop continuously (default) or play once. */
   loop?: boolean;
   theme?: ThemeName;
+  /** Whether to draw a configured background. Defaults to `true`. */
+  includeBackground?: boolean;
+  /** Phase 5.2 — Intentional Roughness preset. Defaults to `'clean'`. */
+  preset?: PersonalityPreset;
 }
 
 /** Not user-configurable — a fixed, reasonable size for a ticket/Slack embed. */
@@ -59,6 +70,10 @@ export interface GifFramePlan {
   step: number;
   camera: DraftViewport;
   pulsePhase: number;
+  /** Which of a request/response connector's two lines this frame's pulse animates — see
+   *  `FlowPlaybackState.phase`. Always `'request'` for a step whose edge has no `response`, i.e.
+   *  identical to every frame plan from before this field existed. */
+  phase: 'request' | 'response';
   delayMs: number;
 }
 
@@ -91,16 +106,30 @@ export function planGifFrames(
           step: step.step,
           camera: lerpViewport(previous, camera, t / transitionFrames),
           pulsePhase: 0,
+          phase: 'request',
           delayMs: FRAME_INTERVAL_MS,
         });
       }
     }
 
+    // A step whose primary edge has a `response` splits its hold into a request run followed by a
+    // response run, at the same proportion the live `useFlowPlayback` timer uses
+    // (`RESPONSE_PHASE_DELAY_MS`) — a step with no response keeps every frame `'request'`, i.e.
+    // byte-identical to this function's behavior from before this feature existed. Each phase's own
+    // pulse restarts from 0, mirroring how the live CSS animation restarts fresh on whichever line
+    // newly starts matching `[data-flow-active]` rather than continuing the other line's timeline.
+    const requestFrames = step.edge?.response
+      ? Math.max(1, Math.min(holdFrames, Math.round((RESPONSE_PHASE_DELAY_MS / holdMs) * holdFrames)))
+      : holdFrames;
+
     for (let f = 0; f < holdFrames; f += 1) {
+      const phase: 'request' | 'response' = step.edge?.response && f >= requestFrames ? 'response' : 'request';
+      const elapsedInPhase = (phase === 'response' ? f - requestFrames : f) * FRAME_INTERVAL_MS;
       frames.push({
         step: step.step,
         camera,
-        pulsePhase: ((f * FRAME_INTERVAL_MS) % PULSE_PERIOD_MS) / PULSE_PERIOD_MS,
+        pulsePhase: (elapsedInPhase % PULSE_PERIOD_MS) / PULSE_PERIOD_MS,
+        phase,
         delayMs: FRAME_INTERVAL_MS,
       });
     }
@@ -118,7 +147,9 @@ export async function exportFlowGifFile(
 
   const frames = planGifFrames(document, flowId, options.speed ?? 'normal');
   const theme = options.theme ?? 'dark';
-  const background = themeFor(theme).canvas;
+  const canvasColor = themeFor(theme).canvas;
+  // Resolved once, not per-frame: every frame reuses the same data URI.
+  const resolvedBackground = await resolveExportBackground(document, options.includeBackground !== false);
 
   const gif = GIFEncoder();
   const repeat = options.loop === false ? -1 : 0;
@@ -132,12 +163,13 @@ export async function exportFlowGifFile(
       frame.camera,
       CANVAS_SIZE,
       frame.pulsePhase,
-      { theme },
+      frame.phase,
+      { theme, background: resolvedBackground, extraDim: PRESENTATION_EXTRA_DIM, preset: options.preset },
     );
     const { data, width, height } = await rasterizeSvgToPixels(svg, {
       width: CANVAS_SIZE.width,
       height: CANVAS_SIZE.height,
-      background,
+      background: canvasColor,
     });
 
     const palette = quantize(data, 256);

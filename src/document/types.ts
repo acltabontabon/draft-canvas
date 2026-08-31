@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 6;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -85,6 +85,11 @@ export interface EdgeAnchor {
 
 export const GRID_MODES = ['dots', 'lines', 'none'] as const;
 export type GridMode = (typeof GRID_MODES)[number];
+
+/** How a custom canvas background image fills its anchor rectangle — see
+ *  `render/backgroundAnchor.ts` and `canvas/CanvasBackground.tsx`. */
+export const BACKGROUND_FITS = ['cover', 'contain', 'tile'] as const;
+export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
 
 /** Sub-kinds of the developer presets. Purely a labelling convenience — the
  *  base type's silhouette and accent always dominate; see `nodes/describe.ts`. */
@@ -224,6 +229,20 @@ export interface DraftEdge {
    * evaluated — display only.
    */
   condition?: string;
+  /**
+   * Free-text response chip for a synchronous call, e.g. "200 Customer",
+   * "404 Not Found". Distinct from `condition`: `condition` says *when* a
+   * branch applies, `response` says what came back. Absent means "a plain
+   * one-way connector, exactly as before this field existed" — it never
+   * creates or implies a second edge; it renders as a quieter secondary line
+   * reusing this same connector's own geometry (see `edges/routing.ts`'s lane
+   * trick). Never evaluated, and deliberately never persists a
+   * success/failure distinction — `kind: 'failure'` already exists as a
+   * whole-connector visual treatment for that. `document/connectorSemantics.ts`'s
+   * `isSyncPairing` only gates whether the *authoring* UI offers this field,
+   * never whether an existing value renders.
+   */
+  response?: string;
   /** Flow behaviour — see `ConnectorKind`. Optional; a plain connection has none. */
   kind?: ConnectorKind;
   /** `true` renders a dashed line for an asynchronous interaction. Absent/`false` is synchronous (solid). */
@@ -323,10 +342,29 @@ export interface DraftMetadata {
   updatedAt: number;
 }
 
+/**
+ * Phase 5.1 — a decorative, canvas-layer backdrop. Presentation knobs only:
+ * the image bytes themselves live in a dedicated IndexedDB store, keyed by
+ * this document's id (see `storage/IndexedDbRepository.ts`), never inline
+ * here — `localStorage`-style inlining would duplicate large binary data
+ * across every save. `enabled: true` with no matching stored row (corruption,
+ * a duplicate that failed to copy) degrades to "no background shown," never
+ * an error — the same repair-don't-reject discipline as the rest of this file.
+ */
+export interface BackgroundSettings {
+  enabled: boolean;
+  fit: BackgroundFit;
+  /** Scrim opacity over the image, 0 (none) – 1 (fully obscured). */
+  dim: number;
+  /** 0 (none) – 1 (maximum), mapped to a CSS/SVG blur radius at render time. */
+  blur: number;
+}
+
 export interface DraftSettings {
   /** Whether to show a flow's step badges on its connectors when it's selected for overlay. */
   showSequence: boolean;
   grid: GridMode;
+  background: BackgroundSettings;
 }
 
 export interface DraftDocument {

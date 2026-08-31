@@ -170,7 +170,19 @@ export function useDocumentSession(): DocumentSession {
       if (!repository) return;
       const source = await repository.load(id);
       if (!source) return;
-      await repository.save(cloneDocumentAsNew(source, `${source.metadata.title} copy`));
+      const clone = cloneDocumentAsNew(source, `${source.metadata.title} copy`);
+      await repository.save(clone);
+      // A configured background is part of what the user set up for this
+      // diagram — "Duplicate" should never silently drop it.
+      if (source.settings.background.enabled) {
+        const image = await repository.loadBackgroundImage(id);
+        if (image) {
+          await repository.saveBackgroundImage(clone.metadata.id, image.blob, {
+            width: image.width,
+            height: image.height,
+          });
+        }
+      }
       await refreshLibrary();
     },
     [refreshLibrary, repository],

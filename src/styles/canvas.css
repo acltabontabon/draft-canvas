@@ -368,6 +368,43 @@
   white-space: nowrap;
 }
 
+/* A request/response connector's own reply line and label — see `DraftEdgeView.tsx`. Compact by
+   default (a low, but never fully invisible, opacity — this is a meeting-time sketching tool, and
+   a diagram screenshotted mid-conversation shouldn't look incomplete), revealed more prominently
+   on hover, selection, or (see `[data-flow-active='response']` below) while its own half of a
+   Presentation Mode step is playing. `pointer-events: none` throughout: neither element should
+   ever compete with the primary line's own `interactionWidth` hit-box for clicks/selection.
+   `[data-revealed]` is set from JS (`DraftEdgeView.tsx`'s `responseRevealed`), not a `:hover`/
+   `[data-selected]` ancestor selector on `.dc-edge`: the label lives in React Flow's
+   `EdgeLabelRenderer` portal, a sibling overlay div elsewhere in the DOM tree, so no ancestor
+   selector on `.dc-edge` can ever reach it — the same reason `.dc-edge-label`'s own tier
+   attributes above are explicit props rather than inherited from a parent. */
+.dc-edge-response-line {
+  pointer-events: none;
+  opacity: 0.28;
+  transition: opacity 120ms ease;
+}
+
+.dc-edge-response-label {
+  position: absolute;
+  padding: 1px 6px;
+  border: 1px solid var(--dc-border);
+  border-radius: 4px;
+  background: var(--dc-edge-label-bg);
+  color: var(--dc-text-faint);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0.4;
+  transition: opacity 120ms ease;
+}
+
+.dc-edge-response-line[data-revealed='true'],
+.dc-edge-response-label[data-revealed='true'] {
+  opacity: 0.85;
+}
+
 /* ------------------------------------------------------ edge detail -- */
 
 /* The row of attachment chips — positioned above the connector by default (or below, via
@@ -583,9 +620,20 @@
 }
 
 /* A pulse traveling along the active connector during Presentation Mode —
-   the one thing this animation needs to answer is "who is talking to whom". */
+   the one thing this animation needs to answer is "who is talking to whom".
+   `data-flow-active` carries which half of a request/response connector's exchange is animating
+   (`'request'` or `'response'` — see `FlowPlaybackState.phase`); a plain connector with no
+   `response` is always `'request'` while active, i.e. this is exactly the old boolean pulse,
+   unchanged. The response line's own path already runs target → source (see `RESPONSE_LANE_DELTA`
+   in `edges/routing.ts`), so the same dash-offset keyframe below already travels the correct visual
+   direction for a reply — no separate "reverse" animation is needed. */
 @media (prefers-reduced-motion: no-preference) {
-  .dc-edge[data-flow-active='true'] .dc-edge-line {
+  .dc-edge[data-flow-active='request'] .dc-edge-line {
+    stroke-dasharray: 3 9;
+    animation: dc-flow-pulse 900ms linear infinite;
+  }
+
+  .dc-edge[data-flow-active='response'] .dc-edge-response-line {
     stroke-dasharray: 3 9;
     animation: dc-flow-pulse 900ms linear infinite;
   }

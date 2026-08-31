@@ -5,6 +5,7 @@ import { LibraryScreen } from './ui/Library/LibraryScreen';
 import { AboutDialog } from './ui/common/AboutDialog';
 import { Toasts } from './ui/common/Toasts';
 import { ThemeProvider } from './ui/theme/ThemeProvider';
+import { PersonalityProvider } from './ui/personality/PersonalityProvider';
 
 /**
  * There is no router.
@@ -34,7 +35,9 @@ function Shell() {
 export function App() {
   return (
     <ThemeProvider>
-      <Shell />
+      <PersonalityProvider>
+        <Shell />
+      </PersonalityProvider>
     </ThemeProvider>
   );
 }

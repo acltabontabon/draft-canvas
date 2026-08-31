@@ -757,6 +757,10 @@ kbd {
   width: 110px;
 }
 
+.dc-input-response {
+  width: 130px;
+}
+
 .dc-flow-switcher {
   position: relative;
   display: inline-flex;
@@ -1180,6 +1184,44 @@ kbd {
 
 .dc-shortcuts dd {
   margin: 0;
+}
+
+/* ------------------------------------------------------------- settings -- */
+
+.dc-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.dc-settings section h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dc-text-muted);
+}
+
+.dc-settings section .dc-muted {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+}
+
+.dc-settings-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dc-settings .dc-field-inline {
+  margin-top: 10px;
+}
+
+.dc-settings-personality {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* ----------------------------------------------------------------- about -- */

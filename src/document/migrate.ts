@@ -147,12 +147,33 @@ function migrateFlowAccent(doc: Record<string, unknown>): Record<string, unknown
 }
 
 /**
+ * v4 has no concept of a canvas background at all — same structural-no-op
+ * shape as `migrateFlowAccent`. `document/validate.ts`'s `normalizeDocument`
+ * gives every migrated document a clean, disabled default background block;
+ * there is no v4 data to derive one from.
+ */
+function migrateBackground(doc: Record<string, unknown>): Record<string, unknown> {
+  return doc;
+}
+
+/**
+ * v5 has no concept of a request/response connector at all — same
+ * structural-no-op shape as `migrateFlowAccent`/`migrateBackground`. There is
+ * no v5 data to derive a `response` string from.
+ */
+function migrateResponse(doc: Record<string, unknown>): Record<string, unknown> {
+  return doc;
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
   1: migrateSequenceToFlows,
   2: migrateAnchors,
   3: migrateFlowAccent,
+  4: migrateBackground,
+  5: migrateResponse,
 };
 
 export class UnsupportedVersionError extends Error {

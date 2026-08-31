@@ -97,6 +97,15 @@ export interface FlowPlaybackState {
   active: boolean;
   flowId: string | null;
   step: number;
+  /**
+   * Which half of the current step's exchange is animating — irrelevant (and never read) unless
+   * the step's primary edge has a `response` (see `DraftEdge.response`). Reset to `'request'` by
+   * `useFlowPlayback`'s own effect on every step/flow/active change, regardless of what triggered
+   * it — `setFlowPlayback`'s shallow merge means a caller that patches `step` without also patching
+   * `phase` would otherwise leave a stale `'response'` bleeding into the next step, so no other call
+   * site sets this directly. Absent reads exactly like `'request'`.
+   */
+  phase?: 'request' | 'response';
 }
 
 /**
@@ -203,6 +212,8 @@ export interface EditorStore {
   setEdgeSemantic: (id: string, semantic: EdgeSemantic | undefined) => void;
   /** Free-text condition chip, e.g. "approved" — display only, never evaluated. */
   setEdgeCondition: (id: string, condition: string) => void;
+  /** Free-text response chip, e.g. "200 Customer" — display only, see `DraftEdge.response`. */
+  setEdgeResponse: (id: string, response: string) => void;
   toggleEdgeAsync: (id: string) => void;
   /** Sets (or clears) a connector's flow-behaviour kind — see `ConnectorKind`. */
   setEdgeKind: (id: string, kind: ConnectorKind | undefined) => void;
@@ -483,6 +494,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setEdgeCondition(id, condition) {
     get().apply('Set condition', (doc) => updateEdge(doc, id, { condition: condition.trim() || undefined }), {
       coalesceKey: `edge-condition:${id}`,
+    });
+  },
+
+  setEdgeResponse(id, response) {
+    get().apply('Set response', (doc) => updateEdge(doc, id, { response: response.trim() || undefined }), {
+      coalesceKey: `edge-response:${id}`,
     });
   },
 

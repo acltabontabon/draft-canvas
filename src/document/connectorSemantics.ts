@@ -113,6 +113,28 @@ export function capabilityFor(source: NodeCategory, target: NodeCategory): Conne
   return undefined;
 }
 
+/**
+ * Whether a connector between this category pair reads as a single
+ * synchronous call — the only shape a request/response pair
+ * (`DraftEdge.response`) makes sense on. `'calls'` is the matrix's own
+ * marker for exactly this: the three pairings whose `defaultRelation` is
+ * `'calls'` (`service>service`/`service>external`, ambiguous enough to offer
+ * `'sync'` as a real behaviour choice, and `actor>service`, synchronous by
+ * predetermination with no behaviour picker at all) are the only ones this
+ * is true for. A pairing predetermined to something else entirely —
+ * `service>database`'s `'writes'`, `service>queue`'s `'publishes'`/`'event'`,
+ * etc. — reads `false`, even though some of those also have an empty
+ * `behaviors` array; emptiness alone doesn't mean "a call," only
+ * `defaultRelation` does. Independent of the edge's *current* `kind`;
+ * callers combine this with `edge.kind === undefined || edge.kind ===
+ * 'sync'` themselves — mirrors how `AdvancedPanel`'s own
+ * `behaviorMatchesPolicy` is a separate concern from `capabilityFor`'s
+ * opinion.
+ */
+export function isSyncPairing(source: NodeCategory, target: NodeCategory): boolean {
+  return capabilityFor(source, target)?.defaultRelation === 'calls';
+}
+
 type Relationship = { kind?: ConnectorKind; semantic?: EdgeSemantic };
 
 /**

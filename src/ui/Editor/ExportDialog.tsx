@@ -9,6 +9,7 @@ import {
 } from '../../export';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
+import { usePersonality } from '../personality/usePersonality';
 import { useTheme } from '../theme/useTheme';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
@@ -27,10 +28,12 @@ export function ExportDialog() {
   const selection = useEditorStore((state) => state.selection);
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const { name } = useTheme();
+  const { preset } = usePersonality();
 
   const [paletteName, setPaletteName] = useState<ThemeName>(name);
   const [transparent, setTransparent] = useState(false);
   const [selectionOnly, setSelectionOnly] = useState(false);
+  const [includeBackground, setIncludeBackground] = useState(true);
   const [busy, setBusy] = useState(false);
   const [securePromptOpen, setSecurePromptOpen] = useState(false);
   const [gifFlowIdChoice, setGifFlowIdChoice] = useState<string | null>(null);
@@ -51,11 +54,14 @@ export function ExportDialog() {
 
   const only =
     selectionOnly && selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
+  const hasBackground = document.settings.background.enabled;
   const options = {
     theme: paletteName,
     transparent,
     only,
     selectedFlowId: selectedFlowId ?? undefined,
+    includeBackground: hasBackground ? includeBackground : false,
+    preset,
   };
 
   const run = async (task: () => void | Promise<void>, what: string) => {
@@ -96,6 +102,17 @@ export function ExportDialog() {
           />
           <span>Transparent background</span>
         </label>
+
+        {hasBackground && (
+          <label className="dc-check">
+            <input
+              type="checkbox"
+              checked={includeBackground}
+              onChange={(event) => setIncludeBackground(event.target.checked)}
+            />
+            <span>Include canvas background</span>
+          </label>
+        )}
 
         <label className="dc-check" data-disabled={selection.nodes.length === 0 ? 'true' : undefined}>
           <input
@@ -150,7 +167,14 @@ export function ExportDialog() {
             busy={busy || !gifFlowId}
             onClick={() =>
               void run(
-                () => exportFlowGifFile(document, gifFlowId, { theme: paletteName, speed: gifSpeed, loop: gifLoop }),
+                () =>
+                  exportFlowGifFile(document, gifFlowId, {
+                    theme: paletteName,
+                    speed: gifSpeed,
+                    loop: gifLoop,
+                    includeBackground: options.includeBackground,
+                    preset,
+                  }),
                 'GIF export',
               )
             }

@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { capabilityFor, categoryOf, inferRelationship, isEligibleForReinference } from '../src/document/connectorSemantics';
+import {
+  capabilityFor,
+  categoryOf,
+  inferRelationship,
+  isEligibleForReinference,
+  isSyncPairing,
+} from '../src/document/connectorSemantics';
 import { createDocument, createEdge, createNode, type CreateNodeInput } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
@@ -115,6 +121,35 @@ describe('capabilityFor — the capability matrix', () => {
     expect(capabilityFor('generic', 'service')).toBeUndefined();
     expect(capabilityFor('service', 'generic')).toBeUndefined();
     expect(capabilityFor('generic', 'generic')).toBeUndefined();
+  });
+});
+
+describe('isSyncPairing — which pairings a request/response can attach to', () => {
+  it('is true for the ambiguous call pairings, where sync is a real choice', () => {
+    expect(isSyncPairing('service', 'service')).toBe(true);
+    expect(isSyncPairing('service', 'external')).toBe(true);
+  });
+
+  it('is true for actor → service, predetermined-and-sync with no other option', () => {
+    expect(isSyncPairing('actor', 'service')).toBe(true);
+  });
+
+  it('is false for pairings predetermined to something other than sync', () => {
+    expect(isSyncPairing('service', 'queue')).toBe(false);
+    expect(isSyncPairing('queue', 'service')).toBe(false);
+  });
+
+  it('is false for pairings with no meaningful behaviour choice at all', () => {
+    expect(isSyncPairing('service', 'database')).toBe(false);
+    expect(isSyncPairing('database', 'service')).toBe(false);
+    expect(isSyncPairing('service', 'cache')).toBe(false);
+    expect(isSyncPairing('cache', 'service')).toBe(false);
+  });
+
+  it('is false for a pair the matrix has no opinion on', () => {
+    expect(isSyncPairing('queue', 'queue')).toBe(false);
+    expect(isSyncPairing('generic', 'generic')).toBe(false);
+    expect(isSyncPairing('database', 'database')).toBe(false);
   });
 });
 

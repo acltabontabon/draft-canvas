@@ -14,7 +14,7 @@ import {
 import type { DraftDocument, DraftSummary } from '../document/types';
 
 const DB_NAME = 'draft-canvas';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /**
  * Meta and body live in separate stores on purpose: rendering the library only
@@ -27,6 +27,22 @@ const DB_VERSION = 1;
  * shape, not a flag — the same repair-don't-reject discipline
  * `document/validate.ts` already uses. See `crypto/migrateStorage.ts`.
  */
+/**
+ * One row per document id — deliberately not a generic, content-hashed asset
+ * table. Phase 5.1 only ever needs a single background image per document;
+ * building dedup/reference-counting for a future asset system that doesn't
+ * exist yet would be speculative. Stored unencrypted, unlike `bodies`: a
+ * wallpaper image is far less sensitive than diagram content, and threading
+ * AES-GCM through a `Blob` buys little for a lot of extra plumbing.
+ */
+interface BackgroundImageRow {
+  id: string;
+  blob: Blob;
+  mimeType: string;
+  width: number;
+  height: number;
+}
+
 interface DraftDb extends DBSchema {
   documents: {
     key: string;
@@ -36,6 +52,10 @@ interface DraftDb extends DBSchema {
   bodies: {
     key: string;
     value: EncryptedBody | LegacyBody;
+  };
+  backgroundImages: {
+    key: string;
+    value: BackgroundImageRow;
   };
 }
 
@@ -60,6 +80,9 @@ export class IndexedDbRepository implements DraftRepository {
           }
           if (!database.objectStoreNames.contains('bodies')) {
             database.createObjectStore('bodies', { keyPath: 'id' });
+          }
+          if (!database.objectStoreNames.contains('backgroundImages')) {
+            database.createObjectStore('backgroundImages', { keyPath: 'id' });
           }
         },
         blocked() {
@@ -148,10 +171,11 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   async remove(id: string): Promise<void> {
-    const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
+    const tx = this.db.transaction(['documents', 'bodies', 'backgroundImages'], 'readwrite');
     await Promise.all([
       tx.objectStore('documents').delete(id),
       tx.objectStore('bodies').delete(id),
+      tx.objectStore('backgroundImages').delete(id),
       tx.done,
     ]);
   }
@@ -207,6 +231,40 @@ export class IndexedDbRepository implements DraftRepository {
       }
     }
     return { migrated, failed };
+  }
+
+  async saveBackgroundImage(
+    documentId: string,
+    blob: Blob,
+    dims: { width: number; height: number },
+  ): Promise<void> {
+    try {
+      await this.db.put('backgroundImages', {
+        id: documentId,
+        blob,
+        mimeType: blob.type,
+        width: dims.width,
+        height: dims.height,
+      });
+    } catch (error) {
+      if (isQuotaError(error)) throw new QuotaExceededError(error);
+      throw error;
+    }
+  }
+
+  async loadBackgroundImage(
+    documentId: string,
+  ): Promise<{ blob: Blob; width: number; height: number } | null> {
+    const row = await this.db.get('backgroundImages', documentId);
+    if (!row) return null;
+    // Some IndexedDB implementations don't round-trip a Blob's `type` through
+    // structured clone — `mimeType` is stored alongside for exactly this case.
+    const blob = row.blob.type ? row.blob : new Blob([row.blob], { type: row.mimeType });
+    return { blob, width: row.width, height: row.height };
+  }
+
+  async removeBackgroundImage(documentId: string): Promise<void> {
+    await this.db.delete('backgroundImages', documentId);
   }
 }
 

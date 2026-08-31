@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  RESPONSE_LANE_DELTA,
   anchorPoint,
   chooseSides,
   detourAround,
@@ -14,7 +15,7 @@ import { createDocument, createEdge, createNode } from '../src/document/factory'
 import { addEdges, addNodes, moveNodes, updateNode } from '../src/document/operations';
 import { getMeasurer } from '../src/render/text/measure';
 import { DARK } from '../src/render/theme/tokens';
-import type { DraftEdge, DraftNode } from '../src/document/types';
+import { EDGE_ROUTINGS, type DraftEdge, type DraftNode } from '../src/document/types';
 
 /**
  * Routing invariants: an explicit anchor represents the user's intent and
@@ -419,6 +420,45 @@ describe('route stability', () => {
     const route = routeEdge(doc.edges[0]!, nodes)!;
     expect(route.source.side).toBe('top');
     expect(route.target.side).toBe('top');
+  });
+});
+
+/**
+ * A request/response connector's own reply line (see `DraftEdge.response`) is computed by calling
+ * `routeBetween` a second time with source/target and their anchors swapped, plus a small addition
+ * to the lane offset — reusing this same routing engine rather than a second one. These tests cover
+ * the geometry contract `DraftEdgeView.tsx`/`edges/describe.ts` both rely on.
+ */
+describe('a response route mirrors its request route via RESPONSE_LANE_DELTA', () => {
+  const sourceRect = { x: 0, y: 0, width: 120, height: 60 };
+  const targetRect = { x: 400, y: 0, width: 120, height: 60 };
+  const sourceAnchor = { side: 'right' as const, offset: 0.5 };
+  const targetAnchor = { side: 'left' as const, offset: 0.5 };
+
+  it.each(EDGE_ROUTINGS)('runs target → source, offset from the request route, for %s routing', (routing) => {
+    const request = routeBetween(sourceRect, targetRect, routing, {
+      anchors: { source: sourceAnchor, target: targetAnchor },
+      lane: 0,
+    });
+    const response = routeBetween(targetRect, sourceRect, routing, {
+      anchors: { source: targetAnchor, target: sourceAnchor },
+      lane: RESPONSE_LANE_DELTA,
+    });
+
+    // `response.target` is where its own arrowhead lands — the *original source* node, per
+    // `RESPONSE_LANE_DELTA`'s own doc comment — so it shares a side with `request.source`, and
+    // vice versa, even though the lane delta means the exact points aren't identical.
+    expect(response.target.side).toBe(request.source.side);
+    expect(response.source.side).toBe(request.target.side);
+    // The lane delta actually moved it — never lands exactly on top of the primary line.
+    expect(response.d).not.toBe(request.d);
+  });
+
+  it('falls back to the mirror image of chooseSides when neither endpoint has a persisted anchor', () => {
+    const request = routeBetween(sourceRect, targetRect, 'smoothstep');
+    const response = routeBetween(targetRect, sourceRect, 'smoothstep', { lane: RESPONSE_LANE_DELTA });
+    expect(response.source.side).toBe(request.target.side);
+    expect(response.target.side).toBe(request.source.side);
   });
 });
 

@@ -1,11 +1,23 @@
 import type { DraftEdge, DraftNode, EdgeRouting } from '../document/types';
 import type { Shape, TextAlign } from '../render/displayList';
+import { PRESET_AMPLITUDE } from '../render/roughness/presets';
+import { roughenPath } from '../render/roughness/roughPath';
 import { markerRef } from '../render/svg/markers';
 import type { Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
-import { LABEL_LINE_GAP, labelLaneOffset, rectOf, routeEdge, type RoutedEdge, type Side } from './routing';
+import type { PersonalityPreset } from '../ui/personality/usePersonality';
+import {
+  LABEL_LINE_GAP,
+  RESPONSE_LANE_DELTA,
+  labelLaneOffset,
+  rectOf,
+  routeBetween,
+  routeEdge,
+  type RoutedEdge,
+  type Side,
+} from './routing';
 import { dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 
@@ -18,6 +30,9 @@ export interface EdgeDescribeContext {
   stepIndex?: number;
   /** This edge's parallel-lane slot — see `laneIndex` in `store/selectors.ts`. */
   lane?: number;
+  /** Phase 5.2 — Intentional Roughness. Defaults to `'clean'` at call sites
+   *  that construct this object directly without a preset. */
+  preset?: PersonalityPreset;
 }
 
 const LABEL_PADDING_X = 6;
@@ -79,6 +94,15 @@ export interface DescribedEdge {
   route: RoutedEdge;
   /** The connector line. Painted underneath every node. */
   line: Shape[];
+  /**
+   * A request/response connector's own reply line — present only when `edge.response` is set.
+   * Kept separate from `line` (never merged into it) specifically so a two-phase Presentation/GIF
+   * pulse (see `pulseTarget` in `render/svg/document.ts`) can animate one without the other.
+   * Unlike the live canvas (compact by default, revealed on hover/selection), a static export has
+   * no hover concept, so this always renders when present — quieter than the primary line (thinner,
+   * lower opacity, hollow arrowhead), never hidden.
+   */
+  responseLine?: Shape[];
   /** The label chip and step badge. Painted on top of everything. */
   overlay: Shape[];
   color: string;
@@ -108,17 +132,105 @@ export function describeEdge(
 
   const color = resolveEdgeColor(edge, nodes.get(edge.source), ctx.theme);
 
-  const line: Shape[] = [
-    {
-      t: 'path',
-      d: route.d,
-      fill: 'none',
-      stroke: { color, width: 1.6, linecap: 'round', dash: dashForEdge(edge) },
-      markerEnd: edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined,
-    },
-  ];
+  // Geometry (`route`, `labelX`/`labelY`/every overlay below) always reads
+  // from the unperturbed `route` object — only the drawn stroke wobbles, so
+  // label placement, direction, and attachment points stay exactly as legible
+  // as Clean at every preset, and topology/routing never changes.
+  const amplitude = PRESET_AMPLITUDE[ctx.preset ?? 'clean'];
+  const strokeBase = { color, width: 1.6, linecap: 'round' as const, dash: dashForEdge(edge) };
+  const markerEnd = edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined;
+  const line: Shape[] =
+    amplitude.outline === 0
+      ? [{ t: 'path', d: route.d, fill: 'none', stroke: strokeBase, markerEnd }]
+      : [
+          {
+            t: 'path',
+            d: roughenPath(route.d, `${edge.id}:0`, amplitude.outline),
+            fill: 'none',
+            stroke: strokeBase,
+            markerEnd,
+          },
+          ...(amplitude.strokes === 2
+            ? ([
+                {
+                  t: 'path',
+                  d: roughenPath(route.d, `${edge.id}:1`, amplitude.outline),
+                  fill: 'none',
+                  stroke: { ...strokeBase, width: 1 },
+                  opacity: 0.5,
+                },
+              ] as Shape[])
+            : []),
+        ];
 
   const overlay: Shape[] = [];
+
+  // The reply half of a request/response connector — reuses `routeBetween` a second time with
+  // source/target (and their anchors) swapped, so the path naturally runs target → source, plus a
+  // small addition to this edge's own lane slot, exactly mirroring `DraftEdgeView.tsx`'s live
+  // rendering. `responseRoute.target` lands on the *original source* node — see
+  // `RESPONSE_LANE_DELTA`'s own doc comment in `edges/routing.ts` — which is what makes its
+  // `markerEnd` correctly point back at A.
+  let responseLine: Shape[] | undefined;
+  if (edge.response) {
+    const sourceNode = nodes.get(edge.source);
+    const targetNode = nodes.get(edge.target);
+    if (sourceNode && targetNode) {
+      const responseLane = (ctx.lane ?? 0) + RESPONSE_LANE_DELTA;
+      const responseRoute = routeBetween(rectOf(targetNode), rectOf(sourceNode), edge.routing, {
+        anchors: { source: edge.targetAnchor, target: edge.sourceAnchor },
+        lane: responseLane,
+        obstacles,
+      });
+      responseLine = [
+        {
+          t: 'path',
+          d: responseRoute.d,
+          fill: 'none',
+          stroke: { color, width: 1, linecap: 'round', dash: dashForEdge(edge) },
+          markerEnd: edge.directed ? markerRef(color, 'open') : undefined,
+          opacity: 0.8,
+        },
+      ];
+
+      const responseLabelNudge = labelLaneOffset(responseRoute.source.side, responseRoute.target.side, responseLane);
+      const responseLabelX = responseRoute.labelX + responseLabelNudge.x;
+      const responseLabelY = responseRoute.labelY + responseLabelNudge.y;
+      const responseLayout = layoutText(edge.response, {
+        font: FONTS.edgeLabel,
+        maxWidth: 220,
+        lineHeight: FONTS.edgeLabel.size * LINE_HEIGHTS.label,
+        maxLines: 1,
+        measurer: ctx.measurer,
+      });
+      const w = responseLayout.width + LABEL_PADDING_X * 2;
+      const h = responseLayout.height + LABEL_PADDING_Y * 2;
+      const { left, top } = labelChipRect(responseRoute.labelSide, responseLabelX, responseLabelY, w, h);
+      overlay.push(
+        {
+          t: 'rect',
+          x: left,
+          y: top,
+          w,
+          h,
+          r: 4,
+          fill: ctx.theme.edgeLabelBg,
+          stroke: { color: ctx.theme.border, width: 1 },
+          opacity: 0.8,
+        },
+        {
+          t: 'text',
+          x: left + LABEL_PADDING_X,
+          y: top + h / 2 - responseLayout.height / 2,
+          layout: responseLayout,
+          font: FONTS.edgeLabel,
+          fill: ctx.theme.textFaint,
+          align: 'start',
+          opacity: 0.8,
+        },
+      );
+    }
+  }
 
   const hasStep = ctx.showSequence && typeof ctx.stepIndex === 'number';
 
@@ -304,7 +416,7 @@ export function describeEdge(
     );
   }
 
-  return { route, line, overlay, color };
+  return { route, line, responseLine, overlay, color };
 }
 
 const OUTWARD: Record<Side, { x: number; y: number }> = {

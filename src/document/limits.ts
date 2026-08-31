@@ -29,6 +29,7 @@ export const LIMITS = {
   maxExtraMembersPerStep: 40,
   maxFlowTitleLength: 100,
   maxConditionLength: 120,
+  maxResponseLength: 120,
 } as const;
 
 export const DEFAULTS = {

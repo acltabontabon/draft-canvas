@@ -29,6 +29,19 @@ function fixture() {
 const CANVAS = { width: 960, height: 600 };
 const CENTERED = { x: 0, y: 0, zoom: 1 };
 
+/** One step, one connector — with (or, for a control case, without) a `response` set. */
+function responseFixture(response?: string) {
+  const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
+  const b = createNode({ type: 'service', x: 200, y: 0, text: 'B' });
+  // `response`, like `condition`, is only ever set post-creation — see `rendering.test.ts`'s
+  // identical fixture for why this spreads it on rather than passing it to `createEdge`.
+  const e1 = { ...createEdge({ source: a.id, target: b.id, accent: 'teal' as const }), response };
+  const doc = addEdges(addNodes(createDocument('Response fixture'), [a, b]), [e1]);
+  const flow = createFlow({ title: 'Walkthrough' });
+  flow.steps = [{ id: 'fs1', edgeId: e1.id }];
+  return { doc: addFlow(doc, flow), flow, e1 };
+}
+
 function nodeGroup(svgDoc: Document, x: number, y: number): Element | undefined {
   return [...svgDoc.querySelectorAll('svg > g')].find(
     (g) => g.getAttribute('transform') === `translate(${x} ${y})`,
@@ -101,6 +114,22 @@ describe('renderFlowFrameSvg (Phase 4.3 GIF export frames)', () => {
     expect(offsetAt(1)).toBe('0');
   });
 
+  it('reflects the selected Intentional Roughness preset in every frame, not Clean by default', () => {
+    const { doc, flow } = fixture();
+    const clean = renderFlowFrameSvg(doc, flow, 1, CENTERED, CANVAS, 0);
+    const sketch = renderFlowFrameSvg(doc, flow, 1, CENTERED, CANVAS, 0, 'request', { preset: 'sketch' });
+    expect(sketch.svg).not.toBe(clean.svg);
+  });
+
+  it('composes preset jitter with Presentation Mode tier decoration independently', () => {
+    const { doc, flow } = fixture();
+    const { svg } = renderFlowFrameSvg(doc, flow, 1, CENTERED, CANVAS, 0, 'request', { preset: 'sketch' });
+    const parsed = parseSvg(svg);
+    // The active node's tier opacity is unaffected by the preset.
+    expect(nodeGroup(parsed, 0, 0)?.getAttribute('opacity')).toBe('1');
+    expect(nodeGroup(parsed, 400, 0)?.getAttribute('opacity')).toBe('0.3');
+  });
+
   it('frames the camera viewport via viewBox, not a content-bounds fit', () => {
     const { doc, flow } = fixture();
     const { svg, width, height } = renderFlowFrameSvg(
@@ -142,5 +171,69 @@ describe('planGifFrames', () => {
     const empty = createFlow({ title: 'Empty' });
     const withEmpty = addFlow(doc, empty);
     expect(() => planGifFrames(withEmpty, empty.id)).toThrow();
+  });
+});
+
+describe('planGifFrames — request/response phase split', () => {
+  it('tags every hold frame "request" for a step whose edge has no response', () => {
+    const { doc, flow } = responseFixture();
+    const frames = planGifFrames(doc, flow.id, 'slow').filter((f) => f.step === 1);
+    expect(frames.length).toBeGreaterThan(0);
+    for (const frame of frames) expect(frame.phase).toBe('request');
+  });
+
+  it('splits the hold into a request run followed by a response run when the edge has one', () => {
+    const responseFx = responseFixture('200 Customer');
+    const plainFx = responseFixture();
+    const withResponse = planGifFrames(responseFx.doc, responseFx.flow.id, 'slow').filter((f) => f.step === 1);
+    const withoutResponse = planGifFrames(plainFx.doc, plainFx.flow.id, 'slow').filter((f) => f.step === 1);
+    // Same total frame count either way — a response never drops or adds a frame, only relabels some.
+    expect(withResponse.length).toBe(withoutResponse.length);
+
+    const phases = withResponse.map((f) => f.phase);
+    const firstResponseIndex = phases.indexOf('response');
+    expect(firstResponseIndex).toBeGreaterThan(0);
+    // Every frame before the switch is 'request', every one from the switch on is 'response' — one
+    // contiguous run each, not interleaved.
+    expect(phases.slice(0, firstResponseIndex).every((p) => p === 'request')).toBe(true);
+    expect(phases.slice(firstResponseIndex).every((p) => p === 'response')).toBe(true);
+    // Each phase's own pulse restarts from 0 at the switch, mirroring the live CSS animation
+    // starting fresh on whichever line just began matching `[data-flow-active]`.
+    expect(withResponse[firstResponseIndex]!.pulsePhase).toBe(0);
+  });
+});
+
+describe('renderFlowFrameSvg — request/response pulse targeting', () => {
+  it("pulses the primary line, not the response line, during the 'request' phase", () => {
+    const { doc, flow } = responseFixture('200 Customer');
+    const { svg } = renderFlowFrameSvg(doc, flow, 1, CENTERED, CANVAS, 0.5, 'request');
+    const parsed = parseSvg(svg);
+    const teal = DARK.accents.teal.chip;
+    const paths = [...parsed.querySelectorAll(`path[stroke="${teal}"]`)].filter((p) => !p.closest('marker'));
+    expect(paths.length).toBe(2);
+    const primary = paths.find((p) => p.getAttribute('stroke-width') === '1.6');
+    const response = paths.find((p) => p.getAttribute('stroke-width') === '1');
+    expect(primary?.hasAttribute('stroke-dashoffset')).toBe(true);
+    expect(response?.hasAttribute('stroke-dashoffset')).toBe(false);
+  });
+
+  it("pulses the response line, not the primary line, during the 'response' phase", () => {
+    const { doc, flow } = responseFixture('200 Customer');
+    const { svg } = renderFlowFrameSvg(doc, flow, 1, CENTERED, CANVAS, 0.5, 'response');
+    const parsed = parseSvg(svg);
+    const teal = DARK.accents.teal.chip;
+    const paths = [...parsed.querySelectorAll(`path[stroke="${teal}"]`)].filter((p) => !p.closest('marker'));
+    const primary = paths.find((p) => p.getAttribute('stroke-width') === '1.6');
+    const response = paths.find((p) => p.getAttribute('stroke-width') === '1');
+    expect(primary?.hasAttribute('stroke-dashoffset')).toBe(false);
+    expect(response?.hasAttribute('stroke-dashoffset')).toBe(true);
+  });
+
+  it("ignores framePhase for a step whose edge has no response — always pulses the one line", () => {
+    const { doc, flow } = responseFixture();
+    const { svg } = renderFlowFrameSvg(doc, flow, 1, CENTERED, CANVAS, 0.5, 'response');
+    const teal = DARK.accents.teal.chip;
+    const path = edgePath(parseSvg(svg), teal);
+    expect(path?.hasAttribute('stroke-dashoffset')).toBe(true);
   });
 });

@@ -10,7 +10,7 @@ import {
   type EdgeSemantic,
 } from '../document/types';
 import { stepIndexOf } from '../document/flow';
-import { capabilityFor, categoryOf, type ConnectionCapability } from '../document/connectorSemantics';
+import { capabilityFor, categoryOf, isSyncPairing, type ConnectionCapability } from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { routeBetween } from '../edges/routing';
 import { useEditorStore } from '../store/editorStore';
@@ -370,6 +370,29 @@ function behaviorBadgeLabel(kind: ConnectorKind): string {
   return kind === 'event' ? 'Event · Async' : CONNECTOR_KIND_LABELS[kind];
 }
 
+const SUCCESS_STATUS_BY_VERB: Record<string, string> = {
+  GET: '200',
+  POST: '201',
+  PUT: '200',
+  PATCH: '200',
+  DELETE: '204',
+};
+
+/** Best-effort "Success" default for a request/response connector, derived from the request's own
+ *  label — e.g. "GET Customer" → "200 Customer", "POST Payment" → "201 Payment". Falls back to a
+ *  bare "200" (or "200 <label>" for a label with no recognisable verb) when nothing more specific
+ *  can be inferred; the user is always free to overwrite it afterward. */
+function inferSuccessResponse(label: string | undefined): string {
+  const trimmed = label?.trim();
+  if (!trimmed) return '200';
+  const [first, ...rest] = trimmed.split(/\s+/);
+  const verb = first!.toUpperCase();
+  const status = SUCCESS_STATUS_BY_VERB[verb];
+  if (!status) return `200 ${trimmed}`;
+  const resource = rest.join(' ').trim();
+  return resource ? `${status} ${resource}` : status;
+}
+
 /** The rest of what `EdgeControls` used to show inline, all at once, now
  *  behind the overflow toggle: arrow, routing shape, behaviour/kind,
  *  condition, and this connector's own colour override. */
@@ -387,6 +410,7 @@ function AdvancedPanel({
   store: typeof useEditorStore;
 }) {
   const [editingBehavior, setEditingBehavior] = useState(false);
+  const [editingResponse, setEditingResponse] = useState(false);
 
   const capability: ConnectionCapability | undefined =
     sourceNode && targetNode ? capabilityFor(categoryOf(sourceNode), categoryOf(targetNode)) : undefined;
@@ -398,6 +422,17 @@ function AdvancedPanel({
   const hideSyncOption = behaviorBase.includes('sync') && edge.kind !== 'sync';
   const behaviorOptions = hideSyncOption ? behaviorBase.filter((kind) => kind !== 'sync') : behaviorBase;
   const showCondition = showBehaviorPicker || Boolean(edge.condition);
+
+  // Only offered where a connector already reads as an unambiguous synchronous call — see
+  // `isSyncPairing`'s own doc comment for exactly which pairings that covers and why. A connector
+  // that already carries a response never loses the control just because the pairing or kind
+  // changed underneath it, same discipline as `showCondition` above.
+  const canHaveResponse =
+    Boolean(sourceNode && targetNode) &&
+    isSyncPairing(categoryOf(sourceNode!), categoryOf(targetNode!)) &&
+    (edge.kind === undefined || edge.kind === 'sync');
+  const showResponse = canHaveResponse || Boolean(edge.response);
+  const showResponseInput = editingResponse || Boolean(edge.response);
 
   return (
     <div className="dc-edge-inspector-panel dc-edge-inspector-panel-advanced">
@@ -463,6 +498,50 @@ function AdvancedPanel({
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === 'Enter') event.currentTarget.blur();
+          }}
+        />
+      )}
+      {showResponse && (
+        <select
+          className="dc-select"
+          aria-label="Response"
+          title="An optional reply, drawn as a quieter secondary line — see the connector's own tooltip"
+          value={edge.response ? 'custom' : 'none'}
+          onChange={(event) => {
+            const choice = event.target.value;
+            if (choice === 'none') {
+              setEditingResponse(false);
+              store.getState().setEdgeResponse(edge.id, '');
+              return;
+            }
+            if (choice === 'success') {
+              store.getState().setEdgeResponse(edge.id, inferSuccessResponse(edge.label));
+              setEditingResponse(true);
+              return;
+            }
+            setEditingResponse(true);
+          }}
+        >
+          <option value="none">No response</option>
+          <option value="success">Success</option>
+          <option value="custom">Custom…</option>
+        </select>
+      )}
+      {showResponseInput && (
+        <input
+          className="dc-input dc-input-response"
+          aria-label="Response text"
+          placeholder="Response…"
+          defaultValue={edge.response ?? ''}
+          spellCheck={false}
+          onBlur={(event) => {
+            store.getState().setEdgeResponse(edge.id, event.currentTarget.value);
+            setEditingResponse(false);
+          }}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === 'Enter') event.currentTarget.blur();
+            if (event.key === 'Escape') setEditingResponse(false);
           }}
         />
       )}

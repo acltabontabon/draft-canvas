@@ -2,13 +2,29 @@ import { describeEdge } from '../../edges/describe';
 import { describeNode, describeContext } from '../../nodes/describe';
 import { findFlow, stepIndexOf } from '../../document/flow';
 import { boundsOf } from '../../document/operations';
-import type { DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../../document/types';
+import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../../document/types';
 import { laneIndex } from '../../edges/routing';
+import { blurRadiusFor } from '../backgroundAnchor';
 import { themeFor, type Theme, type ThemeName } from '../theme/tokens';
 import { getMeasurer } from '../text/measure';
 import { el, serialize, n, type SvgEl } from './element';
 import { beginClipScope, emitDisplayList, emitShape, shadowFilter } from './emit';
 import { markerDefs } from './markers';
+import type { PersonalityPreset } from '../../ui/personality/usePersonality';
+
+const BACKGROUND_BLUR_FILTER_ID = 'dc-bg-blur';
+
+/** An already-resolved background — the image loaded and base64-encoded, so
+ *  every renderer here stays synchronous/pure. See `export/background.ts`. */
+export interface ResolvedBackground {
+  dataUri: string;
+  fit: BackgroundFit;
+  dim: number;
+  blur: number;
+  /** Natural pixel dimensions — only used to size one repeat of a `tile` fit. */
+  naturalWidth: number;
+  naturalHeight: number;
+}
 
 export interface ExportOptions {
   theme?: ThemeName;
@@ -19,6 +35,67 @@ export interface ExportOptions {
   only?: ReadonlySet<string>;
   /** The flow currently selected for step-badge overlay, if any — "what you see is what you export". */
   selectedFlowId?: string;
+  /** Whether to draw a configured background — see `ResolvedBackground`. Defaults to `true`. */
+  includeBackground?: boolean;
+  background?: ResolvedBackground;
+  /** Phase 5.2 — Intentional Roughness preset. Defaults to `'clean'`. */
+  preset?: PersonalityPreset;
+}
+
+/**
+ * Builds the `<image>`/scrim (and, for `blur`, an SVG filter) for a resolved
+ * background, sized to fill `frame` — the export's own visible bounds (the
+ * whole canvas for `renderDocumentSvg`, the camera-cropped viewBox for
+ * `renderFlowFrameSvg`) — the same "always fills the visible screen" behavior
+ * `CanvasBackground.tsx` gives the live canvas, so panning/zooming and
+ * exporting never disagree about how much of the image is showing.
+ * `preserveAspectRatio` does the cover/contain fitting; `<image>` clips to
+ * its own box by default, so no manual geometry is needed for anything but
+ * `tile`, which repeats the image at its natural pixel size.
+ */
+export function backgroundEls(
+  background: ResolvedBackground,
+  canvasColor: string,
+  frame: { x: number; y: number; width: number; height: number },
+  extraDim = 0,
+): { defs: SvgEl[]; els: SvgEl[] } {
+  const { x, y, width, height } = frame;
+  const defs: SvgEl[] = [];
+  let imageEl: SvgEl;
+
+  if (background.fit === 'tile') {
+    const patternId = 'dc-bg-pattern';
+    const tileW = Math.max(1, background.naturalWidth);
+    const tileH = Math.max(1, background.naturalHeight);
+    defs.push(
+      el('pattern', { id: patternId, x, y, width: tileW, height: tileH, patternUnits: 'userSpaceOnUse' }, [
+        el('image', { x: 0, y: 0, width: tileW, height: tileH, href: background.dataUri, preserveAspectRatio: 'none' }),
+      ]),
+    );
+    imageEl = el('rect', { x, y, width, height, fill: `url(#${patternId})` });
+  } else {
+    imageEl = el('image', {
+      x,
+      y,
+      width,
+      height,
+      href: background.dataUri,
+      preserveAspectRatio: background.fit === 'contain' ? 'xMidYMid meet' : 'xMidYMid slice',
+    });
+  }
+
+  if (background.blur > 0) {
+    defs.push(
+      el('filter', { id: BACKGROUND_BLUR_FILTER_ID, x: '-20%', y: '-20%', width: '140%', height: '140%' }, [
+        el('feGaussianBlur', { stdDeviation: n(blurRadiusFor(background.blur)) }),
+      ]),
+    );
+    imageEl = el('g', { filter: `url(#${BACKGROUND_BLUR_FILTER_ID})` }, [imageEl]);
+  }
+
+  const dim = Math.min(1, background.dim + extraDim);
+  const scrim = el('rect', { x, y, width, height, fill: canvasColor, opacity: n(dim) });
+  return { defs, els: [imageEl, scrim] };
 }
 
 export interface RenderedSvg {
@@ -41,7 +118,12 @@ export interface SceneOptions {
   only?: ReadonlySet<string>;
   selectedFlow?: DraftFlow;
   decorateNode?: (node: DraftNode) => Decoration | undefined;
-  decorateEdge?: (edge: DraftEdge) => (Decoration & { pulsePhase?: number }) | undefined;
+  /** `pulseTarget` picks which of a request/response connector's two lines the pulse animates —
+   *  see `DescribedEdge.responseLine` in `edges/describe.ts`. Defaults to `'request'` (the primary
+   *  line) when omitted, i.e. every existing caller's behavior is unchanged. */
+  decorateEdge?: (
+    edge: DraftEdge,
+  ) => (Decoration & { pulsePhase?: number; pulseTarget?: 'request' | 'response' }) | undefined;
 }
 
 export interface Scene {
@@ -85,8 +167,13 @@ function applyPulse(lineEls: SvgEl[], pulsePhase: number): void {
  */
 export function buildScene(
   document: DraftDocument,
-  nodeCtx: { theme: Theme; measurer: ReturnType<typeof getMeasurer> },
-  edgeCtx: { theme: Theme; measurer: ReturnType<typeof getMeasurer>; showSequence: boolean },
+  nodeCtx: { theme: Theme; measurer: ReturnType<typeof getMeasurer>; preset: PersonalityPreset },
+  edgeCtx: {
+    theme: Theme;
+    measurer: ReturnType<typeof getMeasurer>;
+    showSequence: boolean;
+    preset: PersonalityPreset;
+  },
   options: SceneOptions = {},
 ): Scene {
   const nodes = options.only
@@ -114,8 +201,15 @@ export function buildScene(
     if (edge.directed) arrowColors.add(described.color);
 
     const decoration = options.decorateEdge?.(edge);
-    const lineEls = described.line.flatMap(emitShape);
-    if (decoration?.pulsePhase !== undefined) applyPulse(lineEls, decoration.pulsePhase);
+    const primaryEls = described.line.flatMap(emitShape);
+    const responseEls = described.responseLine?.flatMap(emitShape) ?? [];
+    // Kept as two separate element groups, not one merged pulse target: a request/response
+    // connector's two-phase Presentation/GIF pulse (see `pulseTarget`) needs to animate the
+    // primary or the response line independently, never both at once for the wrong phase.
+    if (decoration?.pulsePhase !== undefined) {
+      applyPulse(decoration.pulseTarget === 'response' ? responseEls : primaryEls, decoration.pulsePhase);
+    }
+    const lineEls = [...primaryEls, ...responseEls];
     const overlayEls = described.overlay.flatMap(emitShape);
     const groupAttrs = decorateGroupAttrs(decoration);
 
@@ -158,8 +252,9 @@ export function renderDocumentSvg(
   const theme = themeFor(options.theme ?? 'dark');
   const padding = options.padding ?? DEFAULT_PADDING;
   const measurer = getMeasurer();
-  const nodeCtx = { theme, measurer };
-  const edgeCtx = { theme, measurer, showSequence: document.settings.showSequence };
+  const preset = options.preset ?? 'clean';
+  const nodeCtx = { theme, measurer, preset };
+  const edgeCtx = { theme, measurer, showSequence: document.settings.showSequence, preset };
   const selectedFlow = options.selectedFlowId ? findFlow(document, options.selectedFlowId) : undefined;
 
   const scene = buildScene(document, nodeCtx, edgeCtx, { only: options.only, selectedFlow });
@@ -172,10 +267,20 @@ export function renderDocumentSvg(
 
   const defs: SvgEl[] = [shadowFilter(theme.shadow), ...markerDefs(scene.arrowColors)];
 
+  const showBackground = options.includeBackground !== false && options.background !== undefined;
+  // Sized to the export's own visible bounds (0,0,width,height) — outside the
+  // content's translated `<g>` below, so it fills the whole exported canvas
+  // like a wallpaper rather than a rectangle pinned to document coordinates.
+  const background = showBackground
+    ? backgroundEls(options.background!, theme.canvas, { x: 0, y: 0, width, height })
+    : undefined;
+  if (background) defs.push(...background.defs);
+
   const children: SvgEl[] = [el('defs', undefined, defs)];
   if (!options.transparent) {
     children.push(el('rect', { x: 0, y: 0, width, height, fill: theme.canvas }));
   }
+  children.push(...(background?.els ?? []));
   children.push(
     el('g', { transform: `translate(${n(-originX)} ${n(-originY)})` }, [
       ...scene.backdropEls,

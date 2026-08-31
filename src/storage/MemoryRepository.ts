@@ -10,6 +10,10 @@ export class MemoryRepository implements DraftRepository {
   readonly durable = false;
 
   private readonly documents = new Map<string, DraftDocument>();
+  private readonly backgroundImages = new Map<
+    string,
+    { blob: Blob; width: number; height: number }
+  >();
 
   async list(): Promise<DraftSummary[]> {
     return [...this.documents.values()]
@@ -28,6 +32,7 @@ export class MemoryRepository implements DraftRepository {
 
   async remove(id: string): Promise<void> {
     this.documents.delete(id);
+    this.backgroundImages.delete(id);
   }
 
   async rename(id: string, title: string): Promise<void> {
@@ -38,5 +43,23 @@ export class MemoryRepository implements DraftRepository {
 
   async usage(): Promise<{ usage: number; quota: number } | null> {
     return null;
+  }
+
+  async saveBackgroundImage(
+    documentId: string,
+    blob: Blob,
+    dims: { width: number; height: number },
+  ): Promise<void> {
+    this.backgroundImages.set(documentId, { blob, ...dims });
+  }
+
+  async loadBackgroundImage(
+    documentId: string,
+  ): Promise<{ blob: Blob; width: number; height: number } | null> {
+    return this.backgroundImages.get(documentId) ?? null;
+  }
+
+  async removeBackgroundImage(documentId: string): Promise<void> {
+    this.backgroundImages.delete(documentId);
   }
 }

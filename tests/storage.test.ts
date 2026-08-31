@@ -201,6 +201,55 @@ describe('local persistence', () => {
   });
 });
 
+/** Phase 5.1 — one background image blob per document, in its own store. */
+describe.each([
+  ['IndexedDbRepository', () => IndexedDbRepository.open()],
+  ['MemoryRepository', () => Promise.resolve(new MemoryRepository())],
+])('background image storage (%s)', (_name, open) => {
+  it('round-trips a saved image', async () => {
+    const repository = await open();
+    const doc = documentWith('With background');
+    await repository.save(doc);
+    const blob = new Blob(['fake-image-bytes'], { type: 'image/png' });
+
+    await repository.saveBackgroundImage(doc.metadata.id, blob, { width: 200, height: 100 });
+    const loaded = await repository.loadBackgroundImage(doc.metadata.id);
+
+    expect(loaded).not.toBeNull();
+    expect(loaded!.width).toBe(200);
+    expect(loaded!.height).toBe(100);
+    expect(loaded!.blob.type).toBe('image/png');
+  });
+
+  it('returns null when no background image is stored', async () => {
+    const repository = await open();
+    expect(await repository.loadBackgroundImage('no-such-document')).toBeNull();
+  });
+
+  it('removing a background image clears it independently of the document', async () => {
+    const repository = await open();
+    const doc = documentWith('Removable background');
+    await repository.save(doc);
+    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['x']), { width: 10, height: 10 });
+
+    await repository.removeBackgroundImage(doc.metadata.id);
+
+    expect(await repository.loadBackgroundImage(doc.metadata.id)).toBeNull();
+    expect(await repository.load(doc.metadata.id)).not.toBeNull();
+  });
+
+  it('deleting the document also clears its background image', async () => {
+    const repository = await open();
+    const doc = documentWith('Deleted with background');
+    await repository.save(doc);
+    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['x']), { width: 10, height: 10 });
+
+    await repository.remove(doc.metadata.id);
+
+    expect(await repository.loadBackgroundImage(doc.metadata.id)).toBeNull();
+  });
+});
+
 class RecordingRepository extends MemoryRepository {
   readonly saved: DraftDocument[] = [];
 

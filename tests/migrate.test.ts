@@ -184,3 +184,115 @@ describe('v3 to v4 migration: flow accent', () => {
     expect(result.document.flows[0]!.accent).toBeUndefined();
   });
 });
+
+/**
+ * The v4→v5 migration: v4 has no concept of a canvas background at all, so
+ * there is nothing to backfill — a structural no-op, same shape as
+ * `migrateFlowAccent`. `normalizeDocument` gives the migrated document a
+ * clean, disabled default background block.
+ */
+describe('v4 to v5 migration: canvas background', () => {
+  function v4Fixture() {
+    return {
+      format: DRAFT_FORMAT,
+      version: 4,
+      metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0 },
+      nodes: [{ id: 'a', type: 'service', x: 0, y: 0, width: 120, height: 60 }],
+      edges: [],
+      settings: { showSequence: true, grid: 'dots' },
+      flows: [],
+    };
+  }
+
+  it('migrates a v4 document to the current version with a clean default background', () => {
+    const result = parseDocument(JSON.stringify(v4Fixture()));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.version).toBe(CURRENT_VERSION);
+    expect(result.document.settings.background).toEqual({
+      enabled: false,
+      fit: 'cover',
+      dim: 0.55,
+      blur: 0,
+    });
+  });
+});
+
+/**
+ * The v5→v6 migration: v5 has no concept of a request/response connector at
+ * all, so there is nothing to backfill — a structural no-op, same shape as
+ * `migrateFlowAccent`/`migrateBackground`.
+ */
+describe('v5 to v6 migration: request/response connectors', () => {
+  function v5Fixture(edgeOverrides: Record<string, unknown> = {}) {
+    return {
+      format: DRAFT_FORMAT,
+      version: 5,
+      metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0 },
+      nodes: [
+        { id: 'a', type: 'service', x: 0, y: 0, width: 120, height: 60 },
+        { id: 'b', type: 'service', x: 400, y: 0, width: 120, height: 60 },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: 'a',
+          target: 'b',
+          directed: true,
+          routing: 'smoothstep',
+          sourceAnchor: { side: 'right', offset: 0.5 },
+          targetAnchor: { side: 'left', offset: 0.5 },
+          ...edgeOverrides,
+        },
+      ],
+      settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
+      flows: [],
+    };
+  }
+
+  it('migrates a v5 document to the current version unchanged apart from version', () => {
+    const result = parseDocument(JSON.stringify(v5Fixture()));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.version).toBe(CURRENT_VERSION);
+    expect(result.document.edges[0]!.response).toBeUndefined();
+  });
+
+  it('accepts a valid response on a hand-authored v5-shaped-but-v6-aware fixture', () => {
+    const result = parseDocument(JSON.stringify(v5Fixture({ response: '200 Customer' })));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.edges[0]!.response).toBe('200 Customer');
+  });
+
+  it('drops an invalid (non-string) response rather than coercing it', () => {
+    const result = parseDocument(JSON.stringify(v5Fixture({ response: 42 })));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.edges[0]!.response).toBeUndefined();
+  });
+
+  it('drops a whitespace-only response, same discipline as condition', () => {
+    const result = parseDocument(JSON.stringify(v5Fixture({ response: '   ' })));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.edges[0]!.response).toBeUndefined();
+  });
+
+  it('a v1 document with legacy sequence numbers still migrates all the way to the current version', () => {
+    const raw = {
+      format: DRAFT_FORMAT,
+      version: 1,
+      metadata: { id: 'd1', title: 'Very old', createdAt: 0, updatedAt: 0 },
+      nodes: [
+        { id: 'a', type: 'card', x: 0, y: 0, width: 100, height: 60 },
+        { id: 'b', type: 'card', x: 300, y: 0, width: 100, height: 60 },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'b', sequence: 1 }],
+    };
+    const result = parseDocument(JSON.stringify(raw));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.version).toBe(CURRENT_VERSION);
+  });
+});

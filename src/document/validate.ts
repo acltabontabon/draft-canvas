@@ -14,6 +14,7 @@ import { defaultSizeFor } from './factory';
 import {
   ACCENTS,
   ATTACHABLE_TYPES,
+  BACKGROUND_FITS,
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
   CONNECTOR_KINDS,
@@ -31,6 +32,7 @@ import {
   type Accent,
   type AttachableType,
   type Attachment,
+  type BackgroundFit,
   type BoundaryPreset,
   type CodeLanguage,
   type ConnectorKind,
@@ -396,6 +398,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     const condition = text(candidate.condition, LIMITS.maxConditionLength)?.trim();
     if (condition) edge.condition = condition;
 
+    const response = text(candidate.response, LIMITS.maxResponseLength)?.trim();
+    if (response) edge.response = response;
+
     if (candidate.async === true) edge.async = true;
 
     if (isRecord(candidate.details)) {
@@ -588,6 +593,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
 
   const viewportRaw = isRecord(raw.viewport) ? raw.viewport : {};
   const settingsRaw = isRecord(raw.settings) ? raw.settings : {};
+  const backgroundRaw = isRecord(settingsRaw.background) ? settingsRaw.background : {};
 
   const document: DraftDocument = {
     format: DRAFT_FORMAT,
@@ -608,6 +614,12 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     settings: {
       showSequence: settingsRaw.showSequence !== false,
       grid: oneOf<GridMode>(settingsRaw.grid, GRID_MODES, 'dots'),
+      background: {
+        enabled: backgroundRaw.enabled === true,
+        fit: oneOf<BackgroundFit>(backgroundRaw.fit, BACKGROUND_FITS, 'cover'),
+        dim: clamp(finite(backgroundRaw.dim, 0.55), 0, 1),
+        blur: clamp(finite(backgroundRaw.blur, 0), 0, 1),
+      },
     },
     flows,
   };
