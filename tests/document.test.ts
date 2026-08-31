@@ -33,6 +33,12 @@ describe('document model', () => {
     expect(doc.nodes).toHaveLength(0);
   });
 
+  it('a freshly created queue node\'s placeholder text matches its default kind — no Topic-labelled-Queue mismatch', () => {
+    const node = createNode({ type: 'queue', x: 0, y: 0 });
+    expect(node.queueKind).toBe('queue');
+    expect(node.text).toBe('Queue');
+  });
+
   it('rejects edges whose endpoints do not exist', () => {
     const doc = createDocument();
     const next = addEdges(doc, [createEdge({ source: 'nope', target: 'also-nope' })]);

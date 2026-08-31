@@ -453,43 +453,42 @@ describe('live resize', () => {
     expect(texts).toEqual(['Untitled area']);
   });
 
-  it('gives each service/database/queue variant a distinct caption without changing the base category colour', () => {
-    const ctx = describeContext(LIGHT);
+  function fillsAndCaptions(ctx: ReturnType<typeof describeContext>, node: ReturnType<typeof createNode>) {
+    const display = describeNode(node, ctx);
+    // Only the silhouette's own fill (rect/path/ellipse) — a caption's text
+    // colour is a different visual channel and deliberately uses the
+    // theme's neutral muted colour regardless of accent.
+    const fills = display.shapes
+      .filter((shape) => shape.t !== 'text')
+      .map((shape) => ('fill' in shape ? shape.fill : undefined))
+      .filter((fill): fill is string => typeof fill === 'string');
+    const texts = display.shapes
+      .filter((shape): shape is Extract<typeof shape, { t: 'text' }> => shape.t === 'text')
+      .map((shape) => shape.layout.lines.map((line) => line.text).join(''));
+    return { fills, texts };
+  }
 
-    function fillsAndCaptions(node: ReturnType<typeof createNode>) {
-      const display = describeNode(node, ctx);
-      // Only the silhouette's own fill (rect/path/ellipse) — a caption's text
-      // colour is a different visual channel and deliberately uses the
-      // theme's neutral muted colour regardless of accent.
-      const fills = display.shapes
-        .filter((shape) => shape.t !== 'text')
-        .map((shape) => ('fill' in shape ? shape.fill : undefined))
-        .filter((fill): fill is string => typeof fill === 'string');
-      const texts = display.shapes
-        .filter((shape): shape is Extract<typeof shape, { t: 'text' }> => shape.t === 'text')
-        .map((shape) => shape.layout.lines.map((line) => line.text).join(''));
-      return { fills, texts };
-    }
+  it('gives each service/database variant a distinct caption without changing the base category colour, default kind stays uncaptioned', () => {
+    const ctx = describeContext(LIGHT);
 
     for (const [type, kindField, kinds] of [
       ['service', 'serviceKind', ['generic', 'api', 'worker', 'external']],
       ['database', 'databaseKind', ['generic', 'sql', 'nosql', 'cache']],
-      ['queue', 'queueKind', ['queue', 'topic', 'stream']],
     ] as const) {
       const variants = kinds.map((kind) =>
         createNode({ type, x: 0, y: 0, text: 'Label', [kindField]: kind } as Parameters<
           typeof createNode
         >[0]),
       );
-      const results = variants.map(fillsAndCaptions);
+      const results = variants.map((node) => fillsAndCaptions(ctx, node));
 
       // The base category's fills (accent-driven silhouette colour) are
       // identical across every kind of the same type.
       const [first, ...rest] = results;
       for (const result of rest) expect(result.fills).toEqual(first!.fills);
 
-      // The default kind renders no extra caption; every named kind adds
-      // exactly one distinguishing caption on top of the shared label.
+      // The default ("generic") kind renders no extra caption; every named
+      // kind adds exactly one distinguishing caption on top of the label.
       expect(results[0]!.texts).toEqual(['Label']);
       for (let i = 1; i < results.length; i += 1) {
         expect(results[i]!.texts).toContain('Label');
@@ -499,6 +498,53 @@ describe('live resize', () => {
       const captions = results.slice(1).map((r) => r.texts.find((t) => t !== 'Label'));
       expect(new Set(captions).size).toBe(captions.length);
     }
+  });
+
+  it('captions every queue kind, including the default — none of queue/topic/stream is a placeholder', () => {
+    const ctx = describeContext(LIGHT);
+    const kinds = ['queue', 'topic', 'stream'] as const;
+    const variants = kinds.map((queueKind) =>
+      createNode({ type: 'queue', x: 0, y: 0, text: 'Label', queueKind }),
+    );
+    const results = variants.map((node) => fillsAndCaptions(ctx, node));
+
+    // The base violet silhouette's fills are identical across every kind.
+    const [first, ...rest] = results;
+    for (const result of rest) expect(result.fills).toEqual(first!.fills);
+
+    // Every kind — including the default "queue" — adds exactly one
+    // distinguishing caption on top of the shared label.
+    for (const result of results) {
+      expect(result.texts).toContain('Label');
+      expect(result.texts.length).toBe(2);
+    }
+    const captions = results.map((r) => r.texts.find((t) => t !== 'Label'));
+    expect(captions).toEqual(['QUEUE', 'TOPIC', 'STREAM']);
+  });
+
+  it('renders the queue silhouette as a horizontal cylinder with envelope icons, distinct from service and database', () => {
+    const ctx = describeContext(LIGHT);
+    const queueNode = createNode({ type: 'queue', x: 0, y: 0, width: 176, height: 68, text: 'Orders' });
+    const serviceNode = createNode({ type: 'service', x: 0, y: 0, width: 176, height: 68, text: 'Orders' });
+    const databaseNode = createNode({ type: 'database', x: 0, y: 0, width: 176, height: 68, text: 'Orders' });
+
+    const queueShapes = describeNode(queueNode, ctx).shapes;
+    const serviceShapes = describeNode(serviceNode, ctx).shapes;
+    const databaseShapes = describeNode(databaseNode, ctx).shapes;
+    const queuePaths = queueShapes.filter((s) => s.t === 'path');
+
+    // Body + lid (the open-tube seam) + a combined envelope-icons path.
+    expect(queuePaths.length).toBe(3);
+    // No rects and no group — unlike box/service, this silhouette is built
+    // entirely from paths, same construction style as the database cylinder.
+    expect(queueShapes.some((s) => s.t === 'rect')).toBe(false);
+    expect(queueShapes.some((s) => s.t === 'group')).toBe(false);
+
+    // Not a box+cap (service) or a vertical-cylinder path count (database) —
+    // both build a recognisable cylinder from paths, but a different count.
+    expect(serviceShapes.some((s) => s.t === 'group')).toBe(true);
+    expect(databaseShapes.filter((s) => s.t === 'path').length).toBe(2);
+    expect(queuePaths.length).not.toBe(databaseShapes.filter((s) => s.t === 'path').length);
   });
 
   it('describes every node type at its own per-type minimum without throwing or collapsing geometry', () => {

@@ -35,6 +35,8 @@ export function defaultSizeFor(type: DraftNodeType): { width: number; height: nu
       return { width: DEFAULTS.groupWidth, height: DEFAULTS.groupHeight };
     case 'actor':
       return { width: DEFAULTS.actorWidth, height: DEFAULTS.actorHeight };
+    case 'queue':
+      return { width: DEFAULTS.nodeWidth, height: DEFAULTS.queueHeight };
     default:
       return { width: DEFAULTS.nodeWidth, height: DEFAULTS.nodeHeight };
   }
@@ -55,6 +57,8 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
       return { width: 72, height: 72 };
     case 'actor':
       return { width: 64, height: 72 };
+    case 'queue':
+      return { width: 120, height: 72 };
     case 'note':
       return { width: 120, height: 72 };
     case 'code':
@@ -73,7 +77,7 @@ export function defaultTextFor(type: DraftNodeType): string {
     case 'database':
       return 'Database';
     case 'queue':
-      return 'Topic';
+      return 'Queue';
     case 'actor':
       return 'User';
     case 'group':

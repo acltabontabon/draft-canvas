@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { capabilityFor, categoryOf, inferRelationship, isEligibleForReinference } from '../src/document/connectorSemantics';
-import { createDocument, createEdge, type CreateNodeInput } from '../src/document/factory';
+import { createDocument, createEdge, createNode, type CreateNodeInput } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 describe('categoryOf', () => {
@@ -141,6 +141,18 @@ describe('inferRelationship — a thin wrapper over capabilityFor\'s default', (
     expect(inferRelationship({ type: 'queue' }, { type: 'queue' })).toBeUndefined();
     expect(inferRelationship({ type: 'actor' }, { type: 'note' })).toBeUndefined();
     expect(inferRelationship({ type: 'card' }, { type: 'card' })).toBeUndefined();
+  });
+
+  it('a topic and a stream infer exactly like a plain queue — Draft Canvas doesn\'t over-differentiate messaging kinds', () => {
+    const service = createNode({ type: 'service', x: 0, y: 0 });
+    const plainQueue = createNode({ type: 'queue', x: 0, y: 0 });
+    const plain = inferRelationship(service, plainQueue);
+    const reverse = inferRelationship(plainQueue, service);
+    for (const queueKind of ['topic', 'stream'] as const) {
+      const node = createNode({ type: 'queue', x: 0, y: 0, queueKind });
+      expect(inferRelationship(service, node)).toEqual(plain);
+      expect(inferRelationship(node, service)).toEqual(reverse);
+    }
   });
 });
 

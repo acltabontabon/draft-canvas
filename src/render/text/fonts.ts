@@ -41,6 +41,10 @@ export const TEXT_SIZES = {
   nodeLabelLarge: 15,
   nodeSubtitle: 11,
   presetTag: 10,
+  /** A variant's own kind tag (API, SQL, TOPIC…) — quieter than a preset tag,
+   *  since it's a secondary detail on top of a category that's already clear
+   *  from the silhouette, not a label carrying its own weight. */
+  variantTag: 9,
   noteBody: 13,
   freeText: 15,
   code: 12.5,
@@ -61,6 +65,7 @@ export const FONTS = {
   nodeLabel: { stack: 'sans', size: TEXT_SIZES.nodeLabel, weight: 600 } satisfies FontSpec,
   nodeSubtitle: { stack: 'sans', size: TEXT_SIZES.nodeSubtitle, weight: 500 } satisfies FontSpec,
   presetTag: { stack: 'sans', size: TEXT_SIZES.presetTag, weight: 600 } satisfies FontSpec,
+  variantTag: { stack: 'sans', size: TEXT_SIZES.variantTag, weight: 500 } satisfies FontSpec,
   noteBody: { stack: 'sans', size: TEXT_SIZES.noteBody, weight: 400 } satisfies FontSpec,
   freeText: { stack: 'sans', size: TEXT_SIZES.freeText, weight: 500 } satisfies FontSpec,
   code: { stack: 'mono', size: TEXT_SIZES.code, weight: 400 } satisfies FontSpec,

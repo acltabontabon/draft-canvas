@@ -69,7 +69,10 @@ const BOUNDARY_PRESET_LABELS: Partial<Record<BoundaryPreset, string>> = {
  * does change accent), these never touch `accentOf` — the base category
  * colour must keep dominating, so the variant only ever adds this small
  * corner caption, the same restrained treatment a boundary preset gets.
- * The default kind of each type renders no caption at all.
+ * The default kind of Service and Database ("generic") renders no caption —
+ * it means "unspecified," not a real subtype. Queue has no such placeholder:
+ * `queue`/`topic`/`stream` are three equally specific kinds, so all three are
+ * captioned.
  */
 const SERVICE_KIND_LABELS: Partial<Record<ServiceKind, string>> = {
   api: 'API',
@@ -81,7 +84,8 @@ const DATABASE_KIND_LABELS: Partial<Record<DatabaseKind, string>> = {
   nosql: 'NOSQL',
   cache: 'CACHE',
 };
-const QUEUE_KIND_LABELS: Partial<Record<QueueKind, string>> = {
+const QUEUE_KIND_LABELS: Record<QueueKind, string> = {
+  queue: 'QUEUE',
   topic: 'TOPIC',
   stream: 'STREAM',
 };
@@ -89,9 +93,9 @@ const QUEUE_KIND_LABELS: Partial<Record<QueueKind, string>> = {
 /** A small, muted corner tag — the one shared visual for every node variant. */
 function variantCaption(node: DraftNode, ctx: DescribeContext, label: string, color: string): Shape[] {
   const layout = layoutText(label, {
-    font: FONTS.presetTag,
+    font: FONTS.variantTag,
     maxWidth: Math.max(16, node.width - 12),
-    lineHeight: FONTS.presetTag.size * LINE_HEIGHTS.label,
+    lineHeight: FONTS.variantTag.size * LINE_HEIGHTS.label,
     maxLines: 1,
     measurer: ctx.measurer,
   });
@@ -101,7 +105,7 @@ function variantCaption(node: DraftNode, ctx: DescribeContext, label: string, co
       x: node.width - 7,
       y: node.height - layout.height - 5,
       layout,
-      font: FONTS.presetTag,
+      font: FONTS.variantTag,
       fill: color,
       align: 'end',
     },
@@ -224,9 +228,10 @@ function ellipse(node: DraftNode, ctx: DescribeContext): Shape[] {
 
 /**
  * The developer presets earn their keep through silhouette, not iconography:
- * a service has a coloured cap, a database is a cylinder, a queue shows stacked
- * messages, an actor has a head and shoulders. Recognisable at a glance on a
- * shared screen, and none of them look like clip art.
+ * a service has a coloured cap, a database is a (vertical) cylinder, a queue
+ * is a horizontal one — a pipe messages travel through — and an actor has a
+ * head and shoulders. Recognisable at a glance on a shared screen, and none
+ * of them look like clip art.
  */
 function service(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'teal');
@@ -293,61 +298,127 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
 
 function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'violet');
-  const slot = 7;
-  const slots = 3;
-  const gutter = slot * slots + 6;
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const rx = Math.min(14, w * 0.12);
+  // The tube is a compact glyph, not the whole node — like an actor's head
+  // and shoulders, it doesn't grow to fill the box. The name and its kind
+  // subtext live below it, stacked, in the full-width space that leaves —
+  // kept small enough that even a pre-existing (shorter) queue node has room
+  // for both lines without them running into the tube.
+  const tubeH = Math.min(32, h * 0.5);
+
+  // A horizontal cylinder — a pipe messages travel through — built the same
+  // way `database()` builds its (vertical) one: elliptical caps joined by
+  // straight edges, with one cap's seam drawn again on top as a "lid" so it
+  // reads as an open tube rather than a solid capsule.
+  const body = [
+    `M${x + rx},${y}`,
+    `a${rx},${tubeH / 2} 0 0 0 0,${tubeH}`,
+    `l${w - rx * 2},0`,
+    `a${rx},${tubeH / 2} 0 0 0 0,${-tubeH}`,
+    'Z',
+  ].join(' ');
+  const lid = `M${x + w - rx},${y} a${rx},${tubeH / 2} 0 0 1 0,${tubeH} a${rx},${tubeH / 2} 0 0 1 0,${-tubeH}`;
+
+  // A few envelope glyphs, centred in the tube — messages in transit. Kept to
+  // a fixed count and size regardless of node size, like a real icon would be.
+  const iconCount = 3;
+  const iconW = 17;
+  const iconH = 13;
+  const iconGap = 6;
+  const iconY = y + tubeH / 2 - iconH / 2;
+  const iconsStartX = x + (w - (iconW * iconCount + iconGap * (iconCount - 1))) / 2;
+  function envelope(ex: number): string {
+    return [
+      `M${ex},${iconY}`,
+      `h${iconW}`,
+      `v${iconH}`,
+      `h${-iconW}`,
+      'Z',
+      `M${ex},${iconY}`,
+      `L${ex + iconW / 2},${iconY + iconH * 0.6}`,
+      `L${ex + iconW},${iconY}`,
+    ].join(' ');
+  }
+  const icons = Array.from({ length: iconCount }, (_, i) =>
+    envelope(iconsStartX + i * (iconW + iconGap)),
+  ).join(' ');
 
   const shapes: Shape[] = [
-    {
-      t: 'rect',
-      x: 0.75,
-      y: 0.75,
-      w: node.width - 1.5,
-      h: node.height - 1.5,
-      r: 6,
-      fill: palette.fill,
-      stroke: { color: palette.line, width: 1.5 },
-      shadow: true,
-    },
+    { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
+    { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5 } },
+    { t: 'path', d: icons, fill: 'none', stroke: { color: palette.line, width: 1.2 } },
   ];
 
-  // Stacked messages waiting at the head of the queue.
-  for (let i = 0; i < slots; i += 1) {
-    shapes.push({
-      t: 'rect',
-      x: 6 + i * slot,
-      y: node.height / 2 - 9,
-      w: slot - 2.5,
-      h: 18,
-      r: 1.5,
-      fill: i === 0 ? palette.chip : 'none',
-      stroke: { color: palette.line, width: 1.2 },
-    });
-  }
+  // Below the tube: the name, with its kind as a small muted subtext line
+  // underneath it — not a corner tag (this silhouette has no filled corner to
+  // put one in) and not inline (a long name would crowd it). Same treatment
+  // `variantCaption` gives every other variant, just stacked instead of
+  // cornered.
+  const kindLabel = QUEUE_KIND_LABELS[node.queueKind ?? 'queue'];
+  const kindFont = FONTS.variantTag;
+  const kindLineHeight = kindFont.size * LINE_HEIGHTS.label;
+  const kindLayout = layoutText(kindLabel, {
+    font: kindFont,
+    maxWidth: Math.max(16, node.width - PADDING * 2),
+    lineHeight: kindLineHeight,
+    maxLines: 1,
+    measurer: ctx.measurer,
+  });
 
+  const top = tubeH + 4;
+  const available = Math.max(12, node.height - top);
   const text = node.text ?? '';
+  const nameGap = 2;
+
   if (text.trim()) {
-    const maxWidth = Math.max(16, node.width - gutter - PADDING);
-    const lineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
-    const layout = layoutText(text, {
+    const nameLineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
+    const nameLayout = layoutText(text, {
       font: FONTS.nodeLabel,
-      maxWidth,
-      lineHeight,
-      maxLines: Math.max(1, Math.floor((node.height - 8) / lineHeight)),
+      maxWidth: Math.max(16, node.width - PADDING * 2),
+      lineHeight: nameLineHeight,
+      maxLines: 1,
       measurer: ctx.measurer,
     });
+    const blockHeight = nameLayout.height + nameGap + kindLayout.height;
+    const blockTop = top + (available - blockHeight) / 2;
+
+    shapes.push(
+      {
+        t: 'text',
+        x: node.width / 2,
+        y: blockTop,
+        layout: nameLayout,
+        font: FONTS.nodeLabel,
+        fill: palette.text,
+        align: 'middle',
+      },
+      {
+        t: 'text',
+        x: node.width / 2,
+        y: blockTop + nameLayout.height + nameGap,
+        layout: kindLayout,
+        font: kindFont,
+        fill: ctx.theme.textMuted,
+        align: 'middle',
+      },
+    );
+  } else {
+    // No name yet — the kind still shows on its own, centred.
     shapes.push({
       t: 'text',
-      x: gutter + (node.width - gutter - PADDING / 2) / 2,
-      y: (node.height - layout.height) / 2,
-      layout,
-      font: FONTS.nodeLabel,
-      fill: palette.text,
+      x: node.width / 2,
+      y: top + (available - kindLayout.height) / 2,
+      layout: kindLayout,
+      font: kindFont,
+      fill: ctx.theme.textMuted,
       align: 'middle',
     });
   }
-  const kindLabel = QUEUE_KIND_LABELS[node.queueKind ?? 'queue'];
-  if (kindLabel) shapes.push(...variantCaption(node, ctx, kindLabel, ctx.theme.textMuted));
+
   return shapes;
 }
 

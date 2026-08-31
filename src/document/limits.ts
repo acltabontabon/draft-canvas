@@ -46,4 +46,8 @@ export const DEFAULTS = {
   groupHeight: 300,
   actorWidth: 120,
   actorHeight: 92,
+  /** Taller than a plain node — the tube is a compact glyph anchored to the
+   *  top, so the label and the kind caption both need their own room below
+   *  it, the same reason an actor gets its own taller default too. */
+  queueHeight: 88,
 } as const;

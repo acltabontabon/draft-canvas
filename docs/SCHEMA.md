@@ -104,7 +104,7 @@ Defined in [`src/document/types.ts`](../src/document/types.ts).
 | `boundaryPreset` | enum? | `boundary` · `system` · `domain` · `network` · `deployment` · `group`. `group` nodes only. A loose, technology-neutral label rendered as a small caption — never mutates the node's own `text`. |
 | `serviceKind` | enum? | `generic` · `api` · `worker` · `external`. `service` nodes only. Renders as a small caption; the teal silhouette never changes. |
 | `databaseKind` | enum? | `generic` · `sql` · `nosql` · `cache`. `database` nodes only. Renders as a small caption; the blue silhouette never changes. |
-| `queueKind` | enum? | `queue` · `topic` · `stream`. `queue` nodes only. Renders as a small caption; the violet silhouette never changes. |
+| `queueKind` | enum? | `queue` · `topic` · `stream`. `queue` nodes only. The violet horizontal-cylinder ("pipe") silhouette never changes; each kind is captioned (`QUEUE`/`TOPIC`/`STREAM`, as a small muted subtext line under the name) since none of the three is a placeholder default the way `serviceKind`'s and `databaseKind`'s `generic` are. |
 
 ### Attachment
 

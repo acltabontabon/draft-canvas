@@ -88,6 +88,29 @@ come from one map in `render/code/theme.ts` that both backends read.
 Monospace makes the geometry free: a token's x position is `charWidth × column`, so the code path
 needs no measurement at all and is exactly reproducible.
 
+### The messaging silhouette is a compact glyph, like an actor's
+
+A queue/topic/stream node's silhouette (`nodes/describe.ts`'s `queue()`) is a horizontal cylinder —
+a pipe messages travel through, with a couple of envelope glyphs inside — built the same way the
+database's (vertical) cylinder is: elliptical caps joined by straight edges, one cap's seam redrawn
+on top as a "lid" so it reads as an open tube. It doesn't fill the whole node the way a service or
+database silhouette does; it's a fixed-size glyph anchored to the top of the box, with the label
+living in the full-width space below it — the same relationship an actor's head and shoulders have
+with its own label. That's a deliberate trade: a queue node accepts a connector landing on empty
+space below the tube (exactly as an actor already does below its shoulders) in exchange for the
+label never competing with the tube's cap curvature or icons for room, however long the label is.
+
+The kind (`QUEUE`/`TOPIC`/`STREAM`) renders as a small muted subtext line stacked directly under the
+name — the same small muted style `variantCaption` gives every other variant's corner tag, just
+stacked instead of cornered, since this silhouette has no filled corner to put one in. Both the name
+and the kind are capped to a single line each (ellipsized, never wrapped), and the tube itself is
+kept short enough that even a node sized before this two-line layout existed still fits both lines
+without them running into it.
+
+Connector anchors, resize, and selection needed no changes for this regardless, since all of them
+key off `node.width`/`node.height` alone — `edges/routing.ts` never reads node type, sub-kind, or
+how much of the box a silhouette visually fills.
+
 ### Edges are the one exception to "one renderer"
 
 Node appearance is unified through `describeNode`; edge appearance is not. `edges/describe.ts`

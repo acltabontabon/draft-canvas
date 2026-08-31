@@ -91,6 +91,60 @@ describe('routeEdge threads an edge\'s own anchors through routeBetween', () => 
   });
 });
 
+/**
+ * The queue node's fanned-card-stack silhouette (`nodes/describe.ts`'s `queue()`)
+ * draws three nested rects inside its own bounding box, but routing never reads
+ * node type or sub-kind — it only ever sees `{x, y, width, height}` via `rectOf`.
+ * These tests confirm that invariant holds end-to-end for a real queue node on
+ * every side, and that topic/stream anchor identically to a plain queue.
+ */
+describe('a queue/topic/stream node anchors on its true bounding box regardless of its stacked silhouette', () => {
+  function queueAt(id: string, queueKind: 'queue' | 'topic' | 'stream' = 'queue'): DraftNode {
+    return createNode({ id, type: 'queue', x: 300, y: 300, width: 176, height: 68, queueKind });
+  }
+
+  const service = createNode({ id: 'svc', type: 'service', x: -300, y: -300, width: 100, height: 60 });
+
+  it.each(['top', 'right', 'bottom', 'left'] as const)(
+    'anchors a connector on the %s side of a queue node exactly on its rect edge',
+    (side) => {
+      const target = queueAt(`q-${side}`);
+      const edge = createEdge({
+        source: service.id,
+        target: target.id,
+        targetAnchor: { side, offset: 0.5 },
+      });
+      const nodes = new Map([
+        [service.id, service],
+        [target.id, target],
+      ]);
+
+      const route = routeEdge(edge, nodes)!;
+      expect(route.target.side).toBe(side);
+      const rect = { x: target.x, y: target.y, width: target.width, height: target.height };
+      expect(route.target).toEqual({ ...anchorPoint(rect, side, 0.5), side });
+    },
+  );
+
+  it('a topic and a stream node anchor identically to a plain queue node — sub-kind never affects geometry', () => {
+    const points = (['queue', 'topic', 'stream'] as const).map((queueKind) => {
+      const target = queueAt(`k-${queueKind}`, queueKind);
+      const edge = createEdge({
+        source: service.id,
+        target: target.id,
+        targetAnchor: { side: 'left', offset: 0.5 },
+      });
+      const nodes = new Map([
+        [service.id, service],
+        [target.id, target],
+      ]);
+      return routeEdge(edge, nodes)!.target;
+    });
+    expect(points[1]).toEqual(points[0]);
+    expect(points[2]).toEqual(points[0]);
+  });
+});
+
 describe('an anchor survives operations that do not touch the edge itself', () => {
   it('is untouched by moving either endpoint node', () => {
     const a = createNode({ type: 'service', x: 0, y: 0 });
