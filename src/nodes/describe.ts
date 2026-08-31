@@ -356,13 +356,17 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   const h = node.height - 1.5;
   const x = 0.75;
   const y = 0.75;
-  const rx = Math.min(14, w * 0.12);
   // The tube is a compact glyph, not the whole node — like an actor's head
   // and shoulders, it doesn't grow to fill the box. The name and its kind
   // subtext live below it, stacked, in the full-width space that leaves —
   // kept small enough that even a pre-existing (shorter) queue node has room
   // for both lines without them running into the tube.
   const tubeH = Math.min(32, h * 0.5);
+  // Capped at half the tube's own height, not just a width fraction — a cap
+  // wider than the tube is tall reads as a flattened oval bulging past the
+  // pill's own ends rather than a rounded one, which is what a short queue
+  // node (tubeH below the historical 32px cap) would otherwise get.
+  const rx = Math.min(14, w * 0.12, tubeH / 2);
   const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
 
   // A horizontal cylinder — a pipe messages travel through — built the same
