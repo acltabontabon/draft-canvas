@@ -859,6 +859,12 @@ function EdgeAttachmentChip({
                   onChange={(event) => {
                     pendingValueRef.current = event.currentTarget.value;
                   }}
+                  // Without this, a keystroke here bubbles all the way up to React Flow's own
+                  // per-edge keydown handler — reachable because `EdgeLabelRenderer` still portals
+                  // through the *React* tree, even though the DOM node itself lives elsewhere — and
+                  // Enter/Space there means "select this edge", popping `EdgeInspectorPopover` open
+                  // behind the card the user is mid-edit on.
+                  onKeyDown={(event) => event.stopPropagation()}
                 />
               ) : (
                 <textarea
@@ -868,6 +874,7 @@ function EdgeAttachmentChip({
                   onChange={(event) => {
                     pendingValueRef.current = event.currentTarget.value;
                   }}
+                  onKeyDown={(event) => event.stopPropagation()}
                 />
               )
             ) : attachment.type === 'code' ? (
