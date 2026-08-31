@@ -240,7 +240,7 @@ export function useFlowPlayback(): FlowPlaybackController {
     if (flowPlayback.step > steps.length) setFlowPlayback({ step: steps.length });
   }, [flowPlayback.active, flowPlayback.flowId, flowPlayback.step, setFlowPlayback, steps.length]);
 
-  // A step's own two-phase request/response pulse (see `DraftEdge.response`, `FlowPlaybackState.phase`).
+  // A step's own two-phase request/response pulse (see `DraftEdge.hasResponse`, `FlowPlaybackState.phase`).
   // Reset happens here, in exactly one place, keyed only on what actually identifies "a new step to
   // animate" — not scattered across `goTo`/`pickFlow`/the reconciliation effect/the edit-mode reset
   // above, which would need to individually remember to also patch `phase` (`setFlowPlayback`'s
@@ -249,7 +249,7 @@ export function useFlowPlayback(): FlowPlaybackController {
   // listing it would just double-fire this effect on the render where it catches up.
   useEffect(() => {
     setFlowPlayback({ phase: 'request' });
-    if (!current?.edge?.response) return;
+    if (!current?.edge?.hasResponse) return;
     const timer = window.setTimeout(() => setFlowPlayback({ phase: 'response' }), RESPONSE_PHASE_DELAY_MS);
     return () => window.clearTimeout(timer);
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- current intentionally excluded, see comment above.

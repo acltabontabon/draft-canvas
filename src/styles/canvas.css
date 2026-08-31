@@ -282,15 +282,17 @@
   z-index: 4;
 }
 
+/* A lightweight halo over the canvas background rather than a bordered chip — legible where the
+   label crosses its own (or a neighbouring) connector without reading as a floating card. The
+   permanent border/background this replaces was the visual cue that a label is clickable/
+   editable; `:hover`/`:focus-within` below restore that cue as a soft tint instead. */
 .dc-edge-label {
   position: absolute;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 7px;
-  border: 1px solid var(--dc-border);
+  padding: 2px 4px;
   border-radius: 4px;
-  background: var(--dc-edge-label-bg);
   color: var(--dc-text);
   font-size: 11.5px;
   font-weight: 500;
@@ -298,6 +300,17 @@
   white-space: nowrap;
   pointer-events: all;
   cursor: text;
+  text-shadow:
+    0 0 3px var(--dc-canvas),
+    0 0 3px var(--dc-canvas),
+    0 0 3px var(--dc-canvas),
+    0 0 3px var(--dc-canvas);
+  transition: background 120ms ease;
+}
+
+.dc-edge-label:hover,
+.dc-edge-label:focus-within {
+  background: var(--dc-edge-label-bg);
 }
 
 /* When a connector is both labelled and numbered, the step rides inside the
@@ -392,10 +405,7 @@
 
 .dc-edge-response-label {
   position: absolute;
-  padding: 1px 6px;
-  border: 1px solid var(--dc-border);
-  border-radius: 4px;
-  background: var(--dc-edge-label-bg);
+  padding: 1px 2px;
   color: var(--dc-text-faint);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
@@ -403,6 +413,11 @@
   pointer-events: none;
   opacity: 0.5;
   transition: opacity 120ms ease;
+  text-shadow:
+    0 0 3px var(--dc-canvas),
+    0 0 3px var(--dc-canvas),
+    0 0 3px var(--dc-canvas),
+    0 0 3px var(--dc-canvas);
 }
 
 .dc-edge-response-line[data-revealed='true'],
@@ -920,6 +935,20 @@
   color: var(--dc-text-faint);
 }
 
+/* Same footprint as the pill it replaces while editing, so the row doesn't jump. */
+.dc-edge-inspector-caption-input {
+  min-width: 60px;
+  max-width: 160px;
+  padding: 3px 8px;
+  border: 1px solid var(--dc-selection);
+  border-radius: 999px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
 /* The shared `.dc-button` is sized for the toolbar (28px tall) — sized down
    here to match the two pills' own height, so "⋯" reads as part of the same
    compact row instead of a taller control that wandered in from elsewhere. */
@@ -936,6 +965,170 @@
   gap: 6px;
   padding: 8px;
   border-top: 1px solid var(--dc-border);
+}
+
+/*
+ * The full editor behind "⋯" — labelled sections stacked vertically instead
+ * of one flat wrapped row of unrelated-looking controls. Deliberately capped
+ * narrower than the popover's own 320px ceiling: a column of compact rows
+ * reads better tall-and-narrow than wide-and-wrapped.
+ */
+.dc-edge-inspector-expanded {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px;
+  width: 240px;
+}
+
+.dc-inspector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dc-inspector-section-label {
+  color: var(--dc-text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dc-inspector-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dc-inspector-section-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Shared sizing for every select/input inside the expanded editor — one
+ * consistent, comfortable control height (see requirements doc's "32–36px
+ * control heights, not large form fields") instead of the mix of 22–32px
+ * chrome the flat grid this replaced had accumulated across its controls. */
+.dc-inspector-control {
+  height: 32px;
+  min-width: 0;
+  flex: 1;
+  padding: 0 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: 6px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.dc-inspector-control::placeholder {
+  color: var(--dc-text-faint);
+}
+
+.dc-inspector-condition {
+  flex: 1;
+}
+
+/* A request/response line's own "verb + subject" split — see `SplitTextEditor`. Visually one
+ * field with an internal seam, not two separate boxes, so it still reads as a single value. */
+.dc-inspector-split {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.dc-inspector-split-first {
+  flex: 0 0 56px;
+  border-radius: 6px 0 0 6px;
+}
+
+.dc-inspector-split-rest {
+  flex: 1;
+  min-width: 0;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+
+.dc-inspector-toggle {
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dc-inspector-toggle[data-active='true'] {
+  border-color: color-mix(in srgb, var(--dc-selection) 55%, transparent);
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+/* A quiet, link-styled one-click convenience (guessing a response from the request's own verb)
+ * — not a real form control, so it carries none of `.dc-inspector-control`'s chrome. */
+.dc-inspector-hint {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dc-inspector-hint:hover {
+  color: var(--dc-text);
+}
+
+/*
+ * A predetermined connector behaviour (see `capabilityFor` in
+ * `document/connectorSemantics.ts`) — dashed border reads as "inferred, not a
+ * fixed choice," and it's a real button: clicking it reveals the full picker
+ * underneath, so nothing here is a dead end. Same idea `Inspector.tsx`'s
+ * multi-select copy still uses under its own `.dc-kind-badge` name.
+ */
+.dc-inspector-badge {
+  height: 32px;
+  flex: 1;
+  padding: 0 9px;
+  border: 1px dashed var(--dc-border-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dc-inspector-badge:hover {
+  border-style: solid;
+  color: var(--dc-text);
+}
+
+/* Collapsed by default — the full palette (`.dc-swatches` below) only
+ * appears once this is clicked, rather than permanently consuming a row. */
+.dc-inspector-color-swatch {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--dc-border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.dc-inspector-color-swatch[data-auto='true'] {
+  border-style: dashed;
+  background: transparent;
 }
 
 .dc-edge-inspector-membership-list {

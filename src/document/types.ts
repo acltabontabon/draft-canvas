@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 7;
+export const CURRENT_VERSION = 8;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -241,6 +241,21 @@ export interface DraftEdge {
    * never whether an existing value renders.
    */
   response?: string;
+  /**
+   * Whether this connector draws its quiet reply line at all, independent of
+   * `response`'s text. Absent/`false` means a plain one-way connector, exactly
+   * as before this field existed. `true` with `response` unset draws the line
+   * with no label yet; `response` text should never appear with this `false`
+   * (a hand-edited file that does so still renders no label — this field is
+   * the sole gate for the line's existence, not a derived value from
+   * `response`'s truthiness). Defaulted `true` by `connect()`/`reconnectEdge()`
+   * only for a service↔service (or service↔external) pairing — see
+   * `connectorSemantics.ts`'s `defaultsToResponse` — never for `actor>service`.
+   * A manual toggle (`setEdgeHasResponse`) stamps `semanticsOrigin: 'explicit'`,
+   * the same discipline `setEdgeSemantic`/`setEdgeKind` already follow, so an
+   * explicit "no response" survives a later reconnect.
+   */
+  hasResponse?: boolean;
   /** Flow behaviour — see `ConnectorKind`. Optional; a plain connection has none. */
   kind?: ConnectorKind;
   /** `true` renders a dashed line for an asynchronous interaction. Absent/`false` is synchronous (solid). */

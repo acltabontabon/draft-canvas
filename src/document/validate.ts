@@ -401,6 +401,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     const response = text(candidate.response, LIMITS.maxResponseLength)?.trim();
     if (response) edge.response = response;
 
+    if (candidate.hasResponse === true) edge.hasResponse = true;
+
     if (candidate.async === true) edge.async = true;
 
     if (isRecord(candidate.details)) {

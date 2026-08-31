@@ -411,8 +411,14 @@ function responseFixture(response?: string) {
   // `response`, like `condition`, is only ever set post-creation via `setEdgeResponse` —
   // `createEdge`/`CreateEdgeInput` deliberately don't accept it, matching `condition`'s own
   // precedent — so a test fixture spreads it on directly, same as other tests do for
-  // `semantic`/`kind`/`semanticsOrigin`.
-  const edge = { ...createEdge({ source: serviceA.id, target: serviceB.id, label: 'GET Customer' }), response };
+  // `semantic`/`kind`/`semanticsOrigin`. `hasResponse` is the independent gate for the reply
+  // line's existence (see `DraftEdge.hasResponse`) — a fixture with response text wants the line
+  // drawn, exactly as `connect()`'s own auto-default would produce for two services.
+  const edge = {
+    ...createEdge({ source: serviceA.id, target: serviceB.id, label: 'GET Customer' }),
+    response,
+    hasResponse: Boolean(response),
+  };
   return addEdges(addNodes(createDocument('Export'), [serviceA, serviceB]), [edge]);
 }
 

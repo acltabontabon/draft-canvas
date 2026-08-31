@@ -135,6 +135,19 @@ export function isSyncPairing(source: NodeCategory, target: NodeCategory): boole
   return capabilityFor(source, target)?.defaultRelation === 'calls';
 }
 
+/**
+ * Whether a fresh connection between these categories should default its
+ * reply line on. Narrower than `isSyncPairing` (which also covers
+ * `actor>service` — a user may still *manually* add a response there via the
+ * inspector's `canHaveResponse` gate). Only two service-shaped boxes talking
+ * to each other reads as a request/response conversation by default; a
+ * person initiating a call is not itself a service that structurally
+ * replies.
+ */
+export function defaultsToResponse(source: NodeCategory, target: NodeCategory): boolean {
+  return resolved(source) === 'service' && resolved(target) === 'service';
+}
+
 type Relationship = { kind?: ConnectorKind; semantic?: EdgeSemantic };
 
 /**

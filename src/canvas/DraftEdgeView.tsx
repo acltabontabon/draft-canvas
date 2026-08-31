@@ -5,16 +5,16 @@ import { explainEdgeTier, lensEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import {
   LABEL_LINE_GAP,
-  RESPONSE_LANE_DELTA,
   labelLaneOffset,
   laneIndex,
   rectOf,
+  responseLaneFor,
   routeBetween,
   snappedAnchorForDrop,
   type Rect,
   type Side,
 } from '../edges/routing';
-import { dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
+import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { NOTE_ACCENTS, NOTE_LABELS } from '../nodes/describe';
@@ -55,6 +55,12 @@ function pointRect(point: { x: number; y: number }): Rect {
  * this chip moves; the event dot, conditional diamond, caption, and condition chip all keep
  * anchoring straight at `(x, y)` as before, since they were never the ones being cut through.
  */
+/** The side a request/response connector's reply label is forced to, relative to the request
+ *  label's own side — guarantees "request above / response below" (or the left/right
+ *  equivalent) across every routing mode, rather than leaving it to incidental agreement between
+ *  the two independently-computed (source/target-swapped) routes' own `labelSide`. */
+const OPPOSITE_SIDE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+
 function labelChipTransform(side: Side, x: number, y: number): string {
   switch (side) {
     case 'right':
@@ -198,10 +204,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const isShownStep = flowPlayback.active && tier === 'shown';
   const dimmed = flowPlayback.active && tier === 'hidden';
   // Which of a request/response connector's two lines the active step's pulse animates — see
-  // `FlowPlaybackState.phase`. Irrelevant, and always `'request'`, for a plain edge (no `response`)
-  // or one not the active step, so existing single-line playback is entirely unchanged.
+  // `FlowPlaybackState.phase`. Irrelevant, and always `'request'`, for a plain edge (no
+  // `hasResponse`) or one not the active step, so existing single-line playback is entirely
+  // unchanged.
   const pulseTarget: 'request' | 'response' =
-    isActiveStep && edge?.response && flowPlayback.phase === 'response' ? 'response' : 'request';
+    isActiveStep && edge?.hasResponse && flowPlayback.phase === 'response' ? 'response' : 'request';
   const focusDimmed = focus.active && edge ? !isEdgeFocused(focus, edge) : false;
 
   // Merely *selecting* a flow (not presenting it) is a gentler lens: every
@@ -314,14 +321,15 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // small addition to this edge's own lane slot, so it reads as a quieter sibling of the request
   // line rather than a whole new routing system. `responseRoute.target` therefore lands on the
   // *original source* node — that's what makes its `markerEnd` correctly point back at A; don't
-  // "fix" the apparent reversal. See `RESPONSE_LANE_DELTA`'s own doc comment in `edges/routing.ts`.
-  const responseRoute = edge.response
+  // "fix" the apparent reversal. See `responseLaneFor`'s own doc comment in `edges/routing.ts`.
+  const responseLane = responseLaneFor(laneOffset);
+  const responseRoute = edge.hasResponse
     ? routeBetween(effectiveTargetRect, effectiveSourceRect, edge.routing, {
         anchors: {
           source: dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor,
           target: dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor,
         },
-        lane: laneOffset + RESPONSE_LANE_DELTA,
+        lane: responseLane,
         obstacles,
       })
     : null;
@@ -330,11 +338,16 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       ? responseRoute.d
       : roughenPath(responseRoute.d, `${edge.id}:response`, roughAmplitude.outline)
     : null;
-  const responseLabelNudge = responseRoute
-    ? labelLaneOffset(responseRoute.source.side, responseRoute.target.side, laneOffset + RESPONSE_LANE_DELTA)
-    : null;
-  const responseLabelX = responseRoute && responseLabelNudge ? responseRoute.labelX + responseLabelNudge.x : 0;
-  const responseLabelY = responseRoute && responseLabelNudge ? responseRoute.labelY + responseLabelNudge.y : 0;
+  // Deliberately *not* `labelLaneOffset` here: that helper adds real-sibling-edge label
+  // clearance on top of an already-lane-nudged line, for when a 10px line gap isn't enough
+  // room for two separate edges' full-height label chips to avoid stacking. The response
+  // route's own path is already comfortably separated from the request line by
+  // `RESPONSE_LANE_DELTA`, so its label only needs the same small perpendicular clearance the
+  // request label gets from its own line (`labelChipTransform`'s `LABEL_LINE_GAP`) — stacking
+  // the sibling nudge on top of that pushed the response label tens of pixels further away
+  // than the line it's meant to sit right against.
+  const responseLabelX = responseRoute ? responseRoute.labelX : 0;
+  const responseLabelY = responseRoute ? responseRoute.labelY : 0;
   // Compact by default; the response's own half of a two-phase presentation pulse also counts as
   // "useful to see right now", same as hover/selection.
   const responseRevealed = selected || hoveringResponse || pulseTarget === 'response';
@@ -397,7 +410,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             stroke: strokeColor,
             strokeWidth: 1,
             strokeLinecap: 'round',
-            strokeDasharray: dashForEdge(edge)?.join(' '),
+            strokeDasharray: RESPONSE_DASH.join(' '),
           }}
         />
       )}
@@ -417,8 +430,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )}
       {/* A subtle caption of the relationship — independent of `kind`'s glyph
           above, so a plain call/read/write connector reads just as clearly as
-          an event one. Yields entirely to a real label the moment there is one. */}
-      {!hasLabel && !hasStep && edge.semantic && (() => {
+          an event one. Yields entirely to a real label the moment there is one,
+          and to a request/response connector's own reply line: its fixed
+          downward offset would otherwise land right on top of (or read as
+          attached to) the quiet response line/label below, and the two-line
+          shape itself already communicates "this is a call" without the
+          caption's help. */}
+      {!hasLabel && !hasStep && !edge.hasResponse && edge.semantic && (() => {
         const caption = captionAnchor(route.labelSide, labelX, labelY);
         return (
           <text
@@ -552,9 +570,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
         {/* The reply half of a request/response connector — anchored to the response route's own
             label point (already offset from the primary by `RESPONSE_LANE_DELTA`), not the
-            primary's, so it never stacks on the label/condition/step/attachment cluster above.
-            Compact by default, revealed on hover/selection via `canvas.css`, not a new piece of
-            React state. */}
+            primary's, so it never stacks on the label/condition/step/attachment cluster above,
+            and forced to `OPPOSITE_SIDE` of the request label so "request above / response
+            below" (or the left/right equivalent) holds regardless of what each independently-
+            computed route's own `labelSide` happens to agree on. Compact by default, revealed on
+            hover/selection via `canvas.css`, not a new piece of React state. */}
         {edge.response && (
           <div
             className="dc-edge-response-label"
@@ -565,7 +585,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-active={isActiveStep ? 'true' : undefined}
             data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{
-              transform: labelChipTransform(responseRoute!.labelSide, responseLabelX, responseLabelY),
+              transform: labelChipTransform(OPPOSITE_SIDE[route.labelSide], responseLabelX, responseLabelY),
             }}
           >
             {edge.response}

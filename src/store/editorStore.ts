@@ -56,6 +56,8 @@ import {
 } from '../document/flow';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import {
+  categoryOf,
+  defaultsToResponse,
   inferRelationship,
   isEligibleForReinference,
 } from '../document/connectorSemantics';
@@ -214,6 +216,8 @@ export interface EditorStore {
   setEdgeCondition: (id: string, condition: string) => void;
   /** Free-text response chip, e.g. "200 Customer" — display only, see `DraftEdge.response`. */
   setEdgeResponse: (id: string, response: string) => void;
+  /** Toggles the reply line's existence, independent of `response`'s text — see `DraftEdge.hasResponse`. */
+  setEdgeHasResponse: (id: string, hasResponse: boolean) => void;
   toggleEdgeAsync: (id: string) => void;
   /** Sets (or clears) a connector's flow-behaviour kind — see `ConnectorKind`. */
   setEdgeKind: (id: string, kind: ConnectorKind | undefined) => void;
@@ -421,6 +425,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const sourceNode = state.document.nodes.find((n) => n.id === source);
     const targetNode = state.document.nodes.find((n) => n.id === target);
     const relationship = sourceNode && targetNode ? inferRelationship(sourceNode, targetNode) : undefined;
+    const hasResponse =
+      sourceNode && targetNode ? defaultsToResponse(categoryOf(sourceNode), categoryOf(targetNode)) : false;
     const edge = createEdge({
       source,
       target,
@@ -432,6 +438,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       targetAnchor: targetSide ? { side: targetSide, offset: targetOffset } : undefined,
       kind: relationship?.kind,
       semantic: relationship?.semantic,
+      hasResponse: hasResponse || undefined,
       semanticsOrigin: relationship ? 'inferred' : undefined,
     });
     state.apply('Connect', (doc) => addEdges(doc, [edge]), {
@@ -466,9 +473,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // touched, gets reclassified here — an explicit user choice survives a
       // reconnect untouched. See `isEligibleForReinference`.
       const relationship = inferRelationship(sourceNode, targetNode);
+      const hasResponse = defaultsToResponse(categoryOf(sourceNode), categoryOf(targetNode));
       return updateEdge(reconnected, id, {
         semantic: relationship?.semantic,
         kind: relationship?.kind,
+        hasResponse: hasResponse || undefined,
         semanticsOrigin: relationship ? 'inferred' : undefined,
       });
     });
@@ -501,6 +510,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Set response', (doc) => updateEdge(doc, id, { response: response.trim() || undefined }), {
       coalesceKey: `edge-response:${id}`,
     });
+  },
+
+  setEdgeHasResponse(id, hasResponse) {
+    get().apply('Toggle response', (doc) =>
+      updateEdge(doc, id, { hasResponse: hasResponse || undefined, semanticsOrigin: 'explicit' }),
+    );
   },
 
   toggleEdgeAsync(id) {

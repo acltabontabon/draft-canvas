@@ -28,6 +28,15 @@ export function dashForEdge(edge: DraftEdge): number[] | undefined {
   }
 }
 
+/**
+ * The response line's own dash pattern — always on, independent of
+ * `dashForEdge`'s kind-driven pattern, so a plain synchronous call's reply
+ * line still reads as visually secondary even though the request line
+ * itself is solid. Shared by both renderers (`DraftEdgeView.tsx`,
+ * `edges/describe.ts`) so the two stay visually identical.
+ */
+export const RESPONSE_DASH = [3, 3];
+
 /** A callback's return arrow reads as hollow, so a forward/return pair is
  *  distinct even before lane separation or direction is noticed. */
 export function markerVariantForEdge(edge: DraftEdge): MarkerVariant {

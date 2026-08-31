@@ -71,7 +71,7 @@ export interface GifFramePlan {
   camera: DraftViewport;
   pulsePhase: number;
   /** Which of a request/response connector's two lines this frame's pulse animates — see
-   *  `FlowPlaybackState.phase`. Always `'request'` for a step whose edge has no `response`, i.e.
+   *  `FlowPlaybackState.phase`. Always `'request'` for a step whose edge has no `hasResponse`, i.e.
    *  identical to every frame plan from before this field existed. */
   phase: 'request' | 'response';
   delayMs: number;
@@ -112,18 +112,18 @@ export function planGifFrames(
       }
     }
 
-    // A step whose primary edge has a `response` splits its hold into a request run followed by a
+    // A step whose primary edge has `hasResponse` splits its hold into a request run followed by a
     // response run, at the same proportion the live `useFlowPlayback` timer uses
-    // (`RESPONSE_PHASE_DELAY_MS`) — a step with no response keeps every frame `'request'`, i.e.
+    // (`RESPONSE_PHASE_DELAY_MS`) — a step with no response line keeps every frame `'request'`, i.e.
     // byte-identical to this function's behavior from before this feature existed. Each phase's own
     // pulse restarts from 0, mirroring how the live CSS animation restarts fresh on whichever line
     // newly starts matching `[data-flow-active]` rather than continuing the other line's timeline.
-    const requestFrames = step.edge?.response
+    const requestFrames = step.edge?.hasResponse
       ? Math.max(1, Math.min(holdFrames, Math.round((RESPONSE_PHASE_DELAY_MS / holdMs) * holdFrames)))
       : holdFrames;
 
     for (let f = 0; f < holdFrames; f += 1) {
-      const phase: 'request' | 'response' = step.edge?.response && f >= requestFrames ? 'response' : 'request';
+      const phase: 'request' | 'response' = step.edge?.hasResponse && f >= requestFrames ? 'response' : 'request';
       const elapsedInPhase = (phase === 'response' ? f - requestFrames : f) * FRAME_INTERVAL_MS;
       frames.push({
         step: step.step,

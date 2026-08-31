@@ -166,6 +166,23 @@ function migrateResponse(doc: Record<string, unknown>): Record<string, unknown> 
 }
 
 /**
+ * v7 has no independent concept of "the reply line exists" — presence of
+ * `response` text was the only signal. Every v7 edge that already has
+ * `response` text keeps its visible line via `hasResponse: true`; every
+ * other edge gets no line, exactly as it rendered before this field existed.
+ */
+function migrateHasResponse(doc: Record<string, unknown>): Record<string, unknown> {
+  const rawEdges = Array.isArray(doc.edges) ? doc.edges : [];
+  const edges = rawEdges.map((raw) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const edge = raw as Record<string, unknown>;
+    if (typeof edge.response !== 'string' || edge.response.trim() === '') return edge;
+    return { ...edge, hasResponse: true };
+  });
+  return { ...doc, edges };
+}
+
+/**
  * v6 removed the `card` and `rounded` node types — Draft Canvas no longer has
  * a blank, semantics-free box primitive. The closest surviving primitive is
  * `note`: it holds free text with no structural implications (no boundary,
@@ -208,6 +225,7 @@ const MIGRATIONS: Record<number, Migration> = {
   4: migrateBackground,
   5: migrateResponse,
   6: migrateCardAndRoundedToNote,
+  7: migrateHasResponse,
 };
 
 export class UnsupportedVersionError extends Error {

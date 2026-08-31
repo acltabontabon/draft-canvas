@@ -289,18 +289,34 @@ const LANE_SPACING = 10;
  * already separates real parallel edges, added on top of this edge's own
  * lane slot rather than a fixed pixel offset, so it still reads correctly
  * when this edge already has parallel siblings. A caller computes the
- * response's route by calling `routeBetween` a second time with source/target
- * (and their anchors) swapped and `lane: laneOffset + RESPONSE_LANE_DELTA` —
- * see `DraftEdgeView.tsx`/`edges/describe.ts`. `laneIndex` only ever assigns
- * real siblings a (positive or negative) multiple of 0.5, so any delta whose
+ * response's lane with `responseLaneFor(laneOffset)` below — see
+ * `DraftEdgeView.tsx`/`edges/describe.ts`. `laneIndex` only ever assigns real
+ * siblings a (positive or negative) multiple of 0.5, so any delta whose
  * remainder mod 0.5 is non-zero can never land exactly on a real neighbour's
- * lane, regardless of this edge's own offset — 1.25 satisfies that while
- * giving the line (~12.5px) and its label (~25px) enough clearance from the
- * request line/label to read as two distinct lines rather than a smudge; a
- * smaller fractional delta (e.g. the original 0.35) technically satisfied
- * the same non-collision invariant but left too little room for the label.
+ * lane, regardless of this edge's own offset — 1.8 satisfies that while
+ * giving the line (~18px) and its label (~36px) comfortable, "pleasant to the
+ * eye" clearance from the request line/label, not merely enough to avoid a
+ * smudge. A smaller fractional delta (0.35, then 1.25) technically satisfied
+ * the same non-collision invariant but read as too cramped.
  */
-export const RESPONSE_LANE_DELTA = 1.25;
+export const RESPONSE_LANE_DELTA = 1.8;
+
+/**
+ * The response route's own lane slot, given this edge's request-side
+ * `laneOffset`. Adds the delta *away from centre* — same side as the
+ * request's own offset, just further out — rather than a fixed `+DELTA`
+ * regardless of sign: with two real edges between the same node pair (one at
+ * a negative `laneIndex` slot, one at a positive one), a sign-blind `+DELTA`
+ * can push edge A's response line past centre into edge B's own lane band,
+ * interleaving the two pairs (A-request, B-response, A-response, B-request)
+ * instead of keeping each connector's own request+response grouped together
+ * as one visual unit. `laneOffset === 0` (the common single-edge case) keeps
+ * exactly its previous behaviour — treated as the positive side, i.e.
+ * `+RESPONSE_LANE_DELTA` — since that case has no sign to preserve.
+ */
+export function responseLaneFor(laneOffset: number): number {
+  return laneOffset + Math.sign(laneOffset || 1) * RESPONSE_LANE_DELTA;
+}
 
 /**
  * Shifts an anchor point along its own side by `lane` slots, clamped so a

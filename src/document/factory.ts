@@ -224,6 +224,7 @@ export interface CreateEdgeInput {
   targetAnchor?: EdgeAnchor;
   kind?: ConnectorKind;
   semantic?: EdgeSemantic;
+  hasResponse?: boolean;
   semanticsOrigin?: DraftEdge['semanticsOrigin'];
 }
 
@@ -241,6 +242,7 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
   if (input.targetAnchor) edge.targetAnchor = input.targetAnchor;
   if (input.kind) edge.kind = input.kind;
   if (input.semantic) edge.semantic = input.semantic;
+  if (input.hasResponse) edge.hasResponse = input.hasResponse;
   if (input.semanticsOrigin) edge.semanticsOrigin = input.semanticsOrigin;
   return edge;
 }

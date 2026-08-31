@@ -10,15 +10,15 @@ import type { TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../ui/personality/usePersonality';
 import {
   LABEL_LINE_GAP,
-  RESPONSE_LANE_DELTA,
   labelLaneOffset,
   rectOf,
+  responseLaneFor,
   routeBetween,
   routeEdge,
   type RoutedEdge,
   type Side,
 } from './routing';
-import { dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
+import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 
 export interface EdgeDescribeContext {
@@ -46,6 +46,10 @@ const CONDITION_PADDING_X = 6;
 const CONDITION_PADDING_Y = 2;
 /** How far below the label chip a condition chip sits, in canvas units. */
 const CONDITION_OFFSET_Y = 18;
+
+/** Mirrors `OPPOSITE_SIDE` in `DraftEdgeView.tsx` — forces a request/response connector's reply
+ *  label to the geometric opposite of the request label's own side. */
+const OPPOSITE_SIDE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
 
 /**
  * The label chip's top-left corner, anchored to whichever side of the line `route.labelSide`
@@ -95,7 +99,7 @@ export interface DescribedEdge {
   /** The connector line. Painted underneath every node. */
   line: Shape[];
   /**
-   * A request/response connector's own reply line — present only when `edge.response` is set.
+   * A request/response connector's own reply line — present only when `edge.hasResponse` is set.
    * Kept separate from `line` (never merged into it) specifically so a two-phase Presentation/GIF
    * pulse (see `pulseTarget` in `render/svg/document.ts`) can animate one without the other.
    * Unlike the live canvas (compact by default, revealed on hover/selection), a static export has
@@ -169,14 +173,14 @@ export function describeEdge(
   // source/target (and their anchors) swapped, so the path naturally runs target → source, plus a
   // small addition to this edge's own lane slot, exactly mirroring `DraftEdgeView.tsx`'s live
   // rendering. `responseRoute.target` lands on the *original source* node — see
-  // `RESPONSE_LANE_DELTA`'s own doc comment in `edges/routing.ts` — which is what makes its
+  // `responseLaneFor`'s own doc comment in `edges/routing.ts` — which is what makes its
   // `markerEnd` correctly point back at A.
   let responseLine: Shape[] | undefined;
-  if (edge.response) {
+  if (edge.hasResponse) {
     const sourceNode = nodes.get(edge.source);
     const targetNode = nodes.get(edge.target);
     if (sourceNode && targetNode) {
-      const responseLane = (ctx.lane ?? 0) + RESPONSE_LANE_DELTA;
+      const responseLane = responseLaneFor(ctx.lane ?? 0);
       const responseRoute = routeBetween(rectOf(targetNode), rectOf(sourceNode), edge.routing, {
         anchors: { source: edge.targetAnchor, target: edge.sourceAnchor },
         lane: responseLane,
@@ -187,48 +191,56 @@ export function describeEdge(
           t: 'path',
           d: responseRoute.d,
           fill: 'none',
-          stroke: { color, width: 1, linecap: 'round', dash: dashForEdge(edge) },
+          stroke: { color, width: 1, linecap: 'round', dash: RESPONSE_DASH },
           markerEnd: edge.directed ? markerRef(color, 'open') : undefined,
           opacity: 0.8,
         },
       ];
 
-      const responseLabelNudge = labelLaneOffset(responseRoute.source.side, responseRoute.target.side, responseLane);
-      const responseLabelX = responseRoute.labelX + responseLabelNudge.x;
-      const responseLabelY = responseRoute.labelY + responseLabelNudge.y;
-      const responseLayout = layoutText(edge.response, {
-        font: FONTS.edgeLabel,
-        maxWidth: 220,
-        lineHeight: FONTS.edgeLabel.size * LINE_HEIGHTS.label,
-        maxLines: 1,
-        measurer: ctx.measurer,
-      });
-      const w = responseLayout.width + LABEL_PADDING_X * 2;
-      const h = responseLayout.height + LABEL_PADDING_Y * 2;
-      const { left, top } = labelChipRect(responseRoute.labelSide, responseLabelX, responseLabelY, w, h);
-      overlay.push(
-        {
-          t: 'rect',
-          x: left,
-          y: top,
-          w,
-          h,
-          r: 4,
-          fill: ctx.theme.edgeLabelBg,
-          stroke: { color: ctx.theme.border, width: 1 },
-          opacity: 0.8,
-        },
-        {
-          t: 'text',
-          x: left + LABEL_PADDING_X,
-          y: top + h / 2 - responseLayout.height / 2,
-          layout: responseLayout,
+      // A textless response line (auto-defaulted, nothing typed yet) draws only the line above —
+      // no label chip, same as the live renderer.
+      if (edge.response) {
+        // Deliberately *not* `labelLaneOffset` here — see the matching comment in
+        // `DraftEdgeView.tsx`: that helper's extra clearance is for separating two different
+        // *real* edges' label chips, not for spacing a response label off its own already
+        // well-separated (`RESPONSE_LANE_DELTA`) line.
+        const responseLabelSide = OPPOSITE_SIDE[route.labelSide];
+        const responseLabelX = responseRoute.labelX;
+        const responseLabelY = responseRoute.labelY;
+        const responseLayout = layoutText(edge.response, {
           font: FONTS.edgeLabel,
-          fill: ctx.theme.textFaint,
-          align: 'start',
-          opacity: 0.8,
-        },
-      );
+          maxWidth: 220,
+          lineHeight: FONTS.edgeLabel.size * LINE_HEIGHTS.label,
+          maxLines: 1,
+          measurer: ctx.measurer,
+        });
+        const w = responseLayout.width + LABEL_PADDING_X * 2;
+        const h = responseLayout.height + LABEL_PADDING_Y * 2;
+        const { left, top } = labelChipRect(responseLabelSide, responseLabelX, responseLabelY, w, h);
+        overlay.push(
+          {
+            t: 'rect',
+            x: left,
+            y: top,
+            w,
+            h,
+            r: 4,
+            fill: ctx.theme.edgeLabelBg,
+            stroke: { color: ctx.theme.border, width: 1 },
+            opacity: 0.8,
+          },
+          {
+            t: 'text',
+            x: left + LABEL_PADDING_X,
+            y: top + h / 2 - responseLayout.height / 2,
+            layout: responseLayout,
+            font: FONTS.edgeLabel,
+            fill: ctx.theme.textFaint,
+            align: 'start',
+            opacity: 0.8,
+          },
+        );
+      }
     }
   }
 
@@ -258,8 +270,10 @@ export function describeEdge(
     // an event one, without spending the connector's actual `label`
     // (reserved for something like an event's own name, e.g.
     // "OrderCreated") on a generic operation word. Yields entirely to a real
-    // label the moment the user gives one (the `!edge.label` guard above).
-    if (edge.semantic) {
+    // label the moment the user gives one (the `!edge.label` guard above), and
+    // to a request/response connector's own reply line — see the matching
+    // comment in `DraftEdgeView.tsx`.
+    if (edge.semantic && !edge.hasResponse) {
       const captionLayout = layoutText(SEMANTIC_DEFAULTS[edge.semantic].label, {
         font: FONTS.connectorCaption,
         maxWidth: 120,

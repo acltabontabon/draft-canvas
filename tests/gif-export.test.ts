@@ -35,7 +35,13 @@ function responseFixture(response?: string) {
   const b = createNode({ type: 'service', x: 200, y: 0, text: 'B' });
   // `response`, like `condition`, is only ever set post-creation — see `rendering.test.ts`'s
   // identical fixture for why this spreads it on rather than passing it to `createEdge`.
-  const e1 = { ...createEdge({ source: a.id, target: b.id, accent: 'teal' as const }), response };
+  // `hasResponse` is the independent gate for the reply line/pulse's existence — see
+  // `DraftEdge.hasResponse`.
+  const e1 = {
+    ...createEdge({ source: a.id, target: b.id, accent: 'teal' as const }),
+    response,
+    hasResponse: Boolean(response),
+  };
   const doc = addEdges(addNodes(createDocument('Response fixture'), [a, b]), [e1]);
   const flow = createFlow({ title: 'Walkthrough' });
   flow.steps = [{ id: 'fs1', edgeId: e1.id }];
