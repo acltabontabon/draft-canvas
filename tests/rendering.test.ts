@@ -645,6 +645,40 @@ describe('live resize', () => {
     expect(queuePaths.length).not.toBe(databaseShapes.filter((s) => s.t === 'path').length);
   });
 
+  it('gives Human/System/Device distinct silhouettes while keeping the same label and stroke weight', () => {
+    const ctx = describeContext(LIGHT);
+    const kinds = ['human', 'system', 'device'] as const;
+    const variants = kinds.map((actorKind) => createNode({ type: 'actor', x: 0, y: 0, actorKind, text: 'Customer' }));
+    const results = variants.map((node) => describeNode(node, ctx).shapes);
+
+    for (const shapes of results) {
+      // Every variant keeps Actor's family stroke weight. Every shape stays unfilled except
+      // Human's torso, which carries a deliberately very light wash (not a filled architecture
+      // shape) — the thing that keeps Actor visually lighter than Service/Data Store either way.
+      const glyphShapes = shapes.filter((s) => s.t !== 'text');
+      expect(glyphShapes.length).toBeGreaterThan(0);
+      for (const shape of glyphShapes) {
+        const strokeWidth = 'stroke' in shape ? shape.stroke?.width : undefined;
+        if (strokeWidth !== undefined) expect(strokeWidth).toBe(1.5);
+        const fill = 'fill' in shape ? shape.fill : undefined;
+        if (fill === 'none' || fill === undefined) continue;
+        // The one exception: Human's torso wash — a fill-only shape (no stroke of its own) at a
+        // deliberately very light opacity, layered under its own full-strength outline shape.
+        expect(strokeWidth).toBeUndefined();
+        expect('opacity' in shape ? shape.opacity : undefined).toBeLessThan(0.2);
+      }
+      // No on-shape kind caption — just the participant's own name.
+      const texts = shapes
+        .filter((s): s is Extract<typeof s, { t: 'text' }> => s.t === 'text')
+        .map((s) => s.layout.lines.map((line) => line.text).join(''));
+      expect(texts).toEqual(['Customer']);
+    }
+
+    // The silhouettes themselves are genuinely different shapes, not a relabelled copy.
+    const signatures = results.map((shapes) => JSON.stringify(shapes.filter((s) => s.t !== 'text')));
+    expect(new Set(signatures).size).toBe(signatures.length);
+  });
+
   it('describes every node type at its own per-type minimum without throwing or collapsing geometry', () => {
     const ctx = describeContext(LIGHT);
     for (const type of NODE_TYPES) {

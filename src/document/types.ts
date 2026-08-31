@@ -100,6 +100,11 @@ export type DatabaseKind = (typeof DATABASE_KINDS)[number];
 export const QUEUE_KINDS = ['queue', 'topic', 'stream'] as const;
 export type QueueKind = (typeof QUEUE_KINDS)[number];
 
+/** An Actor is any external participant interacting with the system being modelled — not
+ *  human-only. */
+export const ACTOR_KINDS = ['human', 'system', 'device'] as const;
+export type ActorKind = (typeof ACTOR_KINDS)[number];
+
 /** Loose, technology-neutral presets for a `group` boundary. A preset only
  *  changes a small secondary caption — never the node's own `text`. */
 export const BOUNDARY_PRESETS = ['boundary', 'system', 'domain', 'network', 'deployment', 'group'] as const;
@@ -193,6 +198,8 @@ export interface DraftNode {
   databaseKind?: DatabaseKind;
   /** `queue` nodes only. */
   queueKind?: QueueKind;
+  /** `actor` nodes only. */
+  actorKind?: ActorKind;
   /** `group` nodes only. */
   boundaryPreset?: BoundaryPreset;
   /** Supporting detail collapsed into this node. Any node type may host one. */

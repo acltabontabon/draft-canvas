@@ -2,6 +2,7 @@ import {
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
   ACCENTS,
+  ACTOR_KINDS,
   DATABASE_KINDS,
   NOTE_KINDS,
   QUEUE_KINDS,
@@ -9,6 +10,7 @@ import {
 } from '../../document/types';
 import type {
   Accent,
+  ActorKind,
   BoundaryPreset,
   CodeLanguage,
   DatabaseKind,
@@ -24,6 +26,7 @@ import { useThemeValue } from '../theme/useTheme';
 import { Button } from '../common/Button';
 import {
   NOTE_LABELS,
+  ACTOR_KIND_OPTION_LABELS,
   BOUNDARY_PRESET_OPTION_LABELS,
   SERVICE_KIND_OPTION_LABELS,
   DATABASE_KIND_OPTION_LABELS,
@@ -230,6 +233,32 @@ export function Inspector() {
             {QUEUE_KINDS.map((kind) => (
               <option key={kind} value={kind}>
                 {QUEUE_KIND_OPTION_LABELS[kind]}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
+
+      {onlyNode?.type === 'actor' && (
+        <>
+          <span className="dc-inspector-divider" />
+          <select
+            className="dc-select"
+            aria-label="Actor type"
+            value={onlyNode.actorKind ?? 'human'}
+            onChange={(event) =>
+              store
+                .getState()
+                .updateNodeById(
+                  onlyNode.id,
+                  { actorKind: event.target.value as ActorKind },
+                  'Change actor type',
+                )
+            }
+          >
+            {ACTOR_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {ACTOR_KIND_OPTION_LABELS[kind]}
               </option>
             ))}
           </select>

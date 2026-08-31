@@ -45,8 +45,15 @@ export const DEFAULTS = {
   ellipseHeight: 132,
   groupWidth: 420,
   groupHeight: 300,
+  /** Sized to give Actor real presence as a first-class participant — big enough for a clearly
+   *  readable glyph and label with proper breathing room, while staying narrower than Service so
+   *  the family hierarchy (participant vs. internal component) still reads at a glance. */
   actorWidth: 120,
   actorHeight: 92,
+  /** Narrower and taller than the generic node default — a cylinder that wide and short reads
+   *  as a stretched database icon rather than a deliberate container shape. */
+  dataStoreWidth: 148,
+  dataStoreHeight: 88,
   /** The tube is a compact glyph anchored to the top, with only its kind
    *  caption (no editable name — see `defaultTextFor`) sitting snugly below
    *  it — sized to leave just enough margin below the caption for a

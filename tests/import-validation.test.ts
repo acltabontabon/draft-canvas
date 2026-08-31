@@ -350,6 +350,8 @@ describe('importing untrusted files', () => {
         { id: 'd2', type: 'database', x: 0, y: 0, databaseKind: 'sql' },
         { id: 'q1', type: 'queue', x: 0, y: 0, queueKind: 'mailbox' },
         { id: 'q2', type: 'queue', x: 0, y: 0, queueKind: 'stream' },
+        { id: 'a1', type: 'actor', x: 0, y: 0, actorKind: 'robot' },
+        { id: 'a2', type: 'actor', x: 0, y: 0, actorKind: 'device' },
       ],
       edges: [],
     });
@@ -362,6 +364,8 @@ describe('importing untrusted files', () => {
     expect(byId('d2').databaseKind).toBe('sql');
     expect(byId('q1').queueKind).toBe('queue');
     expect(byId('q2').queueKind).toBe('stream');
+    expect(byId('a1').actorKind).toBe('human');
+    expect(byId('a2').actorKind).toBe('device');
   });
 
   it('coerces an unknown boundary preset to the default, and always sets one on a group', () => {

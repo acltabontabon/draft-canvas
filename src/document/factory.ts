@@ -4,6 +4,7 @@ import {
   CURRENT_VERSION,
   DRAFT_FORMAT,
   type Accent,
+  type ActorKind,
   type AttachableType,
   type Attachment,
   type BoundaryPreset,
@@ -35,6 +36,8 @@ export function defaultSizeFor(type: DraftNodeType): { width: number; height: nu
       return { width: DEFAULTS.groupWidth, height: DEFAULTS.groupHeight };
     case 'actor':
       return { width: DEFAULTS.actorWidth, height: DEFAULTS.actorHeight };
+    case 'database':
+      return { width: DEFAULTS.dataStoreWidth, height: DEFAULTS.dataStoreHeight };
     case 'queue':
       return { width: DEFAULTS.queueWidth, height: DEFAULTS.queueHeight };
     default:
@@ -56,7 +59,7 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
     case 'ellipse':
       return { width: 72, height: 72 };
     case 'actor':
-      return { width: 64, height: 72 };
+      return { width: 88, height: 84 };
     case 'queue':
       return { width: 120, height: 40 };
     case 'note':
@@ -94,6 +97,7 @@ export function defaultTextFor(type: DraftNodeType): string {
 const QUEUE_KIND_NAMES: Record<QueueKind, string> = { queue: 'Queue', topic: 'Topic', stream: 'Stream' };
 const SERVICE_KIND_NAMES: Partial<Record<ServiceKind, string>> = { api: 'API', worker: 'Worker', external: 'External service' };
 const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = { sql: 'SQL data store', nosql: 'NoSQL data store', cache: 'Cache' };
+const ACTOR_KIND_NAMES: Record<ActorKind, string> = { human: 'Human', system: 'System', device: 'Device' };
 
 /**
  * A human-readable fallback identity for a node with no custom `text` of its
@@ -105,7 +109,7 @@ const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = { sql: 'SQL d
  * breadcrumb — needs that same fallback, not a bare "Untitled".
  */
 export function displayNameFor(
-  node: Pick<DraftNode, 'type' | 'text' | 'queueKind' | 'serviceKind' | 'databaseKind'>,
+  node: Pick<DraftNode, 'type' | 'text' | 'queueKind' | 'serviceKind' | 'databaseKind' | 'actorKind'>,
 ): string {
   if (node.text && node.text.trim()) return node.text;
   switch (node.type) {
@@ -116,7 +120,7 @@ export function displayNameFor(
     case 'database':
       return (node.databaseKind && DATABASE_KIND_NAMES[node.databaseKind]) || 'Data Store';
     case 'actor':
-      return 'Actor';
+      return (node.actorKind && ACTOR_KIND_NAMES[node.actorKind]) || 'Actor';
     case 'group':
       return 'Boundary';
     case 'note':
@@ -148,6 +152,7 @@ export interface CreateNodeInput {
   serviceKind?: ServiceKind;
   databaseKind?: DatabaseKind;
   queueKind?: QueueKind;
+  actorKind?: ActorKind;
   parentId?: string;
   id?: string;
 }
@@ -178,6 +183,7 @@ export function createNode(input: CreateNodeInput): DraftNode {
   if (input.type === 'service') node.serviceKind = input.serviceKind ?? 'generic';
   if (input.type === 'database') node.databaseKind = input.databaseKind ?? 'generic';
   if (input.type === 'queue') node.queueKind = input.queueKind ?? 'queue';
+  if (input.type === 'actor') node.actorKind = input.actorKind ?? 'human';
   return node;
 }
 

@@ -13,6 +13,7 @@ import { migrateToCurrent, UnsupportedVersionError } from './migrate';
 import { defaultSizeFor } from './factory';
 import {
   ACCENTS,
+  ACTOR_KINDS,
   ATTACHABLE_TYPES,
   BACKGROUND_FITS,
   BOUNDARY_PRESETS,
@@ -30,6 +31,7 @@ import {
   SERVICE_KINDS,
   SIDES,
   type Accent,
+  type ActorKind,
   type AttachableType,
   type Attachment,
   type BackgroundFit,
@@ -279,6 +281,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     }
     if (type === 'queue') {
       node.queueKind = oneOf<QueueKind>(candidate.queueKind, QUEUE_KINDS, 'queue');
+    }
+    if (type === 'actor') {
+      node.actorKind = oneOf<ActorKind>(candidate.actorKind, ACTOR_KINDS, 'human');
     }
 
     const rawAttachments = Array.isArray(candidate.attachments) ? candidate.attachments : [];

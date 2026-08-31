@@ -298,7 +298,9 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'blue');
   const w = node.width - 1.5;
   const h = node.height - 1.5;
-  const ry = Math.min(14, h * 0.2);
+  // Shallower than a "stretched database icon" cap — flatter top/bottom curves leave more of
+  // the box as usable body for the two-line label underneath.
+  const ry = Math.min(10, h * 0.16);
   const x = 0.75;
   const y = 0.75;
   const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
@@ -607,30 +609,73 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   return shapes;
 }
 
-function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent);
-  const headR = 9;
-  const cx = node.width / 2;
-  const headCy = 14;
-  const shoulderY = headCy + headR + 4;
-  const shoulderW = 26;
-  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
-  // 1.5 — same body stroke weight as Service/Data Store/Queue, for one consistent line weight
-  // across every technical shape.
-  const stroke: Stroke = { color: palette.line, width: 1.5 };
+/**
+ * Every Actor glyph shares this vertical envelope — starting `GLYPH_TOP` down from the container
+ * edge and filling the same `GLYPH_SLOT` of height, regardless of kind — so the label never shifts
+ * position when the user switches Human/System/Device, and each glyph reads as filling roughly the
+ * same share of the container rather than floating as a small icon in a mostly-empty card.
+ */
+const GLYPH_TOP = 13;
+const GLYPH_SLOT = 41;
+const GLYPH_BOTTOM = GLYPH_TOP + GLYPH_SLOT;
+/** Tight on purpose — the glyph and the participant's name need to read as one unit, not two
+ *  separate things with a gap between them. */
+const GLYPH_LABEL_GAP = 6;
 
-  let shoulders: string;
+/**
+ * Human: a simplified bust silhouette — a large head sitting just above a broad, closed
+ * shoulder/torso shape, tinted with a very light wash of the line colour so the body reads as a
+ * silhouette's mass rather than a thin wireframe arc. No facial features, no hair, no filled
+ * avatar circle: it needs to read as "a person," not "a profile picture."
+ */
+function humanGlyph(
+  node: DraftNode,
+  cx: number,
+  stroke: Stroke,
+  ctx: DescribeContext,
+): { shapes: Shape[]; glyphBottom: number } {
+  const headR = 13;
+  const headCy = GLYPH_TOP + headR;
+  const torsoRx = 30;
+  // A modest rounded cap, not a shallow dome spanning the full width — most of the torso's
+  // height is straight-sided "shoulders," with just a soft curve at the very top, so it reads as
+  // a broad body rather than a flattened crescent.
+  const capRy = 8;
+  // The rounded cap's peak sits a few pixels inside the head's own bottom edge — the two
+  // silhouettes overlap slightly, like a real neck, instead of floating apart with a gap.
+  const peakY = headCy + headR - 3;
+  const shoulderTopY = peakY + capRy;
+  const left = cx - torsoRx;
+  const right = cx + torsoRx;
+  const bottom = GLYPH_BOTTOM;
+  // A wash this light gives the body presence as a mass without competing with the container's
+  // own (unfilled) card — still clearly lighter than a filled architecture shape.
+  const bodyFill = 0.12;
+  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
+
+  let torso: string;
   if (amplitude === 0) {
-    shoulders = [
-      `M${cx - shoulderW / 2},${shoulderY + 10}`,
-      `a${shoulderW / 2},12 0 0 1 ${shoulderW},0`,
+    torso = [
+      `M${left},${bottom}`,
+      `L${left},${shoulderTopY}`,
+      `A${torsoRx},${capRy} 0 0 1 ${right},${shoulderTopY}`,
+      `L${right},${bottom}`,
+      'Z',
     ].join(' ');
   } else {
     const j = (i: number) => jitter(node.id, i, amplitude);
-    const left = { x: cx - shoulderW / 2 + j(0), y: shoulderY + 10 + j(1) };
-    const right = { x: cx + shoulderW / 2 + j(2), y: shoulderY + 10 + j(3) };
-    const ry = 12 + j(4);
-    shoulders = `M${left.x},${left.y} A${(right.x - left.x) / 2},${ry} 0 0 1 ${right.x},${right.y}`;
+    const lb = { x: left + j(0), y: bottom + j(1) };
+    const lt = { x: left + j(2), y: shoulderTopY + j(3) };
+    const rt = { x: right + j(4), y: shoulderTopY + j(5) };
+    const rb = { x: right + j(6), y: bottom + j(7) };
+    const ry = capRy + j(8);
+    torso = [
+      `M${lb.x},${lb.y}`,
+      `L${lt.x},${lt.y}`,
+      `A${(rt.x - lt.x) / 2},${ry} 0 0 1 ${rt.x},${rt.y}`,
+      `L${rb.x},${rb.y}`,
+      'Z',
+    ].join(' ');
   }
 
   const headOutline: Shape =
@@ -638,18 +683,128 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
       ? { t: 'ellipse', cx, cy: headCy, rx: headR, ry: headR, fill: 'none', stroke }
       : { t: 'path', d: roughEllipsePath(cx, headCy, headR, headR, `${node.id}:head`, amplitude), fill: 'none', stroke };
 
-  const shapes: Shape[] = [
-    headOutline,
-    { t: 'path', d: shoulders, fill: 'none', stroke },
-  ];
+  return {
+    // The wash and its outline are two separate shapes sharing the same `d` — `opacity` dims a
+    // shape's stroke along with its fill, and the outline needs to stay at full strength (the
+    // same family stroke every other Actor line uses) while only the fill underneath is faint.
+    // Torso first (behind), head last (in front) — the head reads as a clean, whole circle
+    // sitting on top of the body, not overlapped by its fill.
+    shapes: [
+      { t: 'path', d: torso, fill: stroke.color, opacity: bodyFill },
+      { t: 'path', d: torso, fill: 'none', stroke },
+      headOutline,
+    ],
+    glyphBottom: bottom,
+  };
+}
 
+/**
+ * System: an external-system/window glyph — a plain outline frame with a title-bar line and one
+ * quieter content line beneath it, just enough internal structure to read as an application
+ * window rather than a blank box. Deliberately not Service's shape (a full accent-filled card):
+ * the point is that this is something *outside* the architecture being modelled, not a component
+ * of it. Technology-neutral on purpose — no vendor chrome.
+ */
+function systemGlyph(
+  node: DraftNode,
+  cx: number,
+  stroke: Stroke,
+  ctx: DescribeContext,
+): { shapes: Shape[]; glyphBottom: number } {
+  const rectW = 58;
+  const rectH = GLYPH_SLOT;
+  const rectX = cx - rectW / 2;
+  const rectY = GLYPH_TOP;
+  const headerY = rectY + 10;
+  const contentW = rectW * 0.6;
+  const contentX = cx - contentW / 2;
+  const contentY = headerY + 12;
+
+  return {
+    shapes: [
+      outlineShape(`${node.id}:actor-glyph`, ctx, { x: rectX, y: rectY, w: rectW, h: rectH, r: 4 }, { fill: 'none', stroke }),
+      { t: 'path', d: `M${rectX},${headerY} h${rectW}`, fill: 'none', stroke },
+      { t: 'path', d: `M${contentX},${contentY} h${contentW}`, fill: 'none', stroke },
+    ],
+    glyphBottom: rectY + rectH,
+  };
+}
+
+/**
+ * Device: a vertically-proportioned device silhouette with a subtle inset screen area —
+ * generic enough to read as a phone, terminal, ATM, or IoT client. No buttons, no screen
+ * content, no decorative detail beyond that one inset — the silhouette alone is the point.
+ */
+function deviceGlyph(
+  node: DraftNode,
+  cx: number,
+  stroke: Stroke,
+  ctx: DescribeContext,
+): { shapes: Shape[]; glyphBottom: number } {
+  const rectW = 26;
+  const rectH = GLYPH_SLOT;
+  const rectX = cx - rectW / 2;
+  const rectY = GLYPH_TOP;
+  const screenInset = 4;
+  const screenX = rectX + screenInset;
+  const screenY = rectY + 5;
+  const screenW = rectW - screenInset * 2;
+  const screenH = rectH - 14;
+
+  return {
+    shapes: [
+      outlineShape(`${node.id}:actor-glyph`, ctx, { x: rectX, y: rectY, w: rectW, h: rectH, r: 5 }, { fill: 'none', stroke }),
+      outlineShape(
+        `${node.id}:actor-glyph-screen`,
+        ctx,
+        { x: screenX, y: screenY, w: screenW, h: screenH, r: 2 },
+        { fill: 'none', stroke },
+      ),
+    ],
+    glyphBottom: rectY + rectH,
+  };
+}
+
+/**
+ * Actor gets its own light outline container — unlike Service's filled, capped, shadowed card,
+ * this is a plain unfilled rounded rect (a touch softer at the corners, too) so the hierarchy
+ * reads through composition and treatment rather than through being tiny: a real participant
+ * card, just visibly lighter than an internal architecture component.
+ */
+function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent);
+  const cx = node.width / 2;
+  // 1.5 — same body stroke weight as Service/Data Store/Queue, for one consistent line weight
+  // across every technical shape.
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
+  const kind = node.actorKind ?? 'human';
+
+  const container = outlineShape(
+    node.id,
+    ctx,
+    { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 10 },
+    { fill: 'none', stroke },
+  );
+
+  const { shapes: glyphShapes, glyphBottom } =
+    kind === 'system'
+      ? systemGlyph(node, cx, stroke, ctx)
+      : kind === 'device'
+        ? deviceGlyph(node, cx, stroke, ctx)
+        : humanGlyph(node, cx, stroke, ctx);
+
+  const shapes: Shape[] = [container, ...glyphShapes];
+
+  // No on-shape kind caption ("HUMAN"/"SYSTEM"/"DEVICE") — unlike Service/Data Store/Queue, whose
+  // silhouette is shared across every sub-kind, Actor's three kinds are already visually distinct
+  // by shape; the only text this glyph needs is the participant's own name.
   const text = node.text ?? '';
   if (text.trim()) {
-    const top = shoulderY + 16;
+    const top = glyphBottom + GLYPH_LABEL_GAP;
     const lineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
     const layout = layoutText(text, {
       font: FONTS.nodeLabel,
-      maxWidth: Math.max(16, node.width - 4),
+      maxWidth: Math.max(16, node.width - PADDING),
       lineHeight,
       maxLines: Math.max(1, Math.floor((node.height - top) / lineHeight)),
       measurer: ctx.measurer,

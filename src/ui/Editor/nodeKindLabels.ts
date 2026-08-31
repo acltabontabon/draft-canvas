@@ -1,4 +1,4 @@
-import type { BoundaryPreset, DatabaseKind, NoteKind, QueueKind, ServiceKind } from '../../document/types';
+import type { ActorKind, BoundaryPreset, DatabaseKind, NoteKind, QueueKind, ServiceKind } from '../../document/types';
 
 /**
  * Per-type option labels for a node's "kind"/preset field — shared between `Inspector.tsx`'s
@@ -40,4 +40,10 @@ export const QUEUE_KIND_OPTION_LABELS: Record<QueueKind, string> = {
   queue: 'Queue',
   topic: 'Topic',
   stream: 'Stream',
+};
+
+export const ACTOR_KIND_OPTION_LABELS: Record<ActorKind, string> = {
+  human: 'Human',
+  system: 'System',
+  device: 'Device',
 };

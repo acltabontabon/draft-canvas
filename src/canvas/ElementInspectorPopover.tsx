@@ -2,12 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ViewportPortal, useInternalNode, useReactFlow } from '@xyflow/react';
 import {
   ACCENTS,
+  ACTOR_KINDS,
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
   DATABASE_KINDS,
   NOTE_KINDS,
   QUEUE_KINDS,
   SERVICE_KINDS,
+  type ActorKind,
   type BoundaryPreset,
   type CodeLanguage,
   type DatabaseKind,
@@ -23,6 +25,7 @@ import { nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
 import {
+  ACTOR_KIND_OPTION_LABELS,
   BOUNDARY_PRESET_OPTION_LABELS,
   DATABASE_KIND_OPTION_LABELS,
   NOTE_LABELS,
@@ -51,6 +54,10 @@ const DATABASE_OPTIONS: InspectorSelectOption[] = DATABASE_KINDS.map((kind) => (
 const QUEUE_OPTIONS: InspectorSelectOption[] = QUEUE_KINDS.map((kind) => ({
   value: kind,
   label: QUEUE_KIND_OPTION_LABELS[kind],
+}));
+const ACTOR_OPTIONS: InspectorSelectOption[] = ACTOR_KINDS.map((kind) => ({
+  value: kind,
+  label: ACTOR_KIND_OPTION_LABELS[kind],
 }));
 const BOUNDARY_OPTIONS: InspectorSelectOption[] = BOUNDARY_PRESETS.map((preset) => ({
   value: preset,
@@ -394,6 +401,14 @@ function ElementInspectorRow({
           ariaLabel: 'Boundary preset',
           onChange: (value) =>
             store.getState().updateNodeById(node.id, { boundaryPreset: value as BoundaryPreset }, 'Change boundary preset'),
+        };
+      case 'actor':
+        return {
+          options: ACTOR_OPTIONS,
+          value: node.actorKind ?? 'human',
+          ariaLabel: 'Actor type',
+          onChange: (value) =>
+            store.getState().updateNodeById(node.id, { actorKind: value as ActorKind }, 'Change actor type'),
         };
       default:
         return null;
