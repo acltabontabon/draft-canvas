@@ -111,6 +111,7 @@ The build is path-agnostic (`base: './'`), so `dist/` can be served from any sub
 - [Architecture](docs/ARCHITECTURE.md) — how the layers fit together, and why
 - [Document schema](docs/SCHEMA.md) — the `.draftcanvas` format, and how it evolves
 - [Privacy implementation](docs/PRIVACY.md) — what is stored where, auditably
+- [Roadmap](docs/ROADMAP.md) — numbered phases from what's shipped to what's next, no dates
 
 ## Built with
 
