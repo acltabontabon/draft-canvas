@@ -257,13 +257,15 @@ test.describe('Flows', () => {
     await newCanvas(page, 'Async and conditions');
     // Two plain, unclassified shapes — not two Services (which now get the opinionated
     // Service→Service editor, whose own Sync/Async choice deliberately never dashes the line —
-    // see `connector-semantics.spec.ts`'s "never dashes the primary request line" test), and not
+    // see `connector-semantics.spec.ts`'s "never dashes the primary request line" test), not
     // a service/queue pair (auto-inferred as an EVENT connector, whose dash pattern would take
-    // priority over the plain `async` flag this test is actually exercising). Two `Circle` nodes
-    // have no capability-matrix entry at all, so they keep the generic, unrestricted "Flow kind"
-    // picker this coupling still applies to.
-    await createNode(page, 'Circle', { x: 300, y: 250 });
-    await createNode(page, 'Circle', { x: 700, y: 250 });
+    // priority over the plain `async` flag this test is actually exercising), and not two
+    // Junctions (a routing point, not a component — its connector drops the Flow kind/Condition
+    // fields entirely, see `connector-semantics.spec.ts`'s "Junction connector" tests). Two
+    // `Text` nodes have no capability-matrix entry at all, so they keep the generic,
+    // unrestricted "Flow kind" picker this coupling still applies to.
+    await createNode(page, 'Text', { x: 300, y: 250 });
+    await createNode(page, 'Text', { x: 700, y: 250 });
     await connect(page, 0, 1);
 
     await clickEdgeBetween(page, 0);

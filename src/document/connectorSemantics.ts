@@ -10,7 +10,15 @@ import type { ConnectorKind, DraftEdge, DraftNode, EdgeSemantic } from './types'
  * ellipse, rounded) reads as `generic`: Draft Canvas has no real basis to
  * infer anything about a plain shape, so it stays out of this entirely.
  */
-export type NodeCategory = 'actor' | 'service' | 'external' | 'database' | 'cache' | 'queue' | 'generic';
+export type NodeCategory =
+  | 'actor'
+  | 'service'
+  | 'external'
+  | 'database'
+  | 'cache'
+  | 'queue'
+  | 'junction'
+  | 'generic';
 
 type CategorizableNode = Pick<DraftNode, 'type'> & Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind'>>;
 
@@ -24,6 +32,8 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
       return node.databaseKind === 'cache' ? 'cache' : 'database';
     case 'queue':
       return 'queue';
+    case 'ellipse':
+      return 'junction';
     default:
       return 'generic';
   }

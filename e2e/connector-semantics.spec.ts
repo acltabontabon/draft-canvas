@@ -105,10 +105,11 @@ test.describe('contextual connector toolbar', () => {
 
   test('the Interaction type select keeps the full vocabulary for an unclassified pairing', async ({ page }) => {
     // Two plain, unclassified shapes have no capability-matrix entry at all — the generic
-    // Interaction section falls back to the full, unrestricted `EDGE_SEMANTICS` list.
+    // Interaction section falls back to the full, unrestricted `EDGE_SEMANTICS` list. (Junction
+    // is *not* such a pairing — see the dedicated "Junction connector" describe block below.)
     await newCanvas(page, 'Unfiltered relation list');
-    await create(page, 'Circle', { x: 300, y: 200 });
-    await create(page, 'Circle', { x: 600, y: 200 });
+    await create(page, 'Text', { x: 300, y: 200 });
+    await create(page, 'Text', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
     await inspectorSelect(page, 'Interaction type').click();
@@ -256,5 +257,64 @@ test.describe('contextual connector toolbar', () => {
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Writes');
     await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
     await expect(page.getByLabel('Condition')).toHaveCount(0);
+  });
+});
+
+test.describe('Junction connector', () => {
+  // A Junction (`ellipse`) is a routing/convergence point, not a system component — see
+  // `connectorSemantics.ts`'s `'junction'` category and `EdgeInspectorPopover.tsx`'s
+  // `involvesJunction`. Neither leg of Service↔Junction gets the Interaction section (protocol,
+  // HTTP verbs, flow kind) or the Condition field; Route and Style stay exactly as every other
+  // connector's do.
+  test('Service → Junction shows no Interaction section and no Condition field', async ({ page }) => {
+    await newCanvas(page, 'Service to junction');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await create(page, 'Junction', { x: 600, y: 200 });
+    await connect(page, 0, 1);
+
+    await expect(page.getByRole('button', { name: 'Interaction type' })).toHaveCount(0);
+    await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
+    await expect(inspectorSelect(page, 'Protocol')).toHaveCount(0);
+    await expect(page.getByLabel('Condition')).toHaveCount(0);
+    await expect(page.getByLabel('Request', { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Response', { exact: true })).toHaveCount(0);
+
+    // Route and Style are untouched — a Junction connector is simplified, not stripped down.
+    await expect(inspectorSelect(page, 'Connector shape')).toHaveText('Stepped');
+    await expect(page.getByRole('button', { name: 'Arrow', exact: true })).toBeVisible();
+
+    await expect(page.getByTitle('Rename connector')).toHaveText('Add label…');
+  });
+
+  test('Junction → Service also drops the Interaction section, and offers a branch-label placeholder', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Junction to service');
+    await create(page, 'Junction', { x: 300, y: 200 });
+    await create(page, 'Service', { x: 600, y: 200 });
+    await connect(page, 0, 1);
+
+    await expect(page.getByRole('button', { name: 'Interaction type' })).toHaveCount(0);
+    await expect(page.getByLabel('Condition')).toHaveCount(0);
+
+    const caption = page.getByTitle('Rename connector');
+    await expect(caption).toHaveText('Add branch label…');
+    await caption.click();
+    await expect(page.getByLabel('Connector label')).toHaveAttribute('placeholder', 'Add branch label…');
+    await page.getByLabel('Connector label').fill('approved');
+    await page.getByLabel('Connector label').blur();
+    await expect(page.locator('.dc-edge-label')).toHaveText('approved');
+  });
+
+  test('a Junction-connected edge never gets the opinionated Service→Service editor either', async ({ page }) => {
+    // Two Junctions in a row (or a Junction sitting between two services) must not accidentally
+    // read as a service call just because a service is on one end.
+    await newCanvas(page, 'Junction chain');
+    await create(page, 'Junction', { x: 300, y: 200 });
+    await create(page, 'Junction', { x: 600, y: 200 });
+    await connect(page, 0, 1);
+
+    await expect(inspectorSelect(page, 'Protocol')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Interaction type' })).toHaveCount(0);
   });
 });

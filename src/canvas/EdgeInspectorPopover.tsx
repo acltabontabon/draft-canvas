@@ -296,6 +296,13 @@ function EdgeInspectorRow({
         ? memberOf[0]!.title
         : `${memberOf[0]!.title} +${memberOf.length - 1}`;
 
+  // A connector fanning *out* of a Junction is a branch — the branching structure itself already
+  // communicates that ("approved"/"rejected", "yes"/"no"), so a contextual placeholder nudges
+  // toward a branch label instead of the generic empty-connector copy, without requiring any
+  // separate branch-type field (see `ExpandedPanel`'s own Junction handling).
+  const sourceIsJunction = Boolean(sourceNode && categoryOf(sourceNode) === 'junction');
+  const emptyLabelText = sourceIsJunction ? 'Add branch label…' : 'Add label…';
+
   return (
     <>
       <div className="dc-edge-inspector-row">
@@ -305,7 +312,7 @@ function EdgeInspectorRow({
             className="dc-edge-inspector-caption-input"
             aria-label="Connector label"
             defaultValue={edge.label ?? ''}
-            placeholder={edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : 'Label…'}
+            placeholder={edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : emptyLabelText}
             spellCheck={false}
             onFocus={(event) => event.currentTarget.select()}
             onBlur={(event) => {
@@ -329,7 +336,7 @@ function EdgeInspectorRow({
             title="Rename connector"
             onClick={() => setEditingLabel(true)}
           >
-            {caption ?? 'Add label…'}
+            {caption ?? emptyLabelText}
           </button>
         )}
         <button
@@ -775,6 +782,17 @@ function ExpandedPanel({
   const [editingBehavior, setEditingBehavior] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
+  // A Junction is a routing/convergence point, not a system component — neither leg of
+  // Service→Junction nor Junction→Service is a communication between two components, so none of
+  // the vocabulary built for that (protocol, HTTP verbs, sync/async, retries, a request/response
+  // pair, a free-text Condition field) applies. The branching/merging structure itself already
+  // communicates split and merge; the only thing worth capturing here is the connector's own
+  // label (a branch name on the way out of a Junction — see `sourceIsJunction` above). This never
+  // strips an already-persisted `semantic`/`kind`/`condition` from an older document, it only
+  // stops offering the controls that would edit them while a Junction is on either end.
+  const involvesJunction =
+    (sourceNode && categoryOf(sourceNode) === 'junction') || (targetNode && categoryOf(targetNode) === 'junction');
+
   const capability: ConnectionCapability | undefined =
     sourceNode && targetNode ? capabilityFor(categoryOf(sourceNode), categoryOf(targetNode)) : undefined;
 
@@ -784,7 +802,10 @@ function ExpandedPanel({
   const behaviorBase = capability && capability.behaviors.length > 0 ? capability.behaviors : CONNECTOR_KINDS;
   const hideSyncOption = behaviorBase.includes('sync') && edge.kind !== 'sync';
   const behaviorOptions = hideSyncOption ? behaviorBase.filter((kind) => kind !== 'sync') : behaviorBase;
-  const showCondition = showBehaviorPicker || Boolean(edge.condition);
+  // A Junction connector never gets the free-text Condition field either — see
+  // `involvesJunction`'s own comment above: the connector's label is the one field that matters
+  // here, whether that's a plain optional label or a branch name.
+  const showCondition = !involvesJunction && (showBehaviorPicker || Boolean(edge.condition));
 
   // Only offered where a connector already reads as an unambiguous synchronous call — see
   // `isSyncPairing`'s own doc comment for exactly which pairings that covers and why. A connector
@@ -833,7 +854,7 @@ function ExpandedPanel({
 
   return (
     <div className="dc-edge-inspector-panel dc-edge-inspector-expanded">
-      {isServiceToService ? (
+      {involvesJunction ? null : isServiceToService ? (
         <ServiceInteractionSection edge={edge} store={store} />
       ) : (
         <>

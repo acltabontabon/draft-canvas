@@ -35,6 +35,11 @@ break as we settle on a stable 1.0 shape.
   instead of inheriting the generic node size and reading as a stretched database icon.
 - The generic "Circle" shape is now "Junction" — a compact routing/convergence point sized to read
   as punctuation in a diagram, not a component on par with Service or Data Store.
+- A connector into or out of a Junction now shows a lightweight editor — label, flow membership,
+  route, and style only — instead of the full Interaction editor (protocol, request/response,
+  condition) built for connections between real components. Leaving a Junction, the label field
+  is now framed as a branch label, since that's what a connector fanning out of a routing point
+  almost always is.
 - Dropdown menus (in the connector popover and elsewhere) now flip or shrink to stay clear of the
   viewport and the element they're editing, instead of sometimes covering it.
 - Toolbar buttons now distinguish creation tools from utility actions, with a clearer active-tool

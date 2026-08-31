@@ -28,8 +28,12 @@ describe('categoryOf', () => {
     expect(categoryOf({ type: 'database', databaseKind: 'cache' })).toBe('cache');
   });
 
+  it('reads ellipse (Junction) as its own category, not generic', () => {
+    expect(categoryOf({ type: 'ellipse' })).toBe('junction');
+  });
+
   it('reads every other node type as generic', () => {
-    for (const type of ['ellipse', 'text', 'note', 'code', 'group'] as const) {
+    for (const type of ['text', 'note', 'code', 'group'] as const) {
       expect(categoryOf({ type })).toBe('generic');
     }
   });
