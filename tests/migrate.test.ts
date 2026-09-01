@@ -393,3 +393,37 @@ describe('v6 to v7 migration: Card and rounded removal', () => {
     expect(result.document.nodes[1]!.type).toBe('group');
   });
 });
+
+/**
+ * The v8→v9 migration: v8 has no concept of a Project at all — same
+ * structural-no-op shape as `migrateFlowAccent`/`migrateBackground`. An
+ * absent `metadata.projectId` already means Unorganized.
+ */
+describe('v8 to v9 migration: Projects', () => {
+  function v8Fixture(metaOverrides: Record<string, unknown> = {}) {
+    return {
+      format: DRAFT_FORMAT,
+      version: 8,
+      metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0, ...metaOverrides },
+      nodes: [{ id: 'a', type: 'service', x: 0, y: 0, width: 120, height: 60 }],
+      edges: [],
+      settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
+      flows: [],
+    };
+  }
+
+  it('migrates a v8 document to the current version with no project assigned', () => {
+    const result = parseDocument(JSON.stringify(v8Fixture()));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.version).toBe(CURRENT_VERSION);
+    expect(result.document.metadata.projectId).toBeUndefined();
+  });
+
+  it('accepts a valid projectId on a hand-authored v8-shaped-but-v9-aware fixture', () => {
+    const result = parseDocument(JSON.stringify(v8Fixture({ projectId: 'p_abc123' })));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.metadata.projectId).toBe('p_abc123');
+  });
+});

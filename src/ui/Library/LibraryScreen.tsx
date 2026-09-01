@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { readProjectFile } from '../../export/project';
 import { looksLikeSecureExport, readSecureProjectFile } from '../../export/secureProject';
 import type { DraftSummary } from '../../document/types';
@@ -9,21 +9,48 @@ import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Modal } from '../common/Modal';
 import { PrivacyNote } from '../PrivacyNote';
+import { ProjectSidebar } from './ProjectSidebar';
+import { MoveToProjectMenu } from './MoveToProjectMenu';
+import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
 
 /**
- * The landing screen: a list of what is stored in this browser.
+ * The landing screen: what is stored in this browser, optionally grouped
+ * into Projects.
  *
- * Deliberately not a dashboard. There are no projects, no folders and no
- * sharing — just the diagrams on this device and a way into a new one.
+ * Deliberately still not a file manager. One flat, optional grouping — no
+ * nested folders, no required setup before creating a canvas — plus local
+ * search and sort, so it stays scannable at dozens or hundreds of diagrams.
  */
 export function LibraryScreen({ session }: { session: DocumentSession }) {
   const notify = useUiStore((state) => state.notify);
   const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const updateReady = useUiStore((state) => state.updateReady);
+  const searchQuery = useUiStore((state) => state.librarySearchQuery);
+  const setSearchQuery = useUiStore((state) => state.setLibrarySearchQuery);
+  const sort = useUiStore((state) => state.librarySort);
+  const setSort = useUiStore((state) => state.setLibrarySort);
+  const view = useUiStore((state) => state.libraryView);
+  const setView = useUiStore((state) => state.setLibraryView);
+  const moveMenuOpenFor = useUiStore((state) => state.moveMenuOpenFor);
+  const setMoveMenuOpenFor = useUiStore((state) => state.setMoveMenuOpenFor);
   const fileInput = useRef<HTMLInputElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<DraftSummary | null>(null);
   const [renaming, setRenaming] = useState<DraftSummary | null>(null);
   const [securePendingFile, setSecurePendingFile] = useState<File | null>(null);
+
+  // A project can vanish out from under the current view (deleted from
+  // another tab, or a stale selection after this session's own delete
+  // already redirects) — fall back to the default view rather than showing
+  // an empty list under a project name that no longer exists.
+  useEffect(() => {
+    if (view.kind === 'project' && !session.projects.some((project) => project.id === view.projectId)) {
+      setView({ kind: 'recent' });
+    }
+  }, [session.projects, setView, view]);
+
+  const searching = searchQuery.trim().length > 0;
+  const canvases = visibleCanvases(session.library, session.projects, view, searchQuery, sort);
+  const heading = headingFor(view, session.projects, searching);
 
   const finishImport = async (result: NormalizeResult) => {
     if (!result.ok) {
@@ -69,6 +96,19 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
             </div>
             <p className="dc-lede">A local-first canvas for explaining software.</p>
           </div>
+        </header>
+
+        <div className="dc-library-toolbar">
+          <label className="dc-library-search">
+            <Icon name="search" size={14} />
+            <input
+              type="search"
+              placeholder="Search diagrams…"
+              aria-label="Search diagrams"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </label>
           <div className="dc-library-actions">
             <Button
               variant="quiet"
@@ -87,7 +127,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
               New canvas
             </Button>
           </div>
-        </header>
+        </div>
 
         <input
           ref={fileInput}
@@ -100,68 +140,108 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
           }}
         />
 
-        <section className="dc-library-list">
-          <div className="dc-library-list-head">
-            <h2>Your diagrams</h2>
-            <span className="dc-muted">Stored only on this device.</span>
-          </div>
+        <div className="dc-library-body">
+          <ProjectSidebar session={session} library={session.library} view={view} onViewChange={setView} />
 
-          {!session.ready && <p className="dc-muted dc-library-empty">Opening local storage…</p>}
-
-          {session.ready && session.library.length === 0 && (
-            <div className="dc-library-empty">
-              <p>Nothing here yet.</p>
-              <p className="dc-muted">
-                Create a canvas, or import a <code>.draftcanvas</code> file you exported earlier.
-              </p>
+          <section className="dc-library-list">
+            <div className="dc-library-list-head">
+              <h2>{heading}</h2>
+              <div className="dc-library-list-head-right">
+                {!(view.kind === 'recent' && !searching) && (
+                  <select
+                    className="dc-select"
+                    aria-label="Sort diagrams"
+                    value={sort}
+                    onChange={(event) => setSort(event.target.value as LibrarySort)}
+                  >
+                    <option value="updatedAt">Last edited</option>
+                    <option value="createdAt">Created</option>
+                    <option value="name">Name</option>
+                  </select>
+                )}
+                <span className="dc-muted">Stored only on this device.</span>
+              </div>
             </div>
-          )}
 
-          <ul>
-            {session.library.map((entry) => (
-              <li key={entry.id}>
-                <button
-                  type="button"
-                  className="dc-library-item"
-                  onClick={() => void session.openDocument(entry.id)}
-                >
-                  <span className="dc-library-item-title">{entry.title}</span>
-                  <span className="dc-library-item-meta">
-                    {relativeTime(entry.updatedAt)}
-                    <span className="dc-dot" />
-                    {entry.nodeCount} {entry.nodeCount === 1 ? 'element' : 'elements'}
-                    {entry.edgeCount > 0 && (
-                      <>
-                        <span className="dc-dot" />
-                        {entry.edgeCount} {entry.edgeCount === 1 ? 'connection' : 'connections'}
-                      </>
-                    )}
-                  </span>
-                </button>
-                <div className="dc-library-item-actions">
-                  <Button
-                    icon="pencil"
-                    variant="quiet"
-                    aria-label={`Rename ${entry.title}`}
-                    onClick={() => setRenaming(entry)}
-                  />
-                  <Button
-                    icon="copy"
-                    variant="quiet"
-                    aria-label={`Duplicate ${entry.title}`}
-                    onClick={() => void session.duplicateDocument(entry.id)}
-                  />
-                  <Button
-                    icon="trash"
-                    variant="quiet"
-                    aria-label={`Delete ${entry.title}`}
-                    onClick={() => setConfirmDelete(entry)}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+            {!session.ready && <p className="dc-muted dc-library-empty">Opening local storage…</p>}
+
+            {session.ready && session.library.length === 0 && (
+              <div className="dc-library-empty">
+                <p>Nothing here yet.</p>
+                <p className="dc-muted">
+                  Create a canvas, or import a <code>.draftcanvas</code> file you exported earlier.
+                </p>
+              </div>
+            )}
+
+            {session.ready && session.library.length > 0 && canvases.length === 0 && (
+              <div className="dc-library-empty">
+                <p>{searching ? 'No diagrams match your search.' : 'Nothing here yet.'}</p>
+              </div>
+            )}
+
+            <ul>
+              {canvases.map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    className="dc-library-item"
+                    onClick={() => void session.openDocument(entry.id)}
+                  >
+                    <span className="dc-library-item-title">{entry.title}</span>
+                    <span className="dc-library-item-meta">
+                      {relativeTime(entry.updatedAt)}
+                      <span className="dc-dot" />
+                      {entry.nodeCount} {entry.nodeCount === 1 ? 'element' : 'elements'}
+                      {entry.edgeCount > 0 && (
+                        <>
+                          <span className="dc-dot" />
+                          {entry.edgeCount} {entry.edgeCount === 1 ? 'connection' : 'connections'}
+                        </>
+                      )}
+                    </span>
+                  </button>
+                  <div className="dc-library-item-actions">
+                    <Button
+                      icon="pencil"
+                      variant="quiet"
+                      aria-label={`Rename ${entry.title}`}
+                      onClick={() => setRenaming(entry)}
+                    />
+                    <Button
+                      icon="copy"
+                      variant="quiet"
+                      aria-label={`Duplicate ${entry.title}`}
+                      onClick={() => void session.duplicateDocument(entry.id)}
+                    />
+                    <span className="dc-move-menu-anchor">
+                      <Button
+                        icon="folder"
+                        variant="quiet"
+                        aria-label={`Move ${entry.title} to a project`}
+                        onClick={() => setMoveMenuOpenFor(moveMenuOpenFor === entry.id ? null : entry.id)}
+                      />
+                      {moveMenuOpenFor === entry.id && (
+                        <MoveToProjectMenu
+                          currentProjectId={entry.projectId}
+                          projects={session.projects}
+                          onMove={(projectId) => void session.moveDocumentToProject(entry.id, projectId)}
+                          onClose={() => setMoveMenuOpenFor(null)}
+                        />
+                      )}
+                    </span>
+                    <Button
+                      icon="trash"
+                      variant="quiet"
+                      aria-label={`Delete ${entry.title}`}
+                      onClick={() => setConfirmDelete(entry)}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
 
         <PrivacyNote durable={session.durable} />
       </div>

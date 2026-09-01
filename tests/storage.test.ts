@@ -250,6 +250,71 @@ describe.each([
   });
 });
 
+/** Projects — a flat, optional grouping of canvases. See `document/types.ts`'s `Project`. */
+describe.each([
+  ['IndexedDbRepository', () => IndexedDbRepository.open()],
+  ['MemoryRepository', () => Promise.resolve(new MemoryRepository())],
+])('projects (%s)', (_name, open) => {
+  it('creates, lists, and renames a project', async () => {
+    const repository = await open();
+    await repository.saveProject({ id: 'p1', name: 'Payments Platform', createdAt: 1, updatedAt: 1 });
+
+    expect(await repository.listProjects()).toEqual([
+      { id: 'p1', name: 'Payments Platform', createdAt: 1, updatedAt: 1 },
+    ]);
+
+    await repository.saveProject({ id: 'p1', name: 'Payments', createdAt: 1, updatedAt: 2 });
+    expect(await repository.listProjects()).toEqual([{ id: 'p1', name: 'Payments', createdAt: 1, updatedAt: 2 }]);
+  });
+
+  it('moves a canvas into a project and back to Unorganized', async () => {
+    const repository = await open();
+    const doc = documentWith('Checkout');
+    await repository.save(doc);
+    await repository.saveProject({ id: 'p1', name: 'Payments Platform', createdAt: 1, updatedAt: 1 });
+
+    await repository.moveDocumentToProject(doc.metadata.id, 'p1');
+    let list = await repository.list();
+    expect(list[0]!.projectId).toBe('p1');
+
+    await repository.moveDocumentToProject(doc.metadata.id, undefined);
+    list = await repository.list();
+    expect(list[0]!.projectId).toBeUndefined();
+  });
+
+  it('deleting a project reassigns its canvases to Unorganized rather than deleting them', async () => {
+    const repository = await open();
+    const a = documentWith('Checkout');
+    const b = documentWith('Refunds');
+    await repository.save(a);
+    await repository.save(b);
+    await repository.saveProject({ id: 'p1', name: 'Payments Platform', createdAt: 1, updatedAt: 1 });
+    await repository.moveDocumentToProject(a.metadata.id, 'p1');
+    await repository.moveDocumentToProject(b.metadata.id, 'p1');
+
+    await repository.deleteProject('p1');
+
+    const list = await repository.list();
+    expect(list).toHaveLength(2);
+    expect(list.every((entry) => entry.projectId === undefined)).toBe(true);
+    expect(await repository.listProjects()).toHaveLength(0);
+  });
+
+  it('duplicating a canvas keeps it in the same project', async () => {
+    const repository = await open();
+    const original = documentWith('Original');
+    await repository.save(original);
+    await repository.saveProject({ id: 'p1', name: 'Payments Platform', createdAt: 1, updatedAt: 1 });
+    await repository.moveDocumentToProject(original.metadata.id, 'p1');
+
+    const loaded = await repository.load(original.metadata.id);
+    await repository.save(cloneDocumentAsNew(loaded!, 'Original copy'));
+
+    const list = await repository.list();
+    expect(list.every((entry) => entry.projectId === 'p1')).toBe(true);
+  });
+});
+
 class RecordingRepository extends MemoryRepository {
   readonly saved: DraftDocument[] = [];
 

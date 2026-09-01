@@ -290,6 +290,14 @@ export function cloneDocumentAsNew(doc: DraftDocument, title: string): DraftDocu
   const now = Date.now();
   return {
     ...structuredClone(doc),
-    metadata: { id: createId('d'), title, createdAt: now, updatedAt: now },
+    metadata: {
+      id: createId('d'),
+      title,
+      createdAt: now,
+      updatedAt: now,
+      // Duplicate stays in the same project, same principle as carrying over
+      // the background image — see `useDocumentSession.ts`'s `duplicateDocument`.
+      ...(doc.metadata.projectId ? { projectId: doc.metadata.projectId } : {}),
+    },
   };
 }

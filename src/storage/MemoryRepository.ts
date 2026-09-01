@@ -1,5 +1,5 @@
 import { summarize, type DraftRepository } from './DraftRepository';
-import type { DraftDocument, DraftSummary } from '../document/types';
+import type { DraftDocument, DraftSummary, Project } from '../document/types';
 
 /**
  * Non-durable fallback. Used when IndexedDB cannot be opened, and by tests.
@@ -14,6 +14,7 @@ export class MemoryRepository implements DraftRepository {
     string,
     { blob: Blob; width: number; height: number }
   >();
+  private readonly projects = new Map<string, Project>();
 
   async list(): Promise<DraftSummary[]> {
     return [...this.documents.values()]
@@ -39,6 +40,34 @@ export class MemoryRepository implements DraftRepository {
     const found = this.documents.get(id);
     if (!found) return;
     found.metadata = { ...found.metadata, title, updatedAt: Date.now() };
+  }
+
+  async listProjects(): Promise<Project[]> {
+    return [...this.projects.values()];
+  }
+
+  async saveProject(project: Project): Promise<void> {
+    this.projects.set(project.id, { ...project });
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    for (const document of this.documents.values()) {
+      if (document.metadata.projectId === id) {
+        const metadata = { ...document.metadata, updatedAt: Date.now() };
+        delete metadata.projectId;
+        document.metadata = metadata;
+      }
+    }
+    this.projects.delete(id);
+  }
+
+  async moveDocumentToProject(id: string, projectId: string | undefined): Promise<void> {
+    const found = this.documents.get(id);
+    if (!found) return;
+    const metadata = { ...found.metadata, updatedAt: Date.now() };
+    if (projectId) metadata.projectId = projectId;
+    else delete metadata.projectId;
+    found.metadata = metadata;
   }
 
   async usage(): Promise<{ usage: number; quota: number } | null> {

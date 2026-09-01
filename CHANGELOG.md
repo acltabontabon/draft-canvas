@@ -8,6 +8,16 @@ break as we settle on a stable 1.0 shape.
 
 ## [Unreleased]
 
+### Added
+
+- Optional Projects for organizing diagrams once you have more than a handful: group canvases into
+  flat, un-nested Projects from the homepage sidebar, or leave them Unorganized — nothing is ever
+  required before creating a new canvas. Move a canvas into a project (or back out) from its row's
+  folder icon; deleting a project moves its canvases back to Unorganized rather than deleting them.
+- A homepage search box filters by diagram title and project name, and a sort control (Last edited,
+  Created, Name) reorders the visible list — both entirely local, so the homepage stays usable once
+  you have dozens or hundreds of diagrams instead of a handful.
+
 ## [0.1.0-beta.2] - 2026-09-01
 
 ### Changed

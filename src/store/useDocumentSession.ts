@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
-import type { DraftDocument, DraftSummary } from '../document/types';
+import { createId } from '../document/ids';
+import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { Autosave } from '../storage/autosave';
 import { getRepository, type DraftRepository } from '../storage';
 import { IndexedDbRepository } from '../storage/IndexedDbRepository';
@@ -22,6 +23,14 @@ export interface DocumentSession {
   duplicateDocument: (id: string) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
   openId: string | null;
+  /** Optional, flat canvas grouping — see `document/types.ts`'s `Project`. */
+  projects: Project[];
+  refreshProjects: () => Promise<void>;
+  createProject: (name: string) => Promise<Project | undefined>;
+  renameProject: (id: string, name: string) => Promise<void>;
+  /** Removes the project; its canvases move to Unorganized, never deleted. */
+  deleteProject: (id: string) => Promise<void>;
+  moveDocumentToProject: (id: string, projectId: string | undefined) => Promise<void>;
 }
 
 /**
@@ -34,6 +43,7 @@ export interface DocumentSession {
 export function useDocumentSession(): DocumentSession {
   const [repository, setRepository] = useState<DraftRepository | null>(null);
   const [library, setLibrary] = useState<DraftSummary[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -47,6 +57,7 @@ export function useDocumentSession(): DocumentSession {
       if (cancelled) return;
       setRepository(repo);
       setLibrary(await repo.list());
+      setProjects(await repo.listProjects());
       setReady(true);
       if (!repo.durable) {
         notify(
@@ -198,6 +209,52 @@ export function useDocumentSession(): DocumentSession {
     [openId, refreshLibrary, repository],
   );
 
+  const refreshProjects = useCallback(async () => {
+    if (!repository) return;
+    setProjects(await repository.listProjects());
+  }, [repository]);
+
+  const createProject = useCallback(
+    async (name: string) => {
+      if (!repository) return undefined;
+      const now = Date.now();
+      const project: Project = { id: createId('p'), name, createdAt: now, updatedAt: now };
+      await repository.saveProject(project);
+      await refreshProjects();
+      return project;
+    },
+    [refreshProjects, repository],
+  );
+
+  const renameProject = useCallback(
+    async (id: string, name: string) => {
+      if (!repository) return;
+      const existing = projects.find((project) => project.id === id);
+      if (!existing) return;
+      await repository.saveProject({ ...existing, name, updatedAt: Date.now() });
+      await refreshProjects();
+    },
+    [projects, refreshProjects, repository],
+  );
+
+  const deleteProject = useCallback(
+    async (id: string) => {
+      if (!repository) return;
+      await repository.deleteProject(id);
+      await Promise.all([refreshProjects(), refreshLibrary()]);
+    },
+    [refreshLibrary, refreshProjects, repository],
+  );
+
+  const moveDocumentToProject = useCallback(
+    async (id: string, projectId: string | undefined) => {
+      if (!repository) return;
+      await repository.moveDocumentToProject(id, projectId);
+      await refreshLibrary();
+    },
+    [refreshLibrary, repository],
+  );
+
   return {
     ready,
     repository,
@@ -212,5 +269,11 @@ export function useDocumentSession(): DocumentSession {
     duplicateDocument,
     deleteDocument,
     openId,
+    projects,
+    refreshProjects,
+    createProject,
+    renameProject,
+    deleteProject,
+    moveDocumentToProject,
   };
 }

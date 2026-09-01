@@ -241,7 +241,7 @@ test.describe('Draft Canvas', () => {
     /* --- delete locally, then import back ----------------------------------- */
 
     await page.getByTitle('Back to your diagrams').click();
-    await expect(page.getByRole('heading', { name: 'Your diagrams' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recently edited' })).toBeVisible();
 
     await page.getByRole('button', { name: /^Delete Payment Flow/ }).click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();

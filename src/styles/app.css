@@ -173,16 +173,12 @@ kbd {
 }
 
 .dc-library-inner {
-  max-width: 760px;
+  max-width: 880px;
   margin: 0 auto;
 }
 
 .dc-library-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 44px;
+  margin-bottom: 28px;
 }
 
 .dc-library-header h1 {
@@ -221,6 +217,46 @@ kbd {
   font-size: 15px;
 }
 
+.dc-library-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 36px;
+}
+
+.dc-library-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 320px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  color: var(--dc-text-faint);
+}
+
+.dc-library-search:focus-within {
+  border-color: var(--dc-border-strong);
+}
+
+.dc-library-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.dc-library-search input:focus {
+  outline: none;
+}
+
 .dc-library-actions {
   display: flex;
   gap: 8px;
@@ -231,12 +267,181 @@ kbd {
   height: 32px;
 }
 
+.dc-library-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 40px;
+}
+
+.dc-library-sidebar {
+  flex-shrink: 0;
+  width: 176px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-sidebar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-sidebar-row:hover {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+}
+
+.dc-sidebar-row[data-active='true'] {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+.dc-sidebar-count {
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.dc-sidebar-section {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-sidebar-eyebrow {
+  padding: 0 8px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dc-text-faint);
+}
+
+.dc-sidebar-project-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dc-sidebar-project-row .dc-sidebar-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.dc-sidebar-project-row[data-active='true'] .dc-sidebar-row {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+.dc-sidebar-project-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Overlaid rather than laid out inline, so two hidden action icons don't
+   permanently steal width from the project name at rest — the sidebar
+   column is narrow enough that the usual `.dc-library-item-actions`
+   opacity-only trick would truncate names needlessly. */
+.dc-sidebar-project-actions {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  padding-left: 4px;
+  background: var(--dc-surface-raised);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease;
+}
+
+.dc-sidebar-project-row:hover .dc-sidebar-project-actions,
+.dc-sidebar-project-row:focus-within .dc-sidebar-project-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dc-sidebar-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-faint);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-sidebar-action:hover {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+}
+
+.dc-library-list {
+  flex: 1;
+  min-width: 0;
+}
+
 .dc-library-list-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-library-list-head-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dc-select {
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .dc-library-body {
+    flex-direction: column;
+  }
+
+  .dc-library-sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+
+  .dc-sidebar-section {
+    margin-top: 12px;
+    width: 100%;
+  }
 }
 
 .dc-library-list-head h2 {
@@ -302,6 +507,62 @@ kbd {
 .dc-library-list li:hover .dc-library-item-actions,
 .dc-library-list li:focus-within .dc-library-item-actions {
   opacity: 1;
+}
+
+.dc-move-menu-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.dc-move-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  width: 200px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-lg);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+}
+
+.dc-move-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--dc-radius);
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-move-menu-row:hover {
+  background: var(--dc-surface-raised);
+}
+
+.dc-move-menu-check {
+  flex-shrink: 0;
+  color: var(--dc-selection);
+  opacity: 0;
+}
+
+.dc-move-menu-row[aria-checked='true'] .dc-move-menu-check {
+  opacity: 1;
+}
+
+.dc-move-menu-divider {
+  margin: 4px 6px;
+  border-top: 1px solid var(--dc-border);
 }
 
 .dc-library-empty {

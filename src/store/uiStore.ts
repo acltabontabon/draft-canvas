@@ -126,6 +126,17 @@ interface UiStore {
    *  regardless of its own retired state while this is true. */
   learnModeActive: boolean;
 
+  /** The homepage search box's current query — see `LibraryScreen.tsx`. Matches
+   *  against canvas title and project name (see that file's search-filter comment
+   *  for the future, content-indexing extension point this deliberately defers). */
+  librarySearchQuery: string;
+  /** The homepage's chosen sort for the visible canvas list. */
+  librarySort: 'updatedAt' | 'createdAt' | 'name';
+  /** Which slice of the library the homepage is showing — the sidebar's selection. */
+  libraryView: { kind: 'recent' | 'all' | 'unorganized' | 'project'; projectId?: string };
+  /** The canvas id whose "move to project" popover is open, if any — see `MoveToProjectMenu.tsx`. */
+  moveMenuOpenFor: string | null;
+
   arm: (preset: Preset | null) => void;
   setShortcutsOpen: (open: boolean) => void;
   setExportOpen: (open: boolean) => void;
@@ -157,6 +168,10 @@ interface UiStore {
    *  has run (e.g. unsupported browser, or no update staged). */
   activateUpdate: () => void;
   setLearnModeActive: (active: boolean) => void;
+  setLibrarySearchQuery: (query: string) => void;
+  setLibrarySort: (sort: UiStore['librarySort']) => void;
+  setLibraryView: (view: UiStore['libraryView']) => void;
+  setMoveMenuOpenFor: (id: string | null) => void;
 }
 
 let toastId = 0;
@@ -187,6 +202,10 @@ export const useUiStore = create<UiStore>((set) => ({
   editRequestId: null,
   updateReady: false,
   learnModeActive: false,
+  librarySearchQuery: '',
+  librarySort: 'updatedAt',
+  libraryView: { kind: 'recent' },
+  moveMenuOpenFor: null,
 
   arm: (armed) => set({ armed }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
@@ -240,6 +259,10 @@ export const useUiStore = create<UiStore>((set) => ({
   },
   activateUpdate: () => activateFn?.(),
   setLearnModeActive: (learnModeActive) => set({ learnModeActive }),
+  setLibrarySearchQuery: (librarySearchQuery) => set({ librarySearchQuery }),
+  setLibrarySort: (librarySort) => set({ librarySort }),
+  setLibraryView: (libraryView) => set({ libraryView }),
+  setMoveMenuOpenFor: (moveMenuOpenFor) => set({ moveMenuOpenFor }),
 }));
 
 /**

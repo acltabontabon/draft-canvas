@@ -12,10 +12,10 @@ import {
   summarize,
   type DraftRepository,
 } from './DraftRepository';
-import type { DraftDocument, DraftSummary } from '../document/types';
+import type { DraftDocument, DraftSummary, Project } from '../document/types';
 
 const DB_NAME = 'draft-canvas';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /** Ask for persistent storage once there's something worth protecting, not
  *  on every save — see `requestPersistentStorage`. */
@@ -62,6 +62,10 @@ interface DraftDb extends DBSchema {
     key: string;
     value: BackgroundImageRow;
   };
+  projects: {
+    key: string;
+    value: Project;
+  };
 }
 
 export class IndexedDbRepository implements DraftRepository {
@@ -88,6 +92,9 @@ export class IndexedDbRepository implements DraftRepository {
           }
           if (!database.objectStoreNames.contains('backgroundImages')) {
             database.createObjectStore('backgroundImages', { keyPath: 'id' });
+          }
+          if (!database.objectStoreNames.contains('projects')) {
+            database.createObjectStore('projects', { keyPath: 'id' });
           }
         },
         blocked() {
@@ -193,6 +200,40 @@ export class IndexedDbRepository implements DraftRepository {
     const document = await this.load(id);
     if (!document) return;
     document.metadata = { ...document.metadata, title, updatedAt: Date.now() };
+    await this.save(document);
+  }
+
+  async listProjects(): Promise<Project[]> {
+    return this.db.getAll('projects');
+  }
+
+  async saveProject(project: Project): Promise<void> {
+    await this.db.put('projects', project);
+  }
+
+  /**
+   * Reassigns every member canvas to Unorganized before removing the
+   * project row, mirroring `rename()`'s load-mutate-save shape for each one
+   * so the encrypted body and the plaintext summary stay in sync exactly as
+   * a title edit already does. Projects are never large enough (this is a
+   * flat, un-nested grouping, not a file tree) for that per-canvas cost to
+   * matter at the scale this feature targets.
+   */
+  async deleteProject(id: string): Promise<void> {
+    const members = (await this.list()).filter((summary) => summary.projectId === id);
+    for (const member of members) {
+      await this.moveDocumentToProject(member.id, undefined);
+    }
+    await this.db.delete('projects', id);
+  }
+
+  async moveDocumentToProject(id: string, projectId: string | undefined): Promise<void> {
+    const document = await this.load(id);
+    if (!document) return;
+    const metadata = { ...document.metadata, updatedAt: Date.now() };
+    if (projectId) metadata.projectId = projectId;
+    else delete metadata.projectId;
+    document.metadata = metadata;
     await this.save(document);
   }
 

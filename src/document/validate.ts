@@ -610,6 +610,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
       title: text(meta.title, LIMITS.maxTitleLength)?.trim() || 'Untitled canvas',
       createdAt,
       updatedAt: Math.max(createdAt, finite(meta.updatedAt, now)),
+      ...(safeId(meta.projectId) ? { projectId: safeId(meta.projectId)! } : {}),
     },
     nodes,
     edges,

@@ -1,4 +1,4 @@
-import type { DraftDocument, DraftSummary } from '../document/types';
+import type { DraftDocument, DraftSummary, Project } from '../document/types';
 
 /**
  * Persistence contract. Two implementations exist: IndexedDB (the real one) and
@@ -20,6 +20,18 @@ export interface DraftRepository {
   rename(id: string, title: string): Promise<void>;
   /** Estimated bytes used, when the browser will tell us. */
   usage(): Promise<{ usage: number; quota: number } | null>;
+
+  /**
+   * Projects — a flat, optional grouping of canvases (see `Project` in
+   * `document/types.ts`). No nesting, no canvas in more than one project.
+   */
+  listProjects(): Promise<Project[]>;
+  /** Creates or renames a project — `put`, same as `save()` for documents. */
+  saveProject(project: Project): Promise<void>;
+  /** Removes the project. Its canvases are reassigned to Unorganized, never deleted. */
+  deleteProject(id: string): Promise<void>;
+  /** Moves a canvas to a project, or to Unorganized when `projectId` is undefined. */
+  moveDocumentToProject(id: string, projectId: string | undefined): Promise<void>;
 
   /**
    * Phase 5.1 — one background image per document, stored separately from
@@ -73,5 +85,6 @@ export function summarize(document: DraftDocument): DraftSummary {
     updatedAt: document.metadata.updatedAt,
     nodeCount: document.nodes.length,
     edgeCount: document.edges.length,
+    ...(document.metadata.projectId ? { projectId: document.metadata.projectId } : {}),
   };
 }

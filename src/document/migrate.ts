@@ -216,6 +216,15 @@ function migrateCardAndRoundedToNote(doc: Record<string, unknown>): Record<strin
 }
 
 /**
+ * v8 has no concept of a Project at all — same structural-no-op shape as
+ * `migrateFlowAccent`/`migrateBackground`. An absent `metadata.projectId`
+ * already means Unorganized, so there is nothing to backfill.
+ */
+function migrateAddProjectId(doc: Record<string, unknown>): Record<string, unknown> {
+  return doc;
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
@@ -226,6 +235,7 @@ const MIGRATIONS: Record<number, Migration> = {
   5: migrateResponse,
   6: migrateCardAndRoundedToNote,
   7: migrateHasResponse,
+  8: migrateAddProjectId,
 };
 
 export class UnsupportedVersionError extends Error {

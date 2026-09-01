@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 8;
+export const CURRENT_VERSION = 9;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -360,6 +360,22 @@ export interface DraftMetadata {
   title: string;
   createdAt: number;
   updatedAt: number;
+  /** The project this canvas belongs to, if any — see `Project`. A canvas
+   *  belongs to zero or one project; absent means Unorganized. */
+  projectId?: string;
+}
+
+/**
+ * A lightweight, flat collection of canvases — deliberately not a folder:
+ * no nesting, no canvas belonging to more than one. Exists purely so the
+ * library can group diagrams once they number in the dozens or hundreds,
+ * never to gate creating one.
+ */
+export interface Project {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 /**
@@ -411,4 +427,6 @@ export interface DraftSummary {
   updatedAt: number;
   nodeCount: number;
   edgeCount: number;
+  /** Denormalized from `DraftMetadata.projectId` — see `summarize()`. */
+  projectId?: string;
 }
