@@ -2,11 +2,16 @@
 
 All notable changes to Draft Canvas are documented here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Draft Canvas is
-currently in **alpha** (`0.x`) — expect things to move quickly, and version numbers to occasionally
-break as we settle on a stable 1.0 shape.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Draft Canvas follows
+`0.x` versioning until the shape settles — the `alpha`/`beta` releases below were pre-production
+milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-09-02
+
+The first production-ready release. Everything below `0.1.0` (`alpha.1` through `beta.2`) was a
+pre-release milestone; this is the one meant for real use.
 
 ### Added
 
@@ -24,8 +29,26 @@ break as we settle on a stable 1.0 shape.
   current view rather than wherever it started, and pasting the same thing again nudges each copy
   slightly so they don't stack exactly on top of each other.
 
+### Changed
+
+- Icon-only toolbar buttons (Undo, Redo, Present, Export, and others) now have a proper accessible
+  name instead of relying on their tooltip alone.
+- Flow rows in the Flows dropdown are now reachable and selectable by keyboard (Tab, then
+  Enter/Space), not just by mouse.
+
 ### Fixed
 
+- Typing a space into the diagram title (in the canvas toolbar, not the homepage rename dialog)
+  was silently dropped — the title was committed to the document, and trimmed, on every keystroke,
+  which deleted a space the instant it became the trailing character mid-sentence. The title field
+  now edits locally and commits once you're done, like every other text field in the app.
+- Opening a different diagram right after presenting one could carry Presentation Mode over,
+  landing the new diagram straight into it with no editing chrome. Opening a diagram now always
+  starts in edit mode.
+- The connector/double-click type picker could render off-screen near a canvas edge, with no
+  clamping to keep it on screen.
+- The element and connector popovers could sit behind the toolbar once it wraps to two rows on a
+  narrow window, instead of measuring its actual height.
 - A contextual hint's dismiss (×) button did nothing while "Learn Draft Canvas" mode was on —
   Learn Mode's own "resurface hints you've already dismissed" behavior was overriding the
   dismissal on every render, so the hint stayed put no matter how many times you clicked ×.
@@ -229,7 +252,10 @@ break as we settle on a stable 1.0 shape.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.4...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0...main
+[0.1.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-beta.2...v0.1.0
+[0.1.0-beta.2]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-beta.1...v0.1.0-beta.2
+[0.1.0-beta.1]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.4...v0.1.0-beta.1
 [0.1.0-alpha.4]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.3...v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.1...v0.1.0-alpha.2

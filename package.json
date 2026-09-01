@@ -1,7 +1,7 @@
 {
   "name": "draft-canvas",
   "private": true,
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0",
   "type": "module",
   "description": "A local-first canvas for developers to explain software visually.",
   "license": "MIT",
