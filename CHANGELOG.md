@@ -8,6 +8,8 @@ break as we settle on a stable 1.0 shape.
 
 ## [Unreleased]
 
+## [0.1.0-beta.1] - 2026-09-01
+
 ### Added
 
 - Draft Canvas now works offline. After the first successful visit, refreshing or reopening the
@@ -15,6 +17,17 @@ break as we settle on a stable 1.0 shape.
   already local (IndexedDB), and now the app itself is too. A newer version downloads quietly in
   the background when you're online and never interrupts a session in progress; a small
   "Update ready" indicator appears once it's safe to reload.
+- Selecting a Service node or a connector for the first time now surfaces a small, dismissible
+  explanation of what you can do with it — attach notes or code, describe HTTP/event/callback
+  semantics — right inside the panel that selecting it already opens, instead of leaving those
+  capabilities to be found by accident.
+- Hints retire themselves once you've demonstrated the behavior they teach (attach something once
+  and attachment hints stop; set a connector's semantics once and that hint stops), not only when
+  dismissed by hand.
+- A small "New" badge marks newly discoverable capabilities that don't warrant a full hint.
+- An opt-in "Learn Draft Canvas" mode (toolbar lightbulb button) surfaces every contextual
+  explanation across the canvas at once, for anyone who wants a deliberate pass instead of picking
+  hints up incidentally.
 
 ## [0.1.0-alpha.4] - 2026-09-01
 
