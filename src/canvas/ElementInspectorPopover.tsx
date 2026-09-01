@@ -33,7 +33,9 @@ import {
   SERVICE_KIND_OPTION_LABELS,
 } from '../ui/Editor/nodeKindLabels';
 import { rectOfInternal } from './edgeGeometry';
+import { HintStrip } from './HintStrip';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
+import type { HintId } from '../learning/hints';
 import {
   anchorsForRect,
   placementTransform,
@@ -244,6 +246,20 @@ export function ElementInspectorPopover() {
   if (!mounted) return null;
   if (!displayNode || !displayInternal || !rect || !anchors) return null;
 
+  // Phase 7.1 — at most one hint per node, decided by its type alone (never falls through to a
+  // second, near-duplicate message once the first no longer applies): a Service node always
+  // teaches attachments via its own framing; any other non-group node with nothing attached yet
+  // gets the generic nudge. Both retire together (Phase 7.2) — see `hasAnyAttachment` below —
+  // since they teach the same underlying capability.
+  const hasAnyAttachment =
+    document.nodes.some((n) => n.attachments?.length) || document.edges.some((e) => e.attachments?.length);
+  const hintId: HintId | null =
+    displayNode.type === 'service'
+      ? 'service-node'
+      : displayNode.type !== 'group' && !displayNode.attachments?.length
+        ? 'attachment-slot'
+        : null;
+
   // A dropdown inside this popover should open away from the element, not toward it — mirror
   // whichever side the popover itself placed on. Left/right placement has no above/below
   // relationship to the element at all, so 'down' (today's only direction) is the sensible
@@ -280,6 +296,7 @@ export function ElementInspectorPopover() {
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="dc-element-inspector-inner">
+          {hintId && <HintStrip id={hintId} learned={hasAnyAttachment} />}
           <ElementInspectorRow
             node={displayNode}
             paletteOpen={paletteOpen}

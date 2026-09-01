@@ -121,6 +121,10 @@ interface UiStore {
    *  and is waiting to be activated (Phase 6.2/6.3) — see `serviceWorker.ts`
    *  and `AboutDialog.tsx`'s update-ready state. */
   updateReady: boolean;
+  /** Phase 7.4 — "Learn Draft Canvas" mode. Deliberately not persisted: an opt-in pass a user
+   *  asks for each time, never a saved setting — see `HintStrip.tsx`, which shows a hint
+   *  regardless of its own retired state while this is true. */
+  learnModeActive: boolean;
 
   arm: (preset: Preset | null) => void;
   setShortcutsOpen: (open: boolean) => void;
@@ -152,6 +156,7 @@ interface UiStore {
   /** Reloads onto the downloaded update. A no-op until `registerActivateUpdate`
    *  has run (e.g. unsupported browser, or no update staged). */
   activateUpdate: () => void;
+  setLearnModeActive: (active: boolean) => void;
 }
 
 let toastId = 0;
@@ -181,6 +186,7 @@ export const useUiStore = create<UiStore>((set) => ({
   interactionActive: false,
   editRequestId: null,
   updateReady: false,
+  learnModeActive: false,
 
   arm: (armed) => set({ armed }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
@@ -233,6 +239,7 @@ export const useUiStore = create<UiStore>((set) => ({
     activateFn = activate;
   },
   activateUpdate: () => activateFn?.(),
+  setLearnModeActive: (learnModeActive) => set({ learnModeActive }),
 }));
 
 /**

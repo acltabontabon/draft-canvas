@@ -1,5 +1,6 @@
 import { ALL_PRESETS } from '../../canvas/presets';
 import { useUiStore } from '../../store/uiStore';
+import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 
 const isMac =
@@ -40,11 +41,29 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
 export function ShortcutSheet() {
   const open = useUiStore((state) => state.shortcutsOpen);
   const setOpen = useUiStore((state) => state.setShortcutsOpen);
+  const learnModeActive = useUiStore((state) => state.learnModeActive);
+  const setLearnModeActive = useUiStore((state) => state.setLearnModeActive);
   if (!open) return null;
 
   return (
     <Modal title="Keyboard shortcuts" width={620} onClose={() => setOpen(false)}>
       <div className="dc-shortcuts">
+        <section>
+          <h3>Guidance</h3>
+          <p className="dc-muted">
+            Turn on Learn Draft Canvas mode to see every contextual hint again, even ones you've
+            already dismissed or learned — a deliberate pass instead of picking them up
+            incidentally.
+          </p>
+          <Button
+            variant="quiet"
+            icon="lightbulb"
+            active={learnModeActive}
+            onClick={() => setLearnModeActive(!learnModeActive)}
+          >
+            {learnModeActive ? 'Learn Draft Canvas mode is on' : 'Turn on Learn Draft Canvas mode'}
+          </Button>
+        </section>
         <section>
           <h3>Create</h3>
           <dl>

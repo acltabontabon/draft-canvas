@@ -6,6 +6,7 @@ import { AboutDialog } from './ui/common/AboutDialog';
 import { Toasts } from './ui/common/Toasts';
 import { ThemeProvider } from './ui/theme/ThemeProvider';
 import { PersonalityProvider } from './ui/personality/PersonalityProvider';
+import { HintsProvider } from './learning/HintsProvider';
 
 /**
  * There is no router.
@@ -36,7 +37,9 @@ export function App() {
   return (
     <ThemeProvider>
       <PersonalityProvider>
-        <Shell />
+        <HintsProvider>
+          <Shell />
+        </HintsProvider>
       </PersonalityProvider>
     </ThemeProvider>
   );

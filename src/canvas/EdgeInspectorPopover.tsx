@@ -19,11 +19,13 @@ import {
 } from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { routeBetween } from '../edges/routing';
+import type { HintId } from '../learning/hints';
 import { useEditorStore } from '../store/editorStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
 import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
+import { HintStrip } from './HintStrip';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
@@ -231,6 +233,25 @@ export function EdgeInspectorPopover() {
   const sourceDraftNode = nodeIndex(document.nodes).get(displayEdge.source);
   const targetDraftNode = nodeIndex(document.nodes).get(displayEdge.target);
 
+  // Phase 7.1/7.2 — retires the moment any connector's semantics have been explicitly touched
+  // (`semanticsOrigin: 'explicit'`, already stamped by `setEdgeSemantic`/`setEdgeHasResponse`/
+  // `setEdgeKind`), not just on dismissal — the existing, precise signal for "the user has already
+  // worked with what a connector can mean," not a new field invented for this.
+  const hasExplicitSemantics = document.edges.some((e) => e.semanticsOrigin === 'explicit');
+  // The same underlying capability (Phase 2.7's drag-to-attach) whichever kind of element taught
+  // it first — attaching to a node counts as much as attaching to a connector.
+  const hasAnyAttachment =
+    document.nodes.some((n) => n.attachments?.length) || document.edges.some((e) => e.attachments?.length);
+  // At most one hint per connector: semantics first (the more central concept), the
+  // drag-to-attach nudge only once semantics are out of the way — mirrors
+  // `ElementInspectorPopover`'s own service-node/attachment-slot priority.
+  const hintId: HintId | null = !hasExplicitSemantics
+    ? 'connector-selected'
+    : !hasAnyAttachment
+      ? 'connector-attachment-slot'
+      : null;
+  const hintLearned = hintId === 'connector-selected' ? hasExplicitSemantics : hasAnyAttachment;
+
   return (
     <ViewportPortal>
       <div
@@ -247,6 +268,7 @@ export function EdgeInspectorPopover() {
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="dc-edge-inspector-inner">
+          {hintId && <HintStrip id={hintId} learned={hintLearned} />}
           {/* Keyed on the edge id: the editor below is now always mounted (no more "⋯" to
               unmount it on collapse), so switching to a different connector must remount this
               subtree fresh — otherwise `ExpandedPanel`'s own local state (the colour palette,

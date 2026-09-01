@@ -1,6 +1,7 @@
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { DEV_PRESETS, PRESETS, type Preset } from '../../canvas/presets';
+import { useIsNewFeature } from '../../learning/useNewFeature';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { useTheme } from '../theme/useTheme';
@@ -35,6 +36,9 @@ export function Toolbar({
   const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const updateReady = useUiStore((state) => state.updateReady);
+  const learnModeActive = useUiStore((state) => state.learnModeActive);
+  const setLearnModeActive = useUiStore((state) => state.setLearnModeActive);
+  const { isNew: learnModeIsNew, retire: retireLearnModeBadge } = useIsNewFeature('learn-mode');
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const past = useEditorStore((state) => state.history.past.length);
@@ -103,6 +107,19 @@ export function Toolbar({
           onClick={() => setSettingsOpen(true)}
           title="Canvas settings"
         />
+        <span className="dc-badge-anchor">
+          <Button
+            icon="lightbulb"
+            variant="quiet"
+            active={learnModeActive}
+            onClick={() => {
+              retireLearnModeBadge();
+              setLearnModeActive(!learnModeActive);
+            }}
+            title={learnModeActive ? 'Learn Draft Canvas — on' : 'Learn Draft Canvas'}
+          />
+          {learnModeIsNew && <span className="dc-new-dot" aria-hidden="true" />}
+        </span>
         <Button
           icon="keyboard"
           variant="quiet"

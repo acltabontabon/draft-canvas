@@ -16,17 +16,22 @@ yet a commitment)
 | [4](#phase-4--export--sharing) | Export & Sharing | ✅ Done (core) — 4.4 optional, not blocking |
 | [5](#phase-5--personalization) | Personalization | ✅ Done |
 | [6](#phase-6--offline-first-application-availability) | Offline-First Application Availability | ✅ Done — 6.7 exploratory, not blocking |
-| [7](#phase-7--contextual-learning) | Contextual Learning | ⬜ Planned |
+| [7](#phase-7--contextual-learning) | Contextual Learning | ✅ Done |
 | [8](#phase-8--canvas-command-surface) | Canvas Command Surface | ⬜ Planned |
 | [9](#phase-9--future--experimental) | Future / Experimental | 🧪 Exploratory |
 | [10](#phase-10--support-draft-canvas) | Support Draft Canvas | ⬜ Planned (low priority) |
 
-**What's next:** [Phase 7](#phase-7--contextual-learning) is the active next build. Phase 6
-(Offline-First Application Availability) shipped 6.1-6.6, gated by the full test suite, a new
-`dist`-backed Playwright suite (`playwright.dist.config.ts`, `e2e/offline.spec.ts`), and manual
-browser verification against a killed origin server; 6.7 (installable PWA) stays 🧪 Exploratory,
-unchanged. Phase 5 shipped both 5.1 (custom canvas background) and 5.2 (Intentional Roughness),
-gated by the full test suite and browser verification.
+**What's next:** [Phase 8](#phase-8--canvas-command-surface) (Canvas Command Surface) is the active
+next build. Phase 7 (Contextual Learning) shipped all four sub-phases — contextual hints folded into
+the existing `ElementInspectorPopover`/`EdgeInspectorPopover` rather than a second floating overlay,
+usage-inferred retirement via `semanticsOrigin`/attachment state, a "New" indicator on the Learn
+Draft Canvas toolbar entry, and the opt-in Learn Draft Canvas mode itself — gated by the full test
+suite and manual browser verification, including confirming every hint disappears immediately in
+Presentation Mode. Phase 6 (Offline-First Application Availability) shipped 6.1-6.6, gated by the
+full test suite, a new `dist`-backed Playwright suite (`playwright.dist.config.ts`,
+`e2e/offline.spec.ts`), and manual browser verification against a killed origin server; 6.7
+(installable PWA) stays 🧪 Exploratory, unchanged. Phase 5 shipped both 5.1 (custom canvas
+background) and 5.2 (Intentional Roughness), gated by the full test suite and browser verification.
 
 ## Product principle
 
@@ -398,22 +403,38 @@ blank-canvas empty state (Phase 1.1, `EmptyState.tsx`) is one line and three sho
 — its own doc comment already says "no hint, no tour, no dismissible cards." This phase generalizes
 that instinct into a reusable pattern instead of inventing a separate onboarding flow per feature.
 
-- **7.1 Contextual hints & first-use coachmarks** — ⬜ Planned. Small, dismissible explanations
-  tied to a specific canvas moment — the first Service node selected ("You can attach notes or code
-  to this"), the first connector selected ("Connections can describe HTTP, events, callbacks, and
-  other interactions"), an empty attachment slot ("Add context → Note · Code"). Each shown once, in
-  place, never as a modal.
-- **7.2 Usage-inferred learning state** — ⬜ Planned. A hint retires the moment its behavior is
-  demonstrated, not only when it's dismissed: attach a note once and note-attachment hints never
-  show again; edit a connector's label once and connector-semantics hints stop; open the command
-  menu once and the hint pointing at `/` disappears. An explicit dismissal (×) is the fallback, not
-  the primary path.
-- **7.3 "New" feature indicators** — ⬜ Planned. A small badge on a newly discoverable capability —
-  for something too minor to earn its own coachmark, this is the whole treatment.
-- **7.4 "Learn Draft Canvas" mode** — ⬜ Planned. An optional, user-triggered (`?`) mode that
-  surfaces contextual explanations across the canvas for someone who wants a deliberate pass,
-  rather than picking hints up incidentally. Nothing shows unless asked for — this is the opt-in
-  complement to 7.1's opt-out-by-default hints, not a second onboarding system.
+- **7.1 Contextual hints & first-use coachmarks** — ✅ Done. Small, dismissible explanations tied
+  to a specific canvas moment — the first Service node selected ("You can attach notes or code to
+  this"), the first connector selected ("Connections can describe HTTP, events, callbacks, and
+  other interactions"), an empty attachment slot on a node ("Add context → Note · Code"), and —
+  since Phase 2.7 lets a note or code card attach to a *connector* just as it can a node, a
+  capability easy to miss entirely — a connector with nothing attached yet, once its semantics hint
+  is out of the way ("Drag a note or code card onto this connector to attach it as detail"). Each
+  shown once, in place, never as a modal — and, deliberately, never as a *second* floating box
+  either: since selecting a node or connector already opens `ElementInspectorPopover`/
+  `EdgeInspectorPopover` (Phase 2), a hint is one small `HintStrip` folded into the top of that same
+  panel rather than a competing overlay anchored at the same point.
+- **7.2 Usage-inferred learning state** — ✅ Done. A hint retires the moment its behavior is
+  demonstrated, not only when it's dismissed: attach a note or code card anywhere — a node or a
+  connector — and every attachment-related hint never shows again, since it's the same underlying
+  capability regardless of which kind of element taught it first; give a connector explicit
+  semantics (an interaction type, a kind, a response toggle — anything that stamps the existing
+  `semanticsOrigin: 'explicit'` field) and the connector-semantics hint stops. Pure state
+  observation, not call-site instrumentation — no store had to learn about hints to make this work.
+  An explicit dismissal (×) is the fallback, not the primary path. (The roadmap's original third
+  example, "open the command menu once," isn't wired up — Phase 8's command surface doesn't exist
+  yet; the same `retire(id)` API is generic enough for it to call into later with no redesign here.)
+- **7.3 "New" feature indicators** — ✅ Done. A small dot badge on a newly discoverable
+  capability — for something too minor to earn its own coachmark, this is the whole treatment. Ships
+  with one real instance: the Learn Draft Canvas toolbar button itself carries the badge for anyone
+  returning from an older version, until they notice it.
+- **7.4 "Learn Draft Canvas" mode** — ✅ Done. An optional, user-triggered mode that resurfaces
+  contextual explanations across the canvas for someone who wants a deliberate pass, rather than
+  picking hints up incidentally. Triggered from a dedicated toolbar button (not `?`, which already
+  opens the Keyboard Shortcuts sheet — reusing it would have meant moving that existing shortcut) and
+  from a row inside that same Shortcuts sheet. Session-only, never persisted: nothing shows unless
+  asked for, each time — this is the opt-in complement to 7.1's opt-out-by-default hints, not a
+  second onboarding system.
 
 **Guidance behavior, non-negotiable across all four:** contextual (tied to the moment, not a fixed
 sequence), non-blocking, subtle, dismissible, shown only when relevant, shown once, remembered
@@ -423,13 +444,16 @@ appearing mid-explanation is the one failure mode this phase exists to prevent; 
 
 **Persistence** reuses `src/lib/preferences.ts` (0.3) — which hints have already fired is a small,
 local, non-document fact, the same shape as the existing theme preference, not a reason to
-introduce a new store.
+introduce a new store. Each hint is its own short `hint.<id>` key (`HintsProvider.tsx`,
+`useHints.ts`, mirroring `PersonalityProvider`'s own Context+Provider pattern exactly); the "New"
+badge tracks a single `last-seen-version` key plus one `feature-seen.<id>` per catalog entry
+(`useNewFeature.ts`).
 
-**Architecture:** small, reusable primitives — a hint component, a first-use flag, empty-state
-guidance, feature-discovery metadata — not a generic tutorial framework. A future feature that
-needs to introduce something new (4.3's export dialog, 5.1's background setting) should reach for
-these same primitives rather than invent its own tooltip or walkthrough system; this phase exists
-partly to make that the obvious default.
+**Architecture:** small, reusable primitives — `HintStrip.tsx` (the hint itself), `HintsProvider`/
+`useHints` (retirement state), `useIsNewFeature` (the badge) — not a generic tutorial framework. A
+future feature that needs to introduce something new (4.3's export dialog, 5.1's background
+setting) should reach for these same primitives rather than invent its own tooltip or walkthrough
+system; this phase exists partly to make that the obvious default.
 
 What this will not become: a forced walkthrough or multi-step product tour, a large welcome modal,
 a tooltip that keeps reappearing after its feature is already learned, or documentation someone has
