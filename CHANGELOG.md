@@ -8,6 +8,14 @@ break as we settle on a stable 1.0 shape.
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-09-01
+
+### Changed
+
+- Refreshed the shared-link preview image with a bigger brand mark and punchier copy calling out
+  what Draft Canvas actually is — an opinionated, developer-focused canvas built for mid-meeting
+  speed, not a generic diagramming app.
+
 ## [0.1.0-beta.1] - 2026-09-01
 
 ### Added
