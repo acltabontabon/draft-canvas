@@ -3,6 +3,7 @@ import type { HintId } from './hints';
 
 export interface HintsContextValue {
   isRetired: (id: HintId) => boolean;
+  isDismissedThisSession: (id: HintId) => boolean;
   retire: (id: HintId) => void;
 }
 
@@ -10,6 +11,7 @@ export interface HintsContextValue {
 // mode is "show nothing," never "show every hint."
 export const HintsContext = createContext<HintsContextValue>({
   isRetired: () => true,
+  isDismissedThisSession: () => true,
   retire: () => {},
 });
 

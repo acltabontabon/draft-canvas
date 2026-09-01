@@ -24,6 +24,15 @@ break as we settle on a stable 1.0 shape.
   current view rather than wherever it started, and pasting the same thing again nudges each copy
   slightly so they don't stack exactly on top of each other.
 
+### Fixed
+
+- A contextual hint's dismiss (×) button did nothing while "Learn Draft Canvas" mode was on —
+  Learn Mode's own "resurface hints you've already dismissed" behavior was overriding the
+  dismissal on every render, so the hint stayed put no matter how many times you clicked ×.
+  Dismissing a hint now always hides it right away and keeps it hidden for the rest of the
+  session, without turning Learn Mode off. Also reworded the attachment hint copy ("Add context →
+  Note · Code.") into a plain sentence explaining what it does.
+
 ## [0.1.0-beta.2] - 2026-09-01
 
 ### Changed

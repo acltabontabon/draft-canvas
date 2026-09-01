@@ -14,8 +14,8 @@ export const HINT_IDS = [
 export type HintId = (typeof HINT_IDS)[number];
 
 export const HINT_COPY: Record<HintId, string> = {
-  'service-node': 'You can attach notes or code to this.',
-  'attachment-slot': 'Add context → Note · Code.',
+  'service-node': 'Attach a note or code snippet to add detail to this service.',
+  'attachment-slot': 'Attach a note or code snippet to add context to this element.',
   'connector-selected': 'Connections can describe HTTP, events, callbacks, and other interactions.',
   'connector-attachment-slot': 'Drag a note or code card onto this connector to attach it as detail.',
 };

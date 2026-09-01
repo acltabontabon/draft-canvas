@@ -64,4 +64,28 @@ describe('HintsProvider', () => {
     // Retiring one hint never touches another.
     expect(latest!.isRetired('attachment-slot')).toBe(false);
   });
+
+  it('has nothing session-dismissed by default, even for a hint already retired in a past session', () => {
+    store.set('hint.connector-selected', '1');
+    let latest: ReturnType<typeof useHints> | undefined;
+    render(
+      <HintsProvider>
+        <Probe onReady={(api) => (latest = api)} />
+      </HintsProvider>,
+    );
+    // Session-dismissal is in-memory only — a prior session's retirement never seeds it.
+    expect(latest!.isDismissedThisSession('connector-selected')).toBe(false);
+  });
+
+  it('marks a hint session-dismissed the moment it retires, without affecting other hints', () => {
+    let latest: ReturnType<typeof useHints> | undefined;
+    render(
+      <HintsProvider>
+        <Probe onReady={(api) => (latest = api)} />
+      </HintsProvider>,
+    );
+    act(() => latest!.retire('attachment-slot'));
+    expect(latest!.isDismissedThisSession('attachment-slot')).toBe(true);
+    expect(latest!.isDismissedThisSession('service-node')).toBe(false);
+  });
 });

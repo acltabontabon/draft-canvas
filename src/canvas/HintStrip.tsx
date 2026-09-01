@@ -14,7 +14,7 @@ import { useUiStore } from '../store/uiStore';
  * itself, so one small primitive covers every hint regardless of what teaches it.
  */
 export function HintStrip({ id, learned }: { id: HintId; learned: boolean }) {
-  const { isRetired, retire } = useHints();
+  const { isRetired, isDismissedThisSession, retire } = useHints();
   const learnModeActive = useUiStore((state) => state.learnModeActive);
 
   useEffect(() => {
@@ -22,6 +22,9 @@ export function HintStrip({ id, learned }: { id: HintId; learned: boolean }) {
   }, [learned, id, retire]);
 
   if (learned) return null;
+  // An explicit dismissal always wins immediately, even while Learn Mode is forcing already-
+  // retired hints back into view for a review pass — otherwise the X button looks broken.
+  if (isDismissedThisSession(id)) return null;
   if (isRetired(id) && !learnModeActive) return null;
 
   return (
