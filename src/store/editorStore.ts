@@ -355,6 +355,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((state) => ({
       document,
       history: options?.resetHistory === false ? state.history : EMPTY_HISTORY,
+      // A presentation-mode selection ring or playback state from the diagram just closed has no
+      // meaning for the one being opened — without this, opening a new diagram right after
+      // presenting another lands you straight into presentation mode for it too.
+      mode: 'edit',
       selection: EMPTY_SELECTION,
       flowPlayback: { active: false, flowId: null, step: 0 },
       focus: { active: false, nodeIds: [], edgeIds: [] },

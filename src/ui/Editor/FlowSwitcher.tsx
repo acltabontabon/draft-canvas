@@ -33,6 +33,14 @@ export function FlowSwitcher() {
   // to switch between.
   const rowIds: (string | null)[] = [null, ...flows.map((flow) => flow.id)];
   const [highlight, setHighlight] = useState(() => Math.max(0, rowIds.indexOf(selectedFlowId)));
+  // The keydown listener below is deliberately not recreated on every `highlight` change (see its
+  // own comment), so its Enter/Space branch can't read `highlight` directly — that closure only
+  // ever sees the value from whenever the listener was last (re)registered. This ref is what it
+  // reads instead, kept current independently of when the listener itself was created.
+  const highlightRef = useRef(highlight);
+  useEffect(() => {
+    highlightRef.current = highlight;
+  }, [highlight]);
 
   const current = selectedFlowId ? flows.find((flow) => flow.id === selectedFlowId) : undefined;
   const label = current ? current.title : 'Diagram';
@@ -61,9 +69,12 @@ export function FlowSwitcher() {
         setHighlight((index) => Math.max(0, index - 1));
         return;
       }
-      if (event.key === 'Enter') {
+      if (event.key === 'Enter' || event.key === ' ') {
+        // The nested "Edit" button owns its own Enter/Space activation while it holds focus —
+        // this handler must not also select the row underneath it.
+        if ((event.target as HTMLElement).closest('.dc-flow-switcher-row-edit')) return;
         event.preventDefault();
-        setSelectedFlowId(rowIds[highlight] ?? null);
+        setSelectedFlowId(rowIds[highlightRef.current] ?? null);
         setOpen(false);
       }
     };
@@ -103,6 +114,7 @@ export function FlowSwitcher() {
             className="dc-flow-switcher-row"
             data-highlighted={highlight === 0 ? 'true' : undefined}
             data-selected={!current ? 'true' : undefined}
+            onFocus={() => setHighlight(0)}
             onClick={() => {
               setSelectedFlowId(null);
               setOpen(false);
@@ -114,10 +126,12 @@ export function FlowSwitcher() {
             <div
               key={flow.id}
               role="menuitemradio"
+              tabIndex={0}
               aria-checked={flow.id === selectedFlowId}
               className="dc-flow-switcher-row"
               data-highlighted={highlight === index + 1 ? 'true' : undefined}
               data-selected={flow.id === selectedFlowId ? 'true' : undefined}
+              onFocus={() => setHighlight(index + 1)}
               onClick={() => {
                 setSelectedFlowId(flow.id);
                 setOpen(false);

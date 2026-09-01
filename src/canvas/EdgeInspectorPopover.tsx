@@ -226,7 +226,13 @@ export function EdgeInspectorPopover() {
   // selecting an edge), which always reads as "enough room" — a brief default that self-corrects
   // one frame later once `useLayoutEffect` reports the real height, never a lasting wrong guess.
   const screenLabelPoint = flowToScreenPosition({ x: route.labelX, y: route.labelY });
-  const notEnoughRoomAbove = screenLabelPoint.y - POPOVER_GAP - measuredHeight < TOOLBAR_CLEARANCE;
+  // Measured, not guessed: the toolbar wraps to two rows below 720px (see app.css's
+  // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
+  // it — a static constant can't account for either. `TOOLBAR_CLEARANCE` stays as the fallback
+  // for the (rare) frame where `.dc-toolbar` isn't in the DOM yet.
+  const measuredToolbarHeight = window.document.querySelector('.dc-toolbar')?.getBoundingClientRect().height;
+  const toolbarClearance = measuredToolbarHeight ? measuredToolbarHeight + 10 : TOOLBAR_CLEARANCE;
+  const notEnoughRoomAbove = screenLabelPoint.y - POPOVER_GAP - measuredHeight < toolbarClearance;
   const flipBelow =
     attachmentRowBelowsSourceOrTarget(route.labelX, route.labelY, sourceRect, targetRect) || notEnoughRoomAbove;
 

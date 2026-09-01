@@ -21,6 +21,13 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
   useEffect(() => {
     if (!playback.active) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      // No editable surface is actually reachable while presenting today, but every other
+      // shortcut listener in the app guards against one the same way (`EditorScreen.tsx`) — kept
+      // consistent here as defense-in-depth for whatever's added next.
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) {
+        return;
+      }
       if (playback.picking) {
         if (event.key === 'Escape') {
           playback.stop();

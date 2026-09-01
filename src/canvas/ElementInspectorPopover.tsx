@@ -220,9 +220,16 @@ export function ElementInspectorPopover() {
   const displayInternal = open ? internal : lastInternalRef.current;
   const rect = displayInternal ? rectOfInternal(displayInternal) : null;
 
+  // Measured, not guessed: the toolbar wraps to two rows below 720px (see app.css's
+  // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
+  // it — a static constant can't account for either. `TOP_CLEARANCE` stays as the fallback for
+  // the (rare) frame where `.dc-toolbar` isn't in the DOM yet.
+  const measuredToolbarHeight = window.document.querySelector('.dc-toolbar')?.getBoundingClientRect().height;
+  const toolbarClearance = measuredToolbarHeight ? measuredToolbarHeight + 10 : TOP_CLEARANCE;
+
   const clearances: PlacementClearances = {
     gap: GAP,
-    top: TOP_CLEARANCE,
+    top: toolbarClearance,
     bottom: BOTTOM_CLEARANCE,
     left: LEFT_CLEARANCE,
     right: rightClearance,
