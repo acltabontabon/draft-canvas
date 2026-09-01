@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 import {
   createAttachment,
   createDocument,
@@ -12,6 +13,7 @@ import {
   alignNodes,
   attachToEdge as attachToEdgeOp,
   attachToNode as attachToNodeOp,
+  boundsOf,
   bringForward,
   bringToFront,
   detachFromEdge as detachFromEdgeOp,
@@ -170,6 +172,9 @@ export interface EditorStore {
   history: HistoryState;
   selection: Selection;
   clipboard: Clipboard | null;
+  /** Consecutive pastes of unchanged clipboard content, so repeats step
+   *  diagonally instead of stacking exactly — see `paste`. */
+  pasteRepeat: number;
   save: SaveState;
   mode: EditorMode;
   flowPlayback: FlowPlaybackState;
@@ -229,7 +234,18 @@ export interface EditorStore {
   deleteSelection: () => void;
   duplicateSelection: () => void;
   copySelection: () => void;
-  paste: (offset?: { x: number; y: number }) => void;
+  /** Copies the selection, then deletes it — one undo entry (the delete). */
+  cutSelection: () => void;
+  /** `targetCenter` is where the pasted fragment's center should land, in
+   *  document coordinates — typically the pointer or current viewport
+   *  center. Omitted falls back to a small offset from the fragment's own
+   *  original position. */
+  paste: (targetCenter?: { x: number; y: number }) => void;
+  /** Best-effort pull from the OS clipboard into the in-memory one — never
+   *  throws; a denied/unavailable/foreign clipboard just leaves things as
+   *  they are. Call before `paste()` for the freshest cross-tab content;
+   *  `paste()` itself stays synchronous and never calls this on its own. */
+  syncClipboardFromSystem: () => Promise<void>;
   align: (edge: AlignEdge) => void;
   distribute: (axis: 'x' | 'y') => void;
   groupSelection: () => void;
@@ -315,12 +331,17 @@ export interface ApplyOptions {
 }
 
 let interaction: Interaction | null = null;
+/** The last system-clipboard text `syncClipboardFromSystem` has already
+ *  applied, so an unchanged clipboard doesn't keep resetting `pasteRepeat`. */
+let lastSystemClipboardText: string | null = null;
+const PASTE_STAGGER_STEP = 16;
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
   document: createDocument(),
   history: EMPTY_HISTORY,
   selection: EMPTY_SELECTION,
   clipboard: null,
+  pasteRepeat: 0,
   save: { status: 'idle' },
   mode: 'edit',
   flowPlayback: { active: false, flowId: null, step: 0 },
@@ -579,17 +600,75 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   copySelection() {
     const state = get();
     if (state.selection.nodes.length === 0) return;
-    set({ clipboard: extractFragment(state.document, state.selection.nodes) });
+    const fragment = extractFragment(state.document, state.selection.nodes);
+    set({ clipboard: fragment, pasteRepeat: 0 });
+    // Best-effort — a missing/denied Clipboard API (insecure context, an
+    // older browser, a test env) never breaks same-tab copy/paste, which
+    // the in-memory `clipboard` above already covers on its own.
+    try {
+      void navigator.clipboard?.writeText?.(encodeClipboard(fragment))?.catch(() => {});
+    } catch {
+      // ignore
+    }
   },
 
-  paste(offset = { x: 32, y: 32 }) {
+  cutSelection() {
+    const state = get();
+    const { selection } = state;
+    if (selection.nodes.length === 0 && selection.edges.length === 0) return;
+    // Only a node-bearing selection has a meaningful, self-contained
+    // fragment to put on the clipboard — an edge-only cut, like an
+    // edge-only copy, just removes what's selected. See `copySelection`.
+    if (selection.nodes.length > 0) {
+      const fragment = extractFragment(state.document, selection.nodes);
+      set({ clipboard: fragment, pasteRepeat: 0 });
+      try {
+        void navigator.clipboard?.writeText?.(encodeClipboard(fragment))?.catch(() => {});
+      } catch {
+        // ignore
+      }
+    }
+    state.apply('Cut', (doc) => removeElements(doc, selection.nodes, selection.edges), {
+      selection: EMPTY_SELECTION,
+    });
+  },
+
+  paste(targetCenter) {
     const state = get();
     const fragment = state.clipboard;
     if (!fragment || fragment.nodes.length === 0) return;
+    const bounds = boundsOf(fragment.nodes);
+    const fragmentCenter = bounds
+      ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+      : { x: 0, y: 0 };
+    const target = targetCenter ?? { x: fragmentCenter.x + 32, y: fragmentCenter.y + 32 };
+    // Consecutive pastes of the same clipboard content step diagonally so
+    // they don't perfectly overlap; a fresh copy/cut resets the count.
+    const stagger = state.pasteRepeat * PASTE_STAGGER_STEP;
+    const offset = {
+      x: target.x - fragmentCenter.x + stagger,
+      y: target.y - fragmentCenter.y + stagger,
+    };
     const result = pasteFragment(state.document, fragment, offset);
     state.apply('Paste', () => result.doc, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
+    set((s) => ({ pasteRepeat: s.pasteRepeat + 1 }));
+  },
+
+  async syncClipboardFromSystem() {
+    try {
+      const text = await navigator.clipboard?.readText?.();
+      if (!text || text === lastSystemClipboardText) return;
+      const fragment = decodeClipboard(text);
+      if (!fragment || fragment.nodes.length === 0) return;
+      lastSystemClipboardText = text;
+      set({ clipboard: fragment, pasteRepeat: 0 });
+    } catch {
+      // Permission denied, insecure context, no Clipboard API, or the
+      // clipboard holding something that isn't Draft Canvas JSON — all a
+      // silent no-op; `paste()` falls back to the in-memory clipboard.
+    }
   },
 
   align(edge) {
@@ -960,4 +1039,9 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
 /** Test seam: interaction state lives outside the store, so it needs resetting. */
 export function __resetInteraction(): void {
   interaction = null;
+}
+
+/** Test seam: the last-synced system-clipboard text lives outside the store too. */
+export function __resetClipboardSync(): void {
+  lastSystemClipboardText = null;
 }

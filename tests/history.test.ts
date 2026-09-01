@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
-import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { __resetClipboardSync, __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 const store = useEditorStore;
 
 function reset() {
   __resetInteraction();
+  __resetClipboardSync();
   store.setState({
     document: createDocument('History'),
     history: { past: [], future: [] },
     selection: { nodes: [], edges: [] },
     clipboard: null,
+    pasteRepeat: 0,
     revision: 0,
   });
 }
@@ -159,15 +161,89 @@ describe('undo and redo', () => {
     expect(store.getState().document.nodes).toHaveLength(1);
   });
 
-  it('copies and pastes across the clipboard', () => {
+  it('copies and pastes across the clipboard, placed around a given target center', () => {
+    // Default note size is 200x108, so a note at (0,0) has fragment center
+    // (100,54); a target of (160,114) reproduces a (60,60) top-left, same as
+    // the old fixed-offset behavior, but now because it's viewport-aware.
     const node = store.getState().addNode({ type: 'note', x: 0, y: 0, text: 'Copy me' });
     store.getState().setSelection({ nodes: [node.id], edges: [] });
     store.getState().copySelection();
-    store.getState().paste({ x: 60, y: 60 });
+    store.getState().paste({ x: 160, y: 114 });
 
     const doc = store.getState().document;
     expect(doc.nodes).toHaveLength(2);
     expect(doc.nodes[1]!.x).toBe(60);
+    expect(doc.nodes[1]!.y).toBe(60);
     expect(doc.nodes[1]!.text).toBe('Copy me');
+  });
+
+  it('pastes near the original position when no target center is given', () => {
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0, text: 'Copy me' });
+    store.getState().setSelection({ nodes: [node.id], edges: [] });
+    store.getState().copySelection();
+    store.getState().paste();
+
+    const doc = store.getState().document;
+    expect(doc.nodes[1]!.x).toBe(32);
+    expect(doc.nodes[1]!.y).toBe(32);
+  });
+
+  it('offsets repeated pastes diagonally, and resets the stagger on a fresh copy', () => {
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0, text: 'Copy me' });
+    store.getState().setSelection({ nodes: [node.id], edges: [] });
+    store.getState().copySelection();
+
+    store.getState().paste({ x: 160, y: 114 });
+    store.getState().paste({ x: 160, y: 114 });
+    store.getState().paste({ x: 160, y: 114 });
+
+    const [, first, second, third] = store.getState().document.nodes;
+    expect(first!.x).toBe(60);
+    expect(second!.x).toBe(76);
+    expect(third!.x).toBe(92);
+
+    store.getState().copySelection();
+    store.getState().paste({ x: 160, y: 114 });
+    expect(store.getState().document.nodes.at(-1)!.x).toBe(60);
+  });
+
+  it('cuts a selection into the clipboard, removing it in one undo step', () => {
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0, text: 'Cut me' });
+    store.getState().setSelection({ nodes: [node.id], edges: [] });
+    const before = store.getState().history.past.length;
+
+    store.getState().cutSelection();
+    expect(store.getState().document.nodes).toHaveLength(0);
+    expect(store.getState().history.past.length).toBe(before + 1);
+    expect(store.getState().clipboard?.nodes).toHaveLength(1);
+
+    store.getState().paste({ x: 0, y: 0 });
+    expect(store.getState().document.nodes).toHaveLength(1);
+    expect(store.getState().document.nodes[0]!.text).toBe('Cut me');
+
+    store.getState().undo(); // undoes the paste
+    store.getState().undo(); // undoes the cut's delete
+    expect(store.getState().document.nodes).toHaveLength(1);
+    // The clipboard isn't part of document history — undo doesn't clear it.
+    expect(store.getState().clipboard?.nodes).toHaveLength(1);
+  });
+
+  it('cutting an edge-only selection deletes without touching the clipboard', () => {
+    const a = store.getState().addNode({ type: 'note', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'note', x: 200, y: 0 });
+    const edge = store.getState().connect(a.id, b.id)!;
+    store.getState().setSelection({ nodes: [], edges: [edge.id] });
+
+    // Mirrors `copySelection`'s own gate: an edge-only selection has no
+    // self-contained fragment, so cutting one just deletes, clipboard untouched.
+    store.getState().cutSelection();
+    expect(store.getState().document.edges).toHaveLength(0);
+    expect(store.getState().clipboard).toBeNull();
+  });
+
+  it('cutting an empty selection is a no-op', () => {
+    const before = store.getState().history.past.length;
+    store.getState().cutSelection();
+    expect(store.getState().history.past.length).toBe(before);
   });
 });

@@ -17,6 +17,12 @@ break as we settle on a stable 1.0 shape.
 - A homepage search box filters by diagram title and project name, and a sort control (Last edited,
   Created, Name) reorders the visible list — both entirely local, so the homepage stays usable once
   you have dozens or hundreds of diagrams instead of a handful.
+- Copy (⌘C), cut (⌘X), and paste (⌘V) now work across diagrams, not just within one — select part
+  of a diagram, open a different diagram, and paste it there. A copy only ever carries the
+  connectors between elements you actually selected, so pasting never leaves a dangling connection
+  to something left behind; every pasted element gets a fresh identity, positioned around your
+  current view rather than wherever it started, and pasting the same thing again nudges each copy
+  slightly so they don't stack exactly on top of each other.
 
 ## [0.1.0-beta.2] - 2026-09-01
 

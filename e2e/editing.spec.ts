@@ -348,7 +348,7 @@ test.describe('editing', () => {
     expect(Math.abs(gapA - gapB)).toBeLessThan(1.5);
   });
 
-  test('copies, pastes and duplicates', async ({ page }) => {
+  test('copies, pastes, cuts and duplicates', async ({ page }) => {
     await newCanvas(page, 'Clipboard');
     await create(page, 'Note', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click();
@@ -362,6 +362,41 @@ test.describe('editing', () => {
 
     await page.keyboard.press('Meta+z');
     await expect(page.locator('.dc-node')).toHaveCount(2);
+
+    await page.keyboard.press('Meta+a');
+    await page.keyboard.press('Meta+x');
+    await expect(page.locator('.dc-node')).toHaveCount(0);
+
+    await page.keyboard.press('Meta+z');
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+  });
+
+  test('pastes a copied selection into a different diagram after a reload', async ({ page, context }) => {
+    // The in-memory clipboard alone already survives switching diagrams
+    // within the same tab; granting real clipboard permissions and forcing
+    // a reload here is what actually exercises the OS-clipboard sync path.
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    await newCanvas(page, 'Clipboard source');
+    await create(page, 'Note', { x: 400, y: 300 });
+    await page.locator('.dc-node').first().click();
+    await page.keyboard.press('Meta+c');
+    // The OS-clipboard write is fire-and-forget; wait for it to actually
+    // land before navigating away, or the write's promise never resolves.
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toContain('"format":"draft-canvas"');
+
+    await newCanvas(page, 'Clipboard target');
+    await expect(page.locator('.dc-save')).toContainText('Saved locally');
+    await page.reload();
+    await page.locator('.dc-library-item', { hasText: 'Clipboard target' }).click();
+    // The Async Clipboard API's readText() requires document focus even with
+    // the permission granted — a plain click after navigating in gives it that.
+    await page.locator('.react-flow__pane').click();
+
+    await page.keyboard.press('Meta+v');
+    await expect(page.locator('.dc-node')).toHaveCount(1);
   });
 
   test('groups a selection into a boundary and ungroups it', async ({ page }) => {

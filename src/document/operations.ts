@@ -221,16 +221,26 @@ export function instantiateFragment(
       if (mapped) next.parentId = mapped;
       else delete next.parentId;
     }
+    // Attachments are cloned with the node, so they need fresh ids too —
+    // otherwise every paste/duplicate of a node with a note or code card
+    // would share that attachment's id with the original.
+    if (node.attachments) {
+      next.attachments = node.attachments.map((a) => ({ ...a, id: createId('a') }));
+    }
     return next;
   });
 
   const edges = fragment.edges.map((edge) => {
-    return {
+    const next: DraftEdge = {
       ...edge,
       id: createId('e'),
       source: idMap.get(edge.source)!,
       target: idMap.get(edge.target)!,
-    } satisfies DraftEdge;
+    };
+    if (edge.attachments) {
+      next.attachments = edge.attachments.map((a) => ({ ...a, id: createId('a') }));
+    }
+    return next;
   });
 
   return { nodes, edges };

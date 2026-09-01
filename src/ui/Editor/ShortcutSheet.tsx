@@ -14,6 +14,7 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
       [`${mod} Z`, 'Undo'],
       [`${mod} Shift Z`, 'Redo'],
       [`${mod} C`, 'Copy'],
+      [`${mod} X`, 'Cut'],
       [`${mod} V`, 'Paste'],
       [`${mod} D`, 'Duplicate'],
       [`${mod} A`, 'Select all'],

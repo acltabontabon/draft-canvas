@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDocument, createEdge, createNode, displayNameFor } from '../src/document/factory';
+import { createAttachment, createDocument, createEdge, createNode, displayNameFor } from '../src/document/factory';
 import {
   addEdges,
   addNodes,
@@ -106,6 +106,22 @@ describe('document model', () => {
   it('excludes edges that leave the copied fragment', () => {
     const { doc, a } = sample();
     expect(extractFragment(doc, [a.id]).edges).toHaveLength(0);
+  });
+
+  it('gives a pasted node fresh attachment ids, not the original ones', () => {
+    const attachment = createAttachment({ type: 'note', text: 'Watch out' });
+    const node = { ...createNode({ type: 'service', x: 0, y: 0 }), attachments: [attachment] };
+    const doc = addNodes(createDocument(), [node]);
+
+    const fragment = extractFragment(doc, [node.id]);
+    const result = pasteFragment(doc, fragment, { x: 40, y: 40 });
+
+    const pasted = result.doc.nodes.find((n) => result.nodeIds.includes(n.id))!;
+    expect(pasted.attachments).toHaveLength(1);
+    expect(pasted.attachments![0]!.id).not.toBe(attachment.id);
+    expect(pasted.attachments![0]!.text).toBe('Watch out');
+    // The original is untouched.
+    expect(result.doc.nodes.find((n) => n.id === node.id)!.attachments![0]!.id).toBe(attachment.id);
   });
 
   it('aligns and distributes selections', () => {

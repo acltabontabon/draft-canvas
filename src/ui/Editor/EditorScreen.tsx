@@ -227,7 +227,18 @@ function useKeyboard({
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const arm = useUiStore((state) => state.arm);
   const setFlowSwitcherOpen = useUiStore((state) => state.setFlowSwitcherOpen);
-  const { fitView, zoomIn, zoomOut } = useReactFlow();
+  const { fitView, zoomIn, zoomOut, screenToFlowPosition } = useReactFlow();
+
+  // Best-effort pickup of whatever's on the OS clipboard whenever the tab
+  // regains focus, so it's already fresh by the time the user presses ⌘V —
+  // `paste()` itself stays synchronous and never waits on this.
+  useEffect(() => {
+    const onFocus = () => {
+      void store.getState().syncClipboardFromSystem();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [store]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -255,10 +266,26 @@ function useKeyboard({
             state.redo();
             return;
           case 'c':
+            event.preventDefault();
             state.copySelection();
             return;
+          case 'x':
+            event.preventDefault();
+            state.cutSelection();
+            return;
           case 'v':
-            state.paste();
+            event.preventDefault();
+            // Pull the freshest OS-clipboard content in first (best-effort —
+            // falls back to whatever's already in the in-memory clipboard),
+            // then paste around wherever the pointer is, same placement
+            // `createAtPointer` uses for a freshly created node.
+            void (async () => {
+              await store.getState().syncClipboardFromSystem();
+              const target = pointer.known
+                ? { x: pointer.x, y: pointer.y }
+                : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+              store.getState().paste(target);
+            })();
             return;
           case 'd':
             event.preventDefault();
@@ -386,6 +413,7 @@ function useKeyboard({
     createAtPointer,
     playback,
     fitView,
+    screenToFlowPosition,
     setExportOpen,
     setFlowSwitcherOpen,
     setShortcutsOpen,
