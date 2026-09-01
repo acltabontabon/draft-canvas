@@ -6,6 +6,7 @@ coverage
 .DS_Store
 .vite
 playwright-report
+playwright-report-offline
 test-results
 .playwright
 *.tsbuildinfo

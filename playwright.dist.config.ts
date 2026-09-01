@@ -13,7 +13,12 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
+  // A distinct HTML report folder from the main suite's — both configs can run in the same CI job
+  // (`npm run e2e` then `npm run e2e:offline`), and sharing `playwright-report/`'s default output
+  // folder would let the second run silently overwrite the first's report.
+  reporter: process.env.CI
+    ? [['github'], ['html', { outputFolder: 'playwright-report-offline', open: 'never' }]]
+    : [['list']],
   timeout: 60_000,
   use: {
     baseURL: 'http://localhost:5190',

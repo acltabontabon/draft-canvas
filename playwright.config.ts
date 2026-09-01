@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  // Runs only against `dist/` via `playwright.dist.config.ts` (`npm run e2e:offline`) — `vite dev`
+  // never registers the Service Worker it depends on, so it hangs here instead of failing fast.
+  testIgnore: 'offline.spec.ts',
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
