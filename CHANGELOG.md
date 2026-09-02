@@ -8,6 +8,16 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+### Changed
+
+- Connectors touching a Junction now expose the same interaction-type options (HTTP, Call, Async,
+  Event, Command, Query, etc.) as any other connector, instead of hiding the Interaction section
+  entirely. A Junction is treated as transparent routing: an outgoing connector's options and
+  default follow whatever the Junction actually connects to on either side — inheriting a single,
+  unambiguous incoming type as a (freely overridable) default, and falling back to the normal
+  full picker when incoming types disagree or nothing feeds the Junction yet — while still
+  respecting the same endpoint-compatibility rules as a direct connection.
+
 ## [0.1.1] - 2026-09-02
 
 ### Changed

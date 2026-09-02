@@ -158,6 +158,73 @@ export function defaultsToResponse(source: NodeCategory, target: NodeCategory): 
   return resolved(source) === 'service' && resolved(target) === 'service';
 }
 
+/**
+ * Which side of an edge a Junction is being resolved as — see
+ * `resolveTransparentCategory`. `'source'` looks at what feeds the Junction
+ * (its incoming edges); `'target'` looks at what it feeds (its outgoing
+ * edges).
+ */
+export type EdgeEndpointRole = 'source' | 'target';
+
+/** The bits of a `DraftDocument` `resolveTransparentCategory`/`inferredJunctionSemantic` need —
+ *  a `DraftDocument` itself, or any other `{ nodes, edges }` shape, satisfies this structurally. */
+interface GraphLike {
+  nodes: readonly DraftNode[];
+  edges: readonly DraftEdge[];
+}
+
+/**
+ * Resolves what a node "looks like" for connection-capability purposes, seeing straight through
+ * any Junction on the way — a Junction organizes topology, it has no semantic identity of its
+ * own (see this module's Junction connection spec). A non-Junction node just resolves to its own
+ * `categoryOf`. A Junction resolves to whatever real node feeds it on the requested `role`: the
+ * categories of the nodes on the other end of its *incoming* edges when asked as a `'source'`
+ * (what supplies it), or of its *outgoing* edges' targets when asked as a `'target'` (what it
+ * feeds) — recursing through any further Junctions on that same side. A single, unambiguous
+ * non-Junction category resolves to that category; none, or more than one distinct category,
+ * resolves to `'junction'` itself — the module's own existing "no opinion" signal (`capabilityFor`
+ * has no matrix entry for it, so callers already fall back to the full, unrestricted vocabulary),
+ * which is exactly the "don't guess" behaviour an unfed or ambiguous convergence needs.
+ */
+export function resolveTransparentCategory(
+  graph: GraphLike,
+  nodeId: string,
+  role: EdgeEndpointRole,
+  visited: Set<string> = new Set(),
+): NodeCategory {
+  const node = graph.nodes.find((n) => n.id === nodeId);
+  if (!node) return 'generic';
+  const own = categoryOf(node);
+  if (own !== 'junction' || visited.has(nodeId)) return own;
+  visited.add(nodeId);
+  const neighborIds =
+    role === 'source'
+      ? graph.edges.filter((e) => e.target === nodeId).map((e) => e.source)
+      : graph.edges.filter((e) => e.source === nodeId).map((e) => e.target);
+  const resolved = new Set<NodeCategory>();
+  for (const id of neighborIds) {
+    const category = resolveTransparentCategory(graph, id, role, visited);
+    if (category !== 'junction') resolved.add(category);
+  }
+  return resolved.size === 1 ? [...resolved][0]! : 'junction';
+}
+
+/**
+ * The literal `semantic` a Junction's incoming edges converge on, when there is exactly one to
+ * converge on — the "smart inheritance" default for a *new* outgoing edge (Junction connection
+ * spec, requirement 3). An edge with no `semantic` at all doesn't vote either way; more than one
+ * distinct value present (or none present) means there's no clear default — an ambiguous
+ * convergence (requirement 4), left for the caller to fall back to the ordinary capability-based
+ * default and the user to pick explicitly, same as anywhere else in this module.
+ */
+export function inferredJunctionSemantic(graph: GraphLike, junctionNodeId: string): EdgeSemantic | undefined {
+  const semantics = new Set<EdgeSemantic>();
+  for (const e of graph.edges) {
+    if (e.target === junctionNodeId && e.semantic !== undefined) semantics.add(e.semantic);
+  }
+  return semantics.size === 1 ? [...semantics][0] : undefined;
+}
+
 type Relationship = { kind?: ConnectorKind; semantic?: EdgeSemantic };
 
 /**

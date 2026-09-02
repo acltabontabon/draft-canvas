@@ -60,10 +60,13 @@ import {
 } from '../document/flow';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import {
+  capabilityFor,
   categoryOf,
   defaultsToResponse,
+  inferredJunctionSemantic,
   inferRelationship,
   isEligibleForReinference,
+  resolveTransparentCategory,
 } from '../document/connectorSemantics';
 import type {
   Accent,
@@ -330,6 +333,34 @@ export interface ApplyOptions {
   selection?: Selection;
 }
 
+/**
+ * `inferRelationship`'s own default-relation logic, wrapped so a Junction on either end resolves
+ * transparently to whatever it actually connects (`resolveTransparentCategory`) instead of ending
+ * inference dead at the Junction itself — the Junction connection spec's "smart inheritance": a
+ * Junction sourcing a fresh edge whose incoming edges converge on one clear `semantic`
+ * (`inferredJunctionSemantic`) defaults the new edge to that same semantic (as long as it's still
+ * valid for the resolved pairing), falling back to the ordinary capability default — and to no
+ * default at all, same as any other unclassified pairing — when the convergence is ambiguous.
+ * Used by both `connect()` and `reconnectEdge()` so a connector's semantics always resolve the
+ * same way regardless of how it came to exist.
+ */
+function inferRelationshipThroughJunctions(
+  graph: DraftDocument,
+  sourceNode: DraftNode,
+  targetNode: DraftNode,
+): ReturnType<typeof inferRelationship> {
+  const sourceCategory = resolveTransparentCategory(graph, sourceNode.id, 'source');
+  const targetCategory = resolveTransparentCategory(graph, targetNode.id, 'target');
+  const capability = capabilityFor(sourceCategory, targetCategory);
+  const inherited =
+    categoryOf(sourceNode) === 'junction' ? inferredJunctionSemantic(graph, sourceNode.id) : undefined;
+  if (inherited !== undefined && (!capability || capability.relations.includes(inherited))) {
+    return { semantic: inherited, kind: capability?.defaultBehavior };
+  }
+  if (!capability?.defaultRelation) return undefined;
+  return { semantic: capability.defaultRelation, kind: capability.defaultBehavior };
+}
+
 let interaction: Interaction | null = null;
 /** The last system-clipboard text `syncClipboardFromSystem` has already
  *  applied, so an unchanged clipboard doesn't keep resetting `pasteRepeat`. */
@@ -450,12 +481,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const exists = state.document.edges.some((e) => e.source === source && e.target === target);
     if (exists) return null;
     // Infer a relationship from what's actually being connected — see
-    // `inferRelationship`'s doc comment for exactly which pairings apply.
+    // `inferRelationshipThroughJunctions`'s doc comment for exactly which pairings apply, and how
+    // a Junction on either end resolves transparently rather than blocking inference outright.
     const sourceNode = state.document.nodes.find((n) => n.id === source);
     const targetNode = state.document.nodes.find((n) => n.id === target);
-    const relationship = sourceNode && targetNode ? inferRelationship(sourceNode, targetNode) : undefined;
+    const relationship =
+      sourceNode && targetNode ? inferRelationshipThroughJunctions(state.document, sourceNode, targetNode) : undefined;
     const hasResponse =
-      sourceNode && targetNode ? defaultsToResponse(categoryOf(sourceNode), categoryOf(targetNode)) : false;
+      sourceNode && targetNode
+        ? defaultsToResponse(
+            resolveTransparentCategory(state.document, sourceNode.id, 'source'),
+            resolveTransparentCategory(state.document, targetNode.id, 'target'),
+          )
+        : false;
     const edge = createEdge({
       source,
       target,
@@ -501,8 +539,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // Only an edge inference already claimed, or one nothing has ever
       // touched, gets reclassified here — an explicit user choice survives a
       // reconnect untouched. See `isEligibleForReinference`.
-      const relationship = inferRelationship(sourceNode, targetNode);
-      const hasResponse = defaultsToResponse(categoryOf(sourceNode), categoryOf(targetNode));
+      const relationship = inferRelationshipThroughJunctions(reconnected, sourceNode, targetNode);
+      const hasResponse = defaultsToResponse(
+        resolveTransparentCategory(reconnected, sourceNode.id, 'source'),
+        resolveTransparentCategory(reconnected, targetNode.id, 'target'),
+      );
       return updateEdge(reconnected, id, {
         semantic: relationship?.semantic,
         kind: relationship?.kind,

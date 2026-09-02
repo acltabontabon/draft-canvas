@@ -15,6 +15,7 @@ import {
   categoryOf,
   defaultsToResponse,
   isSyncPairing,
+  resolveTransparentCategory,
   type ConnectionCapability,
 } from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
@@ -810,19 +811,27 @@ function ExpandedPanel({
   const [editingBehavior, setEditingBehavior] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  // A Junction is a routing/convergence point, not a system component — neither leg of
-  // Service→Junction nor Junction→Service is a communication between two components, so none of
-  // the vocabulary built for that (protocol, HTTP verbs, sync/async, retries, a request/response
-  // pair, a free-text Condition field) applies. The branching/merging structure itself already
-  // communicates split and merge; the only thing worth capturing here is the connector's own
-  // label (a branch name on the way out of a Junction — see `sourceIsJunction` above). This never
-  // strips an already-persisted `semantic`/`kind`/`condition` from an older document, it only
-  // stops offering the controls that would edit them while a Junction is on either end.
-  const involvesJunction =
+  // A Junction is a routing/convergence point, not a system component of its own — it has no
+  // semantic identity, so every capability lookup below resolves *through* it to whatever it
+  // actually connects (`resolveTransparentCategory`) rather than stopping at the Junction and
+  // treating the connector as generic. A Junction still isn't a component itself, though: its own
+  // branch label (`sourceIsJunction` above) is what matters on the way out of one, so the
+  // free-text Condition field — a separate, narrower field — stays hidden whenever either end is
+  // a Junction. This never strips an already-persisted `condition` from an older document, it
+  // only stops offering the control that would edit it.
+  const nodes = useEditorStore((state) => state.document.nodes);
+  const edges = useEditorStore((state) => state.document.edges);
+  const graph = { nodes, edges };
+  const touchesJunction =
     (sourceNode && categoryOf(sourceNode) === 'junction') || (targetNode && categoryOf(targetNode) === 'junction');
 
+  const resolvedSourceCategory = sourceNode ? resolveTransparentCategory(graph, sourceNode.id, 'source') : undefined;
+  const resolvedTargetCategory = targetNode ? resolveTransparentCategory(graph, targetNode.id, 'target') : undefined;
+
   const capability: ConnectionCapability | undefined =
-    sourceNode && targetNode ? capabilityFor(categoryOf(sourceNode), categoryOf(targetNode)) : undefined;
+    resolvedSourceCategory && resolvedTargetCategory
+      ? capabilityFor(resolvedSourceCategory, resolvedTargetCategory)
+      : undefined;
 
   const behaviorIsPredetermined = Boolean(capability) && capability!.behaviors.length === 0;
   const behaviorMatchesPolicy = !edge.kind || edge.kind === capability?.defaultBehavior;
@@ -831,26 +840,29 @@ function ExpandedPanel({
   const hideSyncOption = behaviorBase.includes('sync') && edge.kind !== 'sync';
   const behaviorOptions = hideSyncOption ? behaviorBase.filter((kind) => kind !== 'sync') : behaviorBase;
   // A Junction connector never gets the free-text Condition field either — see
-  // `involvesJunction`'s own comment above: the connector's label is the one field that matters
+  // `touchesJunction`'s own comment above: the connector's label is the one field that matters
   // here, whether that's a plain optional label or a branch name.
-  const showCondition = !involvesJunction && (showBehaviorPicker || Boolean(edge.condition));
+  const showCondition = !touchesJunction && (showBehaviorPicker || Boolean(edge.condition));
 
   // Only offered where a connector already reads as an unambiguous synchronous call — see
   // `isSyncPairing`'s own doc comment for exactly which pairings that covers and why. A connector
   // that already carries a response never loses the section just because the pairing or kind
   // changed underneath it, same discipline as `showCondition` above.
   const canHaveResponse =
-    Boolean(sourceNode && targetNode) &&
-    isSyncPairing(categoryOf(sourceNode!), categoryOf(targetNode!)) &&
+    Boolean(resolvedSourceCategory && resolvedTargetCategory) &&
+    isSyncPairing(resolvedSourceCategory!, resolvedTargetCategory!) &&
     (edge.kind === undefined || edge.kind === 'sync');
   const showRequestResponse = canHaveResponse || Boolean(edge.hasResponse);
 
   // The opinionated editor (`ServiceInteractionSection`) replaces the generic Interaction
   // section below for exactly the pairing `defaultsToResponse` already means "two services
   // talking to each other" for (see its own doc comment) — everything else, Actor→Service
-  // included, keeps the generic, unrestricted vocabulary exactly as it reads today.
+  // included, keeps the generic, unrestricted vocabulary exactly as it reads today. A Junction
+  // resolving transparently to a service on both sides (e.g. Service → Junction → Service) reads
+  // the same way, reusing this same editor rather than inventing a Junction-specific one.
   const isServiceToService =
-    Boolean(sourceNode && targetNode) && defaultsToResponse(categoryOf(sourceNode!), categoryOf(targetNode!));
+    Boolean(resolvedSourceCategory && resolvedTargetCategory) &&
+    defaultsToResponse(resolvedSourceCategory!, resolvedTargetCategory!);
 
   const currentAccentChip = edge.accent !== undefined ? theme.accents[edge.accent].chip : undefined;
 
@@ -882,7 +894,7 @@ function ExpandedPanel({
 
   return (
     <div className="dc-edge-inspector-panel dc-edge-inspector-expanded">
-      {involvesJunction ? null : isServiceToService ? (
+      {isServiceToService ? (
         <ServiceInteractionSection edge={edge} store={store} />
       ) : (
         <>

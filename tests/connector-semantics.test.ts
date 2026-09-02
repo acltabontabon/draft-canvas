@@ -2,11 +2,15 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   capabilityFor,
   categoryOf,
+  inferredJunctionSemantic,
   inferRelationship,
   isEligibleForReinference,
   isSyncPairing,
+  resolveTransparentCategory,
 } from '../src/document/connectorSemantics';
 import { createDocument, createEdge, createNode, type CreateNodeInput } from '../src/document/factory';
+import { addEdges, addNodes } from '../src/document/operations';
+import { deserializeDocument, serializeDocument } from '../src/export/project';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 describe('categoryOf', () => {
@@ -431,5 +435,286 @@ describe('persistence and legacy compatibility', () => {
     expect(edge.semantic).toBe('publishes');
     expect(edge.kind).toBe('event');
     expect(isEligibleForReinference(edge)).toBe(false);
+  });
+});
+
+describe('resolveTransparentCategory — seeing through a Junction', () => {
+  it('a non-Junction node resolves to its own category regardless of role', () => {
+    const service = createNode({ type: 'service', x: 0, y: 0 });
+    const g = { nodes: [service], edges: [] };
+    expect(resolveTransparentCategory(g, service.id, 'source')).toBe('service');
+    expect(resolveTransparentCategory(g, service.id, 'target')).toBe('service');
+  });
+
+  it('resolves a Junction as "source" to the single category feeding it', () => {
+    const service = createNode({ type: 'service', x: 0, y: 0 });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const g = { nodes: [service, junction], edges: [createEdge({ source: service.id, target: junction.id })] };
+    expect(resolveTransparentCategory(g, junction.id, 'source')).toBe('service');
+  });
+
+  it('resolves a Junction as "target" to the single category it feeds', () => {
+    const junction = createNode({ type: 'ellipse', x: 0, y: 0 });
+    const queue = createNode({ type: 'queue', x: 200, y: 0 });
+    const g = { nodes: [junction, queue], edges: [createEdge({ source: junction.id, target: queue.id })] };
+    expect(resolveTransparentCategory(g, junction.id, 'target')).toBe('queue');
+  });
+
+  it('an unfed Junction resolves to "junction" itself — no opinion', () => {
+    const junction = createNode({ type: 'ellipse', x: 0, y: 0 });
+    expect(resolveTransparentCategory({ nodes: [junction], edges: [] }, junction.id, 'source')).toBe('junction');
+  });
+
+  it('a Junction fed by mismatched categories resolves to "junction" — ambiguous, no opinion', () => {
+    const service = createNode({ type: 'service', x: 0, y: 0 });
+    const queue = createNode({ type: 'queue', x: 0, y: 150 });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 75 });
+    const g = {
+      nodes: [service, queue, junction],
+      edges: [
+        createEdge({ source: service.id, target: junction.id }),
+        createEdge({ source: queue.id, target: junction.id }),
+      ],
+    };
+    expect(resolveTransparentCategory(g, junction.id, 'source')).toBe('junction');
+  });
+
+  it('a Junction fed by two same-category sources still resolves unambiguously', () => {
+    const serviceA = createNode({ type: 'service', x: 0, y: 0 });
+    const serviceB = createNode({ type: 'service', x: 0, y: 150 });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 75 });
+    const g = {
+      nodes: [serviceA, serviceB, junction],
+      edges: [
+        createEdge({ source: serviceA.id, target: junction.id }),
+        createEdge({ source: serviceB.id, target: junction.id }),
+      ],
+    };
+    expect(resolveTransparentCategory(g, junction.id, 'source')).toBe('service');
+  });
+
+  it('chains through multiple Junctions to the real upstream category', () => {
+    const service = createNode({ type: 'service', x: 0, y: 0 });
+    const j1 = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const j2 = createNode({ type: 'ellipse', x: 400, y: 0 });
+    const g = {
+      nodes: [service, j1, j2],
+      edges: [createEdge({ source: service.id, target: j1.id }), createEdge({ source: j1.id, target: j2.id })],
+    };
+    expect(resolveTransparentCategory(g, j2.id, 'source')).toBe('service');
+  });
+});
+
+describe('inferredJunctionSemantic — the literal semantic a Junction\'s incoming edges converge on', () => {
+  it('is undefined with no incoming edges', () => {
+    const junction = createNode({ type: 'ellipse', x: 0, y: 0 });
+    expect(inferredJunctionSemantic({ nodes: [junction], edges: [] }, junction.id)).toBeUndefined();
+  });
+
+  it('is the single incoming semantic when every typed incoming edge agrees', () => {
+    const a = createNode({ type: 'service', x: 0, y: 0 });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const edge = createEdge({ source: a.id, target: junction.id, semantic: 'http', semanticsOrigin: 'explicit' });
+    expect(inferredJunctionSemantic({ nodes: [a, junction], edges: [edge] }, junction.id)).toBe('http');
+  });
+
+  it('is undefined when incoming edges disagree — ambiguous convergence', () => {
+    const a = createNode({ type: 'service', x: 0, y: 0 });
+    const b = createNode({ type: 'service', x: 0, y: 150 });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 75 });
+    const edges = [
+      createEdge({ source: a.id, target: junction.id, semantic: 'http', semanticsOrigin: 'explicit' }),
+      createEdge({ source: b.id, target: junction.id, semantic: 'event', semanticsOrigin: 'explicit' }),
+    ];
+    expect(inferredJunctionSemantic({ nodes: [a, b, junction], edges }, junction.id)).toBeUndefined();
+  });
+
+  it('ignores untyped incoming edges when checking for agreement', () => {
+    const a = createNode({ type: 'service', x: 0, y: 0 });
+    const b = createNode({ type: 'service', x: 0, y: 150 });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 75 });
+    const edges = [
+      createEdge({ source: a.id, target: junction.id, semantic: 'http', semanticsOrigin: 'explicit' }),
+      createEdge({ source: b.id, target: junction.id }),
+    ];
+    expect(inferredJunctionSemantic({ nodes: [a, b, junction], edges }, junction.id)).toBe('http');
+  });
+});
+
+describe('capabilityFor through a Junction — endpoint compatibility is preserved', () => {
+  it('Junction → Queue resolves Queue-shaped relations, not Service→Service ones, even though the source is a Junction', () => {
+    const service = createNode({ type: 'service', x: 0, y: 0 });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const queue = createNode({ type: 'queue', x: 400, y: 0 });
+    const g = { nodes: [service, junction, queue], edges: [createEdge({ source: service.id, target: junction.id })] };
+
+    const sourceCategory = resolveTransparentCategory(g, junction.id, 'source');
+    const cap = capabilityFor(sourceCategory, categoryOf(queue))!;
+
+    expect(cap.relations).toEqual(['publishes', 'event', 'dependsOn']);
+    expect(cap.relations).not.toContain('command');
+    expect(cap.relations).not.toContain('writes');
+  });
+});
+
+describe('Junction connections — store integration (connect/reconnect through a Junction)', () => {
+  const store = useEditorStore;
+
+  beforeEach(() => {
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Junction'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+  });
+
+  it('Service → Junction → Service: the outgoing leg gets the normal Service→Service treatment, not a blanked-out one', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const junction = store.getState().addNode({ type: 'ellipse', x: 200, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 400, y: 0 });
+    store.getState().connect(a.id, junction.id);
+
+    const outgoing = store.getState().connect(junction.id, b.id)!;
+    // No unambiguous incoming semantic yet (the A→Junction leg is still untyped), so this falls
+    // back to the ordinary Service→Service default — the same thing a direct Service→Service
+    // connection infers — rather than staying untyped just because a Junction is on the way.
+    expect(outgoing.semantic).toBe('calls');
+    expect(outgoing.semanticsOrigin).toBe('inferred');
+  });
+
+  it('Service → Junction → Queue: the outgoing leg gets Queue-shaped options, not Service→Service ones', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const junction = store.getState().addNode({ type: 'ellipse', x: 200, y: 0 });
+    const queue = store.getState().addNode({ type: 'queue', x: 400, y: 0 });
+    store.getState().connect(a.id, junction.id);
+
+    const outgoing = store.getState().connect(junction.id, queue.id)!;
+    expect(outgoing.semantic).toBe('publishes');
+    expect(outgoing.kind).toBe('event');
+  });
+
+  it('single incoming semantic inheritance: an unambiguous HTTP leg into the Junction defaults the outgoing leg to HTTP', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const junction = store.getState().addNode({ type: 'ellipse', x: 200, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 400, y: 0 });
+    const incoming = store.getState().connect(a.id, junction.id)!;
+    store.getState().setEdgeSemantic(incoming.id, 'http');
+
+    const outgoing = store.getState().connect(junction.id, b.id)!;
+    expect(outgoing.semantic).toBe('http');
+    expect(outgoing.semanticsOrigin).toBe('inferred');
+  });
+
+  it('user overriding an inherited semantic: the inherited value is only a default, still freely changeable', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const junction = store.getState().addNode({ type: 'ellipse', x: 200, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 400, y: 0 });
+    const incoming = store.getState().connect(a.id, junction.id)!;
+    store.getState().setEdgeSemantic(incoming.id, 'http');
+    const outgoing = store.getState().connect(junction.id, b.id)!;
+    expect(outgoing.semantic).toBe('http');
+
+    store.getState().setEdgeSemantic(outgoing.id, 'command');
+    const stored = store.getState().document.edges.find((e) => e.id === outgoing.id)!;
+    expect(stored.semantic).toBe('command');
+    expect(stored.semanticsOrigin).toBe('explicit');
+  });
+
+  it('mixed incoming semantics (ambiguous convergence): does not guess between them, falls back to the neutral default', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const worker = store.getState().addNode({ type: 'service', x: 0, y: 150 });
+    const junction = store.getState().addNode({ type: 'ellipse', x: 200, y: 75 });
+    const c = store.getState().addNode({ type: 'service', x: 400, y: 75 });
+
+    const inA = store.getState().connect(a.id, junction.id)!;
+    store.getState().setEdgeSemantic(inA.id, 'http');
+    const inWorker = store.getState().connect(worker.id, junction.id)!;
+    store.getState().setEdgeSemantic(inWorker.id, 'event');
+
+    const outgoing = store.getState().connect(junction.id, c.id)!;
+    expect(outgoing.semantic).not.toBe('http');
+    expect(outgoing.semantic).not.toBe('event');
+    expect(outgoing.semantic).toBe('calls');
+  });
+
+  it('fan-out with different outgoing interaction types: two branches from the same Junction may differ', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const junction = store.getState().addNode({ type: 'ellipse', x: 200, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 400, y: -75 });
+    const queue = store.getState().addNode({ type: 'queue', x: 400, y: 75 });
+    const incoming = store.getState().connect(a.id, junction.id)!;
+    store.getState().setEdgeSemantic(incoming.id, 'http');
+
+    const toService = store.getState().connect(junction.id, b.id)!;
+    const toQueue = store.getState().connect(junction.id, queue.id)!;
+
+    expect(toService.semantic).toBe('http');
+    expect(toQueue.semantic).toBe('publishes');
+    expect(toQueue.kind).toBe('event');
+  });
+
+  it('endpoint compatibility filtering: Junction → Queue never inherits a Service-only semantic like "command"', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const junction = store.getState().addNode({ type: 'ellipse', x: 200, y: 0 });
+    const queue = store.getState().addNode({ type: 'queue', x: 400, y: 0 });
+    const incoming = store.getState().connect(a.id, junction.id)!;
+    store.getState().setEdgeSemantic(incoming.id, 'command');
+
+    const outgoing = store.getState().connect(junction.id, queue.id)!;
+    expect(outgoing.semantic).not.toBe('command');
+    expect(outgoing.semantic).toBe('publishes');
+  });
+
+  it('editing an existing Junction edge changes its interaction type and blocks further automatic reinference', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const junction = store.getState().addNode({ type: 'ellipse', x: 200, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 400, y: 0 });
+    const queue = store.getState().addNode({ type: 'queue', x: 400, y: 150 });
+    const incoming = store.getState().connect(a.id, junction.id)!;
+    store.getState().setEdgeSemantic(incoming.id, 'http');
+    const outgoing = store.getState().connect(junction.id, b.id)!;
+    expect(outgoing.semantic).toBe('http');
+    expect(outgoing.semanticsOrigin).toBe('inferred');
+
+    // The user explicitly picks a different interaction type from the (now-visible) picker.
+    store.getState().setEdgeSemantic(outgoing.id, 'query');
+    let stored = store.getState().document.edges.find((e) => e.id === outgoing.id)!;
+    expect(stored.semantic).toBe('query');
+    expect(stored.semanticsOrigin).toBe('explicit');
+
+    // Retargeting the edge afterward must not silently reclassify the explicit choice.
+    store.getState().reconnectEdge(outgoing.id, 'target', queue.id, undefined);
+    stored = store.getState().document.edges.find((e) => e.id === outgoing.id)!;
+    expect(stored.target).toBe(queue.id);
+    expect(stored.semantic).toBe('query');
+    expect(stored.semanticsOrigin).toBe('explicit');
+  });
+
+  it('persistence/reload: a Junction connector\'s chosen interaction type survives a save/load round trip', () => {
+    const a = createNode({ type: 'service', x: 0, y: 0 });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const b = createNode({ type: 'queue', x: 400, y: 0 });
+    const incoming = createEdge({ source: a.id, target: junction.id, semantic: 'http', semanticsOrigin: 'explicit' });
+    const outgoing = createEdge({
+      source: junction.id,
+      target: b.id,
+      semantic: 'publishes',
+      kind: 'event',
+      semanticsOrigin: 'explicit',
+    });
+    let doc = addNodes(createDocument('Junction persistence'), [a, junction, b]);
+    doc = addEdges(doc, [incoming, outgoing]);
+
+    const result = deserializeDocument(serializeDocument(doc));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const restoredOutgoing = result.document.edges.find((e) => e.id === outgoing.id)!;
+    expect(restoredOutgoing.semantic).toBe('publishes');
+    expect(restoredOutgoing.kind).toBe('event');
+    expect(restoredOutgoing.semanticsOrigin).toBe('explicit');
   });
 });
