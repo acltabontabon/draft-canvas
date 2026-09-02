@@ -8,6 +8,8 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-02
+
 ### Changed
 
 - Connectors touching a Junction now expose the same interaction-type options (HTTP, Call, Async,
