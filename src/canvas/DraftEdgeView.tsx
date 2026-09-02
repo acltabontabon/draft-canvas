@@ -394,7 +394,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         interactionWidth={18}
         style={{
           stroke: strokeColor,
-          strokeWidth: isActiveStep ? 2.6 : selected || attachTarget ? 2.4 : 1.6,
+          strokeWidth: isActiveStep ? 2.6 : selected || attachTarget ? 2.4 : lensMember ? 2.0 : 1.6,
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
@@ -654,6 +654,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             cardSide={attachmentFlipBelow ? 'below' : 'above'}
             editable={mode !== 'present'}
             actions={attachmentActions}
+            dimmed={lensDimmed}
             style={{ position: 'absolute', transform: attachmentRowTransform(labelX, labelY, attachmentFlipBelow) }}
           />
         ) : null}

@@ -37,10 +37,12 @@ Flow that used it; nothing crashes or dangles.
 The toolbar always shows **Flows · Diagram ▾** (press **F** to open it) — a constant, honest
 answer to "what am I looking at right now?" **Diagram** is a real, intentional state, not an
 absence: the plain architecture, nothing narrated. Picking a flow from the dropdown *selects* it —
-a lens, not a presentation. Its member connectors and their endpoints stay fully lit; everything
-else gently dims (never hidden), and the flow's own connectors pulse once so the path reads at a
-glance. Selecting a flow never starts Presentation Mode — **▶ Present** next to the switcher is the
-separate, explicit way to do that.
+a lens, not a presentation. Its member connectors and their endpoints stay fully lit, get a
+slightly bolder stroke, and their nodes wear a subtle ring (the flow's own colour, if it has one,
+otherwise a neutral border); everything else — including any attachment chips on a non-member
+connector — gently dims (never hidden, no grayscale), and the flow's own connectors pulse once so
+the path reads at a glance. Selecting a flow never starts Presentation Mode — **▶ Present** next to
+the switcher is the separate, explicit way to do that.
 
 ## Editing a flow deliberately
 

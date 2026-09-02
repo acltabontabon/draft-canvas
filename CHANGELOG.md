@@ -8,6 +8,16 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-02
+
+### Changed
+
+- Selecting a flow now makes it stand out more clearly against the rest of the diagram: unrelated
+  nodes, connectors, labels, and attachment chips dim further, while the selected flow's own nodes
+  gain a subtle ring (the flow's colour, if it has one) and its connectors read slightly bolder.
+  Attachment chips on connectors outside the selected flow now dim along with everything else,
+  instead of staying at full opacity.
+
 ## [0.1.0] - 2026-09-02
 
 The first production-ready release. Everything below `0.1.0` (`alpha.1` through `beta.2`) was a

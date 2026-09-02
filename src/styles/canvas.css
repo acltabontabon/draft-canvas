@@ -1442,24 +1442,38 @@
  * A flow merely *selected* (not presented) is a gentler preview than either
  * Explain or Focus above: the point is to keep everything on the canvas
  * legible while still making the flow's own path stand out, not to black out
- * the rest of the architecture. No grayscale, and a much softer floor than
- * Explain's 0.22 — this should read as "quietly nudged aside," not "hidden."
- * Same one-attribute-on-the-container technique as the other two.
+ * the rest of the architecture. No grayscale, and a still-softer floor than
+ * Focus's 0.22/0.3 — this should read as "quietly nudged aside," not
+ * "hidden." Same one-attribute-on-the-container technique as the other two.
  */
 .dc-canvas[data-lens='on'] .react-flow__node:not(:has(.dc-node[data-lens-member='true'])) {
-  opacity: 0.65;
+  opacity: 0.45;
   transition: opacity 180ms ease;
 }
 
 .dc-canvas[data-lens='on'] .dc-edge[data-lens-dimmed='true'] {
-  opacity: 0.6;
+  opacity: 0.4;
   transition: opacity 180ms ease;
 }
 
 .dc-edge-label[data-lens-dimmed='true'],
 .dc-edge-step[data-lens-dimmed='true'],
 .dc-edge-meta[data-lens-dimmed='true'] {
-  opacity: 0.6;
+  opacity: 0.4;
+  transition: opacity 180ms ease;
+}
+
+/* A member node's identity is subtle by default — the flow's own accent
+ * colour when it has one, otherwise the existing neutral "stronger border"
+ * token, never a new colour invented just for this. Mirrors the accent tint
+ * member edges already wear (`DraftEdgeView.tsx`'s `lensAccent`). */
+.dc-canvas[data-lens='on'] .dc-node[data-lens-member='true'] {
+  box-shadow: 0 0 0 1.5px var(--dc-lens-accent, var(--dc-border-strong));
+  transition: box-shadow 180ms ease;
+}
+
+.dc-canvas[data-lens='on'] .dc-attachment-chip-row[data-lens-dimmed='true'] {
+  opacity: 0.4;
   transition: opacity 180ms ease;
 }
 

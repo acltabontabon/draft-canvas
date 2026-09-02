@@ -99,6 +99,7 @@ export function AttachmentChipRow({
   cardSide,
   editable,
   actions,
+  dimmed,
   style,
 }: {
   hostKind: 'node' | 'edge';
@@ -107,6 +108,7 @@ export function AttachmentChipRow({
   cardSide: 'above' | 'below';
   editable: boolean;
   actions: AttachmentActions;
+  dimmed?: boolean;
   style?: CSSProperties;
 }) {
   if (!attachments.length) return null;
@@ -114,6 +116,7 @@ export function AttachmentChipRow({
     <div
       className="dc-attachment-chip-row"
       data-flip={cardSide === 'below' ? 'below' : undefined}
+      data-lens-dimmed={dimmed ? 'true' : undefined}
       style={style}
     >
       {attachments.map((attachment, index) => (

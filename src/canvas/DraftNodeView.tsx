@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Handle, NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { maxSizeFor, minSizeFor } from '../document/factory';
 import { explainNodeTier, lensNodeTier, type ExplainTier } from '../document/flow';
@@ -8,6 +8,7 @@ import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
 import { useEditorStore, type EditorStore } from '../store/editorStore';
+import { accentOf, type Theme } from '../render/theme/tokens';
 import { edgeIndex, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
@@ -36,6 +37,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const updateNodeText = useEditorStore((state) => state.updateNodeText);
   const updateNodeById = useEditorStore((state) => state.updateNodeById);
   const theme = useThemeValue();
+  const lensAccent = useEditorStore((state) => lensAccentFor(state, theme, id));
   const { preset } = usePersonality();
   const updateNodeInternals = useUpdateNodeInternals();
   // A boolean, not the id itself: every node's selector runs on every drag
@@ -170,7 +172,13 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-editing={editing ? 'true' : undefined}
       data-attach-target={isAttachTarget ? 'true' : undefined}
       data-reconnect-target={isReconnectTarget ? 'true' : undefined}
-      style={{ width: effectiveWidth, height: effectiveHeight }}
+      style={
+        {
+          width: effectiveWidth,
+          height: effectiveHeight,
+          ...(lensAccent ? { ['--dc-lens-accent']: lensAccent } : {}),
+        } as CSSProperties
+      }
       onDoubleClick={beginEditing}
     >
       {!readOnly && (
@@ -367,6 +375,17 @@ function lensMemberFor(state: EditorStore, id: string): boolean {
   if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active) return false;
   const flow = state.document.flows.find((f) => f.id === state.selectedFlowId);
   return lensNodeTier(flow, edgeIndex(state.document.edges).values(), id) === 'member';
+}
+
+/** A member node's ring colour while lensed, if its flow has one set — mirrors the accent tint
+ *  member edges already wear (`DraftEdgeView.tsx`'s `lensAccent`). Undefined (falling back to a
+ *  neutral border token in CSS) when the flow has no accent, or the node isn't a member. */
+function lensAccentFor(state: EditorStore, theme: Theme, id: string): string | undefined {
+  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active) return undefined;
+  const flow = state.document.flows.find((f) => f.id === state.selectedFlowId);
+  if (!flow?.accent) return undefined;
+  const isMember = lensNodeTier(flow, edgeIndex(state.document.edges).values(), id) === 'member';
+  return isMember ? accentOf(theme, flow.accent).chip : undefined;
 }
 
 export type { DraftNodeData };
