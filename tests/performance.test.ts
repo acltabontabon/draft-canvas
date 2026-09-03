@@ -35,8 +35,8 @@ const CODE_SAMPLE = [
   '}',
 ].join('\n');
 
-function largeDocument(): DraftDocument {
-  const nodes = Array.from({ length: NODE_COUNT }, (_, index) => {
+function largeDocument(nodeCount = NODE_COUNT, edgeCount = EDGE_COUNT): DraftDocument {
+  const nodes = Array.from({ length: nodeCount }, (_, index) => {
     const column = index % 10;
     const row = Math.floor(index / 10);
     if (index % 9 === 0) {
@@ -67,10 +67,10 @@ function largeDocument(): DraftDocument {
     });
   });
 
-  const edges = Array.from({ length: EDGE_COUNT }, (_, index) =>
+  const edges = Array.from({ length: edgeCount }, (_, index) =>
     createEdge({
-      source: nodes[index % NODE_COUNT]!.id,
-      target: nodes[(index * 7 + 3) % NODE_COUNT]!.id,
+      source: nodes[index % nodeCount]!.id,
+      target: nodes[(index * 7 + 3) % nodeCount]!.id,
       label: index % 3 === 0 ? `EVENT_${index}` : undefined,
     }),
   ).filter((edge) => edge.source !== edge.target);
@@ -305,5 +305,41 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
       expect(loaded!.nodes).toHaveLength(NODE_COUNT);
       expect(loaded!.edges.length).toBe(doc.edges.length);
     });
+  });
+});
+
+/**
+ * Evidence-gathering, not a fix: a prior hardening pass flagged
+ * `evaluateAttachCandidates`/`deepestBoundaryAt` (`src/canvas/dragTargets.ts`)
+ * as an unindexed O(n) scan per pointer-move frame, tested only at the
+ * `NODE_COUNT` (100) above — a 50x gap against `LIMITS.maxNodes` (5,000).
+ * This runs the exact same hit-testing loop at that real ceiling and asserts
+ * a budget generous enough to only catch an accidental quadratic, not to
+ * police milliseconds — see the audit's final report for what the measured
+ * numbers turned out to be and whether they warrant a follow-up.
+ */
+describe('drag hit-testing at the schema node/edge ceiling', () => {
+  const ceilingDoc = largeDocument(5000, 9000);
+
+  it('builds the fixture at the intended scale', () => {
+    expect(ceilingDoc.nodes).toHaveLength(5000);
+    expect(ceilingDoc.edges.length).toBeGreaterThan(8000);
+  });
+
+  it('runs attach/reparent hit-testing repeatedly over a 5,000-node document within budget', () => {
+    const dragged = ceilingDoc.nodes[0]!;
+    const draggedRect = { x: dragged.x, y: dragged.y, width: dragged.width, height: dragged.height };
+    const exclude = new Set([dragged.id]);
+
+    const started = performance.now();
+    for (let frame = 0; frame < 60; frame += 1) {
+      const point = { x: draggedRect.x + frame, y: draggedRect.y };
+      evaluateAttachCandidates({ ...draggedRect, x: point.x }, dragged.type, ceilingDoc, exclude);
+      deepestBoundaryAt(point, ceilingDoc, exclude);
+    }
+    // 50x the fixture size the equivalent budget above uses (500ms) — generous
+    // in the same spirit: this exists to catch an accidental quadratic scan,
+    // not to police milliseconds on a variable CI machine.
+    expect(performance.now() - started).toBeLessThan(25_000);
   });
 });
