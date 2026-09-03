@@ -167,6 +167,25 @@ describe('containment', () => {
     expect(descendantsOf(doc, leaf.id)).toEqual([]);
   });
 
+  it('refuses to reparent a node under its own descendant', () => {
+    // `Canvas.tsx`'s drag-drop already excludes this via `descendantsOf`
+    // before ever offering a drop target — this is `setParent` itself
+    // refusing the same cycle, so correctness doesn't depend on every future
+    // caller remembering to pre-filter.
+    const outer = createNode({ type: 'group', x: 0, y: 0, width: 600, height: 600 });
+    const inner = createNode({ type: 'group', x: 50, y: 50, width: 300, height: 300 });
+    let doc = addNodes(createDocument(), [outer, inner]);
+    doc = setParent(doc, [inner.id], outer.id);
+
+    doc = setParent(doc, [outer.id], inner.id);
+
+    const storedOuter = doc.nodes.find((n) => n.id === outer.id)!;
+    expect(storedOuter.parentId).toBeUndefined();
+    // The one already-valid relationship is untouched by the refused attempt.
+    const storedInner = doc.nodes.find((n) => n.id === inner.id)!;
+    expect(storedInner.parentId).toBe(outer.id);
+  });
+
   it('leaves node coordinates untouched by parenting or unparenting', () => {
     const boundary = createNode({ type: 'group', x: 0, y: 0, width: 400, height: 400 });
     const child = createNode({ type: 'note', x: 120, y: 90 });

@@ -112,6 +112,64 @@ describe('undo and redo', () => {
     expect(store.getState().history.future).toHaveLength(0);
   });
 
+  /**
+   * `undo`/`redo` swap `document` directly rather than through `setDocument`
+   * (which resets everything, correctly, for an unrelated document) — so
+   * unlike a fresh open, `selectedFlowId`/`focus`/`flowEdit` used to keep
+   * pointing at ids the restored document no longer has. Confirmed
+   * non-crashing everywhere it's read (every consumer already guards with
+   * `.find()`/optional-chaining), but a real state-hygiene gap: e.g.
+   * undoing a flow's creation while `flowEdit` was on it left the exit
+   * banner silently gone with no way back out. `flowPlayback` already
+   * self-heals the same way via its own effect (`useFlowPlayback.ts`) — this
+   * mirrors that for the three fields undo/redo themselves own.
+   */
+  it('undo clears selectedFlowId when the selected flow no longer exists in the restored document', () => {
+    const flowId = store.getState().createFlow('Checkout');
+    store.getState().setSelectedFlowId(flowId);
+    expect(store.getState().selectedFlowId).toBe(flowId);
+
+    store.getState().undo();
+    expect(store.getState().document.flows).toHaveLength(0);
+    expect(store.getState().selectedFlowId).toBeNull();
+
+    store.getState().redo();
+    expect(store.getState().document.flows).toHaveLength(1);
+    // Redo restores the flow, but does not re-select it on its own — the
+    // reconciliation only ever drops a now-invalid reference, it never
+    // re-adds one that was already cleared.
+    expect(store.getState().selectedFlowId).toBeNull();
+  });
+
+  it('undo exits flow-edit mode when the edited flow no longer exists in the restored document', () => {
+    const flowId = store.getState().createFlow('Checkout');
+    store.getState().enterFlowEdit(flowId);
+    expect(store.getState().flowEdit).toEqual({ active: true, flowId });
+
+    store.getState().undo();
+    expect(store.getState().document.flows).toHaveLength(0);
+    expect(store.getState().flowEdit).toEqual({ active: false, flowId: null });
+  });
+
+  it('undo drops focused ids that no longer exist, exiting focus entirely once none survive', () => {
+    const a = store.getState().addNode({ type: 'note', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'note', x: 100, y: 0 });
+    store.getState().enterFocus([a.id, b.id], []);
+
+    // Undoes only the most recent command — creating `b` — leaving `a` and
+    // the focus set partially, not fully, invalidated.
+    store.getState().undo();
+    expect(store.getState().document.nodes.map((n) => n.id)).toEqual([a.id]);
+    expect(store.getState().focus).toEqual({ active: true, nodeIds: [a.id], edgeIds: [] });
+
+    // Undoing the remaining command removes `a` too — nothing focused
+    // survives, so focus exits entirely rather than being left active with
+    // an empty member set.
+    store.getState().undo();
+    expect(store.getState().document.nodes).toHaveLength(0);
+    expect(store.getState().focus).toEqual({ active: false, nodeIds: [], edgeIds: [] });
+  });
+
   it('keeps the viewport out of the undo stack', () => {
     const before = store.getState().history.past.length;
     store.getState().persistViewport({ x: 100, y: 200, zoom: 1.5 });

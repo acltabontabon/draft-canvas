@@ -641,6 +641,13 @@ export function setParent(
         return rest;
       }
       if (node.parentId === parentId) return node;
+      // A node cannot be reparented under its own descendant — that would
+      // create a cycle `descendantsOf`'s own walk assumes can never exist.
+      // The one caller today (`Canvas.tsx`'s drag-drop) already excludes
+      // these targets before ever offering them as a drop candidate; the
+      // guard lives here too so correctness doesn't depend on every future
+      // caller remembering to pre-filter the same way.
+      if (descendantsOf(doc, node.id).includes(parentId)) return node;
       return { ...node, parentId };
     }),
   );

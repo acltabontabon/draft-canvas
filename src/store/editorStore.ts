@@ -367,6 +367,50 @@ let interaction: Interaction | null = null;
 let lastSystemClipboardText: string | null = null;
 const PASTE_STAGGER_STEP = 16;
 
+/**
+ * `undo`/`redo` swap `document` without going through `setDocument` (which
+ * intentionally resets everything for an unrelated document) — so unlike a
+ * fresh open, they need to keep whatever of `selectedFlowId`/`focus`/
+ * `flowEdit` still resolves against the *restored* document, and drop only
+ * what doesn't. `flowPlayback` already self-heals this way via its own
+ * effect (`useFlowPlayback.ts`) for the same reason: landing on a document
+ * where the flow/nodes/edges you had selected no longer exist shouldn't
+ * strand you in a mode with no visible way out (e.g. `flowEdit.active: true`
+ * with its exit banner silently gone).
+ */
+function reconcileSessionState(
+  document: DraftDocument,
+  state: Pick<EditorStore, 'selectedFlowId' | 'focus' | 'flowEdit'>,
+): Partial<EditorStore> {
+  const patch: Partial<EditorStore> = {};
+
+  if (state.selectedFlowId && !document.flows.some((flow) => flow.id === state.selectedFlowId)) {
+    patch.selectedFlowId = null;
+  }
+
+  if (state.flowEdit.active && state.flowEdit.flowId && !document.flows.some((flow) => flow.id === state.flowEdit.flowId)) {
+    patch.flowEdit = { active: false, flowId: null };
+  }
+
+  if (state.focus.active) {
+    const nodeIds = new Set(document.nodes.map((node) => node.id));
+    const edgeIds = new Set(document.edges.map((edge) => edge.id));
+    const survivingNodeIds = state.focus.nodeIds.filter((id) => nodeIds.has(id));
+    const survivingEdgeIds = state.focus.edgeIds.filter((id) => edgeIds.has(id));
+    if (
+      survivingNodeIds.length !== state.focus.nodeIds.length ||
+      survivingEdgeIds.length !== state.focus.edgeIds.length
+    ) {
+      patch.focus =
+        survivingNodeIds.length + survivingEdgeIds.length === 0
+          ? { active: false, nodeIds: [], edgeIds: [] }
+          : { active: true, nodeIds: survivingNodeIds, edgeIds: survivingEdgeIds };
+    }
+  }
+
+  return patch;
+}
+
 export const useEditorStore = create<EditorStore>((set, get) => ({
   document: createDocument(),
   history: EMPTY_HISTORY,
@@ -980,6 +1024,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       document: entry.before,
       selection: entry.selectionBefore,
       revision: s.revision + 1,
+      ...reconcileSessionState(entry.before, s),
     }));
   },
 
@@ -992,6 +1037,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       document: entry.after,
       selection: entry.selectionAfter,
       revision: s.revision + 1,
+      ...reconcileSessionState(entry.after, s),
     }));
   },
 
