@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -8,6 +8,7 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   useReactFlow,
+  useStore,
   type Connection,
   type FinalConnectionState,
   type EdgeChange,
@@ -280,18 +281,6 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
    */
   const dwellTimer = useRef<number | null>(null);
   const dwellTargetId = useRef<string | null>(null);
-  /**
-   * A marquee (rubber-band) drag drives edge selection through a second,
-   * internal React Flow pathway that bypasses the controlled `edges` prop
-   * entirely — unlike a plain click, which has no such pathway and relies on
-   * `onEdgesChange`'s own `'select'` change as the only place that ever
-   * happens. Applying that same change on top of the marquee's own pathway
-   * is what raced (see `onEdgesChange`); only marquee gestures need to skip
-   * it, so this ref (not e.g. a `useState`) tracks it without asking for a
-   * render no one needs.
-   */
-  const marqueeActive = useRef(false);
-
   const clearDwell = useCallback(() => {
     if (dwellTimer.current !== null) {
       window.clearTimeout(dwellTimer.current);
@@ -299,9 +288,17 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
     }
     dwellTargetId.current = null;
   }, []);
+  // Every other call site clears the dwell timer at a specific gesture
+  // event; nothing previously cleared it if `Canvas` itself unmounted
+  // mid-dwell (e.g. closing the document mid-drag).
+  useEffect(() => clearDwell, [clearDwell]);
 
   const selectedNodes = useMemo(() => new Set(selection.nodes), [selection.nodes]);
   const selectedEdges = useMemo(() => new Set(selection.edges), [selection.edges]);
+
+  // React Flow's own marquee (rubber-band) selection state — see `onEdgesChange`
+  // for why this is read here.
+  const userSelectionActive = useStore((state) => state.userSelectionActive);
 
   /**
    * The rendered arrays are derived from the document during render rather than
@@ -520,25 +517,24 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
    * moment a marquee drag included any edge. So only during a marquee is a
    * `'select'` change here redundant with what the store-driven path is
    * about to do anyway — skip it exactly then, and only then.
+   *
+   * `userSelectionActive` is React Flow's own store flag for "a marquee is
+   * in progress" (read via `useStore` above), not a ref this file maintains
+   * itself — React Flow resets it unconditionally on every qualifying
+   * pointer-up via native pointer capture, so it can't desync from what's
+   * actually happening the way a hand-rolled ref tracking the same thing
+   * could (e.g. if an interrupted gesture ever left a local ref stuck).
    */
   const onEdgesChange = useCallback(
     (changes: EdgeChange<DraftRfEdge>[]) => {
-      const rest = marqueeActive.current
+      const rest = userSelectionActive
         ? changes.filter((change) => change.type !== 'select')
         : changes;
       if (rest.length === 0) return;
       setEdges((current) => applyEdgeChanges(rest, current));
     },
-    [setEdges],
+    [setEdges, userSelectionActive],
   );
-
-  const onSelectionStart = useCallback(() => {
-    marqueeActive.current = true;
-  }, []);
-
-  const onSelectionEnd = useCallback(() => {
-    marqueeActive.current = false;
-  }, []);
 
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodeList, edges: selectedEdgeList }: OnSelectionChangeParams) => {
@@ -847,8 +843,6 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onSelectionChange={onSelectionChange}
-        onSelectionStart={onSelectionStart}
-        onSelectionEnd={onSelectionEnd}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}

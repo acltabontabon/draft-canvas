@@ -318,6 +318,91 @@ test.describe('editing', () => {
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
   });
 
+  test('a marquee released over the toolbar still resets selection state cleanly', async ({ page }) => {
+    // The fix for the test above reads React Flow's own `userSelectionActive`
+    // store flag instead of a hand-rolled ref set by `onSelectionStart`/
+    // `onSelectionEnd` props — this exercises that the flag still resets
+    // correctly when the release point is outside the canvas pane itself,
+    // which native pointer capture (not this app's own prop callbacks) is
+    // what actually guarantees.
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await newCanvas(page, 'Marquee released outside canvas');
+    await create(page, 'Service', { x: 300, y: 250 });
+    await create(page, 'Data Store', { x: 600, y: 250 });
+    await connect(page, 0, 1);
+
+    await page.mouse.move(200, 150);
+    await page.mouse.down();
+    await page.mouse.move(760, 420, { steps: 12 });
+    await page.mouse.move(400, 20, { steps: 6 }); // over the toolbar, above the canvas pane
+    await page.mouse.up();
+
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    expect(errors).toEqual([]);
+
+    // A subsequent, ordinary marquee still works correctly — the real
+    // regression signal, proving no stale state carried over.
+    await page.mouse.move(200, 150);
+    await page.mouse.down();
+    await page.mouse.move(760, 420, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
+    expect(errors).toEqual([]);
+  });
+
+  test('two marquee gestures back-to-back never leave stale selection state', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await newCanvas(page, 'Back-to-back marquees');
+    await create(page, 'Service', { x: 300, y: 250 });
+    await create(page, 'Data Store', { x: 600, y: 250 });
+    await connect(page, 0, 1);
+
+    // The exact marquee that used to crash the app (see the test above),
+    // fired twice in a row with no deliberate pause — re-exercises
+    // `onSelectionStart` → filtered `onEdgesChange` → reset all over again
+    // immediately, rather than only once.
+    for (let i = 0; i < 2; i += 1) {
+      await page.mouse.move(200, 150);
+      await page.mouse.down();
+      await page.mouse.move(760, 420, { steps: 10 });
+      await page.mouse.up();
+    }
+
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    expect(errors).toEqual([]);
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
+  });
+
+  test('losing window focus mid-marquee never crashes the app', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await newCanvas(page, 'Blur mid-marquee');
+    await create(page, 'Service', { x: 300, y: 250 });
+    await create(page, 'Data Store', { x: 600, y: 250 });
+    await connect(page, 0, 1);
+
+    await page.mouse.move(200, 150);
+    await page.mouse.down();
+    await page.mouse.move(760, 420, { steps: 12 });
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await page.mouse.up();
+
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    expect(errors).toEqual([]);
+
+    // A subsequent ordinary marquee still works — proves no stuck state.
+    await page.mouse.move(200, 150);
+    await page.mouse.down();
+    await page.mouse.move(760, 420, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
+  });
+
   test('aligns and distributes a multi-selection via the Inspector', async ({ page }) => {
     await newCanvas(page, 'Align and distribute');
     await create(page, 'Service', { x: 300, y: 220 });

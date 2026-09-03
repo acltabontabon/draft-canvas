@@ -65,6 +65,13 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const [resizing, setResizing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copiedTimeout = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (copiedTimeout.current !== null) window.clearTimeout(copiedTimeout.current);
+    },
+    [],
+  );
 
   // Handles move with the node's size, so React Flow has to re-measure them.
   useEffect(() => {
@@ -219,8 +226,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           onClick={(event) => {
             event.stopPropagation();
             void navigator.clipboard.writeText(node.code ?? '').then(() => {
+              if (copiedTimeout.current !== null) window.clearTimeout(copiedTimeout.current);
               setCopied(true);
-              window.setTimeout(() => setCopied(false), 1200);
+              copiedTimeout.current = window.setTimeout(() => {
+                copiedTimeout.current = null;
+                setCopied(false);
+              }, 1200);
             });
           }}
         >
