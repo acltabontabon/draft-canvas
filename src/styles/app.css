@@ -1663,6 +1663,32 @@ kbd {
   background: var(--dc-surface-raised);
 }
 
+/* --------------------------------------------------------- error boundary -- */
+
+.dc-error-boundary {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px;
+  text-align: center;
+}
+
+.dc-error-boundary-message {
+  margin: 0;
+  max-width: 420px;
+  color: var(--dc-text-muted);
+  font-size: 15px;
+}
+
+.dc-error-boundary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* --------------------------------------------------------------- toasts -- */
 
 .dc-toasts {

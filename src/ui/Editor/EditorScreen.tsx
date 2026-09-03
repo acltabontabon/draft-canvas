@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { Canvas } from '../../canvas/Canvas';
@@ -8,6 +8,7 @@ import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { createEdge, createNode } from '../../document/factory';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
+import { logDiagnostic } from '../../lib/diagnostics';
 import { useEditorStore } from '../../store/editorStore';
 import { pointer, useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
@@ -25,6 +26,7 @@ import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
 import { Toolbar } from './Toolbar';
 import { Button } from '../common/Button';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 
 /** Sample content for a fresh code card, so it is never a blank grey box. */
 const CODE_SAMPLES: Record<string, string> = {
@@ -49,6 +51,11 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   const theme = useThemeValue();
   const playback = useFlowPlayback();
   const { fitView, screenToFlowPosition } = useReactFlow();
+
+  // Bumped to force a clean remount of the boundary + Canvas below, e.g. from
+  // the "Reload canvas" recovery action — a fresh `key` discards whatever
+  // local component state the crashed instance was carrying.
+  const [canvasInstanceKey, setCanvasInstanceKey] = useState(0);
 
   const createAt = useCallback(
     (preset: Preset, position: { x: number; y: number }) => {
@@ -152,15 +159,34 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       )}
 
       <div className="dc-editor-canvas">
-        <Canvas
-          onCreateAt={(position) => armed && createAt(armed, position)}
-          onQuickConnectMenu={(source, sourceSide, sourceOffset, flowPosition, screenPosition) =>
-            setQuickConnect({ source, sourceSide, sourceOffset, flowPosition, screenPosition })
+        <ErrorBoundary
+          key={canvasInstanceKey}
+          scope="canvas"
+          message="Something went wrong while rendering this canvas."
+          actions={[
+            { label: 'Reload canvas', onClick: () => setCanvasInstanceKey((k) => k + 1) },
+            {
+              label: 'Restore last-known-good',
+              onClick: () => {
+                void session.openDocument(session.openId!).then(() => setCanvasInstanceKey((k) => k + 1));
+              },
+            },
+            { label: 'Return home', onClick: () => void session.closeDocument() },
+          ]}
+          onError={(error, componentStack) =>
+            logDiagnostic(error, { operation: 'canvas-render', documentId: session.openId }, componentStack)
           }
-          onEmptyCanvasMenu={(flowPosition, screenPosition) =>
-            setQuickConnect({ flowPosition, screenPosition })
-          }
-        />
+        >
+          <Canvas
+            onCreateAt={(position) => armed && createAt(armed, position)}
+            onQuickConnectMenu={(source, sourceSide, sourceOffset, flowPosition, screenPosition) =>
+              setQuickConnect({ source, sourceSide, sourceOffset, flowPosition, screenPosition })
+            }
+            onEmptyCanvasMenu={(flowPosition, screenPosition) =>
+              setQuickConnect({ flowPosition, screenPosition })
+            }
+          />
+        </ErrorBoundary>
         {quickConnect && (
           <QuickConnectMenu
             screenPosition={quickConnect.screenPosition}
