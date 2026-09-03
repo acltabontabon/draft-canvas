@@ -7,6 +7,7 @@ import { MemoryRepository } from '../src/storage/MemoryRepository';
 import { Autosave } from '../src/storage/autosave';
 import { QuotaExceededError } from '../src/storage/DraftRepository';
 import { decryptDocument } from '../src/crypto/documentCipher';
+import * as documentCipher from '../src/crypto/documentCipher';
 import { getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/keyStore';
 import { isEncryptedBody } from '../src/crypto/migrateStorage';
 import type { EncryptedBody } from '../src/crypto/types';
@@ -183,6 +184,48 @@ describe('local persistence', () => {
     const key = await getOrCreateMasterKey();
     const decrypted = await decryptDocument(raw as EncryptedBody, key);
     expect((decrypted as { version: number }).version).toBe(CURRENT_VERSION);
+  });
+
+  it('load() resolves null rather than rejecting when the raw record cannot be read', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Unreadable row', 2);
+    await repository.save(doc);
+
+    const dbField = (repository as unknown as { db: { get: (...args: unknown[]) => unknown } }).db;
+    vi.spyOn(dbField, 'get').mockRejectedValueOnce(new Error('simulated IndexedDB read failure'));
+
+    await expect(repository.load(doc.metadata.id)).resolves.toBeNull();
+  });
+
+  it('a failed self-verification during a migration resave leaves the original record on disk untouched, but load() still returns the migrated document', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Verify failure', 2);
+    const [a, b] = doc.nodes;
+    await writeLegacyPlaintextRow({
+      ...doc,
+      version: 2,
+      edges: [{ id: 'e1', source: a!.id, target: b!.id, directed: true, routing: 'smoothstep' }],
+    });
+
+    // The only `decryptDocument` call this scenario reaches is `saveVerified`'s
+    // own internal verify step — the legacy row itself is plaintext, so
+    // `load()` never decrypts to read it.
+    const spy = vi.spyOn(documentCipher, 'decryptDocument').mockResolvedValueOnce(null);
+
+    const loaded = await repository.load(doc.metadata.id);
+    // The caller still gets the correctly migrated in-memory document even
+    // though persisting it failed self-verification.
+    expect(loaded).not.toBeNull();
+    expect(loaded!.version).toBe(CURRENT_VERSION);
+    expect(loaded!.edges[0]!.sourceAnchor).toBeDefined();
+
+    // The original row on disk was never overwritten — reading it back
+    // directly still finds the original legacy plaintext shape, not a
+    // partially-written or corrupted encrypted one.
+    const raw = await readRawRow(doc.metadata.id);
+    expect(isEncryptedBody(raw)).toBe(false);
+
+    spy.mockRestore();
   });
 
   it('returns null for a record too broken to recognise', async () => {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
 import { createId } from '../document/ids';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
+import { logDiagnostic } from '../lib/diagnostics';
 import { Autosave } from '../storage/autosave';
 import { getRepository, type DraftRepository } from '../storage';
 import { IndexedDbRepository } from '../storage/IndexedDbRepository';
@@ -56,8 +57,16 @@ export function useDocumentSession(): DocumentSession {
       const repo = await getRepository();
       if (cancelled) return;
       setRepository(repo);
-      setLibrary(await repo.list());
-      setProjects(await repo.listProjects());
+      try {
+        setLibrary(await repo.list());
+        setProjects(await repo.listProjects());
+      } catch (error) {
+        // Without this, a thrown `list()`/`listProjects()` left `ready`
+        // false forever — the Library screen shows "Opening local
+        // storage…" indefinitely, with no error and no way to retry.
+        logDiagnostic(error, { operation: 'library-startup' });
+        notify('Could not read your local diagrams. Try reloading the page.', 'error');
+      }
       setReady(true);
       if (!repo.durable) {
         notify(
@@ -146,12 +155,25 @@ export function useDocumentSession(): DocumentSession {
   const adoptDocument = useCallback(
     async (incoming: DraftDocument) => {
       if (!repository) return;
-      await repository.save(incoming);
-      useEditorStore.getState().setDocument(incoming);
-      setOpenId(incoming.metadata.id);
+      // A `projectId` from a document authored in a different browser
+      // profile (or whose project was deleted here) would make the canvas
+      // invisible in the Library — excluded from Unorganized, with no
+      // reachable project view to move it out of. Repair, don't reject: the
+      // same discipline `document/validate.ts` already applies to every
+      // other unresolvable reference, just one layer up (a pure function has
+      // no repository to check the real project list against).
+      let document = incoming;
+      if (incoming.metadata.projectId && !projects.some((p) => p.id === incoming.metadata.projectId)) {
+        const metadata = { ...incoming.metadata };
+        delete metadata.projectId;
+        document = { ...incoming, metadata };
+      }
+      await repository.save(document);
+      useEditorStore.getState().setDocument(document);
+      setOpenId(document.metadata.id);
       await refreshLibrary();
     },
-    [refreshLibrary, repository],
+    [projects, refreshLibrary, repository],
   );
 
   const newDocument = useCallback(
@@ -170,43 +192,58 @@ export function useDocumentSession(): DocumentSession {
   const renameDocument = useCallback(
     async (id: string, title: string) => {
       if (!repository) return;
-      await repository.rename(id, title);
-      await refreshLibrary();
+      try {
+        await repository.rename(id, title);
+        await refreshLibrary();
+      } catch (error) {
+        logDiagnostic(error, { operation: 'rename-document', documentId: id });
+        notify('Could not rename that diagram — local storage may be full or unavailable.', 'error');
+      }
     },
-    [refreshLibrary, repository],
+    [notify, refreshLibrary, repository],
   );
 
   const duplicateDocument = useCallback(
     async (id: string) => {
       if (!repository) return;
-      const source = await repository.load(id);
-      if (!source) return;
-      const clone = cloneDocumentAsNew(source, `${source.metadata.title} copy`);
-      await repository.save(clone);
-      // A configured background is part of what the user set up for this
-      // diagram — "Duplicate" should never silently drop it.
-      if (source.settings.background.enabled) {
-        const image = await repository.loadBackgroundImage(id);
-        if (image) {
-          await repository.saveBackgroundImage(clone.metadata.id, image.blob, {
-            width: image.width,
-            height: image.height,
-          });
+      try {
+        const source = await repository.load(id);
+        if (!source) return;
+        const clone = cloneDocumentAsNew(source, `${source.metadata.title} copy`);
+        await repository.save(clone);
+        // A configured background is part of what the user set up for this
+        // diagram — "Duplicate" should never silently drop it.
+        if (source.settings.background.enabled) {
+          const image = await repository.loadBackgroundImage(id);
+          if (image) {
+            await repository.saveBackgroundImage(clone.metadata.id, image.blob, {
+              width: image.width,
+              height: image.height,
+            });
+          }
         }
+        await refreshLibrary();
+      } catch (error) {
+        logDiagnostic(error, { operation: 'duplicate-document', documentId: id });
+        notify('Could not duplicate that diagram — local storage may be full or unavailable.', 'error');
       }
-      await refreshLibrary();
     },
-    [refreshLibrary, repository],
+    [notify, refreshLibrary, repository],
   );
 
   const deleteDocument = useCallback(
     async (id: string) => {
       if (!repository) return;
-      await repository.remove(id);
-      if (openId === id) setOpenId(null);
-      await refreshLibrary();
+      try {
+        await repository.remove(id);
+        if (openId === id) setOpenId(null);
+        await refreshLibrary();
+      } catch (error) {
+        logDiagnostic(error, { operation: 'delete-document', documentId: id });
+        notify('Could not delete that diagram — local storage may be full or unavailable.', 'error');
+      }
     },
-    [openId, refreshLibrary, repository],
+    [notify, openId, refreshLibrary, repository],
   );
 
   const refreshProjects = useCallback(async () => {
@@ -249,10 +286,15 @@ export function useDocumentSession(): DocumentSession {
   const moveDocumentToProject = useCallback(
     async (id: string, projectId: string | undefined) => {
       if (!repository) return;
-      await repository.moveDocumentToProject(id, projectId);
-      await refreshLibrary();
+      try {
+        await repository.moveDocumentToProject(id, projectId);
+        await refreshLibrary();
+      } catch (error) {
+        logDiagnostic(error, { operation: 'move-document-to-project', documentId: id });
+        notify('Could not move that diagram — local storage may be full or unavailable.', 'error');
+      }
     },
-    [refreshLibrary, repository],
+    [notify, refreshLibrary, repository],
   );
 
   return {

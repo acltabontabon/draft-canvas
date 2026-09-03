@@ -132,8 +132,20 @@ export class IndexedDbRepository implements DraftRepository {
    * edge dropped) is left for the next real edit to persist, same as always.
    */
   async load(id: string): Promise<DraftDocument | null> {
-    const row = await this.db.get('bodies', id);
-    if (!row) return null;
+    let fetched;
+    try {
+      fetched = await this.db.get('bodies', id);
+    } catch (error) {
+      console.warn(`[draft-canvas] Local record ${id} could not be read from IndexedDB:`, error);
+      return null;
+    }
+    if (!fetched) return null;
+    // Re-bound to a `const` here on purpose: TypeScript's aliased-condition
+    // narrowing (used below via `wasEncrypted`) only holds for a binding it
+    // can prove is never reassigned — `fetched` above is `let` only because
+    // the try/catch needs to assign it, so `row` is a plain `const` copy
+    // narrowing can actually track.
+    const row = fetched;
 
     const wasEncrypted = isEncryptedBody(row);
     let rawDocument: unknown;
@@ -161,7 +173,18 @@ export class IndexedDbRepository implements DraftRepository {
 
     const priorVersion = isRecord(rawDocument) ? rawDocument.version : undefined;
     if (!wasEncrypted || priorVersion !== result.document.version) {
-      await this.save(result.document);
+      // Best-effort: the caller still gets the correctly migrated in-memory
+      // document either way, and the next real edit persists it through the
+      // ordinary `save()` path — a failure here only loses the "derive once"
+      // optimisation, never correctness.
+      try {
+        await this.saveVerified(result.document);
+      } catch (error) {
+        console.warn(
+          `[draft-canvas] Could not persist the migrated copy of record ${id}; continuing with the in-memory version:`,
+          error,
+        );
+      }
     }
     return result.document;
   }
@@ -183,6 +206,36 @@ export class IndexedDbRepository implements DraftRepository {
     } catch (error) {
       if (isQuotaError(error)) throw new QuotaExceededError(error);
       throw error;
+    }
+  }
+
+  /**
+   * Same write `save()` does, plus one extra step: the freshly encrypted
+   * body is decrypted back and compared before it ever replaces the row on
+   * disk — the same encrypt → verify → atomic-put contract
+   * `migrateLegacyRecord` already uses for the legacy-encryption sweep.
+   * Scoped to `load()`'s migration resave only, not the far hotter ordinary
+   * `save()` path autosave calls on every edit, where an extra decrypt round
+   * trip would add real, unrequested cost with no evidence it's needed.
+   */
+  private async saveVerified(document: DraftDocument): Promise<void> {
+    const key = await getOrCreateMasterKey();
+    const encrypted = await encryptDocument(document, key);
+    const verified = await decryptDocument(encrypted, key);
+    if (verified === null) {
+      throw new Error(
+        `Migrated record ${document.metadata.id} failed self-verification; leaving the original on disk untouched.`,
+      );
+    }
+    const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
+    await Promise.all([
+      tx.objectStore('documents').put(summarize(document)),
+      tx.objectStore('bodies').put(encrypted),
+      tx.done,
+    ]);
+    if (!persistenceRequested) {
+      persistenceRequested = true;
+      requestPersistentStorage();
     }
   }
 
