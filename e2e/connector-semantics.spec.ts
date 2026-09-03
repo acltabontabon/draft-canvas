@@ -105,8 +105,9 @@ test.describe('contextual connector toolbar', () => {
 
   test('the Interaction type select keeps the full vocabulary for an unclassified pairing', async ({ page }) => {
     // Two plain, unclassified shapes have no capability-matrix entry at all — the generic
-    // Interaction section falls back to the full, unrestricted `EDGE_SEMANTICS` list. (Junction
-    // is *not* such a pairing — see the dedicated "Junction connector" describe block below.)
+    // Interaction section falls back to the full, unrestricted `EDGE_SEMANTICS` list. An unfed
+    // Junction ends up here too, but for a different reason — see the dedicated "Junction
+    // connector" describe block below.
     await newCanvas(page, 'Unfiltered relation list');
     await create(page, 'Text', { x: 300, y: 200 });
     await create(page, 'Text', { x: 600, y: 200 });
@@ -261,32 +262,57 @@ test.describe('contextual connector toolbar', () => {
 });
 
 test.describe('Junction connector', () => {
-  // A Junction (`ellipse`) is a routing/convergence point, not a system component — see
-  // `connectorSemantics.ts`'s `'junction'` category and `EdgeInspectorPopover.tsx`'s
-  // `involvesJunction`. Neither leg of Service↔Junction gets the Interaction section (protocol,
-  // HTTP verbs, flow kind) or the Condition field; Route and Style stay exactly as every other
-  // connector's do.
-  test('Service → Junction shows no Interaction section and no Condition field', async ({ page }) => {
+  // A Junction (`ellipse`) is a routing/convergence point with no semantic identity of its own —
+  // see `connectorSemantics.ts`'s `'junction'` category and `resolveTransparentCategory`, and
+  // `EdgeInspectorPopover.tsx`'s `touchesJunction`. It is semantically *transparent*, not blank:
+  // an edge touching one resolves through it to whatever real node(s) actually feed/receive it,
+  // reusing the exact same Interaction UI (and endpoint-compatibility rules) a direct connection
+  // between those real nodes would get — narrowed options, the opinionated Service↔Service
+  // editor, all of it. Only two things are unconditionally different from a direct connection: the
+  // free-text Condition field never shows (a Junction has nothing of its own to attach a condition
+  // to), and an edge leaving one frames its own label as a branch name. A Junction with nothing
+  // else feeding the relevant side (an "unfed convergence") has nothing to resolve through, so it
+  // falls back to the full, unrestricted picker — the same fallback an unclassified pairing gets,
+  // for the same reason (no capability-matrix opinion).
+  test('Service → Junction (unfed) falls back to the full Interaction picker, with no Condition', async ({
+    page,
+  }) => {
     await newCanvas(page, 'Service to junction');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Junction', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await expect(page.getByRole('button', { name: 'Interaction type' })).toHaveCount(0);
-    await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
+    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('No type');
+    await inspectorSelect(page, 'Interaction type').click();
+    await expect(page.getByRole('option')).toHaveText([
+      'No type',
+      'HTTP',
+      'Event',
+      'Command',
+      'Query',
+      'Reads',
+      'Writes',
+      'Publishes',
+      'Consumes',
+      'Calls',
+      'Depends on',
+    ]);
+    await page.keyboard.press('Escape');
+
+    await expect(inspectorSelect(page, 'Flow kind')).toHaveText('No kind');
     await expect(inspectorSelect(page, 'Protocol')).toHaveCount(0);
     await expect(page.getByLabel('Condition')).toHaveCount(0);
     await expect(page.getByLabel('Request', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Response', { exact: true })).toHaveCount(0);
 
-    // Route and Style are untouched — a Junction connector is simplified, not stripped down.
+    // Route and Style are untouched.
     await expect(inspectorSelect(page, 'Connector shape')).toHaveText('Stepped');
     await expect(page.getByRole('button', { name: 'Arrow', exact: true })).toBeVisible();
 
     await expect(page.getByTitle('Rename connector')).toHaveText('Add label…');
   });
 
-  test('Junction → Service also drops the Interaction section, and offers a branch-label placeholder', async ({
+  test('Junction → Service (unfed) also falls back to the full picker, and offers a branch-label placeholder', async ({
     page,
   }) => {
     await newCanvas(page, 'Junction to service');
@@ -294,7 +320,7 @@ test.describe('Junction connector', () => {
     await create(page, 'Service', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await expect(page.getByRole('button', { name: 'Interaction type' })).toHaveCount(0);
+    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('No type');
     await expect(page.getByLabel('Condition')).toHaveCount(0);
 
     const caption = page.getByTitle('Rename connector');
@@ -306,15 +332,40 @@ test.describe('Junction connector', () => {
     await expect(page.locator('.dc-edge-label')).toHaveText('approved');
   });
 
-  test('a Junction-connected edge never gets the opinionated Service→Service editor either', async ({ page }) => {
-    // Two Junctions in a row (or a Junction sitting between two services) must not accidentally
-    // read as a service call just because a service is on one end.
+  test('a Junction chain with nothing else feeding it also falls back to the full picker, never the opinionated Service→Service editor', async ({
+    page,
+  }) => {
     await newCanvas(page, 'Junction chain');
     await create(page, 'Junction', { x: 300, y: 200 });
     await create(page, 'Junction', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
     await expect(inspectorSelect(page, 'Protocol')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Interaction type' })).toHaveCount(0);
+    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('No type');
+  });
+
+  test('Service → Junction → Database inherits Writes through the Junction, exactly like a direct connection', async ({
+    page,
+  }) => {
+    // The "smart inheritance" case: a Junction fed by exactly one real category on the relevant
+    // side resolves transparently to it, reusing that pairing's own narrowed capability — not the
+    // full picker (that fallback is only for an unfed or ambiguous convergence, covered above).
+    await newCanvas(page, 'Junction smart inheritance');
+    await create(page, 'Service', { x: 200, y: 200 });
+    await create(page, 'Junction', { x: 500, y: 200 });
+    await create(page, 'Data Store', { x: 800, y: 200 });
+    await connect(page, 0, 1);
+    // The first connection auto-selects its edge, opening a popover that covers the Junction
+    // node and would block the next `connect()` call's hover on it.
+    await page.keyboard.press('Escape');
+    await connect(page, 1, 2);
+
+    // Select the Junction → Database leg specifically.
+    await page.locator('.dc-edge').nth(1).click();
+    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Writes');
+    // `service>database`'s capability has no behaviour options of its own, so the picker
+    // collapses to a badge instead of an open `InspectorSelect` — same as a direct connection.
+    await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
+    await expect(page.getByLabel('Condition')).toHaveCount(0);
   });
 });
