@@ -128,6 +128,50 @@ describe('v2 to v3 migration: connector anchors', () => {
 });
 
 /**
+ * A `version` field can be corrupted (hand edit, a bug in some other tool,
+ * bit rot) rather than merely absent. `migrateToCurrent` used to treat any
+ * non-integer or out-of-range value as an immediate no-op — relabelling
+ * straight to v1 without running a single migration — which would silently
+ * misinterpret a genuinely old-shaped document instead of repairing it. The
+ * fix clamps the malformed value down to v1 and lets the ordinary migration
+ * chain run from there, same as ever.
+ */
+describe('corrupted or nonsensical version fields', () => {
+  /** Same v1-shaped fixture as the legacy-sequence test above, just with a
+   *  corrupted `version` in place of the plain `1`. */
+  function legacyFixture(version: unknown) {
+    return {
+      format: DRAFT_FORMAT,
+      version,
+      metadata: { id: 'd1', title: 'Very old', createdAt: 0, updatedAt: 0 },
+      nodes: [
+        { id: 'a', type: 'note', x: 0, y: 0, width: 100, height: 60 },
+        { id: 'b', type: 'note', x: 300, y: 0, width: 100, height: 60 },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'b', sequence: 1 }],
+    };
+  }
+
+  // Passed as objects, not JSON strings — `JSON.stringify` would turn `NaN`
+  // into `null` before it ever reached `migrateToCurrent`, which is a
+  // different (already-handled) case; `parseDocument` accepts a raw value
+  // just as readily as a JSON string, so this exercises the real value.
+  it.each([['NaN', Number.NaN], ['fractional', 1.5], ['zero', 0], ['negative', -3]])(
+    'still runs the full migration chain for a %s version, not just relabelling it',
+    (_label, version) => {
+      const result = parseDocument(legacyFixture(version));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.document.version).toBe(CURRENT_VERSION);
+      // Only present once the v2→v3 anchor-backfill migration has actually
+      // run — proves the chain executed rather than being skipped.
+      expect(result.document.edges[0]!.sourceAnchor).toBeDefined();
+      expect(result.document.edges[0]!.targetAnchor).toBeDefined();
+    },
+  );
+});
+
+/**
  * The v3→v4 migration: v3 has no concept of a flow accent at all, so there is
  * nothing to backfill — the migration is a structural no-op. Its only job is
  * to exist as an explicit `MIGRATIONS` entry so the version funnel does not

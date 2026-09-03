@@ -254,11 +254,14 @@ export function migrateToCurrent(raw: Record<string, unknown>): {
   doc: Record<string, unknown>;
   applied: number[];
 } {
-  const version = typeof raw.version === 'number' ? raw.version : 1;
-  if (!Number.isInteger(version) || version < 1) {
-    // Treat nonsense as the oldest known format and let the normalizer repair it.
-    return { doc: { ...raw, version: 1 }, applied: [] };
-  }
+  const rawVersion = typeof raw.version === 'number' ? raw.version : 1;
+  // A non-integer or out-of-range version (corruption, a hand edit) is
+  // treated as the oldest known format — and, critically, still runs the
+  // full migration chain below rather than jumping straight past it:
+  // `normalizeDocument` only recognises the *current* field layout, so a
+  // genuinely old-shaped document landing here unmigrated would have its
+  // old field names silently unrecognised instead of repaired.
+  const version = Number.isInteger(rawVersion) && rawVersion >= 1 ? rawVersion : 1;
   if (version > CURRENT_VERSION) throw new UnsupportedVersionError(version);
 
   let doc = raw;

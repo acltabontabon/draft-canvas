@@ -180,6 +180,16 @@ export function parseDocument(input: unknown): NormalizeResult {
   return normalizeDocument(migrated, repairs);
 }
 
+/**
+ * Repairs and reshapes a raw value into a valid `DraftDocument` — does NOT
+ * run schema migrations (see `migrateToCurrent` / `parseDocument`). Calling
+ * this directly on a document whose `version` predates the current schema
+ * will leave old-shaped fields unrecognised rather than migrated. Every real
+ * document source (IndexedDB, file import, clipboard) goes through
+ * `parseDocument`, which runs `migrateToCurrent` first — this is exported
+ * separately only so tests can exercise repair behaviour in isolation,
+ * already at current-schema shape.
+ */
 export function normalizeDocument(raw: unknown, repairs: string[] = []): NormalizeResult {
   if (!isRecord(raw)) return { ok: false, error: 'That document is empty or unreadable.' };
 
@@ -361,6 +371,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   const seenEdgeIds = new Set<string>();
   const edges: DraftEdge[] = [];
   let droppedEdges = 0;
+  let droppedSelfLoopEdges = 0;
   /** Maps the edge id as written in the file to the id we actually used — flows resolve through this. */
   const edgeIdRemap = new Map<string, string>();
 
@@ -375,6 +386,14 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
       typeof candidate.target === 'string' ? nodeIdRemap.get(candidate.target) : undefined;
     if (!source || !target || !byId.has(source) || !byId.has(target)) {
       droppedEdges += 1;
+      continue;
+    }
+    // In-app `connect()` already refuses a self-loop; a file can still
+    // contain one (hand-edited, or written by a different tool), and nothing
+    // downstream (routing, hit-testing) expects a connector with the same
+    // node at both ends.
+    if (source === target) {
+      droppedSelfLoopEdges += 1;
       continue;
     }
 
@@ -497,6 +516,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   if (droppedEdges > 0) {
     repairs.push(`Dropped ${droppedEdges} connection(s) pointing at nodes that do not exist.`);
   }
+  if (droppedSelfLoopEdges > 0) {
+    repairs.push(`Dropped ${droppedSelfLoopEdges} connection(s) that pointed a node at itself.`);
+  }
   if (droppedEdgeAttachments > 0) {
     repairs.push(`Dropped ${droppedEdgeAttachments} unreadable connection attachment(s).`);
   }
@@ -510,13 +532,16 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   const flows: DraftFlow[] = [];
   let droppedFlows = 0;
   let droppedFlowSteps = 0;
+  const seenFlowIds = new Set<string>();
 
   for (const candidateFlow of rawFlows.slice(0, LIMITS.maxFlows)) {
     if (!isRecord(candidateFlow)) {
       droppedFlows += 1;
       continue;
     }
-    const id = safeId(candidateFlow.id) ?? createId('f');
+    let id = safeId(candidateFlow.id) ?? createId('f');
+    if (seenFlowIds.has(id)) id = createId('f');
+    seenFlowIds.add(id);
     const title = text(candidateFlow.title, LIMITS.maxFlowTitleLength)?.trim() || 'Untitled flow';
     // Same discipline as a node/edge's own accent: absent or unrecognised
     // stays absent rather than being coerced to a fallback.

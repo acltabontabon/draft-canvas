@@ -82,6 +82,29 @@ describe('importing untrusted files', () => {
     expect(result.repairs.join(' ')).toContain('2 connection(s)');
   });
 
+  it('drops a self-referencing connection (source equal to target)', () => {
+    // In-app `connect()` already refuses to create one of these, but a file
+    // — hand-edited or written by a different tool — can still contain one,
+    // and nothing downstream expects a connector with the same node at both
+    // ends.
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 'a', type: 'note', x: 0, y: 0 },
+        { id: 'b', type: 'note', x: 200, y: 0 },
+      ],
+      edges: [
+        { id: 'e1', source: 'a', target: 'a' },
+        { id: 'e2', source: 'a', target: 'b' },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.edges).toHaveLength(1);
+    expect(result.document.edges[0]!.id).toBe('e2');
+    expect(result.repairs.join(' ')).toContain('pointed a node at itself');
+  });
+
   it('gives duplicate node ids fresh identities', () => {
     const result = parse({
       ...base,
@@ -96,6 +119,25 @@ describe('importing untrusted files', () => {
     const ids = result.document.nodes.map((node) => node.id);
     expect(new Set(ids).size).toBe(2);
     expect(result.repairs.join(' ')).toContain('new ids');
+  });
+
+  it('gives duplicate flow ids fresh identities', () => {
+    const result = parse({
+      ...base,
+      nodes: [],
+      edges: [],
+      flows: [
+        { id: 'same', title: 'First', steps: [] },
+        { id: 'same', title: 'Second', steps: [] },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ids = result.document.flows.map((flow) => flow.id);
+    expect(new Set(ids).size).toBe(2);
+    // Both flows must survive with their own titles intact — this is an id
+    // collision to repair, not a reason to drop either flow.
+    expect(result.document.flows.map((flow) => flow.title).sort()).toEqual(['First', 'Second']);
   });
 
   it('detaches grouping links that are dangling, self-referential or cyclic', () => {
@@ -216,12 +258,18 @@ describe('importing untrusted files', () => {
   it('survives malformed entries in the node and edge arrays', () => {
     const result = parse({
       ...base,
-      nodes: [null, 'a string', 42, { id: 'ok', type: 'note', x: 0, y: 0 }],
-      edges: [null, { id: 'e', source: 'ok', target: 'ok' }],
+      nodes: [
+        null,
+        'a string',
+        42,
+        { id: 'ok', type: 'note', x: 0, y: 0 },
+        { id: 'ok2', type: 'note', x: 200, y: 0 },
+      ],
+      edges: [null, { id: 'e', source: 'ok', target: 'ok2' }],
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.document.nodes).toHaveLength(1);
+    expect(result.document.nodes).toHaveLength(2);
     expect(result.document.edges).toHaveLength(1);
   });
 
