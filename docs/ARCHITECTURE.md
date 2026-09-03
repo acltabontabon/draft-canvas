@@ -255,6 +255,14 @@ Failures degrade rather than destroy: IndexedDB unavailable falls back to an in-
 and the UI says so plainly; a quota error surfaces a message telling the user to export; a corrupt
 record is repaired through the same validator as an imported file.
 
+The same posture extends to rendering. Two `ErrorBoundary` instances (`ui/common/ErrorBoundary.tsx`)
+sit in the tree — one around the canvas alone, one around the whole app shell — so a render
+exception anywhere degrades to a recoverable screen instead of unmounting to a blank page. The
+canvas-scoped boundary can remount just the canvas, reload the open document from disk, or return to
+the library; the outer one is the last resort. `lib/diagnostics.ts` logs full context (operation,
+document id, error stack) in development and only ids and counts in production — never node or edge
+content.
+
 ## Flows and presentation
 
 A `DraftFlow` is a narration layer over connectors that already exist — it never duplicates a node

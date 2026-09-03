@@ -8,6 +8,27 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+### Added
+
+- A canvas that fails to render now shows a recoverable screen ("Something went wrong while
+  rendering this canvas.") instead of going blank, with options to reload the canvas, restore the
+  last saved version, or return to your diagrams.
+
+### Fixed
+
+- A rare interaction sequence involving a marquee (rubber-band) selection over a connector could
+  crash the canvas to a blank screen. Fixed at the source rather than just contained.
+- The app could get stuck indefinitely on "Opening local storage…" if reading your local diagrams
+  failed on startup, with no error shown and no way to retry.
+- Renaming, duplicating, deleting, or moving a diagram between projects could fail without telling
+  you anything went wrong.
+- Undo/redo could leave a flow selection, a flow-edit session, or Focus Mode referencing something
+  that no longer existed in the restored diagram, with no way to get back out.
+- Opening a diagram file whose format-version field was corrupted could skip the repair process
+  that upgrades older files entirely, instead of running it.
+- Malformed or hand-edited diagram files could slip a duplicate flow, a connection pointing a node
+  at itself, or a reference to a project from a different browser profile past import.
+
 ## [0.1.2] - 2026-09-02
 
 ### Changed

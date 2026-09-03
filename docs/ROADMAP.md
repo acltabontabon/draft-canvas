@@ -78,9 +78,8 @@ actually reaches for.*
 
 - **1.1 Shape vocabulary** — ✅ Done. Text, note, code, plus developer presets (service, database,
   queue, actor, group). Double-click to create — a small picker, no modal in the way. (The
-  original Card shape and its unreachable `rounded` duplicate were removed in the hardening pass —
-  see `docs/HARDENING.md` — since Note/Text/the developer presets already cover what a
-  semantics-free box was standing in for.)
+  original Card shape and its unreachable `rounded` duplicate were later removed, since
+  Note/Text/the developer presets already cover what a semantics-free box was standing in for.)
 - **1.2 Drag-to-connect & drop-to-create** — ✅ Done. Drag from a node's edge to connect; drop on
   empty canvas and the node you were heading for is created for you.
 - **1.3 Resize** — ✅ Done.

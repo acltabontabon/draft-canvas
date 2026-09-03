@@ -190,7 +190,7 @@ newer format version. Everything else is repaired, and the repairs are reported:
 
 - Unknown node types become `note`, keeping their text rather than losing the content.
 - Missing or duplicate ids are replaced.
-- Connections pointing at absent nodes are dropped.
+- Connections pointing at absent nodes, or pointing a node at itself, are dropped.
 - Grouping links that dangle, point at themselves, or form a cycle are detached.
 - Non-finite and out-of-range numbers are clamped.
 - Control characters are stripped from text; tabs and newlines are kept.
