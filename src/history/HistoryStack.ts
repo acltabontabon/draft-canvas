@@ -7,6 +7,23 @@ export interface Selection {
 
 export const EMPTY_SELECTION: Selection = { nodes: [], edges: [] };
 
+/**
+ * A snapshot of `editorStore`'s `selectedFlowId`/`flowPlayback`/`flowEdit` fields — mirrored
+ * structurally here rather than imported from `store/editorStore.ts`, since that module already
+ * imports this one (an import the other way would be circular). Deliberately *not* a general
+ * mechanism: `flowPlayback`/`focus`/`flowEdit` are documented in `editorStore.ts` as "never pushed
+ * to history" because playing or editing a flow is not itself an editorial action, and that stays
+ * true — nothing here changes when playback starts/stops or which flow is selected. This exists
+ * for exactly one case: `deleteFlow` forcibly clears these fields as a *side effect* of a document
+ * edit that already gets a history entry, and undoing that edit should undo the side effect with
+ * it. `HistoryEntry.flowSessionBefore`/`flowSessionAfter` stay `undefined` for every other entry.
+ */
+export interface FlowSessionSnapshot {
+  selectedFlowId: string | null;
+  flowPlayback: { active: boolean; flowId: string | null; step: number; phase?: 'request' | 'response' };
+  flowEdit: { active: boolean; flowId: string | null };
+}
+
 export interface HistoryEntry {
   label: string;
   before: DraftDocument;
@@ -19,6 +36,9 @@ export interface HistoryEntry {
    * typing a node's name is a single undo rather than one per keystroke.
    */
   coalesceKey?: string;
+  /** See `FlowSessionSnapshot`. Only ever set by `deleteFlow`. */
+  flowSessionBefore?: FlowSessionSnapshot;
+  flowSessionAfter?: FlowSessionSnapshot;
 }
 
 export interface HistoryState {

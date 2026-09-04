@@ -505,6 +505,62 @@ describe('flows through the store', () => {
     expect(store.getState().flowPlayback).toEqual({ active: false, flowId: null, step: 0 });
   });
 
+  it('undoing a flow deletion restores which flow was selected and its playback state', () => {
+    const { edges } = chain(1);
+    const flowId = store.getState().createFlow();
+    store.getState().addEdgeToFlow(flowId, edges[0]!.id);
+    store.getState().setSelectedFlowId(flowId);
+    store.getState().setFlowPlayback({ active: true, flowId, step: 1 });
+
+    store.getState().deleteFlow(flowId);
+    expect(store.getState().selectedFlowId).toBeNull();
+
+    store.getState().undo();
+
+    expect(store.getState().document.flows.find((f) => f.id === flowId)).toBeDefined();
+    expect(store.getState().selectedFlowId).toBe(flowId);
+    expect(store.getState().flowPlayback).toEqual({ active: true, flowId, step: 1 });
+
+    store.getState().redo();
+
+    expect(store.getState().document.flows.find((f) => f.id === flowId)).toBeUndefined();
+    expect(store.getState().selectedFlowId).toBeNull();
+    expect(store.getState().flowPlayback).toEqual({ active: false, flowId: null, step: 0 });
+  });
+
+  it('undoing a flow deletion restores flow-edit mode too, if it was active for that flow', () => {
+    const { edges } = chain(1);
+    const flowId = store.getState().createFlow();
+    store.getState().addEdgeToFlow(flowId, edges[0]!.id);
+    store.getState().enterFlowEdit(flowId);
+
+    store.getState().deleteFlow(flowId);
+    expect(store.getState().flowEdit).toEqual({ active: false, flowId: null });
+
+    store.getState().undo();
+
+    expect(store.getState().flowEdit).toEqual({ active: true, flowId });
+
+    store.getState().redo();
+
+    expect(store.getState().flowEdit).toEqual({ active: false, flowId: null });
+  });
+
+  it('does not disturb flow session state for an unrelated flow deletion', () => {
+    const { edges } = chain(2);
+    const kept = store.getState().createFlow('Kept');
+    const removed = store.getState().createFlow('Removed');
+    store.getState().addEdgeToFlow(kept, edges[0]!.id);
+    store.getState().addEdgeToFlow(removed, edges[1]!.id);
+    store.getState().setSelectedFlowId(kept);
+
+    store.getState().deleteFlow(removed);
+    expect(store.getState().selectedFlowId).toBe(kept);
+
+    store.getState().undo();
+    expect(store.getState().selectedFlowId).toBe(kept);
+  });
+
   it('opening a document auto-selects its one flow, so step badges are not blank on first load', () => {
     const doc = addFlow(createDocument('X'), createFlow({ title: 'Only flow', id: 'f1' }));
     store.getState().setDocument(doc);

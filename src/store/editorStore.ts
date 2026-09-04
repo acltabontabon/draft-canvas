@@ -94,6 +94,7 @@ import {
   pushEntry,
   redo as redoStack,
   undo as undoStack,
+  type FlowSessionSnapshot,
   type HistoryState,
   type Selection,
 } from '../history/HistoryStack';
@@ -341,6 +342,9 @@ export interface ApplyOptions {
   /** Skips the history entry — used for viewport and other non-editorial state. */
   transient?: boolean;
   selection?: Selection;
+  /** See `FlowSessionSnapshot` in `history/HistoryStack.ts`. Only `deleteFlow` sets these. */
+  flowSessionBefore?: FlowSessionSnapshot;
+  flowSessionAfter?: FlowSessionSnapshot;
 }
 
 /**
@@ -515,6 +519,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         selectionAfter,
         at: Date.now(),
         coalesceKey: options?.coalesceKey,
+        flowSessionBefore: options?.flowSessionBefore,
+        flowSessionAfter: options?.flowSessionAfter,
       }),
     }));
   },
@@ -988,12 +994,27 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   deleteFlow(flowId) {
-    get().apply('Delete flow', (doc) => deleteFlow(doc, flowId));
-    set((s) => ({
-      selectedFlowId: s.selectedFlowId === flowId ? null : s.selectedFlowId,
-      flowPlayback: s.flowPlayback.flowId === flowId ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
-      flowEdit: s.flowEdit.flowId === flowId ? { active: false, flowId: null } : s.flowEdit,
-    }));
+    const state = get();
+    // Deleting a flow forcibly clears any session state that referenced it, outside the document
+    // itself — captured here so undoing the delete can restore it too, rather than leave "which
+    // flow's step badges were showing" reset with no way back. See `FlowSessionSnapshot`.
+    const flowSessionBefore: FlowSessionSnapshot = {
+      selectedFlowId: state.selectedFlowId,
+      flowPlayback: state.flowPlayback,
+      flowEdit: state.flowEdit,
+    };
+    const nextSelectedFlowId = state.selectedFlowId === flowId ? null : state.selectedFlowId;
+    const nextFlowPlayback: FlowSessionSnapshot['flowPlayback'] =
+      state.flowPlayback.flowId === flowId ? { active: false, flowId: null, step: 0 } : state.flowPlayback;
+    const nextFlowEdit: FlowSessionSnapshot['flowEdit'] =
+      state.flowEdit.flowId === flowId ? { active: false, flowId: null } : state.flowEdit;
+    const flowSessionAfter: FlowSessionSnapshot = {
+      selectedFlowId: nextSelectedFlowId,
+      flowPlayback: nextFlowPlayback,
+      flowEdit: nextFlowEdit,
+    };
+    get().apply('Delete flow', (doc) => deleteFlow(doc, flowId), { flowSessionBefore, flowSessionAfter });
+    set({ selectedFlowId: nextSelectedFlowId, flowPlayback: nextFlowPlayback, flowEdit: nextFlowEdit });
   },
 
   addEdgeToFlow(flowId, edgeId, caption) {
@@ -1062,6 +1083,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: entry.selectionBefore,
       revision: s.revision + 1,
       ...reconcileSessionState(entry.before, s),
+      // Overrides whatever reconcileSessionState just computed for selectedFlowId/flowEdit —
+      // focus isn't part of the snapshot and still goes through the reconciler's own pruning
+      // above regardless. See `FlowSessionSnapshot`.
+      ...(entry.flowSessionBefore ?? {}),
     }));
   },
 
@@ -1075,6 +1100,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: entry.selectionAfter,
       revision: s.revision + 1,
       ...reconcileSessionState(entry.after, s),
+      ...(entry.flowSessionAfter ?? {}),
     }));
   },
 
