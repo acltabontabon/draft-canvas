@@ -47,6 +47,9 @@ milestones; **0.1.0 is the first production-ready release.**
 - Pasting or duplicating a very large selection repeatedly, or into an already-large diagram,
   could grow it past the size a diagram can reliably stay responsive at. Draft Canvas now stops at
   that limit and tells you, the same way it already does for an imported file.
+- Undoing a deleted Flow brought its connectors back but not which Flow's step badges were
+  showing, or that you'd been presenting or editing it — you'd have to reselect it by hand. Undo
+  now restores that too.
 
 ## [0.2.0] - 2026-09-04
 
