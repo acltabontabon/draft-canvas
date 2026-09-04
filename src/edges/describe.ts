@@ -22,7 +22,8 @@ import {
   type Side,
 } from './routing';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
-import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import { relationshipCaptionLabel } from '../document/edgeSemantics';
+import { capabilityFor, categoryOf } from '../document/connectorSemantics';
 
 export interface EdgeDescribeContext {
   theme: Theme;
@@ -77,9 +78,16 @@ function labelChipRect(side: Side, x: number, y: number, w: number, h: number): 
  * with the pre-existing fixed downward offset; a vertical line needs the caption moved beside it
  * instead, since a y-only offset never leaves the line's own x-coordinate.
  */
-function captionAnchor(side: Side, x: number, y: number, height: number): { x: number; y: number; align: TextAlign } {
+function captionAnchor(
+  side: Side,
+  x: number,
+  y: number,
+  height: number,
+  awayFromResponse = false,
+): { x: number; y: number; align: TextAlign } {
   if (side === 'right') return { x: x + LABEL_LINE_GAP, y: y - height / 2, align: 'start' };
   if (side === 'left') return { x: x - LABEL_LINE_GAP, y: y - height / 2, align: 'end' };
+  if (awayFromResponse && side === 'top') return { x, y: y - 6 - height, align: 'middle' };
   return { x, y: y + 6, align: 'middle' };
 }
 
@@ -314,25 +322,32 @@ export function describeEdge(
     // an event one, without spending the connector's actual `label`
     // (reserved for something like an event's own name, e.g.
     // "OrderCreated") on a generic operation word. Yields entirely to a real
-    // label the moment the user gives one (the `!edge.label` guard above), and
-    // to a request/response connector's own reply line — see the matching
-    // comment in `DraftEdgeView.tsx`.
-    if (edge.semantic && !edge.hasResponse) {
-      const captionLayout = layoutText(SEMANTIC_DEFAULTS[edge.semantic].label, {
+    // label the moment the user gives one (the `!edge.label` guard above). A
+    // request/response connector gets one too now — see the matching comment
+    // in `DraftEdgeView.tsx`.
+    if (edge.semantic) {
+      const sourceNode = nodes.get(edge.source);
+      const targetNode = nodes.get(edge.target);
+      const status =
+        sourceNode && targetNode ? capabilityFor(categoryOf(sourceNode), categoryOf(targetNode))?.status : undefined;
+      const isUnusual = status === 'unusual' || status === 'questionable';
+      const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse);
+      const text = isUnusual ? `▲ ${label}` : label;
+      const captionLayout = layoutText(text, {
         font: FONTS.connectorCaption,
         maxWidth: 120,
         lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
         maxLines: 1,
         measurer: ctx.measurer,
       });
-      const caption = captionAnchor(route.labelSide, labelX, labelY, captionLayout.height);
+      const caption = captionAnchor(route.labelSide, labelX, labelY, captionLayout.height, Boolean(edge.hasResponse));
       overlay.push({
         t: 'text',
         x: caption.x,
         y: caption.y,
         layout: captionLayout,
         font: FONTS.connectorCaption,
-        fill: ctx.theme.textFaint,
+        fill: isUnusual ? ctx.theme.accents.amber.text : ctx.theme.textFaint,
         align: caption.align,
       });
     }

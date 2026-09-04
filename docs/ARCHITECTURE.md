@@ -21,7 +21,8 @@ the file format outlive any decision made above it.
 
 ```
 src/
-  document/     types · factory · operations · flow · edgeSemantics · validate · migrate · limits
+  document/     types · factory · operations · flow · edgeSemantics · connectorSemantics · validate
+                · migrate · limits
   storage/      DraftRepository · IndexedDbRepository · MemoryRepository · autosave
   history/      HistoryStack
   render/       the shared renderer (see below)
@@ -162,6 +163,24 @@ Two details that were bugs first:
   endpoints through them; a node without handles silently loses all its connectors.
 - Dropping a connection anywhere on a node's body connects to it. React Flow only reports a target
   within its connection radius of a handle, so `Canvas.tsx` hit-tests the drop point itself.
+
+#### Relationship model
+
+"The user decides what connects. Draft Canvas decides how to make it look good" extends to
+*meaning*, not just geometry. `document/connectorSemantics.ts`'s `MATRIX`, keyed by
+`sourceCategory>targetCategory` (`NodeCategory` — a node's `type` plus, for `service`/`database`/
+`queue`, its sub-kind: `external`/`cache`/`topic` each read as their own category), is the single
+source of truth every UI surface reads from: `EdgeInspectorPopover.tsx` narrows the interaction
+picker to `capabilityFor(...)?.relations`, `store/editorStore.ts`'s `connect()`/`reconnectEdge()`
+apply `.defaultRelation`/`.defaultBehavior` on a fresh or re-pointed connector (never overwriting an
+explicit choice — `isEligibleForReinference`), and `DraftEdgeView.tsx`/`edges/describe.ts` read
+`.status` for a subtle canvas warning marker. Deliberately sparse: an undocumented pairing
+(`capabilityFor` returning `undefined`) keeps full, unrestricted freedom — every rule here narrows
+or nudges, never blocks. Extending it to a new pairing means adding one line to `MATRIX`, not
+touching any rendering code — `quickFixesFor` layers a second, edge-aware signal on top (e.g. the
+Queue→Topic "Insert Worker" fix, `store/editorStore.ts`'s `insertWorkerOnEdge`) for the one case a
+static per-pairing rule can't express: whether *this specific edge's* current `semantic` still fits
+its (possibly just re-pointed) endpoints.
 
 #### Anchors, lanes, and obstacle avoidance
 
@@ -355,6 +374,7 @@ bumping `CURRENT_VERSION` and adding one function there. Nothing in the UI branc
 | Layer | Where |
 | --- | --- |
 | Document model, operations, flows | `tests/document.test.ts`, `tests/flow.test.ts` |
+| Relationship model, semantic/kind inference and re-inference | `tests/connector-semantics.test.ts`, `tests/edge-semantics.test.ts`, `tests/edge-kinds.test.ts` |
 | Round trip and file format | `tests/serialization.test.ts` |
 | Hostile and malformed imports | `tests/import-validation.test.ts` |
 | Undo, redo, drag granularity, coalescing | `tests/history.test.ts` |

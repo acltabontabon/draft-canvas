@@ -1,14 +1,17 @@
+import { SEMANTIC_DEFAULTS } from './edgeSemantics';
 import type { ConnectorKind, DraftEdge, DraftNode, EdgeSemantic } from './types';
 
 /**
  * A node's role for connection-semantics purposes — coarser than
  * `DraftNodeType` (which silhouette to draw) and finer than "ignore the node
- * type entirely." `external` and `cache` come from a node's *sub-kind*
- * (`serviceKind`/`databaseKind`), not a distinct `DraftNodeType`, because
- * that's what they already are in the document model — see `nodes/describe.ts`.
- * Every `DraftNodeType` not covered here (card, note, code, text, group,
- * ellipse, rounded) reads as `generic`: Draft Canvas has no real basis to
- * infer anything about a plain shape, so it stays out of this entirely.
+ * type entirely." `external`, `cache`, and `topic` come from a node's
+ * *sub-kind* (`serviceKind`/`databaseKind`/`queueKind`), not a distinct
+ * `DraftNodeType`, because that's what they already are in the document model
+ * — see `nodes/describe.ts`. `queueKind: 'stream'` stays folded into `queue`;
+ * no relationship rule below distinguishes it from a plain queue. Every
+ * `DraftNodeType` not covered here (card, note, code, text, group, ellipse,
+ * rounded) reads as `generic`: Draft Canvas has no real basis to infer
+ * anything about a plain shape, so it stays out of this entirely.
  */
 export type NodeCategory =
   | 'actor'
@@ -17,10 +20,12 @@ export type NodeCategory =
   | 'database'
   | 'cache'
   | 'queue'
+  | 'topic'
   | 'junction'
   | 'generic';
 
-type CategorizableNode = Pick<DraftNode, 'type'> & Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind'>>;
+type CategorizableNode = Pick<DraftNode, 'type'> &
+  Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind' | 'queueKind'>>;
 
 export function categoryOf(node: CategorizableNode): NodeCategory {
   switch (node.type) {
@@ -31,7 +36,7 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
     case 'database':
       return node.databaseKind === 'cache' ? 'cache' : 'database';
     case 'queue':
-      return 'queue';
+      return node.queueKind === 'topic' ? 'topic' : 'queue';
     case 'ellipse':
       return 'junction';
     default:
@@ -40,24 +45,55 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
 }
 
 /**
+ * How architecturally ordinary a category pair is. Omitted (or `'valid'`) is
+ * the default for every pairing that doesn't say otherwise — the vast
+ * majority. `'unusual'` is drawable with no friction but gets a subtle nudge
+ * (see `guidance`/`quickFix` below); `'questionable'` is modeled for a future
+ * pairing that would warrant stronger guidance but isn't assigned to any
+ * current pair — Draft Canvas never hard-blocks a connection on this alone.
+ */
+export type RelationshipStatus = 'valid' | 'unusual' | 'questionable';
+
+/**
+ * A one-click resolution offered alongside `guidance`. `'insert-worker'`
+ * performs a real graph transform (see `store/editorStore.ts`'s
+ * `insertWorkerOnEdge`); `'retarget-relation'` just relabels the edge's own
+ * `semantic` — used both as a static, matrix-level fix (none currently) and
+ * computed per-edge by `quickFixesFor` when an edge's explicit `semantic`
+ * no longer fits its (possibly re-pointed) endpoints.
+ */
+export type RelationshipQuickFix =
+  | { id: 'insert-worker'; label: string }
+  | { id: 'retarget-relation'; label: string; semantic: EdgeSemantic };
+
+/**
  * What a connection between two node categories is capable of — the single
- * source of truth `Inspector.tsx` reads to decide what to show, and
- * `inferRelationship` reads to decide what a fresh connection starts as.
+ * source of truth `EdgeInspectorPopover.tsx` reads to decide what to show,
+ * and `inferRelationship` reads to decide what a fresh connection starts as.
  *
  * `relations`/`behaviors` are the contextually relevant options, in display
- * order — never a "you may only pick from these" restriction: `Inspector.tsx`
- * always keeps an edge's *current* value selectable and offers a "Show all…"
- * escape hatch, so an unusual pre-existing or deliberately-chosen value is
+ * order — never a "you may only pick from these" restriction:
+ * `EdgeInspectorPopover.tsx` always keeps an edge's *current* value
+ * selectable, so an unusual pre-existing or deliberately-chosen value is
  * never hidden or clobbered. An empty `behaviors` list means the behaviour is
  * predetermined (or trivial enough — a plain synchronous call — not to be
  * worth a picker at all); `defaultBehavior`, if set, is what to display as a
  * compact indicator in that case.
+ *
+ * `status`/`guidance`/`quickFix` are the "is this pairing itself unusual"
+ * layer, orthogonal to which relation label gets picked — `status` defaults
+ * to `'valid'` when omitted (every pairing below except `queue>topic` today),
+ * `guidance` is only ever shown when `status !== 'valid'`, and `quickFix` is
+ * an optional matrix-level fix (see `quickFixesFor` for the edge-aware kind).
  */
 export interface ConnectionCapability {
   relations: readonly EdgeSemantic[];
   defaultRelation?: EdgeSemantic;
   behaviors: readonly ConnectorKind[];
   defaultBehavior?: ConnectorKind;
+  status?: RelationshipStatus;
+  guidance?: string;
+  quickFix?: RelationshipQuickFix;
 }
 
 function capability(
@@ -65,8 +101,9 @@ function capability(
   defaultRelation: EdgeSemantic | undefined,
   behaviors: ConnectorKind[],
   defaultBehavior?: ConnectorKind,
+  opinion?: Pick<ConnectionCapability, 'status' | 'guidance' | 'quickFix'>,
 ): ConnectionCapability {
-  return { relations, defaultRelation, behaviors, defaultBehavior };
+  return { relations, defaultRelation, behaviors, defaultBehavior, ...opinion };
 }
 
 /**
@@ -85,23 +122,55 @@ const CALL_BEHAVIORS: ConnectorKind[] = ['sync', 'async', 'callback', 'condition
  * entry everywhere except its own explicit one below, so this table doesn't
  * need an entry for every category combination `external` participates in).
  *
- * Deliberately sparse: a pair with no entry (queue↔queue, database↔database,
- * actor↔database, anything touching a `generic` node, …) has no contextual
- * opinion at all — `capabilityFor` returns `undefined` and callers fall back
- * to full, unrestricted behaviour, exactly as today. Only pairs the product
- * spec actually describes get a rule; extending this to a new node type or
- * pairing means adding one line here, not touching any rendering code.
+ * Deliberately sparse: a pair with no entry (queue↔queue, topic↔topic,
+ * actor↔database, database↔topic, anything touching a `generic` node, …) has
+ * no contextual opinion at all — `capabilityFor` returns `undefined` and
+ * callers fall back to full, unrestricted behaviour, exactly as today. Only
+ * pairs the product spec actually describes get a rule; extending this to a
+ * new node type or pairing means adding one line here, not touching any
+ * rendering code. `cache`/`topic` never fall back to `database`/`queue` for
+ * an unlisted pairing — same "no opinion beats a wrong one" rule `external`
+ * doesn't follow (see `resolved` below), applied consistently to every other
+ * sub-kind-derived category.
  */
 const MATRIX: Record<string, ConnectionCapability> = {
   'service>database': capability(['writes', 'reads', 'query', 'dependsOn'], 'writes', []),
   'database>service': capability(['reads', 'query', 'dependsOn'], 'reads', []),
   'service>cache': capability(['writes', 'reads', 'dependsOn'], 'writes', []),
   'cache>service': capability(['reads', 'dependsOn'], 'reads', []),
-  'service>queue': capability(['publishes', 'event', 'dependsOn'], 'publishes', [], 'event'),
-  'queue>service': capability(['consumes', 'event', 'dependsOn'], 'consumes', [], 'event'),
-  'service>service': capability(['calls', 'http', 'command', 'query', 'event', 'dependsOn'], 'calls', CALL_BEHAVIORS),
+  'service>queue': capability(['publishes', 'command', 'event', 'dependsOn'], 'publishes', [], 'event'),
+  'queue>service': capability(['consumes', 'deliversTo', 'event', 'dependsOn'], 'consumes', [], 'event'),
+  'service>service': capability(
+    ['calls', 'http', 'grpc', 'command', 'query', 'event', 'dependsOn'],
+    'calls',
+    CALL_BEHAVIORS,
+  ),
   'actor>service': capability(['calls', 'http', 'command'], 'calls', []),
-  'service>external': capability(['calls', 'http', 'command', 'event', 'dependsOn'], 'calls', CALL_BEHAVIORS),
+  'service>external': capability(
+    ['calls', 'http', 'grpc', 'command', 'event', 'dependsOn'],
+    'calls',
+    CALL_BEHAVIORS,
+  ),
+  'service>topic': capability(['publishes', 'event', 'dependsOn'], 'publishes', [], 'event'),
+  // A topic fans a message out to every subscriber rather than one worker pulling it off a
+  // queue — 'deliversTo' (not 'consumes') is the default here for exactly that reason, unlike
+  // `queue>service` above which keeps 'consumes'.
+  'topic>service': capability(['deliversTo', 'consumes', 'dependsOn'], 'deliversTo', [], 'event'),
+  'topic>queue': capability(['fansOut', 'deliversTo', 'dependsOn'], 'fansOut', [], 'event'),
+  // Deliberately NOT the inverse of 'topic>queue' — a queue doesn't itself publish into a
+  // topic; something normally has to consume it and forward the message. Narrower relation
+  // list, no default (nothing should ever auto-infer into this), 'unusual' status with a
+  // one-click way to make the implied worker explicit instead of just accepting the arrow.
+  'queue>topic': capability(['dependsOn', 'event'], undefined, [], undefined, {
+    status: 'unusual',
+    guidance: "A queue doesn't typically publish to a topic — something usually consumes it and forwards the message.",
+    quickFix: { id: 'insert-worker', label: 'Insert Worker' },
+  }),
+  // Deliberately not JDBC/synchronous-request-shaped — see `defaultsToResponse`, which this
+  // pairing is intentionally absent from. "Ingests" is the default because it's the most
+  // common intent when a fresh connection is drawn; the others are equally valid, explicit
+  // choices, not lesser alternatives.
+  'database>database': capability(['ingests', 'replicates', 'cdc', 'syncs', 'dependsOn'], 'ingests', []),
 };
 
 /** `external` is a flavour of `service` for every pairing that doesn't have
@@ -121,6 +190,31 @@ export function capabilityFor(source: NodeCategory, target: NodeCategory): Conne
     return MATRIX[`${resolved(source)}>${resolved(target)}`];
   }
   return undefined;
+}
+
+/**
+ * The quick fixes worth offering for one specific edge — `capability`'s own
+ * static `quickFix` (if any, e.g. `queue>topic`'s Insert Worker) plus a
+ * computed one when the *edge's own* `semantic` no longer fits its (possibly
+ * re-pointed) endpoints: an explicit choice is never silently reset (see
+ * `isEligibleForReinference` — reconnecting only auto-reclassifies an edge
+ * nothing has explicitly claimed), but a one-click way to fix it up is still
+ * worth surfacing. Returns `[]` when there's nothing to suggest — the normal
+ * case for a `'valid'` pairing whose edge already picked (or was inferred)
+ * something in `capability.relations`.
+ */
+export function quickFixesFor(
+  cap: ConnectionCapability | undefined,
+  edge: Pick<DraftEdge, 'semantic'>,
+): RelationshipQuickFix[] {
+  if (!cap) return [];
+  const fixes: RelationshipQuickFix[] = [];
+  if (cap.quickFix) fixes.push(cap.quickFix);
+  if (edge.semantic !== undefined && !cap.relations.includes(edge.semantic) && cap.defaultRelation !== undefined) {
+    const label = SEMANTIC_DEFAULTS[cap.defaultRelation].label;
+    fixes.push({ id: 'retarget-relation', label: `Use "${label}" instead`, semantic: cap.defaultRelation });
+  }
+  return fixes;
 }
 
 /**

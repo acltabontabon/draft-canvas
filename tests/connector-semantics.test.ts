@@ -6,6 +6,7 @@ import {
   inferRelationship,
   isEligibleForReinference,
   isSyncPairing,
+  quickFixesFor,
   resolveTransparentCategory,
 } from '../src/document/connectorSemantics';
 import { createDocument, createEdge, createNode, type CreateNodeInput } from '../src/document/factory';
@@ -17,6 +18,12 @@ describe('categoryOf', () => {
   it('reads actor and queue straight from the node type', () => {
     expect(categoryOf({ type: 'actor' })).toBe('actor');
     expect(categoryOf({ type: 'queue' })).toBe('queue');
+  });
+
+  it('reads a topic queue as its own category, and a stream queue as plain queue', () => {
+    expect(categoryOf({ type: 'queue', queueKind: 'topic' })).toBe('topic');
+    expect(categoryOf({ type: 'queue', queueKind: 'stream' })).toBe('queue');
+    expect(categoryOf({ type: 'queue', queueKind: 'queue' })).toBe('queue');
   });
 
   it('reads a plain service as service, and an external one as external', () => {
@@ -60,18 +67,18 @@ describe('capabilityFor — the capability matrix', () => {
     expect(cap.relations).not.toContain('consumes');
   });
 
-  it('service → queue: defaults to publishes, implies event behaviour with no picker', () => {
+  it('service → queue: defaults to publishes, offers command as a sharper alternative, implies event behaviour with no picker', () => {
     const cap = capabilityFor('service', 'queue')!;
     expect(cap.defaultRelation).toBe('publishes');
-    expect(cap.relations).toEqual(['publishes', 'event', 'dependsOn']);
+    expect(cap.relations).toEqual(['publishes', 'command', 'event', 'dependsOn']);
     expect(cap.behaviors).toEqual([]);
     expect(cap.defaultBehavior).toBe('event');
   });
 
-  it('queue → service: defaults to consumes, implies event behaviour with no picker', () => {
+  it('queue → service: defaults to consumes, offers deliversTo as an alternative, implies event behaviour with no picker', () => {
     const cap = capabilityFor('queue', 'service')!;
     expect(cap.defaultRelation).toBe('consumes');
-    expect(cap.relations).toEqual(['consumes', 'event', 'dependsOn']);
+    expect(cap.relations).toEqual(['consumes', 'deliversTo', 'event', 'dependsOn']);
     expect(cap.defaultBehavior).toBe('event');
   });
 
@@ -79,10 +86,49 @@ describe('capabilityFor — the capability matrix', () => {
     expect(capabilityFor('queue', 'queue')).toBeUndefined();
   });
 
+  it('service → topic: defaults to publishes, same shape as service → queue', () => {
+    const cap = capabilityFor('service', 'topic')!;
+    expect(cap.defaultRelation).toBe('publishes');
+    expect(cap.relations).toEqual(['publishes', 'event', 'dependsOn']);
+    expect(cap.defaultBehavior).toBe('event');
+    expect(cap.status).toBeUndefined();
+  });
+
+  it('topic → service: defaults to deliversTo, not consumes — a topic fans out rather than being pulled from', () => {
+    const cap = capabilityFor('topic', 'service')!;
+    expect(cap.defaultRelation).toBe('deliversTo');
+    expect(cap.relations).toEqual(['deliversTo', 'consumes', 'dependsOn']);
+    expect(cap.status).toBeUndefined();
+  });
+
+  it('topic → queue: defaults to fans out, a valid and common pub-sub shape', () => {
+    const cap = capabilityFor('topic', 'queue')!;
+    expect(cap.defaultRelation).toBe('fansOut');
+    expect(cap.relations).toEqual(['fansOut', 'deliversTo', 'dependsOn']);
+    expect(cap.status).toBeUndefined();
+  });
+
+  it('queue → topic: unusual, no default, offers a guidance message and an Insert Worker quick fix', () => {
+    const cap = capabilityFor('queue', 'topic')!;
+    expect(cap.defaultRelation).toBeUndefined();
+    expect(cap.status).toBe('unusual');
+    expect(cap.guidance).toMatch(/consumes it and forwards/);
+    expect(cap.quickFix).toEqual({ id: 'insert-worker', label: 'Insert Worker' });
+    // Not simply the inverse of topic → queue's relation list.
+    expect(cap.relations).not.toContain('fansOut');
+  });
+
+  it('database → database: defaults to ingests, offers data-movement intents, no request/response shape', () => {
+    const cap = capabilityFor('database', 'database')!;
+    expect(cap.defaultRelation).toBe('ingests');
+    expect(cap.relations).toEqual(['ingests', 'replicates', 'cdc', 'syncs', 'dependsOn']);
+    expect(cap.status).toBeUndefined();
+  });
+
   it('service → service: defaults to calls, exposes the full behaviour range minus event', () => {
     const cap = capabilityFor('service', 'service')!;
     expect(cap.defaultRelation).toBe('calls');
-    expect(cap.relations).toEqual(['calls', 'http', 'command', 'query', 'event', 'dependsOn']);
+    expect(cap.relations).toEqual(['calls', 'http', 'grpc', 'command', 'query', 'event', 'dependsOn']);
     expect(cap.behaviors).toEqual(['sync', 'async', 'callback', 'conditional', 'retry', 'failure', 'fallback']);
     expect(cap.behaviors).not.toContain('event');
   });
@@ -124,11 +170,16 @@ describe('capabilityFor — the capability matrix', () => {
   });
 
   it('has no opinion about pairs the spec never described', () => {
-    expect(capabilityFor('database', 'database')).toBeUndefined();
     expect(capabilityFor('actor', 'database')).toBeUndefined();
     expect(capabilityFor('generic', 'service')).toBeUndefined();
     expect(capabilityFor('service', 'generic')).toBeUndefined();
     expect(capabilityFor('generic', 'generic')).toBeUndefined();
+  });
+
+  it('a topic never falls back to a plain queue\'s entry for an unlisted pairing — same "no fallback" rule cache already follows', () => {
+    expect(capabilityFor('topic', 'topic')).toBeUndefined();
+    expect(capabilityFor('database', 'topic')).toBeUndefined();
+    expect(capabilityFor('topic', 'database')).toBeUndefined();
   });
 });
 
@@ -157,7 +208,14 @@ describe('isSyncPairing — which pairings a request/response can attach to', ()
   it('is false for a pair the matrix has no opinion on', () => {
     expect(isSyncPairing('queue', 'queue')).toBe(false);
     expect(isSyncPairing('generic', 'generic')).toBe(false);
+  });
+
+  it('is false for database → database and every topic/queue pairing — none of them are a plain synchronous call', () => {
     expect(isSyncPairing('database', 'database')).toBe(false);
+    expect(isSyncPairing('service', 'topic')).toBe(false);
+    expect(isSyncPairing('topic', 'service')).toBe(false);
+    expect(isSyncPairing('topic', 'queue')).toBe(false);
+    expect(isSyncPairing('queue', 'topic')).toBe(false);
   });
 });
 
@@ -186,16 +244,34 @@ describe('inferRelationship — a thin wrapper over capabilityFor\'s default', (
     expect(inferRelationship({ type: 'text' }, { type: 'text' })).toBeUndefined();
   });
 
-  it('a topic and a stream infer exactly like a plain queue — Draft Canvas doesn\'t over-differentiate messaging kinds', () => {
+  it('a stream infers exactly like a plain queue — Draft Canvas doesn\'t differentiate that kind', () => {
     const service = createNode({ type: 'service', x: 0, y: 0 });
     const plainQueue = createNode({ type: 'queue', x: 0, y: 0 });
-    const plain = inferRelationship(service, plainQueue);
-    const reverse = inferRelationship(plainQueue, service);
-    for (const queueKind of ['topic', 'stream'] as const) {
-      const node = createNode({ type: 'queue', x: 0, y: 0, queueKind });
-      expect(inferRelationship(service, node)).toEqual(plain);
-      expect(inferRelationship(node, service)).toEqual(reverse);
-    }
+    const stream = createNode({ type: 'queue', x: 0, y: 0, queueKind: 'stream' });
+    expect(inferRelationship(service, stream)).toEqual(inferRelationship(service, plainQueue));
+    expect(inferRelationship(stream, service)).toEqual(inferRelationship(plainQueue, service));
+  });
+
+  it('a topic matches a plain queue publishing into it, but diverges reading out of it — a topic delivers, it isn\'t consumed by one puller', () => {
+    const service = createNode({ type: 'service', x: 0, y: 0 });
+    const topic = createNode({ type: 'queue', x: 0, y: 0, queueKind: 'topic' });
+    const plainQueue = createNode({ type: 'queue', x: 0, y: 0 });
+    expect(inferRelationship(service, topic)).toEqual(inferRelationship(service, plainQueue));
+    expect(inferRelationship(topic, service)).toEqual({ semantic: 'deliversTo', kind: 'event' });
+    expect(inferRelationship(topic, service)).not.toEqual(inferRelationship(plainQueue, service));
+  });
+
+  it('a topic publishing into a queue infers fan-out; a queue into a topic stays neutral (no default)', () => {
+    const topic = createNode({ type: 'queue', x: 0, y: 0, queueKind: 'topic' });
+    const plainQueue = createNode({ type: 'queue', x: 0, y: 0 });
+    expect(inferRelationship(topic, plainQueue)).toEqual({ semantic: 'fansOut', kind: 'event' });
+    expect(inferRelationship(plainQueue, topic)).toBeUndefined();
+  });
+
+  it('database → database infers ingests', () => {
+    const a = createNode({ type: 'database', x: 0, y: 0 });
+    const b = createNode({ type: 'database', x: 0, y: 0 });
+    expect(inferRelationship(a, b)).toEqual({ semantic: 'ingests', kind: undefined });
   });
 });
 
@@ -223,6 +299,38 @@ describe('isEligibleForReinference', () => {
   it('treats a legacy edge with only a kind set the same way', () => {
     const edge = { ...createEdge({ source: 'a', target: 'b' }), kind: 'retry' as const };
     expect(isEligibleForReinference(edge)).toBe(false);
+  });
+});
+
+describe('quickFixesFor', () => {
+  it('is empty when there is no capability at all', () => {
+    expect(quickFixesFor(undefined, { semantic: 'writes' })).toEqual([]);
+  });
+
+  it('is empty for a valid pairing whose edge already matches (or has no) semantic', () => {
+    const cap = capabilityFor('service', 'database');
+    expect(quickFixesFor(cap, { semantic: 'writes' })).toEqual([]);
+    expect(quickFixesFor(cap, { semantic: undefined })).toEqual([]);
+  });
+
+  it('surfaces the matrix-level Insert Worker fix for queue → topic regardless of the edge\'s own semantic', () => {
+    const cap = capabilityFor('queue', 'topic');
+    expect(quickFixesFor(cap, { semantic: undefined })).toEqual([{ id: 'insert-worker', label: 'Insert Worker' }]);
+  });
+
+  it('offers a retarget fix when the edge\'s explicit semantic no longer fits its (re-pointed) endpoints', () => {
+    // The exact "Service → Database writes, re-pointed to a Topic" scenario from the spec.
+    const cap = capabilityFor('service', 'topic');
+    const fixes = quickFixesFor(cap, { semantic: 'writes' });
+    expect(fixes).toEqual([{ id: 'retarget-relation', label: 'Use "publishes" instead', semantic: 'publishes' }]);
+  });
+
+  it('queue → topic never adds a retarget fix on top of Insert Worker — there is no default to retarget to', () => {
+    const cap = capabilityFor('queue', 'topic');
+    // 'writes' isn't in queue → topic's relation list either, but with no `defaultRelation` there's
+    // nothing sensible to suggest retargeting to — only the static Insert Worker fix shows.
+    const fixes = quickFixesFor(cap, { semantic: 'writes' });
+    expect(fixes).toEqual([{ id: 'insert-worker', label: 'Insert Worker' }]);
   });
 });
 
@@ -295,6 +403,33 @@ describe('connect() — inference on a fresh connection, across the real node vo
     expect(edge.semantic).toBe('reads');
   });
 
+  it('service → topic infers publishes', () => {
+    const edge = connect({ type: 'service' }, { type: 'queue', queueKind: 'topic' });
+    expect(edge.semantic).toBe('publishes');
+    expect(edge.kind).toBe('event');
+  });
+
+  it('topic → service infers deliversTo', () => {
+    const edge = connect({ type: 'queue', queueKind: 'topic' }, { type: 'service' });
+    expect(edge.semantic).toBe('deliversTo');
+  });
+
+  it('topic → queue infers fans out', () => {
+    const edge = connect({ type: 'queue', queueKind: 'topic' }, { type: 'queue' });
+    expect(edge.semantic).toBe('fansOut');
+  });
+
+  it('queue → topic stays neutral — drawable, but nothing auto-infers into it', () => {
+    const edge = connect({ type: 'queue' }, { type: 'queue', queueKind: 'topic' });
+    expect(edge.semantic).toBeUndefined();
+    expect(edge.semanticsOrigin).toBeUndefined();
+  });
+
+  it('database → database infers ingests', () => {
+    const edge = connect({ type: 'database' }, { type: 'database' });
+    expect(edge.semantic).toBe('ingests');
+  });
+
   it('stays neutral for a pair the matrix has no opinion on', () => {
     const edge = connect({ type: 'actor' }, { type: 'note' });
     expect(edge.semantic).toBeUndefined();
@@ -336,6 +471,20 @@ describe('reconnectEdge() — reclassifying an eligible connector when the topol
     expect(stored.target).toBe(database.id);
     expect(stored.semantic).toBe('writes');
     expect(stored.kind).toBeUndefined();
+    expect(stored.semanticsOrigin).toBe('inferred');
+  });
+
+  it('a Service → Database "writes" re-infers to "publishes" when the database is re-pointed to a Topic', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const database = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    const topic = store.getState().addNode({ type: 'queue', queueKind: 'topic', x: 600, y: 0 });
+    const edge = store.getState().connect(service.id, database.id)!;
+    expect(edge.semantic).toBe('writes');
+
+    store.getState().reconnectEdge(edge.id, 'target', topic.id, undefined);
+    const stored = store.getState().document.edges[0]!;
+    expect(stored.target).toBe(topic.id);
+    expect(stored.semantic).toBe('publishes');
     expect(stored.semanticsOrigin).toBe('inferred');
   });
 
@@ -417,6 +566,79 @@ describe('reconnectEdge() — reclassifying an eligible connector when the topol
     const reverted = store.getState().document.edges[0]!;
     expect(reverted.target).toBe(queue.id);
     expect(reverted.semantic).toBe('publishes');
+  });
+});
+
+describe('insertWorkerOnEdge() — the "Insert Worker" quick fix', () => {
+  const store = useEditorStore;
+
+  beforeEach(() => {
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Semantics'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+  });
+
+  function setUpQueueToTopic() {
+    const queue = store.getState().addNode({ type: 'queue', x: 0, y: 0 });
+    const topic = store.getState().addNode({ type: 'queue', queueKind: 'topic', x: 400, y: 0 });
+    // A fresh queue → topic connect() infers nothing (no default), so build the edge directly to
+    // exercise the quick fix independent of that.
+    const edge = store.getState().connect(queue.id, topic.id)!;
+    return { queue, topic, edge };
+  }
+
+  it('replaces the one edge with a Worker node and two correctly-inferred edges', () => {
+    const { queue, topic, edge } = setUpQueueToTopic();
+
+    store.getState().insertWorkerOnEdge(edge.id);
+    const doc = store.getState().document;
+
+    expect(doc.edges.find((e) => e.id === edge.id)).toBeUndefined();
+    expect(doc.edges).toHaveLength(2);
+    const toWorker = doc.edges.find((e) => e.source === queue.id)!;
+    const fromWorker = doc.edges.find((e) => e.target === topic.id)!;
+    expect(toWorker.target).toBe(fromWorker.source);
+    expect(toWorker.semantic).toBe('consumes');
+    expect(fromWorker.semantic).toBe('publishes');
+
+    const worker = doc.nodes.find((n) => n.id === toWorker.target)!;
+    expect(worker.type).toBe('service');
+    expect(worker.serviceKind).toBe('worker');
+  });
+
+  it('positions the worker between the two original endpoints', () => {
+    const { queue, topic, edge } = setUpQueueToTopic();
+    store.getState().insertWorkerOnEdge(edge.id);
+    const doc = store.getState().document;
+    const worker = doc.nodes.find((n) => n.type === 'service')!;
+    expect(worker.x).toBeGreaterThan(queue.x);
+    expect(worker.x).toBeLessThan(topic.x);
+  });
+
+  it('is one undo step — undo restores the original single connector', () => {
+    const { edge } = setUpQueueToTopic();
+    const before = store.getState().history.past.length;
+
+    store.getState().insertWorkerOnEdge(edge.id);
+    expect(store.getState().history.past).toHaveLength(before + 1);
+    expect(store.getState().document.nodes).toHaveLength(3);
+
+    store.getState().undo();
+    const doc = store.getState().document;
+    expect(doc.nodes).toHaveLength(2);
+    expect(doc.edges).toEqual([edge]);
+  });
+
+  it('is a no-op for an edge id that no longer resolves', () => {
+    setUpQueueToTopic();
+    const before = store.getState().document;
+    store.getState().insertWorkerOnEdge('not-a-real-edge-id');
+    expect(store.getState().document).toBe(before);
   });
 });
 
@@ -663,8 +885,8 @@ describe('capabilityFor through a Junction — endpoint compatibility is preserv
     const sourceCategory = resolveTransparentCategory(g, junction.id, 'source');
     const cap = capabilityFor(sourceCategory, categoryOf(queue))!;
 
-    expect(cap.relations).toEqual(['publishes', 'event', 'dependsOn']);
-    expect(cap.relations).not.toContain('command');
+    expect(cap.relations).toEqual(['publishes', 'command', 'event', 'dependsOn']);
+    expect(cap.relations).not.toContain('query');
     expect(cap.relations).not.toContain('writes');
   });
 });
@@ -768,15 +990,15 @@ describe('Junction connections — store integration (connect/reconnect through 
     expect(toQueue.kind).toBe('event');
   });
 
-  it('endpoint compatibility filtering: Junction → Queue never inherits a Service-only semantic like "command"', () => {
+  it('endpoint compatibility filtering: Junction → Queue never inherits a Service-only semantic like "query"', () => {
     const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const junction = store.getState().addNode({ type: 'ellipse', x: 200, y: 0 });
     const queue = store.getState().addNode({ type: 'queue', x: 400, y: 0 });
     const incoming = store.getState().connect(a.id, junction.id)!;
-    store.getState().setEdgeSemantic(incoming.id, 'command');
+    store.getState().setEdgeSemantic(incoming.id, 'query');
 
     const outgoing = store.getState().connect(junction.id, queue.id)!;
-    expect(outgoing.semantic).not.toBe('command');
+    expect(outgoing.semantic).not.toBe('query');
     expect(outgoing.semantic).toBe('publishes');
   });
 

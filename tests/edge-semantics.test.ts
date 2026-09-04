@@ -2,7 +2,22 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
 import { normalizeDocument } from '../src/document/validate';
 import { DRAFT_FORMAT, CURRENT_VERSION } from '../src/document/types';
+import { relationshipCaptionLabel } from '../src/document/edgeSemantics';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+
+describe('relationshipCaptionLabel', () => {
+  it('relabels the untouched call default to "requests" only when paired with a response line', () => {
+    expect(relationshipCaptionLabel('calls', true)).toBe('requests');
+    expect(relationshipCaptionLabel('calls', false)).toBe('calls');
+    expect(relationshipCaptionLabel('calls', undefined)).toBe('calls');
+  });
+
+  it('leaves every other interaction label exactly as SEMANTIC_DEFAULTS says, response or not', () => {
+    expect(relationshipCaptionLabel('http', true)).toBe('HTTP');
+    expect(relationshipCaptionLabel('writes', true)).toBe('writes');
+    expect(relationshipCaptionLabel('publishes', false)).toBe('publishes');
+  });
+});
 
 describe('semantic connections', () => {
   const store = useEditorStore;
@@ -30,6 +45,18 @@ describe('semantic connections', () => {
     expect(stored.semantic).toBe('reads');
     expect(stored.label).toBe('reads');
     expect(stored.accent).toBeUndefined();
+  });
+
+  it('does NOT fill a default label for an unusual pairing — the caption\'s own warning marker stays the visible signal instead', () => {
+    const queue = store.getState().addNode({ type: 'queue', x: 0, y: 0 });
+    const topic = store.getState().addNode({ type: 'queue', queueKind: 'topic', x: 300, y: 0 });
+    const edge = store.getState().connect(queue.id, topic.id)!;
+    expect(edge.semantic).toBeUndefined();
+
+    store.getState().setEdgeSemantic(edge.id, 'dependsOn');
+    const stored = store.getState().document.edges[0]!;
+    expect(stored.semantic).toBe('dependsOn');
+    expect(stored.label).toBeUndefined();
   });
 
   it('leaves an existing label untouched when a semantic is applied', () => {

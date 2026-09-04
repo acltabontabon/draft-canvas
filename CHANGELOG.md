@@ -10,6 +10,18 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ### Added
 
+- **Draft Canvas is more opinionated about what a connection probably means.** A Topic now reads
+  as its own thing rather than just another Queue: Topic → Queue defaults to "fans out," Topic →
+  Service to "delivers to," and each offers only the messaging interactions that make sense —
+  no more sifting through HTTP, Query, or Reads/Writes for a message-broker connection. A
+  database-to-database connection defaults to "ingests," with replicate/CDC/sync as alternatives,
+  instead of the generic service-call list.
+- **An unusual connection gets a gentle nudge instead of staying silent.** Connect a Queue directly
+  to a Topic and Draft Canvas explains why that's atypical and offers a one-click "Insert Worker"
+  fix — inserting a service between them and correctly relabeling both new connections — while
+  still letting you keep the connection exactly as drawn if you meant it.
+- A fresh Service → Service connection now shows a subtle "requests" caption instead of no label at
+  all; picking a more specific interaction (HTTP, gRPC, Command, …) replaces it.
 - **Right-click for a contextual menu.** Right-click a service, connector, junction, boundary,
   a selection, or empty canvas for a small menu of just the actions that make sense there —
   duplicate, layer, add a note or code snippet, reverse a connection, select everything inside a
@@ -30,6 +42,10 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ### Fixed
 
+- Re-pointing a connector onto a different kind of node (say, a Database connection dragged onto a
+  Topic) could leave it labelled with an interaction that no longer made sense there, with nothing
+  to notice unless you happened to read it closely. It's now flagged with a one-click fix to
+  relabel it correctly, without silently changing anything you chose on purpose.
 - Reversing a connection's direction could leave it labelled with the wrong relationship (a
   reversed "writes" connector stayed labelled "writes" instead of becoming "reads"). It now
   relabels correctly, unless you had chosen the label yourself.

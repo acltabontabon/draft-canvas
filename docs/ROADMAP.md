@@ -124,6 +124,11 @@ a collection of arrows.*
   new endpoint with a live preview.
 - **2.7 Connector attachments** — ✅ Done. A note or code card can be dragged onto a connector to
   attach as detail; multiple attachments render as independent, hover-revealed chips.
+- **2.8 Opinionated relationship model** — ✅ Done. 2.4's capability matrix now understands Topic
+  as its own kind (not just a Queue caption) and Database→Database data movement, offers a subtle
+  default caption for a request/response connector, and flags an architecturally unusual pairing
+  (e.g. Queue → Topic) with a compact guidance note and, where practical, a one-click "Insert
+  Worker" fix — never a hard block, "guide" always beats "prevent."
 
 ## Phase 3 — Flow & Presentation
 

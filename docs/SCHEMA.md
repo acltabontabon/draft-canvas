@@ -130,12 +130,35 @@ one restores it as an ordinary node on the canvas.
 | `label` | string? | |
 | `accent` | enum? | As for nodes. |
 | `details` | object? | `{ language, code }` — expandable detail shown on selection and during its playback step. |
-| `semantic` | enum? | `http` · `event` · `command` · `query` · `reads` · `writes` · `publishes` · `consumes` · `calls` · `dependsOn`. Optional convenience only — fills in a default `label` when picked on a labelless edge, never assigned automatically, never changes `accent`. |
+| `semantic` | enum? | `http` · `grpc` · `event` · `command` · `query` · `reads` · `writes` · `publishes` · `consumes` · `calls` · `dependsOn` · `fansOut` · `deliversTo` · `ingests` · `replicates` · `cdc` · `syncs`. Optional convenience only — fills in a default `label` when picked on a labelless edge (skipped for a pairing the relationship model flags as unusual, see below), never assigned automatically, never changes `accent`. |
 | `kind` | enum? | `sync` · `async` · `event` · `callback` · `conditional` · `retry` · `failure` · `fallback`. A connector's flow behaviour — line style and a small glyph, not a protocol taxonomy. Independent of `semantic` (a label convenience) and `async` (solid/dashed); the one exception is `kind: "async"` itself, which defaults `async` to `true` the same way a `semantic` fills in a default label — never forced, and either can still be changed afterward on its own. See [`docs/FLOWS.md`](FLOWS.md#flow-kind). |
 | `async` | boolean? | `true` renders a dashed line for an asynchronous interaction. Absent/`false` is synchronous (solid) — a visual distinction only, no protocol taxonomy. |
+| `response` | string? | The reply chip's own text, e.g. `"200 Customer"` — only meaningful alongside `hasResponse`. |
+| `hasResponse` | boolean? | Whether this connector draws a second, quieter reply line back to its source, independent of whether `response` has text. Defaults on for a fresh Service↔Service connection (see [Relationship model](#relationship-model) below), off otherwise; always a manual, reversible choice afterward. |
 | `condition` | string? | Free-text chip, e.g. `"approved"`, `"timeout"` — displayed, never evaluated. Distinct from `label`: the label describes the connection in general, the condition describes when a particular branch applies. |
 | `sourceAnchor` `targetAnchor` | object? | `{ side, offset }` — which side of the node (`top` · `right` · `bottom` · `left`) the connector attaches to, and how far along it (`offset`, a 0–1 fraction of the side's length; `0.5` is the midpoint). Captures the side the user actually dragged the connection from or onto — see [Connector anchors](#connector-anchors) below. Absent on either end falls back to picking the nearest side live, the same way every connector worked before this field existed. |
+| `semanticsOrigin` | `"inferred"` · `"explicit"` ? | Whether `semantic`/`kind` were derived automatically from what the connector links (`"inferred"`, freely re-derived on a later reconnect) or set by hand (`"explicit"`, never silently overwritten). Absent alongside a real `semantic`/`kind` value reads as legacy-explicit (a file saved before this field existed) — never as "up for grabs." |
 | `attachments` | array? | Optional supporting detail (a note, or a code/JSON snippet) on the connection itself — the same [Attachment](#attachment) shape a node uses. Hidden by default, at most a small chip per attachment; reveals its own card on hover or selection. Created by dragging an existing Note/Code node onto the connector (mirrors dragging one onto another node), not through a toolbar control. A separate, newer field from `details` above, which stays as its own thing (read during flow playback only). Up to `maxAttachmentsPerEdge`, and the UI renders every one of them, each styled to match its own type (a note reads as a note, code as code). |
+
+### Relationship model
+
+`semantic`/`kind`/`hasResponse` above are optional conveniences a person can always override, but
+Draft Canvas fills in a sensible default for most pairings up front, and gently flags an unusual
+one instead of staying silent. `src/document/connectorSemantics.ts` derives all of this from
+`sourceNodeCategory × targetNodeCategory` (a node's `type`, and for `service`/`database`/`queue` its
+sub-kind — `serviceKind: 'external'`, `databaseKind: 'cache'`, `queueKind: 'topic'` each read as
+their own category) — a Service→Database connection defaults to `writes`, a fresh Service↔Service
+one defaults to a request/response pair with a subtle "requests" caption, a Topic→Queue connection
+reads as fan-out, and so on. A pairing the model has no opinion about (most of them) keeps full,
+unrestricted freedom — nothing here ever hard-blocks a connection.
+
+A pairing can additionally carry a `status` (`unusual` today; a `questionable` tier is modeled for a
+future one) with a short guidance message and, sometimes, a one-click quick fix — e.g. Queue→Topic
+(a queue does not typically publish into a topic on its own) offers "Insert Worker," which replaces
+that one connector with a new Worker service node and two correctly-labeled connectors
+(Queue→Worker `consumes`, Worker→Topic `publishes`) as a single undo step. None of this is
+persisted structurally — it is derived live from the two endpoint nodes' current types every time,
+so re-pointing a connector to a different kind of node re-evaluates it fresh.
 
 ### Connector anchors
 

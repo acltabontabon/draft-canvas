@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import type { DraftNode } from '../document/types';
+import { capabilityFor, categoryOf } from '../document/connectorSemantics';
 import { explainEdgeTier, lensEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import {
@@ -19,7 +20,7 @@ import {
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
-import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { roughenPath } from '../render/roughness/roughPath';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
@@ -79,14 +80,23 @@ function labelChipTransform(side: Side, x: number, y: number): string {
  * fixed downward offset (the pre-existing behaviour) already clears a horizontal line just fine,
  * since it moves the text off the line's own y-coordinate — the vertical-line case is the one that
  * was never actually clear (a y-only offset leaves the text centered right back on the line's x).
+ *
+ * `awayFromResponse` is `true` only when this caption shares its connector with a response line
+ * (`edge.hasResponse`): the response's own label sits at `OPPOSITE_SIDE[side]` (see
+ * `labelChipTransform`), so a plain always-down default would land the caption on the *same* side
+ * as the response label for a `side === 'top'` connector. Scoped to that one case so the far more
+ * common plain (no response) caption keeps its original, already-shipped-and-tested position
+ * exactly as it was.
  */
 function captionAnchor(
   side: Side,
   x: number,
   y: number,
+  awayFromResponse = false,
 ): { x: number; y: number; textAnchor: 'start' | 'middle' | 'end'; dominantBaseline?: 'middle' } {
   if (side === 'right') return { x: x + LABEL_LINE_GAP, y, textAnchor: 'start', dominantBaseline: 'middle' };
   if (side === 'left') return { x: x - LABEL_LINE_GAP, y, textAnchor: 'end', dominantBaseline: 'middle' };
+  if (awayFromResponse && side === 'top') return { x, y: y - 14, textAnchor: 'middle' };
   return { x, y: y + 14, textAnchor: 'middle' };
 }
 
@@ -131,6 +141,17 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // connector only re-renders when its *source's* colour actually changes,
   // and automatically follows both a recoloured source and a reconnected one.
   const sourceAccent = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.accent);
+  // A primitive, same reasoning as `sourceAccent` above — only re-renders when the pairing's
+  // opinion of itself actually changes (e.g. a reconnect), not on every unrelated node edit. Not
+  // Junction-transparent (unlike `EdgeInspectorPopover.tsx`'s own resolution): a false negative
+  // (no marker on a Junction-mediated unusual pairing) is an acceptable, deliberately cheap
+  // simplification for an ambient canvas hint — it never shows a *wrong* marker, only sometimes
+  // omits one the popover's fuller resolution would have shown.
+  const relationshipStatus = useEditorStore((state) => {
+    const source = selectNode(state.document, edge?.source ?? '');
+    const target = selectNode(state.document, edge?.target ?? '');
+    return source && target ? capabilityFor(categoryOf(source), categoryOf(target))?.status : undefined;
+  });
   const showSequence = useEditorStore((state) => state.document.settings.showSequence);
   const flows = useEditorStore((state) => state.document.flows);
   const flowPlayback = useEditorStore((state) => state.flowPlayback);
@@ -544,26 +565,27 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             </g>
           );
         })()}
-      {/* A subtle caption of the relationship — independent of `kind`'s glyph
-          above, so a plain call/read/write connector reads just as clearly as
-          an event one. Yields entirely to a real label the moment there is one,
-          and to a request/response connector's own reply line: its fixed
-          downward offset would otherwise land right on top of (or read as
-          attached to) the quiet response line/label below, and the two-line
-          shape itself already communicates "this is a call" without the
-          caption's help. */}
-      {!hasLabel && !hasStep && !edge.hasResponse && edge.semantic && (() => {
-        const caption = captionAnchor(route.labelSide, labelX, labelY);
+      {/* A subtle caption of the relationship — independent of `kind`'s glyph above, so a plain
+          call/read/write connector reads just as clearly as an event one. Yields entirely to a
+          real label the moment there is one. A request/response connector now gets one too (see
+          `relationshipCaptionLabel`) — the two-line shape communicates "this is a call," but not
+          *what kind* of call, which is exactly what left a fresh Service→Service connector with
+          no visible text at all. `captionAnchor`'s `awayFromResponse` flag is what keeps this from
+          landing on top of the response line's own label — see its own doc comment. */}
+      {!hasLabel && !hasStep && edge.semantic && (() => {
+        const caption = captionAnchor(route.labelSide, labelX, labelY, Boolean(edge.hasResponse));
+        const isUnusual = relationshipStatus === 'unusual' || relationshipStatus === 'questionable';
+        const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse);
         return (
           <text
             x={caption.x}
             y={caption.y}
             textAnchor={caption.textAnchor}
             dominantBaseline={caption.dominantBaseline}
-            fill={theme.textFaint}
+            fill={isUnusual ? theme.accents.amber.text : theme.textFaint}
             style={{ font: cssFont(FONTS.connectorCaption) }}
           >
-            {SEMANTIC_DEFAULTS[edge.semantic].label}
+            {isUnusual ? `▲ ${label}` : label}
           </text>
         );
       })()}

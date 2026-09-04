@@ -15,6 +15,7 @@ import {
   categoryOf,
   defaultsToResponse,
   isSyncPairing,
+  quickFixesFor,
   resolveTransparentCategory,
   type ConnectionCapability,
 } from '../document/connectorSemantics';
@@ -31,6 +32,7 @@ import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   http: 'HTTP',
+  grpc: 'gRPC',
   event: 'Event',
   command: 'Command',
   query: 'Query',
@@ -40,6 +42,12 @@ const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   consumes: 'Consumes',
   calls: 'Calls',
   dependsOn: 'Depends on',
+  fansOut: 'Fans out',
+  deliversTo: 'Delivers to',
+  ingests: 'Ingests',
+  replicates: 'Replicates',
+  cdc: 'CDC',
+  syncs: 'Syncs',
 };
 
 const CONNECTOR_KIND_LABELS: Record<ConnectorKind, string> = {
@@ -795,6 +803,58 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
 }
 
 /**
+ * The "is this pairing itself unusual" nudge — see `connectorSemantics.ts`'s `RelationshipStatus`/
+ * `quickFixesFor`. Renders nothing for the ordinary case (a `'valid'` pairing whose edge already
+ * picked something `capability.relations` recognizes) — this is a subtle, occasional aside, not a
+ * standing panel. `capability.guidance` covers "this pairing itself is unusual" (e.g. Queue →
+ * Topic); the fallback covers the narrower case of an edge whose *own* explicit `semantic` no
+ * longer fits its (possibly re-pointed) endpoints even though the pairing itself is ordinary — see
+ * the spec's "Service → Database 'writes' re-pointed to a Topic" example. Never both at once: one
+ * quiet line is the point.
+ */
+function RelationshipGuidance({
+  edge,
+  capability,
+  store,
+}: {
+  edge: DraftEdge;
+  capability: ConnectionCapability | undefined;
+  store: typeof useEditorStore;
+}) {
+  const fixes = quickFixesFor(capability, edge);
+  if (fixes.length === 0) return null;
+  const retarget = fixes.find((fix) => fix.id === 'retarget-relation');
+  const message =
+    capability?.guidance ??
+    (retarget && edge.semantic
+      ? `"${EDGE_SEMANTIC_LABELS[edge.semantic]}" doesn't typically apply to this connection.`
+      : undefined);
+  if (!message) return null;
+
+  return (
+    <div className="dc-relationship-guidance">
+      <span className="dc-relationship-guidance-text">{message}</span>
+      <div className="dc-relationship-guidance-actions">
+        {fixes.map((fix) => (
+          <button
+            key={fix.id}
+            type="button"
+            className="dc-relationship-guidance-fix"
+            onClick={() =>
+              fix.id === 'insert-worker'
+                ? store.getState().insertWorkerOnEdge(edge.id)
+                : store.getState().setEdgeSemantic(edge.id, fix.semantic)
+            }
+          >
+            {fix.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The connector's contextual editor — shown immediately under the compact row for every selected
  * connector, no click required (see this file's own top comment) — grouped into labelled sections
  * rather than one flat control grid. Only the sections/fields relevant to *this* connector render:
@@ -902,6 +962,7 @@ function ExpandedPanel({
 
   return (
     <div className="dc-edge-inspector-panel dc-edge-inspector-expanded">
+      <RelationshipGuidance edge={edge} capability={capability} store={store} />
       {isServiceToService ? (
         <ServiceInteractionSection edge={edge} store={store} />
       ) : (

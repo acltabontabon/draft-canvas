@@ -117,6 +117,7 @@ test.describe('contextual connector toolbar', () => {
     await expect(page.getByRole('option')).toHaveText([
       'No type',
       'HTTP',
+      'gRPC',
       'Event',
       'Command',
       'Query',
@@ -126,6 +127,12 @@ test.describe('contextual connector toolbar', () => {
       'Consumes',
       'Calls',
       'Depends on',
+      'Fans out',
+      'Delivers to',
+      'Ingests',
+      'Replicates',
+      'CDC',
+      'Syncs',
     ]);
   });
 
@@ -287,6 +294,7 @@ test.describe('Junction connector', () => {
     await expect(page.getByRole('option')).toHaveText([
       'No type',
       'HTTP',
+      'gRPC',
       'Event',
       'Command',
       'Query',
@@ -296,6 +304,12 @@ test.describe('Junction connector', () => {
       'Consumes',
       'Calls',
       'Depends on',
+      'Fans out',
+      'Delivers to',
+      'Ingests',
+      'Replicates',
+      'CDC',
+      'Syncs',
     ]);
     await page.keyboard.press('Escape');
 

@@ -114,6 +114,7 @@ export type BoundaryPreset = (typeof BOUNDARY_PRESETS)[number];
  *  and never changes an edge's `accent` — see `document/edgeSemantics.ts`. */
 export const EDGE_SEMANTICS = [
   'http',
+  'grpc',
   'event',
   'command',
   'query',
@@ -123,6 +124,12 @@ export const EDGE_SEMANTICS = [
   'consumes',
   'calls',
   'dependsOn',
+  'fansOut',
+  'deliversTo',
+  'ingests',
+  'replicates',
+  'cdc',
+  'syncs',
 ] as const;
 export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];
 

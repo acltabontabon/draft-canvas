@@ -18,8 +18,24 @@ import type { EdgeSemantic } from './types';
  * defaults `async` to `true` the same way a semantic defaults a label, but
  * setting one never reads, requires, or implies the other two.
  */
+/**
+ * The caption text for a connector's relationship — `SEMANTIC_DEFAULTS`'s own label, with one
+ * deliberate relabel: a request/response connector (`hasResponse`) whose `semantic` is still the
+ * untouched call default reads as "requests" rather than "calls" — the plain word "calls" doesn't
+ * say anything the two-line request/response shape doesn't already say, while "requests" names
+ * what's actually happening. Display only; `semantic` itself is never changed by this. Once the
+ * user picks anything more specific (HTTP, gRPC, Command, Query, Event), that relation's own label
+ * shows exactly as it does everywhere else. Shared by both connector renderers (`DraftEdgeView.tsx`
+ * and `edges/describe.ts`) so they can't quietly disagree.
+ */
+export function relationshipCaptionLabel(semantic: EdgeSemantic, hasResponse?: boolean): string {
+  if (hasResponse && semantic === 'calls') return 'requests';
+  return SEMANTIC_DEFAULTS[semantic].label;
+}
+
 export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   http: { label: 'HTTP' },
+  grpc: { label: 'gRPC' },
   event: { label: 'event' },
   command: { label: 'command' },
   query: { label: 'query' },
@@ -29,4 +45,10 @@ export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   consumes: { label: 'consumes' },
   calls: { label: 'calls' },
   dependsOn: { label: 'depends on' },
+  fansOut: { label: 'fans out' },
+  deliversTo: { label: 'delivers to' },
+  ingests: { label: 'ingests' },
+  replicates: { label: 'replicates to' },
+  cdc: { label: 'CDC' },
+  syncs: { label: 'syncs to' },
 };

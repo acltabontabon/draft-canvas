@@ -9,6 +9,7 @@ import {
   createDocument,
   createEdge,
   createNode,
+  defaultSizeFor,
   type CreateNodeInput,
 } from '../document/factory';
 import {
@@ -226,6 +227,11 @@ export interface EditorStore {
   ) => void;
   /** Swaps a connector's source and target (and their anchors) — nothing else. See `reverseEdge`. */
   reverseEdge: (id: string) => void;
+  /** The "Insert Worker" quick fix (see `document/connectorSemantics.ts`'s `RelationshipQuickFix`):
+   *  replaces one edge with a new Worker service node and two new edges (source→worker,
+   *  worker→target), their semantics drawn from the same capability matrix as everywhere else —
+   *  one undo step. A no-op if the edge or either endpoint no longer resolves. */
+  insertWorkerOnEdge: (edgeId: string) => void;
   updateEdgeLabel: (id: string, label: string) => void;
   /** Sets (or clears) a semantic type — fills the default label only if the
    *  edge has none, and never touches `accent`. See `document/edgeSemantics.ts`. */
@@ -632,6 +638,51 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
   },
 
+  insertWorkerOnEdge(edgeId) {
+    const state = get();
+    const edge = state.document.edges.find((e) => e.id === edgeId);
+    const source = edge && state.document.nodes.find((n) => n.id === edge.source);
+    const target = edge && state.document.nodes.find((n) => n.id === edge.target);
+    if (!edge || !source || !target) return;
+
+    // Same midpoint-of-both-centers placement `detachFromEdge` already uses for a connector's
+    // own detached attachment — no independent placement heuristic invented for this.
+    const size = defaultSizeFor('service');
+    const worker = createNode({
+      type: 'service',
+      serviceKind: 'worker',
+      x: Math.round((source.x + source.width / 2 + target.x + target.width / 2) / 2 - size.width / 2),
+      y: Math.round((source.y + source.height / 2 + target.y + target.height / 2) / 2 - size.height / 2),
+      z: Math.max(source.z, target.z),
+    });
+
+    // Both new edges' semantics come from the same capability matrix everything else reads —
+    // never hardcoded — so `Queue → Worker`/`Worker → Topic` fall out as `consumes`/`publishes`
+    // without this action needing to know that itself.
+    const toWorker = capabilityFor(categoryOf(source), categoryOf(worker));
+    const fromWorker = capabilityFor(categoryOf(worker), categoryOf(target));
+    const edgeToWorker = createEdge({
+      source: edge.source,
+      target: worker.id,
+      semantic: toWorker?.defaultRelation,
+      kind: toWorker?.defaultBehavior,
+      semanticsOrigin: toWorker?.defaultRelation ? 'inferred' : undefined,
+    });
+    const edgeFromWorker = createEdge({
+      source: worker.id,
+      target: edge.target,
+      semantic: fromWorker?.defaultRelation,
+      kind: fromWorker?.defaultBehavior,
+      semanticsOrigin: fromWorker?.defaultRelation ? 'inferred' : undefined,
+    });
+
+    state.apply(
+      'Insert worker',
+      (doc) => addEdges(addNodes(removeElements(doc, [], [edgeId]), [worker]), [edgeToWorker, edgeFromWorker]),
+      { selection: { nodes: [worker.id], edges: [] } },
+    );
+  },
+
   updateEdgeLabel(id, label) {
     get().apply('Label connection', (doc) => updateEdge(doc, id, { label }), {
       coalesceKey: `edge-label:${id}`,
@@ -643,9 +694,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const edge = state.document.edges.find((e) => e.id === id);
     if (!edge) return;
     const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { semantic, semanticsOrigin: 'explicit' };
-    // Only a fill-in-the-blank convenience: never overrides a label the user
-    // already gave the connection, and never touches `accent` at all.
-    if (semantic && !edge.label) patch.label = SEMANTIC_DEFAULTS[semantic].label;
+    // Only a fill-in-the-blank convenience: never overrides a label the user already gave the
+    // connection, and never touches `accent` at all. Also skipped for a pairing the matrix flags
+    // as unusual/questionable — auto-filling a plain label there would silently replace the one
+    // visual signal (the caption's own warning marker, see `DraftEdgeView.tsx`) that this
+    // connection is worth a second look, at the exact moment a relation gets picked for it.
+    const status = capabilityFor(
+      resolveTransparentCategory(state.document, edge.source, 'source'),
+      resolveTransparentCategory(state.document, edge.target, 'target'),
+    )?.status;
+    const isUnusual = status === 'unusual' || status === 'questionable';
+    if (semantic && !edge.label && !isUnusual) patch.label = SEMANTIC_DEFAULTS[semantic].label;
     state.apply('Set connection type', (doc) => updateEdge(doc, id, patch));
   },
 

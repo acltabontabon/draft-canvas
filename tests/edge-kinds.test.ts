@@ -275,4 +275,40 @@ describe('a connector\'s subtle relationship caption', () => {
     expect(texts).toHaveLength(1);
     expect(texts[0]!.layout.lines.map((l) => l.text).join('')).toBe('calls');
   });
+
+  function describedServiceToService(edge: DraftEdge) {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
+    const b = createNode({ id: 'b', type: 'service', x: 300, y: 0 });
+    const nodes = new Map([[a.id, a], [b.id, b]]);
+    return describeEdge(edge, nodes, { theme: DARK, measurer: getMeasurer(), showSequence: false })!;
+  }
+
+  it('a request/response connector now shows a caption too — "requests" for the untouched default', () => {
+    const edge = createEdge({ source: 'a', target: 'b', semantic: 'calls', hasResponse: true });
+    const texts = describedServiceToService(edge).overlay.filter((s) => s.t === 'text');
+    expect(texts.some((s) => s.layout.lines.map((l) => l.text).join('') === 'requests')).toBe(true);
+  });
+
+  it('a request/response connector with a more specific interaction shows that interaction\'s own label, not "requests"', () => {
+    const edge = createEdge({ source: 'a', target: 'b', semantic: 'http', hasResponse: true });
+    const texts = describedServiceToService(edge).overlay.filter((s) => s.t === 'text');
+    expect(texts.some((s) => s.layout.lines.map((l) => l.text).join('') === 'HTTP')).toBe(true);
+    expect(texts.some((s) => s.layout.lines.map((l) => l.text).join('').includes('requests'))).toBe(false);
+  });
+
+  it('an unusual pairing\'s caption carries a small warning marker', () => {
+    const a = createNode({ id: 'a', type: 'queue', x: 0, y: 0 });
+    const b = createNode({ id: 'b', type: 'queue', x: 300, y: 0, queueKind: 'topic' });
+    const nodes = new Map([[a.id, a], [b.id, b]]);
+    const edge = createEdge({ source: 'a', target: 'b', semantic: 'event' });
+    const described = describeEdge(edge, nodes, { theme: DARK, measurer: getMeasurer(), showSequence: false })!;
+    const texts = described.overlay.filter((s) => s.t === 'text');
+    expect(texts.some((s) => s.layout.lines.map((l) => l.text).join('').startsWith('▲'))).toBe(true);
+  });
+
+  it('an ordinary pairing\'s caption carries no warning marker', () => {
+    const edge = createEdge({ source: 'a', target: 'b', semantic: 'publishes' });
+    const texts = described(edge).overlay.filter((s) => s.t === 'text');
+    expect(texts.some((s) => s.layout.lines.map((l) => l.text).join('').startsWith('▲'))).toBe(false);
+  });
 });

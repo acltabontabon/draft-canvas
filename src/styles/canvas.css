@@ -1228,6 +1228,51 @@
   color: var(--dc-text);
 }
 
+/*
+ * A subtle "this connection is architecturally unusual" nudge — see
+ * `RelationshipGuidance` in `EdgeInspectorPopover.tsx`. A soft amber tint, not a full-strength
+ * alert: guidance, not a lecture. Reuses the theme's own amber accent variables (already written
+ * onto :root for the amber node/edge accent) rather than a new, parallel colour token.
+ */
+.dc-relationship-guidance {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--dc-accent-amber-chip) 45%, var(--dc-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--dc-accent-amber-chip) 12%, transparent);
+}
+
+.dc-relationship-guidance-text {
+  color: var(--dc-accent-amber-text);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.dc-relationship-guidance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dc-relationship-guidance-fix {
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--dc-accent-amber-chip) 55%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dc-accent-amber-text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dc-relationship-guidance-fix:hover {
+  background: color-mix(in srgb, var(--dc-accent-amber-chip) 20%, transparent);
+}
+
 /* Collapsed by default — the full palette (`.dc-swatches` below) only
  * appears once this is clicked, rather than permanently consuming a row. */
 .dc-inspector-color-swatch {
