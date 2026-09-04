@@ -20,6 +20,7 @@ import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
 import { FocusIndicator } from './FocusIndicator';
 import { CanvasSettingsDialog } from './CanvasSettingsDialog';
+import { CommandPalette } from './CommandPalette';
 import { ExportDialog } from './ExportDialog';
 import { Inspector } from './Inspector';
 import { ShortcutSheet } from './ShortcutSheet';
@@ -65,7 +66,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
           ? naturalCodeSize(code, describeContext(theme))
           : undefined;
 
-      store.getState().addNode({
+      const node = store.getState().addNode({
         type: preset.type,
         x: Math.round(position.x),
         y: Math.round(position.y),
@@ -78,6 +79,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         code,
       });
       arm(null);
+      return node;
     },
     [arm, store, theme],
   );
@@ -121,7 +123,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       const position = pointer.known
         ? { x: pointer.x - 88, y: pointer.y - 34 }
         : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-      createAt(preset, position);
+      return createAt(preset, position);
     },
     [createAt, screenToFlowPosition],
   );
@@ -223,6 +225,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       <ShortcutSheet />
       <ExportDialog />
       <CanvasSettingsDialog />
+      <CommandPalette createAt={createAt} createAtPointer={createAtPointer} playback={playback} />
 
       {/* Hidden control kept reachable for screen readers in presentation mode. */}
       {presenting && (
@@ -253,6 +256,7 @@ function useKeyboard({
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const arm = useUiStore((state) => state.arm);
   const setFlowSwitcherOpen = useUiStore((state) => state.setFlowSwitcherOpen);
+  const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const { fitView, zoomIn, zoomOut, screenToFlowPosition } = useReactFlow();
 
   // Best-effort pickup of whatever's on the OS clipboard whenever the tab
@@ -276,6 +280,10 @@ function useKeyboard({
       ) {
         return;
       }
+
+      // While the command palette is up it owns the keyboard outright — even if focus has
+      // somehow left its input, a stray "t" must never spawn a Text node behind it.
+      if (useUiStore.getState().commandPaletteOpen) return;
 
       const meta = event.metaKey || event.ctrlKey;
       const state = store.getState();
@@ -320,6 +328,12 @@ function useKeyboard({
           case 'e':
             event.preventDefault();
             setExportOpen(true);
+            return;
+          case 'k':
+            // The command palette (Phase 8). Only opens from here — while it's open its own
+            // capture-phase listener owns every key, including the ⌘K that closes it again.
+            event.preventDefault();
+            setCommandPaletteOpen(true);
             return;
           case 'a': {
             event.preventDefault();
@@ -440,6 +454,7 @@ function useKeyboard({
     playback,
     fitView,
     screenToFlowPosition,
+    setCommandPaletteOpen,
     setExportOpen,
     setFlowSwitcherOpen,
     setShortcutsOpen,

@@ -38,7 +38,12 @@ after the first successful visit. See `docs/ROADMAP.md`'s Phase 6 for the full d
 
 ### localStorage
 
-One key, `draft-canvas.theme`, holding `dark` or `light`.
+Short, named UI preferences only: `draft-canvas.theme` (`dark`/`light`), `draft-canvas.personality`
+(the roughness preset), `draft-canvas.last-seen-version` and `draft-canvas.feature-seen.<id>` (the
+"New" badges), `draft-canvas.hint.<id>` (which contextual hints have been learned), and — for the
+command palette's history — `draft-canvas.command-recent.<n>` (the ids of the last few commands
+run) and `draft-canvas.command-use.<id>` (a per-command counter). Command ids name actions
+("add-service", "connect-to"), never elements: nothing about a diagram's content is stored here.
 
 All access goes through `src/lib/preferences.ts`, which namespaces keys and rejects any value
 longer than 64 characters. No canvas content is written there, and a test

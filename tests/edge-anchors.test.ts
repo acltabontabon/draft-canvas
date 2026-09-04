@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
-import { addEdges, addNodes, reconnectEdge } from '../src/document/operations';
+import { addEdges, addNodes, reconnectEdge, reverseEdge } from '../src/document/operations';
 import { normalizeDocument } from '../src/document/validate';
 import { DRAFT_FORMAT, CURRENT_VERSION } from '../src/document/types';
 import {
@@ -417,5 +417,70 @@ describe('reconnectEdge', () => {
 
     useEditorStore.getState().undo();
     expect(useEditorStore.getState().document.edges[0]!.source).toBe('a');
+  });
+});
+
+describe('reverseEdge', () => {
+  const store = useEditorStore;
+
+  beforeEach(() => {
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Reverse'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+  });
+
+  it('swaps the endpoints and their anchors, and nothing else', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    const edge = store.getState().connect(a.id, b.id, 'right', 'left')!;
+    store.getState().updateEdgeById(edge.id, { label: 'reads', kind: 'retry', condition: 'cached', hasResponse: true });
+    const before = store.getState().document.edges.find((e) => e.id === edge.id)!;
+
+    store.getState().reverseEdge(edge.id);
+    const after = store.getState().document.edges.find((e) => e.id === edge.id)!;
+
+    expect(after.source).toBe(b.id);
+    expect(after.target).toBe(a.id);
+    expect(after.sourceAnchor).toEqual({ side: 'left', offset: 0.5 });
+    expect(after.targetAnchor).toEqual({ side: 'right', offset: 0.5 });
+    const { source: _s, target: _t, sourceAnchor: _sa, targetAnchor: _ta, ...restBefore } = before;
+    const { source: _s2, target: _t2, sourceAnchor: _sa2, targetAnchor: _ta2, ...restAfter } = after;
+    expect(restAfter).toEqual(restBefore);
+  });
+
+  it('keeps an absent anchor absent rather than writing undefined', () => {
+    const doc0 = addNodes(createDocument('Reverse'), [
+      createNode({ type: 'service', x: 0, y: 0, id: 'a' }),
+      createNode({ type: 'service', x: 300, y: 0, id: 'b' }),
+    ]);
+    const doc1 = addEdges(doc0, [
+      createEdge({ source: 'a', target: 'b', id: 'e', sourceAnchor: { side: 'right', offset: 0.5 } }),
+    ]);
+    const reversed = reverseEdge(doc1, 'e');
+    const edge = reversed.edges[0]!;
+    expect(edge.source).toBe('b');
+    expect(edge.targetAnchor).toEqual({ side: 'right', offset: 0.5 });
+    expect('sourceAnchor' in edge).toBe(false);
+    expect(reverseEdge(doc1, 'missing')).toBe(doc1);
+  });
+
+  it('is one undo step and keeps flow steps pointing at the same connector', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 300, y: 0 });
+    const edge = store.getState().connect(a.id, b.id)!;
+    const flowId = store.getState().createFlow('Checkout');
+    store.getState().addEdgeToFlow(flowId, edge.id);
+    const past = store.getState().history.past.length;
+
+    store.getState().reverseEdge(edge.id);
+    expect(store.getState().history.past.length).toBe(past + 1);
+    expect(store.getState().document.flows[0]!.steps[0]!.edgeId).toBe(edge.id);
+    store.getState().undo();
+    expect(store.getState().document.edges[0]!.source).toBe(a.id);
   });
 });

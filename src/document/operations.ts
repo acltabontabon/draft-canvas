@@ -131,6 +131,29 @@ export function reconnectEdge(
   return changed ? withEdges(doc, edges) : doc;
 }
 
+/**
+ * Swaps a connector's direction. Only the two endpoints and their anchors move — the label, the
+ * semantic, the kind, the condition/response chips, attachments, and `semanticsOrigin` all stay
+ * exactly as they were: reversing which way an arrow points never changes which node kinds are
+ * on each end, so unlike `reconnectEdge` there is nothing for inference to re-derive. Flow steps
+ * reference the edge by id, so they keep pointing at this connector too.
+ */
+export function reverseEdge(doc: DraftDocument, id: string): DraftDocument {
+  let changed = false;
+  const edges = doc.edges.map((edge) => {
+    if (edge.id !== id) return edge;
+    changed = true;
+    const next: DraftEdge = { ...edge, source: edge.target, target: edge.source };
+    // Absent stays absent — never write an `undefined` own-property a serializer would emit.
+    if (edge.targetAnchor) next.sourceAnchor = edge.targetAnchor;
+    else delete next.sourceAnchor;
+    if (edge.sourceAnchor) next.targetAnchor = edge.sourceAnchor;
+    else delete next.targetAnchor;
+    return next;
+  });
+  return changed ? withEdges(doc, edges) : doc;
+}
+
 /** Applies a batch of positions in one pass — used to commit a drag gesture. */
 export function moveNodes(
   doc: DraftDocument,

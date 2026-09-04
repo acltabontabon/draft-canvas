@@ -1,16 +1,16 @@
 import { ALL_PRESETS } from '../../canvas/presets';
+import { MOD_LABEL } from '../../lib/platform';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 
-const isMac =
-  typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-const mod = isMac ? 'Cmd' : 'Ctrl';
+const mod = MOD_LABEL;
 
 const GROUPS: { title: string; items: [string, string][] }[] = [
   {
     title: 'Editing',
     items: [
+      [`${mod} K`, 'Commands — search actions, elements, and flows'],
       [`${mod} Z`, 'Undo'],
       [`${mod} Shift Z`, 'Redo'],
       [`${mod} C`, 'Copy'],

@@ -174,6 +174,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const [editing, setEditing] = useState(false);
   const stopEditing = useCallback(() => setEditing(false), []);
   const editRequested = useUiStore((state) => state.editRequestId === id);
+  const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
 
   // Tracked in JS, not left to a pure `.dc-edge:hover` CSS rule: the response label lives in React
   // Flow's `EdgeLabelRenderer` portal, a sibling overlay div elsewhere in the DOM tree, not a real
@@ -377,6 +378,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-flow-active={isActiveStep ? pulseTarget : undefined}
       data-attach-target={attachTarget ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
+      data-jump-flash={jumpFlash ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
       data-lens-pulse={lensPulsing ? 'true' : undefined}
       onPointerEnter={responseRoute ? () => setHoveringResponse(true) : undefined}

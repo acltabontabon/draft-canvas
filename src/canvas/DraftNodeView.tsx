@@ -45,6 +45,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const isAttachTarget = useUiStore((state) => state.attachArmedTarget === id);
   // Same boolean-not-id discipline as `isAttachTarget` — see its comment.
   const isReconnectTarget = useUiStore((state) => state.reconnectHoverTarget === id);
+  const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   // Which specific anchor (side + offset) a reconnect drag is currently
   // hovering, if any is on this node — null on every other node, so only the
   // one matching handle (see the render below) ever re-renders when this
@@ -179,6 +180,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-editing={editing ? 'true' : undefined}
       data-attach-target={isAttachTarget ? 'true' : undefined}
       data-reconnect-target={isReconnectTarget ? 'true' : undefined}
+      data-jump-flash={jumpFlash ? 'true' : undefined}
       style={
         {
           width: effectiveWidth,

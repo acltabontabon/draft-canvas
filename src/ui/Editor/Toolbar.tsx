@@ -40,6 +40,8 @@ export function Toolbar({
   const learnModeActive = useUiStore((state) => state.learnModeActive);
   const setLearnModeActive = useUiStore((state) => state.setLearnModeActive);
   const { isNew: learnModeIsNew, retire: retireLearnModeBadge } = useIsNewFeature('learn-mode');
+  const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
+  const { isNew: paletteIsNew, retire: retirePaletteBadge } = useIsNewFeature('command-palette');
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const past = useEditorStore((state) => state.history.past.length);
@@ -138,6 +140,18 @@ export function Toolbar({
         />
         <Button icon="fit" variant="quiet" onClick={onFit} title="Fit to view (Shift+1)" />
         <span className="dc-toolbar-divider" />
+        <span className="dc-badge-anchor">
+          <Button
+            icon="search"
+            variant="quiet"
+            onClick={() => {
+              retirePaletteBadge();
+              setCommandPaletteOpen(true);
+            }}
+            title="Commands (Cmd+K)"
+          />
+          {paletteIsNew && <span className="dc-new-dot" aria-hidden="true" />}
+        </span>
         <FlowSwitcher />
         <Button icon="present" variant="ghost" onClick={onPresent} title="Present (Cmd+Enter)" />
         <span className="dc-toolbar-divider" />

@@ -40,6 +40,17 @@ export function ExportDialog() {
   const [gifSpeed, setGifSpeed] = useState<GifSpeed>('normal');
   const [gifLoop, setGifLoop] = useState(true);
 
+  // "Export selection…" from the command palette: the request simply reads as the checkbox
+  // being on until the user touches it or closes the dialog — derived, not copied into state, so
+  // a later plain ⌘E opens with whatever was last chosen here rather than a stale request.
+  const selectionRequested = useUiStore((state) => state.exportSelectionRequested);
+  const requestExportSelection = useUiStore((state) => state.requestExportSelection);
+  const effectiveSelectionOnly = selectionOnly || selectionRequested;
+  const close = () => {
+    requestExportSelection(false);
+    setOpen(false);
+  };
+
   if (!open) return null;
 
   // Re-derived every render rather than a `useState` default: a flow created
@@ -53,7 +64,7 @@ export function ExportDialog() {
     '';
 
   const only =
-    selectionOnly && selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
+    effectiveSelectionOnly && selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
   const hasBackground = document.settings.background.enabled;
   const options = {
     theme: paletteName,
@@ -68,7 +79,7 @@ export function ExportDialog() {
     setBusy(true);
     try {
       await task();
-      setOpen(false);
+      close();
     } catch (error) {
       notify(
         error instanceof Error ? `${what} failed: ${error.message}` : `${what} failed.`,
@@ -80,7 +91,7 @@ export function ExportDialog() {
   };
 
   return (
-    <Modal title="Export" width={520} onClose={() => setOpen(false)}>
+    <Modal title="Export" width={520} onClose={close}>
       <div className="dc-export-options">
         <label className="dc-field dc-field-inline">
           <span>Palette</span>
@@ -117,9 +128,12 @@ export function ExportDialog() {
         <label className="dc-check" data-disabled={selection.nodes.length === 0 ? 'true' : undefined}>
           <input
             type="checkbox"
-            checked={selectionOnly}
+            checked={effectiveSelectionOnly}
             disabled={selection.nodes.length === 0}
-            onChange={(event) => setSelectionOnly(event.target.checked)}
+            onChange={(event) => {
+              setSelectionOnly(event.target.checked);
+              requestExportSelection(false);
+            }}
           />
           <span>
             Selection only

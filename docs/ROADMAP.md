@@ -17,12 +17,19 @@ yet a commitment)
 | [5](#phase-5--personalization) | Personalization | ✅ Done |
 | [6](#phase-6--offline-first-application-availability) | Offline-First Application Availability | ✅ Done — 6.7 exploratory, not blocking |
 | [7](#phase-7--contextual-learning) | Contextual Learning | ✅ Done |
-| [8](#phase-8--canvas-command-surface) | Canvas Command Surface | ⬜ Planned |
+| [8](#phase-8--canvas-command-surface) | Canvas Command Surface | ✅ Done — 8.5-8.7 exploratory, not blocking |
 | [9](#phase-9--future--experimental) | Future / Experimental | 🧪 Exploratory |
 | [10](#phase-10--support-draft-canvas) | Support Draft Canvas | ⬜ Planned (low priority) |
 
-**What's next:** [Phase 8](#phase-8--canvas-command-surface) (Canvas Command Surface) is the active
-next build. Phase 7 (Contextual Learning) shipped all four sub-phases — contextual hints folded into
+**What's next:** every planned phase has shipped. What remains is optional or exploratory:
+[4.4](#phase-4--export--sharing) (Export for Ticket), [8.5-8.7](#phase-8--canvas-command-surface)
+(quick-create shorthand, name-resolving commands, recipes), [6.7](#phase-6--offline-first-application-availability)
+(installable PWA), [9.1](#phase-9--future--experimental) (MP4), and
+[Phase 10](#phase-10--support-draft-canvas) (Support Draft Canvas, deliberately low priority).
+Phase 8 (Canvas Command Surface) shipped 8.1-8.4 — the `⌘K` palette, selection-aware commands with
+two-step targets, canvas search and jump, and local command history — gated per sub-phase by the
+full test suite, a new `e2e/command-palette.spec.ts`, and manual browser verification in both
+themes and in Presentation Mode. Phase 7 (Contextual Learning) shipped all four sub-phases — contextual hints folded into
 the existing `ElementInspectorPopover`/`EdgeInspectorPopover` rather than a second floating overlay,
 usage-inferred retirement via `semanticsOrigin`/attachment state, a "New" indicator on the Learn
 Draft Canvas toolbar entry, and the opt-in Learn Draft Canvas mode itself — gated by the full test
@@ -473,23 +480,50 @@ Command Palette, Raycast, Spotlight — contextual to a technical canvas — nev
 primary UX built around typing `add-service --name payment-api` is novelty over usability and is
 explicitly out of scope.
 
-- **8.1 Command surface core** — ⬜ Planned. `⌘K`/`Ctrl+K` (and possibly `/` when the canvas is
-  focused, echoing 1.7's existing single-key shortcuts) opens a searchable list of deterministic
-  commands with fuzzy matching — `db` surfaces "Add Database," `conn` surfaces "Connect selected
-  element," `spot` surfaces "Spotlight selection." No command requires memorizing an exact name.
-- **8.2 Contextual commands** — ⬜ Planned. The list adapts to selection state instead of listing
-  hundreds of unrelated actions: nothing selected surfaces creation and navigation (Add Service,
-  Start Presentation, Find Element); one node selected surfaces Connect to…, Duplicate, Group,
-  Spotlight, Start Flow Here (reusing 3.1); one connector selected surfaces Change Relationship,
-  Reverse Direction, Reconnect Source/Target (reusing 2.6), Add to Flow; a multi-selection surfaces
-  Group, Align, Duplicate, Export Selection (reusing 4.1).
-- **8.3 Canvas search & jump navigation** — ⬜ Planned. The same surface is the fastest way to find
-  something on a large canvas — typing a name surfaces matching nodes and Flows; picking one pans to
-  it, briefly highlights it, and optionally selects it. No separate search UI. Includes jump
-  commands (next/previous flow step, fit canvas, fit selection, jump to bookmark).
-- **8.4 Command history** — ⬜ Planned. `⌘K` then Up Arrow recalls recently used commands; a
-  frequently repeated command (Add Service, Add Service, Connect, Connect during rapid diagram
-  creation) can rise toward the top. A small local list, not a synced or cross-document history.
+- **8.1 Command surface core** — ✅ Done. `⌘K`/`Ctrl+K` — and a quiet search button in the
+  toolbar, carrying 7.3's "New" dot for returning users — opens a searchable list of deterministic
+  commands with fuzzy matching: `db` surfaces "Add Data Store," `conn` surfaces "Connect to…,"
+  `spot` surfaces "Spotlight selection," each with its existing keyboard chord shown beside it.
+  `⌘K` only: `/` was considered and left free — one trigger, no accidental opens. The matcher is
+  hand-rolled (`src/commands/fuzzy.ts`), not a dependency, because the short dependency list is
+  part of the privacy promise. Every command is one call into an existing `editorStore`/`uiStore`
+  action (`src/commands/registry.ts`); the palette itself (`CommandPalette.tsx`) owns only the
+  query, the highlight, and — for a two-step command like "Connect to…" — the stage it is in.
+  Available in Presentation Mode too, but navigation-only there: next/previous step, go to step…,
+  fit, exit — never a mutating command mid-explanation.
+- **8.2 Contextual commands** — ✅ Done. The list adapts to selection state instead of listing
+  hundreds of unrelated actions: nothing selected surfaces creation, flows, and navigation; one
+  node surfaces Connect to… (existing nodes by name, then "New Service/Data Store/Queue/Actor"
+  which creates *and* connects, placed beside the source), Edit text, Spotlight, Start flow here
+  (reusing 3.1 — immediate for one outgoing connector, a picker for several, absent for none),
+  Duplicate, Bring to front/Send to back; one connector surfaces Change relationship…, Change
+  kind…, async and response toggles, Reverse direction, Reconnect source…/target… (reusing 2.6),
+  Add to flow…, Spotlight, Edit label; a multi-selection surfaces Group, Ungroup, Align (six ways),
+  Distribute (three or more), Spotlight, Duplicate, Export selection… (reusing 4.1's own
+  selection-only option). Creation commands stay available with a selection, and a created node
+  is selected afterwards, so "Add Service → Connect to… → New Queue" chains without a mouse.
+  Group for a *single* node was dropped — a boundary around one element isn't a thing 1.4 does.
+  "Reverse direction" was the one operation that did not already exist; it was added to
+  `document/operations.ts` as `reverseEdge` (endpoints and anchors swap, nothing else) with a
+  store wrapper, so the palette still names an operation rather than owning one.
+- **8.3 Canvas search & jump navigation** — ✅ Done. The same surface is the fastest way to find
+  something on a large canvas — typing a name surfaces matching nodes, Flows, and labelled
+  connectors under "Jump to," ranked alongside commands (an exact name beats a scattered command
+  match; a good command match still leads) and capped at eight. Picking one pans there with the
+  same capped bounds-fit Presentation Mode uses, selects it, and flashes it once (a `data-jump-flash`
+  ring, static under reduced motion); picking a Flow selects its lens and frames its members. No
+  separate search UI. Jump commands: next/previous step and go to step… (while presenting), fit
+  canvas, fit selection. "Jump to bookmark" was not built — no bookmark concept exists in the
+  model, and inventing one for a jump target would have been a feature, not a command.
+- **8.4 Command history** — ✅ Done. An empty palette leads with "Recent" — the last few
+  commands that still apply — so `⌘K` then `Enter` repeats the last one and `↓` browses the rest;
+  a frequently repeated command (Add Service, Add Service, Connect, Connect during rapid diagram
+  creation) rises a little in a typed search, with the nudge capped below a prefix match so it can
+  never outrank the thing you just typed the start of. A two-step command records itself, not the
+  target picked inside it; a jump is a place, not an action, and is never recorded. A small local
+  list through `lib/preferences.ts` — one short key per slot (`command-recent.<n>`,
+  `command-use.<id>`), never a joined value, because that file caps each at 64 characters — not a
+  synced or cross-document history.
 - **8.5 Quick-create shorthand** — 🧪 Exploratory. A lightweight, optional syntax for expert users
   (`+service Payment API`, `+db Ledger`) that never replaces normal command search. Handle with
   care: the shorthand accelerates direct manipulation on the canvas, it does not become a
@@ -512,13 +546,16 @@ faster way to invoke the existing one. This keeps it instant, offline, and fully
 0.1's no-network invariant: no command, including 8.6's name matching, ever leaves the browser.
 
 **Dependencies & sequencing.** 8.1-8.4 depend only on Phases 1-4 already being real capabilities to
-front — they could ship independently of Phase 5, 6, or 7. This phase is still sequenced after
-Contextual Learning specifically for 8.1's own discoverability: "Tip: Press ⌘K from anywhere on the
-canvas," and inline shortcut hints next to menu items, should be built as an instance of 7.1's
-contextual-hint primitive, not a bespoke tooltip invented for this one feature — reusing Phase 7's
-primitives is the point, the same way 4.3 reused Presentation Mode instead of building a second
-animation system. Within the phase: 8.1 → 8.2 → 8.3 → 8.4 is the deterministic core and the
-recommended build order; 8.5-8.7 stay exploratory and don't block it.
+front — they could ship independently of Phase 5, 6, or 7. This phase was still sequenced after
+Contextual Learning specifically for 8.1's own discoverability, and that is how it shipped: the
+"Press ⌘K to act on this from the keyboard" tip is a fifth `HintStrip` id (`command-palette`) in
+the same `ElementInspectorPopover` slot the node hints use, shown once an element's own hint is
+learned or dismissed and retired the first time the palette opens (7.2's "open the command menu
+once," finally wired); inline shortcut chips beside menu items reuse the app's `kbd` styling; the
+toolbar button carries 7.3's "New" dot; the empty canvas and the Keyboard Shortcuts sheet each
+gained a `⌘K` line. Built as 8.1 → 8.2 → 8.3 → 8.4, each gated before the next; 8.5-8.7 stay
+exploratory and nothing in 8.1-8.4 scaffolds for them — `CommandStage` is the only extension point,
+and it exists because 8.2 needed it.
 
 **AI should not be required.** Every command listed above — create, connect, rename, group, align,
 spotlight, flow, navigate, search, export — is deterministic. If AI capabilities are ever explored

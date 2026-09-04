@@ -1494,3 +1494,61 @@
 .react-flow__attribution {
   display: none;
 }
+
+/* -------------------------------------------------------------- jump -- */
+
+/* Phase 8.3 — the palette's "Jump to" just landed here. A ring that swells once and settles
+   into the ordinary selection ring, so the eye finds the element even on a crowded canvas
+   without anything being re-coloured. Under reduced motion it simply holds a wider ring for the
+   same beat instead of animating. */
+.dc-node[data-jump-flash='true']::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1.5px solid var(--dc-selection);
+  border-radius: calc(var(--dc-radius) + 3px);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--dc-selection) 22%, transparent);
+  pointer-events: none;
+}
+
+.dc-node[data-type='ellipse'][data-jump-flash='true']::after {
+  border-radius: 50%;
+}
+
+.dc-edge[data-jump-flash='true'] .dc-edge-line {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dc-selection) 90%, transparent));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-node[data-jump-flash='true']::after {
+    animation: dc-jump-flash 900ms ease-out 1;
+  }
+
+  .dc-edge[data-jump-flash='true'] .dc-edge-line {
+    animation: dc-jump-flash-edge 900ms ease-out 1;
+  }
+}
+
+@keyframes dc-jump-flash {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--dc-selection) 55%, transparent);
+  }
+  40% {
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--dc-selection) 22%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 0%, transparent);
+  }
+}
+
+@keyframes dc-jump-flash-edge {
+  0% {
+    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
+  }
+  40% {
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--dc-selection) 95%, transparent));
+  }
+  100% {
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 60%, transparent));
+  }
+}

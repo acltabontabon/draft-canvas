@@ -8,4 +8,5 @@ import { PRODUCT } from '../product';
  */
 export const NEW_FEATURES: { id: string; sinceVersion: string }[] = [
   { id: 'learn-mode', sinceVersion: PRODUCT.version },
+  { id: 'command-palette', sinceVersion: PRODUCT.version },
 ];

@@ -1,0 +1,822 @@
+import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../canvas/presets';
+import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import { defaultSizeFor, displayNameFor } from '../document/factory';
+import {
+  CONNECTOR_KINDS,
+  EDGE_SEMANTICS,
+  type ConnectorKind,
+  type DraftEdge,
+  type DraftNode,
+} from '../document/types';
+import { MOD_SYMBOL } from '../lib/platform';
+import { focusNodes } from './search';
+import type { Command, CommandContext, CommandOption, CommandStage } from './types';
+
+/**
+ * Phase 8.1/8.2 — the whole command catalog, derived fresh from context on every call. Nothing
+ * here is registered ahead of time or kept in a store: `commandsFor` reads the selection, the
+ * mode, and the document, and returns exactly the commands that make sense *right now*, in the
+ * order they should list. Cheap (a few dozen entries), pure, and trivially testable.
+ *
+ * Every `run` is one call into an existing store action or hook — see `types.ts`.
+ */
+
+const PRESET_KEYWORDS: Record<string, string[]> = {
+  text: ['label', 'caption'],
+  note: ['remark', 'question', 'warning', 'decision', 'sticky'],
+  code: ['snippet', 'json', 'yaml', 'sql', 'log', 'config'],
+  service: ['api', 'app', 'worker', 'microservice'],
+  database: ['db', 'database', 'sql', 'store', 'cache', 'table'],
+  queue: ['topic', 'stream', 'kafka', 'event bus', 'message'],
+  actor: ['user', 'person', 'client', 'device'],
+  ellipse: ['junction', 'branch', 'merge', 'circle'],
+};
+
+function createCommand(preset: Preset): Command {
+  return {
+    id: `add-${preset.id}`,
+    title: `Add ${preset.label}`,
+    group: 'create',
+    keywords: PRESET_KEYWORDS[preset.id],
+    hint: preset.hint,
+    shortcut: preset.shortcut,
+    run: (ctx) => {
+      const node = ctx.createAtPointer(preset);
+      // Select what was just made, so "Add Service → Connect to…" chains without a mouse.
+      ctx.editor.setSelection({ nodes: [node.id], edges: [] });
+    },
+  };
+}
+
+function startPresentation(ctx: CommandContext) {
+  ctx.editor.setMode('present');
+  if (ctx.playback.canStart) ctx.playback.start();
+  void ctx.camera.fitView({ padding: 0.18, duration: 320 });
+}
+
+function presentFlowStage(ctx: CommandContext): CommandStage {
+  return {
+    prompt: 'Present flow',
+    options: ctx.editor.document.flows.map((flow) => ({
+      id: `present-flow:${flow.id}`,
+      title: flow.title,
+      hint: `${flow.steps.length} step${flow.steps.length === 1 ? '' : 's'}`,
+      run: (inner) => {
+        inner.editor.setMode('present');
+        inner.playback.pickFlow(flow.id);
+      },
+    })),
+  };
+}
+
+/** What the palette offers while presenting: moving through the story, never rewriting it. */
+function presentModeCommands(ctx: CommandContext): Command[] {
+  const { playback } = ctx;
+  const commands: Command[] = [];
+  if (playback.active && playback.flow) {
+    const last = playback.steps.length;
+    commands.push(
+      {
+        id: 'step-next',
+        title: 'Next step',
+        group: 'flow',
+        shortcut: '→',
+        hint: playback.step < last ? `Step ${playback.step + 1} of ${last}` : 'At the end',
+        run: (inner) => inner.playback.next(),
+      },
+      {
+        id: 'step-previous',
+        title: 'Previous step',
+        group: 'flow',
+        shortcut: '←',
+        hint: playback.step > 1 ? `Step ${playback.step - 1} of ${last}` : 'At the start',
+        run: (inner) => inner.playback.previous(),
+      },
+      {
+        id: 'step-go-to',
+        title: 'Go to step…',
+        group: 'flow',
+        keywords: ['jump', 'skip'],
+        run: (inner) => ({
+          prompt: 'Go to step',
+          options: inner.playback.steps.map((step) => ({
+            id: `step:${step.step}`,
+            title: `${step.step}. ${step.caption ?? stepTitle(inner, step.edge?.id)}`,
+            hint: step.step === inner.playback.step ? 'Current' : undefined,
+            run: (deep) => deep.playback.goTo(step.step),
+          })),
+        }),
+      },
+    );
+  } else if (playback.canStart) {
+    commands.push({
+      id: 'present-flow',
+      title: 'Present a flow…',
+      group: 'flow',
+      keywords: ['walkthrough', 'play', 'story'],
+      run: presentFlowStage,
+    });
+  }
+  commands.push(
+    {
+      id: 'fit',
+      title: 'Fit to view',
+      group: 'view',
+      keywords: ['zoom', 'center', 'all'],
+      shortcut: 'Shift 1',
+      run: (inner) => void inner.camera.fitView({ padding: 0.2, duration: 320 }),
+    },
+    {
+      id: 'present-exit',
+      title: 'Exit presentation',
+      group: 'view',
+      keywords: ['stop', 'edit', 'leave'],
+      shortcut: `${MOD_SYMBOL} Enter`,
+      run: (inner) => inner.editor.setMode('edit'),
+    },
+  );
+  return commands;
+}
+
+function stepTitle(ctx: CommandContext, edgeId: string | undefined): string {
+  if (!edgeId) return 'Frame';
+  const edge = ctx.editor.document.edges.find((entry) => entry.id === edgeId);
+  if (!edge) return 'Step';
+  const names = new Map(ctx.editor.document.nodes.map((node) => [node.id, node]));
+  const from = names.get(edge.source);
+  const to = names.get(edge.target);
+  const label = edge.label?.trim();
+  return `${from ? displayNameFor(from) : '?'} → ${to ? displayNameFor(to) : '?'}${label ? ` · ${label}` : ''}`;
+}
+
+
+function flowCommands(ctx: CommandContext): Command[] {
+  const { flows } = ctx.editor.document;
+  const commands: Command[] = [];
+  if (flows.length > 0) {
+    commands.push({
+      id: 'present',
+      title: 'Start presentation',
+      group: 'flow',
+      keywords: ['present', 'walkthrough', 'play', 'story', 'meeting'],
+      shortcut: `${MOD_SYMBOL} Enter`,
+      hint: flows.length === 1 ? flows[0]!.title : `${flows.length} flows`,
+      run: startPresentation,
+    });
+    if (flows.length > 1) {
+      commands.push({
+        id: 'present-flow',
+        title: 'Present flow…',
+        group: 'flow',
+        keywords: ['walkthrough', 'play'],
+        run: presentFlowStage,
+      });
+    }
+    commands.push({
+      id: 'switch-flow',
+      title: 'Switch to flow…',
+      group: 'flow',
+      keywords: ['lens', 'view', 'select flow'],
+      shortcut: 'F',
+      run: (inner) => ({
+        prompt: 'Switch to',
+        options: [
+          {
+            id: 'switch-flow:diagram',
+            title: 'Diagram',
+            hint: inner.editor.selectedFlowId === null ? 'Current' : 'No flow lens',
+            run: (deep) => deep.editor.setSelectedFlowId(null),
+          },
+          ...inner.editor.document.flows.map((flow) => ({
+            id: `switch-flow:${flow.id}`,
+            title: flow.title,
+            hint:
+              inner.editor.selectedFlowId === flow.id
+                ? 'Current'
+                : `${flow.steps.length} step${flow.steps.length === 1 ? '' : 's'}`,
+            run: (deep: CommandContext) => deep.editor.setSelectedFlowId(flow.id),
+          })),
+        ],
+      }),
+    });
+  } else {
+    commands.push({
+      id: 'present',
+      title: 'Start presentation',
+      group: 'flow',
+      keywords: ['present', 'walkthrough', 'play'],
+      shortcut: `${MOD_SYMBOL} Enter`,
+      hint: 'No flows yet — presents the diagram',
+      run: startPresentation,
+    });
+  }
+  commands.push(
+    {
+      id: 'flow-new',
+      title: 'New flow',
+      group: 'flow',
+      keywords: ['create flow', 'story', 'path', 'walkthrough'],
+      run: (inner) => {
+        const id = inner.editor.createFlow();
+        inner.editor.setSelectedFlowId(id);
+        inner.ui.setFlowPanelOpen(true);
+      },
+    },
+    {
+      id: 'flow-manage',
+      title: 'Manage flows…',
+      group: 'flow',
+      keywords: ['rename', 'reorder', 'steps', 'panel'],
+      run: (inner) => inner.ui.setFlowPanelOpen(true),
+    },
+  );
+  return commands;
+}
+
+function viewCommands(ctx: CommandContext): Command[] {
+  const commands: Command[] = [
+    {
+      id: 'fit',
+      title: 'Fit to view',
+      group: 'view',
+      keywords: ['zoom', 'center', 'all', 'canvas'],
+      shortcut: 'Shift 1',
+      run: (inner) => void inner.camera.fitView({ padding: 0.2, duration: 320 }),
+    },
+    {
+      id: 'zoom-in',
+      title: 'Zoom in',
+      group: 'view',
+      shortcut: `${MOD_SYMBOL} +`,
+      run: (inner) => void inner.camera.zoomIn({ duration: 160 }),
+    },
+    {
+      id: 'zoom-out',
+      title: 'Zoom out',
+      group: 'view',
+      shortcut: `${MOD_SYMBOL} −`,
+      run: (inner) => void inner.camera.zoomOut({ duration: 160 }),
+    },
+  ];
+  if (ctx.editor.selection.nodes.length > 0) {
+    commands.push({
+      id: 'fit-selection',
+      title: 'Fit selection',
+      group: 'view',
+      keywords: ['zoom to', 'center on', 'frame'],
+      run: (inner) => focusNodes(inner, inner.editor.selection.nodes),
+    });
+  }
+  if (ctx.editor.focus.active) {
+    commands.push({
+      id: 'focus-exit',
+      title: 'Exit spotlight',
+      group: 'view',
+      keywords: ['focus', 'clear', 'unhighlight'],
+      shortcut: 'Esc',
+      run: (inner) => inner.editor.exitFocus(),
+    });
+  }
+  commands.push({
+    id: 'theme-toggle',
+    title: 'Toggle light / dark theme',
+    group: 'view',
+    keywords: ['theme', 'dark', 'light', 'appearance'],
+    run: (inner) => inner.toggleTheme(),
+  });
+  return commands;
+}
+
+function canvasCommands(ctx: CommandContext): Command[] {
+  const commands: Command[] = [];
+  if (ctx.editor.canUndo()) {
+    commands.push({
+      id: 'undo',
+      title: 'Undo',
+      group: 'canvas',
+      shortcut: `${MOD_SYMBOL} Z`,
+      run: (inner) => inner.editor.undo(),
+    });
+  }
+  if (ctx.editor.canRedo()) {
+    commands.push({
+      id: 'redo',
+      title: 'Redo',
+      group: 'canvas',
+      shortcut: `${MOD_SYMBOL} Shift Z`,
+      run: (inner) => inner.editor.redo(),
+    });
+  }
+  if (ctx.editor.document.nodes.length > 0) {
+    commands.push({
+      id: 'select-all',
+      title: 'Select all',
+      group: 'canvas',
+      shortcut: `${MOD_SYMBOL} A`,
+      run: (inner) =>
+        inner.editor.setSelection({
+          nodes: inner.editor.document.nodes.map((node) => node.id),
+          edges: [],
+        }),
+    });
+  }
+  commands.push(
+    {
+      id: 'export',
+      title: 'Export…',
+      group: 'canvas',
+      keywords: ['png', 'svg', 'gif', 'download', 'save', 'share', 'image'],
+      shortcut: `${MOD_SYMBOL} E`,
+      run: (inner) => inner.ui.setExportOpen(true),
+    },
+    {
+      id: 'settings',
+      title: 'Canvas settings…',
+      group: 'canvas',
+      keywords: ['background', 'personality', 'roughness', 'sketch', 'appearance', 'image'],
+      run: (inner) => inner.ui.setSettingsOpen(true),
+    },
+    {
+      id: 'shortcuts',
+      title: 'Keyboard shortcuts',
+      group: 'canvas',
+      keywords: ['help', 'keys', 'hotkeys'],
+      shortcut: '?',
+      run: (inner) => inner.ui.setShortcutsOpen(true),
+    },
+    {
+      id: 'learn-mode',
+      title: ctx.ui.learnModeActive ? 'Turn off Learn Draft Canvas mode' : 'Turn on Learn Draft Canvas mode',
+      group: 'canvas',
+      keywords: ['hints', 'learn', 'guidance', 'tips', 'coach'],
+      run: (inner) => inner.ui.setLearnModeActive(!inner.ui.learnModeActive),
+    },
+    {
+      id: 'about',
+      title: 'About Draft Canvas',
+      group: 'canvas',
+      keywords: ['version', 'update', 'info'],
+      run: (inner) => inner.ui.setAboutOpen(true),
+    },
+  );
+  return commands;
+}
+
+
+/* ------------------------------------------------------------ selection -- */
+
+const KIND_TITLES: Record<ConnectorKind, string> = {
+  sync: 'Sync',
+  async: 'Async',
+  event: 'Event',
+  callback: 'Callback',
+  conditional: 'Conditional',
+  retry: 'Retry',
+  failure: 'Failure',
+  fallback: 'Fallback',
+};
+
+const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
+  text: 'Text',
+  note: 'Note',
+  code: 'Code',
+  service: 'Service',
+  database: 'Data store',
+  queue: 'Queue',
+  actor: 'Actor',
+  group: 'Boundary',
+  ellipse: 'Junction',
+};
+
+function captionFor(node: DraftNode): string {
+  return TYPE_CAPTIONS[node.type] ?? node.type;
+}
+
+/** Nodes worth offering as a connector endpoint — everything but boundaries and the node itself. */
+function endpointCandidates(ctx: CommandContext, exclude: string[]): DraftNode[] {
+  return ctx.editor.document.nodes.filter((node) => node.type !== 'group' && !exclude.includes(node.id));
+}
+
+function nodeOptions(nodes: DraftNode[], prefix: string, run: (node: DraftNode, ctx: CommandContext) => void): CommandOption[] {
+  return nodes.map((node) => ({
+    id: `${prefix}:${node.id}`,
+    title: displayNameFor(node),
+    hint: captionFor(node),
+    run: (ctx) => run(node, ctx),
+  }));
+}
+
+/** How far to the right of its source a "Connect to → New …" node lands. A UX choice, not a rule. */
+const NEW_NEIGHBOUR_GAP = 120;
+
+function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
+  const existing = nodeOptions(endpointCandidates(ctx, [source.id]), 'connect', (target, inner) => {
+    const edge = inner.editor.connect(source.id, target.id);
+    if (edge) inner.editor.setSelection({ nodes: [], edges: [edge.id] });
+  });
+  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse').map((preset) => ({
+    id: `connect-new:${preset.id}`,
+    title: `New ${preset.label}`,
+    keywords: PRESET_KEYWORDS[preset.id],
+    hint: 'Create and connect',
+    run: (inner) => {
+      const size = defaultSizeFor(preset.type);
+      const created = inner.createAt(preset, {
+        x: Math.round(source.x + source.width + NEW_NEIGHBOUR_GAP),
+        y: Math.round(source.y + source.height / 2 - size.height / 2),
+      });
+      inner.editor.connect(source.id, created.id);
+      inner.editor.setSelection({ nodes: [created.id], edges: [] });
+    },
+  }));
+  return { prompt: 'Connect to', options: [...existing, ...fresh] };
+}
+
+function startFlowWith(ctx: CommandContext, edge: DraftEdge) {
+  const flowId = ctx.editor.createFlow();
+  ctx.editor.addEdgeToFlow(flowId, edge.id);
+  ctx.editor.setSelectedFlowId(flowId);
+  ctx.editor.setSelection({ nodes: [], edges: [edge.id] });
+}
+
+function edgeTitle(ctx: CommandContext, edge: DraftEdge): string {
+  const nodes = ctx.editor.document.nodes;
+  const from = nodes.find((node) => node.id === edge.source);
+  const to = nodes.find((node) => node.id === edge.target);
+  return `${from ? displayNameFor(from) : '?'} → ${to ? displayNameFor(to) : '?'}`;
+}
+
+function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
+  const commands: Command[] = [];
+  const isBoundary = node.type === 'group';
+  if (!isBoundary) {
+    commands.push({
+      id: 'connect-to',
+      title: 'Connect to…',
+      group: 'selection',
+      keywords: ['link', 'edge', 'arrow', 'wire', 'draw connection'],
+      hint: displayNameFor(node),
+      run: (inner) => connectToStage(inner, node),
+    });
+  }
+  commands.push({
+    id: 'edit-text',
+    title: isBoundary ? 'Edit caption' : 'Edit text',
+    group: 'selection',
+    keywords: ['rename', 'label', 'name'],
+    shortcut: 'Enter',
+    run: (inner) => inner.ui.requestEdit(node.id),
+  });
+  const outgoing = ctx.editor.document.edges.filter((edge) => edge.source === node.id);
+  if (outgoing.length > 0) {
+    commands.push({
+      id: 'flow-start-here',
+      title: 'Start flow here',
+      group: 'selection',
+      keywords: ['new flow', 'story', 'walkthrough', 'begin'],
+      hint:
+        outgoing.length === 1
+          ? `${displayNameFor(node)} → ${edgeTitle(ctx, outgoing[0]!).split(' → ')[1]}`
+          : `${outgoing.length} outgoing connectors`,
+      run: (inner) => {
+        if (outgoing.length === 1) {
+          startFlowWith(inner, outgoing[0]!);
+          return;
+        }
+        return {
+          prompt: 'Start flow with',
+          options: outgoing.map((edge) => ({
+            id: `flow-start:${edge.id}`,
+            title: edgeTitle(inner, edge),
+            hint: edge.label?.trim() || undefined,
+            run: (deep) => startFlowWith(deep, edge),
+          })),
+        };
+      },
+    });
+  }
+  commands.push(
+    {
+      id: 'spotlight',
+      title: 'Spotlight selection',
+      group: 'selection',
+      keywords: ['focus', 'highlight', 'dim others'],
+      run: (inner) => inner.editor.enterFocus([node.id], []),
+    },
+    {
+      id: 'duplicate',
+      title: 'Duplicate',
+      group: 'selection',
+      keywords: ['copy', 'clone'],
+      shortcut: `${MOD_SYMBOL} D`,
+      run: (inner) => inner.editor.duplicateSelection(),
+    },
+    {
+      id: 'bring-to-front',
+      title: 'Bring to front',
+      group: 'selection',
+      keywords: ['raise', 'z-order', 'top'],
+      run: (inner) => inner.editor.raise(true),
+    },
+    {
+      id: 'send-to-back',
+      title: 'Send to back',
+      group: 'selection',
+      keywords: ['lower', 'z-order', 'bottom'],
+      run: (inner) => inner.editor.lower(true),
+    },
+  );
+  if (isBoundary) {
+    commands.push({
+      id: 'ungroup',
+      title: 'Ungroup',
+      group: 'selection',
+      keywords: ['dissolve boundary', 'remove group'],
+      shortcut: `${MOD_SYMBOL} Shift G`,
+      run: (inner) => inner.editor.ungroupSelection(),
+    });
+  }
+  commands.push(deleteCommand('Delete'));
+  return commands;
+}
+
+function deleteCommand(title: string): Command {
+  return {
+    id: 'delete',
+    title,
+    group: 'selection',
+    keywords: ['remove', 'trash'],
+    shortcut: 'Backspace',
+    run: (inner) => inner.editor.deleteSelection(),
+  };
+}
+
+function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
+  const semanticTitle = edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : 'Plain';
+  const flowsContaining = ctx.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId === edge.id));
+  const flowsAvailable = ctx.editor.document.flows.filter((flow) => !flowsContaining.includes(flow));
+  return [
+    {
+      id: 'edge-semantic',
+      title: 'Change relationship…',
+      group: 'connector',
+      keywords: ['semantic', 'http', 'event', 'reads', 'writes', 'publishes', 'consumes', 'calls', 'meaning', 'type'],
+      hint: semanticTitle,
+      run: () => ({
+        prompt: 'Relationship',
+        options: [
+          ...EDGE_SEMANTICS.map((semantic) => ({
+            id: `edge-semantic:${semantic}`,
+            title: SEMANTIC_DEFAULTS[semantic].label,
+            hint: edge.semantic === semantic ? 'Current' : undefined,
+            run: (inner: CommandContext) => inner.editor.setEdgeSemantic(edge.id, semantic),
+          })),
+          {
+            id: 'edge-semantic:none',
+            title: 'None',
+            hint: edge.semantic ? 'Clear the relationship' : 'Current',
+            run: (inner) => inner.editor.setEdgeSemantic(edge.id, undefined),
+          },
+        ],
+      }),
+    },
+    {
+      id: 'edge-kind',
+      title: 'Change kind…',
+      group: 'connector',
+      keywords: ['behaviour', 'behavior', 'sync', 'async', 'callback', 'retry', 'failure', 'fallback', 'conditional', 'line style'],
+      hint: edge.kind ? KIND_TITLES[edge.kind] : 'Plain',
+      run: () => ({
+        prompt: 'Kind',
+        options: [
+          ...CONNECTOR_KINDS.map((kind) => ({
+            id: `edge-kind:${kind}`,
+            title: KIND_TITLES[kind],
+            hint: edge.kind === kind ? 'Current' : undefined,
+            run: (inner: CommandContext) => inner.editor.setEdgeKind(edge.id, kind),
+          })),
+          {
+            id: 'edge-kind:none',
+            title: 'None',
+            hint: edge.kind ? 'Clear the kind' : 'Current',
+            run: (inner) => inner.editor.setEdgeKind(edge.id, undefined),
+          },
+        ],
+      }),
+    },
+    {
+      id: 'edge-async',
+      title: edge.async ? 'Make synchronous' : 'Make asynchronous',
+      group: 'connector',
+      keywords: ['async', 'sync', 'dashed', 'solid', 'toggle'],
+      hint: edge.async ? 'Solid line' : 'Dashed line',
+      run: (inner) => inner.editor.toggleEdgeAsync(edge.id),
+    },
+    {
+      id: 'edge-response',
+      title: edge.hasResponse ? 'Remove response line' : 'Add response line',
+      group: 'connector',
+      keywords: ['reply', 'return', 'request response', '200'],
+      run: (inner) => inner.editor.setEdgeHasResponse(edge.id, !edge.hasResponse),
+    },
+    {
+      id: 'edge-reverse',
+      title: 'Reverse direction',
+      group: 'connector',
+      keywords: ['flip', 'swap', 'invert', 'arrow'],
+      hint: edgeTitle(ctx, edge),
+      run: (inner) => inner.editor.reverseEdge(edge.id),
+    },
+    {
+      id: 'edge-reconnect-source',
+      title: 'Reconnect source…',
+      group: 'connector',
+      keywords: ['move start', 'from', 'origin', 'retarget'],
+      run: (inner) => ({
+        prompt: 'Source',
+        options: nodeOptions(endpointCandidates(inner, [edge.source]), 'reconnect-source', (node, deep) =>
+          deep.editor.reconnectEdge(edge.id, 'source', node.id, undefined),
+        ),
+      }),
+    },
+    {
+      id: 'edge-reconnect-target',
+      title: 'Reconnect target…',
+      group: 'connector',
+      keywords: ['move end', 'to', 'destination', 'retarget'],
+      run: (inner) => ({
+        prompt: 'Target',
+        options: nodeOptions(endpointCandidates(inner, [edge.target]), 'reconnect-target', (node, deep) =>
+          deep.editor.reconnectEdge(edge.id, 'target', node.id, undefined),
+        ),
+      }),
+    },
+    {
+      id: 'edge-add-to-flow',
+      title: 'Add to flow…',
+      group: 'connector',
+      keywords: ['step', 'story', 'walkthrough', 'sequence'],
+      hint: flowsContaining.length > 0 ? `In ${flowsContaining.map((flow) => flow.title).join(', ')}` : undefined,
+      run: () => ({
+        prompt: 'Add to flow',
+        options: [
+          ...flowsAvailable.map((flow) => ({
+            id: `edge-add-to-flow:${flow.id}`,
+            title: flow.title,
+            hint: `${flow.steps.length} step${flow.steps.length === 1 ? '' : 's'}`,
+            run: (deep: CommandContext) => {
+              deep.editor.addEdgeToFlow(flow.id, edge.id);
+              deep.editor.setSelectedFlowId(flow.id);
+            },
+          })),
+          {
+            id: 'edge-add-to-flow:new',
+            title: 'New flow',
+            hint: 'Starts a flow with this connector',
+            run: (deep) => startFlowWith(deep, edge),
+          },
+        ],
+      }),
+    },
+    {
+      id: 'spotlight',
+      title: 'Spotlight selection',
+      group: 'connector',
+      keywords: ['focus', 'highlight', 'dim others'],
+      run: (inner) => inner.editor.enterFocus([], [edge.id]),
+    },
+    {
+      id: 'edit-text',
+      title: 'Edit label',
+      group: 'connector',
+      keywords: ['rename', 'caption', 'name'],
+      shortcut: 'Enter',
+      run: (inner) => inner.ui.requestEdit(edge.id),
+    },
+    { ...deleteCommand('Delete connector'), group: 'connector' },
+  ];
+}
+
+function multiCommands(ctx: CommandContext): Command[] {
+  const { selection, document } = ctx.editor;
+  const nodes = document.nodes.filter((node) => selection.nodes.includes(node.id));
+  const commands: Command[] = [];
+  if (nodes.length >= 2) {
+    commands.push({
+      id: 'group',
+      title: 'Group into boundary',
+      group: 'selection',
+      keywords: ['boundary', 'system', 'domain', 'container', 'wrap'],
+      shortcut: `${MOD_SYMBOL} G`,
+      hint: `${nodes.length} elements`,
+      run: (inner) => inner.editor.groupSelection(),
+    });
+  }
+  if (nodes.some((node) => node.type === 'group')) {
+    commands.push({
+      id: 'ungroup',
+      title: 'Ungroup',
+      group: 'selection',
+      keywords: ['dissolve boundary', 'remove group'],
+      shortcut: `${MOD_SYMBOL} Shift G`,
+      run: (inner) => inner.editor.ungroupSelection(),
+    });
+  }
+  if (nodes.length >= 2) {
+    const aligns: [string, string, Parameters<CommandContext['editor']['align']>[0]][] = [
+      ['align-left', 'Align left', 'left'],
+      ['align-right', 'Align right', 'right'],
+      ['align-top', 'Align top', 'top'],
+      ['align-bottom', 'Align bottom', 'bottom'],
+      ['align-center-x', 'Align centers horizontally', 'centerX'],
+      ['align-center-y', 'Align centers vertically', 'centerY'],
+    ];
+    for (const [id, title, edge] of aligns) {
+      commands.push({
+        id,
+        title,
+        group: 'selection',
+        keywords: ['align', 'line up', 'tidy'],
+        run: (inner) => inner.editor.align(edge),
+      });
+    }
+  }
+  if (nodes.length >= 3) {
+    commands.push(
+      {
+        id: 'distribute-x',
+        title: 'Distribute horizontally',
+        group: 'selection',
+        keywords: ['space evenly', 'spread', 'tidy'],
+        run: (inner) => inner.editor.distribute('x'),
+      },
+      {
+        id: 'distribute-y',
+        title: 'Distribute vertically',
+        group: 'selection',
+        keywords: ['space evenly', 'spread', 'tidy'],
+        run: (inner) => inner.editor.distribute('y'),
+      },
+    );
+  }
+  commands.push(
+    {
+      id: 'spotlight',
+      title: 'Spotlight selection',
+      group: 'selection',
+      keywords: ['focus', 'highlight', 'dim others'],
+      hint: `${selection.nodes.length + selection.edges.length} elements`,
+      run: (inner) => inner.editor.enterFocus(inner.editor.selection.nodes, inner.editor.selection.edges),
+    },
+    {
+      id: 'duplicate',
+      title: 'Duplicate',
+      group: 'selection',
+      keywords: ['copy', 'clone'],
+      shortcut: `${MOD_SYMBOL} D`,
+      run: (inner) => inner.editor.duplicateSelection(),
+    },
+  );
+  if (nodes.length > 0) {
+    commands.push({
+      id: 'export-selection',
+      title: 'Export selection…',
+      group: 'selection',
+      keywords: ['png', 'svg', 'image', 'share', 'only'],
+      run: (inner) => {
+        inner.ui.requestExportSelection(true);
+        inner.ui.setExportOpen(true);
+      },
+    });
+  }
+  commands.push(deleteCommand('Delete selection'));
+  return commands;
+}
+
+/** The selection-dependent part of the list — empty when nothing is selected. */
+function selectionCommands(ctx: CommandContext): Command[] {
+  const { nodes, edges } = ctx.editor.selection;
+  const { document } = ctx.editor;
+  if (nodes.length === 1 && edges.length === 0) {
+    const node = document.nodes.find((entry) => entry.id === nodes[0]);
+    return node ? nodeCommands(ctx, node) : [];
+  }
+  if (edges.length === 1 && nodes.length === 0) {
+    const edge = document.edges.find((entry) => entry.id === edges[0]);
+    return edge ? edgeCommands(ctx, edge) : [];
+  }
+  if (nodes.length + edges.length >= 2) return multiCommands(ctx);
+  return [];
+}
+
+/** Every command that applies to `ctx` right now, in display order. */
+export function commandsFor(ctx: CommandContext): Command[] {
+  if (ctx.editor.mode === 'present') return presentModeCommands(ctx);
+  return [
+    ...selectionCommands(ctx),
+    ...ALL_PRESETS.map(createCommand),
+    ...flowCommands(ctx),
+    ...viewCommands(ctx),
+    ...canvasCommands(ctx),
+  ];
+}

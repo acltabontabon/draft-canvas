@@ -10,6 +10,13 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ### Added
 
+- **Command palette.** Press `⌘K` (`Ctrl+K` on Windows/Linux), or use the search button in the
+  toolbar, and type what you want to do — add a service, connect it, spotlight it, start a flow,
+  present, export. The list changes with what you have selected, and two-step commands like
+  "Connect to…" pick their target right there.
+- **Find anything by name.** Type a node, flow, or connection name in the palette to jump to it.
+- The palette remembers your recent commands, so `⌘K` then `Enter` repeats the last one.
+- A connection can be reversed with "Reverse direction".
 - A canvas that fails to render now shows a recoverable screen ("Something went wrong while
   rendering this canvas.") instead of going blank, with options to reload the canvas, restore the
   last saved version, or return to your diagrams.

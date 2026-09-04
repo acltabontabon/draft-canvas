@@ -23,6 +23,7 @@ import {
   moveNodes,
   pasteFragment,
   reconnectEdge as reconnectEdgeOp,
+  reverseEdge as reverseEdgeOp,
   removeAttachment as removeAttachmentOp,
   removeEdgeAttachment as removeEdgeAttachmentOp,
   removeElements,
@@ -218,6 +219,8 @@ export interface EditorStore {
     newSide: Side | undefined,
     newOffset?: number,
   ) => void;
+  /** Swaps a connector's source and target (and their anchors) — nothing else. See `reverseEdge`. */
+  reverseEdge: (id: string) => void;
   updateEdgeLabel: (id: string, label: string) => void;
   /** Sets (or clears) a semantic type — fills the default label only if the
    *  edge has none, and never touches `accent`. See `document/edgeSemantics.ts`. */
@@ -570,6 +573,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   updateEdgeById(id, patch, label = 'Change connection') {
     get().apply(label, (doc) => updateEdge(doc, id, patch));
+  },
+
+  reverseEdge(id) {
+    get().apply('Reverse direction', (doc) => reverseEdgeOp(doc, id));
   },
 
   reconnectEdge(id, endpoint, newNodeId, newSide, newOffset = 0.5) {

@@ -1,3 +1,4 @@
+import { MOD_SYMBOL } from '../../lib/platform';
 import { useEditorStore } from '../../store/editorStore';
 
 /**
@@ -16,7 +17,8 @@ export function EmptyState() {
       <p className="dc-empty-hint">Add shapes, connect ideas, drop in code, explain the flow.</p>
       <p className="dc-empty-keys">
         <kbd>N</kbd> note <span className="dc-dot" /> <kbd>C</kbd> code <span className="dc-dot" />{' '}
-        <kbd>S</kbd> service <span className="dc-dot" /> <kbd>?</kbd> all shortcuts
+        <kbd>S</kbd> service <span className="dc-dot" /> <kbd>{MOD_SYMBOL}K</kbd> commands{' '}
+        <span className="dc-dot" /> <kbd>?</kbd> all shortcuts
       </p>
     </div>
   );

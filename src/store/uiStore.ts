@@ -32,7 +32,7 @@ export interface ArmedAnchor {
   offset: number;
 }
 
-interface UiStore {
+export interface UiStore {
   /** The preset a canvas click will place, or null for plain selection. */
   armed: Preset | null;
   shortcutsOpen: boolean;
@@ -121,6 +121,20 @@ interface UiStore {
    *  and is waiting to be activated (Phase 6.2/6.3) — see `serviceWorker.ts`
    *  and `AboutDialog.tsx`'s update-ready state. */
   updateReady: boolean;
+  /** Phase 8 — whether the ⌘K command palette is showing. See `CommandPalette.tsx`. */
+  commandPaletteOpen: boolean;
+  /**
+   * The node or edge id the palette's "Jump to" just landed on (Phase 8.3), so its view can flash
+   * once. Cleared by the palette itself a moment later — the same shape as `editRequestId`: a
+   * one-shot request into memoized views that have no imperative API.
+   */
+  jumpFlashId: string | null;
+  /**
+   * A one-shot request for the Export dialog to open with "Selection only" already checked —
+   * how the palette's "Export selection…" reaches a dialog that otherwise owns that toggle
+   * locally. Consumed (cleared) by `ExportDialog` the moment it opens.
+   */
+  exportSelectionRequested: boolean;
   /** Phase 7.4 — "Learn Draft Canvas" mode. Deliberately not persisted: an opt-in pass a user
    *  asks for each time, never a saved setting — see `HintStrip.tsx`, which shows a hint
    *  regardless of its own retired state while this is true. */
@@ -167,6 +181,9 @@ interface UiStore {
   /** Reloads onto the downloaded update. A no-op until `registerActivateUpdate`
    *  has run (e.g. unsupported browser, or no update staged). */
   activateUpdate: () => void;
+  setCommandPaletteOpen: (open: boolean) => void;
+  requestExportSelection: (requested: boolean) => void;
+  setJumpFlashId: (id: string | null) => void;
   setLearnModeActive: (active: boolean) => void;
   setLibrarySearchQuery: (query: string) => void;
   setLibrarySort: (sort: UiStore['librarySort']) => void;
@@ -201,6 +218,9 @@ export const useUiStore = create<UiStore>((set) => ({
   interactionActive: false,
   editRequestId: null,
   updateReady: false,
+  commandPaletteOpen: false,
+  exportSelectionRequested: false,
+  jumpFlashId: null,
   learnModeActive: false,
   librarySearchQuery: '',
   librarySort: 'updatedAt',
@@ -258,6 +278,10 @@ export const useUiStore = create<UiStore>((set) => ({
     activateFn = activate;
   },
   activateUpdate: () => activateFn?.(),
+  setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
+  requestExportSelection: (exportSelectionRequested) => set({ exportSelectionRequested }),
+  setJumpFlashId: (jumpFlashId) =>
+    set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
   setLearnModeActive: (learnModeActive) => set({ learnModeActive }),
   setLibrarySearchQuery: (librarySearchQuery) => set({ librarySearchQuery }),
   setLibrarySort: (librarySort) => set({ librarySort }),

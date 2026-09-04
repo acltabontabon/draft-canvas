@@ -50,6 +50,12 @@ Each of these has a failure mode that is silent, delayed, or both.
   so every PNG would export in the wrong typeface.
 - **`localStorage` is only for tiny preferences**, and only through `src/lib/preferences.ts`.
   Documents go in IndexedDB.
+- **A command palette entry is a name for an existing store action, never a new way to change
+  the document.** Every command in `src/commands/registry.ts` calls `useEditorStore`/`useUiStore`
+  (or a React Flow camera method) — never `src/document/operations.ts` directly, and never its
+  own document logic. If a command needs an operation that doesn't exist, add the operation and
+  a store wrapper first (the way `reverseEdge` was added), then name it. Commands live only in
+  `registry.ts` (and `search.ts` for jump targets); nothing else may build one ad hoc.
 - **`version` is read only in `src/document/migrate.ts`.** Nothing else may branch on it.
 - **No side effects inside React state updaters.** React runs them twice in development; doing
   this recorded every drag twice and made undo appear broken.

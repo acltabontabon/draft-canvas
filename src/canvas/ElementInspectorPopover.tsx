@@ -33,6 +33,7 @@ import {
   SERVICE_KIND_OPTION_LABELS,
 } from '../ui/Editor/nodeKindLabels';
 import { rectOfInternal } from './edgeGeometry';
+import { useHints } from '../learning/useHints';
 import { HintStrip } from './HintStrip';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import type { HintId } from '../learning/hints';
@@ -111,6 +112,8 @@ export function ElementInspectorPopover() {
   const selection = useEditorStore((state) => state.selection);
   const mode = useEditorStore((state) => state.mode);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
+  const learnModeActive = useUiStore((state) => state.learnModeActive);
+  const { isRetired, isDismissedThisSession } = useHints();
   const store = useEditorStore;
   const theme = useThemeValue();
   const { flowToScreenPosition, screenToFlowPosition } = useReactFlow();
@@ -260,12 +263,24 @@ export function ElementInspectorPopover() {
   // since they teach the same underlying capability.
   const hasAnyAttachment =
     document.nodes.some((n) => n.attachments?.length) || document.edges.some((e) => e.attachments?.length);
-  const hintId: HintId | null =
+  const primaryHint: HintId | null =
     displayNode.type === 'service'
       ? 'service-node'
       : displayNode.type !== 'group' && !displayNode.attachments?.length
         ? 'attachment-slot'
         : null;
+  // Phase 8 — once the element's own hint is learned or dismissed (or it never had one), the same
+  // slot teaches the palette instead: a selected element is exactly the moment "connect, spotlight,
+  // start a flow here" becomes a question. Learn mode keeps showing the element's own hint first,
+  // since resurfacing those is the whole point of that mode.
+  const primaryDone =
+    primaryHint === null ||
+    hasAnyAttachment ||
+    isRetired(primaryHint) ||
+    isDismissedThisSession(primaryHint);
+  const hintId: HintId | null =
+    learnModeActive && primaryHint ? primaryHint : primaryDone ? 'command-palette' : primaryHint;
+  const hintLearned = hintId === 'command-palette' ? false : hasAnyAttachment;
 
   // A dropdown inside this popover should open away from the element, not toward it — mirror
   // whichever side the popover itself placed on. Left/right placement has no above/below
@@ -303,7 +318,7 @@ export function ElementInspectorPopover() {
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="dc-element-inspector-inner">
-          {hintId && <HintStrip id={hintId} learned={hasAnyAttachment} />}
+          {hintId && <HintStrip id={hintId} learned={hintLearned} />}
           <ElementInspectorRow
             node={displayNode}
             paletteOpen={paletteOpen}

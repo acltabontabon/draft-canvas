@@ -286,6 +286,27 @@ during that flow's playback. Reaching for `FocusState` to model "a step with sev
 have collapsed two things that only look similar — one is a story, the other is a spotlight — so
 the two stayed separate, and `DraftFlowStep` grew a richer shape instead.
 
+## Command surface
+
+`src/commands/` is the ⌘K palette's brain, and it is deliberately thin. `registry.ts`'s
+`commandsFor(ctx)` is a pure function from the current selection, mode, and document to the list
+of commands that make sense right now — re-derived on every keystroke, never registered ahead of
+time or kept in a store. Each command's `run` is one call into an action `store/editorStore.ts`
+or `store/uiStore.ts` already exposes (or a React Flow camera method). That is the whole design:
+the palette introduces no second way to mutate the document, so undo, selection, autosave, and
+every invariant above hold for a command exactly as they hold for the toolbar button or keyboard
+shortcut that does the same thing. A command that needs a two-step answer ("Connect to…" needs a
+target) returns a `CommandStage` — a prompt and a list of options that are themselves commands —
+and the palette swaps its list for them.
+
+`fuzzy.ts` is a small hand-rolled subsequence matcher (word starts, consecutive runs, and prefixes
+score high; keywords let `db` find "Add Data Store") — not a dependency, because the runtime
+dependency list is part of the privacy promise (`tests/privacy.test.ts`). `search.ts` turns named
+nodes, flows, and labelled connectors into "Jump to" commands and moves the camera with the same
+`getViewportForBounds` math Presentation Mode uses. `history.ts` remembers recent and frequent
+commands through `lib/preferences.ts`, one short key per slot. `ui/Editor/CommandPalette.tsx` owns
+nothing but the query, the highlight, and the stage.
+
 ## Untrusted input
 
 `document/validate.ts` is the only door into the document model, used for both imported files and
