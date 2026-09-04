@@ -1,16 +1,15 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PRODUCT } from '../src/product';
 import { AboutDialog } from '../src/ui/common/AboutDialog';
 import { useUiStore } from '../src/store/uiStore';
 
 /**
- * Phase 10 — Support Draft Canvas. The support entry is a single collapsed
- * `<details>` inside the existing About dialog: invisible weight until someone
- * deliberately opens it, and its one action is a plain external Ko-fi link,
- * not a payment integration.
+ * Phase 10 — Support Draft Canvas. A single human footnote inside the
+ * existing About dialog: a plain external Ko-fi link, visible immediately
+ * (no expand/collapse, no explanatory paragraph), not a payment integration.
  */
-describe('AboutDialog support entry', () => {
+describe('AboutDialog support link', () => {
   beforeEach(() => {
     useUiStore.setState({ aboutOpen: true, updateReady: false });
   });
@@ -21,18 +20,9 @@ describe('AboutDialog support entry', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows a collapsed support disclosure that is not open by default', () => {
+  it('shows a Ko-fi link, opened externally, with no click needed to reveal it', () => {
     render(<AboutDialog />);
-    const details = screen.getByText('♥ Support Draft Canvas').closest('details');
-    expect(details).not.toBeNull();
-    expect(details).not.toHaveAttribute('open');
-  });
-
-  it('reveals a Ko-fi link, opened externally, once expanded', () => {
-    render(<AboutDialog />);
-    fireEvent.click(screen.getByText('♥ Support Draft Canvas'));
-
-    const link = screen.getByRole('link', { name: /Support Draft Canvas on Ko-fi/i });
+    const link = screen.getByRole('link', { name: /Buy the builder a coffee/i });
     expect(link).toHaveAttribute('href', PRODUCT.links.kofi);
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noreferrer');

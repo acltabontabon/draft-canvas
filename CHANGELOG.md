@@ -8,6 +8,11 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+### Changed
+
+- The About dialog's support entry is now a single line — "☕ Buy the builder a coffee" — instead
+  of an expandable section.
+
 ## [0.3.0] - 2026-09-04
 
 ### Added

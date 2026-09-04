@@ -102,28 +102,16 @@ export function AboutDialog() {
           </div>
         </div>
 
-        <details className="dc-about-support">
-          <summary>♥ Support Draft Canvas</summary>
-          <div className="dc-about-support-body">
-            <p className="dc-muted">
-              Draft Canvas is free and independently built. If it saved a meeting, explained an
-              architecture, or kept you from opening something heavier, you can optionally support
-              its development.
-            </p>
-            <a
-              className="dc-support-link"
-              href={PRODUCT.links.kofi}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Support Draft Canvas on Ko-fi (opens in a new tab)"
-            >
-              ☕ Support on Ko-fi ↗
-            </a>
-            <p className="dc-muted dc-support-note">
-              No perks, no paywalls — coffee accepted, architecture emergencies also accepted.
-            </p>
-          </div>
-        </details>
+        <a
+          className="dc-about-support"
+          href={PRODUCT.links.kofi}
+          target="_blank"
+          rel="noreferrer"
+          title="If Draft Canvas helped, you can optionally support its development."
+          aria-label="Buy the builder a coffee on Ko-fi (opens in a new tab)"
+        >
+          ☕ Buy the builder a coffee ↗
+        </a>
       </div>
     </Modal>
   );

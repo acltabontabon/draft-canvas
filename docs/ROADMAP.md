@@ -637,39 +637,40 @@ asking "please upgrade." This is intentionally the lowest-priority phase on the 
 sequencing after the core experience (0-4) is mature enough that support would be a genuine, earned
 reaction rather than an ask.
 
-- **10.1 Support entry point** — ✅ Done. A subtle "♥ Support Draft Canvas" line in the existing
-  About dialog (`AboutDialog.tsx`) — one more low-key entry below the signature/links row that's
-  already there, not a new surface. It's a native `<details>` disclosure, collapsed by default, so
-  About looks exactly as it always has unless someone deliberately opens it. Expanding it reveals a
-  short note — *"Draft Canvas is free and independently built. If it saved a meeting, explained an
-  architecture, or kept you from opening something heavier, you can optionally support its
-  development."* — one button, and a closing line: *"No perks, no paywalls — coffee accepted,
-  architecture emergencies also accepted."*
+- **10.1 Support entry point** — ✅ Done. A one-line human footnote in the existing About dialog
+  (`AboutDialog.tsx`), directly under "Built by Alvin Cris Tabontabon": *"☕ Buy the builder a
+  coffee ↗."* No expand/collapse, no explanatory paragraph, no dedicated "Support Draft Canvas"
+  section — an earlier version of this used a collapsed `<details>` disclosure with a full pitch
+  behind it, but that read as documentation/a donation ask sitting inside what's otherwise a short,
+  personal "here's who built this" dialog. The restraint the roadmap's intro paragraph describes
+  (never a pitch for money) turned out to apply to the *implementation*, not to something that
+  needs explaining in the UI every time someone opens About — so the visible surface shrank to one
+  line, and the longer context lives only in a `title` tooltip: *"If Draft Canvas helped, you can
+  optionally support its development."*
   - **One destination, not a payment-provider directory.** Ko-fi (`PRODUCT.links.kofi`) is the only
     support mechanism — Ko-fi owns the entire payment experience, so Draft Canvas never has to know
     about QR codes, PayPal, or routing a Philippine vs. international user to different places. The
     "contribution personalities" this phase originally sketched (☕ kept me awake, 🍺 survived the
-    meeting, 🔥 saved the architecture discussion...) stayed as flavor text in the closing line
-    rather than becoming separate payment tiers or buttons — there is exactly one action: "☕
-    Support on Ko-fi ↗."
+    meeting, 🔥 saved the architecture discussion...) live only in that one line's own personality
+    ("buy the builder a coffee") rather than as separate payment tiers, buttons, or microcopy.
   - **Contributing unlocks nothing.** No badges, no premium features, no raised limits, no
-    preferential treatment, ever — stated in the dialog itself. Whether someone has contributed
-    isn't even something Draft Canvas has a way to know.
+    preferential treatment, ever. Whether someone has contributed isn't even something Draft Canvas
+    has a way to know.
   - **Never intrusive.** No popups asking for money, no recurring banners, no reminders, no nag
     after an export, no guilt-driven copy, and — the hard constraint — no feature is ever gated or
     degraded to create a reason to contribute. The application must never get worse for a user who
     never opens this dialog. No toolbar button, no command-palette entry, no floating button —
-    the collapsed line inside About is the only place this exists anywhere in the app.
+    this one line inside About is the only place this exists anywhere in the app.
 
-**Architectural considerations.** This is a link-out, not a payment integration — the disclosure
-opens an external Ko-fi link the same way the About dialog's existing GitHub/LinkedIn/email links
-already do (`PRODUCT.links`), and Draft Canvas itself makes no request, tracks no click, and stores
-no payment or contribution data anywhere. Fully compatible with 0.1's no-network invariant: nothing
-about this feature runs inside the app's own network boundary — it just points somewhere else, the
-same way a `mailto:` link already does. Gated by a new unit test (`tests/about-dialog.test.tsx`)
-and e2e spec (`e2e/support-link.spec.ts`), the full existing test suite (including
-`tests/privacy.test.ts`, which statically proves no network API was introduced), and manual browser
-verification in both themes and at a narrow viewport.
+**Architectural considerations.** This is a link-out, not a payment integration — the line opens an
+external Ko-fi link the same way the About dialog's existing GitHub/LinkedIn/email links already do
+(`PRODUCT.links`), and Draft Canvas itself makes no request, tracks no click, and stores no payment
+or contribution data anywhere. Fully compatible with 0.1's no-network invariant: nothing about this
+feature runs inside the app's own network boundary — it just points somewhere else, the same way a
+`mailto:` link already does. Gated by a unit test (`tests/about-dialog.test.tsx`) and e2e spec
+(`e2e/support-link.spec.ts`), the full existing test suite (including `tests/privacy.test.ts`,
+which statically proves no network API was introduced), and manual browser verification in both
+themes.
 
 What this will not become: a paywall, a subscription, a limits system, a badge or perk system, or
 any messaging that implies the free version is lesser. If a future idea for this phase would make
