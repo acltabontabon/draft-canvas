@@ -113,6 +113,7 @@ export function ElementInspectorPopover() {
   const mode = useEditorStore((state) => state.mode);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const learnModeActive = useUiStore((state) => state.learnModeActive);
+  const interactionActive = useUiStore((state) => state.interactionActive);
   const { isRetired, isDismissedThisSession } = useHints();
   const store = useEditorStore;
   const theme = useThemeValue();
@@ -257,7 +258,19 @@ export function ElementInspectorPopover() {
   // element is selected on the very first render, so there's no single dependency list that
   // covers "recompute whenever the resolved placement disagrees with stored state"); the
   // `effectivePlacement !== placement` guard is what keeps it from looping.
-  const effectivePlacement = anchors
+  //
+  // Skipped entirely while a gesture is in flight (`interactionActive`, same field
+  // `DraftEdgeView`'s obstacle avoidance skips for the same reason): a dragged or resized node's
+  // `rect` moves every animation frame, and right at the boundary between two placements'
+  // "fits" thresholds, that continuous motion can flip `fits('above')`/`fits('below')` back and
+  // forth from one frame to the next — each flip calling `setPlacement`, which re-renders, which
+  // reads the still-moving `rect` again, which can flip right back. That is a real, not
+  // self-resolving, oscillation (unlike the sub-pixel noise `measuredSize` rounds away above), so
+  // it can run past React's update-depth limit and crash the canvas. Freezing `placement` for the
+  // duration of the gesture and resolving once more when it ends (this effect fires again as soon
+  // as `interactionActive` flips back to false) keeps the popover on its last-good side while the
+  // element is moving, then settles it in one shot against the final, still `rect`.
+  const effectivePlacement = anchors && !interactionActive
     ? resolvePlacement(placement, anchors, flowToScreenPosition, measuredSize, clearances)
     : placement;
   // oxlint-disable-next-line react-hooks/exhaustive-deps
