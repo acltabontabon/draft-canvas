@@ -29,7 +29,9 @@ yet a commitment)
 Phase 8 (Canvas Command Surface) shipped 8.1-8.4 — the `⌘K` palette, selection-aware commands with
 two-step targets, canvas search and jump, and local command history — gated per sub-phase by the
 full test suite, a new `e2e/command-palette.spec.ts`, and manual browser verification in both
-themes and in Presentation Mode. Phase 7 (Contextual Learning) shipped all four sub-phases — contextual hints folded into
+themes and in Presentation Mode. 8.8 later added a right-click contextual menu as a third
+invocation surface for the same commands, gated the same way with a new `e2e/context-menu.spec.ts`.
+Phase 7 (Contextual Learning) shipped all four sub-phases — contextual hints folded into
 the existing `ElementInspectorPopover`/`EdgeInspectorPopover` rather than a second floating overlay,
 usage-inferred retirement via `semanticsOrigin`/attachment state, a "New" indicator on the Learn
 Draft Canvas toolbar entry, and the opt-in Learn Draft Canvas mode itself — gated by the full test
@@ -538,6 +540,25 @@ explicitly out of scope.
   Queue → Worker with `consume` semantics (reusing 2.5's kind vocabulary). Templates the user
   invokes, never automatic architecture generation; not prioritized initially, but 8.1's command
   architecture should leave room for it rather than close it off.
+- **8.8 Contextual right-click menu** — ✅ Done. A third invocation surface for the exact same
+  commands 8.1-8.4 already expose — right-clicking a node, connector, junction, boundary,
+  multi-selection, or empty canvas opens a small curated menu instead of the browser's own
+  (`src/commands/contextMenu.ts` builds it from `nodeCommands`/`edgeCommands`/`multiCommands`, the
+  same functions `commandsFor` calls, filtered to a hand-picked subset per target — never a
+  parallel command catalog). Deliberately excludes any command whose `run()` can return a
+  `CommandStage` (a follow-up picker, e.g. "Connect to…"), keeping it flat with no flyouts.
+  Right-clicking an element already part of a multi-selection preserves the whole selection rather
+  than collapsing to just the clicked one — resolved by snapshotting `editorStore.selection` on the
+  right button's own `pointerdown` (capture phase), since React Flow's default click handling would
+  otherwise collapse it first. Shift+F10/the Menu key open the same menu for the keyboard, anchored
+  to the current selection's own center; nothing selected is a no-op. Also shipped alongside it:
+  `attachToNode`/`attachToEdge` (already existed with zero UI call sites) wired to real "Add
+  Note"/"Add Code" menu items; `descendantsOf` (already existed for boundary-drag-sweep) wired to a
+  new "Select Contents" command; a new "Add Boundary" preset (shortcut `B`); `reverseEdge` fixed to
+  re-infer an eligible edge's semantic after the swap, reusing `reconnectEdge`'s own
+  `isEligibleForReinference` rule, so a reversed inferred edge relabels correctly (and an explicit
+  choice still survives untouched); and the Inspector bar's own Distribute buttons corrected to the
+  same ≥3-node gate the command already used (previously ≥2, silently a no-op at exactly 2).
 
 **Architectural considerations.** Every command in 8.1-8.4 is a thin, deterministic front-end onto
 an operation Phases 1-4 already expose (`document/operations.ts`, `document/flow.ts`, the export

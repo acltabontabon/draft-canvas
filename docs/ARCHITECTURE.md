@@ -305,7 +305,26 @@ dependency list is part of the privacy promise (`tests/privacy.test.ts`). `searc
 nodes, flows, and labelled connectors into "Jump to" commands and moves the camera with the same
 `getViewportForBounds` math Presentation Mode uses. `history.ts` remembers recent and frequent
 commands through `lib/preferences.ts`, one short key per slot. `ui/Editor/CommandPalette.tsx` owns
-nothing but the query, the highlight, and the stage.
+nothing but the query, the highlight, and the stage. `useCommandContext.ts` assembles the
+`CommandContext` every command's `run` receives (live store snapshots, the camera, `createAt`);
+it's a hook specifically so a second surface can build the identical context without copying the
+closure.
+
+The right-click context menu (`canvas/ContextMenu.tsx`) is that second surface —
+`commands/contextMenu.ts`'s `contextMenuCommandsFor(ctx, target, point)` calls the same
+`nodeCommands`/`edgeCommands`/`multiCommands` the palette's `commandsFor` calls, then picks a
+small, ordered, separator-grouped subset per target (a node's menu is not an edge's menu is not a
+boundary's), rather than listing everything the palette would. It excludes any command whose `run`
+can return a `CommandStage` — a follow-up picker, like "Connect to…" — since the menu is
+deliberately flat, with no flyouts. `ContextMenu.tsx` itself renders whatever entry list it's
+given and knows nothing about node types or selection shape; `uiStore.contextMenu` holds what's
+open (mirroring `QuickConnectState`'s shape), and `Canvas.tsx`'s `onPaneContextMenu`/
+`onNodeContextMenu`/`onEdgeContextMenu` decide the target, including snapshotting the selection on
+the right button's own `pointerdown` (capture phase) so a right-click on an element already part
+of a multi-selection doesn't lose that selection to React Flow's own default click handling, which
+runs first otherwise. Shift+F10/the Menu key open the identical menu anchored to the current
+selection instead of a click point (`EditorScreen.tsx`'s `openContextMenuFromKeyboard`) — the one
+gap is empty canvas, which has no keyboard-native equivalent of a point to anchor to.
 
 ## Untrusted input
 

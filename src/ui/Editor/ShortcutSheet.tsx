@@ -22,6 +22,7 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
       ['Esc', 'Clear selection'],
       ['Double-click', 'Create, or edit text'],
       ['Drag from edge', 'Connect — drop on empty canvas to make a node'],
+      ['Right-click', 'Context menu — actions for what you clicked (or Shift F10 / Menu key)'],
     ],
   },
   {

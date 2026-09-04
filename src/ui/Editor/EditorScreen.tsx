@@ -1,16 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { Canvas } from '../../canvas/Canvas';
+import { ContextMenu } from '../../canvas/ContextMenu';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
+import { contextMenuCommandsFor } from '../../commands/contextMenu';
+import type { Command } from '../../commands/types';
+import { useCommandContext } from '../../commands/useCommandContext';
 import { createEdge, createNode } from '../../document/factory';
+import { boundsOf } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
+import { isEditableTarget } from '../../lib/isEditableTarget';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { useEditorStore } from '../../store/editorStore';
-import { pointer, useUiStore } from '../../store/uiStore';
+import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { useThemeValue } from '../theme/useTheme';
@@ -48,6 +54,13 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   const quickConnect = useUiStore((state) => state.quickConnect);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
   const reconnecting = useUiStore((state) => state.reconnectDragActive);
+  const contextMenu = useUiStore((state) => state.contextMenu);
+  const setContextMenu = useUiStore((state) => state.setContextMenu);
+  // Reactive only so the menu's own contents stay correct if the world changes underneath it while
+  // it's open (e.g. an undo from elsewhere) — read live via `getState()` inside `buildContext`/
+  // `contextMenuCommandsFor` otherwise, same split `CommandPalette.tsx` uses.
+  const selection = useEditorStore((state) => state.selection);
+  const editorDocument = useEditorStore((state) => state.document);
 
   const theme = useThemeValue();
   const playback = useFlowPlayback();
@@ -130,6 +143,36 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
 
   useKeyboard({ createAtPointer, playback });
 
+  const buildCommandContext = useCommandContext({ createAt, createAtPointer, playback });
+
+  const contextMenuEntries = useMemo(() => {
+    if (!contextMenu) return [];
+    return contextMenuCommandsFor(buildCommandContext(), contextMenu.target, contextMenu.flowPosition);
+    // `selection`/`editorDocument` aren't read directly here — they're what make this recompute
+    // when the thing the menu is showing changes underneath it (see the effect right below).
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextMenu, buildCommandContext, selection, editorDocument]);
+
+  // A target that stops resolving (its node/edge got deleted, or a multi-selection collapsed below
+  // 2 members) makes its command list come back empty — closing then, rather than the menu itself
+  // re-validating its own target, keeps all of "does this still make sense" in one place.
+  useEffect(() => {
+    if (contextMenu && contextMenuEntries.length === 0) setContextMenu(null);
+  }, [contextMenu, contextMenuEntries, setContextMenu]);
+
+  const runContextMenuCommand = useCallback(
+    (command: Command) => {
+      const ctx = buildCommandContext();
+      setContextMenu(null);
+      try {
+        command.run(ctx);
+      } catch (error) {
+        ctx.ui.notify(error instanceof Error ? error.message : 'That command failed.', 'error');
+      }
+    },
+    [buildCommandContext, setContextMenu],
+  );
+
   const onFit = useCallback(() => {
     void fitView({ padding: 0.2, duration: 320 });
   }, [fitView]);
@@ -196,6 +239,14 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
             onDismiss={() => setQuickConnect(null)}
           />
         )}
+        {!presenting && contextMenu && (
+          <ContextMenu
+            screenPosition={contextMenu.screenPosition}
+            entries={contextMenuEntries}
+            onSelect={runContextMenuCommand}
+            onDismiss={() => setContextMenu(null)}
+          />
+        )}
         {!presenting && <AttachmentPopover />}
         {!presenting && <EdgeInspectorPopover />}
         {!presenting && <ElementInspectorPopover />}
@@ -257,7 +308,59 @@ function useKeyboard({
   const arm = useUiStore((state) => state.arm);
   const setFlowSwitcherOpen = useUiStore((state) => state.setFlowSwitcherOpen);
   const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
-  const { fitView, zoomIn, zoomOut, screenToFlowPosition } = useReactFlow();
+  const { fitView, zoomIn, zoomOut, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
+
+  /**
+   * The keyboard-only path into the context menu (Shift+F10 / the Menu key, standard desktop
+   * convention) — anchors the menu to the current selection instead of a click point, since there's
+   * no pointer position to use. A single node/edge/multi-selection each resolve their own screen
+   * anchor; nothing selected is a no-op, since there's no keyboard-native equivalent of "a point on
+   * empty canvas" — the pane menu stays mouse-only, a deliberate scope boundary, not an oversight.
+   * Presentation Mode is excluded for free: `selection` is always empty there (`setMode('present')`
+   * clears it), so this always falls through to the no-op branch without needing its own check.
+   */
+  const openContextMenuFromKeyboard = useCallback(() => {
+    const state = store.getState();
+    const { nodes, edges } = state.selection;
+    let flowPoint: { x: number; y: number } | undefined;
+    let target: ContextMenuTarget | undefined;
+
+    if (nodes.length === 1 && edges.length === 0) {
+      const node = state.document.nodes.find((n) => n.id === nodes[0]);
+      if (node) {
+        flowPoint = { x: node.x + node.width / 2, y: node.y + node.height / 2 };
+        target = { kind: 'node', id: node.id };
+      }
+    } else if (edges.length === 1 && nodes.length === 0) {
+      const edge = state.document.edges.find((e) => e.id === edges[0]);
+      const source = edge ? state.document.nodes.find((n) => n.id === edge.source) : undefined;
+      const edgeTarget = edge ? state.document.nodes.find((n) => n.id === edge.target) : undefined;
+      if (edge && source && edgeTarget) {
+        // Same source/target-center-average heuristic `detachFromEdge` already uses for placement —
+        // not the full routing engine, for the same "not worth the coupling" reason that op gives.
+        flowPoint = {
+          x: (source.x + source.width / 2 + edgeTarget.x + edgeTarget.width / 2) / 2,
+          y: (source.y + source.height / 2 + edgeTarget.y + edgeTarget.height / 2) / 2,
+        };
+        target = { kind: 'edge', id: edge.id };
+      }
+    } else if (nodes.length + edges.length >= 2) {
+      const bounds = boundsOf(state.document.nodes.filter((n) => nodes.includes(n.id)));
+      flowPoint = bounds
+        ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+        // An edges-only multi-selection has no node bounds to anchor to — the viewport center is a
+        // reasonable, simple fallback; the menu's own content is correct regardless of where it opens.
+        : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      target = { kind: 'selection' };
+    }
+
+    if (!flowPoint || !target) return;
+    useUiStore.getState().setContextMenu({
+      target,
+      screenPosition: flowToScreenPosition(flowPoint),
+      flowPosition: flowPoint,
+    });
+  }, [flowToScreenPosition, screenToFlowPosition, store]);
 
   // Best-effort pickup of whatever's on the OS clipboard whenever the tab
   // regains focus, so it's already fresh by the time the user presses ⌘V —
@@ -272,18 +375,15 @@ function useKeyboard({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (
-        target &&
-        (target.isContentEditable ||
-          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-      ) {
-        return;
-      }
+      if (isEditableTarget(event.target)) return;
 
       // While the command palette is up it owns the keyboard outright — even if focus has
       // somehow left its input, a stray "t" must never spawn a Text node behind it.
       if (useUiStore.getState().commandPaletteOpen) return;
+      // Same reasoning for the context menu: it has its own capture-phase listener for
+      // Escape/Arrows/Enter, but any other key (e.g. a shape shortcut) would otherwise fall
+      // through to here and spawn a node behind an open menu.
+      if (useUiStore.getState().contextMenu) return;
 
       const meta = event.metaKey || event.ctrlKey;
       const state = store.getState();
@@ -382,6 +482,15 @@ function useKeyboard({
         case '?':
           setShortcutsOpen(true);
           return;
+        case 'ContextMenu':
+          event.preventDefault();
+          openContextMenuFromKeyboard();
+          return;
+        case 'F10':
+          if (!event.shiftKey) break; // plain F10 is unclaimed; only the Shift chord opens the menu
+          event.preventDefault();
+          openContextMenuFromKeyboard();
+          return;
         case 'f':
           // Plain F only — Cmd/Ctrl+F already returned above via the `meta`
           // branch; Shift+F falls through unhandled rather than toggling.
@@ -451,6 +560,7 @@ function useKeyboard({
   }, [
     arm,
     createAtPointer,
+    openContextMenuFromKeyboard,
     playback,
     fitView,
     screenToFlowPosition,

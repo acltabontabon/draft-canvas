@@ -19,6 +19,7 @@ import { defaultTextFor } from '../document/factory';
 import { descendantsOf } from '../document/operations';
 import type { DraftDocument, Side } from '../document/types';
 import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
+import { isEditableTarget } from '../lib/isEditableTarget';
 import { useEditorStore } from '../store/editorStore';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
@@ -47,6 +48,12 @@ const nodeTypes = { [NODE_COMPONENT]: DraftNodeView };
 const edgeTypes = { [EDGE_COMPONENT]: DraftEdgeView };
 
 const PRO_OPTIONS = { hideAttribution: true } as const;
+
+/** How far the pointer may drift between a right-mousedown and the native `contextmenu` event
+ *  before a menu open is suppressed as an unintentional gesture rather than a stationary click —
+ *  its own independently-declared constant, per this file's usual "no shared clearance/threshold
+ *  numbers across gestures" house style (see `DraftEdgeView.tsx`'s own `DRAG_THRESHOLD_PX`). */
+const CONTEXT_MENU_DRAG_THRESHOLD_PX = 4;
 
 /** How much further Presentation Mode dims a configured background, on top of
  *  the user's own setting — enough to recede further without disappearing. */
@@ -281,6 +288,9 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
    */
   const dwellTimer = useRef<number | null>(null);
   const dwellTargetId = useRef<string | null>(null);
+  /** Where the right mouse button went down, in screen coordinates — compared against the native
+   *  `contextmenu` event's own position to tell a stationary right-click from a right-drag. */
+  const rightPointerDown = useRef<{ x: number; y: number } | null>(null);
   const clearDwell = useCallback(() => {
     if (dwellTimer.current !== null) {
       window.clearTimeout(dwellTimer.current);
@@ -761,6 +771,107 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
   // do. `document/operations.ts`'s `reconnectEdge` — the actual document
   // mutation — is unaffected; only what triggers it moved.
 
+  /**
+   * The selection as it stood the instant the right button went down — read again inside
+   * `onNodeContextMenu`/`onEdgeContextMenu` instead of a fresh `store.getState().selection`, because
+   * by the time those fire, React Flow's own default click-to-select handling (on the node/edge's
+   * own wrapper, a descendant of this div) has already run and collapsed the selection to just the
+   * clicked element — confirmed empirically, not assumed. Capturing here, on `onPointerDownCapture`
+   * (the capture phase always reaches an ancestor before any bubble-phase handler on a descendant
+   * runs, regardless of DOM position), is what gets ahead of that collapse.
+   */
+  const selectionAtRightPointerDown = useRef<{ nodes: string[]; edges: string[] } | null>(null);
+
+  const onCanvasPointerDown = useCallback(
+    (event: React.PointerEvent) => {
+      if (event.button !== 2) return;
+      rightPointerDown.current = { x: event.clientX, y: event.clientY };
+      selectionAtRightPointerDown.current = store.getState().selection;
+    },
+    [store],
+  );
+
+  /** True once the pointer has moved past `CONTEXT_MENU_DRAG_THRESHOLD_PX` since the right button
+   *  went down — a real gesture (jitter aside), not a click, so no menu should open for it. */
+  const movedPastContextMenuThreshold = useCallback((event: { clientX: number; clientY: number }) => {
+    const down = rightPointerDown.current;
+    if (!down) return false;
+    return Math.hypot(event.clientX - down.x, event.clientY - down.y) > CONTEXT_MENU_DRAG_THRESHOLD_PX;
+  }, []);
+
+  const onPaneContextMenu = useCallback(
+    (event: MouseEvent | React.MouseEvent) => {
+      if (!interactive) return;
+      // A right-click landing inside a text field (there's no such surface on the bare pane today,
+      // but see `onNodeContextMenu`) must never hijack the browser's own Copy/Paste menu.
+      if (isEditableTarget(event.target)) return;
+      event.preventDefault();
+      if (movedPastContextMenuThreshold(event)) return;
+      // Matches the existing plain-left-click-on-empty-canvas precedent (React Flow's own default
+      // pane-click deselect) — a right-click on empty canvas is the same "click on nothing" gesture.
+      store.getState().setSelection({ nodes: [], edges: [] });
+      // The literal click point, in flow coordinates — no centering offset here. "Add X" needs one
+      // (a node's `x`/`y` is its top-left, not its center), but "Paste" wants the raw point, since
+      // `paste()` already computes its own offset from the pasted fragment's own bounding box; the
+      // `-88,-34` convention is applied only at the "Add X" call site, inside `contextMenuCommandsFor`.
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      useUiStore.getState().setContextMenu({
+        target: { kind: 'pane' },
+        screenPosition: { x: event.clientX, y: event.clientY },
+        flowPosition: { x: Math.round(position.x), y: Math.round(position.y) },
+      });
+    },
+    [interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
+  );
+
+  /**
+   * Right-clicking a node that's already part of a multi-selection must preserve the whole
+   * selection and open the multi-selection menu — never collapse it down to just the clicked
+   * element (spec's own selection semantics). Right-clicking anything else (unselected, or the
+   * single already-selected node) replaces the selection with just that node, same as a plain
+   * left-click would.
+   */
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: DraftRfNode) => {
+      if (!interactive) return;
+      if (isEditableTarget(event.target)) return;
+      event.preventDefault();
+      if (movedPastContextMenuThreshold(event)) return;
+      // The pre-click snapshot, not a fresh read — see `selectionAtRightPointerDown`'s own comment.
+      const before = selectionAtRightPointerDown.current ?? store.getState().selection;
+      const partOfMultiSelection = before.nodes.length + before.edges.length >= 2 && before.nodes.includes(node.id);
+      // Either restore the multi-selection React Flow's own default click handling already
+      // collapsed by this point, or replace it with just the clicked node — never leave the live
+      // store holding that collapsed-to-one-node state.
+      store.getState().setSelection(partOfMultiSelection ? before : { nodes: [node.id], edges: [] });
+      useUiStore.getState().setContextMenu({
+        target: partOfMultiSelection ? { kind: 'selection' } : { kind: 'node', id: node.id },
+        screenPosition: { x: event.clientX, y: event.clientY },
+        flowPosition: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+      });
+    },
+    [interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
+  );
+
+  /** Mirrors `onNodeContextMenu` exactly, just against `selection.edges` — see its own comment. */
+  const onEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: DraftRfEdge) => {
+      if (!interactive) return;
+      if (isEditableTarget(event.target)) return;
+      event.preventDefault();
+      if (movedPastContextMenuThreshold(event)) return;
+      const before = selectionAtRightPointerDown.current ?? store.getState().selection;
+      const partOfMultiSelection = before.nodes.length + before.edges.length >= 2 && before.edges.includes(edge.id);
+      store.getState().setSelection(partOfMultiSelection ? before : { nodes: [], edges: [edge.id] });
+      useUiStore.getState().setContextMenu({
+        target: partOfMultiSelection ? { kind: 'selection' } : { kind: 'edge', id: edge.id },
+        screenPosition: { x: event.clientX, y: event.clientY },
+        flowPosition: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+      });
+    },
+    [interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
+  );
+
   const onPaneDoubleClick = useCallback(
     (event: React.MouseEvent) => {
       if (!interactive) return;
@@ -828,6 +939,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
       data-explain={explainActive ? 'on' : undefined}
       data-focus={focusActive ? 'on' : undefined}
       data-lens={lensActive ? 'on' : undefined}
+      onPointerDownCapture={onCanvasPointerDown}
     >
       <CanvasBackground
         settings={document.settings.background}
@@ -845,10 +957,13 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
         onSelectionChange={onSelectionChange}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
+        onNodeContextMenu={onNodeContextMenu}
+        onEdgeContextMenu={onEdgeContextMenu}
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
         onDoubleClick={onPaneDoubleClick}
         onPaneClick={onPaneClick}
+        onPaneContextMenu={onPaneContextMenu}
         onPointerMove={onPointerMove}
         onMoveEnd={onMoveEnd}
         defaultViewport={document.viewport}
@@ -871,7 +986,10 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
         elementsSelectable={interactive}
         panOnScroll
         selectionOnDrag={interactive}
-        panOnDrag={interactive ? [1, 2] : true}
+        // Button 1 (middle-mouse-drag) still pans; button 2 (right) is freed for the context menu —
+        // see `onPaneContextMenu`'s own comment for why React Flow's `Pane` would otherwise swallow
+        // the native `contextmenu` event before it ever reaches that handler.
+        panOnDrag={interactive ? [1] : true}
         zoomOnDoubleClick={false}
         deleteKeyCode={null}
         multiSelectionKeyCode={['Meta', 'Shift', 'Control']}

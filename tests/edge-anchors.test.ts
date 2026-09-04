@@ -434,11 +434,16 @@ describe('reverseEdge', () => {
     });
   });
 
-  it('swaps the endpoints and their anchors, and nothing else', () => {
+  it('swaps the endpoints and their anchors, and nothing else — for an edge whose semantics a user has explicitly set', () => {
     const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
     const edge = store.getState().connect(a.id, b.id, 'right', 'left')!;
-    store.getState().updateEdgeById(edge.id, { label: 'reads', kind: 'retry', condition: 'cached', hasResponse: true });
+    // `setEdgeKind` marks the whole edge `semanticsOrigin: 'explicit'` — what makes `reverseEdge`'s
+    // own re-inference step (see `reinferIfEligible`) correctly leave it alone. An edge still
+    // eligible for re-inference (the far more common, freshly-inferred case) is exactly the one
+    // `tests/connector-semantics.test.ts`'s `reverseEdge` block covers instead.
+    store.getState().setEdgeKind(edge.id, 'retry');
+    store.getState().updateEdgeById(edge.id, { label: 'reads', condition: 'cached', hasResponse: true });
     const before = store.getState().document.edges.find((e) => e.id === edge.id)!;
 
     store.getState().reverseEdge(edge.id);

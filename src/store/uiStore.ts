@@ -32,6 +32,27 @@ export interface ArmedAnchor {
   offset: number;
 }
 
+/** What was right-clicked (or Shift+F10'd) to open the context menu — `id` is absent for `pane`
+ *  (nothing under the pointer) and `selection` (the target is "whatever's currently selected", not
+ *  one specific id, since a multi-selection has no single owner). */
+export type ContextMenuTarget =
+  | { kind: 'pane' }
+  | { kind: 'node'; id: string }
+  | { kind: 'edge'; id: string }
+  | { kind: 'selection' };
+
+/**
+ * Drives the right-click context menu — mirrors `QuickConnectState`'s shape and reasoning exactly.
+ * `screenPosition` is fixed for the life of the menu (it does not track pan/zoom); `flowPosition` is
+ * the same click converted to document coordinates, used by the pane menu's "Add …"/"Paste" rows —
+ * meaningless for `node`/`edge`/`selection` targets, which act on the target itself, not a point.
+ */
+export interface ContextMenuState {
+  target: ContextMenuTarget;
+  screenPosition: { x: number; y: number };
+  flowPosition: { x: number; y: number };
+}
+
 export interface UiStore {
   /** The preset a canvas click will place, or null for plain selection. */
   armed: Preset | null;
@@ -46,6 +67,7 @@ export interface UiStore {
   backgroundImageVersion: number;
   toasts: Toast[];
   quickConnect: QuickConnectState | null;
+  contextMenu: ContextMenuState | null;
   /** The node id a dragged attachable node is currently armed against. */
   attachArmedTarget: string | null;
   /** The edge id a dragged note/code node is currently armed against — see `Canvas.tsx`'s
@@ -158,6 +180,7 @@ export interface UiStore {
   setSettingsOpen: (open: boolean) => void;
   bumpBackgroundImageVersion: () => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
+  setContextMenu: (state: ContextMenuState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
   setAttachArmedEdgeTarget: (edgeId: string | null) => void;
   setReconnectHoverTarget: (nodeId: string | null) => void;
@@ -206,6 +229,7 @@ export const useUiStore = create<UiStore>((set) => ({
   backgroundImageVersion: 0,
   toasts: [],
   quickConnect: null,
+  contextMenu: null,
   attachArmedTarget: null,
   attachArmedEdgeTarget: null,
   reconnectHoverTarget: null,
@@ -234,6 +258,7 @@ export const useUiStore = create<UiStore>((set) => ({
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   bumpBackgroundImageVersion: () => set((state) => ({ backgroundImageVersion: state.backgroundImageVersion + 1 })),
   setQuickConnect: (quickConnect) => set({ quickConnect }),
+  setContextMenu: (contextMenu) => set({ contextMenu }),
   setAttachArmedTarget: (attachArmedTarget) =>
     set((state) => (state.attachArmedTarget === attachArmedTarget ? state : { attachArmedTarget })),
   setAttachArmedEdgeTarget: (attachArmedEdgeTarget) =>

@@ -245,8 +245,11 @@ export interface EditorStore {
   /** `targetCenter` is where the pasted fragment's center should land, in
    *  document coordinates — typically the pointer or current viewport
    *  center. Omitted falls back to a small offset from the fragment's own
-   *  original position. */
-  paste: (targetCenter?: { x: number; y: number }) => void;
+   *  original position. `exact: true` (the right-click menu's "Paste at this
+   *  point") skips the repeated-paste diagonal stagger `targetCenter` alone
+   *  would otherwise still pick up — a deliberate "land exactly here" click
+   *  should never drift because an earlier, unrelated paste happened first. */
+  paste: (targetCenter?: { x: number; y: number }, options?: { exact?: boolean }) => void;
   /** Best-effort pull from the OS clipboard into the in-memory one — never
    *  throws; a denied/unavailable/foreign clipboard just leaves things as
    *  they are. Call before `paste()` for the freshest cross-tab content;
@@ -362,6 +365,34 @@ function inferRelationshipThroughJunctions(
   }
   if (!capability?.defaultRelation) return undefined;
   return { semantic: capability.defaultRelation, kind: capability.defaultBehavior };
+}
+
+/**
+ * Reclassifies one edge's `semantic`/`kind` from what it now actually connects, but only when
+ * `isEligibleForReinference` says nothing has explicitly claimed them — extracted from
+ * `reconnectEdge`'s original post-swap block so `reverseEdge` (which changes source/target exactly
+ * the same way, just both endpoints at once) can reuse the identical rule instead of leaving its own
+ * copy to drift. A no-op for an edge id that no longer resolves, or one whose endpoints don't (both
+ * genuinely impossible via `apply`'s own recipes, but a pure function shouldn't assume its caller
+ * always hands it a fully-linked graph).
+ */
+function reinferIfEligible(doc: DraftDocument, edgeId: string): DraftDocument {
+  const edge = doc.edges.find((e) => e.id === edgeId);
+  if (!edge || !isEligibleForReinference(edge)) return doc;
+  const sourceNode = doc.nodes.find((n) => n.id === edge.source);
+  const targetNode = doc.nodes.find((n) => n.id === edge.target);
+  if (!sourceNode || !targetNode) return doc;
+  const relationship = inferRelationshipThroughJunctions(doc, sourceNode, targetNode);
+  const hasResponse = defaultsToResponse(
+    resolveTransparentCategory(doc, sourceNode.id, 'source'),
+    resolveTransparentCategory(doc, targetNode.id, 'target'),
+  );
+  return updateEdge(doc, edgeId, {
+    semantic: relationship?.semantic,
+    kind: relationship?.kind,
+    hasResponse: hasResponse || undefined,
+    semanticsOrigin: relationship ? 'inferred' : undefined,
+  });
 }
 
 let interaction: Interaction | null = null;
@@ -575,33 +606,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply(label, (doc) => updateEdge(doc, id, patch));
   },
 
+  // Swapping direction changes which node is source and which is target — exactly the same
+  // structural change `reconnectEdge` makes to one endpoint, so it reuses the identical
+  // re-inference rule: reclassify only when nothing has claimed the semantic yet (or inference
+  // already owns it), never touch a user's explicit choice. Without this, reversing an inferred
+  // `service→database` "writes" edge would leave it *still* labeled "writes" pointing the other
+  // way — stale relative to what the matrix itself would infer for the reversed pairing.
   reverseEdge(id) {
-    get().apply('Reverse direction', (doc) => reverseEdgeOp(doc, id));
+    get().apply('Reverse direction', (doc) => reinferIfEligible(reverseEdgeOp(doc, id), id));
   },
 
   reconnectEdge(id, endpoint, newNodeId, newSide, newOffset = 0.5) {
-    get().apply('Reconnect', (doc) => {
-      const reconnected = reconnectEdgeOp(doc, id, endpoint, newNodeId, newSide, newOffset);
-      const edge = reconnected.edges.find((e) => e.id === id);
-      if (!edge || !isEligibleForReinference(edge)) return reconnected;
-      const sourceNode = reconnected.nodes.find((n) => n.id === edge.source);
-      const targetNode = reconnected.nodes.find((n) => n.id === edge.target);
-      if (!sourceNode || !targetNode) return reconnected;
-      // Only an edge inference already claimed, or one nothing has ever
-      // touched, gets reclassified here — an explicit user choice survives a
-      // reconnect untouched. See `isEligibleForReinference`.
-      const relationship = inferRelationshipThroughJunctions(reconnected, sourceNode, targetNode);
-      const hasResponse = defaultsToResponse(
-        resolveTransparentCategory(reconnected, sourceNode.id, 'source'),
-        resolveTransparentCategory(reconnected, targetNode.id, 'target'),
-      );
-      return updateEdge(reconnected, id, {
-        semantic: relationship?.semantic,
-        kind: relationship?.kind,
-        hasResponse: hasResponse || undefined,
-        semanticsOrigin: relationship ? 'inferred' : undefined,
-      });
-    });
+    get().apply('Reconnect', (doc) =>
+      reinferIfEligible(reconnectEdgeOp(doc, id, endpoint, newNodeId, newSide, newOffset), id),
+    );
   },
 
   updateEdgeLabel(id, label) {
@@ -729,7 +747,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  paste(targetCenter) {
+  paste(targetCenter, options) {
     const state = get();
     const fragment = state.clipboard;
     if (!fragment || fragment.nodes.length === 0) return;
@@ -738,9 +756,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
       : { x: 0, y: 0 };
     const target = targetCenter ?? { x: fragmentCenter.x + 32, y: fragmentCenter.y + 32 };
-    // Consecutive pastes of the same clipboard content step diagonally so
-    // they don't perfectly overlap; a fresh copy/cut resets the count.
-    const stagger = state.pasteRepeat * PASTE_STAGGER_STEP;
+    // Consecutive pastes of the same clipboard content step diagonally so they don't perfectly
+    // overlap; a fresh copy/cut resets the count. `exact` (a right-click "Paste" at a captured
+    // point) opts out — that gesture means "land exactly here," not "here, plus whatever drift an
+    // unrelated earlier paste happened to leave behind."
+    const stagger = options?.exact ? 0 : state.pasteRepeat * PASTE_STAGGER_STEP;
     const offset = {
       x: target.x - fragmentCenter.x + stagger,
       y: target.y - fragmentCenter.y + stagger,

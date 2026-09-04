@@ -8,6 +8,24 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+### Added
+
+- **Right-click for a contextual menu.** Right-click a service, connector, junction, boundary,
+  a selection, or empty canvas for a small menu of just the actions that make sense there —
+  duplicate, layer, add a note or code snippet, reverse a connection, select everything inside a
+  boundary, and more — each with its keyboard shortcut shown alongside it. The same menu opens
+  from the keyboard too, with Shift+F10 or the Menu key.
+- **Paste exactly where you click.** Right-click anywhere on the canvas and choose Paste to drop
+  a copied selection precisely at that spot — handy for moving an architecture fragment into a
+  different part of the canvas, or into a different diagram entirely.
+- A boundary can now be added directly with the `B` key, alongside the other shapes.
+
+### Fixed
+
+- Reversing a connection's direction could leave it labelled with the wrong relationship (a
+  reversed "writes" connector stayed labelled "writes" instead of becoming "reads"). It now
+  relabels correctly, unless you had chosen the label yourself.
+
 ## [0.2.0] - 2026-09-04
 
 ### Added

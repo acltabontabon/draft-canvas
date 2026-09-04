@@ -420,6 +420,118 @@ describe('reconnectEdge() — reclassifying an eligible connector when the topol
   });
 });
 
+describe('reverseEdge() — reclassifying an eligible connector after a direction swap', () => {
+  const store = useEditorStore;
+
+  beforeEach(() => {
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Semantics'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+  });
+
+  it('a Service → Database "writes" becomes Database → Service "reads" once reversed', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const database = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    const edge = store.getState().connect(service.id, database.id)!;
+    expect(edge.semantic).toBe('writes');
+
+    store.getState().reverseEdge(edge.id);
+    const stored = store.getState().document.edges[0]!;
+    expect(stored.source).toBe(database.id);
+    expect(stored.target).toBe(service.id);
+    expect(stored.semantic).toBe('reads');
+    expect(stored.semanticsOrigin).toBe('inferred');
+  });
+
+  it('clears a stale inferred semantic when the reversed pair has no inference', () => {
+    const actor = store.getState().addNode({ type: 'actor', x: 0, y: 0 });
+    const service = store.getState().addNode({ type: 'service', x: 300, y: 0 });
+    const edge = store.getState().connect(actor.id, service.id)!;
+    expect(edge.semantic).toBe('calls'); // actor>service has an opinion; service>actor does not
+
+    store.getState().reverseEdge(edge.id);
+    const stored = store.getState().document.edges[0]!;
+    expect(stored.source).toBe(service.id);
+    expect(stored.target).toBe(actor.id);
+    expect(stored.semantic).toBeUndefined();
+    expect(stored.kind).toBeUndefined();
+    expect(stored.semanticsOrigin).toBeUndefined();
+  });
+
+  it('never touches an explicitly-chosen semantic on reverse — deliberate intent survives a direction swap', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const database = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    const edge = store.getState().connect(service.id, database.id)!;
+    store.getState().setEdgeSemantic(edge.id, 'http');
+    expect(store.getState().document.edges[0]!.semanticsOrigin).toBe('explicit');
+
+    store.getState().reverseEdge(edge.id);
+    const stored = store.getState().document.edges[0]!;
+    expect(stored.source).toBe(database.id);
+    expect(stored.semantic).toBe('http');
+    expect(stored.semanticsOrigin).toBe('explicit');
+  });
+
+  it('never touches a legacy edge — semantic set with no origin marker — on reverse', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const database = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    const edge = store.getState().connect(service.id, database.id)!;
+    store.setState({
+      document: {
+        ...store.getState().document,
+        edges: store.getState().document.edges.map((e) =>
+          e.id === edge.id ? { ...e, semantic: 'dependsOn' as const, kind: undefined, semanticsOrigin: undefined } : e,
+        ),
+      },
+    });
+
+    store.getState().reverseEdge(edge.id);
+    const stored = store.getState().document.edges[0]!;
+    expect(stored.semantic).toBe('dependsOn');
+    expect(stored.semanticsOrigin).toBeUndefined();
+  });
+
+  it('degrades safely (no crash, no stale value) when reversing dead-ends the junction\'s own transparency', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const junction = store.getState().addNode({ type: 'ellipse', x: 300, y: 0 });
+    const database = store.getState().addNode({ type: 'database', x: 600, y: 0 });
+    store.getState().connect(service.id, junction.id);
+    const edge = store.getState().connect(junction.id, database.id)!;
+    expect(edge.semantic).toBe('writes'); // service resolves transparently through the junction
+
+    // Reversing junction→database leaves the junction with two *incoming* edges (from the service,
+    // and now from the database too) and none outgoing — genuinely ambiguous as a source, the same
+    // "no signal" case `resolveTransparentCategory` already returns `'junction'`/no-opinion for on
+    // a fresh connect. The correct outcome is a clean `undefined`, not a stale carried-over value.
+    store.getState().reverseEdge(edge.id);
+    const stored = store.getState().document.edges.find((e) => e.id === edge.id)!;
+    expect(stored.source).toBe(database.id);
+    expect(stored.target).toBe(junction.id);
+    expect(stored.semantic).toBeUndefined();
+    expect(stored.semanticsOrigin).toBeUndefined();
+  });
+
+  it('is one undo step, reclassification included', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const database = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    const edge = store.getState().connect(service.id, database.id)!;
+    const before = store.getState().history.past.length;
+
+    store.getState().reverseEdge(edge.id);
+    expect(store.getState().history.past).toHaveLength(before + 1);
+
+    store.getState().undo();
+    const reverted = store.getState().document.edges[0]!;
+    expect(reverted.source).toBe(service.id);
+    expect(reverted.semantic).toBe('writes');
+  });
+});
+
 describe('persistence and legacy compatibility', () => {
   it('an edge with an uncommon combination round-trips through the document model untouched', () => {
     // A Database → Service edge with `publishes`/`event` — not a combination

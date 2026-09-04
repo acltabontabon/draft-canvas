@@ -1,16 +1,20 @@
 import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../canvas/presets';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
-import { defaultSizeFor, displayNameFor } from '../document/factory';
+import { createAttachment, defaultSizeFor, displayNameFor } from '../document/factory';
+import { LIMITS } from '../document/limits';
+import { descendantsOf } from '../document/operations';
 import {
   CONNECTOR_KINDS,
   EDGE_SEMANTICS,
+  type AttachableType,
   type ConnectorKind,
   type DraftEdge,
   type DraftNode,
 } from '../document/types';
 import { MOD_SYMBOL } from '../lib/platform';
+import { pointer } from '../store/uiStore';
 import { focusNodes } from './search';
-import type { Command, CommandContext, CommandOption, CommandStage } from './types';
+import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
 
 /**
  * Phase 8.1/8.2 — the whole command catalog, derived fresh from context on every call. Nothing
@@ -25,6 +29,7 @@ const PRESET_KEYWORDS: Record<string, string[]> = {
   text: ['label', 'caption'],
   note: ['remark', 'question', 'warning', 'decision', 'sticky'],
   code: ['snippet', 'json', 'yaml', 'sql', 'log', 'config'],
+  boundary: ['container', 'system', 'domain', 'network', 'deployment'],
   service: ['api', 'app', 'worker', 'microservice'],
   database: ['db', 'database', 'sql', 'store', 'cache', 'table'],
   queue: ['topic', 'stream', 'kafka', 'event bus', 'message'],
@@ -44,6 +49,47 @@ function createCommand(preset: Preset): Command {
       const node = ctx.createAtPointer(preset);
       // Select what was just made, so "Add Service → Connect to…" chains without a mouse.
       ctx.editor.setSelection({ nodes: [node.id], edges: [] });
+    },
+  };
+}
+
+/** Same as `createCommand`, but places the new node at an explicit document coordinate instead of
+ *  the tracked pointer — for a caller that already knows exactly where (the right-click menu's own
+ *  click point), where `createAtPointer`'s tracked position would be stale by the time a menu item
+ *  is actually clicked (the pointer has moved to hover the menu itself by then). */
+export function createCommandAt(preset: Preset, position: { x: number; y: number }): Command {
+  return {
+    id: `add-${preset.id}`,
+    title: `Add ${preset.label}`,
+    group: 'create',
+    keywords: PRESET_KEYWORDS[preset.id],
+    hint: preset.hint,
+    shortcut: preset.shortcut,
+    run: (ctx) => {
+      const node = ctx.createAt(preset, position);
+      ctx.editor.setSelection({ nodes: [node.id], edges: [] });
+    },
+  };
+}
+
+/** The context-menu "Paste" — same underlying command as `canvasCommands`' pointer-tracked one,
+ *  just landing at an explicit document coordinate (the right-click point, captured when the menu
+ *  opened) with `exact: true` so it never inherits the ⌘V stagger meant for repeated same-spot
+ *  pastes. `null` when there's nothing to paste, so a caller can skip the menu row entirely instead
+ *  of showing a dead one. */
+export function pasteAtCommand(ctx: CommandContext, position: { x: number; y: number }): Command | null {
+  if (ctx.editor.clipboard === null) return null;
+  return {
+    id: 'paste',
+    title: 'Paste',
+    group: 'canvas',
+    keywords: ['clipboard'],
+    shortcut: `${MOD_SYMBOL} V`,
+    run: (inner) => {
+      void (async () => {
+        await inner.editor.syncClipboardFromSystem();
+        inner.editor.paste(position, { exact: true });
+      })();
     },
   };
 }
@@ -287,7 +333,7 @@ function viewCommands(ctx: CommandContext): Command[] {
   return commands;
 }
 
-function canvasCommands(ctx: CommandContext): Command[] {
+export function canvasCommands(ctx: CommandContext): Command[] {
   const commands: Command[] = [];
   if (ctx.editor.canUndo()) {
     commands.push({
@@ -318,6 +364,22 @@ function canvasCommands(ctx: CommandContext): Command[] {
           nodes: inner.editor.document.nodes.map((node) => node.id),
           edges: [],
         }),
+    });
+  }
+  if (ctx.editor.clipboard !== null) {
+    commands.push({
+      id: 'paste',
+      title: 'Paste',
+      group: 'canvas',
+      keywords: ['clipboard'],
+      shortcut: `${MOD_SYMBOL} V`,
+      run: (inner) => {
+        void (async () => {
+          await inner.editor.syncClipboardFromSystem();
+          const target = pointer.known ? { x: pointer.x, y: pointer.y } : undefined;
+          inner.editor.paste(target);
+        })();
+      },
     });
   }
   commands.push(
@@ -446,7 +508,105 @@ function edgeTitle(ctx: CommandContext, edge: DraftEdge): string {
   return `${from ? displayNameFor(from) : '?'} → ${to ? displayNameFor(to) : '?'}`;
 }
 
-function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
+function bringToFrontCommand(): Command {
+  return {
+    id: 'bring-to-front',
+    title: 'Bring to front',
+    group: 'selection',
+    keywords: ['raise', 'z-order', 'top'],
+    run: (inner) => inner.editor.raise(true),
+  };
+}
+
+function sendToBackCommand(): Command {
+  return {
+    id: 'send-to-back',
+    title: 'Send to back',
+    group: 'selection',
+    keywords: ['lower', 'z-order', 'bottom'],
+    run: (inner) => inner.editor.lower(true),
+  };
+}
+
+/** One step at a time, unlike `bringToFrontCommand`/`sendToBackCommand` — the store's `raise`/
+ *  `lower` already support both (`toFront`/`toBack` default `false`); no UI surface called the
+ *  single-step form until now. */
+function bringForwardCommand(): Command {
+  return {
+    id: 'bring-forward',
+    title: 'Bring forward',
+    group: 'selection',
+    keywords: ['raise', 'z-order'],
+    run: (inner) => inner.editor.raise(false),
+  };
+}
+
+function sendBackwardCommand(): Command {
+  return {
+    id: 'send-backward',
+    title: 'Send backward',
+    group: 'selection',
+    keywords: ['lower', 'z-order'],
+    run: (inner) => inner.editor.lower(false),
+  };
+}
+
+function copyCommand(): Command {
+  return {
+    id: 'copy',
+    title: 'Copy',
+    group: 'selection',
+    keywords: ['clipboard'],
+    shortcut: `${MOD_SYMBOL} C`,
+    run: (inner) => inner.editor.copySelection(),
+  };
+}
+
+function cutCommand(): Command {
+  return {
+    id: 'cut',
+    title: 'Cut',
+    group: 'selection',
+    keywords: ['clipboard', 'remove'],
+    shortcut: `${MOD_SYMBOL} X`,
+    run: (inner) => inner.editor.cutSelection(),
+  };
+}
+
+/** "Add Note"/"Add Code" on a node's own menu — creates a brand-new, empty attachment directly
+ *  (`attachToNode`/`createAttachment` already existed with zero UI call sites; every attachment
+ *  before this was created by dragging an existing standalone Note/Code node onto a host and
+ *  folding it in). Opens the new attachment's card immediately (pinned via `openAttachmentDetail`,
+ *  same as clicking its chip) instead of leaving the user to go find and click the new chip
+ *  themselves. Deliberately does not also force `AttachmentPresentation.tsx`'s own local `editing`
+ *  state open — that pin→edit split is that component's own established, tested safety behavior
+ *  (view before you commit to editing), and reaching past its public interface to bypass it for
+ *  this one entry point would be a bigger change than this menu warrants; one more click (the
+ *  card's own pencil icon) reaches the textarea. Id is `attach-*`, not `add-*` — `add-note`/
+ *  `add-code` are already taken by the "create a standalone Note/Code node" preset commands, and
+ *  sharing an id would corrupt `commands/history.ts`'s by-id "Recent" lookup in the palette (two
+ *  different commands silently shadowing each other under one key). */
+function addAttachmentCommand(
+  host: { hostKind: 'node'; node: DraftNode } | { hostKind: 'edge'; edge: DraftEdge },
+  type: AttachableType,
+  group: CommandGroup,
+): Command {
+  const hostId = host.hostKind === 'node' ? host.node.id : host.edge.id;
+  return {
+    id: `attach-${type}`,
+    title: type === 'note' ? 'Add Note' : 'Add Code',
+    group,
+    keywords: ['attach', 'context', 'detail'],
+    run: (inner) => {
+      const attachment = createAttachment({ type });
+      if (host.hostKind === 'node') inner.editor.attachToNode(hostId, attachment);
+      else inner.editor.attachToEdge(hostId, attachment);
+      inner.ui.setOpenAttachmentDetail({ hostKind: host.hostKind, hostId, attachmentId: attachment.id });
+    },
+  };
+}
+
+export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
   const commands: Command[] = [];
   const isBoundary = node.type === 'group';
   if (!isBoundary) {
@@ -495,6 +655,13 @@ function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       },
     });
   }
+  const attachmentCount = node.attachments?.length ?? 0;
+  if (attachmentCount < LIMITS.maxAttachmentsPerNode) {
+    commands.push(
+      addAttachmentCommand({ hostKind: 'node', node }, 'note', 'selection'),
+      addAttachmentCommand({ hostKind: 'node', node }, 'code', 'selection'),
+    );
+  }
   commands.push(
     {
       id: 'spotlight',
@@ -511,22 +678,31 @@ function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       shortcut: `${MOD_SYMBOL} D`,
       run: (inner) => inner.editor.duplicateSelection(),
     },
-    {
-      id: 'bring-to-front',
-      title: 'Bring to front',
-      group: 'selection',
-      keywords: ['raise', 'z-order', 'top'],
-      run: (inner) => inner.editor.raise(true),
-    },
-    {
-      id: 'send-to-back',
-      title: 'Send to back',
-      group: 'selection',
-      keywords: ['lower', 'z-order', 'bottom'],
-      run: (inner) => inner.editor.lower(true),
-    },
+    copyCommand(),
+    cutCommand(),
+    bringToFrontCommand(),
+    bringForwardCommand(),
+    sendBackwardCommand(),
+    sendToBackCommand(),
   );
   if (isBoundary) {
+    const descendantIds = descendantsOf(ctx.editor.document, node.id);
+    if (descendantIds.length > 0) {
+      const descendantSet = new Set(descendantIds);
+      commands.push({
+        id: 'select-contents',
+        title: 'Select Contents',
+        group: 'selection',
+        keywords: ['children', 'members', 'inside'],
+        hint: `${descendantIds.length} element${descendantIds.length === 1 ? '' : 's'}`,
+        run: (inner) => {
+          const edgeIds = inner.editor.document.edges
+            .filter((edge) => descendantSet.has(edge.source) && descendantSet.has(edge.target))
+            .map((edge) => edge.id);
+          inner.editor.setSelection({ nodes: descendantIds, edges: edgeIds });
+        },
+      });
+    }
     commands.push({
       id: 'ungroup',
       title: 'Ungroup',
@@ -551,11 +727,11 @@ function deleteCommand(title: string): Command {
   };
 }
 
-function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
+export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   const semanticTitle = edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : 'Plain';
   const flowsContaining = ctx.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId === edge.id));
   const flowsAvailable = ctx.editor.document.flows.filter((flow) => !flowsContaining.includes(flow));
-  return [
+  const commands: Command[] = [
     {
       id: 'edge-semantic',
       title: 'Change relationship…',
@@ -695,9 +871,16 @@ function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
     },
     { ...deleteCommand('Delete connector'), group: 'connector' },
   ];
+  if ((edge.attachments?.length ?? 0) < LIMITS.maxAttachmentsPerEdge) {
+    commands.push(
+      addAttachmentCommand({ hostKind: 'edge', edge }, 'note', 'connector'),
+      addAttachmentCommand({ hostKind: 'edge', edge }, 'code', 'connector'),
+    );
+  }
+  return commands;
 }
 
-function multiCommands(ctx: CommandContext): Command[] {
+export function multiCommands(ctx: CommandContext): Command[] {
   const { selection, document } = ctx.editor;
   const nodes = document.nodes.filter((node) => selection.nodes.includes(node.id));
   const commands: Command[] = [];
@@ -759,35 +942,42 @@ function multiCommands(ctx: CommandContext): Command[] {
       },
     );
   }
-  commands.push(
-    {
-      id: 'spotlight',
-      title: 'Spotlight selection',
-      group: 'selection',
-      keywords: ['focus', 'highlight', 'dim others'],
-      hint: `${selection.nodes.length + selection.edges.length} elements`,
-      run: (inner) => inner.editor.enterFocus(inner.editor.selection.nodes, inner.editor.selection.edges),
-    },
-    {
-      id: 'duplicate',
-      title: 'Duplicate',
-      group: 'selection',
-      keywords: ['copy', 'clone'],
-      shortcut: `${MOD_SYMBOL} D`,
-      run: (inner) => inner.editor.duplicateSelection(),
-    },
-  );
+  commands.push({
+    id: 'spotlight',
+    title: 'Spotlight selection',
+    group: 'selection',
+    keywords: ['focus', 'highlight', 'dim others'],
+    hint: `${selection.nodes.length + selection.edges.length} elements`,
+    run: (inner) => inner.editor.enterFocus(inner.editor.selection.nodes, inner.editor.selection.edges),
+  });
   if (nodes.length > 0) {
-    commands.push({
-      id: 'export-selection',
-      title: 'Export selection…',
-      group: 'selection',
-      keywords: ['png', 'svg', 'image', 'share', 'only'],
-      run: (inner) => {
-        inner.ui.requestExportSelection(true);
-        inner.ui.setExportOpen(true);
+    // `duplicateSelection`/`copySelection`/`cutSelection` all no-op on an edges-only selection (an
+    // edge has no meaningful standalone duplicate/clipboard identity apart from its endpoints) —
+    // gated here to match, rather than showing a command that silently does nothing.
+    commands.push(
+      {
+        id: 'duplicate',
+        title: 'Duplicate',
+        group: 'selection',
+        keywords: ['copy', 'clone'],
+        shortcut: `${MOD_SYMBOL} D`,
+        run: (inner) => inner.editor.duplicateSelection(),
       },
-    });
+      copyCommand(),
+      cutCommand(),
+      bringToFrontCommand(),
+      sendToBackCommand(),
+      {
+        id: 'export-selection',
+        title: 'Export selection…',
+        group: 'selection',
+        keywords: ['png', 'svg', 'image', 'share', 'only'],
+        run: (inner) => {
+          inner.ui.requestExportSelection(true);
+          inner.ui.setExportOpen(true);
+        },
+      },
+    );
   }
   commands.push(deleteCommand('Delete selection'));
   return commands;

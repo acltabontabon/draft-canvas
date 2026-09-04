@@ -39,6 +39,13 @@ export const PRESETS: Preset[] = [
     hint: 'Syntax-highlighted code, config or logs',
     language: 'json',
   },
+  {
+    id: 'boundary',
+    label: 'Boundary',
+    type: 'group',
+    shortcut: 'B',
+    hint: 'A labelled container for related elements',
+  },
 ];
 
 export const DEV_PRESETS: Preset[] = [

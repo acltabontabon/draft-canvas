@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useReactFlow, useStore } from '@xyflow/react';
 import type { Preset } from '../../canvas/presets';
 import { rank, type RankedEntry } from '../../commands/fuzzy';
 import { commandsFor } from '../../commands/registry';
@@ -9,10 +8,10 @@ import {
   GROUP_LABELS,
   isStage,
   type Command,
-  type CommandContext,
   type CommandOption,
   type CommandStage,
 } from '../../commands/types';
+import { useCommandContext } from '../../commands/useCommandContext';
 import type { DraftNode } from '../../document/types';
 import { useHints } from '../../learning/useHints';
 import { MOD_SYMBOL } from '../../lib/platform';
@@ -20,7 +19,6 @@ import type { FlowPlaybackController } from '../../presentation/useFlowPlayback'
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../common/Icon';
-import { useTheme } from '../theme/useTheme';
 
 interface CommandPaletteProps {
   createAt: (preset: Preset, position: { x: number; y: number }) => DraftNode;
@@ -61,13 +59,8 @@ export function CommandPalette({ createAt, createAtPointer, playback }: CommandP
   const focus = useEditorStore((state) => state.focus);
   const flowPlayback = useEditorStore((state) => state.flowPlayback);
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
-  const { toggle: toggleTheme } = useTheme();
   const { retire: retireHint } = useHints();
-  const { fitView, zoomIn, zoomOut, screenToFlowPosition, setViewport } = useReactFlow();
-  // Selected separately, as `useFlowPlayback` does: an object literal from a store selector is a
-  // new identity every time and would re-render forever.
-  const viewWidth = useStore((state) => state.width);
-  const viewHeight = useStore((state) => state.height);
+  const buildContext = useCommandContext({ createAt, createAtPointer, playback });
 
   const [query, setQuery] = useState('');
   const [stage, setStage] = useState<CommandStage | null>(null);
@@ -78,31 +71,6 @@ export function CommandPalette({ createAt, createAtPointer, playback }: CommandP
   const highlightRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-
-  const buildContext = useCallback(
-    (): CommandContext => ({
-      editor: useEditorStore.getState(),
-      ui: useUiStore.getState(),
-      camera: { fitView, zoomIn, zoomOut, screenToFlowPosition, setViewport, viewWidth, viewHeight },
-      playback,
-      createAt,
-      createAtPointer,
-      toggleTheme,
-    }),
-    [
-      createAt,
-      createAtPointer,
-      fitView,
-      playback,
-      screenToFlowPosition,
-      setViewport,
-      toggleTheme,
-      viewHeight,
-      viewWidth,
-      zoomIn,
-      zoomOut,
-    ],
-  );
 
   // The list, re-derived whenever the query, the stage, or any reactive slice above changes.
   // `commandsFor` is pure and a few dozen entries long — cheaper to rebuild than to cache.

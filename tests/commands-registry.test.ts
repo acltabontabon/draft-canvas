@@ -123,11 +123,25 @@ describe('commandsFor — contextual (8.2)', () => {
     return result;
   };
 
-  it('one node: connect, edit, spotlight, duplicate, z-order, delete — and creation stays available', () => {
+  it('one node: connect, edit, attach, clipboard, z-order, spotlight, delete — and creation stays available', () => {
     const node = useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0, text: 'API' });
     useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
     const list = ids(stubContext());
-    expect(list.slice(0, 7)).toEqual(['connect-to', 'edit-text', 'spotlight', 'duplicate', 'bring-to-front', 'send-to-back', 'delete']);
+    expect(list.slice(0, 13)).toEqual([
+      'connect-to',
+      'edit-text',
+      'attach-note',
+      'attach-code',
+      'spotlight',
+      'duplicate',
+      'copy',
+      'cut',
+      'bring-to-front',
+      'bring-forward',
+      'send-backward',
+      'send-to-back',
+      'delete',
+    ]);
     expect(list).toContain('add-service');
     expect(list).not.toContain('flow-start-here');
     expect(list).not.toContain('group');
@@ -247,9 +261,26 @@ describe('commandsFor — contextual (8.2)', () => {
     const b = state.addNode({ type: 'service', x: 300, y: 40 });
     state.setSelection({ nodes: [a.id, b.id], edges: [] });
     let list = ids(stubContext());
-    expect(list).toEqual(expect.arrayContaining(['group', 'align-left', 'align-center-y', 'spotlight', 'duplicate', 'export-selection', 'delete']));
+    expect(list).toEqual(
+      expect.arrayContaining([
+        'group',
+        'align-left',
+        'align-center-y',
+        'spotlight',
+        'duplicate',
+        'copy',
+        'cut',
+        'bring-to-front',
+        'send-to-back',
+        'export-selection',
+        'delete',
+      ]),
+    );
     expect(list).not.toContain('distribute-x');
     expect(list).not.toContain('ungroup');
+    // No single-step Bring Forward/Send Backward for a multi-selection — only the two extremes.
+    expect(list).not.toContain('bring-forward');
+    expect(list).not.toContain('send-backward');
 
     const c = state.addNode({ type: 'service', x: 600, y: 0 });
     state.setSelection({ nodes: [a.id, b.id, c.id], edges: [] });
@@ -263,5 +294,21 @@ describe('commandsFor — contextual (8.2)', () => {
     commandsFor(ctx).find((command) => command.id === 'export-selection')!.run(ctx);
     expect(useUiStore.getState().exportOpen).toBe(true);
     expect(useUiStore.getState().exportSelectionRequested).toBe(true);
+  });
+
+  it('an edges-only multi-selection has nothing node-shaped to duplicate/copy/cut/reorder/export', () => {
+    const state = useEditorStore.getState();
+    const a = state.addNode({ type: 'service', x: 0, y: 0 });
+    const b = state.addNode({ type: 'database', x: 300, y: 0 });
+    const c = state.addNode({ type: 'queue', x: 0, y: 300 });
+    const e1 = state.connect(a.id, b.id)!;
+    const e2 = state.connect(a.id, c.id)!;
+    state.setSelection({ nodes: [], edges: [e1.id, e2.id] });
+    const list = ids(stubContext());
+    expect(list).toContain('spotlight');
+    expect(list).toContain('delete');
+    for (const id of ['duplicate', 'copy', 'cut', 'bring-to-front', 'send-to-back', 'export-selection', 'group']) {
+      expect(list).not.toContain(id);
+    }
   });
 });

@@ -288,20 +288,24 @@ export function Inspector() {
             <option value="centerY">Middle</option>
             <option value="bottom">Bottom</option>
           </select>
-          <Button
-            variant="quiet"
-            title="Distribute evenly, left to right"
-            onClick={() => store.getState().distribute('x')}
-          >
-            Distribute ↔
-          </Button>
-          <Button
-            variant="quiet"
-            title="Distribute evenly, top to bottom"
-            onClick={() => store.getState().distribute('y')}
-          >
-            Distribute ↕
-          </Button>
+          {nodes.length >= 3 && (
+            <>
+              <Button
+                variant="quiet"
+                title="Distribute evenly, left to right"
+                onClick={() => store.getState().distribute('x')}
+              >
+                Distribute ↔
+              </Button>
+              <Button
+                variant="quiet"
+                title="Distribute evenly, top to bottom"
+                onClick={() => store.getState().distribute('y')}
+              >
+                Distribute ↕
+              </Button>
+            </>
+          )}
           <Button
             variant="quiet"
             title="Enclose in a boundary"
