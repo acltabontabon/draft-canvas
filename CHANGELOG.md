@@ -38,6 +38,15 @@ milestones; **0.1.0 is the first production-ready release.**
 - A request/response connector's reply line didn't match its request line's hand-drawn look in
   exported files, even though it already did on the live canvas.
 - A straight-routed connector never picked up any Draft/Sketch hand-drawn character at all.
+- A settings dialog (Canvas Settings, Export, and others) could steal keyboard focus back to
+  itself while you were still typing or adjusting a control inside it, if anything else on screen
+  happened to update at the same time.
+- Interrupting a resize or a connector drag — most commonly by switching into Presentation Mode
+  before releasing the mouse — could leave undo unable to record your next several edits, with no
+  visible sign anything was wrong.
+- Pasting or duplicating a very large selection repeatedly, or into an already-large diagram,
+  could grow it past the size a diagram can reliably stay responsive at. Draft Canvas now stops at
+  that limit and tells you, the same way it already does for an imported file.
 
 ## [0.2.0] - 2026-09-04
 
