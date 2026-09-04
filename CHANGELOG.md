@@ -8,6 +8,8 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-04
+
 ### Changed
 
 - The About dialog's support entry is now a single line — "☕ Buy the builder a coffee" — instead
@@ -372,7 +374,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.1...main
+[0.3.1]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.1...v0.1.2
