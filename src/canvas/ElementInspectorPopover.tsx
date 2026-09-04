@@ -139,13 +139,25 @@ export function ElementInspectorPopover() {
   // which change as sections open/close. Re-measures after every render — cheap (one
   // `getBoundingClientRect` read) and guarded so it only ever triggers a re-render when the size
   // actually changed.
+  //
+  // Rounded to whole pixels before comparing: `getBoundingClientRect` returns sub-pixel floats
+  // that can differ by less than a thousandth of a pixel between two renders of the same
+  // genuinely-settled layout (observed directly: 106.3280029296875 vs 106.32806396484375 vs
+  // 106.32794189453125 for one popover that never visibly changed size) — often while a resize or
+  // zoom is also driving `useReactFlow()`'s viewport transform. An exact `!==` on that noise never
+  // reaches a fixed point: each render's `setMeasuredSize` triggers another render, which measures
+  // a new sub-pixel value, which triggers another `setMeasuredSize`, chaining into React's
+  // "Maximum update depth exceeded" crash. Whole pixels are the coarsest resolution anything here
+  // is ever laid out or visually distinguishable at, so rounding away that noise costs nothing.
   const [measuredSize, setMeasuredSize] = useState({ width: 0, height: 0 });
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const rect = panelRef.current?.getBoundingClientRect();
     if (!rect) return;
-    if (rect.width > 0 && rect.height > 0 && (rect.width !== measuredSize.width || rect.height !== measuredSize.height)) {
-      setMeasuredSize({ width: rect.width, height: rect.height });
+    const width = Math.round(rect.width);
+    const height = Math.round(rect.height);
+    if (width > 0 && height > 0 && (width !== measuredSize.width || height !== measuredSize.height)) {
+      setMeasuredSize({ width, height });
     }
   });
 

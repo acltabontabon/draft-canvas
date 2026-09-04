@@ -114,13 +114,21 @@ export function EdgeInspectorPopover() {
   // and the expanded editor's several sections. Re-measures after every render — cheap (one
   // `getBoundingClientRect` read) and guarded so it only ever triggers a re-render when the
   // height actually changed, converging in at most one extra frame whenever content changes.
+  //
+  // Rounded to whole pixels before comparing: `getBoundingClientRect` returns sub-pixel floats
+  // that can differ by a fraction of a pixel between two renders of the same genuinely-settled
+  // layout — often while a resize or zoom is also driving `useReactFlow()`'s viewport transform.
+  // An exact `!==` on that noise never reaches a fixed point (see `ElementInspectorPopover.tsx`'s
+  // identical fix, where this was directly observed chaining into React's "Maximum update depth
+  // exceeded" crash). Whole pixels are the coarsest resolution anything here is ever laid out or
+  // visually distinguishable at, so rounding away that noise costs nothing.
   const [measuredHeight, setMeasuredHeight] = useState(0);
   // Deliberately no dependency array — this must re-measure after every render (content height
   // can change for reasons with no single dependency to name: a new section appearing, a
   // multi-line label). The `height !== measuredHeight` guard is what keeps this from looping.
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
-    const height = panelRef.current?.getBoundingClientRect().height ?? 0;
+    const height = Math.round(panelRef.current?.getBoundingClientRect().height ?? 0);
     if (height > 0 && height !== measuredHeight) setMeasuredHeight(height);
   });
 
