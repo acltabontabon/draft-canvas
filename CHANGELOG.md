@@ -10,6 +10,8 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ### Added
 
+- Added an optional way to support Draft Canvas's development — a subtle "♥ Support Draft Canvas"
+  entry in the About dialog, never surfaced anywhere else.
 - **Draft Canvas is more opinionated about what a connection probably means.** A Topic now reads
   as its own thing rather than just another Queue: Topic → Queue defaults to "fans out," Topic →
   Service to "delivers to," and each offers only the messaging interactions that make sense —

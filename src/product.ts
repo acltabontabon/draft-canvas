@@ -19,5 +19,6 @@ export const PRODUCT = {
     linkedin: 'https://www.linkedin.com/in/acltabontabon/',
     website: author.url,
     email: author.email,
+    kofi: 'https://ko-fi.com/aclt_attic',
   },
 } as const;

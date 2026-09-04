@@ -19,13 +19,17 @@ yet a commitment)
 | [7](#phase-7--contextual-learning) | Contextual Learning | ✅ Done |
 | [8](#phase-8--canvas-command-surface) | Canvas Command Surface | ✅ Done — 8.5-8.7 exploratory, not blocking |
 | [9](#phase-9--future--experimental) | Future / Experimental | 🧪 Exploratory |
-| [10](#phase-10--support-draft-canvas) | Support Draft Canvas | ⬜ Planned (low priority) |
+| [10](#phase-10--support-draft-canvas) | Support Draft Canvas | ✅ Done |
 
 **What's next:** every planned phase has shipped. What remains is optional or exploratory:
 [4.4](#phase-4--export--sharing) (Export for Ticket), [8.5-8.7](#phase-8--canvas-command-surface)
 (quick-create shorthand, name-resolving commands, recipes), [6.7](#phase-6--offline-first-application-availability)
-(installable PWA), [9.1](#phase-9--future--experimental) (MP4), and
-[Phase 10](#phase-10--support-draft-canvas) (Support Draft Canvas, deliberately low priority).
+(installable PWA), and [9.1](#phase-9--future--experimental) (MP4).
+Phase 10 (Support Draft Canvas) shipped as one collapsed disclosure inside the existing About
+dialog — "♥ Support Draft Canvas" reveals a short note and a single external Ko-fi link, nothing
+else in the app references it, and Draft Canvas makes no payment-related network request of its
+own; opening the link is the same kind of explicit external navigation as the About dialog's
+existing GitHub/LinkedIn links.
 Phase 8 (Canvas Command Surface) shipped 8.1-8.4 — the `⌘K` palette, selection-aware commands with
 two-step targets, canvas search and jump, and local command history — gated per sub-phase by the
 full test suite, a new `e2e/command-palette.spec.ts`, and manual browser verification in both
@@ -633,33 +637,39 @@ asking "please upgrade." This is intentionally the lowest-priority phase on the 
 sequencing after the core experience (0-4) is mature enough that support would be a genuine, earned
 reaction rather than an ask.
 
-- **10.1 Support entry point & dialog** — ⬜ Planned (intentionally low priority). A subtle
-  "❤️ Support Draft Canvas" line in the existing About dialog (`AboutDialog.tsx`) — one more
-  low-key entry in the signature/links row that's already there, not a new surface. Selecting it
-  opens a small dialog: *"Draft Canvas is free and independently built. If it helped you survive a
-  meeting, explain an architecture, or avoid opening a heavier diagramming tool, you can optionally
-  support its development."*
-  - **Contribution options read as personalities, not tiers.** ☕ Kept me awake · 🍺 Survived the
-    meeting · 🔥 Saved the architecture discussion · 🫡 Please keep building this shit — playful
-    labels for different amounts, never presented as pricing rows.
+- **10.1 Support entry point** — ✅ Done. A subtle "♥ Support Draft Canvas" line in the existing
+  About dialog (`AboutDialog.tsx`) — one more low-key entry below the signature/links row that's
+  already there, not a new surface. It's a native `<details>` disclosure, collapsed by default, so
+  About looks exactly as it always has unless someone deliberately opens it. Expanding it reveals a
+  short note — *"Draft Canvas is free and independently built. If it saved a meeting, explained an
+  architecture, or kept you from opening something heavier, you can optionally support its
+  development."* — one button, and a closing line: *"No perks, no paywalls — coffee accepted,
+  architecture emergencies also accepted."*
+  - **One destination, not a payment-provider directory.** Ko-fi (`PRODUCT.links.kofi`) is the only
+    support mechanism — Ko-fi owns the entire payment experience, so Draft Canvas never has to know
+    about QR codes, PayPal, or routing a Philippine vs. international user to different places. The
+    "contribution personalities" this phase originally sketched (☕ kept me awake, 🍺 survived the
+    meeting, 🔥 saved the architecture discussion...) stayed as flavor text in the closing line
+    rather than becoming separate payment tiers or buttons — there is exactly one action: "☕
+    Support on Ko-fi ↗."
   - **Contributing unlocks nothing.** No badges, no premium features, no raised limits, no
-    preferential treatment, ever — stated in the dialog itself: *"No perks. No paywalls. Just
-    support."* Whether someone has contributed isn't even something Draft Canvas has a way to know.
-  - **Payment options stay minimal.** Philippines: a QR-based local payment option, ideally one
-    interoperable QR rather than a wall of provider logos (Maya/GCash as fallback alternatives to
-    evaluate only if a single QR solution doesn't hold up). International: PayPal. Two paths, not a
-    payment-provider directory.
+    preferential treatment, ever — stated in the dialog itself. Whether someone has contributed
+    isn't even something Draft Canvas has a way to know.
   - **Never intrusive.** No popups asking for money, no recurring banners, no reminders, no nag
     after an export, no guilt-driven copy, and — the hard constraint — no feature is ever gated or
     degraded to create a reason to contribute. The application must never get worse for a user who
-    never opens this dialog.
+    never opens this dialog. No toolbar button, no command-palette entry, no floating button —
+    the collapsed line inside About is the only place this exists anywhere in the app.
 
-**Architectural considerations.** This is link-outs, not a payment integration — the dialog opens
-an external QR/PayPal link the same way the About dialog's existing GitHub/LinkedIn/email links
+**Architectural considerations.** This is a link-out, not a payment integration — the disclosure
+opens an external Ko-fi link the same way the About dialog's existing GitHub/LinkedIn/email links
 already do (`PRODUCT.links`), and Draft Canvas itself makes no request, tracks no click, and stores
 no payment or contribution data anywhere. Fully compatible with 0.1's no-network invariant: nothing
 about this feature runs inside the app's own network boundary — it just points somewhere else, the
-same way a `mailto:` link already does.
+same way a `mailto:` link already does. Gated by a new unit test (`tests/about-dialog.test.tsx`)
+and e2e spec (`e2e/support-link.spec.ts`), the full existing test suite (including
+`tests/privacy.test.ts`, which statically proves no network API was introduced), and manual browser
+verification in both themes and at a narrow viewport.
 
 What this will not become: a paywall, a subscription, a limits system, a badge or perk system, or
 any messaging that implies the free version is lesser. If a future idea for this phase would make
