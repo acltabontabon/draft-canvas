@@ -1,10 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BaseEdge, EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
+import { EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import type { DraftNode } from '../document/types';
 import { explainEdgeTier, lensEdgeTier, stepIndexOf } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import {
   LABEL_LINE_GAP,
+  RESPONSE_SEED_SUFFIX,
+  endTangent,
   labelLaneOffset,
   laneIndex,
   rectOf,
@@ -18,8 +20,9 @@ import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } fr
 import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
-import { PRESET_AMPLITUDE } from '../render/roughness/presets';
+import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { roughenPath } from '../render/roughness/roughPath';
+import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { accentOf } from '../render/theme/tokens';
 import { isEdgeFocused, useEditorStore } from '../store/editorStore';
 import { selectEdge, selectNode } from '../store/selectors';
@@ -321,15 +324,25 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
   // Only the drawn stroke wobbles — every geometry value above (`route`,
   // `labelX`/`labelY`, attachment points) already reads from the unperturbed
-  // route, matching `edges/describe.ts`'s dual-renderer contract. The
-  // amplitude is small enough relative to `interactionWidth` below that
-  // hit-testing (which necessarily follows whichever path `BaseEdge` draws)
-  // stays effectively unaffected.
-  const roughAmplitude = PRESET_AMPLITUDE[preset];
-  const drawnPath =
-    roughAmplitude.outline === 0 ? route.d : roughenPath(route.d, `${edge.id}:0`, roughAmplitude.outline);
-  const secondStrokePath =
-    roughAmplitude.strokes === 2 ? roughenPath(route.d, `${edge.id}:1`, roughAmplitude.outline) : null;
+  // route, matching `edges/describe.ts`'s dual-renderer contract. Hit-testing
+  // below reads from `route.d` directly (never `drawnPath`), so it stays
+  // exactly as precise as Clean regardless of how bold Sketch's wobble gets —
+  // see the hit-path/decorative-path split further down.
+  const profile = PERSONALITY_PROFILES[preset];
+  const drawnPath = roughenPath(route.d, `${edge.id}:0`, profile.outline, profile.bow);
+  const secondStrokePath = profile.strokes === 2 ? roughenPath(route.d, `${edge.id}:1`, profile.outline, profile.bow) : null;
+  // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
+  // `render/roughness/roughArrow.ts`.
+  const usesHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';
+  const arrowPath = usesHandDrawnArrow
+    ? sketchArrowPath(
+        route.target,
+        endTangent(route, edge.routing, 'target'),
+        `${edge.id}:arrow`,
+        profile.arrowJitter,
+        markerVariantForEdge(edge),
+      )
+    : null;
 
   // The reply half of a request/response connector — reuses `routeBetween` a second time with
   // source/target (and their anchors) swapped, so the path naturally runs target → source, and a
@@ -349,9 +362,17 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       })
     : null;
   const responseDrawnPath = responseRoute
-    ? roughAmplitude.outline === 0
-      ? responseRoute.d
-      : roughenPath(responseRoute.d, `${edge.id}:response`, roughAmplitude.outline)
+    ? roughenPath(responseRoute.d, `${edge.id}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow)
+    : null;
+  const responseUsesHandDrawnArrow = responseRoute && edge.directed && profile.arrowStyle === 'per-edge-hand';
+  const responseArrowPath = responseUsesHandDrawnArrow
+    ? sketchArrowPath(
+        responseRoute.target,
+        endTangent(responseRoute, edge.routing, 'target'),
+        `${edge.id}:response-head`,
+        profile.arrowJitter,
+        'open',
+      )
     : null;
   // Deliberately *not* `labelLaneOffset` here: that helper adds real-sibling-edge label
   // clearance on top of an already-lane-nudged line, for when a 10px line gap isn't enough
@@ -385,15 +406,27 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       onPointerLeave={responseRoute ? () => setHoveringResponse(false) : undefined}
     >
 {/*
-        `BaseEdge` draws the path and, through `interactionWidth`, a second
-        invisible one wide enough to click. Hand-rolling that stroke is not
-        enough: React Flow keys selection off its own interaction path.
+        Two sibling paths, same shape `BaseEdge` itself renders internally — but decoupled onto
+        different `d`s. The invisible, wide interaction path always uses the canonical `route.d`,
+        never `drawnPath`, so this edge's click/hover/reconnect hit area stays exactly as precise
+        as Clean at every preset, regardless of how far Sketch's wobble pushes the visible stroke.
+        Class names match what `BaseEdge` used, so React Flow's own click dispatch (bound to the
+        ancestor `.react-flow__edge`, not to either path itself) and `.react-flow__edge-interaction`'s
+        cursor styling keep working unchanged.
       */}
-      <BaseEdge
-        className="dc-edge-line"
-        path={drawnPath}
-        markerEnd={edge.directed ? markerRef(strokeColor, markerVariantForEdge(edge)) : undefined}
-        interactionWidth={18}
+      <path
+        className="dc-edge-hit react-flow__edge-interaction"
+        d={route.d}
+        fill="none"
+        strokeOpacity={0}
+        strokeWidth={18}
+      />
+      <path
+        className="react-flow__edge-path dc-edge-line"
+        d={drawnPath}
+        fill="none"
+        pointerEvents="none"
+        markerEnd={edge.directed && !usesHandDrawnArrow ? markerRef(strokeColor, markerVariantForEdge(edge)) : undefined}
         style={{
           stroke: strokeColor,
           strokeWidth: isActiveStep ? 2.6 : selected || attachTarget ? 2.4 : lensMember ? 2.0 : 1.6,
@@ -415,19 +448,49 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           }}
         />
       )}
+      {arrowPath && (
+        <path
+          className="dc-edge-arrow"
+          d={arrowPath}
+          pointerEvents="none"
+          fill={markerVariantForEdge(edge) === 'closed' ? strokeColor : 'none'}
+          stroke={markerVariantForEdge(edge) === 'open' ? strokeColor : undefined}
+          strokeWidth={markerVariantForEdge(edge) === 'open' ? 1.3 : undefined}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
       {responseDrawnPath && (
+        // Deliberately *not* `pointerEvents="none"`: unlike the second stroke and the arrowhead,
+        // this is a real interactive affordance — hovering directly over it is how
+        // `hoveringResponse`/`responseRevealed` gets set, and it has no separate wide hit path of
+        // its own the way the primary line does, so roughening it doesn't widen or blur any
+        // existing hitbox — its clickable area was always just this thin stroke.
         <path
           className="dc-edge-response-line"
           data-revealed={responseRevealed ? 'true' : undefined}
           d={responseDrawnPath}
           fill="none"
-          markerEnd={edge.directed ? markerRef(strokeColor, 'open') : undefined}
+          markerEnd={edge.directed && !responseUsesHandDrawnArrow ? markerRef(strokeColor, 'open') : undefined}
           style={{
             stroke: strokeColor,
             strokeWidth: 1,
             strokeLinecap: 'round',
             strokeDasharray: RESPONSE_DASH.join(' '),
           }}
+        />
+      )}
+      {responseArrowPath && (
+        <path
+          className="dc-edge-response-arrow"
+          d={responseArrowPath}
+          pointerEvents="none"
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={1.3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={0.8}
         />
       )}
 

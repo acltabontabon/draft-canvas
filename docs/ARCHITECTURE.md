@@ -116,13 +116,20 @@ how much of the box a silhouette visually fills.
 Node appearance is unified through `describeNode`; edge appearance is not. `edges/describe.ts`
 (`describeEdge`) is the pure describer the SVG exporter calls, and `canvas/DraftEdgeView.tsx` is
 an independent, hand-rolled React implementation of the same connector — path, label, step badge,
-async dash, condition chip. They share geometry (`edges/routing.ts`) and marker defs,
-but nothing enforces that a visual addition to one is mirrored in the other. This was true before
-Flows existed and remains true after; it is a known, accepted gap, not an oversight to "fix" in
-passing — unifying it would mean either giving React Flow's edge renderer a pure display-list
-input (a real, larger change) or re-deriving on-screen interactivity (hover, inline editing,
-drag-to-select) from a description format not built for it. If you add a new visual to a
-connector, add it in both places.
+async dash, condition chip, arrowhead choice (a shared `<marker>` vs. a per-edge hand-drawn path),
+and which of an edge's two paths carries the click/reconnect hit area versus which is purely
+decorative. They share geometry (`edges/routing.ts`) and marker defs, but nothing enforces that a
+visual addition to one is mirrored in the other. This was true before Flows existed and remains
+true after; it is a known, accepted gap, not an oversight to "fix" in passing — unifying it would
+mean either giving React Flow's edge renderer a pure display-list input (a real, larger change) or
+re-deriving on-screen interactivity (hover, inline editing, drag-to-select) from a description
+format not built for it. If you add a new visual to a connector, add it in both places.
+
+Draft and Sketch's arrowheads deliberately use two different mechanisms, not an inconsistency to
+unify: Draft's is a shared, colour-keyed `<marker>` def (the same fixed shape reused by every edge
+of that colour — cheap, and "restrained" doesn't need per-instance variation); Sketch's is a
+unique inline path per edge, seeded by the edge's own id, since a shared marker has no way to vary
+per instance the way the rest of Sketch's primitives do.
 
 ## Canvas boundary
 

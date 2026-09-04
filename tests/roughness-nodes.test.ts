@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NODE_TYPES } from '../src/document/types';
 import { createNode } from '../src/document/factory';
 import { describeContext, describeNode } from '../src/nodes/describe';
 import { LIGHT } from '../src/render/theme/tokens';
@@ -39,6 +40,22 @@ describe('Intentional Roughness — Clean stays byte-for-byte unchanged', () => 
     }
   });
 
+  it('every node type has a Clean output identical to describeContext\'s default, across the full NODE_TYPES set', () => {
+    for (const type of NODE_TYPES) {
+      const node = createNode({ type, x: 0, y: 0, text: 'Label' });
+      expect(describeNode(node, clean)).toEqual(describeNode(node, describeContext(LIGHT)));
+    }
+  });
+
+  it('every node type with an outline switches to a path the moment Draft/Sketch is active (text has no outline to switch)', () => {
+    for (const type of NODE_TYPES.filter((t) => t !== 'text')) {
+      const node = createNode({ type, x: 0, y: 0, width: 176, height: 96, text: 'Label' });
+      const cleanOutline = outlineShapes(node, clean)[0]!;
+      expect(cleanOutline.t === 'rect' || cleanOutline.t === 'ellipse' || cleanOutline.t === 'path').toBe(true);
+      expect(outlineShapes(node, sketch)[0]!.t).toBe('path');
+    }
+  });
+
   it('text/label position and content never change across presets', () => {
     for (const type of ['note', 'group', 'service', 'database', 'queue', 'actor'] as const) {
       const node = createNode({ type, x: 0, y: 0, text: 'Order Service' });
@@ -66,13 +83,23 @@ describe('Intentional Roughness — determinism', () => {
 });
 
 describe('Intentional Roughness — developer-preset silhouettes stay recognisable', () => {
-  it('database/queue keep the same number and kind of outline shapes across presets — always paths, never a rect substitution', () => {
+  it('database/queue keep the same number and kind of outline shapes at Draft — always paths, never a rect substitution', () => {
+    for (const type of ['database', 'queue'] as const) {
+      const node = createNode({ type, id: 'dev1', x: 0, y: 0, width: 176, height: 96, text: 'X' });
+      const cleanShapes = describeNode(node, clean).shapes;
+      const draftShapes = describeNode(node, draft).shapes;
+      expect(draftShapes.length).toBe(cleanShapes.length);
+      expect(draftShapes.map((s) => s.t)).toEqual(cleanShapes.map((s) => s.t));
+    }
+  });
+
+  it('database/queue add exactly a retrace body+lid pair at Sketch, still all paths', () => {
     for (const type of ['database', 'queue'] as const) {
       const node = createNode({ type, id: 'dev1', x: 0, y: 0, width: 176, height: 96, text: 'X' });
       const cleanShapes = describeNode(node, clean).shapes;
       const sketchShapes = describeNode(node, sketch).shapes;
-      expect(sketchShapes.length).toBe(cleanShapes.length);
-      expect(sketchShapes.map((s) => s.t)).toEqual(cleanShapes.map((s) => s.t));
+      expect(sketchShapes.length).toBe(cleanShapes.length + 2);
+      expect(sketchShapes.every((s) => s.t === 'path' || s.t === 'text')).toBe(true);
     }
   });
 
@@ -95,5 +122,69 @@ describe('Intentional Roughness — developer-preset silhouettes stay recognisab
       expect(sketchD).toBeDefined();
       expect(sketchD!.d).not.toBe(cleanD!.d);
     }
+  });
+});
+
+describe('Intentional Roughness — Junction (ellipse) gets a clamped, retraced treatment', () => {
+  it('adds a retrace rim pass at Sketch only, not Draft', () => {
+    const node = createNode({ type: 'ellipse', id: 'j1', x: 0, y: 0, width: 40, height: 40 });
+    const cleanCount = outlineShapes(node, clean).length;
+    expect(outlineShapes(node, draft)).toHaveLength(cleanCount);
+    expect(outlineShapes(node, sketch)).toHaveLength(cleanCount + 1);
+  });
+
+  it('clamps jitter relative to the node\'s own radius at the smallest (24px) junction size', () => {
+    const node = createNode({ type: 'ellipse', id: 'j2', x: 0, y: 0, width: 24, height: 24 });
+    const outline = outlineShapes(node, sketch)[0] as { d: string };
+    // rx/ry ≈ 11.25 at this size; the clamp caps both outline and bow at 18% of that (~2), well
+    // under the flat sketch profile's outline (2.2) + bow (3.4) — every coordinate in the path
+    // should stay within a small margin of the node's own bounding box, not balloon past it.
+    const nums = outline.d.match(/-?\d*\.?\d+/g)!.map(Number);
+    for (const n of nums) {
+      expect(n).toBeGreaterThan(-10);
+      expect(n).toBeLessThan(34);
+    }
+  });
+});
+
+describe('Intentional Roughness — Boundary is the boldest primitive (Sketch only)', () => {
+  it('gets an overshoot pass at Sketch but not Draft', () => {
+    const node = createNode({ type: 'group', id: 'b1', x: 0, y: 0, width: 300, height: 200, text: 'Payments' });
+    const cleanCount = describeNode(node, clean).shapes.length;
+    const draftCount = describeNode(node, draft).shapes.length;
+    const sketchCount = describeNode(node, sketch).shapes.length;
+    // Draft: outline switches from rect to path (+0 shapes, same primitive count as Clean).
+    expect(draftCount).toBe(cleanCount);
+    // Sketch: retrace (+1 path) and overshoot (+1 path) on top of the outline.
+    expect(sketchCount).toBe(cleanCount + 2);
+  });
+});
+
+describe('Intentional Roughness — Draft and Sketch differ by technique, not just magnitude', () => {
+  it('only Sketch turns on retrace/overshoot — Draft never gains extra shapes over Clean for any primitive', () => {
+    for (const type of NODE_TYPES.filter((t) => t !== 'text')) {
+      const node = createNode({ type, id: 'divergence1', x: 0, y: 0, width: 176, height: 96, text: 'X' });
+      const cleanCount = describeNode(node, clean).shapes.length;
+      const draftCount = describeNode(node, draft).shapes.length;
+      expect(draftCount).toBe(cleanCount);
+    }
+  });
+});
+
+describe('Intentional Roughness — shadow survives the switch to a jittered path outline', () => {
+  it('a shape with a drop shadow keeps it once its outline becomes a path (service/note/code)', () => {
+    for (const type of ['service', 'note', 'code'] as const) {
+      const node = createNode({ type, id: 'shadow1', x: 0, y: 0, width: 176, height: 96, text: 'X' });
+      const outline = outlineShapes(node, sketch)[0]!;
+      expect(outline.t).toBe('path');
+      expect((outline as { shadow?: boolean }).shadow).toBe(true);
+    }
+  });
+
+  it('a junction (ellipse) keeps its shadow once its outline becomes a path', () => {
+    const node = createNode({ type: 'ellipse', id: 'shadow2', x: 0, y: 0, width: 40, height: 40 });
+    const outline = outlineShapes(node, sketch)[0]!;
+    expect(outline.t).toBe('path');
+    expect((outline as { shadow?: boolean }).shadow).toBe(true);
   });
 });

@@ -6,6 +6,8 @@ import { getRepository } from '../../storage';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import { PERSONALITY_PRESETS, usePersonality, type PersonalityPreset } from '../personality/usePersonality';
+import { PersonalityPreview } from '../personality/PersonalityPreview';
+import { useThemeValue } from '../theme/useTheme';
 
 const FIT_LABELS: Record<BackgroundFit, string> = {
   cover: 'Cover',
@@ -40,6 +42,7 @@ export function CanvasSettingsDialog() {
   const document = useEditorStore((state) => state.document);
   const updateSettings = useEditorStore((state) => state.updateSettings);
   const { preset, setPreset } = usePersonality();
+  const theme = useThemeValue();
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
@@ -174,7 +177,7 @@ export function CanvasSettingsDialog() {
           </p>
           <div className="dc-settings-personality">
             {PERSONALITY_PRESETS.map((p) => (
-              <label key={p} className="dc-check">
+              <label key={p} className="dc-check dc-check-personality">
                 <input
                   type="radio"
                   name="personality"
@@ -184,6 +187,7 @@ export function CanvasSettingsDialog() {
                 <span>
                   {PRESET_LABELS[p]} <span className="dc-muted">— {PRESET_HINTS[p]}</span>
                 </span>
+                <PersonalityPreview preset={p} theme={theme} />
               </label>
             ))}
           </div>

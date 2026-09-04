@@ -190,6 +190,46 @@ export interface RoutedEdge {
   target: Anchor;
 }
 
+/** The direction of travel arriving at a side's own anchor — the inward-pointing counterpart to
+ *  `edges/describe.ts`'s `OUTWARD` (which instead walks *out* from a source anchor for step
+ *  badge placement). Shared here since `endTangent` needs it for both ends. */
+const INWARD: Record<Side, { x: number; y: number }> = {
+  top: { x: 0, y: 1 },
+  bottom: { x: 0, y: -1 },
+  left: { x: 1, y: 0 },
+  right: { x: -1, y: 0 },
+};
+
+/**
+ * The unit-vector direction a connector is travelling in as it arrives at one end of an
+ * already-routed edge — what a hand-drawn Sketch arrowhead (`render/roughness/roughArrow.ts`)
+ * needs to orient itself, computed from routing geometry directly rather than by sampling the
+ * drawn path (which would need to account for roughening, bow, and every routing mode's own
+ * curve shape).
+ *
+ * `straight` has no fixed approach direction — it's simply point-to-point, so the tangent is the
+ * line's own direction. Every other routing mode (`bezier`/`smoothstep`, including the hand-built
+ * detour) approaches its anchor exactly perpendicular to the node's own side — the same fact
+ * `orient="auto-start-reverse"` already exploits for the shared `<marker>` — so the tangent there
+ * is simply that side's own inward normal, regardless of the path's shape further back.
+ */
+export function endTangent(route: RoutedEdge, routing: EdgeRouting, end: 'source' | 'target'): { x: number; y: number } {
+  const anchor = end === 'target' ? route.target : route.source;
+  if (routing === 'straight') {
+    const other = end === 'target' ? route.source : route.target;
+    const dx = anchor.x - other.x;
+    const dy = anchor.y - other.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: dx / len, y: dy / len };
+  }
+  return INWARD[anchor.side];
+}
+
+/** The seed suffix a request/response connector's reply line roughens with — shared by
+ *  `edges/describe.ts` and `DraftEdgeView.tsx` so the two renderers can never silently disagree
+ *  on it the way they already once did (the reply line wobbled live but not in exports). */
+export const RESPONSE_SEED_SUFFIX = ':response';
+
 /** Gap, in canvas pixels, between the line and a label chip's near edge. Shared by
  *  `DraftEdgeView.tsx` (transform-based) and `edges/describe.ts` (direct rect math) so the two
  *  renderers can't drift the way `CONDITION_OFFSET_Y` already has. */

@@ -10,6 +10,7 @@ import { getMeasurer } from '../text/measure';
 import { el, serialize, n, type SvgEl } from './element';
 import { beginClipScope, emitDisplayList, emitShape, shadowFilter } from './emit';
 import { markerDefs } from './markers';
+import { PERSONALITY_PROFILES } from '../roughness/presets';
 import type { PersonalityPreset } from '../../ui/personality/usePersonality';
 
 const BACKGROUND_BLUR_FILTER_ID = 'dc-bg-blur';
@@ -265,7 +266,10 @@ export function renderDocumentSvg(
   const originX = bounds.x - padding;
   const originY = bounds.y - padding;
 
-  const defs: SvgEl[] = [shadowFilter(theme.shadow), ...markerDefs(scene.arrowColors)];
+  const defs: SvgEl[] = [
+    shadowFilter(theme.shadow),
+    ...markerDefs(scene.arrowColors, PERSONALITY_PROFILES[preset].arrowJitter),
+  ];
 
   const showBackground = options.includeBackground !== false && options.background !== undefined;
   // Sized to the export's own visible bounds (0,0,width,height) — outside the

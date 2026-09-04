@@ -19,12 +19,25 @@ milestones; **0.1.0 is the first production-ready release.**
   a copied selection precisely at that spot — handy for moving an architecture fragment into a
   different part of the canvas, or into a different diagram entirely.
 - A boundary can now be added directly with the `B` key, alongside the other shapes.
+- **Draft and Sketch look like genuinely different personalities now, not just more or less
+  jitter on the same lines.** Draft stays restrained — tight corners, gently curved lines, a
+  lightly hand-drawn arrowhead. Sketch goes further: databases, queues, and junctions get a
+  retraced, doubled outline; boundaries draw with a bolder stroke whose corners deliberately
+  overshoot, like someone circling part of the diagram; and every connector gets its own
+  individually hand-drawn arrowhead instead of a stock one.
+- The Personality setting (Canvas Settings → Personality) now shows a small live preview next to
+  each option, so you can see the difference before choosing.
 
 ### Fixed
 
 - Reversing a connection's direction could leave it labelled with the wrong relationship (a
   reversed "writes" connector stayed labelled "writes" instead of becoming "reads"). It now
   relabels correctly, unless you had chosen the label yourself.
+- A drop shadow could silently disappear from services, notes, code cards, and junctions the
+  moment Draft or Sketch personality was active.
+- A request/response connector's reply line didn't match its request line's hand-drawn look in
+  exported files, even though it already did on the live canvas.
+- A straight-routed connector never picked up any Draft/Sketch hand-drawn character at all.
 
 ## [0.2.0] - 2026-09-04
 

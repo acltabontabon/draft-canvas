@@ -3,6 +3,8 @@ import { resolveEdgeColor } from '../edges/kindStyle';
 import { markerDefs } from '../render/svg/markers';
 import { shadowFilter } from '../render/svg/emit';
 import { serialize } from '../render/svg/element';
+import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 
 /**
@@ -14,6 +16,7 @@ import { useThemeValue } from '../ui/theme/useTheme';
  */
 export function Markers() {
   const theme = useThemeValue();
+  const { preset } = usePersonality();
   const edges = useEditorStore((state) => state.document.edges);
   const nodes = useEditorStore((state) => state.document.nodes);
 
@@ -23,7 +26,9 @@ export function Markers() {
     colors.add(resolveEdgeColor(edge, nodesById.get(edge.source), theme));
   }
 
-  const markup = [shadowFilter(theme.shadow), ...markerDefs(colors)].map(serialize).join('');
+  const markup = [shadowFilter(theme.shadow), ...markerDefs(colors, PERSONALITY_PROFILES[preset].arrowJitter)]
+    .map(serialize)
+    .join('');
 
   return (
     <svg

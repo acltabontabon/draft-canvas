@@ -1,3 +1,4 @@
+import { jitter } from '../roughness/seed';
 import { el, type SvgEl } from './element';
 
 /**
@@ -11,6 +12,14 @@ import { el, type SvgEl } from './element';
  * `context-stroke` would avoid per-colour markers but is unevenly supported and
  * fails during PNG rasterization in some browsers, so a marker is minted per
  * colour instead. There are at most eight colours in the whole design system.
+ *
+ * Only Clean and Draft ever *reference* a minted marker — Sketch draws its
+ * arrowheads inline, per-edge (`render/roughness/roughArrow.ts`), since a shared
+ * `<marker>` def has no way to vary per edge the way Sketch's other primitives do.
+ * A marker is still minted for every preset regardless (defensive completeness,
+ * near-zero cost), seeded by a *fixed*, non-per-edge string — every edge of a
+ * colour shares the one subtly-imperfect triangle at Draft, unlike Sketch's
+ * per-instance one.
  */
 const ARROW_LENGTH = 9;
 const ARROW_WIDTH = 7;
@@ -34,19 +43,28 @@ export function markerRef(color: string, variant: MarkerVariant = 'closed'): str
   return `url(#${markerId(color, variant)})`;
 }
 
-function arrowMarker(color: string, variant: MarkerVariant): SvgEl {
-  const trianglePath = `M0.7,0.7 L${ARROW_LENGTH - 0.7},${ARROW_WIDTH / 2} L0.7,${ARROW_WIDTH - 0.7}`;
+/**
+ * `amplitude === 0` (Clean) reproduces the original crisp triangle exactly, byte-for-byte — the
+ * two back corners only move once `amplitude` is above zero, each independently, off a seed keyed
+ * by colour+variant (not an edge id), so the wobble stays fixed across the whole document rather
+ * than looking hand-picked per connector.
+ */
+function arrowMarker(color: string, variant: MarkerVariant, amplitude: number): SvgEl {
+  const j = (i: number) => jitter(`marker:${color}:${variant}`, i, amplitude);
+  const tip = { x: ARROW_LENGTH, y: ARROW_WIDTH / 2 };
+  const back1 = { x: j(0), y: j(1) };
+  const back2 = { x: j(2), y: ARROW_WIDTH + j(3) };
   const shape =
     variant === 'open'
       ? el('path', {
-          d: trianglePath,
+          d: `M${back1.x + 0.7},${back1.y + 0.7} L${tip.x - 0.7},${tip.y} L${back2.x + 0.7},${back2.y - 0.7}`,
           fill: 'none',
           stroke: color,
           'stroke-width': 1.3,
           'stroke-linejoin': 'round',
           'stroke-linecap': 'round',
         })
-      : el('path', { d: `M0,0 L${ARROW_LENGTH},${ARROW_WIDTH / 2} L0,${ARROW_WIDTH} Z`, fill: color });
+      : el('path', { d: `M${back1.x},${back1.y} L${tip.x},${tip.y} L${back2.x},${back2.y} Z`, fill: color });
 
   return el(
     'marker',
@@ -65,8 +83,9 @@ function arrowMarker(color: string, variant: MarkerVariant): SvgEl {
   );
 }
 
-/** Marker definitions — both variants, for every colour the document actually uses. */
-export function markerDefs(colors: Iterable<string>): SvgEl[] {
+/** Marker definitions — both variants, for every colour the document actually uses, at the active
+ *  preset's `arrowJitter` amplitude (0 for Clean, the original untouched default). */
+export function markerDefs(colors: Iterable<string>, arrowJitter = 0): SvgEl[] {
   const unique = [...new Set(colors)];
-  return unique.flatMap((color) => [arrowMarker(color, 'closed'), arrowMarker(color, 'open')]);
+  return unique.flatMap((color) => [arrowMarker(color, 'closed', arrowJitter), arrowMarker(color, 'open', arrowJitter)]);
 }

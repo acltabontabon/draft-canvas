@@ -10,8 +10,8 @@ import type { DisplayList, Shape, Stroke } from '../render/displayList';
 import { tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
-import { PRESET_AMPLITUDE } from '../render/roughness/presets';
-import { roughEllipsePath, roughRectPath } from '../render/roughness/roughRect';
+import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
@@ -199,23 +199,30 @@ function surfaceStroke(ctx: DescribeContext, node: DraftNode): Stroke {
 /**
  * A rounded-rect outline that stays a plain `RectShape` at Clean (so Clean's
  * emitted SVG element type never changes) and switches to a jittered
- * `PathShape` only when Draft/Sketch's amplitude is above zero — see
- * `render/roughness/roughRect.ts`. Shared by every node whose outline is a
- * plain rounded rectangle: `box`, `note`, `group`, and `codeCard`.
+ * `PathShape` the moment Draft/Sketch's `outline` or `bow` is above zero —
+ * see `render/roughness/roughRect.ts`. Shared by every node whose outline is
+ * a plain rounded rectangle: `box`, `note`, `group`, `codeCard`, `service`,
+ * and actor's container/system-glyph/device-glyph.
+ *
+ * `boost` scales both axes together for a primitive that wants more presence
+ * than an ordinary node at the same preset — only `group()`/Boundary uses it.
  */
 function outlineShape(
   seedId: string,
   ctx: DescribeContext,
   rect: { x: number; y: number; w: number; h: number; r: number },
   paint: { fill?: string; opacity?: number; stroke?: Stroke; shadow?: boolean },
+  boost = 1,
 ): Shape {
-  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
-  if (amplitude === 0) {
+  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const outlineAmp = profile.outline * boost;
+  const bowAmp = profile.bow * boost;
+  if (outlineAmp === 0 && bowAmp === 0) {
     return { t: 'rect', x: rect.x, y: rect.y, w: rect.w, h: rect.h, r: rect.r, ...paint };
   }
   return {
     t: 'path',
-    d: roughRectPath(rect.x, rect.y, rect.w, rect.h, rect.r, seedId, amplitude),
+    d: roughRectPath(rect.x, rect.y, rect.w, rect.h, rect.r, seedId, outlineAmp, bowAmp),
     ...paint,
   };
 }
@@ -233,20 +240,43 @@ function box(node: DraftNode, ctx: DescribeContext, radius: number): Shape[] {
   ];
 }
 
+/**
+ * A Junction (the `ellipse` node type) is 24-64px — the flattest, smallest node in the app (see
+ * `document/factory.ts`'s uniquely-clamped `maxSizeFor('ellipse')`) — so the profile's flat
+ * `outline`/`bow` values would be disproportionate on the smallest ones. Both axes clamp to a
+ * fraction of the node's own radius instead of using the profile value directly.
+ */
+function junctionAmplitude(profile: (typeof PERSONALITY_PROFILES)[PersonalityPreset], rx: number, ry: number) {
+  const cap = Math.min(rx, ry) * 0.18;
+  return { outline: Math.min(profile.outline, cap), bow: Math.min(profile.bow, cap) };
+}
+
 function ellipse(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent);
   const cx = node.width / 2;
   const cy = node.height / 2;
   const rx = node.width / 2 - 0.75;
   const ry = node.height / 2 - 0.75;
-  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
+  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const amp = junctionAmplitude(profile, rx, ry);
   const paint = { fill: palette.fill, stroke: surfaceStroke(ctx, node), shadow: true };
   const outline: Shape =
-    amplitude === 0
+    amp.outline === 0 && amp.bow === 0
       ? { t: 'ellipse', cx, cy, rx, ry, ...paint }
-      : { t: 'path', d: roughEllipsePath(cx, cy, rx, ry, node.id, amplitude), ...paint };
+      : { t: 'path', d: roughEllipsePath(cx, cy, rx, ry, node.id, amp.outline, amp.bow), ...paint };
+  const shapes: Shape[] = [outline];
+  // The "obvious hand-drawn circle" — a second, independently-seeded rim pass, Sketch only.
+  if (profile.retrace) {
+    shapes.push({
+      t: 'path',
+      d: roughEllipsePath(cx, cy, rx, ry, `${node.id}:retrace`, amp.outline, amp.bow),
+      fill: 'none',
+      stroke: { ...surfaceStroke(ctx, node), width: 1 },
+      opacity: 0.55,
+    });
+  }
   return [
-    outline,
+    ...shapes,
     ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
   ];
 }
@@ -294,6 +324,71 @@ function service(node: DraftNode, ctx: DescribeContext): Shape[] {
   ];
 }
 
+/**
+ * The (vertical) cylinder's body + lid paths, factored out so `database()` can call it twice at
+ * Sketch — once for the real outline, once (independently seeded) for its `retrace` pass —
+ * without duplicating the cylinder math itself.
+ */
+function cylinderPaths(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  ry: number,
+  seedId: string,
+  outlineAmp: number,
+  bowAmp: number,
+): { body: string; lid: string } {
+  if (outlineAmp === 0 && bowAmp === 0) {
+    // Cylinder: an elliptical top, straight sides, an elliptical bottom.
+    const body = [
+      `M${x},${y + ry}`,
+      `a${w / 2},${ry} 0 0 1 ${w},0`,
+      `l0,${h - ry * 2}`,
+      `a${w / 2},${ry} 0 0 1 ${-w},0`,
+      'Z',
+    ].join(' ');
+    const lid = `M${x},${y + ry} a${w / 2},${ry} 0 0 0 ${w},0 a${w / 2},${ry} 0 0 0 ${-w},0`;
+    return { body, lid };
+  }
+  // Each defining point of the cylinder — top/bottom cap height, left/right
+  // walls — jitters independently, so the cap height and overall width stay
+  // close to their Clean values (still recognisably a cylinder) while the
+  // drawn curve gets a hand-drawn wobble.
+  const j = (i: number) => jitter(seedId, i, outlineAmp);
+  const topRy = ry + j(0);
+  const bottomRy = ry + j(1);
+  const left = x + j(2);
+  const right = x + w + j(3);
+  const top = y + j(4);
+  const bottom = y + h + j(5);
+  const bodyW = right - left;
+  // The two straight side walls, each independently bowed (Draft/Sketch) rather than laser-
+  // straight — one drawn explicitly (`L`/`Q`), the other closed by `Z` at amplitude 0 becomes an
+  // explicit segment too the moment it needs to bow, since a `Z`-closing segment can't curve.
+  const wall = (a: { x: number; y: number }, b: { x: number; y: number }, index: number) => {
+    if (bowAmp === 0) return `L${b.x},${b.y}`;
+    const c = bowControlPoint(a, b, seedId, index, bowAmp);
+    return `Q${c.x},${c.y} ${b.x},${b.y}`;
+  };
+  const rightTop = { x: right, y: top + topRy };
+  const rightBottom = { x: right, y: bottom - bottomRy };
+  const leftBottom = { x: left, y: bottom - bottomRy };
+  const leftTop = { x: left, y: top + topRy };
+  const body = [
+    `M${leftTop.x},${leftTop.y}`,
+    `A${bodyW / 2},${topRy} 0 0 1 ${rightTop.x},${rightTop.y}`,
+    wall(rightTop, rightBottom, 10),
+    `A${bodyW / 2},${bottomRy} 0 0 1 ${leftBottom.x},${leftBottom.y}`,
+    wall(leftBottom, leftTop, 12),
+    'Z',
+  ].join(' ');
+  const lid =
+    `M${left},${top + topRy} A${bodyW / 2},${topRy} 0 0 0 ${right},${top + topRy} ` +
+    `A${bodyW / 2},${topRy} 0 0 0 ${left},${top + topRy}`;
+  return { body, lid };
+}
+
 function database(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'blue');
   const w = node.width - 1.5;
@@ -303,44 +398,9 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
   const ry = Math.min(10, h * 0.16);
   const x = 0.75;
   const y = 0.75;
-  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
+  const profile = PERSONALITY_PROFILES[ctx.preset];
 
-  let body: string;
-  let lid: string;
-  if (amplitude === 0) {
-    // Cylinder: an elliptical top, straight sides, an elliptical bottom.
-    body = [
-      `M${x},${y + ry}`,
-      `a${w / 2},${ry} 0 0 1 ${w},0`,
-      `l0,${h - ry * 2}`,
-      `a${w / 2},${ry} 0 0 1 ${-w},0`,
-      'Z',
-    ].join(' ');
-    lid = `M${x},${y + ry} a${w / 2},${ry} 0 0 0 ${w},0 a${w / 2},${ry} 0 0 0 ${-w},0`;
-  } else {
-    // Each defining point of the cylinder — top/bottom cap height, left/right
-    // walls — jitters independently, so the cap height and overall width stay
-    // close to their Clean values (still recognisably a cylinder) while the
-    // drawn curve gets a hand-drawn wobble.
-    const j = (i: number) => jitter(node.id, i, amplitude);
-    const topRy = ry + j(0);
-    const bottomRy = ry + j(1);
-    const left = x + j(2);
-    const right = x + w + j(3);
-    const top = y + j(4);
-    const bottom = y + h + j(5);
-    const bodyW = right - left;
-    body = [
-      `M${left},${top + topRy}`,
-      `A${bodyW / 2},${topRy} 0 0 1 ${right},${top + topRy}`,
-      `L${right},${bottom - bottomRy}`,
-      `A${bodyW / 2},${bottomRy} 0 0 1 ${left},${bottom - bottomRy}`,
-      'Z',
-    ].join(' ');
-    lid =
-      `M${left},${top + topRy} A${bodyW / 2},${topRy} 0 0 0 ${right},${top + topRy} ` +
-      `A${bodyW / 2},${topRy} 0 0 0 ${left},${top + topRy}`;
-  }
+  const { body, lid } = cylinderPaths(x, y, w, h, ry, node.id, profile.outline, profile.bow);
   const kindLabel = DATABASE_KIND_LABELS[node.databaseKind ?? 'generic'];
   const innerTop = ry * 2;
   const innerBottom = ry;
@@ -349,6 +409,17 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
     { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
     { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5 } },
   ];
+
+  // The "special opportunity" primitive — a second, independently-seeded pass over the same
+  // cylinder, Sketch only, reusing the same body/lid coordinates the primary already stayed
+  // aligned on (see the module doc comment on `cylinderPaths`).
+  if (profile.retrace) {
+    const retrace = cylinderPaths(x, y, w, h, ry, `${node.id}:retrace`, profile.outline, profile.bow);
+    shapes.push(
+      { t: 'path', d: retrace.body, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
+      { t: 'path', d: retrace.lid, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
+    );
+  }
 
   // A named kind (SQL/NoSQL/Cache) reads as a quiet second line directly under the primary
   // label — not a corner badge like Service's, which has a real corner to badge; a cylinder
@@ -407,6 +478,67 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
   return shapes;
 }
 
+/**
+ * The (horizontal) tube's body + lid paths — the `queue()` analogue of `database()`'s
+ * `cylinderPaths`, factored out for the same reason: calling it twice, independently seeded, is
+ * what `retrace` needs at Sketch.
+ */
+function tubePaths(
+  x: number,
+  y: number,
+  w: number,
+  tubeH: number,
+  rx: number,
+  seedId: string,
+  outlineAmp: number,
+  bowAmp: number,
+): { body: string; lid: string } {
+  if (outlineAmp === 0 && bowAmp === 0) {
+    const body = [
+      `M${x + rx},${y}`,
+      `a${rx},${tubeH / 2} 0 0 0 0,${tubeH}`,
+      `l${w - rx * 2},0`,
+      `a${rx},${tubeH / 2} 0 0 0 0,${-tubeH}`,
+      'Z',
+    ].join(' ');
+    const lid = `M${x + w - rx},${y} a${rx},${tubeH / 2} 0 0 1 0,${tubeH} a${rx},${tubeH / 2} 0 0 1 0,${-tubeH}`;
+    return { body, lid };
+  }
+  // Each defining point of the tube — left/right cap radius, top/bottom
+  // walls — jitters independently, same discipline as `database()`.
+  const j = (i: number) => jitter(seedId, i, outlineAmp);
+  const leftRx = rx + j(0);
+  const rightRx = rx + j(1);
+  const top = y + j(2);
+  const bottom = y + tubeH + j(3);
+  const halfH = (bottom - top) / 2;
+  const leftCapX = x + leftRx;
+  const rightCapX = x + w - rightRx;
+  // The tube's two straight top/bottom walls, each independently bowed at Draft/Sketch — same
+  // "make the Z-closing segment explicit so it can curve too" treatment as `cylinderPaths`.
+  const wall = (a: { x: number; y: number }, b: { x: number; y: number }, index: number) => {
+    if (bowAmp === 0) return `L${b.x},${b.y}`;
+    const c = bowControlPoint(a, b, seedId, index, bowAmp);
+    return `Q${c.x},${c.y} ${b.x},${b.y}`;
+  };
+  const leftTop = { x: leftCapX, y: top };
+  const leftBottom = { x: leftCapX, y: bottom };
+  const rightBottom = { x: rightCapX, y: bottom };
+  const rightTop = { x: rightCapX, y: top };
+  const body = [
+    `M${leftTop.x},${leftTop.y}`,
+    `A${leftRx},${halfH} 0 0 0 ${leftBottom.x},${leftBottom.y}`,
+    wall(leftBottom, rightBottom, 10),
+    `A${rightRx},${halfH} 0 0 0 ${rightTop.x},${rightTop.y}`,
+    wall(rightTop, leftTop, 12),
+    'Z',
+  ].join(' ');
+  const lid =
+    `M${rightCapX},${top} A${rightRx},${halfH} 0 0 1 ${rightCapX},${bottom} ` +
+    `A${rightRx},${halfH} 0 0 1 ${rightCapX},${top}`;
+  return { body, lid };
+}
+
 function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'violet');
   const w = node.width - 1.5;
@@ -424,45 +556,13 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // pill's own ends rather than a rounded one, which is what a short queue
   // node (tubeH below the historical 32px cap) would otherwise get.
   const rx = Math.min(14, w * 0.12, tubeH / 2);
-  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
+  const profile = PERSONALITY_PROFILES[ctx.preset];
 
   // A horizontal cylinder — a pipe messages travel through — built the same
   // way `database()` builds its (vertical) one: elliptical caps joined by
   // straight edges, with one cap's seam drawn again on top as a "lid" so it
   // reads as an open tube rather than a solid capsule.
-  let body: string;
-  let lid: string;
-  if (amplitude === 0) {
-    body = [
-      `M${x + rx},${y}`,
-      `a${rx},${tubeH / 2} 0 0 0 0,${tubeH}`,
-      `l${w - rx * 2},0`,
-      `a${rx},${tubeH / 2} 0 0 0 0,${-tubeH}`,
-      'Z',
-    ].join(' ');
-    lid = `M${x + w - rx},${y} a${rx},${tubeH / 2} 0 0 1 0,${tubeH} a${rx},${tubeH / 2} 0 0 1 0,${-tubeH}`;
-  } else {
-    // Each defining point of the tube — left/right cap radius, top/bottom
-    // walls — jitters independently, same discipline as `database()`.
-    const j = (i: number) => jitter(node.id, i, amplitude);
-    const leftRx = rx + j(0);
-    const rightRx = rx + j(1);
-    const top = y + j(2);
-    const bottom = y + tubeH + j(3);
-    const halfH = (bottom - top) / 2;
-    const leftCapX = x + leftRx;
-    const rightCapX = x + w - rightRx;
-    body = [
-      `M${leftCapX},${top}`,
-      `A${leftRx},${halfH} 0 0 0 ${leftCapX},${bottom}`,
-      `L${rightCapX},${bottom}`,
-      `A${rightRx},${halfH} 0 0 0 ${rightCapX},${top}`,
-      'Z',
-    ].join(' ');
-    lid =
-      `M${rightCapX},${top} A${rightRx},${halfH} 0 0 1 ${rightCapX},${bottom} ` +
-      `A${rightRx},${halfH} 0 0 1 ${rightCapX},${top}`;
-  }
+  const { body, lid } = tubePaths(x, y, w, tubeH, rx, node.id, profile.outline, profile.bow);
 
   // The message-icon cluster inside the tube is the one thing that differs between Queue,
   // Topic, and Stream — same tube, same lid, same stroke weight, so the three stay clearly one
@@ -535,6 +635,16 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
     { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5 } },
     { t: 'path', d: icons, fill: 'none', stroke: { color: palette.line, width: 1.2 } },
   ];
+
+  // Same "special opportunity" retrace pass as `database()` — Sketch only, independently
+  // seeded. The icon glyphs above never retrace; they're small, identifying, and text-adjacent.
+  if (profile.retrace) {
+    const retrace = tubePaths(x, y, w, tubeH, rx, `${node.id}:retrace`, profile.outline, profile.bow);
+    shapes.push(
+      { t: 'path', d: retrace.body, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
+      { t: 'path', d: retrace.lid, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
+    );
+  }
 
   // Below the tube: the name, with its kind as a small muted subtext line
   // underneath it — not a corner tag (this silhouette has no filled corner to
@@ -651,10 +761,12 @@ function humanGlyph(
   // A wash this light gives the body presence as a mass without competing with the container's
   // own (unfilled) card — still clearly lighter than a filled architecture shape.
   const bodyFill = 0.12;
-  const amplitude = PRESET_AMPLITUDE[ctx.preset].outline;
+  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const outlineAmp = profile.outline;
+  const bowAmp = profile.bow;
 
   let torso: string;
-  if (amplitude === 0) {
+  if (outlineAmp === 0 && bowAmp === 0) {
     torso = [
       `M${left},${bottom}`,
       `L${left},${shoulderTopY}`,
@@ -663,39 +775,61 @@ function humanGlyph(
       'Z',
     ].join(' ');
   } else {
-    const j = (i: number) => jitter(node.id, i, amplitude);
+    const j = (i: number) => jitter(node.id, i, outlineAmp);
     const lb = { x: left + j(0), y: bottom + j(1) };
     const lt = { x: left + j(2), y: shoulderTopY + j(3) };
     const rt = { x: right + j(4), y: shoulderTopY + j(5) };
     const rb = { x: right + j(6), y: bottom + j(7) };
     const ry = capRy + j(8);
+    // The torso's two side walls bow independently at Draft/Sketch — the bottom edge (the Z
+    // close) stays straight, right where the participant's name begins just below it.
+    const wall = (a: { x: number; y: number }, b: { x: number; y: number }, index: number) => {
+      if (bowAmp === 0) return `L${b.x},${b.y}`;
+      const c = bowControlPoint(a, b, node.id, index, bowAmp);
+      return `Q${c.x},${c.y} ${b.x},${b.y}`;
+    };
     torso = [
       `M${lb.x},${lb.y}`,
-      `L${lt.x},${lt.y}`,
+      wall(lb, lt, 20),
       `A${(rt.x - lt.x) / 2},${ry} 0 0 1 ${rt.x},${rt.y}`,
-      `L${rb.x},${rb.y}`,
+      wall(rt, rb, 22),
       'Z',
     ].join(' ');
   }
 
   const headOutline: Shape =
-    amplitude === 0
+    outlineAmp === 0 && bowAmp === 0
       ? { t: 'ellipse', cx, cy: headCy, rx: headR, ry: headR, fill: 'none', stroke }
-      : { t: 'path', d: roughEllipsePath(cx, headCy, headR, headR, `${node.id}:head`, amplitude), fill: 'none', stroke };
+      : {
+          t: 'path',
+          d: roughEllipsePath(cx, headCy, headR, headR, `${node.id}:head`, outlineAmp, bowAmp),
+          fill: 'none',
+          stroke,
+        };
 
-  return {
+  const shapes: Shape[] = [
     // The wash and its outline are two separate shapes sharing the same `d` — `opacity` dims a
     // shape's stroke along with its fill, and the outline needs to stay at full strength (the
     // same family stroke every other Actor line uses) while only the fill underneath is faint.
     // Torso first (behind), head last (in front) — the head reads as a clean, whole circle
     // sitting on top of the body, not overlapped by its fill.
-    shapes: [
-      { t: 'path', d: torso, fill: stroke.color, opacity: bodyFill },
-      { t: 'path', d: torso, fill: 'none', stroke },
-      headOutline,
-    ],
-    glyphBottom: bottom,
-  };
+    { t: 'path', d: torso, fill: stroke.color, opacity: bodyFill },
+    { t: 'path', d: torso, fill: 'none', stroke },
+    headOutline,
+  ];
+  // "Irregular actor shapes" — a retraced head is a distinctly hand-drawn tell that doesn't
+  // touch the filled torso wash, Sketch only.
+  if (profile.retrace) {
+    shapes.push({
+      t: 'path',
+      d: roughEllipsePath(cx, headCy, headR, headR, `${node.id}:head-retrace`, outlineAmp, bowAmp),
+      fill: 'none',
+      stroke: { ...stroke, width: 1 },
+      opacity: 0.55,
+    });
+  }
+
+  return { shapes, glyphBottom: bottom };
 }
 
 /**
@@ -719,12 +853,20 @@ function systemGlyph(
   const contentW = rectW * 0.6;
   const contentX = cx - contentW / 2;
   const contentY = headerY + 12;
+  // These are 1px reference lines, not the silhouette — a small bow only, restrained relative to
+  // the container's own, and never jittered at their endpoints (they stay flush with the frame).
+  const hairlineBow = PERSONALITY_PROFILES[ctx.preset].bow * 0.5;
+  const hairline = (seedSuffix: string, y: number, x0: number, w: number) => {
+    if (hairlineBow === 0) return `M${x0},${y} h${w}`;
+    const c = bowControlPoint({ x: x0, y }, { x: x0 + w, y }, `${node.id}:${seedSuffix}`, 0, hairlineBow);
+    return `M${x0},${y} Q${c.x},${c.y} ${x0 + w},${y}`;
+  };
 
   return {
     shapes: [
       outlineShape(`${node.id}:actor-glyph`, ctx, { x: rectX, y: rectY, w: rectW, h: rectH, r: 4 }, { fill: 'none', stroke }),
-      { t: 'path', d: `M${rectX},${headerY} h${rectW}`, fill: 'none', stroke },
-      { t: 'path', d: `M${contentX},${contentY} h${contentW}`, fill: 'none', stroke },
+      { t: 'path', d: hairline('header-line', headerY, rectX, rectW), fill: 'none', stroke },
+      { t: 'path', d: hairline('content-line', contentY, contentX, contentW), fill: 'none', stroke },
     ],
     glyphBottom: rectY + rectH,
   };
@@ -754,11 +896,14 @@ function deviceGlyph(
   return {
     shapes: [
       outlineShape(`${node.id}:actor-glyph`, ctx, { x: rectX, y: rectY, w: rectW, h: rectH, r: 5 }, { fill: 'none', stroke }),
+      // A small internal detail — restrained relative to the outer silhouette so it doesn't
+      // out-express it, at 0.6x the outer body's own boost.
       outlineShape(
         `${node.id}:actor-glyph-screen`,
         ctx,
         { x: screenX, y: screenY, w: screenW, h: screenH, r: 2 },
         { fill: 'none', stroke },
+        0.6,
       ),
     ],
     glyphBottom: rectY + rectH,
@@ -911,16 +1056,38 @@ function freeText(node: DraftNode, ctx: DescribeContext): Shape[] {
   ];
 }
 
+/** A boundary is explicitly meant to feel stronger than an ordinary node — "someone drawing a
+ *  large boundary around several services... someone just circled this part" — so it boosts its
+ *  own bow/outline over the plain per-node profile value, rather than reading identically to the
+ *  services it contains. Clean stays 1 (no-op) so this never changes byte-identical output. */
+const BOUNDARY_BOOST: Record<PersonalityPreset, number> = { clean: 1, draft: 1.4, sketch: 1.7 };
+
 function group(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent);
+  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const boost = BOUNDARY_BOOST[ctx.preset];
+  const rect = { x: 1, y: 1, w: node.width - 2, h: node.height - 2, r: 12 };
+  const stroke: Stroke = { color: palette.line, width: 1.25, dash: [6, 5] };
   const shapes: Shape[] = [
-    outlineShape(
-      node.id,
-      ctx,
-      { x: 1, y: 1, w: node.width - 2, h: node.height - 2, r: 12 },
-      { fill: ctx.theme.surface, opacity: 0.35, stroke: { color: palette.line, width: 1.25, dash: [6, 5] } },
-    ),
+    outlineShape(node.id, ctx, rect, { fill: ctx.theme.surface, opacity: 0.35, stroke }, boost),
   ];
+
+  // Only the boldest primitive in the whole system gets both of these: a second,
+  // independently-seeded retrace pass, and a corner-overshoot pass — "someone just circled this
+  // part" reads as more than one confident stroke, corners included. Sketch only.
+  if (profile.retrace) {
+    shapes.push({
+      t: 'path',
+      d: roughRectPath(rect.x, rect.y, rect.w, rect.h, rect.r, `${node.id}:retrace`, profile.outline * boost, profile.bow * boost),
+      fill: 'none',
+      stroke: { ...stroke, width: 1 },
+      opacity: 0.5,
+    });
+  }
+  if (profile.overshoot > 0) {
+    const d = roughRectOvershootPath(rect.x, rect.y, rect.w, rect.h, node.id, profile.outline * boost, profile.overshoot * boost);
+    if (d) shapes.push({ t: 'path', d, fill: 'none', stroke });
+  }
 
   // The preset is a small secondary caption, never folded into the node's
   // own `text` — a Domain boundary labelled "Payment Platform" must still

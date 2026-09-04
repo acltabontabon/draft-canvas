@@ -239,12 +239,17 @@ overlay, done.
     change and no new UI.
   - **UX principles.** Understated over cartoonish: a user should think "this feels like a sketch,"
     never "someone applied a filter." Semantics-aware, not uniform — services/databases/queues stay
-    structurally clear, with irregularity only at the outline, never the silhouette (2.3); notes and
-    pen annotations can feel more informal; group boundaries (1.4) can look lightly drawn; a
+    structurally clear, silhouette never in doubt regardless of preset (2.3). Different primitives
+    lean on different techniques rather than one shared intensity dial: a database or queue's
+    outline can retrace itself at Sketch (a second, independently-seeded pass, like a pencil line
+    drawn twice), a junction's rim does too, a note stays comparatively restrained; group boundaries
+    (1.4) deliberately go furthest — a bolder stroke whose corners can overshoot — since a boundary
+    drawn by hand is meant to read as "someone circling this part," not just another wobbly box; a
     highlight can resemble a marker stroke. **Connections are the one element that never trades
     readability for personality** — label placement, direction, and attachment points stay exactly
     as legible as Clean at every setting, and topology never changes for visual style: a preset
-    restyles a line 2.1/2.2 already routed, it never reroutes one.
+    restyles a line 2.1/2.2 already routed, it never reroutes one — though the stroke itself, and
+    now its arrowhead, draw with the same personality as everything else.
   - **Architectural considerations.** A rendering-only concern layered onto Phase 0.2's display
     list, never onto the document model — `x`/`y`/`width`/`height`/anchors on a `DraftNode`/
     `DraftEdge` stay exact regardless of preset; only what `nodes/describe.ts` and
@@ -253,7 +258,12 @@ overlay, done.
     deliberate exception to "one renderer" (`DraftEdgeView.tsx` vs. `edges/describe.ts` stay
     hand-synchronized, per `docs/ARCHITECTURE.md`), a roughness treatment for connectors is — like
     every other connector visual — a second thing to build by hand, not something that falls out of
-    one change.
+    one change. Arrowheads participate too: Draft reuses a shared, fixed-seed marker (one per
+    colour, cheap); Sketch draws each edge's arrowhead inline instead, uniquely seeded per edge,
+    since a shared `<marker>` def can't vary per instance the way the rest of Sketch does. The live
+    canvas's click/reconnect hit area also reads from the connector's canonical, never-jittered
+    geometry rather than its drawn stroke, so a bolder Sketch wobble can never make a connector
+    harder to grab.
   - **Dependencies.** 0.2 (one renderer, for the layering discipline); 2.1-2.7 (to know which
     element is a connector that must stay fully legible vs. a boundary or note that can flex); 3.2
     Presentation Mode and Phase 4 exports both need to carry the active preset through rather than

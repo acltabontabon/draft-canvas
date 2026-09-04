@@ -64,6 +64,8 @@ export interface PathShape {
   d: string;
   fill?: Paint;
   stroke?: Stroke;
+  /** Applies the one shared shadow filter. There is deliberately only one. */
+  shadow?: boolean;
   opacity?: number;
   markerEnd?: string;
   markerStart?: string;

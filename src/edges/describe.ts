@@ -1,7 +1,8 @@
 import type { DraftEdge, DraftNode, EdgeRouting } from '../document/types';
 import type { Shape, TextAlign } from '../render/displayList';
-import { PRESET_AMPLITUDE } from '../render/roughness/presets';
+import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { roughenPath } from '../render/roughness/roughPath';
+import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { markerRef } from '../render/svg/markers';
 import type { Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
@@ -10,6 +11,8 @@ import type { TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../ui/personality/usePersonality';
 import {
   LABEL_LINE_GAP,
+  RESPONSE_SEED_SUFFIX,
+  endTangent,
   labelLaneOffset,
   rectOf,
   responseLaneFor,
@@ -140,32 +143,50 @@ export function describeEdge(
   // from the unperturbed `route` object — only the drawn stroke wobbles, so
   // label placement, direction, and attachment points stay exactly as legible
   // as Clean at every preset, and topology/routing never changes.
-  const amplitude = PRESET_AMPLITUDE[ctx.preset ?? 'clean'];
+  const profile = PERSONALITY_PROFILES[ctx.preset ?? 'clean'];
   const strokeBase = { color, width: 1.6, linecap: 'round' as const, dash: dashForEdge(edge) };
-  const markerEnd = edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined;
-  const line: Shape[] =
-    amplitude.outline === 0
-      ? [{ t: 'path', d: route.d, fill: 'none', stroke: strokeBase, markerEnd }]
-      : [
+  const variant = markerVariantForEdge(edge);
+  // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
+  // `render/roughness/roughArrow.ts`. `roughenPath` is the identity function at
+  // `outline === 0 && bow === 0` (Clean), so the base line needs no separate branch.
+  const usesHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';
+  const markerEnd = edge.directed && !usesHandDrawnArrow ? markerRef(color, variant) : undefined;
+  const line: Shape[] = [
+    {
+      t: 'path',
+      d: roughenPath(route.d, `${edge.id}:0`, profile.outline, profile.bow),
+      fill: 'none',
+      stroke: strokeBase,
+      markerEnd,
+    },
+    ...(profile.strokes === 2
+      ? ([
           {
             t: 'path',
-            d: roughenPath(route.d, `${edge.id}:0`, amplitude.outline),
+            d: roughenPath(route.d, `${edge.id}:1`, profile.outline, profile.bow),
             fill: 'none',
-            stroke: strokeBase,
-            markerEnd,
+            stroke: { ...strokeBase, width: 1 },
+            opacity: 0.5,
           },
-          ...(amplitude.strokes === 2
-            ? ([
-                {
-                  t: 'path',
-                  d: roughenPath(route.d, `${edge.id}:1`, amplitude.outline),
-                  fill: 'none',
-                  stroke: { ...strokeBase, width: 1 },
-                  opacity: 0.5,
-                },
-              ] as Shape[])
-            : []),
-        ];
+        ] as Shape[])
+      : []),
+    ...(usesHandDrawnArrow
+      ? ([
+          {
+            t: 'path',
+            d: sketchArrowPath(
+              route.target,
+              endTangent(route, edge.routing, 'target'),
+              `${edge.id}:arrow`,
+              profile.arrowJitter,
+              variant,
+            ),
+            fill: variant === 'closed' ? color : 'none',
+            stroke: variant === 'open' ? { color, width: 1.3, linecap: 'round' } : undefined,
+          },
+        ] as Shape[])
+      : []),
+  ];
 
   const overlay: Shape[] = [];
 
@@ -186,15 +207,38 @@ export function describeEdge(
         lane: responseLane,
         obstacles,
       });
+      // Roughened exactly like the primary line — this used to draw `responseRoute.d` straight,
+      // which meant the reply line stayed perfectly crisp in every export while the live canvas
+      // (`DraftEdgeView.tsx`) already wobbled it; fixed to match, using the same shared seed
+      // suffix so the two renderers can't quietly disagree on it again.
+      const responseD = roughenPath(responseRoute.d, `${edge.id}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow);
+      const responseHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';
       responseLine = [
         {
           t: 'path',
-          d: responseRoute.d,
+          d: responseD,
           fill: 'none',
           stroke: { color, width: 1, linecap: 'round', dash: RESPONSE_DASH },
-          markerEnd: edge.directed ? markerRef(color, 'open') : undefined,
+          markerEnd: edge.directed && !responseHandDrawnArrow ? markerRef(color, 'open') : undefined,
           opacity: 0.8,
         },
+        ...(responseHandDrawnArrow
+          ? ([
+              {
+                t: 'path',
+                d: sketchArrowPath(
+                  responseRoute.target,
+                  endTangent(responseRoute, edge.routing, 'target'),
+                  `${edge.id}:response-head`,
+                  profile.arrowJitter,
+                  'open',
+                ),
+                fill: 'none',
+                stroke: { color, width: 1.3, linecap: 'round' },
+                opacity: 0.8,
+              },
+            ] as Shape[])
+          : []),
       ];
 
       // A textless response line (auto-defaulted, nothing typed yet) draws only the line above —

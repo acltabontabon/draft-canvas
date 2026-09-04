@@ -16,6 +16,7 @@ import { shadowFilter } from './emit';
 import { markerDefs } from './markers';
 import { backgroundEls, buildScene, type Decoration, type ResolvedBackground } from './document';
 import type { RenderedSvg } from './document';
+import { PERSONALITY_PROFILES } from '../roughness/presets';
 import type { PersonalityPreset } from '../../ui/personality/usePersonality';
 
 export interface FlowFrameOptions {
@@ -104,7 +105,7 @@ export function renderFlowFrameSvg(
   const defs = [
     el('defs', undefined, [
       shadowFilter(theme.shadow),
-      ...markerDefs(scene.arrowColors),
+      ...markerDefs(scene.arrowColors, PERSONALITY_PROFILES[preset].arrowJitter),
       ...(background?.defs ?? []),
     ]),
   ];
