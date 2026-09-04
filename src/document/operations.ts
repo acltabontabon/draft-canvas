@@ -273,13 +273,29 @@ export function pasteFragment(
   doc: DraftDocument,
   fragment: Clipboard,
   offset: { x: number; y: number },
-): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[] } {
-  const created = instantiateFragment(fragment, offset);
+): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[]; truncated: boolean } {
+  const instantiated = instantiateFragment(fragment, offset);
+  // `LIMITS.maxNodes`/`maxEdges` are otherwise only enforced on a document taken as a whole (file
+  // import, clipboard decode) — pasting/duplicating repeatedly into an already-open document has
+  // no other choke point, so cap the *result* here rather than let a document grow without bound.
+  const nodeRoom = Math.max(0, LIMITS.maxNodes - doc.nodes.length);
+  const edgeRoom = Math.max(0, LIMITS.maxEdges - doc.edges.length);
+  const truncated = instantiated.nodes.length > nodeRoom || instantiated.edges.length > edgeRoom;
+  const keptNodeIds = new Set(instantiated.nodes.slice(0, nodeRoom).map((n) => n.id));
+  const created = {
+    nodes: instantiated.nodes.slice(0, nodeRoom),
+    // An edge kept past the node cap would dangle, so it's dropped along with whatever edge-count
+    // truncation removes — both filters collapse to one pass.
+    edges: instantiated.edges
+      .filter((e) => keptNodeIds.has(e.source) && keptNodeIds.has(e.target))
+      .slice(0, edgeRoom),
+  };
   const next = addEdges(addNodes(doc, created.nodes), created.edges);
   return {
     doc: next,
     nodeIds: created.nodes.map((n) => n.id),
     edgeIds: created.edges.map((e) => e.id),
+    truncated,
   };
 }
 

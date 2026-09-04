@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
+// Only used for the one-off "pasted/duplicated content was capped" toast (`notify`) — paste and
+// duplicate are the only place a document-size limit can be hit from a trusted, in-app action
+// rather than at import, and there's no other place in the app that already surfaces that.
+import { useUiStore } from './uiStore';
 import {
   createAttachment,
   createDocument,
@@ -709,6 +713,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Duplicate', () => result.doc, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
+    if (result.truncated) {
+      useUiStore.getState().notify("Duplicated the first part — the rest would make this diagram too large.");
+    }
   },
 
   copySelection() {
@@ -770,6 +777,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
     set((s) => ({ pasteRepeat: s.pasteRepeat + 1 }));
+    if (result.truncated) {
+      useUiStore.getState().notify("Pasted the first part — the rest would make this diagram too large.");
+    }
   },
 
   async syncClipboardFromSystem() {

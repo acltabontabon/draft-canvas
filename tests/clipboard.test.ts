@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decodeClipboard, encodeClipboard } from '../src/document/clipboardCodec';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes, extractFragment } from '../src/document/operations';
+import { LIMITS } from '../src/document/limits';
 import { __resetClipboardSync, __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { useUiStore } from '../src/store/uiStore';
 
 const store = useEditorStore;
 
@@ -136,6 +138,61 @@ describe('group/boundary copy', () => {
     expect(original.parentId).toBe(boundary.id);
     const pastedIds = store.getState().selection.nodes;
     expect(pastedIds).toHaveLength(1);
+  });
+});
+
+// Regression coverage: `LIMITS.maxNodes`/`maxEdges` was previously only enforced on a document
+// taken as a whole (file import, clipboard decode) — nothing stopped a paste or duplicate merged
+// into an already-large *open* document from growing past those caps.
+describe('paste/duplicate respects the document size limits', () => {
+  beforeEach(() => {
+    reset();
+    useUiStore.setState({ toasts: [] });
+  });
+
+  it('caps a paste at LIMITS.maxNodes and notifies once', () => {
+    const existing = Array.from({ length: LIMITS.maxNodes - 2 }, (_, i) =>
+      createNode({ type: 'note', x: i, y: 0, text: `N${i}` }),
+    );
+    store.setState({ document: addNodes(createDocument(), existing) });
+    const fragment = {
+      nodes: [
+        createNode({ type: 'note', x: 0, y: 0, text: 'A' }),
+        createNode({ type: 'note', x: 10, y: 0, text: 'B' }),
+        createNode({ type: 'note', x: 20, y: 0, text: 'C' }),
+      ],
+      edges: [],
+    };
+    store.setState({ clipboard: fragment });
+
+    store.getState().paste({ x: 0, y: 0 });
+
+    expect(store.getState().document.nodes).toHaveLength(LIMITS.maxNodes);
+    expect(useUiStore.getState().toasts).toHaveLength(1);
+  });
+
+  it('caps duplicateSelection the same way', () => {
+    const existing = Array.from({ length: LIMITS.maxNodes - 1 }, (_, i) =>
+      createNode({ type: 'note', x: i, y: 0, text: `N${i}` }),
+    );
+    const doc = addNodes(createDocument(), existing);
+    store.setState({ document: doc });
+    store.getState().setSelection({ nodes: [existing[0]!.id, existing[1]!.id], edges: [] });
+
+    store.getState().duplicateSelection();
+
+    expect(store.getState().document.nodes).toHaveLength(LIMITS.maxNodes);
+    expect(useUiStore.getState().toasts).toHaveLength(1);
+  });
+
+  it('does not notify when a paste stays comfortably under the cap', () => {
+    const node = createNode({ type: 'note', x: 0, y: 0, text: 'Solo' });
+    store.setState({ clipboard: { nodes: [node], edges: [] } });
+
+    store.getState().paste({ x: 0, y: 0 });
+
+    expect(store.getState().document.nodes).toHaveLength(1);
+    expect(useUiStore.getState().toasts).toHaveLength(0);
   });
 });
 
