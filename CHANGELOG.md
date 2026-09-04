@@ -8,6 +8,8 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-04
+
 ### Added
 
 - **Command palette.** Press `⌘K` (`Ctrl+K` on Windows/Linux), or use the search button in the
@@ -302,7 +304,10 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.2.0...main
+[0.2.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.2...v0.2.0
+[0.1.2]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-beta.2...v0.1.0
 [0.1.0-beta.2]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-beta.1...v0.1.0-beta.2
 [0.1.0-beta.1]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.0-alpha.4...v0.1.0-beta.1
