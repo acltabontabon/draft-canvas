@@ -35,17 +35,6 @@ export const GROUP_LABELS: Record<CommandGroup, string> = {
   canvas: 'Canvas',
 };
 
-export const GROUP_ORDER: CommandGroup[] = [
-  'recent',
-  'selection',
-  'connector',
-  'create',
-  'flow',
-  'jump',
-  'view',
-  'canvas',
-];
-
 /** Everything a command needs to do its job — assembled by `CommandPalette` from live hooks. */
 export interface CommandContext {
   /** The live editor store (`useEditorStore.getState()`): state and actions. */

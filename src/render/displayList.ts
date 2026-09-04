@@ -121,5 +121,3 @@ export interface DisplayList {
   height: number;
   shapes: Shape[];
 }
-
-export const EMPTY_DISPLAY_LIST: DisplayList = { width: 0, height: 0, shapes: [] };

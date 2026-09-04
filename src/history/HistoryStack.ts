@@ -100,12 +100,3 @@ export function canUndo(history: HistoryState): boolean {
 export function canRedo(history: HistoryState): boolean {
   return history.future.length > 0;
 }
-
-export function sameSelection(a: Selection, b: Selection): boolean {
-  return (
-    a.nodes.length === b.nodes.length &&
-    a.edges.length === b.edges.length &&
-    a.nodes.every((id, i) => b.nodes[i] === id) &&
-    a.edges.every((id, i) => b.edges[i] === id)
-  );
-}

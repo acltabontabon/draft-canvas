@@ -205,11 +205,6 @@ export function baselineOf(layout: TextLayout, index: number): number {
   return index * layout.lineHeight + halfLeading + layout.ascent;
 }
 
-/** Height a block of `count` lines occupies. */
-export function blockHeight(count: number, lineHeight: number): number {
-  return count * lineHeight;
-}
-
 export function clearLayoutCache(): void {
   layoutCache.clear();
 }
