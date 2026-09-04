@@ -12,6 +12,14 @@ interface ModalProps {
 export function Modal({ title, onClose, children, footer, width = 460 }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
 
+  // Mount-only: focusing the panel on every re-run of the keydown-listener effect below would
+  // steal focus back from whatever's focused inside the modal (e.g. a slider or text field)
+  // any time a caller passes a fresh `onClose` identity — which most do, on every render.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    panel.current?.focus();
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -20,7 +28,6 @@ export function Modal({ title, onClose, children, footer, width = 460 }: ModalPr
       }
     };
     window.addEventListener('keydown', onKeyDown, true);
-    panel.current?.focus();
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [onClose]);
 

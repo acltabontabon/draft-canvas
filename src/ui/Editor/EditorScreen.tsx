@@ -56,6 +56,11 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   const reconnecting = useUiStore((state) => state.reconnectDragActive);
   const contextMenu = useUiStore((state) => state.contextMenu);
   const setContextMenu = useUiStore((state) => state.setContextMenu);
+  // Memoized so `QuickConnectMenu`/`ContextMenu`'s own listener-cleanup effects (keyed on
+  // `onDismiss`) don't tear down and re-register on every unrelated `EditorScreen` re-render
+  // while the menu is open — a fresh inline arrow here would give them a new identity every time.
+  const dismissQuickConnect = useCallback(() => setQuickConnect(null), [setQuickConnect]);
+  const dismissContextMenu = useCallback(() => setContextMenu(null), [setContextMenu]);
   // Reactive only so the menu's own contents stay correct if the world changes underneath it while
   // it's open (e.g. an undo from elsewhere) — read live via `getState()` inside `buildContext`/
   // `contextMenuCommandsFor` otherwise, same split `CommandPalette.tsx` uses.
@@ -236,7 +241,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
           <QuickConnectMenu
             screenPosition={quickConnect.screenPosition}
             onSelect={onQuickConnectSelect}
-            onDismiss={() => setQuickConnect(null)}
+            onDismiss={dismissQuickConnect}
           />
         )}
         {!presenting && contextMenu && (
@@ -244,7 +249,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
             screenPosition={contextMenu.screenPosition}
             entries={contextMenuEntries}
             onSelect={runContextMenuCommand}
-            onDismiss={() => setContextMenu(null)}
+            onDismiss={dismissContextMenu}
           />
         )}
         {!presenting && <AttachmentPopover />}
