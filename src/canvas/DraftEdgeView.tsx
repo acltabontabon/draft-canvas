@@ -803,12 +803,21 @@ function EdgeEndpointHandle({
     onDrag(null);
   }, [onDrag]);
 
-  // `endDrag` already removes this on a normal pointer-up/Escape, but if the
-  // component unmounts mid-drag (e.g. this edge is deleted while its
-  // endpoint is being dragged), that path never runs — this is the backstop.
+  // `endDrag` already runs on a normal pointer-up/Escape, but if the component unmounts mid-drag
+  // — this edge is deleted while its endpoint is being dragged, or `mode` flips to `'present'`
+  // (which un-renders this handle entirely) — that path never runs. Without also resetting the
+  // shared `uiStore` fields here, `interactionActive` is left stuck `true`, which silently
+  // disables obstacle-avoidance/lane recomputation for every edge on the canvas until an
+  // unrelated gesture happens to flip it back off. `endDrag` is written to be idempotent
+  // (resetting already-idle state is a no-op), so calling it unconditionally on unmount is safe.
+  const endDragRef = useRef(endDrag);
+  useEffect(() => {
+    endDragRef.current = endDrag;
+  }, [endDrag]);
   useEffect(() => {
     return () => {
       if (onKeyDownRef.current) window.removeEventListener('keydown', onKeyDownRef.current);
+      endDragRef.current();
     };
   }, []);
 
@@ -877,6 +886,15 @@ function EdgeEndpointHandle({
     [edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],
   );
 
+  // An interrupted gesture (e.g. a touch/stylus drag cancelled by the OS) fires `pointercancel`
+  // instead of `pointerup` — without a handler for it, nothing ever called `endDrag()`, leaving
+  // the drag preview and `uiStore`'s reconnect flags stuck exactly as `onPointerUp` would if it
+  // were simply never called. No commit here, same as an Escape cancel.
+  const onPointerCancel = useCallback(() => {
+    cancelled.current = true;
+    endDrag();
+  }, [endDrag]);
+
   return (
     <div
       className="dc-edge-endpoint"
@@ -884,6 +902,7 @@ function EdgeEndpointHandle({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
     />
   );
 }

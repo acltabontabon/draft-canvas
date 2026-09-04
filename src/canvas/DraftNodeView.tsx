@@ -136,10 +136,28 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
   }, [liveNode, theme, preset]);
 
+  // Doesn't depend on `node`, so — like `shapes` above — this is computed and its effect run
+  // unconditionally, ahead of the `!node` early return below.
+  const readOnly = mode === 'present';
+
+  // `NodeResizer` below is only rendered while `!readOnly`, so switching to Presentation Mode
+  // mid-resize (e.g. Cmd/Ctrl+Enter pressed without releasing the resize handle) unmounts it
+  // without its own `onResizeEnd` ever firing. Without this, the interaction bracket it opened
+  // (`beginInteraction`/`setInteractionActive`) would stay open indefinitely — silently turning
+  // every document edit the user makes next into more of the same "in progress" gesture, with no
+  // history entry created for any of them, until an unrelated resize happened to close it. This
+  // finishes the gesture the same way `onResizeEnd` would.
+  useEffect(() => {
+    if (readOnly && resizing) {
+      useEditorStore.getState().endInteraction();
+      useUiStore.getState().setInteractionActive(false);
+      setResizing(false);
+    }
+  }, [readOnly, resizing]);
+
   if (!node) return null;
 
   const isCode = node.type === 'code';
-  const readOnly = mode === 'present';
 
   const beginEditing = () => {
     // A queue's name is always just its kind (Queue/Topic/Stream) — see

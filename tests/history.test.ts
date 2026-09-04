@@ -56,6 +56,34 @@ describe('undo and redo', () => {
     expect(store.getState().document.nodes[0]!.y).toBe(0);
   });
 
+  it('a still-open interaction stops recording history until it is explicitly closed', () => {
+    // Regression for a bug where a resize interrupted by switching to Presentation Mode
+    // mid-drag unmounted `NodeResizer` without its own `onResizeEnd` ever firing — leaving the
+    // interaction bracket open indefinitely, and every document edit the user made next silently
+    // stopped creating history entries. `DraftNodeView` now detects this (readOnly flips true
+    // while still resizing) and finishes the gesture itself by calling `endInteraction()`, the
+    // same call `onResizeEnd` would have made — this test proves that call is what restores
+    // normal history recording afterward.
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0 });
+    const before = store.getState().history.past.length;
+
+    store.getState().beginInteraction('Resize');
+    store.getState().commitPositions(new Map([[node.id, { x: 40, y: 0 }]]));
+
+    // While the interaction is still open, an unrelated edit is folded into it rather than
+    // recorded on its own — this is the stuck state itself.
+    const other = store.getState().addNode({ type: 'note', x: 300, y: 0 });
+    expect(store.getState().history.past).toHaveLength(before);
+
+    // What the new cleanup effect does instead of leaving the interaction open.
+    store.getState().endInteraction();
+    expect(store.getState().history.past).toHaveLength(before + 1);
+
+    // History recording is no longer stuck: a further, unrelated edit gets its own entry.
+    store.getState().updateNodeById(other.id, { x: 500 }, 'Move');
+    expect(store.getState().history.past).toHaveLength(before + 2);
+  });
+
   it('creates no entry for a click that moved nothing', () => {
     const node = store.getState().addNode({ type: 'note', x: 10, y: 10 });
     const before = store.getState().history.past.length;
