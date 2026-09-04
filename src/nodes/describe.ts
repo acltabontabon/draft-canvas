@@ -217,12 +217,18 @@ function outlineShape(
   const profile = PERSONALITY_PROFILES[ctx.preset];
   const outlineAmp = profile.outline * boost;
   const bowAmp = profile.bow * boost;
+  // A caller's fixed corner radius (8 for most shapes, 12 for a Boundary) is never checked
+  // against the rect it's drawn in — at the schema's minimum node size, half the shorter side can
+  // be smaller than that. Clamped once here, the one shared choke point every rounded-rect outline
+  // goes through, rather than at each of `box`/`service`/`group`/etc.'s call sites. A no-op at any
+  // normal node size, where `r` is already well under `w/2`/`h/2`.
+  const r = Math.min(rect.r, rect.w / 2, rect.h / 2);
   if (outlineAmp === 0 && bowAmp === 0) {
-    return { t: 'rect', x: rect.x, y: rect.y, w: rect.w, h: rect.h, r: rect.r, ...paint };
+    return { t: 'rect', x: rect.x, y: rect.y, w: rect.w, h: rect.h, r, ...paint };
   }
   return {
     t: 'path',
-    d: roughRectPath(rect.x, rect.y, rect.w, rect.h, rect.r, seedId, outlineAmp, bowAmp),
+    d: roughRectPath(rect.x, rect.y, rect.w, rect.h, r, seedId, outlineAmp, bowAmp),
     ...paint,
   };
 }
@@ -1076,9 +1082,13 @@ function group(node: DraftNode, ctx: DescribeContext): Shape[] {
   // independently-seeded retrace pass, and a corner-overshoot pass — "someone just circled this
   // part" reads as more than one confident stroke, corners included. Sketch only.
   if (profile.retrace) {
+    // Same clamp `outlineShape` applies to the primary outline above — kept in step so the retrace
+    // pass can never draw a rounder corner than the outline it's retracing at the schema's minimum
+    // boundary size.
+    const retraceRadius = Math.min(rect.r, rect.w / 2, rect.h / 2);
     shapes.push({
       t: 'path',
-      d: roughRectPath(rect.x, rect.y, rect.w, rect.h, rect.r, `${node.id}:retrace`, profile.outline * boost, profile.bow * boost),
+      d: roughRectPath(rect.x, rect.y, rect.w, rect.h, retraceRadius, `${node.id}:retrace`, profile.outline * boost, profile.bow * boost),
       fill: 'none',
       stroke: { ...stroke, width: 1 },
       opacity: 0.5,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseDocument } from '../src/document/validate';
 import { CURRENT_VERSION, DRAFT_FORMAT } from '../src/document/types';
 import { chooseSides } from '../src/edges/routing';
+import { migrateToCurrent } from '../src/document/migrate';
 
 /**
  * The v2→v3 migration: existing documents have no concept of a connector
@@ -469,5 +470,23 @@ describe('v8 to v9 migration: Projects', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.document.metadata.projectId).toBe('p_abc123');
+  });
+});
+
+/**
+ * Every fixture-based test above already exercises the full v1→current chain incidentally (a gap
+ * anywhere in `MIGRATIONS` would make any of them throw "Missing migration..."), but that
+ * protection is implicit — tied to those fixtures continuing to exist and continuing to start from
+ * v1. This test makes the actual invariant explicit and independent of fixture upkeep: every
+ * version from 1 up to `CURRENT_VERSION - 1` has an entry, so bumping `CURRENT_VERSION` without
+ * adding the matching migration function fails here directly, with a message that says exactly
+ * which version is missing, rather than only surfacing as a fixture test failing for a less
+ * obvious reason.
+ */
+describe('migration chain completeness', () => {
+  it('has no gap between v1 and the current version', () => {
+    const { applied } = migrateToCurrent({ version: 1 });
+    const expected = Array.from({ length: CURRENT_VERSION - 1 }, (_, i) => i + 1);
+    expect(applied).toEqual(expected);
   });
 });

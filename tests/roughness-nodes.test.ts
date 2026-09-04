@@ -147,6 +147,37 @@ describe('Intentional Roughness — Junction (ellipse) gets a clamped, retraced 
   });
 });
 
+describe('Intentional Roughness — a rounded-rect corner radius never exceeds the rect it is drawn in', () => {
+  it('clamps a service outline\'s corner radius at the schema\'s minimum node size', () => {
+    const node = createNode({ type: 'service', id: 's1', x: 0, y: 0, width: 24, height: 24 });
+    const outline = outlineShapes(node, clean)[0] as { t: 'rect'; r: number };
+    expect(outline.t).toBe('rect');
+    expect(outline.r).toBeLessThanOrEqual(Math.min(node.width, node.height) / 2);
+  });
+
+  it('clamps a boundary outline the same way, including its Sketch retrace pass', () => {
+    const node = createNode({ type: 'group', id: 'g1', x: 0, y: 0, width: 24, height: 24 });
+    const outline = outlineShapes(node, clean)[0] as { t: 'rect'; r: number };
+    expect(outline.r).toBeLessThanOrEqual(Math.min(node.width, node.height) / 2);
+
+    // Sketch's retrace pass draws the same outline a second time at an independent seed — spot-
+    // check every coordinate of both paths stays within a small margin of the 24x24 box, the same
+    // style of check the Junction clamp test above uses, rather than a corner rounder than the box
+    // itself pushing coordinates outside it.
+    const sketchPaths = outlineShapes(node, sketch).filter(
+      (s): s is { t: 'path'; d: string } => s.t === 'path',
+    );
+    expect(sketchPaths.length).toBeGreaterThanOrEqual(2); // outline + retrace
+    for (const path of sketchPaths) {
+      const nums = path.d.match(/-?\d*\.?\d+/g)!.map(Number);
+      for (const n of nums) {
+        expect(n).toBeGreaterThan(-10);
+        expect(n).toBeLessThan(34);
+      }
+    }
+  });
+});
+
 describe('Intentional Roughness — Boundary is the boldest primitive (Sketch only)', () => {
   it('gets an overshoot pass at Sketch but not Draft', () => {
     const node = createNode({ type: 'group', id: 'b1', x: 0, y: 0, width: 300, height: 200, text: 'Payments' });
