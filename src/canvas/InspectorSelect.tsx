@@ -50,6 +50,8 @@ export function InspectorSelect({
   const [highlighted, setHighlighted] = useState(0);
   const [direction, setDirection] = useState(preferredDirection);
   const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined);
+  const [hAlign, setHAlign] = useState<'start' | 'end'>('start');
+  const [menuMaxWidth, setMenuMaxWidth] = useState<number | undefined>(undefined);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -95,7 +97,9 @@ export function InspectorSelect({
     const menu = listRef.current;
     if (!trigger || !menu) return;
     const triggerRect = trigger.getBoundingClientRect();
-    const naturalHeight = menu.getBoundingClientRect().height;
+    const menuRect = menu.getBoundingClientRect();
+    const naturalHeight = menuRect.height;
+    const naturalWidth = menuRect.width;
     const margin = 8;
     const gap = 4; // matches the CSS gap between trigger and menu
 
@@ -127,10 +131,34 @@ export function InspectorSelect({
 
     setDirection(resolved);
     setMaxHeight(Math.max(0, Math.min(220, space[resolved])));
+
+    // Horizontal: the menu (now free to grow via CSS `width: max-content`) is measured at its
+    // natural, unclamped width — the widest option's real width, not the trigger's. It stays
+    // left-aligned with the trigger when that fits; otherwise it flips to right-align (still
+    // anchored to the trigger, just growing the other way), and only clamps to a `maxWidth` when
+    // neither side has room, so genuinely narrow viewports still degrade to the existing
+    // ellipsis rather than overflowing the screen.
+    const spaceRight = window.innerWidth - margin - triggerRect.left;
+    const spaceLeft = triggerRect.right - margin;
+    let align: 'start' | 'end' = 'start';
+    let clampedWidth: number | undefined;
+    if (naturalWidth > spaceRight) {
+      if (naturalWidth <= spaceLeft) {
+        align = 'end';
+      } else {
+        align = spaceLeft >= spaceRight ? 'end' : 'start';
+        clampedWidth = Math.max(spaceLeft, spaceRight);
+      }
+    }
+    setHAlign(align);
+    setMenuMaxWidth(clampedWidth);
     // `avoidRect` intentionally tracked by its own top/bottom, not the object reference — a new
-    // `{top, bottom}` literal every render would otherwise rerun this on every render.
+    // `{top, bottom}` literal every render would otherwise rerun this on every render. `options`
+    // is tracked by a cheap label signature (not the array reference) so a caller that swaps
+    // options while the menu stays open and mounted (e.g. switching selection between shape
+    // types) re-measures instead of keeping a stale width from the previous option set.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, preferredDirection, avoidRect?.top, avoidRect?.bottom]);
+  }, [open, preferredDirection, avoidRect?.top, avoidRect?.bottom, options.map((o) => o.label).join(' ')]);
 
   const commit = (index: number) => {
     const option = options[index];
@@ -158,7 +186,11 @@ export function InspectorSelect({
           ref={listRef}
           className="dc-inspector-select-menu"
           data-direction={direction}
-          style={maxHeight !== undefined ? { maxHeight } : undefined}
+          data-h-align={hAlign}
+          style={{
+            ...(maxHeight !== undefined ? { maxHeight } : null),
+            ...(menuMaxWidth !== undefined ? { maxWidth: menuMaxWidth } : null),
+          }}
           role="listbox"
           aria-label={ariaLabel}
           tabIndex={-1}

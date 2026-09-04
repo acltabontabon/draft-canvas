@@ -8,6 +8,12 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed contextual shape menus sometimes truncating options after switching variants.
+- Fixed detaching a note or code attachment producing a tiny, oversquashed node instead of its
+  normal size.
+
 ## [0.3.1] - 2026-09-04
 
 ### Changed

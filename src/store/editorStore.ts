@@ -987,6 +987,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       noteKind: node.noteKind,
       language: node.language,
       code: node.code,
+      width: node.width,
+      height: node.height,
     });
     state.apply(
       'Attach',

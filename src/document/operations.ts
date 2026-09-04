@@ -5,6 +5,7 @@
  * stack keep whole snapshots cheaply.
  */
 import { createId } from './ids';
+import { defaultSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
 import type {
@@ -22,6 +23,15 @@ const clampCoord = (n: number) =>
 
 const clampSize = (n: number) =>
   Math.max(LIMITS.minNodeSize, Math.min(LIMITS.maxNodeSize, Math.round(n)));
+
+/** `attachment.width`/`height` should always be set by `createAttachment` — this is a safety
+ *  net for attachments predating that guarantee (e.g. loaded from an older saved document). */
+function sizeForDetach(attachment: Attachment): { width: number; height: number } {
+  if (attachment.width !== undefined && attachment.height !== undefined) {
+    return { width: attachment.width, height: attachment.height };
+  }
+  return defaultSizeFor(attachment.type);
+}
 
 function withNodes(doc: DraftDocument, nodes: DraftNode[]): DraftDocument {
   return nodes === doc.nodes ? doc : { ...doc, nodes };
@@ -455,10 +465,7 @@ export function detachFromNode(
   const attachment = host?.attachments?.find((a) => a.id === attachmentId);
   if (!host || !attachment) return { doc, extractedNode: null };
 
-  const size = {
-    width: attachment.width ?? LIMITS.minNodeSize,
-    height: attachment.height ?? LIMITS.minNodeSize,
-  };
+  const size = sizeForDetach(attachment);
   let x = host.x + host.width + 32;
   let y = host.y;
   if (x + size.width > LIMITS.maxCoordinate) {
@@ -615,10 +622,7 @@ export function detachFromEdge(
   const target = edge ? doc.nodes.find((n) => n.id === edge.target) : undefined;
   if (!edge || !attachment || !source || !target) return { doc, extractedNode: null };
 
-  const size = {
-    width: attachment.width ?? LIMITS.minNodeSize,
-    height: attachment.height ?? LIMITS.minNodeSize,
-  };
+  const size = sizeForDetach(attachment);
   const midX = (source.x + source.width / 2 + target.x + target.width / 2) / 2;
   const midY = (source.y + source.height / 2 + target.y + target.height / 2) / 2;
   const x = midX - size.width / 2;

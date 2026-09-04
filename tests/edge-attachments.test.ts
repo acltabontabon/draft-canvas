@@ -13,6 +13,7 @@ import {
 } from '../src/document/operations';
 import { normalizeDocument } from '../src/document/validate';
 import { DRAFT_FORMAT, CURRENT_VERSION } from '../src/document/types';
+import { DEFAULTS } from '../src/document/limits';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 function docWithEdge() {
@@ -112,6 +113,16 @@ describe('edge attachment operations', () => {
     expect(extractedNode!.y).toBe(Math.round(midY - 75 - 60));
     expect(detached.edges.find((e) => e.id === edge.id)!.attachments ?? []).toHaveLength(0);
     expect(detached.nodes.some((n) => n.id === extractedNode!.id)).toBe(true);
+  });
+
+  it('detaching an attachment created without an explicit size uses the type default, not the 24px hard floor', () => {
+    const { edge, doc } = docWithEdge();
+    const attachment = createAttachment({ type: 'code', language: 'json', code: '{}' });
+    const attached = attachToEdge(doc, edge.id, attachment);
+
+    const { extractedNode } = detachFromEdge(attached, edge.id, attachment.id);
+    expect(extractedNode!.width).toBe(DEFAULTS.codeWidth);
+    expect(extractedNode!.height).toBe(DEFAULTS.codeHeight);
   });
 
   it('detaching an unknown attachment id is a no-op', () => {
@@ -235,6 +246,23 @@ describe('edge attachments through the store', () => {
     expect(store.getState().document.edges.find((e) => e.id === edge.id)!.attachments ?? []).toHaveLength(0);
     store.getState().redo();
     expect(store.getState().document.edges.find((e) => e.id === edge.id)!.attachments).toHaveLength(1);
+  });
+
+  it('attaching an existing (resized) node to an edge, then detaching it, round-trips its real size', () => {
+    const edge = connectedEdge();
+    const note = store.getState().addNode({ type: 'note', x: 800, y: 800, text: 'context' });
+    store.getState().updateNodeById(note.id, { width: 260, height: 140 });
+
+    store.getState().attachExistingNodeToEdge(note.id, edge.id);
+    const attachment = store.getState().document.edges.find((e) => e.id === edge.id)!.attachments![0]!;
+    expect(attachment.width).toBe(260);
+    expect(attachment.height).toBe(140);
+
+    store.getState().detachEdgeAttachment(edge.id, attachment.id);
+    const doc = store.getState().document;
+    const detached = doc.nodes.find((n) => n.id !== edge.source && n.id !== edge.target)!;
+    expect(detached.width).toBe(260);
+    expect(detached.height).toBe(140);
   });
 
   it('detaching an edge attachment selects the newly-materialized node, and undo restores it', () => {

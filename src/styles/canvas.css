@@ -1094,7 +1094,8 @@
   position: absolute;
   z-index: 1;
   left: 0;
-  right: 0;
+  width: max-content;
+  min-width: 100%;
   margin: 0;
   padding: 4px;
   list-style: none;
@@ -1113,6 +1114,11 @@
 
 .dc-inspector-select-menu[data-direction='up'] {
   bottom: calc(100% + 4px);
+}
+
+.dc-inspector-select-menu[data-h-align='end'] {
+  left: auto;
+  right: 0;
 }
 
 .dc-inspector-select-option {

@@ -41,6 +41,21 @@ test.describe('element inspector popover', () => {
     await page.getByRole('option', { name: 'External' }).click();
     await expect(page.locator('.dc-node').first()).toContainText('EXTERNAL');
 
+    // Regression: switching to a short value (e.g. "API") must not shrink the *menu* down to
+    // that value's width — reopening it should still show every option at full width, not
+    // clipped to "G..."/"W..." by an inherited, too-narrow trigger box.
+    await page.getByRole('button', { name: 'Service type' }).click();
+    await page.getByRole('option', { name: 'API' }).click();
+    await page.getByRole('button', { name: 'Service type' }).click();
+    for (const option of await page.getByRole('option').all()) {
+      await expect
+        .poll(() => option.evaluate((el) => el.scrollWidth <= el.clientWidth + 1))
+        .toBe(true);
+    }
+    await expect(page.getByRole('option', { name: 'External' })).toBeVisible();
+    await page.getByRole('option', { name: 'External' }).click();
+    await expect(page.locator('.dc-node').first()).toContainText('EXTERNAL');
+
     // Focus.
     await page.getByRole('button', { name: 'Focus', exact: true }).click();
     await expect(page.locator('.dc-canvas[data-focus="on"]')).toBeVisible();

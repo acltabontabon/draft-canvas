@@ -10,6 +10,7 @@ import {
 } from '../src/document/operations';
 import { normalizeDocument } from '../src/document/validate';
 import { DRAFT_FORMAT, CURRENT_VERSION } from '../src/document/types';
+import { DEFAULTS } from '../src/document/limits';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 function docWithHost() {
@@ -45,6 +46,52 @@ describe('attachment operations', () => {
     expect(extractedNode!.y).toBe(host.y);
     expect(detached.nodes.find((n) => n.id === host.id)!.attachments ?? []).toHaveLength(0);
     expect(detached.nodes.some((n) => n.id === extractedNode!.id)).toBe(true);
+  });
+
+  it('createAttachment defaults size per type when none is given, instead of leaving it unset', () => {
+    const code = createAttachment({ type: 'code', language: 'json', code: '{}' });
+    expect(code.width).toBe(DEFAULTS.codeWidth);
+    expect(code.height).toBe(DEFAULTS.codeHeight);
+
+    const note = createAttachment({ type: 'note', text: 'context' });
+    expect(note.width).toBe(DEFAULTS.noteWidth);
+    expect(note.height).toBe(DEFAULTS.noteHeight);
+
+    // An explicit size (e.g. a dragged-in existing node) is still preserved as-is.
+    const sized = createAttachment({ type: 'note', text: 'context', width: 260, height: 140 });
+    expect(sized.width).toBe(260);
+    expect(sized.height).toBe(140);
+  });
+
+  it('detaching a note/code attachment created without an explicit size uses the type default, not the 24px hard floor', () => {
+    const { host, doc } = docWithHost();
+
+    const codeAttachment = createAttachment({ type: 'code', language: 'json', code: '{}' });
+    const attachedCode = attachToNode(doc, host.id, codeAttachment);
+    const { extractedNode: codeNode } = detachFromNode(attachedCode, host.id, codeAttachment.id);
+    expect(codeNode!.width).toBe(DEFAULTS.codeWidth);
+    expect(codeNode!.height).toBe(DEFAULTS.codeHeight);
+
+    const noteAttachment = createAttachment({ type: 'note', text: 'context' });
+    const attachedNote = attachToNode(doc, host.id, noteAttachment);
+    const { extractedNode: noteNode } = detachFromNode(attachedNote, host.id, noteAttachment.id);
+    expect(noteNode!.width).toBe(DEFAULTS.noteWidth);
+    expect(noteNode!.height).toBe(DEFAULTS.noteHeight);
+  });
+
+  it('detach falls back to the type default even for pre-existing data that has no width/height at all', () => {
+    // Bypasses createAttachment entirely, simulating an attachment saved before size defaulting
+    // existed (or hand-authored/imported data) — `sizeForDetach`'s own fallback, in isolation.
+    const { host, doc } = docWithHost();
+    const legacy = {
+      ...doc,
+      nodes: doc.nodes.map((n) =>
+        n.id === host.id ? { ...n, attachments: [{ id: 'a_legacy', type: 'code' as const }] } : n,
+      ),
+    };
+    const { extractedNode } = detachFromNode(legacy, host.id, 'a_legacy');
+    expect(extractedNode!.width).toBe(DEFAULTS.codeWidth);
+    expect(extractedNode!.height).toBe(DEFAULTS.codeHeight);
   });
 
   it('falls back to placing the detached node below the host when beside it is out of range', () => {

@@ -224,10 +224,12 @@ export function createAttachment(input: CreateAttachmentInput): Attachment {
     attachment.language = input.language ?? 'plaintext';
     attachment.code = input.code ?? '';
   }
-  if (input.width !== undefined && input.height !== undefined) {
-    attachment.width = input.width;
-    attachment.height = input.height;
-  }
+  const size =
+    input.width !== undefined && input.height !== undefined
+      ? { width: input.width, height: input.height }
+      : defaultSizeFor(input.type);
+  attachment.width = size.width;
+  attachment.height = size.height;
   return attachment;
 }
 
