@@ -35,6 +35,7 @@ import {
   projectEdges,
   projectNodes,
   resolveSelectedEdgeIds,
+  sameSelection,
   type DraftRfEdge,
   type DraftRfNode,
 } from './projection';
@@ -547,28 +548,80 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
     [setEdges, userSelectionActive],
   );
 
+  /**
+   * `resolveSelectedEdgeIds` fixes the one specific way React Flow's own post-marquee selection
+   * report is known to disagree with itself forever (two or more edges sharing a newly-(un)
+   * selected node) — but it is not the only way that has happened across this app's history (see
+   * the other "hardening pass" commits touching this file), and a *new* variant surfaced even
+   * after that fix shipped: the reported *node* list itself, not just its edges, alternating
+   * between empty and full call after call. Patching each newly-discovered oscillation
+   * individually never closes off the next one, because the actual bug lives inside React Flow's
+   * own internal box-selection bookkeeping, not in anything this app can fully audit.
+   *
+   * `selectionBurst` is the backstop for whatever the next one turns out to be. A normal
+   * interaction — even an enthusiastic marquee sweeping many nodes one at a time as the box grows
+   * — calls this a handful of times; only a genuine feedback loop calls it dozens of times inside
+   * one short window. Below `SELECTION_BURST_LIMIT`, every call still commits to `store.selection`
+   * synchronously, exactly as before — callers that act on the selection immediately after a
+   * click (delete-via-Backspace, Enter-to-edit, and the like) depend on that. Only once a burst is
+   * detected does it stop committing synchronously and start coalescing: the *latest* report is
+   * held in `pendingSelectionRef` and committed on the next animation frame instead, so a run of
+   * calls that would otherwise each be a further synchronous re-render collapses into one commit
+   * per frame. If React Flow's own report is genuinely unstable this keeps it unstable — the
+   * selection may still flicker — but each commit now happens in its own animation-frame callback
+   * rather than as a continuation of the last render, so React's own nested-update counter (the
+   * thing that throws "Maximum update depth exceeded") gets to reset between them and can never
+   * be exhausted. A crash becomes, at worst, a rare visual flicker.
+   */
+  const SELECTION_BURST_WINDOW_MS = 300;
+  const SELECTION_BURST_LIMIT = 10;
+  const selectionBurst = useRef({ count: 0, windowEndsAt: 0 });
+  const pendingSelectionRef = useRef<{ nodes: string[]; edges: string[] } | null>(null);
+  const selectionFrameRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (selectionFrameRef.current !== null) cancelAnimationFrame(selectionFrameRef.current);
+    },
+    [],
+  );
+
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodeList, edges: selectedEdgeList }: OnSelectionChangeParams) => {
       const nodeIds = selectedNodeList.map((node) => node.id);
-      const current = store.getState().selection;
+      // Compares against whatever the *next* commit will actually see — a still-pending report
+      // from earlier this same burst, if there is one, not the (about to be stale) store value.
+      const baseline = pendingSelectionRef.current ?? store.getState().selection;
       // See `resolveSelectedEdgeIds`'s own doc comment (`projection.ts`) for why this can't
       // just trust React Flow's reported `selectedEdgeList` unconditionally.
       const edgeIds = resolveSelectedEdgeIds(
         nodeIds,
-        current.nodes,
+        baseline.nodes,
         selectedEdgeList.map((edge) => edge.id),
         store.getState().document.edges,
       );
       const next = { nodes: nodeIds, edges: edgeIds };
-      if (
-        current.nodes.length === next.nodes.length &&
-        current.edges.length === next.edges.length &&
-        current.nodes.every((id, index) => next.nodes[index] === id) &&
-        current.edges.every((id, index) => next.edges[index] === id)
-      ) {
+      if (sameSelection(baseline, next)) return;
+
+      const now = performance.now();
+      const burst = selectionBurst.current;
+      if (now > burst.windowEndsAt) burst.count = 0;
+      burst.count += 1;
+      burst.windowEndsAt = now + SELECTION_BURST_WINDOW_MS;
+
+      if (burst.count <= SELECTION_BURST_LIMIT) {
+        store.getState().setSelection(next);
         return;
       }
-      store.getState().setSelection(next);
+      pendingSelectionRef.current = next;
+      if (selectionFrameRef.current === null) {
+        selectionFrameRef.current = requestAnimationFrame(() => {
+          selectionFrameRef.current = null;
+          const pending = pendingSelectionRef.current;
+          pendingSelectionRef.current = null;
+          if (pending) store.getState().setSelection(pending);
+        });
+      }
     },
     [store],
   );

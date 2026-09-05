@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSelectedEdgeIds } from '../src/canvas/projection';
+import { resolveSelectedEdgeIds, sameSelection } from '../src/canvas/projection';
 
 /** Minimal edge shape `resolveSelectedEdgeIds` actually reads. */
 function edge(id: string, source: string, target: string) {
@@ -47,5 +47,31 @@ describe('resolveSelectedEdgeIds', () => {
     const documentEdges = [edge('e1', 'a', 'b'), edge('e2', 'b', 'c')];
     const result = resolveSelectedEdgeIds(['a', 'b'], [], [], documentEdges);
     expect(result).toEqual(['e1']);
+  });
+});
+
+describe('sameSelection', () => {
+  it('is true for two empty selections', () => {
+    expect(sameSelection({ nodes: [], edges: [] }, { nodes: [], edges: [] })).toBe(true);
+  });
+
+  it('is true when both nodes and edges match exactly, in order', () => {
+    expect(
+      sameSelection({ nodes: ['a', 'b'], edges: ['e1'] }, { nodes: ['a', 'b'], edges: ['e1'] }),
+    ).toBe(true);
+  });
+
+  it('is false when the node sets differ in size', () => {
+    expect(sameSelection({ nodes: ['a'], edges: [] }, { nodes: ['a', 'b'], edges: [] })).toBe(false);
+  });
+
+  it('is false when the edge sets differ in size', () => {
+    expect(sameSelection({ nodes: ['a'], edges: [] }, { nodes: ['a'], edges: ['e1'] })).toBe(false);
+  });
+
+  it('is false when the same ids appear in a different order', () => {
+    // Order-sensitive on purpose — `Canvas.tsx`'s own `setSelection` never reorders an
+    // unchanged selection, so an order difference here means the content genuinely changed.
+    expect(sameSelection({ nodes: ['a', 'b'], edges: [] }, { nodes: ['b', 'a'], edges: [] })).toBe(false);
   });
 });

@@ -163,3 +163,19 @@ export function resolveSelectedEdgeIds(
     .filter((edge) => nodeIds.includes(edge.source) && nodeIds.includes(edge.target))
     .map((edge) => edge.id);
 }
+
+/** Order-sensitive equality for a `{ nodes, edges }` selection pair — shared by
+ *  `Canvas.tsx`'s `onSelectionChange` (both to skip a redundant `setSelection` and to decide
+ *  what its *next* report should be compared against while a commit is still pending; see its
+ *  own doc comment). */
+export function sameSelection(
+  a: { nodes: readonly string[]; edges: readonly string[] },
+  b: { nodes: readonly string[]; edges: readonly string[] },
+): boolean {
+  return (
+    a.nodes.length === b.nodes.length &&
+    a.edges.length === b.edges.length &&
+    a.nodes.every((id, index) => b.nodes[index] === id) &&
+    a.edges.every((id, index) => b.edges[index] === id)
+  );
+}

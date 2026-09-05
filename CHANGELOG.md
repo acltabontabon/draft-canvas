@@ -27,8 +27,9 @@ milestones; **0.1.0 is the first production-ready release.**
   it — the shared arrowhead definitions were being torn down and rebuilt on every canvas render,
   and Safari's own native text-selection highlight could briefly flash over a connector's line or
   caption during the same drag.
-- Fixed the canvas crashing when a marquee selected two or more nodes connected by more than one
-  connector.
+- Fixed the canvas crashing when a marquee selection didn't settle cleanly — most reliably
+  triggered by selecting nodes connected by more than one connector, but any similarly
+  unsettled selection is now caught before it can crash the canvas.
 
 ## [0.3.1] - 2026-09-04
 
