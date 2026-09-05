@@ -416,6 +416,50 @@ describe('importing untrusted files', () => {
     expect(byId('a2').actorKind).toBe('device');
   });
 
+  it('keeps deliveryRole on a queue node but drops it from any other node type', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 'q1', type: 'queue', x: 0, y: 0, deliveryRole: 'dead-letter' },
+        { id: 'q2', type: 'queue', x: 0, y: 0, deliveryRole: 'bogus' },
+        { id: 's1', type: 'service', x: 0, y: 0, deliveryRole: 'dead-letter' },
+      ],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byId = (id: string) => result.document.nodes.find((n) => n.id === id)!;
+    expect(byId('q1').deliveryRole).toBe('dead-letter');
+    expect(byId('q2').deliveryRole).toBeUndefined();
+    expect(byId('s1').deliveryRole).toBeUndefined();
+  });
+
+  it('round-trips a deadLetters edge and clamps a corrupted deliveryAttempts', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 'q1', type: 'queue', x: 0, y: 0 },
+        { id: 'q2', type: 'queue', x: 0, y: 0, deliveryRole: 'dead-letter' },
+        { id: 'q3', type: 'queue', x: 0, y: 0, deliveryRole: 'dead-letter' },
+        { id: 'q4', type: 'queue', x: 0, y: 0, deliveryRole: 'dead-letter' },
+        { id: 'q5', type: 'queue', x: 0, y: 0, deliveryRole: 'dead-letter' },
+      ],
+      edges: [
+        { id: 'e1', source: 'q1', target: 'q2', semantic: 'deadLetters', kind: 'failure', async: true, deliveryAttempts: 3 },
+        { id: 'e2', source: 'q1', target: 'q3', semantic: 'deadLetters', deliveryAttempts: 0 },
+        { id: 'e3', source: 'q1', target: 'q4', semantic: 'deadLetters', deliveryAttempts: 9999 },
+        { id: 'e4', source: 'q1', target: 'q5', semantic: 'deadLetters', deliveryAttempts: 'three' },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byId = (id: string) => result.document.edges.find((e) => e.id === id)!;
+    expect(byId('e1')).toMatchObject({ semantic: 'deadLetters', kind: 'failure', async: true, deliveryAttempts: 3 });
+    expect(byId('e2').deliveryAttempts).toBe(1);
+    expect(byId('e3').deliveryAttempts).toBe(50);
+    expect(byId('e4').deliveryAttempts).toBeUndefined();
+  });
+
   it('coerces an unknown boundary preset to the default, and always sets one on a group', () => {
     const result = parse({
       ...base,

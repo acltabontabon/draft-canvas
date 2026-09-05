@@ -48,6 +48,7 @@ const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   replicates: 'Replicates',
   cdc: 'CDC',
   syncs: 'Syncs',
+  deadLetters: 'Dead-letters to',
 };
 
 const CONNECTOR_KIND_LABELS: Record<ConnectorKind, string> = {
@@ -1059,6 +1060,29 @@ function ExpandedPanel({
             </>
           )}
         </>
+      )}
+
+      {edge.semantic === 'deadLetters' && (
+        <section className="dc-inspector-section">
+          <span className="dc-inspector-section-label">Delivery attempts</span>
+          <div className="dc-inspector-section-row">
+            <Button
+              variant="ghost"
+              aria-label="Decrease delivery attempts"
+              onClick={() => store.getState().setEdgeDeliveryAttempts(edge.id, (edge.deliveryAttempts ?? 3) - 1)}
+            >
+              −
+            </Button>
+            <span>{edge.deliveryAttempts ?? 3}</span>
+            <Button
+              variant="ghost"
+              aria-label="Increase delivery attempts"
+              onClick={() => store.getState().setEdgeDeliveryAttempts(edge.id, (edge.deliveryAttempts ?? 3) + 1)}
+            >
+              +
+            </Button>
+          </div>
+        </section>
       )}
 
       <section className="dc-inspector-section">

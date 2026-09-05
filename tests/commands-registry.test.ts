@@ -312,3 +312,67 @@ describe('commandsFor — contextual (8.2)', () => {
     }
   });
 });
+
+describe('commandsFor — Queue reliability commands (Add Consumer / Add DLQ)', () => {
+  beforeEach(reset);
+
+  function select(id: string) {
+    useEditorStore.getState().setSelection({ nodes: [id], edges: [] });
+  }
+
+  it('a plain Queue offers both Add Consumer and Add DLQ', () => {
+    const q = useEditorStore.getState().addNode({ type: 'queue', x: 0, y: 0 });
+    select(q.id);
+    const list = ids(stubContext());
+    expect(list).toContain('add-consumer');
+    expect(list).toContain('add-dead-letter-queue');
+    expect(list).not.toContain('remove-dead-letter-queue');
+  });
+
+  it('a Topic offers neither — failure handling belongs to a subscription path Draft Canvas does not model yet', () => {
+    const topic = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'topic', x: 0, y: 0 });
+    select(topic.id);
+    const list = ids(stubContext());
+    expect(list).not.toContain('add-consumer');
+    expect(list).not.toContain('add-dead-letter-queue');
+    expect(list).not.toContain('remove-dead-letter-queue');
+  });
+
+  it('a Stream offers Add Consumer but not Add DLQ — its dead-letter destination is typically a separate topic', () => {
+    const stream = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'stream', x: 0, y: 0 });
+    select(stream.id);
+    const list = ids(stubContext());
+    expect(list).toContain('add-consumer');
+    expect(list).not.toContain('add-dead-letter-queue');
+  });
+
+  it('a generated DLQ node offers Add Consumer but never a DLQ of its own', () => {
+    const state = useEditorStore.getState();
+    const q = state.addNode({ type: 'queue', x: 0, y: 0 });
+    state.addDeadLetterQueue(q.id);
+    const dlq = useEditorStore.getState().document.nodes.find((n) => n.deliveryRole === 'dead-letter')!;
+    select(dlq.id);
+    const list = ids(stubContext());
+    expect(list).toContain('add-consumer');
+    expect(list).not.toContain('add-dead-letter-queue');
+    expect(list).not.toContain('remove-dead-letter-queue');
+  });
+
+  it('a Queue that already has a DLQ offers Remove DLQ instead of Add DLQ', () => {
+    const state = useEditorStore.getState();
+    const q = state.addNode({ type: 'queue', x: 0, y: 0 });
+    state.addDeadLetterQueue(q.id);
+    select(q.id);
+    const list = ids(stubContext());
+    expect(list).toContain('remove-dead-letter-queue');
+    expect(list).not.toContain('add-dead-letter-queue');
+  });
+
+  it('running "Add DLQ" from the command list actually creates the companion', () => {
+    const q = useEditorStore.getState().addNode({ type: 'queue', x: 0, y: 0 });
+    select(q.id);
+    const ctx = stubContext();
+    commandsFor(ctx).find((command) => command.id === 'add-dead-letter-queue')!.run(ctx);
+    expect(useEditorStore.getState().document.nodes).toHaveLength(2);
+  });
+});

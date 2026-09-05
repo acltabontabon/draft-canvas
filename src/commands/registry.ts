@@ -1,4 +1,5 @@
 import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../canvas/presets';
+import { categoryOf } from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { createAttachment, defaultSizeFor, displayNameFor } from '../document/factory';
 import { LIMITS } from '../document/limits';
@@ -661,6 +662,45 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       addAttachmentCommand({ hostKind: 'node', node }, 'note', 'selection'),
       addAttachmentCommand({ hostKind: 'node', node }, 'code', 'selection'),
     );
+  }
+  if (node.type === 'queue') {
+    // Consuming from it is universally valid for a plain Queue or a Stream (both resolve to the
+    // `'queue'` category — `categoryOf` already folds `queueKind: 'stream'` in) but not for a
+    // Topic: a fan-out subscriber is a different relationship, not offered here.
+    if (categoryOf(node) === 'queue') {
+      commands.push({
+        id: 'add-consumer',
+        title: 'Add Consumer',
+        group: 'selection',
+        keywords: ['worker', 'subscriber', 'consume'],
+        run: (inner) => inner.editor.addConsumer(node.id),
+      });
+    }
+    // A DLQ belongs only to a plain Queue — deliberately the literal `queueKind === 'queue'`, not
+    // `categoryOf`, since a Stream's own dead-letter destination is typically a separate topic
+    // managed by a consumer/framework, not a queue-shaped DLQ (and a Topic's failure handling
+    // belongs to a subscription/consumer path Draft Canvas doesn't model yet) — and never on a
+    // node that is itself already a generated DLQ.
+    if (node.queueKind === 'queue' && node.deliveryRole !== 'dead-letter') {
+      const hasDlq = ctx.editor.document.edges.some((edge) => edge.source === node.id && edge.semantic === 'deadLetters');
+      commands.push(
+        hasDlq
+          ? {
+              id: 'remove-dead-letter-queue',
+              title: 'Remove DLQ',
+              group: 'selection',
+              keywords: ['dlq', 'dead letter', 'failure', 'reliability'],
+              run: (inner) => inner.editor.removeDeadLetterQueue(node.id),
+            }
+          : {
+              id: 'add-dead-letter-queue',
+              title: 'Add DLQ',
+              group: 'selection',
+              keywords: ['dlq', 'dead letter', 'failure', 'reliability'],
+              run: (inner) => inner.editor.addDeadLetterQueue(node.id),
+            },
+      );
+    }
   }
   commands.push(
     {

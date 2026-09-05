@@ -340,7 +340,7 @@ export function describeEdge(
       const status =
         sourceNode && targetNode ? capabilityFor(categoryOf(sourceNode), categoryOf(targetNode))?.status : undefined;
       const isUnusual = status === 'unusual' || status === 'questionable';
-      const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse);
+      const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse, edge.deliveryAttempts);
       const text = isUnusual ? `▲ ${label}` : label;
       const captionLayout = layoutText(text, {
         font: FONTS.connectorCaption,

@@ -12,6 +12,9 @@ import {
   defaultSizeFor,
   type CreateNodeInput,
 } from '../document/factory';
+import { queueTubeCenterFraction } from '../nodes/describe';
+import { FONTS } from '../render/text/fonts';
+import { getMeasurer } from '../render/text/measure';
 import {
   addEdges,
   addNodes,
@@ -21,12 +24,14 @@ import {
   boundsOf,
   bringForward,
   bringToFront,
+  COMPANION_GAP,
   detachFromEdge as detachFromEdgeOp,
   detachFromNode,
   distributeNodes,
   extractFragment,
   moveNodes,
   pasteFragment,
+  placeNear,
   reconnectEdge as reconnectEdgeOp,
   reverseEdge as reverseEdgeOp,
   removeAttachment as removeAttachmentOp,
@@ -64,7 +69,7 @@ import {
   setStepViewport,
   updateFlowStepCaption as updateFlowStepCaptionOp,
 } from '../document/flow';
-import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import { relationshipCaptionLabel, SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import {
   capabilityFor,
   categoryOf,
@@ -84,6 +89,7 @@ import type {
   ConnectorKind,
   DraftSettings,
   DraftViewport,
+  EdgeAnchor,
   EdgeSemantic,
   Side,
 } from '../document/types';
@@ -232,6 +238,20 @@ export interface EditorStore {
    *  worker→target), their semantics drawn from the same capability matrix as everywhere else —
    *  one undo step. A no-op if the edge or either endpoint no longer resolves. */
   insertWorkerOnEdge: (edgeId: string) => void;
+  /** "Add DLQ" — creates a compact, connected Dead Letter Queue companion for a plain Queue. A
+   *  no-op if the node isn't a plain queue, is itself a generated DLQ, or already has one. */
+  addDeadLetterQueue: (queueId: string) => void;
+  /** Removes a generated DLQ and its connecting edge — never deletes a node the edge was manually
+   *  reconnected onto (see `deliveryRole` guard in the implementation). A no-op if there's no
+   *  outgoing `deadLetters` edge. */
+  removeDeadLetterQueue: (queueId: string) => void;
+  /** "Add Consumer" — creates a Worker service connected with whatever semantic/kind the
+   *  capability matrix already resolves for this pairing (`consumes` for a queue/stream,
+   *  `deliversTo` for a topic — though this is never offered for a topic; see
+   *  `commands/registry.ts`). */
+  addConsumer: (sourceId: string) => void;
+  /** Sets a `deadLetters` edge's delivery-attempts count, clamped to a sane range. */
+  setEdgeDeliveryAttempts: (id: string, attempts: number) => void;
   updateEdgeLabel: (id: string, label: string) => void;
   /** Sets (or clears) a semantic type — fills the default label only if the
    *  edge has none, and never touches `accent`. See `document/edgeSemantics.ts`. */
@@ -407,6 +427,44 @@ function reinferIfEligible(doc: DraftDocument, edgeId: string): DraftDocument {
     hasResponse: hasResponse || undefined,
     semanticsOrigin: relationship ? 'inferred' : undefined,
   });
+}
+
+/**
+ * Anchors for a generated companion's connector (a DLQ, a consumer) — only for the plain
+ * horizontal "beside" placement `placeNear` prefers; the rarer collision-avoidance fallbacks
+ * (below, below-right, …) are left to the routing system's own live nearest-side heuristic, which
+ * already picks a sensible side for a non-horizontal pairing. For a queue-family endpoint on the
+ * horizontal path, `offset: 0.5` (the default) would land the connector at the boundary between
+ * the tube glyph and its caption below — see `queueTubeCenterFraction`'s own doc comment — so the
+ * relevant side gets an explicit offset that lands on the tube's own visual centre instead.
+ */
+function horizontalAnchorsFor(
+  source: Pick<DraftNode, 'x' | 'y' | 'width' | 'height' | 'type'>,
+  target: Pick<DraftNode, 'x' | 'y' | 'width' | 'height' | 'type'>,
+): { sourceAnchor?: EdgeAnchor; targetAnchor?: EdgeAnchor } {
+  const isHorizontal = target.y === source.y && target.x >= source.x + source.width;
+  if (!isHorizontal) return {};
+  return {
+    sourceAnchor: source.type === 'queue' ? { side: 'right', offset: queueTubeCenterFraction(source.height) } : undefined,
+    targetAnchor: target.type === 'queue' ? { side: 'left', offset: queueTubeCenterFraction(target.height) } : undefined,
+  };
+}
+
+/** Comfortable clearance on each side of a connector's own caption, so it never reads as crowding
+ *  either endpoint it sits between. */
+const CAPTION_CLEARANCE = 16;
+
+/**
+ * How far apart a generated companion (a DLQ, a consumer) needs to land so its connector's own
+ * caption — "after 3 attempts", "consumes", … — fits in the gap without overlapping either node,
+ * given the plain horizontal placement `placeNear` prefers puts the caption right in the middle of
+ * that gap. Never smaller than `placeNear`'s own default spacing, so a short/absent caption keeps
+ * today's compact placement exactly as it was.
+ */
+function gapForCaption(caption: string | undefined): number {
+  if (!caption) return COMPANION_GAP;
+  const width = getMeasurer().width(caption, FONTS.connectorCaption);
+  return Math.max(COMPANION_GAP, width + CAPTION_CLEARANCE * 2);
 }
 
 let interaction: Interaction | null = null;
@@ -681,6 +739,86 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       (doc) => addEdges(addNodes(removeElements(doc, [], [edgeId]), [worker]), [edgeToWorker, edgeFromWorker]),
       { selection: { nodes: [worker.id], edges: [] } },
     );
+  },
+
+  addDeadLetterQueue(queueId) {
+    const state = get();
+    const source = state.document.nodes.find((n) => n.id === queueId);
+    // A DLQ belongs only to a plain Queue — never a Topic (real failure handling belongs to a
+    // subscription/consumer path, which Draft Canvas doesn't model as a first-class concept yet),
+    // never a Stream (its dead-letter destination is typically a separate topic, not a
+    // queue-shaped DLQ), and never a node that is itself already a generated DLQ.
+    if (!source || source.type !== 'queue' || source.queueKind !== 'queue' || source.deliveryRole === 'dead-letter') {
+      return;
+    }
+    const alreadyHasDlq = state.document.edges.some((e) => e.source === queueId && e.semantic === 'deadLetters');
+    if (alreadyHasDlq) return;
+
+    const size = defaultSizeFor('queue');
+    const caption = relationshipCaptionLabel('deadLetters', undefined, 3);
+    const { x, y } = placeNear(state.document, source, size, gapForCaption(caption));
+    const dlq = createNode({ type: 'queue', queueKind: 'queue', deliveryRole: 'dead-letter', x, y, z: source.z });
+    const edge = createEdge({
+      source: source.id,
+      target: dlq.id,
+      kind: 'failure',
+      semantic: 'deadLetters',
+      semanticsOrigin: 'explicit',
+      async: true,
+      deliveryAttempts: 3,
+      ...horizontalAnchorsFor(source, dlq),
+    });
+    state.apply('Add DLQ', (doc) => addEdges(addNodes(doc, [dlq]), [edge]), {
+      selection: { nodes: [dlq.id], edges: [] },
+    });
+  },
+
+  removeDeadLetterQueue(queueId) {
+    const state = get();
+    const edge = state.document.edges.find((e) => e.source === queueId && e.semantic === 'deadLetters');
+    if (!edge) return;
+    const dlqNode = state.document.nodes.find((n) => n.id === edge.target);
+    // Since "has a DLQ" is derived purely from this edge's existence, a user could have manually
+    // reconnected it (via the edge inspector's "Show all…" escape hatch) onto an unrelated,
+    // important node — never delete that node, only one still marked as a generated DLQ.
+    const nodeIdsToRemove = dlqNode?.deliveryRole === 'dead-letter' ? [dlqNode.id] : [];
+    state.apply('Remove DLQ', (doc) => removeElements(doc, nodeIdsToRemove, [edge.id]));
+  },
+
+  addConsumer(sourceId) {
+    const state = get();
+    const source = state.document.nodes.find((n) => n.id === sourceId);
+    if (!source) return;
+
+    const size = defaultSizeFor('service');
+    // Same capability matrix every other connection reads — correctly differentiates a queue's
+    // competing-consumer `consumes` from a topic's fan-out `deliversTo` with no special-casing
+    // here (though a topic never reaches this action today — see `commands/registry.ts`). Resolved
+    // ahead of placement (category only needs the type/kind, not a real positioned node) so the
+    // caption it implies can size the gap between source and companion.
+    const workerCategory = categoryOf({ type: 'service', serviceKind: 'worker' });
+    const capability = capabilityFor(categoryOf(source), workerCategory);
+    const caption = capability?.defaultRelation ? SEMANTIC_DEFAULTS[capability.defaultRelation].label : undefined;
+    const { x, y } = placeNear(state.document, source, size, gapForCaption(caption));
+    const worker = createNode({ type: 'service', serviceKind: 'worker', x, y, z: source.z });
+    const edge = createEdge({
+      source: source.id,
+      target: worker.id,
+      semantic: capability?.defaultRelation,
+      kind: capability?.defaultBehavior,
+      semanticsOrigin: capability?.defaultRelation ? 'inferred' : undefined,
+      ...horizontalAnchorsFor(source, worker),
+    });
+    state.apply('Add Consumer', (doc) => addEdges(addNodes(doc, [worker]), [edge]), {
+      selection: { nodes: [worker.id], edges: [] },
+    });
+  },
+
+  setEdgeDeliveryAttempts(id, attempts) {
+    const clamped = Math.max(1, Math.min(50, Math.round(attempts)));
+    get().apply('Set delivery attempts', (doc) => updateEdge(doc, id, { deliveryAttempts: clamped }), {
+      coalesceKey: `delivery-attempts:${id}`,
+    });
   },
 
   updateEdgeLabel(id, label) {

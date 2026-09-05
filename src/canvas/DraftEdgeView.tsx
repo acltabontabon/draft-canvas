@@ -583,7 +583,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       {!hasLabel && !hasStep && edge.semantic && (() => {
         const caption = captionAnchor(route.labelSide, labelX, labelY, edge.hasResponse ? Math.sign(responseLane) : 0);
         const isUnusual = relationshipStatus === 'unusual' || relationshipStatus === 'questionable';
-        const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse);
+        const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse, edge.deliveryAttempts);
         return (
           <text
             x={caption.x}

@@ -545,7 +545,33 @@ function tubePaths(
   return { body, lid };
 }
 
+/**
+ * Where a Queue/Topic/Stream node's tube glyph sits, vertically, as a fraction (0..1) of the
+ * node's own full height — mirrors `queue()`'s own `y`/`tubeH` geometry exactly. The tube is a
+ * compact glyph anchored near the top of the box (the kind caption sits in the remaining space
+ * below it, see `queue()`), so its own visual centre sits well above the box's vertical midpoint —
+ * a connector anchored at the default `offset: 0.5` lands at the boundary between the tube and its
+ * caption, not the tube's centre. Exported so a connector that's generated programmatically for a
+ * queue-family node (rather than picked up by the live nearest-side fallback) can set an explicit
+ * `EdgeAnchor.offset` that actually lands on the glyph — see `store/editorStore.ts`'s
+ * `addDeadLetterQueue`/`addConsumer`.
+ */
+export function queueTubeCenterFraction(height: number): number {
+  const h = height - 1.5;
+  const tubeH = Math.min(32, h * 0.5);
+  const top = 0.75;
+  return (top + tubeH / 2) / height;
+}
+
+/** Same dash array `group()`'s boundary outline already uses — "dashed = subordinate" is an
+ *  established visual meaning in this app, not a new one invented for the DLQ treatment. */
+const DLQ_DASH = [6, 5];
+/** Reduced visual weight for a generated DLQ's tube/icon shapes — never applied to its caption
+ *  text, which must stay fully legible at small zoom and in exports. */
+const DLQ_OPACITY = 0.75;
+
 function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const isDlq = node.deliveryRole === 'dead-letter';
   const palette = accentOf(ctx.theme, node.accent ?? 'violet');
   const w = node.width - 1.5;
   const h = node.height - 1.5;
@@ -633,13 +659,28 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
     ).join(' ');
   }
 
-  const icons =
-    node.queueKind === 'topic' ? topicIcons() : node.queueKind === 'stream' ? streamIcons() : queueIcons();
+  // DLQ: a single, lonely envelope — "one message that didn't make it through," not a queue of
+  // things waiting their turn — centred exactly where the other kinds' icon clusters sit.
+  function dlqIcon(): string {
+    const iconW = 17;
+    const iconH = 13;
+    return envelope(x + (w - iconW) / 2, y + tubeH / 2 - iconH / 2, iconW, iconH);
+  }
 
+  const icons = isDlq
+    ? dlqIcon()
+    : node.queueKind === 'topic'
+      ? topicIcons()
+      : node.queueKind === 'stream'
+        ? streamIcons()
+        : queueIcons();
+
+  const dlqStroke = isDlq ? { dash: DLQ_DASH } : undefined;
+  const dlqOpacity = isDlq ? DLQ_OPACITY : undefined;
   const shapes: Shape[] = [
-    { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
-    { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5 } },
-    { t: 'path', d: icons, fill: 'none', stroke: { color: palette.line, width: 1.2 } },
+    { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5, ...dlqStroke }, opacity: dlqOpacity },
+    { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5, ...dlqStroke }, opacity: dlqOpacity },
+    { t: 'path', d: icons, fill: 'none', stroke: { color: palette.line, width: 1.2 }, opacity: dlqOpacity },
   ];
 
   // Same "special opportunity" retrace pass as `database()` — Sketch only, independently
@@ -647,8 +688,8 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   if (profile.retrace) {
     const retrace = tubePaths(x, y, w, tubeH, rx, `${node.id}:retrace`, profile.outline, profile.bow);
     shapes.push(
-      { t: 'path', d: retrace.body, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
-      { t: 'path', d: retrace.lid, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
+      { t: 'path', d: retrace.body, fill: 'none', stroke: { color: palette.line, width: 1, ...dlqStroke }, opacity: 0.5 },
+      { t: 'path', d: retrace.lid, fill: 'none', stroke: { color: palette.line, width: 1, ...dlqStroke }, opacity: 0.5 },
     );
   }
 
@@ -657,7 +698,10 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // put one in) and not inline (a long name would crowd it). Same treatment
   // `variantCaption` gives every other variant, just stacked instead of
   // cornered.
-  const kindLabel = QUEUE_KIND_LABELS[node.queueKind ?? 'queue'];
+  // Overrides regardless of `queueKind` — even a manually-retargeted DLQ (a rare, accepted edge
+  // case: changing a generated DLQ's queue-kind dropdown doesn't clear `deliveryRole`) still reads
+  // as "DLQ" rather than reverting to a generic kind caption.
+  const kindLabel = isDlq ? 'DLQ' : QUEUE_KIND_LABELS[node.queueKind ?? 'queue'];
   const kindFont = FONTS.variantTag;
   const kindLineHeight = kindFont.size * LINE_HEIGHTS.label;
   const kindLayout = layoutText(kindLabel, {

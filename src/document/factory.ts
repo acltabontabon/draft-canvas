@@ -11,6 +11,7 @@ import {
   type CodeLanguage,
   type ConnectorKind,
   type DatabaseKind,
+  type DeliveryRole,
   type DraftDocument,
   type DraftEdge,
   type DraftNode,
@@ -169,6 +170,7 @@ export interface CreateNodeInput {
   actorKind?: ActorKind;
   parentId?: string;
   id?: string;
+  deliveryRole?: DeliveryRole;
 }
 
 export function createNode(input: CreateNodeInput): DraftNode {
@@ -198,6 +200,7 @@ export function createNode(input: CreateNodeInput): DraftNode {
   if (input.type === 'database') node.databaseKind = input.databaseKind ?? 'generic';
   if (input.type === 'queue') node.queueKind = input.queueKind ?? 'queue';
   if (input.type === 'actor') node.actorKind = input.actorKind ?? 'human';
+  if (input.deliveryRole) node.deliveryRole = input.deliveryRole;
   return node;
 }
 
@@ -248,6 +251,10 @@ export interface CreateEdgeInput {
   semantic?: EdgeSemantic;
   hasResponse?: boolean;
   semanticsOrigin?: DraftEdge['semanticsOrigin'];
+  /** Born-dashed, e.g. a generated dead-letter route — every other edge in the app only ever
+   *  gains `async` after creation, via `toggleEdgeAsync`/`setEdgeKind('async')`. */
+  async?: boolean;
+  deliveryAttempts?: number;
 }
 
 export function createEdge(input: CreateEdgeInput): DraftEdge {
@@ -266,6 +273,8 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
   if (input.semantic) edge.semantic = input.semantic;
   if (input.hasResponse) edge.hasResponse = input.hasResponse;
   if (input.semanticsOrigin) edge.semanticsOrigin = input.semanticsOrigin;
+  if (input.async) edge.async = true;
+  if (input.deliveryAttempts !== undefined) edge.deliveryAttempts = input.deliveryAttempts;
   return edge;
 }
 

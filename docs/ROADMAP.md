@@ -133,6 +133,16 @@ a collection of arrows.*
   default caption for a request/response connector, and flags an architecturally unusual pairing
   (e.g. Queue → Topic) with a compact guidance note and, where practical, a one-click "Insert
   Worker" fix — never a hard block, "guide" always beats "prevent."
+- **2.9 Queue reliability companions** — ✅ Done. Right-click a Queue for "Add DLQ" (a compact,
+  visually subordinate companion node, connected by a dashed `deadLetters` edge captioned "after N
+  attempts") and "Add Consumer" — both real canvas nodes, not a checkbox, so they participate in
+  selection, movement, duplication, and export exactly like anything else. Deliberately narrower
+  than a blanket "every queue-ish shape gets the same buttons": a Topic gets neither action in this
+  release (real pub/sub failure handling belongs to a subscription/consumer path, and Draft Canvas
+  doesn't model Subscription as a first-class shape yet — inventing one just to offer this button
+  would be more misleading than useful), and a Stream gets "Add Consumer" but not "Add DLQ" (its
+  dead-letter destination is typically a separate topic managed by a consumer/framework, not a
+  queue-shaped DLQ). A generated DLQ never offers its own DLQ.
 
 ## Phase 3 — Flow & Presentation
 

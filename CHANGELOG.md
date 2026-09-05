@@ -8,6 +8,14 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+### Added
+
+- Right-click a Queue to add a compact, connected Dead Letter Queue, or a Consumer worker, in one
+  step — positioned and labelled automatically, with a "after N attempts" caption you can adjust
+  from the connector itself. Topics and Streams get a narrower set of these actions on purpose:
+  failure handling in a pub/sub system usually belongs to the subscription or consumer path, not
+  the Topic itself.
+
 ### Fixed
 
 - Fixed contextual shape menus sometimes truncating options after switching variants.

@@ -41,10 +41,15 @@ describe('dashForEdge / markerVariantForEdge: one dimension per kind', () => {
   it('kind never overrides the existing async flag\'s own dashed line', () => {
     // A kind with no dash pattern of its own falls back to `async`, exactly
     // as if `kind` were absent — this is "kind doesn't fight async", not a
-    // special case. `async` isn't part of CreateEdgeInput (only
-    // toggleEdgeAsync sets it post-creation), so it's added directly here.
-    expect(dashForEdge({ ...edgeWith({ kind: 'callback' }), async: true })).toEqual([6, 4]);
-    expect(dashForEdge({ ...edgeWith({ kind: 'failure' }), async: true })).toEqual([6, 4]);
+    // special case.
+    expect(dashForEdge(edgeWith({ kind: 'callback', async: true }))).toEqual([6, 4]);
+    expect(dashForEdge(edgeWith({ kind: 'failure', async: true }))).toEqual([6, 4]);
+  });
+
+  it('a generated dead-letter edge (kind failure + async, born via CreateEdgeInput) dashes with zero kindStyle.ts changes needed', () => {
+    // Regression test for the Queue "Add DLQ" feature: proves the dead-letter edge's dashed
+    // treatment comes entirely from the existing async branch, not a new dash pattern.
+    expect(dashForEdge(edgeWith({ kind: 'failure', semantic: 'deadLetters', async: true }))).toEqual([6, 4]);
   });
 
   it('a kind with its own dash pattern takes priority over async', () => {

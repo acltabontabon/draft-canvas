@@ -28,8 +28,16 @@ import type { EdgeSemantic } from './types';
  * shows exactly as it does everywhere else. Shared by both connector renderers (`DraftEdgeView.tsx`
  * and `edges/describe.ts`) so they can't quietly disagree.
  */
-export function relationshipCaptionLabel(semantic: EdgeSemantic, hasResponse?: boolean): string {
+export function relationshipCaptionLabel(
+  semantic: EdgeSemantic,
+  hasResponse?: boolean,
+  deliveryAttempts?: number,
+): string {
   if (hasResponse && semantic === 'calls') return 'requests';
+  // A protocol-neutral count beats the generic label the moment one is set — "after 3 attempts"
+  // says what's actually being modeled without claiming a specific retry mechanism. See
+  // `DraftEdge.deliveryAttempts`'s own doc comment for why it isn't called `retryAttempts`.
+  if (semantic === 'deadLetters' && deliveryAttempts) return `after ${deliveryAttempts} attempts`;
   return SEMANTIC_DEFAULTS[semantic].label;
 }
 
@@ -51,4 +59,5 @@ export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   replicates: { label: 'replicates to' },
   cdc: { label: 'CDC' },
   syncs: { label: 'syncs to' },
+  deadLetters: { label: 'dead-letters to' },
 };

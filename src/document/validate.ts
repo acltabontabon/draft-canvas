@@ -21,6 +21,7 @@ import {
   CONNECTOR_KINDS,
   CURRENT_VERSION,
   DATABASE_KINDS,
+  DELIVERY_ROLES,
   DRAFT_FORMAT,
   EDGE_ROUTINGS,
   GRID_MODES,
@@ -39,6 +40,7 @@ import {
   type CodeLanguage,
   type ConnectorKind,
   type DatabaseKind,
+  type DeliveryRole,
   type DraftDocument,
   type DraftEdge,
   type DraftFlow,
@@ -93,6 +95,18 @@ function oneOfOptional<T extends string>(value: unknown, allowed: readonly T[]):
   return typeof value === 'string' && (allowed as readonly string[]).includes(value)
     ? (value as T)
     : undefined;
+}
+
+/**
+ * Like `oneOfOptional`, but for a number: absent or non-finite stays absent (never a fabricated
+ * default — genuine absence is meaningful, e.g. a `deadLetters` edge someone hasn't configured a
+ * count for yet), while a present-but-out-of-range value (zero, negative, a hand-edited million)
+ * is clamped into range rather than dropped — the same "repair the value, don't reject the field"
+ * discipline every other numeric field in this file already follows.
+ */
+function positiveIntOptional(value: unknown, min: number, max: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return clamp(Math.round(value), min, max);
 }
 
 /**
@@ -291,6 +305,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     }
     if (type === 'queue') {
       node.queueKind = oneOf<QueueKind>(candidate.queueKind, QUEUE_KINDS, 'queue');
+      const deliveryRole = oneOfOptional<DeliveryRole>(candidate.deliveryRole, DELIVERY_ROLES);
+      if (deliveryRole) node.deliveryRole = deliveryRole;
     }
     if (type === 'actor') {
       node.actorKind = oneOf<ActorKind>(candidate.actorKind, ACTOR_KINDS, 'human');
@@ -445,6 +461,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     // should not silently become e.g. "http".
     const semantic = oneOfOptional<EdgeSemantic>(candidate.semantic, EDGE_SEMANTICS);
     if (semantic) edge.semantic = semantic;
+
+    // Not gated on `semantic === 'deadLetters'` at parse time — same "repair the value, don't
+    // reject the field based on a sibling" discipline `response`/`hasResponse` already follow.
+    const deliveryAttempts = positiveIntOptional(candidate.deliveryAttempts, 1, 50);
+    if (deliveryAttempts !== undefined) edge.deliveryAttempts = deliveryAttempts;
 
     // Same discipline as semantic: absent or unrecognised stays absent, not
     // coerced to a fallback kind.

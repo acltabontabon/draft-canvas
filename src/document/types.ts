@@ -100,6 +100,20 @@ export type DatabaseKind = (typeof DATABASE_KINDS)[number];
 export const QUEUE_KINDS = ['queue', 'topic', 'stream'] as const;
 export type QueueKind = (typeof QUEUE_KINDS)[number];
 
+/**
+ * A node's role in a generated reliability topology — orthogonal to `QueueKind`'s "which
+ * messaging paradigm" dimension. Purely descriptive, never a reference to another node (contrast
+ * with a hypothetical `deadLetterDestination` pointer): the *relationship* to whichever queue
+ * generated this one lives entirely on the connecting edge (`DraftEdge.semantic ===
+ * 'deadLetters'`), so this field can never dangle or need cycle-repair. Set only by the "Add DLQ"
+ * command (`store/editorStore.ts`'s `addDeadLetterQueue`) — deliberately excluded from
+ * `ElementInspectorPopover`'s manual queue-kind picker, since it's a generated role, not a
+ * user-chosen paradigm. One member today; the name stays generic for a future role (e.g. a retry
+ * buffer) without redesign.
+ */
+export const DELIVERY_ROLES = ['dead-letter'] as const;
+export type DeliveryRole = (typeof DELIVERY_ROLES)[number];
+
 /** An Actor is any external participant interacting with the system being modelled — not
  *  human-only. */
 export const ACTOR_KINDS = ['human', 'system', 'device'] as const;
@@ -130,6 +144,7 @@ export const EDGE_SEMANTICS = [
   'replicates',
   'cdc',
   'syncs',
+  'deadLetters',
 ] as const;
 export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];
 
@@ -211,6 +226,8 @@ export interface DraftNode {
   boundaryPreset?: BoundaryPreset;
   /** Supporting detail collapsed into this node. Any node type may host one. */
   attachments?: Attachment[];
+  /** `queue` nodes only — see `DeliveryRole`. */
+  deliveryRole?: DeliveryRole;
 }
 
 export interface EdgeDetails {
@@ -304,6 +321,16 @@ export interface DraftEdge {
    * unchanged) rather than trying to unify the two for a feature that never wrote `details` anyway.
    */
   attachments?: Attachment[];
+  /**
+   * How many delivery attempts occur before this edge's failure route is taken — only meaningful
+   * alongside `semantic: 'deadLetters'`, same convention as `response` being only meaningful
+   * alongside `hasResponse`. Deliberately not called `retryAttempts`: the actual mechanism behind
+   * an "attempt" (broker redelivery, a visibility-timeout re-queue, consumer-side retry, an
+   * explicit republish) varies by messaging technology, and Draft Canvas models architectural
+   * intent, not a specific broker's retry implementation. Rendered as a caption, e.g. "after 3
+   * attempts" — see `document/edgeSemantics.ts`'s `relationshipCaptionLabel`.
+   */
+  deliveryAttempts?: number;
 }
 
 /**

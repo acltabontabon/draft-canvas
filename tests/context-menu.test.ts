@@ -205,6 +205,40 @@ describe('contextMenuCommandsFor — a regular node', () => {
     const ids = nodeMenu(queue.id).filter((e) => e.type === 'command').map((e) => e.command.id);
     expect(ids).not.toContain('edit-text');
   });
+
+  it('a plain Queue gets Add Consumer and Add DLQ grouped right after Add Note/Add Code', () => {
+    const queue = useEditorStore.getState().addNode({ type: 'queue', x: 0, y: 0 });
+    const entries = nodeMenu(queue.id);
+    const types = entries.map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
+    expect(types).toEqual([
+      'attach-note',
+      'attach-code',
+      'sep',
+      'add-consumer',
+      'add-dead-letter-queue',
+      'sep',
+      'duplicate',
+      'copy',
+      'cut',
+      'sep',
+      'bring-to-front',
+      'bring-forward',
+      'send-backward',
+      'send-to-back',
+      'sep',
+      'spotlight',
+      'sep',
+      'delete',
+    ]);
+  });
+
+  it('a Topic gets neither reliability command, and no orphaned separator', () => {
+    const topic = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'topic', x: 0, y: 0 });
+    const ids = nodeMenu(topic.id).filter((e) => e.type === 'command').map((e) => e.command.id);
+    expect(ids).not.toContain('add-consumer');
+    expect(ids).not.toContain('add-dead-letter-queue');
+    expect(ids).not.toContain('remove-dead-letter-queue');
+  });
 });
 
 describe('contextMenuCommandsFor — a junction', () => {

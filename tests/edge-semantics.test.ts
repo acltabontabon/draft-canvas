@@ -17,6 +17,13 @@ describe('relationshipCaptionLabel', () => {
     expect(relationshipCaptionLabel('writes', true)).toBe('writes');
     expect(relationshipCaptionLabel('publishes', false)).toBe('publishes');
   });
+
+  it('a deadLetters edge reads "after N attempts" once a count is set, else the generic label', () => {
+    expect(relationshipCaptionLabel('deadLetters', undefined, 3)).toBe('after 3 attempts');
+    expect(relationshipCaptionLabel('deadLetters', undefined, 1)).toBe('after 1 attempts');
+    expect(relationshipCaptionLabel('deadLetters')).toBe('dead-letters to');
+    expect(relationshipCaptionLabel('deadLetters', undefined, 0)).toBe('dead-letters to');
+  });
 });
 
 describe('semantic connections', () => {

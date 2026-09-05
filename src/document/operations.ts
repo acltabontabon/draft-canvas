@@ -648,6 +648,51 @@ export function detachFromEdge(
   return { doc: next, extractedNode };
 }
 
+/** Spacing between a generated companion node (a DLQ, a consumer) and the node that spawned it —
+ *  the same value `detachFromNode`'s own unconditional offset already uses. Exported so a caller
+ *  that needs a *larger* gap (e.g. to fit a connector's own caption text — see
+ *  `store/editorStore.ts`'s `gapForCaption`) has a floor to widen from, rather than a second,
+ *  independently-drifting magic number. */
+export const COMPANION_GAP = 32;
+
+function rectsOverlap(a: Bounds, b: Bounds): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+/**
+ * A small, bounded search for where a generated companion node should land near `host` — never
+ * stacked on top of an unrelated node it happens to fall on. Tries a short, fixed list of
+ * candidate offsets (right, below, below-right, above-right, further below) and returns the first
+ * whose rect doesn't overlap any existing node. A boundary (`group`) is never treated as an
+ * obstacle — landing inside one is normal, not a collision, the same rule node-drag-to-attach
+ * detection already applies for the same reason. This is deliberately not a general free-space
+ * solver: if every candidate collides (a genuinely crowded corner of the diagram), it falls back
+ * to the first (plain right-of-host) candidate anyway, same as `detachFromNode` always has, just
+ * having tried a few smarter positions first.
+ */
+export function placeNear(
+  doc: DraftDocument,
+  host: Pick<DraftNode, 'id' | 'x' | 'y' | 'width' | 'height'>,
+  size: { width: number; height: number },
+  gap: number = COMPANION_GAP,
+): { x: number; y: number } {
+  const obstacles = doc.nodes.filter((n) => n.id !== host.id && n.type !== 'group');
+  const candidates: Bounds[] = [
+    { x: host.x + host.width + gap, y: host.y, ...size },
+    { x: host.x, y: host.y + host.height + COMPANION_GAP, ...size },
+    { x: host.x + host.width + gap, y: host.y + host.height + COMPANION_GAP, ...size },
+    { x: host.x + host.width + gap, y: host.y - size.height - COMPANION_GAP, ...size },
+    { x: host.x, y: host.y + host.height + COMPANION_GAP * 2 + size.height, ...size },
+  ];
+  const chosen = candidates.find((rect) => !obstacles.some((n) => rectsOverlap(rect, n))) ?? candidates[0]!;
+  let { x, y } = chosen;
+  if (x + size.width > LIMITS.maxCoordinate) {
+    x = host.x;
+    y = host.y + host.height + COMPANION_GAP;
+  }
+  return { x: clampCoord(x), y: clampCoord(y) };
+}
+
 /* ---------------------------------------------------------------- groups --- */
 
 /** Every node transitively parented under `id` — used so dragging a boundary
