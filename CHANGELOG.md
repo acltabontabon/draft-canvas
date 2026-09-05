@@ -8,6 +8,8 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-05
+
 ### Added
 
 - Right-click a Queue to add a compact, connected Dead Letter Queue, or a Consumer worker, in one
@@ -15,6 +17,12 @@ milestones; **0.1.0 is the first production-ready release.**
   from the connector itself. Topics and Streams get a narrower set of these actions on purpose:
   failure handling in a pub/sub system usually belongs to the subscription or consumer path, not
   the Topic itself.
+
+### Changed
+
+- Cmd/Ctrl+V now reads the native paste event directly and never prompts for clipboard access.
+  Right-click → Paste and the ⌘K palette's Paste, which have no native paste event to read from,
+  now ask once with a small dialog before their first clipboard read, and remember your answer.
 
 ### Fixed
 
@@ -30,6 +38,16 @@ milestones; **0.1.0 is the first production-ready release.**
 - Fixed the canvas crashing when a marquee selection didn't settle cleanly — most reliably
   triggered by selecting nodes connected by more than one connector, but any similarly
   unsettled selection is now caught before it can crash the canvas.
+- Fixed a further variant of that same instability surfacing after the fix above shipped: React
+  Flow's own selection reporting could still oscillate on some selections. A runaway burst of
+  selection-change reports now coalesces onto animation frames as a backstop, instead of each one
+  committing synchronously forever.
+- Fixed the canvas crashing when dragging or resizing an element right at the pixel where the
+  element inspector popover's preferred side stopped fitting — resolving its placement mid-gesture
+  could flip it back and forth every frame and exhaust React's update-depth limit. The popover now
+  hides for the gesture's duration instead of chasing a moving target.
+- Fixed the "learn the command palette" hint reappearing on nearly every selection even with Learn
+  Draft Canvas turned off, once an element's own hint had already been learned or dismissed.
 
 ## [0.3.1] - 2026-09-04
 
@@ -397,7 +415,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.4.0...main
+[0.4.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.1.2...v0.2.0
