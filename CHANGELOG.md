@@ -15,6 +15,9 @@ milestones; **0.1.0 is the first production-ready release.**
   normal size.
 - Fixed a request/response connector's auto "requests" caption landing on the wrong side of a
   vertical connector, overlapping the dashed reply line instead of sitting clear of it.
+- Fixed a rendering hitch in Safari where a directed connector's arrowhead could flicker while
+  selecting shapes near it — the shared arrowhead definitions were being torn down and rebuilt
+  on every canvas render, not just when they actually changed.
 
 ## [0.3.1] - 2026-09-04
 
