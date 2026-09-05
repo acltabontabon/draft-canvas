@@ -224,6 +224,18 @@
   cursor: pointer;
 }
 
+/* Safari has a documented flickering-selection bug where a shape/edge selection drag can
+   trigger the browser's own native text-selection highlight over nearby content instead of only
+   this app's own selection outline — see https://github.com/xyflow/xyflow/issues/4806. Scoped to
+   the edge itself (its line, arrowhead, and caption) rather than the whole canvas: this is the
+   one place a connector's own text sits close enough to a drag gesture to be mistaken for
+   selectable content, and it's why the flicker tracks "is there an arrow on screen," not "is
+   anything selected." `.dc-edge-label-input` (the one genuinely editable piece of edge text)
+   opts back into normal text selection below. */
+.dc-edge {
+  user-select: none;
+}
+
 /*
  * A restrained halo, not a bounding box: a soft, close drop-shadow around the
  * line itself reads clearly at a glance in both themes and while zoomed, with
@@ -306,6 +318,9 @@
     0 0 3px var(--dc-canvas),
     0 0 3px var(--dc-canvas);
   transition: background 120ms ease;
+  /* Same Safari flicker note as `.dc-edge` above — `.dc-edge-label-input` (the actual editable
+     text once double-clicked open) opts back in. */
+  user-select: none;
 }
 
 .dc-edge-label:hover,
@@ -337,6 +352,8 @@
   color: inherit;
   font: inherit;
   outline: none;
+  /* Opts back into normal text selection — see `.dc-edge`'s own comment above. */
+  user-select: text;
 }
 
 .dc-edge-step {
