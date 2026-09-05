@@ -13,6 +13,8 @@ milestones; **0.1.0 is the first production-ready release.**
 - Fixed contextual shape menus sometimes truncating options after switching variants.
 - Fixed detaching a note or code attachment producing a tiny, oversquashed node instead of its
   normal size.
+- Fixed a request/response connector's auto "requests" caption landing on the wrong side of a
+  vertical connector, overlapping the dashed reply line instead of sitting clear of it.
 
 ## [0.3.1] - 2026-09-04
 

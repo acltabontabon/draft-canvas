@@ -11,7 +11,7 @@ import { layoutText, baselineOf } from '../src/render/text/layout';
 import { StaticTextMeasurer } from '../src/render/text/measure';
 import { FONTS } from '../src/render/text/fonts';
 import { LIGHT } from '../src/render/theme/tokens';
-import { routeBetween, chooseSides } from '../src/edges/routing';
+import { routeBetween, chooseSides, rectOf } from '../src/edges/routing';
 
 const measurer = new StaticTextMeasurer();
 
@@ -455,6 +455,29 @@ describe('SVG export — request/response connectors', () => {
     // The response route's own lane offset (`RESPONSE_LANE_DELTA`) is what keeps the two label
     // chips from landing on the same point — proof it actually took effect, not just in theory.
     expect(responseText!.getAttribute('y')).not.toBe(primaryText!.getAttribute('y'));
+  });
+
+  it('keeps the auto "requests" caption on the side away from the response line for a vertical connector', () => {
+    // No `label` — this exercises the auto semantic caption (`captionAnchor`'s `!edge.label`
+    // path), not `responseFixture`'s user-typed label chip above. Stacking the nodes (same x)
+    // instead of placing them side by side is what used to trigger the bug: `labelSideFor`
+    // resolves this connector's label to `'right'`, the same default side the response line's own
+    // lane (`responseLaneFor`) drifts to, so the caption used to land on top of/past the response
+    // line instead of clear of it.
+    const serviceA = createNode({ type: 'service', x: 0, y: 0, text: 'Service A' });
+    const serviceB = createNode({ type: 'service', x: 0, y: 320, text: 'Service B' });
+    const edge = createEdge({ source: serviceA.id, target: serviceB.id, semantic: 'calls', hasResponse: true });
+    const doc = addEdges(addNodes(createDocument('Vertical'), [serviceA, serviceB]), [edge]);
+
+    const { svg } = renderDocumentSvg(doc);
+    const caption = [...parseSvg(svg).querySelectorAll('text')].find((t) => t.textContent === 'requests');
+    expect(caption).toBeDefined();
+
+    const route = routeBetween(rectOf(serviceA), rectOf(serviceB), edge.routing);
+    // Same-x nodes stacked vertically route straight down their shared centre line
+    // (`route.labelX`) — the response line drifts to its positive (right) side, so the caption
+    // must land to the left of it, not past it.
+    expect(Number(caption!.getAttribute('x'))).toBeLessThan(route.labelX);
   });
 });
 

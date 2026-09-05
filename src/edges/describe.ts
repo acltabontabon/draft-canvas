@@ -75,20 +75,29 @@ function labelChipRect(side: Side, x: number, y: number, w: number, h: number): 
 
 /**
  * Mirrors `captionAnchor` in `DraftEdgeView.tsx`: a horizontal line's caption already clears it
- * with the pre-existing fixed downward offset; a vertical line needs the caption moved beside it
- * instead, since a y-only offset never leaves the line's own x-coordinate.
+ * with the pre-existing fixed offset; a vertical line needs the caption moved beside it instead,
+ * since a y-only offset never leaves the line's own x-coordinate. `responseAway` is the signed
+ * direction of this connector's own response line (0 when there is none) — see the live renderer's
+ * own doc comment for why the flip is keyed off that sign rather than a single hardcoded side.
  */
 function captionAnchor(
   side: Side,
   x: number,
   y: number,
   height: number,
-  awayFromResponse = false,
+  responseAway = 0,
 ): { x: number; y: number; align: TextAlign } {
-  if (side === 'right') return { x: x + LABEL_LINE_GAP, y: y - height / 2, align: 'start' };
-  if (side === 'left') return { x: x - LABEL_LINE_GAP, y: y - height / 2, align: 'end' };
-  if (awayFromResponse && side === 'top') return { x, y: y - 6 - height, align: 'middle' };
-  return { x, y: y + 6, align: 'middle' };
+  if (side === 'right') {
+    return responseAway > 0
+      ? { x: x - LABEL_LINE_GAP, y: y - height / 2, align: 'end' }
+      : { x: x + LABEL_LINE_GAP, y: y - height / 2, align: 'start' };
+  }
+  if (side === 'left') {
+    return responseAway < 0
+      ? { x: x + LABEL_LINE_GAP, y: y - height / 2, align: 'start' }
+      : { x: x - LABEL_LINE_GAP, y: y - height / 2, align: 'end' };
+  }
+  return responseAway > 0 ? { x, y: y - 6 - height, align: 'middle' } : { x, y: y + 6, align: 'middle' };
 }
 
 /** Mirrors `conditionTransform` in `DraftEdgeView.tsx` — stacked below the label for a horizontal
@@ -340,7 +349,8 @@ export function describeEdge(
         maxLines: 1,
         measurer: ctx.measurer,
       });
-      const caption = captionAnchor(route.labelSide, labelX, labelY, captionLayout.height, Boolean(edge.hasResponse));
+      const captionResponseAway = edge.hasResponse ? Math.sign(responseLaneFor(ctx.lane ?? 0)) : 0;
+      const caption = captionAnchor(route.labelSide, labelX, labelY, captionLayout.height, captionResponseAway);
       overlay.push({
         t: 'text',
         x: caption.x,

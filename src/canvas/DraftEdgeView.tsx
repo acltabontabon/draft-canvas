@@ -77,27 +77,35 @@ function labelChipTransform(side: Side, x: number, y: number): string {
 
 /**
  * The same line-clearance idea as `labelChipTransform`, for the plain SVG `<text>` caption: a
- * fixed downward offset (the pre-existing behaviour) already clears a horizontal line just fine,
- * since it moves the text off the line's own y-coordinate — the vertical-line case is the one that
- * was never actually clear (a y-only offset leaves the text centered right back on the line's x).
+ * fixed offset (the pre-existing behaviour) already clears the line itself just fine, since it
+ * moves the text off the line's own coordinate on whichever axis the line runs along.
  *
- * `awayFromResponse` is `true` only when this caption shares its connector with a response line
- * (`edge.hasResponse`): the response's own label sits at `OPPOSITE_SIDE[side]` (see
- * `labelChipTransform`), so a plain always-down default would land the caption on the *same* side
- * as the response label for a `side === 'top'` connector. Scoped to that one case so the far more
- * common plain (no response) caption keeps its original, already-shipped-and-tested position
- * exactly as it was.
+ * `responseAway` carries the *signed* direction of this connector's own response line (the sign
+ * of `responseLaneFor(laneOffset)` — see `edges/routing.ts`), or `0` when there is none
+ * (`!edge.hasResponse`). The response's own label sits at `OPPOSITE_SIDE[side]` (see
+ * `labelChipTransform`), so a caption whose default direction happens to match the response
+ * line's own side would land right next to (or on top of) it — flipping to the opposite direction
+ * whenever the signs agree keeps the caption clear regardless of orientation, instead of the
+ * single hardcoded `side === 'top'` case this used to be scoped to (which left every vertical
+ * connector — `side === 'right'`/`'left'` — with no such correction at all).
  */
 function captionAnchor(
   side: Side,
   x: number,
   y: number,
-  awayFromResponse = false,
+  responseAway = 0,
 ): { x: number; y: number; textAnchor: 'start' | 'middle' | 'end'; dominantBaseline?: 'middle' } {
-  if (side === 'right') return { x: x + LABEL_LINE_GAP, y, textAnchor: 'start', dominantBaseline: 'middle' };
-  if (side === 'left') return { x: x - LABEL_LINE_GAP, y, textAnchor: 'end', dominantBaseline: 'middle' };
-  if (awayFromResponse && side === 'top') return { x, y: y - 14, textAnchor: 'middle' };
-  return { x, y: y + 14, textAnchor: 'middle' };
+  if (side === 'right') {
+    return responseAway > 0
+      ? { x: x - LABEL_LINE_GAP, y, textAnchor: 'end', dominantBaseline: 'middle' }
+      : { x: x + LABEL_LINE_GAP, y, textAnchor: 'start', dominantBaseline: 'middle' };
+  }
+  if (side === 'left') {
+    return responseAway < 0
+      ? { x: x + LABEL_LINE_GAP, y, textAnchor: 'start', dominantBaseline: 'middle' }
+      : { x: x - LABEL_LINE_GAP, y, textAnchor: 'end', dominantBaseline: 'middle' };
+  }
+  return responseAway > 0 ? { x, y: y - 14, textAnchor: 'middle' } : { x, y: y + 14, textAnchor: 'middle' };
 }
 
 /** Same idea for the condition chip — stacked below the caption for a horizontal line
@@ -573,7 +581,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           no visible text at all. `captionAnchor`'s `awayFromResponse` flag is what keeps this from
           landing on top of the response line's own label — see its own doc comment. */}
       {!hasLabel && !hasStep && edge.semantic && (() => {
-        const caption = captionAnchor(route.labelSide, labelX, labelY, Boolean(edge.hasResponse));
+        const caption = captionAnchor(route.labelSide, labelX, labelY, edge.hasResponse ? Math.sign(responseLane) : 0);
         const isUnusual = relationshipStatus === 'unusual' || relationshipStatus === 'questionable';
         const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse);
         return (
