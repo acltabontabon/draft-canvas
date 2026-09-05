@@ -294,17 +294,21 @@ export function ElementInspectorPopover() {
       : displayNode.type !== 'group' && !displayNode.attachments?.length
         ? 'attachment-slot'
         : null;
-  // Phase 8 — once the element's own hint is learned or dismissed (or it never had one), the same
-  // slot teaches the palette instead: a selected element is exactly the moment "connect, spotlight,
-  // start a flow here" becomes a question. Learn mode keeps showing the element's own hint first,
-  // since resurfacing those is the whole point of that mode.
+  // Phase 8 — once the element's own hint is learned or dismissed (or it never had one), Learn
+  // mode's deliberate review pass teaches the palette instead. Without Learn mode, this slot must
+  // stay silent once the element's own hint is done — falling back to the palette nudge here too
+  // used to mean it kept reappearing on nearly every selection regardless of the Learn Draft
+  // Canvas toggle, which read as a hint system that ignored its own on/off switch.
   const primaryDone =
     primaryHint === null ||
     hasAnyAttachment ||
     isRetired(primaryHint) ||
     isDismissedThisSession(primaryHint);
-  const hintId: HintId | null =
-    learnModeActive && primaryHint ? primaryHint : primaryDone ? 'command-palette' : primaryHint;
+  const hintId: HintId | null = learnModeActive
+    ? (primaryHint ?? 'command-palette')
+    : primaryDone
+      ? null
+      : primaryHint;
   const hintLearned = hintId === 'command-palette' ? false : hasAnyAttachment;
 
   // A dropdown inside this popover should open away from the element, not toward it — mirror
