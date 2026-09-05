@@ -1,0 +1,37 @@
+name: Feature request
+description: Propose something new, or a change to existing behavior.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What developer problem does this solve?
+      description: >
+        Not "what should Draft Canvas do" — what are you actually stuck on right now that this
+        would fix? Draft Canvas stays small on purpose, so this is the question that matters most.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What you'd want to happen, as concretely as you can describe it.
+    validations:
+      required: true
+  - type: textarea
+    id: semantics
+    attributes:
+      label: Is this specific to a technology or architecture pattern?
+      description: >
+        If this touches how connections are inferred, labeled, or flagged (see
+        docs/architecture-semantics.md), say what the technically correct behavior is and why —
+        "it would look nicer" isn't enough on its own for a semantic rule.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Anything else you thought about, including "do nothing."
+    validations:
+      required: false

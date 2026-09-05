@@ -11,6 +11,18 @@ test-results
 .playwright
 *.tsbuildinfo
 
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.crt
+
 # Editors
 .idea
 .vscode
+
+# Local agent tooling
+.claude/

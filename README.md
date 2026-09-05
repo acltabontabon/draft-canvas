@@ -1,9 +1,22 @@
 # Draft Canvas
 
-**A local-first canvas for developers to explain software visually.**
+**Architecture at meeting speed.**
 
-Draft Canvas is a lightweight technical whiteboard for architecture discussions, debugging
-sessions, brainstorming, and walking someone through a flow.
+A local-first, opinionated architecture canvas for developers.
+
+[![CI](https://github.com/acltabontabon/draft-canvas/actions/workflows/ci.yml/badge.svg)](https://github.com/acltabontabon/draft-canvas/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+![Draft Canvas — for meetings that suddenly need a diagram](public/og-image.png)
+
+Sometimes you're in a meeting and suddenly need to explain a system. You don't want to open a
+heavyweight diagramming suite, hunt through hundreds of cloud icons, or spend five minutes aligning
+rectangles. You want to draw the architecture, explain it, and move on.
+
+That is Draft Canvas.
+
+**[Try the live demo →](https://acltabontabon.com/draft-canvas/)** — nothing you draw there leaves
+your browser either.
 
 Your diagrams are stored locally in your browser.
 
@@ -13,14 +26,27 @@ Your diagrams are stored locally in your browser.
 
 ---
 
-## Why
+## Philosophy
 
-Most diagramming tools are built for producing documents. This one is built for the ten minutes
-in a meeting where you need to show someone how something works — and then get back to the
-conversation.
+**Fast where speed matters.** Opening Draft Canvas should feel closer to grabbing a marker than
+opening an enterprise modeling tool. If you spend more time formatting the diagram than explaining
+the idea, the tool has failed.
 
-Everything is aimed at one thing: **speed of thought**. If you spend more time formatting the
-diagram than explaining the idea, the tool has failed.
+**Opinionated where correctness matters.** Draft Canvas understands some architectural
+relationships — a service writes to a database, a queue is consumed rather than published into, a
+topic fans out — and nudges you toward the technically sensible version of what you drew. See
+[docs/architecture-semantics.md](docs/architecture-semantics.md) for exactly what it understands
+today.
+
+**Local-first.** Your diagrams belong to you. No account, no backend, no cloud sync — see
+[Privacy](#privacy) below.
+
+**Architecture, not icon collecting.** The goal is communicating systems clearly, not reproducing
+an AWS architecture poster. There's no provider icon library, and there isn't going to be one.
+
+**An escape hatch is always available.** Opinionated guidance helps you; it never turns the canvas
+into a rigid modeling language. Draft Canvas suggests and warns — it never blocks a connection you
+drew on purpose.
 
 ## What it does
 
@@ -112,20 +138,41 @@ The build is path-agnostic (`base: './'`), so `dist/` can be served from any sub
 
 - [Flows and Presentation Mode](docs/FLOWS.md) — telling a story over a diagram you already drew
 - [Architecture](docs/ARCHITECTURE.md) — how the layers fit together, and why
+- [Architecture semantics](docs/architecture-semantics.md) — exactly what Draft Canvas understands
+  about the diagrams you draw, and what it doesn't
 - [Document schema](docs/SCHEMA.md) — the `.draftcanvas` format, and how it evolves
 - [Privacy implementation](docs/PRIVACY.md) — what is stored where, auditably
 - [Roadmap](docs/ROADMAP.md) — numbered phases from what's shipped to what's next, no dates
 
+## Contributing
+
+Bug reports, feature requests, and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for how
+to run it locally, the project's conventions, and — especially if you're touching connector
+semantics — what makes a change technically defensible rather than just visually convenient. This
+project follows a standard [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Status
+
+Draft Canvas is at `v0.4.0`. Every phase on the [roadmap](docs/ROADMAP.md) through Phase 8 has
+shipped, each gated by its own test coverage and manual browser verification before release —
+pre-1.0 mostly signals that the shape can still change, not that it's unfinished.
+
 ## Built with
 
-[React](https://react.dev) · [Vite](https://vite.dev) ·
+[React](https://react.dev) and [Vite](https://vite.dev), with
 [React Flow](https://reactflow.dev) for canvas interaction ·
 [refractor](https://github.com/wooorm/refractor) for syntax highlighting ·
 [idb](https://github.com/jakearchibald/idb) for local storage ·
-[zustand](https://zustand.docs.pmnd.rs) for state.
+[zustand](https://zustand.docs.pmnd.rs) for state ·
+[gifenc](https://github.com/mattdesl/gifenc) for GIF export.
 
-Six runtime dependencies, all permissively licensed.
+Seven runtime dependencies, all permissively licensed (MIT/ISC) — see
+[docs/PRIVACY.md](docs/PRIVACY.md) and [SECURITY.md](SECURITY.md) for what the app itself does and
+doesn't do with your data.
 
-## Licence
+## License
 
-MIT
+[Apache License 2.0](LICENSE).
+
+"Draft Canvas" and its logo identify this project. Forking, modifying, and reusing the code under
+Apache 2.0 is welcome — just don't present a fork as the official Draft Canvas or as endorsed by it.

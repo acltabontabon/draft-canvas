@@ -85,6 +85,10 @@ The portable, share-anywhere alternative to a plain `.draftcanvas` file:
 ## Reporting a concern
 
 There's no bug bounty program or dedicated security contact — this is a small, local-first tool,
-not a service with a security team. If you find a genuine vulnerability (not a threat-model
-limitation already listed above), open an issue describing it; for anything you'd rather not post
-publicly first, say so in the issue and a maintainer will follow up privately.
+not a service with a security team. For a genuine vulnerability (not a threat-model limitation
+already listed above) — including an accidental secret exposure, unsafe import/export behavior, or
+a local data/privacy issue — the preferred path is GitHub's private vulnerability reporting: on this
+repository, go to the **Security** tab → **Report a vulnerability**. That reaches the maintainer
+directly without a public issue. If you'd rather not use that, open a regular issue and say it's
+sensitive; a maintainer will follow up privately. Either way, there's no formal SLA — this is
+maintained by one person, not a team, so response time is best-effort.
