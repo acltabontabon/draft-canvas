@@ -343,6 +343,7 @@ export function ElementInspectorPopover() {
         aria-label="Element options"
         aria-hidden={closing || undefined}
         data-closing={closing ? 'true' : undefined}
+        data-dragging={interactionActive ? 'true' : undefined}
         style={{ transform }}
         onPointerDown={(event) => event.stopPropagation()}
       >

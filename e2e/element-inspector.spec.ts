@@ -66,6 +66,34 @@ test.describe('element inspector popover', () => {
     await expect(page.locator('.dc-node')).toHaveCount(0);
   });
 
+  test('hides while the element is being dragged, and reappears once the drag ends', async ({ page }) => {
+    await newCanvas(page, 'Element popover during drag');
+    await create(page, 'Service', { x: 350, y: 250 });
+    await page.locator('.dc-node').first().click();
+
+    const popover = page.locator('.dc-element-inspector');
+    await expect(popover).toBeVisible();
+
+    const node = page.locator('.dc-node').first();
+    const start = (await node.boundingBox())!;
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    // The node trails the pointer by the first move of a drag — a real gesture, not a plain click.
+    await page.mouse.move(start.x + start.width / 2 + 120, start.y + start.height / 2 + 80, { steps: 8 });
+
+    // Frozen in place mid-drag (see the component's own `interactionActive` comment) would just sit
+    // there visibly detached from the moving element — hidden outright instead.
+    await expect(popover).toBeHidden();
+
+    await page.mouse.up();
+
+    await expect(popover).toBeVisible();
+    const landed = (await node.boundingBox())!;
+    // Settles back over the element at its new position, not stuck wherever it was before the drag
+    // (grid snap means the exact landing spot isn't the raw pointer delta — just that it moved).
+    expect(landed.x).toBeGreaterThan(start.x + 60);
+  });
+
   test('selecting two elements still shows the shared bottom bar, not the popover', async ({ page }) => {
     await newCanvas(page, 'Element popover multi-select');
     await create(page, 'Service', { x: 300, y: 300 });

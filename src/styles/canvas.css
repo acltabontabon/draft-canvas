@@ -982,6 +982,15 @@
   pointer-events: none;
 }
 
+/* While the selected node is being dragged or resized, its rect updates every animation frame but
+   `placement` itself is deliberately frozen (see the component's own comment on `interactionActive`)
+   — left visible, the popover would visibly lag/jitter behind the element instead of tracking it.
+   Hidden outright instead, then reappears the instant the gesture ends and settles on-target. */
+.dc-element-inspector[data-dragging='true'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .dc-element-inspector-row {
   display: flex;
   align-items: center;
