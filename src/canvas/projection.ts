@@ -1,6 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 import { handleIdForAnchor } from '../edges/routing';
-import type { DraftDocument, DraftNode } from '../document/types';
+import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 
 /**
  * Projects the document into the arrays React Flow renders.
@@ -126,4 +126,40 @@ export function projectEdges(
   });
 
   return changed ? projected : (previous as DraftRfEdge[]);
+}
+
+/**
+ * Resolves which edges belong in a `Canvas.tsx` `onSelectionChange` report, given the node
+ * selection that report just settled on and the one it replaces.
+ *
+ * React Flow's own report of *which edges* go with a given node selection keeps disagreeing
+ * with itself — forever — once a marquee spans (or un-spans) two or more nodes that share an
+ * edge: `Canvas.tsx`'s `onEdgesChange` only prevents its own controlled-prop patch from
+ * double-applying *during* the drag, but React Flow's post-gesture bookkeeping and this app's
+ * own `projectEdges` recompute can still never agree on a final answer once released, each
+ * perceiving the other's patch as a further change and looping forever ("Maximum update depth
+ * exceeded", crashing the whole app).
+ *
+ * Deriving the connected edges ourselves — filtering `document.edges` (which does not change
+ * just because a render happened) for both endpoints in the *new* node set — is a value that
+ * cannot itself oscillate, breaking that cycle at the source. Scoped to only where that
+ * ambiguity actually exists — the new selection has more than one node, or it *shrank down
+ * from* one (a marquee being released or replaced) — so an ordinary single edge click or
+ * deselect, where neither side of the change is ever a multi-node selection, keeps trusting
+ * React Flow's own report exactly as before; overriding it unconditionally on any node-selection
+ * change previously broke that case. A *plain* node click's edges still resolve correctly under
+ * this narrower rule too, since a lone selected node can never be "both endpoints" of any real
+ * edge.
+ */
+export function resolveSelectedEdgeIds(
+  nodeIds: readonly string[],
+  previousNodeIds: readonly string[],
+  reportedEdgeIds: readonly string[],
+  documentEdges: readonly Pick<DraftEdge, 'id' | 'source' | 'target'>[],
+): string[] {
+  const useDerivedEdges = nodeIds.length > 1 || previousNodeIds.length > 1;
+  if (!useDerivedEdges) return [...reportedEdgeIds];
+  return documentEdges
+    .filter((edge) => nodeIds.includes(edge.source) && nodeIds.includes(edge.target))
+    .map((edge) => edge.id);
 }

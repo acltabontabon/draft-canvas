@@ -34,6 +34,7 @@ import {
   NODE_COMPONENT,
   projectEdges,
   projectNodes,
+  resolveSelectedEdgeIds,
   type DraftRfEdge,
   type DraftRfNode,
 } from './projection';
@@ -548,11 +549,17 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
 
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodeList, edges: selectedEdgeList }: OnSelectionChangeParams) => {
-      const next = {
-        nodes: selectedNodeList.map((node) => node.id),
-        edges: selectedEdgeList.map((edge) => edge.id),
-      };
+      const nodeIds = selectedNodeList.map((node) => node.id);
       const current = store.getState().selection;
+      // See `resolveSelectedEdgeIds`'s own doc comment (`projection.ts`) for why this can't
+      // just trust React Flow's reported `selectedEdgeList` unconditionally.
+      const edgeIds = resolveSelectedEdgeIds(
+        nodeIds,
+        current.nodes,
+        selectedEdgeList.map((edge) => edge.id),
+        store.getState().document.edges,
+      );
+      const next = { nodes: nodeIds, edges: edgeIds };
       if (
         current.nodes.length === next.nodes.length &&
         current.edges.length === next.edges.length &&

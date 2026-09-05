@@ -18,6 +18,8 @@ milestones; **0.1.0 is the first production-ready release.**
 - Fixed a rendering hitch in Safari where a directed connector's arrowhead could flicker while
   selecting shapes near it — the shared arrowhead definitions were being torn down and rebuilt
   on every canvas render, not just when they actually changed.
+- Fixed the canvas crashing when a marquee selected two or more nodes connected by more than one
+  connector.
 
 ## [0.3.1] - 2026-09-04
 
