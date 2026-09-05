@@ -33,6 +33,7 @@ import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
 import { Toolbar } from './Toolbar';
 import { Button } from '../common/Button';
+import { ClipboardPermissionDialog } from '../common/ClipboardPermissionDialog';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 
 /** Sample content for a fresh code card, so it is never a blank grey box. */
@@ -281,6 +282,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       <ShortcutSheet />
       <ExportDialog />
       <CanvasSettingsDialog />
+      <ClipboardPermissionDialog />
       <CommandPalette createAt={createAt} createAtPointer={createAtPointer} playback={playback} />
 
       {/* Hidden control kept reachable for screen readers in presentation mode. */}
@@ -367,16 +369,32 @@ function useKeyboard({
     });
   }, [flowToScreenPosition, screenToFlowPosition, store]);
 
-  // Best-effort pickup of whatever's on the OS clipboard whenever the tab
-  // regains focus, so it's already fresh by the time the user presses ⌘V —
-  // `paste()` itself stays synchronous and never waits on this.
+  // Cmd/Ctrl+V is a real OS paste gesture, so the browser fires a native `paste` event carrying
+  // `clipboardData` synchronously — reading that needs no `navigator.clipboard` permission at all,
+  // unlike `syncClipboardFromSystem()`'s async Clipboard API read. This is why plain ⌘V never
+  // triggers a permission prompt; only the context-menu/palette "Paste" commands do (they have no
+  // real `ClipboardEvent` to read from — see `requestClipboardRead` in `lib/clipboardPermission.ts`).
   useEffect(() => {
-    const onFocus = () => {
-      void store.getState().syncClipboardFromSystem();
+    const onPaste = (event: ClipboardEvent) => {
+      if (isEditableTarget(event.target)) return;
+      if (useUiStore.getState().commandPaletteOpen) return;
+      if (useUiStore.getState().contextMenu) return;
+      event.preventDefault();
+      // Best-effort adoption of whatever the OS clipboard actually handed us — foreign text, or
+      // none at all (e.g. a blocked/failed clipboard write elsewhere), is not an error. `paste()`
+      // always runs regardless, same as the old keydown handler did after its own best-effort
+      // sync: same-tab paste must keep working off the in-memory clipboard even when nothing came
+      // through here.
+      const text = event.clipboardData?.getData('text/plain');
+      if (text) store.getState().applyExternalClipboardText(text);
+      const target = pointer.known
+        ? { x: pointer.x, y: pointer.y }
+        : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      store.getState().paste(target);
     };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [store]);
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [store, screenToFlowPosition]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -411,20 +429,6 @@ function useKeyboard({
           case 'x':
             event.preventDefault();
             state.cutSelection();
-            return;
-          case 'v':
-            event.preventDefault();
-            // Pull the freshest OS-clipboard content in first (best-effort —
-            // falls back to whatever's already in the in-memory clipboard),
-            // then paste around wherever the pointer is, same placement
-            // `createAtPointer` uses for a freshly created node.
-            void (async () => {
-              await store.getState().syncClipboardFromSystem();
-              const target = pointer.known
-                ? { x: pointer.x, y: pointer.y }
-                : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-              store.getState().paste(target);
-            })();
             return;
           case 'd':
             event.preventDefault();

@@ -172,6 +172,13 @@ export interface UiStore {
   libraryView: { kind: 'recent' | 'all' | 'unorganized' | 'project'; projectId?: string };
   /** The canvas id whose "move to project" popover is open, if any — see `MoveToProjectMenu.tsx`. */
   moveMenuOpenFor: string | null;
+  /**
+   * A pending "may we read your clipboard?" ask — see `ClipboardPermissionDialog.tsx` and
+   * `lib/clipboardPermission.ts`'s `requestClipboardRead`, the only caller. Holds the resolver for
+   * the promise that call is awaiting, since the dialog's outcome (Allow / Not now / dismissed) is
+   * necessarily async and there is exactly one such ask in flight at a time.
+   */
+  clipboardPermissionRequest: { resolve: (allowed: boolean) => void } | null;
 
   arm: (preset: Preset | null) => void;
   setShortcutsOpen: (open: boolean) => void;
@@ -212,6 +219,11 @@ export interface UiStore {
   setLibrarySort: (sort: UiStore['librarySort']) => void;
   setLibraryView: (view: UiStore['libraryView']) => void;
   setMoveMenuOpenFor: (id: string | null) => void;
+  /** Opens the pre-permission dialog and resolves once the user answers — `true` for "Allow
+   *  clipboard access", `false` for "Not now" or a dismissal (Escape/outside click). */
+  requestClipboardPermission: () => Promise<boolean>;
+  /** Answers the pending request from `requestClipboardPermission`, if any, and closes the dialog. */
+  resolveClipboardPermissionRequest: (allowed: boolean) => void;
 }
 
 let toastId = 0;
@@ -220,7 +232,7 @@ let toastId = 0;
  *  it's a function reference, not something a component should re-render on. */
 let activateFn: (() => void) | null = null;
 
-export const useUiStore = create<UiStore>((set) => ({
+export const useUiStore = create<UiStore>((set, get) => ({
   armed: null,
   shortcutsOpen: false,
   exportOpen: false,
@@ -250,6 +262,7 @@ export const useUiStore = create<UiStore>((set) => ({
   librarySort: 'updatedAt',
   libraryView: { kind: 'recent' },
   moveMenuOpenFor: null,
+  clipboardPermissionRequest: null,
 
   arm: (armed) => set({ armed }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
@@ -312,6 +325,12 @@ export const useUiStore = create<UiStore>((set) => ({
   setLibrarySort: (librarySort) => set({ librarySort }),
   setLibraryView: (libraryView) => set({ libraryView }),
   setMoveMenuOpenFor: (moveMenuOpenFor) => set({ moveMenuOpenFor }),
+  requestClipboardPermission: () =>
+    new Promise<boolean>((resolve) => set({ clipboardPermissionRequest: { resolve } })),
+  resolveClipboardPermissionRequest: (allowed) => {
+    get().clipboardPermissionRequest?.resolve(allowed);
+    set({ clipboardPermissionRequest: null });
+  },
 }));
 
 /**

@@ -281,11 +281,20 @@ export interface EditorStore {
    *  would otherwise still pick up — a deliberate "land exactly here" click
    *  should never drift because an earlier, unrelated paste happened first. */
   paste: (targetCenter?: { x: number; y: number }, options?: { exact?: boolean }) => void;
-  /** Best-effort pull from the OS clipboard into the in-memory one — never
-   *  throws; a denied/unavailable/foreign clipboard just leaves things as
-   *  they are. Call before `paste()` for the freshest cross-tab content;
-   *  `paste()` itself stays synchronous and never calls this on its own. */
-  syncClipboardFromSystem: () => Promise<void>;
+  /** Decodes clipboard text obtained some other way (a native `paste` event's
+   *  `clipboardData`, or `syncClipboardFromSystem`'s own OS read) and, if it's
+   *  a Draft Canvas fragment, adopts it as the in-memory clipboard. Returns
+   *  whether it actually was Draft Canvas content — foreign text is a silent
+   *  no-op, not an error. */
+  applyExternalClipboardText: (text: string) => boolean;
+  /** Best-effort pull from the OS clipboard into the in-memory one via the
+   *  async Clipboard API — never throws. Resolves `true` iff the read itself
+   *  succeeded (permission granted), regardless of whether the clipboard
+   *  happened to hold Draft Canvas content; `false` means denied,
+   *  unavailable, or otherwise blocked. Call before `paste()` for the
+   *  freshest cross-tab content; `paste()` itself stays synchronous and never
+   *  calls this on its own. */
+  syncClipboardFromSystem: () => Promise<boolean>;
   align: (edge: AlignEdge) => void;
   distribute: (axis: 'x' | 'y') => void;
   groupSelection: () => void;
@@ -985,18 +994,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
   },
 
+  applyExternalClipboardText(text) {
+    if (!text) return false;
+    const fragment = decodeClipboard(text);
+    if (!fragment || fragment.nodes.length === 0) return false;
+    // A repeat paste of unchanged text is still a real paste (still returns `true`) — this
+    // dedup guard only decides whether to re-`set` identical content and reset the stagger.
+    if (text !== lastSystemClipboardText) {
+      lastSystemClipboardText = text;
+      set({ clipboard: fragment, pasteRepeat: 0 });
+    }
+    return true;
+  },
+
   async syncClipboardFromSystem() {
     try {
       const text = await navigator.clipboard?.readText?.();
-      if (!text || text === lastSystemClipboardText) return;
-      const fragment = decodeClipboard(text);
-      if (!fragment || fragment.nodes.length === 0) return;
-      lastSystemClipboardText = text;
-      set({ clipboard: fragment, pasteRepeat: 0 });
+      if (text === undefined) return false; // no Clipboard API, or a stub that returns nothing
+      get().applyExternalClipboardText(text);
+      return true; // the read itself succeeded — permission is granted, independent of payload
     } catch {
-      // Permission denied, insecure context, no Clipboard API, or the
-      // clipboard holding something that isn't Draft Canvas JSON — all a
-      // silent no-op; `paste()` falls back to the in-memory clipboard.
+      // Permission denied, insecure context, or a rejecting stub.
+      return false;
     }
   },
 

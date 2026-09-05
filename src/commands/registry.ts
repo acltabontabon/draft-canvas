@@ -12,6 +12,7 @@ import {
   type DraftEdge,
   type DraftNode,
 } from '../document/types';
+import { requestClipboardRead } from '../lib/clipboardPermission';
 import { MOD_SYMBOL } from '../lib/platform';
 import { pointer } from '../store/uiStore';
 import { focusNodes } from './search';
@@ -88,7 +89,7 @@ export function pasteAtCommand(ctx: CommandContext, position: { x: number; y: nu
     shortcut: `${MOD_SYMBOL} V`,
     run: (inner) => {
       void (async () => {
-        await inner.editor.syncClipboardFromSystem();
+        await requestClipboardRead(inner.editor, inner.ui);
         inner.editor.paste(position, { exact: true });
       })();
     },
@@ -376,7 +377,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       shortcut: `${MOD_SYMBOL} V`,
       run: (inner) => {
         void (async () => {
-          await inner.editor.syncClipboardFromSystem();
+          await requestClipboardRead(inner.editor, inner.ui);
           const target = pointer.known ? { x: pointer.x, y: pointer.y } : undefined;
           inner.editor.paste(target);
         })();

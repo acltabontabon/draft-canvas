@@ -1382,6 +1382,45 @@ kbd {
   border-top: 1px solid var(--dc-border);
 }
 
+/* ---------------------------------------------- clipboard permission -- */
+
+.dc-clipboard-permission {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 65;
+  width: min(340px, calc(100% - 32px));
+  padding: 14px 16px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-lg);
+  background: var(--dc-surface-raised);
+  box-shadow: var(--dc-shadow-panel);
+}
+
+.dc-clipboard-permission p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dc-text);
+}
+
+.dc-clipboard-permission-title {
+  font-weight: 600;
+}
+
+.dc-clipboard-permission-note {
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-clipboard-permission-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 /* --------------------------------------------------------------- export -- */
 
 .dc-export-options {

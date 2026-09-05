@@ -44,6 +44,10 @@ Short, named UI preferences only: `draft-canvas.theme` (`dark`/`light`), `draft-
 command palette's history — `draft-canvas.command-recent.<n>` (the ids of the last few commands
 run) and `draft-canvas.command-use.<id>` (a per-command counter). Command ids name actions
 ("add-service", "connect-to"), never elements: nothing about a diagram's content is stored here.
+`draft-canvas.clipboard-permission` (`granted`/`denied`) remembers whether you already answered
+"Allow clipboard access?" for the right-click/⌘K Paste commands, so you aren't asked again;
+Cmd/Ctrl+V never touches this preference, since it reads the native paste event directly and never
+prompts.
 
 All access goes through `src/lib/preferences.ts`, which namespaces keys and rejects any value
 longer than 64 characters. No canvas content is written there, and a test

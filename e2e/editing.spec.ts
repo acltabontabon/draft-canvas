@@ -457,9 +457,12 @@ test.describe('editing', () => {
   });
 
   test('pastes a copied selection into a different diagram after a reload', async ({ page, context }) => {
-    // The in-memory clipboard alone already survives switching diagrams
-    // within the same tab; granting real clipboard permissions and forcing
-    // a reload here is what actually exercises the OS-clipboard sync path.
+    // The in-memory clipboard alone already survives switching diagrams within the same tab; a
+    // reload after copying is what forces this test through the OS clipboard instead. Plain
+    // Cmd/Ctrl+V itself never calls `navigator.clipboard.readText()` — it reads a native `paste`
+    // event's `clipboardData` directly, which needs no permission at all — so granting
+    // `clipboard-read` here isn't what makes the later `Meta+v` work; it's what lets the
+    // `readText()` poll just below observe that the earlier `writeText()` actually landed.
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
     await newCanvas(page, 'Clipboard source');

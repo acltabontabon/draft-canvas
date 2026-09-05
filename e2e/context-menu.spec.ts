@@ -100,12 +100,42 @@ test.describe('context menu — empty canvas', () => {
     await expect(menuItem(page, 'Paste')).toBeVisible();
     await menuItem(page, 'Paste').click();
     await expect(menu(page)).toBeHidden();
+    // First-ever explicit Paste on a fresh profile: the pre-permission dialog asks before Draft
+    // Canvas ever calls `navigator.clipboard.readText()`. Either answer still pastes — the
+    // in-memory clipboard from the `ControlOrMeta+c` above already has the fragment — so "Not now"
+    // is enough to exercise the fallback without needing a real OS clipboard grant.
+    await page.getByRole('button', { name: 'Not now' }).click();
     await expect(page.locator('.dc-node')).toHaveCount(2);
 
     const pasted = page.locator('.dc-node').nth(1);
     const box = (await pasted.boundingBox())!;
     expect(box.x + box.width / 2).toBeCloseTo(paneBox.x + clickAt.x, -1);
     expect(box.y + box.height / 2).toBeCloseTo(paneBox.y + clickAt.y, -1);
+  });
+
+  test('the pre-permission dialog asks once, then Paste remembers the answer', async ({ page, context }) => {
+    // Pre-granting here stands in for the user answering the browser's own native prompt — it's
+    // Draft Canvas's own dialog, not this grant, that's under test: does it appear before the read,
+    // and does it stay answered.
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await newCanvas(page, 'Context menu paste permission');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await page.locator('.dc-node').first().click();
+    await page.keyboard.press('ControlOrMeta+c');
+
+    await page.locator('.react-flow__pane').click({ button: 'right', position: { x: 500, y: 400 } });
+    await menuItem(page, 'Paste').click();
+    await expect(menu(page)).toBeHidden();
+    await expect(page.getByRole('alertdialog', { name: 'Paste from your clipboard?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Allow clipboard access' }).click();
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+
+    // A second explicit Paste no longer shows the dialog — the answer was remembered.
+    await page.locator('.react-flow__pane').click({ button: 'right', position: { x: 700, y: 400 } });
+    await menuItem(page, 'Paste').click();
+    await expect(menu(page)).toBeHidden();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(page.locator('.dc-node')).toHaveCount(3);
   });
 
   test('the native menu is preserved inside the command palette search box', async ({ page }) => {

@@ -196,6 +196,41 @@ describe('paste/duplicate respects the document size limits', () => {
   });
 });
 
+describe('applyExternalClipboardText', () => {
+  beforeEach(reset);
+
+  it('adopts valid Draft Canvas text and resets the paste stagger', () => {
+    const node = createNode({ type: 'note', x: 0, y: 0, text: 'From a paste event' });
+    const text = encodeClipboard({ nodes: [node], edges: [] });
+    store.setState({ pasteRepeat: 3 });
+
+    const applied = store.getState().applyExternalClipboardText(text);
+
+    expect(applied).toBe(true);
+    expect(store.getState().clipboard?.nodes[0]?.text).toBe('From a paste event');
+    expect(store.getState().pasteRepeat).toBe(0);
+  });
+
+  it('returns false and leaves the clipboard untouched for foreign text', () => {
+    const applied = store.getState().applyExternalClipboardText('just some text');
+
+    expect(applied).toBe(false);
+    expect(store.getState().clipboard).toBeNull();
+  });
+
+  it('returns true on an unchanged repeat without resetting the stagger', () => {
+    const node = createNode({ type: 'note', x: 0, y: 0, text: 'Once' });
+    const text = encodeClipboard({ nodes: [node], edges: [] });
+
+    store.getState().applyExternalClipboardText(text);
+    store.setState({ pasteRepeat: 7 });
+    const applied = store.getState().applyExternalClipboardText(text);
+
+    expect(applied).toBe(true);
+    expect(store.getState().pasteRepeat).toBe(7);
+  });
+});
+
 describe('syncClipboardFromSystem', () => {
   beforeEach(() => {
     reset();
@@ -215,16 +250,18 @@ describe('syncClipboardFromSystem', () => {
     (navigator.clipboard.readText as ReturnType<typeof vi.fn>).mockResolvedValue(text);
     store.setState({ pasteRepeat: 3 });
 
-    await store.getState().syncClipboardFromSystem();
+    await expect(store.getState().syncClipboardFromSystem()).resolves.toBe(true);
 
     expect(store.getState().clipboard?.nodes[0]?.text).toBe('From the OS');
     expect(store.getState().pasteRepeat).toBe(0);
   });
 
-  it('ignores non-Draft-Canvas clipboard content', async () => {
+  it('ignores non-Draft-Canvas clipboard content, but still reports the read as successful', async () => {
     (navigator.clipboard.readText as ReturnType<typeof vi.fn>).mockResolvedValue('just some text');
 
-    await store.getState().syncClipboardFromSystem();
+    // The permission read itself worked — `false` is reserved for denied/unavailable/rejected,
+    // not for "the clipboard happened to hold something else."
+    await expect(store.getState().syncClipboardFromSystem()).resolves.toBe(true);
 
     expect(store.getState().clipboard).toBeNull();
   });
@@ -243,9 +280,9 @@ describe('syncClipboardFromSystem', () => {
     expect(store.getState().pasteRepeat).toBe(7);
   });
 
-  it('never throws when readText rejects', async () => {
+  it('never throws when readText rejects, and resolves false', async () => {
     (navigator.clipboard.readText as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('denied'));
-    await expect(store.getState().syncClipboardFromSystem()).resolves.toBeUndefined();
+    await expect(store.getState().syncClipboardFromSystem()).resolves.toBe(false);
   });
 });
 
