@@ -2,10 +2,6 @@
 
 All notable changes to Draft Canvas are documented here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Draft Canvas follows
-`0.x` versioning until the shape settles — the `alpha`/`beta` releases below were pre-production
-milestones; **0.1.0 is the first production-ready release.**
-
 ## [Unreleased]
 
 ## [0.5.0] - 2026-09-06
