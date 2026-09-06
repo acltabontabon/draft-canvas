@@ -239,13 +239,11 @@ describe('buildStarter', () => {
     expect(databaseEdges[0]!.semantic).toBeUndefined();
     expect(databaseEdges[0]!.label).toBeUndefined();
 
-    // The boundary's own subtitle, and the database's single ownership annotation — no repeated
-    // module-name list; the modules are already visible in the row above.
+    // The boundary's own subtitle is the only annotation in the starter — no separate
+    // "module-owned data" caption, and no repeated module-name list either.
     const subtitle = nodes.find((node) => node.parentId === app.id && node.type === 'text');
     expect(subtitle?.text).toBe('Single deployable unit');
-    const ownershipNote = nodes.find((node) => node.type === 'text' && node.parentId !== app.id);
-    expect(ownershipNote?.text).toBe('Module-owned data');
-    expect(nodes.some((node) => node.text === 'Payments | Orders | Customer')).toBe(false);
+    expect(nodes.filter((node) => node.type === 'text')).toHaveLength(1);
   });
 
   it('models event-driven flow as publish then fan-out, with no fake request/response', () => {

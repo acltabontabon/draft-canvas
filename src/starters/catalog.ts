@@ -155,8 +155,8 @@ const monolith: ArchitectureStarter = {
  * `DEPLOYMENT` — so saying the actual phrase means dropping the preset caption
  * (`boundaryPreset: 'boundary'`, the same choice Hexagonal already made for `Application Core`)
  * and adding one small `annotation: true` text node directly under the boundary's own title, the
- * identical technique already used for `Inbound ports`/`Outbound ports` there and for
- * `Module-owned data` below. `Application` stays the one real title (primary, in `groupTitle`);
+ * identical technique Hexagonal already uses for its own `Inbound ports`/`Outbound ports` labels.
+ * `Application` stays the one real title (primary, in `groupTitle`);
  * `Single deployable unit` rides the quiet annotation style (secondary, muted, no chip) — and
  * says, specifically, *unit*: this boundary is the one thing that gets built and shipped as a
  * single artifact, not a generic "everything the application owns" container. That distinction is
@@ -250,9 +250,10 @@ const monolith: ArchitectureStarter = {
  * because Draft Canvas has no opinion on what to call it at this level. `Application Database` is
  * sized to `MODULE`'s own width (176, not `STORE`'s default 148) because its label needs the room
  * on a single line — a data-store cylinder's caption never wraps (`nodes/describe.ts`'s
- * `dataStoreCylinder`) — and one short annotation, `Module-owned data`, stacks directly beneath it:
- * the one plain-language claim the boundary-level edge and a bare node can't make on their own,
- * without repeating the module names already visible in the row above.
+ * `dataStoreCylinder`). No annotation sits beneath it either: an earlier revision added
+ * `Module-owned data` to spell out the ownership principle in words, but the boundary-level edge,
+ * the database's own placement, and the module row above it already carry that weight — a caption
+ * repeating what the diagram already shows is exactly the noise a starter should stay quiet about.
  */
 /** The one inbound interface of the monolith — a routing/dispatch adapter, not an independently
  *  deployable network peer. Kept at Component's own default footprint (`document/limits.ts`'s
@@ -273,14 +274,12 @@ const MODULAR_INNER_WIDTH = MODULE_COLUMNS[2]! + MODULE.width - MODULAR_INNER_LE
 // boundary's own header, and sits exactly as close to the title as that header's own metrics
 // allow — see `tests/starters.test.ts`'s narrow, explicit exception for this one node.
 const MODULAR_SUBTITLE_Y = BOUNDARY_TITLE_SUBLINE_Y;
-/** Shared by every small `annotation: true` label in this starter — the boundary's own `Single
- *  deployable unit` subtitle and the database's `Module-owned data` note — so both read as the
- *  same quiet, deliberate touch rather than two different afterthoughts. Width reuses `MODULE`'s
- *  own 176, comfortably past what either text needs at this style's real font metrics
- *  (`connectorCaption`, 9.5px/500, measured directly in a canvas context rather than estimated —
- *  the fallback text measurer this repo's own test environment uses under-measures real browser
- *  font metrics by a wide enough margin to pass a narrower check here and still visibly clip live).
- */
+/** The boundary's own `Single deployable unit` subtitle — the one small `annotation: true` label
+ *  left in this starter. Width reuses `MODULE`'s own 176, comfortably past what the text needs at
+ *  this style's real font metrics (`connectorCaption`, 9.5px/500, measured directly in a canvas
+ *  context rather than estimated — the fallback text measurer this repo's own test environment
+ *  uses under-measures real browser font metrics by a wide enough margin to pass a narrower check
+ *  here and still visibly clip live). */
 const MODULAR_NOTE = { width: MODULE.width, height: 24 };
 const MODULAR_NOTE_GAP = 8;
 // Clears the `Single deployable unit` subtitle before the API begins — `BOUNDARY_HEADER` alone
@@ -302,7 +301,6 @@ const DATABASE_BOX = { width: MODULE.width, height: STORE.height };
 // line, not a fan needing trunk-planning room (see this block's own doc comment) — only enough gap
 // to read as clearly its own separate runtime resource, not a part the boundary forgot to include.
 const MODULAR_DATABASE_Y = MODULAR_BOUNDARY_HEIGHT + INNER_BAND;
-const MODULAR_NOTE_Y = MODULAR_DATABASE_Y + DATABASE_BOX.height + MODULAR_NOTE_GAP;
 
 const modularMonolith: ArchitectureStarter = {
   id: 'modular-monolith',
@@ -410,18 +408,6 @@ const modularMonolith: ArchitectureStarter = {
       x: centeredAt(MODULAR_CX, DATABASE_BOX.width),
       y: MODULAR_DATABASE_Y,
       ...DATABASE_BOX,
-    },
-    {
-      // A plain, zero-semantics annotation (never a Component/Note standing in for the concept) —
-      // stacked directly beneath the database so it reads as its own caption, not a detached
-      // label. No module-name list here: the modules are already visible in the row above.
-      key: 'data-ownership-note',
-      type: 'text',
-      text: 'Module-owned data',
-      annotation: true,
-      x: centeredAt(MODULAR_CX, MODULAR_NOTE.width),
-      y: MODULAR_NOTE_Y,
-      ...MODULAR_NOTE,
     },
   ],
   edges: [
