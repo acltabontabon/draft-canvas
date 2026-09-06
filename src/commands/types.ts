@@ -19,6 +19,7 @@ export type CommandGroup =
   | 'selection'
   | 'connector'
   | 'create'
+  | 'starter'
   | 'flow'
   | 'jump'
   | 'view'
@@ -29,6 +30,7 @@ export const GROUP_LABELS: Record<CommandGroup, string> = {
   selection: 'Selection',
   connector: 'Connector',
   create: 'Create',
+  starter: 'Architecture starters',
   flow: 'Flows',
   jump: 'Jump to',
   view: 'View',

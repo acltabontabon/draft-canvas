@@ -141,11 +141,12 @@ describe('routingPlan refuses to bundle where a trunk would not read as one', ()
     for (const edge of edges) expect(plan.spineFor(edge.id)).toBeUndefined();
   });
 
-  it('splits destinations lying in opposite directions into separate groups', () => {
+  it('splits destinations lying in opposite directions into separate spines, never one merged bundle', () => {
     const hub = createNode({ id: 'hub', type: 'service', x: 400, y: 400, width: 200, height: 80 });
     const nodes = [hub];
     const edges: DraftEdge[] = [];
-    // Two east, two west — four edges in total, but no side reaches three.
+    // Two east, two west — four edges in total, each side reaching the two-member floor on its
+    // own, but a westbound and an eastbound branch never belong on the same trunk regardless.
     const spots = [
       { id: 'e0', x: 1200, y: 200 },
       { id: 'e1', x: 1200, y: 700 },
@@ -157,7 +158,12 @@ describe('routingPlan refuses to bundle where a trunk would not read as one', ()
       edges.push(createEdge({ id: spot.id, source: 'hub', target: `n${spot.id}` }));
     }
     const plan = routingPlan(nodes, edges);
-    for (const edge of edges) expect(plan.spineFor(edge.id)).toBeUndefined();
+    const east = edges.filter((e) => e.id.startsWith('e')).map((e) => plan.spineFor(e.id));
+    const west = edges.filter((e) => e.id.startsWith('w')).map((e) => plan.spineFor(e.id));
+    for (const spine of [...east, ...west]) expect(spine).toBeDefined();
+    expect(east[0]!.id).toBe(east[1]!.id);
+    expect(west[0]!.id).toBe(west[1]!.id);
+    expect(east[0]!.id).not.toBe(west[0]!.id);
   });
 
   it('does not bundle destinations stacked at one height — that is not a fan', () => {
@@ -443,10 +449,10 @@ describe('the shared trunk survives the hand-drawn presets and export filtering'
     const full = renderDocumentSvg(doc).svg;
     expect(full.split(trunkX).length - 1).toBeGreaterThanOrEqual(5);
 
-    // Only the hub and two destinations: what remains is a pair, which does
-    // not earn a trunk, so it must route independently rather than draw
-    // branches off a spine whose other members aren't in the picture.
-    const partial = renderDocumentSvg(doc, { only: new Set(['hub', 't0', 't1']) }).svg;
+    // Only the hub and one destination: what remains is a single connector, which does
+    // not earn a trunk on its own, so it must route independently rather than draw a
+    // branch off a spine whose other members aren't in the picture.
+    const partial = renderDocumentSvg(doc, { only: new Set(['hub', 't0']) }).svg;
     expect(partial).not.toContain(trunkX);
   });
 });

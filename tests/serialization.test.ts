@@ -4,6 +4,8 @@ import { addEdges, addNodes } from '../src/document/operations';
 import { addFlow, createFlow } from '../src/document/flow';
 import { deserializeDocument, serializeDocument, fileNameFor } from '../src/export/project';
 import { CURRENT_VERSION } from '../src/document/types';
+import { ARCHITECTURE_STARTERS } from '../src/starters';
+import { buildStarter } from '../src/starters/build';
 
 function richDocument() {
   const service = createNode({
@@ -117,6 +119,31 @@ describe('.draftcanvas round trip', () => {
       code: 'select * from orders where id = ?',
     });
   });
+
+  // A starter is only ever ordinary document content — nothing about it is a new kind of thing to
+  // persist. The round trip is what proves that: nested boundaries, `parentId`, inferred semantics
+  // and authored anchors all have to come back exactly as they went in.
+  it.each(ARCHITECTURE_STARTERS.map((starter) => [starter.name, starter] as const))(
+    'round-trips a canvas built from the %s starter',
+    (_label, starter) => {
+      const { nodes, edges } = buildStarter(starter, { x: -120, y: -80 });
+      const document = addEdges(addNodes(createDocument(starter.name), nodes), edges);
+
+      const result = deserializeDocument(serializeDocument(document));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.repairs).toEqual([]);
+      expect(result.document.nodes).toEqual(nodes);
+      expect(result.document.edges).toEqual(edges);
+      // Containment survives, including the modular monolith's boundary inside a boundary.
+      const byId = new Map(result.document.nodes.map((node) => [node.id, node]));
+      for (const node of result.document.nodes) {
+        if (!node.parentId) continue;
+        expect(byId.get(node.parentId)?.type).toBe('group');
+      }
+    },
+  );
 
   it('writes the current schema version', () => {
     expect(JSON.parse(serializeDocument(createDocument())).version).toBe(CURRENT_VERSION);

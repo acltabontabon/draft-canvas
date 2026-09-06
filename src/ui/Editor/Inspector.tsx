@@ -4,6 +4,7 @@ import type {
   ActorKind,
   BoundaryPreset,
   CodeLanguage,
+  ComponentKind,
   DatabaseKind,
   NoteKind,
   QueueKind,
@@ -11,6 +12,7 @@ import type {
 } from '../../document/types';
 import type { AlignEdge } from '../../document/operations';
 import { ACTOR_ICON_OPTIONS } from '../../canvas/actorOptions';
+import { COMPONENT_ICON_OPTIONS } from '../../canvas/componentOptions';
 import { DATABASE_ICON_OPTIONS } from '../../canvas/dataStoreOptions';
 import { InspectorSelect } from '../../canvas/InspectorSelect';
 import { QUEUE_ICON_OPTIONS } from '../../canvas/queueOptions';
@@ -214,6 +216,24 @@ export function Inspector() {
             options={ACTOR_ICON_OPTIONS}
             onChange={(value) =>
               store.getState().updateNodeById(onlyNode.id, { actorKind: value as ActorKind }, 'Change actor type')
+            }
+            preferredDirection="up"
+          />
+        </>
+      )}
+
+      {onlyNode?.type === 'component' && (
+        <>
+          <span className="dc-inspector-divider" />
+          <InspectorSelect
+            className="dc-inspector-toolbar-select"
+            ariaLabel="Component type"
+            value={onlyNode.componentKind ?? 'generic'}
+            options={COMPONENT_ICON_OPTIONS}
+            onChange={(value) =>
+              store
+                .getState()
+                .updateNodeById(onlyNode.id, { componentKind: value as ComponentKind }, 'Change component type')
             }
             preferredDirection="up"
           />

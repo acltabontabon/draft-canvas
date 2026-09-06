@@ -25,6 +25,7 @@ Connections are reasoned about using `NodeCategory` — coarser than a node's sh
 | `actor` | the Actor shape |
 | `service` | the Service shape, any `serviceKind` except `external` |
 | `external` | Service shape with `serviceKind: 'external'` |
+| `component` | the Component shape, any `componentKind` — see below |
 | `database` | Database shape, `databaseKind` of `generic`/`sql`/`nosql` |
 | `cache` | Database shape, `databaseKind: 'cache'` |
 | `fileSystem` | Database shape, `databaseKind: 'file-system'` |
@@ -34,6 +35,17 @@ Connections are reasoned about using `NodeCategory` — coarser than a node's sh
 | `topic` | Queue shape, `queueKind: 'topic'` |
 | `junction` | the Junction (ellipse) shape — see below |
 | `generic` | text, note, code, and group — no relationship rule applies |
+
+**Component** is a logical architectural building block inside a larger deployment or boundary — a
+Use Case layer, a module, a ports-and-adapters adapter — never independently deployable, never a
+network or process boundary. That distinction from Service is real and permanent: `categoryOf`
+never collapses a Component into `service`, so a future capability that queries category can still
+tell them apart. But the *relationship vocabulary* a Component participates in — reads, writes,
+calls, depends on — is exactly Service's own: for matrix lookups only, Component resolves to
+`service` the same way `external`/`worker`/`scheduler`/`gateway` already do (see "The capability
+matrix" below), so Service → Database's "writes" default is also Component → Database's, with no
+duplicated table. `componentKind` (Generic/Module/Adapter) never affects this — none of Component's
+kinds carries its own relationship rule, unlike Service's.
 
 ## The capability matrix
 

@@ -1,5 +1,6 @@
 import type {
   BoundaryPreset,
+  ComponentKind,
   DatabaseKind,
   DraftNode,
   NoteKind,
@@ -103,8 +104,18 @@ const QUEUE_KIND_LABELS: Record<QueueKind, string> = {
   stream: 'STREAM',
 };
 
-/** A small, muted corner tag — the one shared visual for every node variant. */
-function variantCaption(node: DraftNode, ctx: DescribeContext, label: string, color: string): Shape[] {
+/**
+ * A small, muted corner tag — the one shared visual for every node variant. `inset` only exists
+ * for a shape whose own silhouette intrudes on the default bottom-right corner (Adapter's notch);
+ * every other caller keeps the plain 7/5 default.
+ */
+function variantCaption(
+  node: DraftNode,
+  ctx: DescribeContext,
+  label: string,
+  color: string,
+  inset: { right?: number; bottom?: number } = {},
+): Shape[] {
   const layout = layoutText(label, {
     font: FONTS.variantTag,
     maxWidth: Math.max(16, node.width - 12),
@@ -115,8 +126,8 @@ function variantCaption(node: DraftNode, ctx: DescribeContext, label: string, co
   return [
     {
       t: 'text',
-      x: node.width - 7,
-      y: node.height - layout.height - 5,
+      x: node.width - (inset.right ?? 7),
+      y: node.height - layout.height - (inset.bottom ?? 5),
       layout,
       font: FONTS.variantTag,
       fill: color,
@@ -277,6 +288,8 @@ function shapesFor(node: DraftNode, ctx: DescribeContext): Shape[] {
       return actor(node, ctx);
     case 'service':
       return service(node, ctx);
+    case 'component':
+      return component(node, ctx);
     default:
       // Defensive fallback for a node type that somehow bypassed
       // `document/validate.ts` — every valid `DraftNodeType` is handled above.
@@ -674,6 +687,176 @@ function serviceGateway(node: DraftNode, ctx: DescribeContext): Shape[] {
     },
     ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.gateway!, ctx.theme.textMuted),
+  ];
+}
+
+const COMPONENT_KIND_LABELS: Partial<Record<ComponentKind, string>> = {
+  module: 'MODULE',
+  adapter: 'ADAPTER',
+};
+
+/**
+ * Component's own stroke — a shade thinner than every other primitive's shared 1.5px
+ * (`surfaceStroke`). One of the two deliberate "weighs less than Service" cues that aren't just an
+ * absent cap or a quieter accent: a Component-family box should read as lighter even reduced to a
+ * silhouette in monochrome, not only through colour.
+ */
+function componentStroke(ctx: DescribeContext, node: DraftNode): Stroke {
+  return { color: accentOf(ctx.theme, node.accent ?? 'neutral').line, width: 1.25 };
+}
+
+/**
+ * Component earns a distinct silhouette per kind now, the same discipline Service's own kinds
+ * follow — but restrained on purpose: where a Service kind sometimes changes the *whole* body
+ * (Worker's stacked cards, External's double outline), every Component kind keeps exactly the same
+ * plain rounded body and departs from it with only a small mark or two (Module: one, on the top
+ * edge; Adapter: two, mirrored left/right — see its own comment for why), because a Component is
+ * still meant to read as *contained within* something else, never a peer of the Services around
+ * it. `generic` gets no mark at all (and no corner caption — the same "unspecified means unmarked"
+ * convention Service's own default kind follows).
+ */
+function component(node: DraftNode, ctx: DescribeContext): Shape[] {
+  switch (node.componentKind) {
+    case 'module':
+      return componentModule(node, ctx);
+    case 'adapter':
+      return componentAdapter(node, ctx);
+    default:
+      return componentGeneric(node, ctx);
+  }
+}
+
+/** Generic: the family's neutral baseline — a plain rounded box, no cap, no notch, `neutral`
+ *  accent, Component's own thinner stroke. Every other kind is a deliberate, restrained departure
+ *  from this one. */
+function componentGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  return [
+    outlineShape(
+      node.id,
+      ctx,
+      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
+      { fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
+    ),
+    ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
+  ];
+}
+
+/**
+ * Module: Generic's body with one small tab stepping up from the top edge, near the left corner —
+ * a "labelled unit in a set" cue, the same idea as a file/sheet tab. Built as one continuous
+ * outline (the technique `serviceApi`/`serviceGateway` already use for their own notches) rather
+ * than a second stacked shape (`serviceWorker`'s technique, which reads as *layers*, not a *tab*).
+ * Deliberately short and one-sided — a tab spanning the full width would just be Service's own cap
+ * band, the one silhouette Component exists specifically not to have.
+ */
+function componentModule(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const r = 8;
+  const tabX = x + 12;
+  const tabW = Math.min(30, w * 0.32);
+  const tabH = 7;
+  const tr = 2;
+
+  const d = [
+    `M${x + r},${y}`,
+    `L${tabX},${y}`,
+    `L${tabX},${y - tabH + tr}`,
+    `Q${tabX},${y - tabH} ${tabX + tr},${y - tabH}`,
+    `L${tabX + tabW - tr},${y - tabH}`,
+    `Q${tabX + tabW},${y - tabH} ${tabX + tabW},${y - tabH + tr}`,
+    `L${tabX + tabW},${y}`,
+    `L${x + w - r},${y}`,
+    `Q${x + w},${y} ${x + w},${y + r}`,
+    `L${x + w},${y + h - r}`,
+    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
+    `L${x + r},${y + h}`,
+    `Q${x},${y + h} ${x},${y + h - r}`,
+    `L${x},${y + r}`,
+    `Q${x},${y} ${x + r},${y}`,
+    'Z',
+  ].join(' ');
+
+  return [
+    { t: 'path', d, fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
+    ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
+    ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.module!, ctx.theme.textMuted),
+  ];
+}
+
+/**
+ * Adapter: Generic's body with a small rectangular notch cut into *both* vertical edges — the same
+ * cut-rectangle language `serviceApi`'s own notch already speaks, just mirrored onto each side
+ * rather than one.
+ *
+ * An earlier revision cut the notch into the right edge only, on the reasoning that "Draft Canvas
+ * reads left to right, so the side facing onward is the one that bridges toward infrastructure."
+ * That baked in a global assumption this starter's own composition disproves: `Persistence
+ * Adapter`/`Integration Adapter` face infrastructure on their right, but an inbound adapter (a
+ * `REST Adapter` fronting the same core from the left, say) faces infrastructure on its *left* —
+ * there is no side of an Adapter that is always the outward one. Fixing that properly means
+ * orienting the notch from the node's actual connections, but `describeNode` takes only a node and
+ * a theme — deliberately pure, so the same function produces byte-identical output for the canvas
+ * and the static exporter — and has no view of the document's edges to orient from. Threading edge
+ * direction through it would mean recomputing a node's silhouette every time an edge nearby is
+ * dragged, reconnected, undone, or redone, and risks the exact "shape flip-flops while the user is
+ * still drawing" failure a directional rule invites. So instead the silhouette itself stays valid
+ * regardless of which way the Adapter faces: a notch on *each* vertical edge, bilaterally
+ * symmetric, reads as "interfaces on both sides" — true of every Adapter, in either orientation,
+ * with no context required and nothing to get wrong while dragging.
+ */
+function componentAdapter(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const r = 8;
+  const notchH = h * 0.34;
+  const notchDepth = Math.min(8, w * 0.1);
+  const notchTop = y + (h - notchH) / 2;
+  const notchBottom = notchTop + notchH;
+  const nr = 3;
+
+  const d = [
+    `M${x + r},${y}`,
+    `L${x + w - r},${y}`,
+    `Q${x + w},${y} ${x + w},${y + r}`,
+    `L${x + w},${notchTop}`,
+    `L${x + w - notchDepth + nr},${notchTop}`,
+    `Q${x + w - notchDepth},${notchTop} ${x + w - notchDepth},${notchTop + nr}`,
+    `L${x + w - notchDepth},${notchBottom - nr}`,
+    `Q${x + w - notchDepth},${notchBottom} ${x + w - notchDepth + nr},${notchBottom}`,
+    `L${x + w},${notchBottom}`,
+    `L${x + w},${y + h - r}`,
+    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
+    `L${x + r},${y + h}`,
+    `Q${x},${y + h} ${x},${y + h - r}`,
+    `L${x},${notchBottom}`,
+    `L${x + notchDepth - nr},${notchBottom}`,
+    `Q${x + notchDepth},${notchBottom} ${x + notchDepth},${notchBottom - nr}`,
+    `L${x + notchDepth},${notchTop + nr}`,
+    `Q${x + notchDepth},${notchTop} ${x + notchDepth - nr},${notchTop}`,
+    `L${x},${notchTop}`,
+    `L${x},${y + r}`,
+    `Q${x},${y} ${x + r},${y}`,
+    'Z',
+  ].join(' ');
+
+  // The default corner inset (7px from the right edge) sits inside the right notch's own x-range
+  // whenever a notch is this deep — the caption and the silhouette would visually crowd the same
+  // corner. Pushed out exactly as far as the notch itself cuts in, plus a small fixed gap, so the
+  // two never compete regardless of node width.
+  const captionInset = { right: notchDepth + 5 };
+
+  return [
+    { t: 'path', d, fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
+    ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
+    ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.adapter!, ctx.theme.textMuted, captionInset),
   ];
 }
 
@@ -1699,26 +1882,38 @@ function note(node: DraftNode, ctx: DescribeContext): Shape[] {
   return shapes;
 }
 
+/**
+ * `annotation` swaps in the same quiet, chip-less treatment a connector's inferred relationship
+ * caption already gets (`FONTS.connectorCaption`, `theme.textFaint`) — reusing an existing "this is
+ * the quietest text in the app" convention rather than inventing a new size/colour. Every other
+ * Label stays exactly as it was: byte-identical output for a node that never sets the flag.
+ */
 function freeText(node: DraftNode, ctx: DescribeContext): Shape[] {
   const body = node.text ?? '';
   if (!body.trim()) return [];
   const palette = accentOf(ctx.theme, node.accent);
-  const lineHeight = FONTS.freeText.size * LINE_HEIGHTS.body;
+  const font = node.annotation ? FONTS.connectorCaption : FONTS.freeText;
+  const lineHeight = font.size * LINE_HEIGHTS.body;
   const layout = layoutText(body, {
-    font: FONTS.freeText,
+    font,
     maxWidth: Math.max(16, node.width),
     lineHeight,
     maxLines: Math.max(1, Math.floor(node.height / lineHeight)),
     measurer: ctx.measurer,
   });
+  const fill = node.annotation
+    ? ctx.theme.textFaint
+    : node.accent && node.accent !== 'neutral'
+      ? palette.chip
+      : ctx.theme.text;
   return [
     {
       t: 'text',
       x: 0,
       y: 0,
       layout,
-      font: FONTS.freeText,
-      fill: node.accent && node.accent !== 'neutral' ? palette.chip : ctx.theme.text,
+      font,
+      fill,
       align: 'start',
     },
   ];

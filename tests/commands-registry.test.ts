@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { commandsFor } from '../src/commands/registry';
+import { rank } from '../src/commands/fuzzy';
+import { STARTER_IDS } from '../src/starters';
 import type { CommandContext } from '../src/commands/types';
 import { createDocument } from '../src/document/factory';
 import { stubContext, stubPlayback } from './commandStubs';
@@ -156,7 +158,14 @@ describe('commandsFor — contextual (8.2)', () => {
     const ctx = stubContext();
     const stage = stageOf(ctx, 'connect-to');
     expect(stage.prompt).toBe('Connect to');
-    expect(stage.options.map((o) => o.title)).toEqual(['Ledger', 'New Service', 'New Data Store', 'New Queue', 'New Actor']);
+    expect(stage.options.map((o) => o.title)).toEqual([
+      'Ledger',
+      'New Service',
+      'New Data Store',
+      'New Queue',
+      'New Actor',
+      'New Component',
+    ]);
 
     stage.options[0]!.run(ctx);
     const edges = useEditorStore.getState().document.edges;
@@ -376,5 +385,79 @@ describe('commandsFor — Queue reliability commands (Add Consumer / Add DLQ)', 
     const ctx = stubContext();
     commandsFor(ctx).find((command) => command.id === 'add-dead-letter-queue')!.run(ctx);
     expect(useEditorStore.getState().document.nodes).toHaveLength(2);
+  });
+});
+
+/**
+ * Architecture Starters reach the palette as ordinary commands. What is worth pinning is the
+ * search behaviour: a starter has to answer to how people actually say its name, without ever
+ * taking a word that already belongs to a shape.
+ */
+describe('architecture starters', () => {
+  beforeEach(reset);
+
+  const top = (query: string) => rank(query, commandsFor(stubContext()))[0]!.entry.id;
+
+  it('offers one row per starter, in its own group, each with a one-line description', () => {
+    const starters = commandsFor(stubContext()).filter((command) => command.group === 'starter');
+    expect(starters.map((command) => command.id)).toEqual(STARTER_IDS.map((id) => `starter-${id}`));
+    for (const command of starters) {
+      expect(command.hint).toBeTruthy();
+      expect(command.title).not.toMatch(/template/i);
+    }
+  });
+
+  it.each([
+    ['monolith', 'monolith'],
+    ['monolithic', 'monolith'],
+    ['modular monolith', 'modular-monolith'],
+    ['modular architecture', 'modular-monolith'],
+    ['modules', 'modular-monolith'],
+    ['microservices', 'microservices'],
+    ['microservice', 'microservices'],
+    ['distributed services', 'microservices'],
+    ['event driven', 'event-driven'],
+    ['event-driven', 'event-driven'],
+    ['events', 'event-driven'],
+    ['event architecture', 'event-driven'],
+    ['pub sub', 'event-driven'],
+    ['messaging', 'event-driven'],
+    ['hexagonal', 'hexagonal'],
+    ['ports and adapters', 'hexagonal'],
+    ['ports adapters', 'hexagonal'],
+    ['hex architecture', 'hexagonal'],
+    ['clean-ish architecture', 'hexagonal'],
+  ])('"%s" leads with the %s starter', (query, id) => {
+    expect(top(query)).toBe(`starter-${id}`);
+  });
+
+  it.each([
+    ['serv', 'add-service'],
+    ['service', 'add-service'],
+    ['db', 'add-database'],
+    ['data store', 'add-database'],
+    ['queue', 'add-queue'],
+    ['topic', 'add-queue'],
+    ['note', 'add-note'],
+    ['code', 'add-code'],
+    ['actor', 'add-actor'],
+    ['boundary', 'add-boundary'],
+  ])('never takes "%s" away from %s', (query, id) => {
+    expect(top(query)).toBe(id);
+  });
+
+  it('inserts the architecture and moves the camera onto it', () => {
+    const ctx = stubContext();
+    commandsFor(ctx).find((command) => command.id === 'starter-microservices')!.run(ctx);
+    expect(useEditorStore.getState().document.nodes).toHaveLength(11);
+    expect(useEditorStore.getState().selection.nodes).toHaveLength(11);
+    // The command context's `document` predates its own insert, so the camera move has to come
+    // from what the store handed back — see `focusBounds`.
+    expect(ctx.camera.setViewport).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not on offer while presenting', () => {
+    useEditorStore.getState().setMode('present');
+    expect(ids(stubContext()).some((id) => id.startsWith('starter-'))).toBe(false);
   });
 });

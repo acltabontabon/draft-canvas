@@ -30,6 +30,7 @@ import {
   detachFromNode,
   distributeNodes,
   extractFragment,
+  freeOriginFor,
   moveNodes,
   pasteFragment,
   placeNear,
@@ -54,6 +55,7 @@ import {
   type AlignEdge,
   type Clipboard,
 } from '../document/operations';
+import { buildStarter, starterById, starterSize, type StarterId } from '../starters';
 import {
   addFlow,
   createFlow as createFlowEntity,
@@ -217,6 +219,14 @@ export interface EditorStore {
   /* Editing commands */
   addNode: (input: CreateNodeInput) => DraftNode;
   addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string) => void;
+  /**
+   * Inserts an Architecture Starter — a composed opening diagram — as one undoable action, clear of
+   * whatever is already on the canvas, and leaves it selected. Returns the nodes it created, the
+   * way `addNode` returns the one it created: a caller that wants to move the camera onto them
+   * cannot find them in its own `CommandContext`, whose document predates this call. See
+   * `src/starters/`.
+   */
+  insertStarter: (starterId: StarterId) => DraftNode[];
   connect: (
     source: string,
     target: string,
@@ -457,7 +467,7 @@ function reinferIfEligible(doc: DraftDocument, edgeId: string): DraftDocument {
  *  `document/connectorSemantics.ts`) — a change to any of these can make an incident edge's
  *  inferred relationship stale, so `updateNodeById` re-runs `reinferIfEligible` on every edge
  *  touching the node whenever a patch touches one of these. */
-const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'actorKind'] as const;
+const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'actorKind', 'componentKind'] as const;
 
 /**
  * Re-evaluates every edge incident to a node after a patch changes one of `KIND_FIELDS` — the same
@@ -487,6 +497,18 @@ function applyServiceAutoLabel(doc: DraftDocument, nodeId: string, before: Draft
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node) return doc;
   return updateNode(doc, nodeId, { text: defaultTextFor('service', node.serviceKind) });
+}
+
+/**
+ * The same idea as `applyServiceAutoLabel`, for Component's own subtype/label pairing — kept as a
+ * separate function rather than one shared, parameterized helper so each stays a plain, obviously
+ * correct three-line check, not a body threading two different field names through one signature.
+ */
+function applyComponentAutoLabel(doc: DraftDocument, nodeId: string, before: DraftNode, patch: Partial<DraftNode>): DraftDocument {
+  if (before.type !== 'component' || before.textOrigin !== 'auto' || patch.text !== undefined) return doc;
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node) return doc;
+  return updateNode(doc, nodeId, { text: defaultTextFor('component', undefined, node.componentKind) });
 }
 
 /**
@@ -705,6 +727,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
+  insertStarter(starterId) {
+    const starter = starterById(starterId);
+    if (!starter) return [];
+    const state = get();
+    // Everything a starter needs is decided before a single node exists: where it can land
+    // (`freeOriginFor`, one pass over the document) and what it contains (`buildStarter`, pure).
+    // The insert itself is then the plainest bulk add there is, which is what makes one ⌘Z undo
+    // the whole architecture and one ⌘⇧Z bring it back.
+    const { nodes, edges } = buildStarter(starter, freeOriginFor(state.document, starterSize(starter)));
+    state.addNodesWithEdges(nodes, edges, `Insert ${starter.name}`);
+    return nodes;
+  },
+
   connect(source, target, sourceSide, targetSide, sourceOffset = 0.5, targetOffset = 0.5) {
     const state = get();
     if (source === target) return null;
@@ -747,6 +782,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const before = doc.nodes.find((n) => n.id === id);
       let next = updateNode(doc, id, patch);
       if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
+      if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
       const changesKind = KIND_FIELDS.some((field) => field in patch);
       return changesKind ? reinferIncidentEdges(next, id) : next;
     });

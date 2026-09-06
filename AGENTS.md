@@ -50,6 +50,12 @@ Each of these has a failure mode that is silent, delayed, or both.
   so every PNG would export in the wrong typeface.
 - **`localStorage` is only for tiny preferences**, and only through `src/lib/preferences.ts`.
   Documents go in IndexedDB.
+- **`src/starters/` is data, not behaviour.** An Architecture Starter declares nodes, edges and
+  coordinates; `build.ts` derives every connector's semantics from `connectorSemantics.ts`'s matrix
+  rather than stating them, and nothing in the module sets a colour, font or personality. A starter
+  that hardcoded either would silently drift from the rest of the app — one on the next matrix
+  change, the other on the next theme. Everything it creates is an ordinary node/edge; there is no
+  "starter" marker anywhere in the document.
 - **A command palette entry is a name for an existing store action, never a new way to change
   the document.** Every command in `src/commands/registry.ts` calls `useEditorStore`/`useUiStore`
   (or a React Flow camera method) — never `src/document/operations.ts` directly, and never its
@@ -74,7 +80,8 @@ Dependencies point one way: `ui/` → `canvas/` → `document/`, with `storage/`
 hanging off the document model. Library and editor are two states of one screen (`src/App.tsx`,
 no router) — that's what lets `dist/` be served from any path (`base: './'`).
 
-The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
+`src/starters/` sits beside `document/` (it imports only that, and is not part of the file format);
+`store/` and `commands/` consume it. The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
 persistence, the crypto boundary, untrusted input, schema evolution — lives in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The rules above are the invariants that document
 distills into "never break this"; read that file for *why* each one holds.

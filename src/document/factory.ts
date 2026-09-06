@@ -9,6 +9,7 @@ import {
   type Attachment,
   type BoundaryPreset,
   type CodeLanguage,
+  type ComponentKind,
   type ConnectorKind,
   type DatabaseKind,
   type DeliveryRole,
@@ -42,6 +43,8 @@ export function defaultSizeFor(type: DraftNodeType): { width: number; height: nu
       return { width: DEFAULTS.dataStoreWidth, height: DEFAULTS.dataStoreHeight };
     case 'queue':
       return { width: DEFAULTS.queueWidth, height: DEFAULTS.queueHeight };
+    case 'component':
+      return { width: DEFAULTS.componentWidth, height: DEFAULTS.componentHeight };
     default:
       return { width: DEFAULTS.nodeWidth, height: DEFAULTS.nodeHeight };
   }
@@ -92,14 +95,17 @@ export function maxSizeFor(type: DraftNodeType): { width: number; height: number
 }
 
 /**
- * `serviceKind` only matters for `type: 'service'` — every kind gets its own default name (see
- * `SERVICE_KIND_NAMES`) rather than the generic literal `"Service"`, so a fresh Worker/API/etc.
- * starts out named for what it *is*, not for its family. Ignored for every other type.
+ * `serviceKind`/`componentKind` only matter for their own type — every kind gets its own default
+ * name (see `SERVICE_KIND_NAMES`/`COMPONENT_KIND_NAMES`) rather than the generic literal, so a
+ * fresh Worker/API/Adapter/etc. starts out named for what it *is*, not for its family. Ignored for
+ * every other type.
  */
-export function defaultTextFor(type: DraftNodeType, serviceKind?: ServiceKind): string {
+export function defaultTextFor(type: DraftNodeType, serviceKind?: ServiceKind, componentKind?: ComponentKind): string {
   switch (type) {
     case 'service':
       return SERVICE_KIND_NAMES[serviceKind ?? 'generic'];
+    case 'component':
+      return COMPONENT_KIND_NAMES[componentKind ?? 'generic'];
     case 'database':
       return 'Data Store';
     case 'queue':
@@ -141,6 +147,13 @@ const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = {
   'search-index': 'Search index',
 };
 const ACTOR_KIND_NAMES: Record<ActorKind, string> = { human: 'Human', system: 'System', device: 'Device' };
+/** Doubles as the fallback display name and the auto-generated label a fresh Component starts
+ *  with — same one-table discipline as `SERVICE_KIND_NAMES`. */
+const COMPONENT_KIND_NAMES: Record<ComponentKind, string> = {
+  generic: 'Component',
+  module: 'Module',
+  adapter: 'Adapter',
+};
 
 /**
  * A human-readable fallback identity for a node with no custom `text` of its
@@ -152,7 +165,10 @@ const ACTOR_KIND_NAMES: Record<ActorKind, string> = { human: 'Human', system: 'S
  * breadcrumb — needs that same fallback, not a bare "Untitled".
  */
 export function displayNameFor(
-  node: Pick<DraftNode, 'type' | 'text' | 'queueKind' | 'serviceKind' | 'databaseKind' | 'actorKind'>,
+  node: Pick<
+    DraftNode,
+    'type' | 'text' | 'queueKind' | 'serviceKind' | 'databaseKind' | 'actorKind' | 'componentKind'
+  >,
 ): string {
   if (node.text && node.text.trim()) return node.text;
   switch (node.type) {
@@ -160,6 +176,8 @@ export function displayNameFor(
       return QUEUE_KIND_NAMES[node.queueKind ?? 'queue'];
     case 'service':
       return (node.serviceKind && SERVICE_KIND_NAMES[node.serviceKind]) || 'Service';
+    case 'component':
+      return (node.componentKind && COMPONENT_KIND_NAMES[node.componentKind]) || 'Component';
     case 'database':
       return (node.databaseKind && DATABASE_KIND_NAMES[node.databaseKind]) || 'Data Store';
     case 'actor':
@@ -196,9 +214,11 @@ export interface CreateNodeInput {
   databaseKind?: DatabaseKind;
   queueKind?: QueueKind;
   actorKind?: ActorKind;
+  componentKind?: ComponentKind;
   parentId?: string;
   id?: string;
   deliveryRole?: DeliveryRole;
+  annotation?: boolean;
 }
 
 export function createNode(input: CreateNodeInput): DraftNode {
@@ -211,7 +231,7 @@ export function createNode(input: CreateNodeInput): DraftNode {
     width: input.width ?? size.width,
     height: input.height ?? size.height,
     z: input.z ?? 0,
-    text: input.text ?? defaultTextFor(input.type, input.serviceKind),
+    text: input.text ?? defaultTextFor(input.type, input.serviceKind, input.componentKind),
     // A caller-supplied `text` is a deliberate name, kept forever. An omitted one is a
     // system-managed placeholder — `updateNodeById`'s Service auto-relabeling (`editorStore.ts`)
     // is the one place that later reads this to decide whether it may still follow the node's
@@ -233,7 +253,9 @@ export function createNode(input: CreateNodeInput): DraftNode {
   if (input.type === 'database') node.databaseKind = input.databaseKind ?? 'generic';
   if (input.type === 'queue') node.queueKind = input.queueKind ?? 'queue';
   if (input.type === 'actor') node.actorKind = input.actorKind ?? 'human';
+  if (input.type === 'component') node.componentKind = input.componentKind ?? 'generic';
   if (input.deliveryRole) node.deliveryRole = input.deliveryRole;
+  if (input.type === 'text' && input.annotation) node.annotation = true;
   return node;
 }
 
@@ -273,6 +295,8 @@ export interface CreateEdgeInput {
   source: string;
   target: string;
   label?: string;
+  /** A small, secondary annotation shown below the label — see `DraftEdge.condition`. */
+  condition?: string;
   directed?: boolean;
   routing?: DraftEdge['routing'];
   accent?: Accent;
@@ -302,6 +326,7 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
     routing: input.routing ?? 'smoothstep',
   };
   if (input.label) edge.label = input.label;
+  if (input.condition) edge.condition = input.condition;
   if (input.accent !== undefined) edge.accent = input.accent;
   if (input.sourceAnchor) edge.sourceAnchor = input.sourceAnchor;
   if (input.targetAnchor) edge.targetAnchor = input.targetAnchor;

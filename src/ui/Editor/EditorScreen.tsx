@@ -8,8 +8,10 @@ import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { contextMenuCommandsFor } from '../../commands/contextMenu';
+import { starterCommands } from '../../commands/registry';
 import type { Command } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
+import type { StarterId } from '../../starters';
 import { createEdge, createNode } from '../../document/factory';
 import { boundsOf } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
@@ -151,6 +153,17 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
 
   const buildCommandContext = useCommandContext({ createAt, createAtPointer, playback });
 
+  // The empty canvas's starter row runs the palette's own command rather than calling the store
+  // itself, so the two entry points can never drift apart — the same discipline the right-click
+  // menu follows (`commands/contextMenu.ts`).
+  const insertStarter = useCallback(
+    (id: StarterId) => {
+      const command = starterCommands().find((entry) => entry.id === `starter-${id}`);
+      command?.run(buildCommandContext());
+    },
+    [buildCommandContext],
+  );
+
   const contextMenuEntries = useMemo(() => {
     if (!contextMenu) return [];
     return contextMenuCommandsFor(buildCommandContext(), contextMenu.target, contextMenu.flowPosition);
@@ -259,7 +272,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         {!presenting && <AttachmentPopover />}
         {!presenting && <EdgeInspectorPopover />}
         {!presenting && <ElementInspectorPopover />}
-        <EmptyState />
+        <EmptyState onInsertStarter={insertStarter} />
         {!presenting && <Inspector />}
         {!presenting && <FlowPanel playback={playback} />}
         <FlowBar playback={playback} />

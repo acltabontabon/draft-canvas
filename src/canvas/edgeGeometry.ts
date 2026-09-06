@@ -39,3 +39,41 @@ export function attachmentRowBelowsSourceOrTarget(x: number, y: number, sourceRe
     x > rect.x && x < rect.x + rect.width && rect.y < bottom && rect.y + rect.height > top;
   return overlapsRect(sourceRect) || overlapsRect(targetRect);
 }
+
+export interface ScreenRect {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/**
+ * Shifts a popover's desired horizontal center just far enough to clear any obstacle it would
+ * otherwise overlap — `EdgeInspectorPopover`'s guard for a short connector whose label point sits
+ * in open canvas (so `attachmentRowBelowsSourceOrTarget`'s single-point check passes) while the
+ * popover itself, several times wider than the gap between two nearby nodes, still reaches into
+ * one of them. All rects are screen space. An obstacle only constrains the result if it vertically
+ * overlaps the popover's own span; whichever side of `desiredCenterX` it falls on becomes a
+ * one-sided bound. If both sides end up constrained past each other (nodes too close together for
+ * the popover to ever fit between them, or a diagonal connector whose obstacle straddles the
+ * center), the desired center is returned unclamped rather than fighting for a position that
+ * doesn't exist.
+ */
+export function clampPopoverCenterX(
+  desiredCenterX: number,
+  halfWidth: number,
+  gap: number,
+  popoverTop: number,
+  popoverBottom: number,
+  obstacles: ScreenRect[],
+): number {
+  let left = -Infinity;
+  let right = Infinity;
+  for (const o of obstacles) {
+    if (o.top >= popoverBottom || o.bottom <= popoverTop) continue;
+    if (o.right <= desiredCenterX) left = Math.max(left, o.right + gap + halfWidth);
+    else if (o.left >= desiredCenterX) right = Math.min(right, o.left - gap - halfWidth);
+  }
+  if (left > right) return desiredCenterX;
+  return Math.min(Math.max(desiredCenterX, left), right);
+}

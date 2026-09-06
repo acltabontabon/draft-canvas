@@ -20,14 +20,19 @@ import {
   type ConnectionCapability,
 } from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
-import { laneIndex, routeBetween } from '../edges/routing';
+import { laneIndex, routeBetween, type Rect } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import type { HintId } from '../learning/hints';
 import { useEditorStore } from '../store/editorStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
-import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
+import {
+  attachmentRowBelowsSourceOrTarget,
+  clampPopoverCenterX,
+  rectOfInternal,
+  type ScreenRect,
+} from './edgeGeometry';
 import { HintStrip } from './HintStrip';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 
@@ -43,6 +48,7 @@ const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   consumes: 'Consumes',
   calls: 'Calls',
   dependsOn: 'Depends on',
+  uses: 'Uses',
   fansOut: 'Fans out',
   deliversTo: 'Delivers to',
   ingests: 'Ingests',
@@ -106,7 +112,7 @@ export function EdgeInspectorPopover() {
   const mode = useEditorStore((state) => state.mode);
   const store = useEditorStore;
   const theme = useThemeValue();
-  const { flowToScreenPosition } = useReactFlow();
+  const { flowToScreenPosition, screenToFlowPosition } = useReactFlow();
 
   const edgeId = selection.nodes.length === 0 && selection.edges.length === 1 ? selection.edges[0] : null;
   const edge = edgeId ? edgeIndex(document.edges).get(edgeId) : undefined;
@@ -139,13 +145,21 @@ export function EdgeInspectorPopover() {
   // exceeded" crash). Whole pixels are the coarsest resolution anything here is ever laid out or
   // visually distinguishable at, so rounding away that noise costs nothing.
   const [measuredHeight, setMeasuredHeight] = useState(0);
+  // Same reasoning as `measuredHeight`, for the horizontal collision guard below — the panel's
+  // `max-width: 320px` (canvas.css) means width varies far less than height, but a short
+  // connector's label point can still sit close enough to its own source/target that even the
+  // panel's *minimum* width reaches into one of them.
+  const [measuredWidth, setMeasuredWidth] = useState(0);
   // Deliberately no dependency array — this must re-measure after every render (content height
   // can change for reasons with no single dependency to name: a new section appearing, a
   // multi-line label). The `height !== measuredHeight` guard is what keeps this from looping.
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
-    const height = Math.round(panelRef.current?.getBoundingClientRect().height ?? 0);
+    const rect = panelRef.current?.getBoundingClientRect();
+    const height = Math.round(rect?.height ?? 0);
+    const width = Math.round(rect?.width ?? 0);
     if (height > 0 && height !== measuredHeight) setMeasuredHeight(height);
+    if (width > 0 && width !== measuredWidth) setMeasuredWidth(width);
   });
 
   // Cached so the popover keeps rendering the connector it was showing while
@@ -269,6 +283,29 @@ export function EdgeInspectorPopover() {
   const flipBelow =
     attachmentRowBelowsSourceOrTarget(route.labelX, route.labelY, sourceRect, targetRect) || notEnoughRoomAbove;
 
+  // Horizontal collision guard: `attachmentRowBelowsSourceOrTarget` above only checks a single
+  // point at the label's own x, so it can't see the popover's actual *width* reaching sideways
+  // into a neighbour — exactly what happens on a short connector between two nearby nodes (the
+  // label point itself sits in open canvas, but the panel is several times wider than the gap).
+  // Computed in screen space, since that's what both the node rects and the panel's own measured
+  // size are naturally in, then converted back to the flow x the transform below already uses.
+  const toScreenRect = (rect: Rect): ScreenRect => {
+    const topLeft = flowToScreenPosition({ x: rect.x, y: rect.y });
+    const bottomRight = flowToScreenPosition({ x: rect.x + rect.width, y: rect.y + rect.height });
+    return { left: topLeft.x, top: topLeft.y, right: bottomRight.x, bottom: bottomRight.y };
+  };
+  const popoverScreenTop = flipBelow ? screenLabelPoint.y + POPOVER_GAP : screenLabelPoint.y - POPOVER_GAP - measuredHeight;
+  const popoverScreenBottom = flipBelow ? screenLabelPoint.y + POPOVER_GAP + measuredHeight : screenLabelPoint.y - POPOVER_GAP;
+  const clampedScreenX = clampPopoverCenterX(
+    screenLabelPoint.x,
+    measuredWidth / 2,
+    POPOVER_GAP,
+    popoverScreenTop,
+    popoverScreenBottom,
+    [toScreenRect(sourceRect), toScreenRect(targetRect)],
+  );
+  const labelFlowX = screenToFlowPosition({ x: clampedScreenX, y: screenLabelPoint.y }).x;
+
   const sourceDraftNode = nodeIndex(document.nodes).get(displayEdge.source);
   const targetDraftNode = nodeIndex(document.nodes).get(displayEdge.target);
 
@@ -301,8 +338,8 @@ export function EdgeInspectorPopover() {
         data-closing={closing ? 'true' : undefined}
         style={{
           transform: flipBelow
-            ? `translate(-50%, 0) translate(${route.labelX}px, ${route.labelY + POPOVER_GAP}px)`
-            : `translate(-50%, -100%) translate(${route.labelX}px, ${route.labelY - POPOVER_GAP}px)`,
+            ? `translate(-50%, 0) translate(${labelFlowX}px, ${route.labelY + POPOVER_GAP}px)`
+            : `translate(-50%, -100%) translate(${labelFlowX}px, ${route.labelY - POPOVER_GAP}px)`,
         }}
         onPointerDown={(event) => event.stopPropagation()}
       >

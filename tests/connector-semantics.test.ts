@@ -363,6 +363,10 @@ describe('isSyncPairing — which pairings a request/response can attach to', ()
     expect(isSyncPairing('scheduler', 'worker')).toBe(false);
     expect(isSyncPairing('gateway', 'service')).toBe(false);
   });
+
+  it('is false for Component → Component — its exact matrix row defaults to "uses", not "calls"', () => {
+    expect(isSyncPairing('component', 'component')).toBe(false);
+  });
 });
 
 describe('defaultsToResponse — which pairings the reply line is offered for', () => {
@@ -383,6 +387,10 @@ describe('defaultsToResponse — which pairings the reply line is offered for', 
   it('is false for a person initiating a call, and for anything not service-shaped', () => {
     expect(defaultsToResponse('actor', 'service')).toBe(false);
     expect(defaultsToResponse('service', 'database')).toBe(false);
+  });
+
+  it('is false for Component → Component even though it resolves to service→service elsewhere — "uses" has no reply to default on', () => {
+    expect(defaultsToResponse('component', 'component')).toBe(false);
   });
 
   it('no longer turns the reply line on by itself — it only decides who is offered it', () => {
@@ -489,6 +497,20 @@ describe('inferRelationship — a thin wrapper over capabilityFor\'s default', (
     const a = createNode({ type: 'database', x: 0, y: 0 });
     const b = createNode({ type: 'database', x: 0, y: 0 });
     expect(inferRelationship(a, b)).toEqual({ semantic: 'ingests', kind: undefined });
+  });
+
+  it('component → component infers uses, not calls — regardless of componentKind on either side', () => {
+    const generic = createNode({ type: 'component', x: 0, y: 0 });
+    const adapter = createNode({ type: 'component', x: 0, y: 0, componentKind: 'adapter' });
+    expect(inferRelationship(generic, generic)).toEqual({ semantic: 'uses', kind: undefined });
+    expect(inferRelationship(generic, adapter)).toEqual({ semantic: 'uses', kind: undefined });
+    expect(inferRelationship(adapter, generic)).toEqual({ semantic: 'uses', kind: undefined });
+  });
+
+  it('component → database still infers writes, exactly like service → database — only component → component is the exception', () => {
+    const component = createNode({ type: 'component', x: 0, y: 0 });
+    const database = createNode({ type: 'database', x: 0, y: 0 });
+    expect(inferRelationship(component, database)).toEqual({ semantic: 'writes', kind: undefined });
   });
 });
 

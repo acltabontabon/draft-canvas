@@ -438,6 +438,8 @@ describe('importing untrusted files', () => {
         { id: 'q2', type: 'queue', x: 0, y: 0, queueKind: 'stream' },
         { id: 'a1', type: 'actor', x: 0, y: 0, actorKind: 'robot' },
         { id: 'a2', type: 'actor', x: 0, y: 0, actorKind: 'device' },
+        { id: 'c1', type: 'component', x: 0, y: 0, componentKind: 'microservice' },
+        { id: 'c2', type: 'component', x: 0, y: 0, componentKind: 'adapter' },
       ],
       edges: [],
     });
@@ -452,6 +454,8 @@ describe('importing untrusted files', () => {
     expect(byId('q2').queueKind).toBe('stream');
     expect(byId('a1').actorKind).toBe('human');
     expect(byId('a2').actorKind).toBe('device');
+    expect(byId('c1').componentKind).toBe('generic');
+    expect(byId('c2').componentKind).toBe('adapter');
   });
 
   it('keeps deliveryRole on a queue node but drops it from any other node type', () => {

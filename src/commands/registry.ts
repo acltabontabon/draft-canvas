@@ -4,7 +4,7 @@ import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { createAttachment, defaultSizeFor, displayNameFor } from '../document/factory';
 import { LIMITS } from '../document/limits';
 import { routingPlan } from '../edges/bundles';
-import { descendantsOf } from '../document/operations';
+import { boundsOf, descendantsOf } from '../document/operations';
 import {
   CONNECTOR_KINDS,
   EDGE_SEMANTICS,
@@ -16,7 +16,8 @@ import {
 import { requestClipboardRead } from '../lib/clipboardPermission';
 import { MOD_SYMBOL } from '../lib/platform';
 import { pointer } from '../store/uiStore';
-import { focusNodes } from './search';
+import { focusBounds, focusNodes } from './search';
+import { ARCHITECTURE_STARTERS } from '../starters';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
 
 /**
@@ -29,7 +30,7 @@ import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage
  */
 
 const PRESET_KEYWORDS: Record<string, string[]> = {
-  text: ['label', 'caption'],
+  text: ['label', 'caption', 'heading', 'annotation'],
   note: ['remark', 'question', 'warning', 'decision', 'sticky'],
   code: ['snippet', 'json', 'yaml', 'sql', 'log', 'config'],
   boundary: ['container', 'system', 'domain', 'network', 'deployment'],
@@ -38,6 +39,14 @@ const PRESET_KEYWORDS: Record<string, string[]> = {
   queue: ['topic', 'stream', 'kafka', 'event bus', 'message'],
   actor: ['user', 'person', 'client', 'device'],
   ellipse: ['junction', 'branch', 'merge', 'circle'],
+  // Deliberately no 'module'/'adapter' typed alone here — 'module' would compete with
+  // Architecture Starters' own "Modular Monolith" alias ('modules') for the same query, and
+  // "typing 'adapter' creates a Component *already set to* kind Adapter" would need `createAt`/
+  // `createAtPointer` to thread a starting sub-kind through node creation, which nothing in the
+  // app does today for any kind-bearing type (Service included) — out of scope for adding one new
+  // node type. A user reaches Module/Adapter by adding a Component, then picking its kind in the
+  // inspector, same as every other kind-bearing shape.
+  component: ['building block', 'internal', 'logical component'],
 };
 
 function createCommand(preset: Preset): Command {
@@ -459,6 +468,7 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   database: 'Data store',
   queue: 'Queue',
   actor: 'Actor',
+  component: 'Component',
   group: 'Boundary',
   ellipse: 'Junction',
 };
@@ -1076,11 +1086,35 @@ function selectionCommands(ctx: CommandContext): Command[] {
 }
 
 /** Every command that applies to `ctx` right now, in display order. */
+/**
+ * Architecture Starters — one row per composed opening diagram (`src/starters/`).
+ *
+ * These are not a template browser and deliberately not a separate surface: a starter is a name for
+ * `insertStarter`, exactly as "Add Service" is a name for `addNode`. The row adds only the camera
+ * move that puts the result on screen, so ⌘K → "microservices" → Enter is the whole interaction.
+ *
+ * They never depend on `ctx`, so unlike the selection-driven builders this one takes no argument —
+ * a starter applies to any canvas, empty or not. Exported for the same reason `nodeCommands` is:
+ * the empty canvas's starter row is a second surface over these identical commands, not a second
+ * implementation of them (`ui/Editor/EmptyState.tsx`).
+ */
+export function starterCommands(): Command[] {
+  return ARCHITECTURE_STARTERS.map((starter) => ({
+    id: `starter-${starter.id}`,
+    title: starter.name,
+    group: 'starter',
+    keywords: starter.aliases,
+    hint: starter.description,
+    run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter.id))),
+  }));
+}
+
 export function commandsFor(ctx: CommandContext): Command[] {
   if (ctx.editor.mode === 'present') return presentModeCommands(ctx);
   return [
     ...selectionCommands(ctx),
     ...ALL_PRESETS.map(createCommand),
+    ...starterCommands(),
     ...flowCommands(ctx),
     ...viewCommands(ctx),
     ...canvasCommands(ctx),

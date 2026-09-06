@@ -32,11 +32,12 @@ import { type EdgeSpine, type Rect, laneIndex, rectOf, resolveSides } from './ro
 /**
  * How many connectors a fan needs before a shared trunk is worth drawing.
  *
- * Two arrows leaving the same node rarely fight each other, and giving them a
- * trunk adds a bend and a corridor to buy nothing. Three is where the
- * overlapping-verticals problem this module exists for actually starts.
+ * Two members already benefit: a simple fork or funnel reads as more deliberate on one shared
+ * stem with one collapsed caption than as two independent lines each repeating the same
+ * relationship word beside its own branch — the exact "uses / uses" or "calls / calls" column this
+ * module exists to remove, regardless of how many branches are doing it.
  */
-export const MIN_SPINE_MEMBERS = 3;
+export const MIN_SPINE_MEMBERS = 2;
 
 /** Shortest run from the hub out to the trunk, and from the trunk in to a far
  *  node. Below these the path reads as a dogleg pressed against a node rather

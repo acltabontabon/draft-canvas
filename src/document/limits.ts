@@ -64,4 +64,12 @@ export const DEFAULTS = {
    *  the full 176px read as a stretched bar around a much smaller glyph. */
   queueWidth: 140,
   queueHeight: 48,
+  /** ~13%/~18% smaller than Service's own default (`nodeWidth`/`nodeHeight`) — a deliberate visual
+   *  hierarchy, not just a stylistic choice: a Component is meant to read at a glance as something
+   *  contained within a larger boundary, never a peer of the deployable/runtime things around it.
+   *  Only the *default* differs — an existing or manually resized Component is never touched (see
+   *  `document/factory.ts`'s `createNode`, which reads this only when a caller omits `width`/
+   *  `height` entirely). */
+  componentWidth: 152,
+  componentHeight: 56,
 } as const;

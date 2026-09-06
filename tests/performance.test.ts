@@ -18,6 +18,9 @@ import { projectNodes, projectEdges } from '../src/canvas/projection';
 import { laneIndex, rectOf, routeEdge } from '../src/edges/routing';
 import { routingPlan } from '../src/edges/bundles';
 import type { DraftDocument } from '../src/document/types';
+import { ARCHITECTURE_STARTERS } from '../src/starters';
+import { freeOriginFor } from '../src/document/operations';
+import { buildStarter, starterSize } from '../src/starters/build';
 
 /**
  * The brief asks for a document of 100 nodes and 150–200 edges to stay
@@ -282,6 +285,23 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
       routingPlan(doc.nodes.map((node) => ({ ...node })), doc.edges);
     }
     expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  /**
+   * Inserting an Architecture Starter must feel instant even onto a full canvas. The cost that
+   * could plausibly grow is the placement scan, so this runs every starter against the 100-node
+   * fixture: `freeOriginFor` is one pass over the nodes and `buildStarter` is pure, and neither
+   * may quietly turn into a whole-canvas layout pass.
+   */
+  it('places and builds every starter against a full document within budget', () => {
+    const started = performance.now();
+    for (let i = 0; i < 20; i += 1) {
+      for (const starter of ARCHITECTURE_STARTERS) {
+        const origin = freeOriginFor(doc, starterSize(starter));
+        expect(buildStarter(starter, origin).nodes.length).toBeGreaterThan(0);
+      }
+    }
+    expect(performance.now() - started).toBeLessThan(200);
   });
 
   it('reuses the routing plan for an unchanged (nodes, edges) pair', () => {

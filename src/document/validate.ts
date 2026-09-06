@@ -18,6 +18,7 @@ import {
   BACKGROUND_FITS,
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
+  COMPONENT_KINDS,
   CONNECTOR_KINDS,
   CURRENT_VERSION,
   DATABASE_KINDS,
@@ -39,6 +40,7 @@ import {
   type BackgroundFit,
   type BoundaryPreset,
   type CodeLanguage,
+  type ComponentKind,
   type ConnectorKind,
   type DatabaseKind,
   type DeliveryRole,
@@ -319,6 +321,12 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     }
     if (type === 'actor') {
       node.actorKind = oneOf<ActorKind>(candidate.actorKind, ACTOR_KINDS, 'human');
+    }
+    if (type === 'component') {
+      node.componentKind = oneOf<ComponentKind>(candidate.componentKind, COMPONENT_KINDS, 'generic');
+    }
+    if (type === 'text' && candidate.annotation === true) {
+      node.annotation = true;
     }
 
     const rawAttachments = Array.isArray(candidate.attachments) ? candidate.attachments : [];

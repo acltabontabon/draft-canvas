@@ -30,6 +30,7 @@ export const NODE_TYPES = [
   'database',
   'queue',
   'actor',
+  'component',
 ] as const;
 
 export type DraftNodeType = (typeof NODE_TYPES)[number];
@@ -137,6 +138,23 @@ export type DeliveryRole = (typeof DELIVERY_ROLES)[number];
 export const ACTOR_KINDS = ['human', 'system', 'device'] as const;
 export type ActorKind = (typeof ACTOR_KINDS)[number];
 
+/**
+ * A logical architectural building block that lives *inside* a larger deployment or boundary —
+ * the deliberate counterpart to `Service`, which is Draft Canvas's deployable/runtime role.
+ * Component carries none of Service's implications: no independent deployment, no network
+ * boundary, no process boundary. "Use Cases," "a persistence adapter," an internal domain
+ * module — a Component, never a Service, however service-like its name sounds.
+ *
+ * Kept deliberately small: `generic` (unspecified — no caption, same convention as every other
+ * kind's default), `module` (an internal subdivision — Modular Monolith's own boundary-based
+ * modules are a *different*, coarser concept; this is for a single logical piece, not a whole
+ * boundary), and `adapter` (a ports-and-adapters translation layer — Hexagonal's own use case).
+ * Anything narrower — "Repository," "Controller," "Use Case" — is a *label* a user types onto a
+ * `generic` (or `adapter`) Component, never a fourth kind.
+ */
+export const COMPONENT_KINDS = ['generic', 'module', 'adapter'] as const;
+export type ComponentKind = (typeof COMPONENT_KINDS)[number];
+
 /** Loose, technology-neutral presets for a `group` boundary. A preset only
  *  changes a small secondary caption — never the node's own `text`. */
 export const BOUNDARY_PRESETS = ['boundary', 'system', 'domain', 'network', 'deployment', 'group'] as const;
@@ -156,6 +174,7 @@ export const EDGE_SEMANTICS = [
   'consumes',
   'calls',
   'dependsOn',
+  'uses',
   'fansOut',
   'deliversTo',
   'ingests',
@@ -258,12 +277,21 @@ export interface DraftNode {
   queueKind?: QueueKind;
   /** `actor` nodes only. */
   actorKind?: ActorKind;
+  /** `component` nodes only. */
+  componentKind?: ComponentKind;
   /** `group` nodes only. */
   boundaryPreset?: BoundaryPreset;
   /** Supporting detail collapsed into this node. Any node type may host one. */
   attachments?: Attachment[];
   /** `queue` nodes only — see `DeliveryRole`. */
   deliveryRole?: DeliveryRole;
+  /**
+   * `text` nodes only. A quieter rendering for a Label used as a small architectural aside (e.g.
+   * naming the crossing point of a boundary) rather than genuine content someone is meant to read
+   * at normal weight — smaller, muted text, still zero-semantics, still no box. Absent/`false` is
+   * the Label primitive's one existing look, unchanged; this never affects any other node type.
+   */
+  annotation?: boolean;
 }
 
 export interface EdgeDetails {

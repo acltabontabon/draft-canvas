@@ -8,6 +8,7 @@ import {
   type ActorKind,
   type BoundaryPreset,
   type CodeLanguage,
+  type ComponentKind,
   type DatabaseKind,
   type DraftNode,
   type NoteKind,
@@ -22,6 +23,7 @@ import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
 import { BOUNDARY_PRESET_OPTION_LABELS, NOTE_LABELS } from '../ui/Editor/nodeKindLabels';
 import { ACTOR_ICON_OPTIONS } from './actorOptions';
+import { COMPONENT_ICON_OPTIONS } from './componentOptions';
 import { DATABASE_ICON_OPTIONS } from './dataStoreOptions';
 import { rectOfInternal } from './edgeGeometry';
 import { HintStrip } from './HintStrip';
@@ -49,6 +51,7 @@ const SERVICE_OPTIONS: InspectorSelectOption[] = SERVICE_ICON_OPTIONS;
 const DATABASE_OPTIONS: InspectorSelectOption[] = DATABASE_ICON_OPTIONS;
 const QUEUE_OPTIONS: InspectorSelectOption[] = QUEUE_ICON_OPTIONS;
 const ACTOR_OPTIONS: InspectorSelectOption[] = ACTOR_ICON_OPTIONS;
+const COMPONENT_OPTIONS: InspectorSelectOption[] = COMPONENT_ICON_OPTIONS;
 const BOUNDARY_OPTIONS: InspectorSelectOption[] = BOUNDARY_PRESETS.map((preset) => ({
   value: preset,
   label: BOUNDARY_PRESET_OPTION_LABELS[preset],
@@ -422,6 +425,14 @@ function ElementInspectorRow({
           ariaLabel: 'Actor type',
           onChange: (value) =>
             store.getState().updateNodeById(node.id, { actorKind: value as ActorKind }, 'Change actor type'),
+        };
+      case 'component':
+        return {
+          options: COMPONENT_OPTIONS,
+          value: node.componentKind ?? 'generic',
+          ariaLabel: 'Component type',
+          onChange: (value) =>
+            store.getState().updateNodeById(node.id, { componentKind: value as ComponentKind }, 'Change component type'),
         };
       default:
         return null;

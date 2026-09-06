@@ -15,6 +15,21 @@ import type { ConnectorKind, DraftEdge, DraftNode, EdgeSemantic } from './types'
  * sibling. Every `DraftNodeType` not covered here (card, note, code, text,
  * group, ellipse, rounded) reads as `generic`: Draft Canvas has no real basis
  * to infer anything about a plain shape, so it stays out of this entirely.
+ *
+ * `component` is a deliberate exception to that "no basis to infer" rule: unlike a plain shape, a
+ * Component genuinely does call things, get called, and read/write storage — it just isn't a
+ * `service` (no deployment/runtime connotation). It gets its own category (never silently folded
+ * into `generic`, so a future capability that queries category can still tell a Component from a
+ * Note), but `resolved()` below folds it to `service` for matrix *lookups* the same way
+ * `external`/`worker`/`scheduler`/`gateway` already are — the relationship vocabulary (calls,
+ * writes, reads, …) between a Service and a Database is exactly the vocabulary between a Component
+ * and a Database; only the deployment implication differs, and that lives entirely in
+ * `categoryOf`'s own return value and in `nodes/describe.ts`'s rendering, never in the matrix. The
+ * one place that folding would be wrong — a Component talking to *another* Component or Adapter,
+ * where "calls" wrongly implies a network hop — gets its own exact `component>component` row
+ * instead (see the `MATRIX` below), which `capabilityFor` checks before `resolved()` ever runs.
+ * `componentKind` (generic/module/adapter) never sub-divides the category further — unlike
+ * Service's kinds, none of Component's carries its own relationship rule.
  */
 export type NodeCategory =
   | 'actor'
@@ -23,6 +38,7 @@ export type NodeCategory =
   | 'worker'
   | 'scheduler'
   | 'gateway'
+  | 'component'
   | 'database'
   | 'cache'
   | 'fileSystem'
@@ -70,6 +86,8 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
       return node.queueKind === 'topic' ? 'topic' : 'queue';
     case 'ellipse':
       return 'junction';
+    case 'component':
+      return 'component';
     default:
       return 'generic';
   }
@@ -202,6 +220,17 @@ const MATRIX: Record<string, ConnectionCapability> = {
     'calls',
     CALL_BEHAVIORS,
   ),
+  // The one exact-match row `component` needs of its own, rather than folding through `resolved()`
+  // to `service>service`'s 'calls' default: two Components (or a Component and an Adapter — a
+  // `componentKind` never changes `categoryOf`'s category, so this one row covers both) talking to
+  // each other is a plain in-process dependency, not a network call, and the word "calls" is
+  // actively misleading there. `capabilityFor` checks this exact key *before* falling back to
+  // resolved categories, so this takes priority over the `service>service` entry above without
+  // touching it. An Adapter's OTHER edges — toward a Database/Queue/external Service — have no
+  // exact `component>…` row and so still fall through to `resolved()`'s service-shaped behaviour
+  // (writes/reads/publishes/calls), which is exactly right: "internal-like toward the application,
+  // service-like toward infrastructure" falls out of `categoryOf` alone, no new sub-category needed.
+  'component>component': capability(['uses', 'dependsOn', 'calls'], 'uses', []),
   'actor>service': capability(['calls', 'http', 'command'], 'calls', []),
   'service>external': capability(
     ['calls', 'http', 'grpc', 'command', 'event', 'dependsOn'],
@@ -280,16 +309,24 @@ const MATRIX: Record<string, ConnectionCapability> = {
   }),
 };
 
-/** `external`, `worker`, `scheduler`, and `gateway` are all flavours of `service` for every pairing
- *  that doesn't have its own explicit entry above — same "no opinion beats a wrong one" rule every
- *  other sub-kind-derived category follows (see the matrix's own doc comment), just with a
- *  fallback instead of nothing, because all four remain fundamentally service-shaped (they call
- *  things, get called, read/write storage) for anything the matrix doesn't say otherwise about.
- *  Unlike `cache`/`fileSystem`/`objectStorage`/`searchIndex`, none of these four has a failure mode
- *  where inheriting plain Service semantics would be actively misleading — worst case, an unlisted
- *  pairing just reads as an ordinary call. */
+/** `external`, `worker`, `scheduler`, `gateway`, and `component` are all flavours of `service` for
+ *  every pairing that doesn't have its own explicit entry above — same "no opinion beats a wrong
+ *  one" rule every other sub-kind-derived category follows (see the matrix's own doc comment), just
+ *  with a fallback instead of nothing, because all five remain fundamentally service-shaped (they
+ *  call things, get called, read/write storage) for anything the matrix doesn't say otherwise
+ *  about. Unlike `cache`/`fileSystem`/`objectStorage`/`searchIndex`, none of these five has a
+ *  failure mode where inheriting plain Service semantics would be actively misleading — worst case,
+ *  an unlisted pairing just reads as an ordinary call. `component` folding here is still what lets
+ *  every Component/Adapter pairing with actual infrastructure (a database, a queue, an external
+ *  service) inherit that vocabulary for free; the one place folding to `service` would be actively
+ *  wrong — two Components talking to each other — has its own exact `component>component` row
+ *  above instead, checked first by `capabilityFor` before this fallback is ever reached. */
 function resolved(category: NodeCategory): NodeCategory {
-  return category === 'external' || category === 'worker' || category === 'scheduler' || category === 'gateway'
+  return category === 'external' ||
+    category === 'worker' ||
+    category === 'scheduler' ||
+    category === 'gateway' ||
+    category === 'component'
     ? 'service'
     : category;
 }
@@ -370,10 +407,14 @@ export function isSyncPairing(source: NodeCategory, target: NodeCategory): boole
  * a schedule is fire-and-forget, not a call that waits for a reply. Gateway
  * is deliberately *not* excluded: a reverse proxy genuinely does forward a
  * request and return the response, so `defaultsToResponse('gateway',
- * 'service')` staying `true` is correct, not an oversight.
+ * 'service')` staying `true` is correct, not an oversight. Component↔Component
+ * is excluded for the same reason as Scheduler, checked before the `resolved()`
+ * fold rather than after: its exact `component>component` matrix row defaults
+ * to 'uses', not a call, so a reply line has nothing to be a reply *to*.
  */
 export function defaultsToResponse(source: NodeCategory, target: NodeCategory): boolean {
   if (source === 'scheduler') return false;
+  if (source === 'component' && target === 'component') return false;
   return resolved(source) === 'service' && resolved(target) === 'service';
 }
 

@@ -1,7 +1,7 @@
 import { getViewportForBounds } from '@xyflow/react';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { displayNameFor } from '../document/factory';
-import { boundsOf } from '../document/operations';
+import { boundsOf, type Bounds } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import type { Command, CommandContext } from './types';
 
@@ -36,6 +36,7 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   database: 'Data store',
   queue: 'Queue',
   actor: 'Actor',
+  component: 'Component',
   group: 'Boundary',
   ellipse: 'Junction',
 };
@@ -67,7 +68,19 @@ export function flash(ctx: CommandContext, id: string) {
  */
 export function focusNodes(ctx: CommandContext, nodeIds: string[]) {
   const wanted = new Set(nodeIds);
-  const bounds = boundsOf(ctx.editor.document.nodes.filter((node) => wanted.has(node.id)));
+  focusBounds(ctx, boundsOf(ctx.editor.document.nodes.filter((node) => wanted.has(node.id))));
+}
+
+/**
+ * The same camera move for a rectangle the caller already has.
+ *
+ * A command that *creates* something cannot use `focusNodes`: `CommandContext.editor` holds live
+ * actions but a snapshot of the state from when the context was built, so its `document` is the one
+ * from before the command's own mutation and the new nodes simply aren't in it. Such a command
+ * takes the bounds from what the store action handed back instead — see the Architecture Starter
+ * commands in `registry.ts`.
+ */
+export function focusBounds(ctx: CommandContext, bounds: Bounds | null) {
   if (!bounds) return;
   const { viewWidth, viewHeight } = ctx.camera;
   if (viewWidth <= 0 || viewHeight <= 0) return;

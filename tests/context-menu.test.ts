@@ -44,6 +44,7 @@ describe('contextMenuCommandsFor — empty canvas', () => {
       'add-queue',
       'add-actor',
       'add-ellipse',
+      'add-component',
     ]);
   });
 

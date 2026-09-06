@@ -53,6 +53,7 @@ export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   consumes: { label: 'consumes' },
   calls: { label: 'calls' },
   dependsOn: { label: 'depends on' },
+  uses: { label: 'uses' },
   fansOut: { label: 'fans out' },
   deliversTo: { label: 'delivers to' },
   ingests: { label: 'ingests' },

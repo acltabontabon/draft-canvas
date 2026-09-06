@@ -701,6 +701,40 @@ export function placeNear(
   return { x: clampCoord(x), y: clampCoord(y) };
 }
 
+/** Breathing room between a block of elements being inserted and whatever is already on the
+ *  canvas — larger than `COMPANION_GAP`, because this separates two *diagrams*, not a node from
+ *  the node that spawned it. */
+export const INSERT_GAP = 96;
+
+/**
+ * Where to put the top-left corner of an incoming block of `size` so it lands clear of everything
+ * already on the canvas — what an Architecture Starter needs, and deliberately not what
+ * `placeNear` does.
+ *
+ * Two differences from `placeNear` matter. It never treats a boundary as transparent: dropping a
+ * whole architecture inside somebody's existing boundary would silently reparent nothing but would
+ * read as a mistake, so a `group` is an obstacle here even though it is a legitimate landing spot
+ * for a single companion node. And it does not search: right of the existing bounds is *provably*
+ * free, which is worth more than a cleverer position that has to be verified. An empty canvas gets
+ * the block centred on the origin instead, so the very first thing a user inserts sits where the
+ * viewport already is.
+ *
+ * Nothing already on the canvas is ever moved. Cost is one pass over the nodes — no global layout.
+ */
+export function freeOriginFor(
+  doc: DraftDocument,
+  size: { width: number; height: number },
+  gap: number = INSERT_GAP,
+): { x: number; y: number } {
+  const bounds = boundsOf(doc.nodes);
+  if (!bounds) return { x: clampCoord(-size.width / 2), y: clampCoord(-size.height / 2) };
+  const right = bounds.x + bounds.width + gap;
+  // Only when the canvas has genuinely been dragged out to the coordinate limit does going right
+  // stop being an option; below the existing content is the same guarantee on the other axis.
+  if (right + size.width <= LIMITS.maxCoordinate) return { x: clampCoord(right), y: clampCoord(bounds.y) };
+  return { x: clampCoord(bounds.x), y: clampCoord(bounds.y + bounds.height + gap) };
+}
+
 /* ---------------------------------------------------------------- groups --- */
 
 /** Every node transitively parented under `id` — used so dragging a boundary

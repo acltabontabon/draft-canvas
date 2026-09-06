@@ -85,6 +85,75 @@ relation/behavior on a fresh or re-pointed connector, and the subtle warning mar
 pairing. Deliberately sparse — an undocumented pairing keeps full, unrestricted freedom; every rule
 here narrows or nudges, never blocks. See [`docs/SEMANTICS.md`](SEMANTICS.md) for the actual rules.
 
+## Semantic vocabulary
+
+The product principle every new primitive, kind, and semantic gets measured against: **Draft
+Canvas models architectural roles and relationships, not implementation technologies.** Describe
+what something does and how it relates, not which vendor, framework, library, or runtime implements
+it — Component/Adapter/Datastore/Queue, never Spring Controller/Kafka Consumer/PostgreSQL/AWS
+Lambda. A technology name is a *label* a user types onto an existing primitive ("Datastore" with
+text "Orders DB" and, if wanted, a second line "PostgreSQL"), never a reason to add a new one. The
+test before adding anything: *if every technology in this architecture were replaced, would the
+concept still make sense?* Component, Adapter, Interface, Datastore, Queue — yes. Kafka, Spring
+Boot, PostgreSQL, AWS Lambda — no.
+
+A second, narrower rule guards the vocabulary against a subtler failure than adding too much:
+**never reuse a semantic element solely because its visual rendering is convenient.** Hexagonal's
+starter once put "Inbound Port"/"Outbound Port" text on a connector's `condition` field — a
+Condition means an `if`/`when` a branch applies, and a port designation isn't one; it happened to
+render as a small bordered chip, which was the only reason it got picked. Visual similarity is not
+semantic equivalence, and a wrong-but-convenient choice here doesn't just look odd — every future
+capability that reads the document model (validation, quick actions, smarter auto-layout, exports)
+inherits whatever the model actually says, not what a screenshot suggested it meant.
+
+**Component** (`document/types.ts`'s `component`/`ComponentKind`) is this principle's first real
+addition: a logical architectural building block *inside* a larger deployment or boundary — a
+domain module, a use-case layer, a ports-and-adapters adapter — with none of Service's deployment,
+network-boundary, or process-boundary implications. Kept deliberately small: `generic` (no kind
+caption, same "unspecified" convention Service's own default kind follows), `module`, and `adapter`
+— never a kind for what a label already says ("Repository," "Controller," "Use Case" are text a
+user types onto a Component, not a fourth kind to add). Its rendering (`nodes/describe.ts`'s
+`component()`) gives each kind its own small, one-sided departure from a shared plain body — Module
+a tab stepping up from the top edge, Adapter a notch cut into the right — the same "one restrained
+mark per kind" discipline Service's own kinds follow, just quieter throughout: no cap band ever, a
+thinner shared stroke, `neutral` accent by default, and — per an explicit later pass — a noticeably
+smaller default footprint than Service's own (`document/limits.ts`'s `componentWidth`/
+`componentHeight`, ~13%/~18% under `nodeWidth`/`nodeHeight`). The size and weight differences are
+what make Component read as *contained within* something else at a glance, before any label is
+read (Adapter's notch is deliberately cut into *both* vertical edges, not one — see
+`nodes/describe.ts`'s `componentAdapter` for why a single-sided notch baked in a "always faces
+right" assumption a bidirectional primitive can't make); the kind-picker's miniature previews
+(`canvas/componentOptions.tsx`) show these silhouettes
+directly rather than a hand-drawn icon, via the same `ShapePreview` → `describeNode` pipeline
+Service's own kind picker already uses — nothing to keep in sync by hand. For the capability
+matrix, Component resolves to `service` (see `connectorSemantics.ts`'s `resolved()`) purely for
+relationship *vocabulary* — the same "reads/writes/calls" verbs a Service uses — while `categoryOf`
+keeps it as its own, permanent category, never silently folded away: see
+[`docs/SEMANTICS.md`](SEMANTICS.md#node-categories).
+
+**Label/Text** (`type: 'text'`, "Label with no box" in the palette) already existed and already had
+every piece of generic node machinery this needed (move, resize, edit, duplicate, copy/paste,
+undo/redo, theme/personality rendering) — what this pass formalized was the one guarantee that
+makes it safe to use as a zone annotation next to opinionated primitives: it is `generic` in
+`categoryOf`, so it can never become a real endpoint in the capability matrix no matter what it
+sits near or is connected to, and it is never a substitute for an edge's own `semantic`/`label` — an
+annotation like "Driving Adapters" and a relationship caption like "calls" are different concepts
+that happen to both be text.
+
+**Port/Interface** was investigated and deliberately *not* added as a primitive in this pass. The
+concept is real (Hexagonal's inbound/outbound ports, a Component's provided/required interfaces,
+plugin boundaries) and the eventual shape is probably a lightweight attachment on a Component/
+boundary's edge — closer to the existing anchor/attachment system (`document/types.ts`'s
+`EdgeAnchor`, `Attachment`) than a new independently-sized node — but building that cleanly needs
+its own pass, not one folded into a vocabulary cleanup. Naming a port on an edge turned out not to
+be a clean stand-in either — Hexagonal tried it (a plain `label` reading "Inbound Port"/"Outbound
+Port"), and a later pass removed it: the override hid the connector's actual relationship
+underneath, and rode the app's one *bolder* caption style while doing it, the opposite of the quiet
+annotation a port name is supposed to be. Until a real Port/Interface concept exists, a starter
+should let a crossing connector's own relationship word (`calls`, `uses`, …) do the talking instead
+of naming the crossing itself — and, as ever, never reach for `condition` to fake the visual weight
+a port name used to have.
+
 ## History
 
 Snapshot-based, with structural sharing — every operation in `document/operations.ts` returns a
@@ -133,6 +202,48 @@ Multiple Flows can share early steps and diverge later, since a step only ever r
 connector that already exists — nothing is copied. A reply is just another connector, not a
 distinct concept.
 
+## Architecture starters
+
+`src/starters/` holds five authored opening compositions (Monolith, Modular Monolith,
+Microservices, Event-Driven, Hexagonal) and the function that turns one into document elements. It
+is a *starter*, not a template: everything it creates is an ordinary `DraftNode`/`DraftEdge`, and
+nothing anywhere records that a node came from one. That is the whole design — there is no starter
+object to keep consistent, no mode to leave, and no second way to edit what it made.
+
+The module imports only `document/`, and is not part of the `.draftcanvas` format. Three rules
+carry the weight:
+
+- **Composition is authored, layout is not solved.** There is no auto-layout library here, and for
+  five diagrams whose structure is known in advance that is the right answer: a solver produces
+  something defensible, and a starter has to produce something *composed*. `catalog.ts` is literal
+  coordinates; `compose.ts` is a handful of spacing constants, not an engine.
+- **Relationships come from the matrix, never from the catalog.** `build.ts` runs every connector
+  through `inferRelationship` and stamps `semanticsOrigin: 'inferred'`, the same way
+  `insertWorkerOnEdge` and `addConsumer` do. A starter cannot state a relationship the rest of the
+  app would disagree with, and changing a node's kind afterwards re-derives its connectors. A
+  `StarterEdgeSpec` may still set an explicit `label` (Hexagonal's `Use Cases` → `Domain Model`/
+  `Persistence Adapter`/`Integration Adapter` all read `uses`, since Component resolves through
+  `service`'s matrix rows and `calls` is genuinely the wrong word for a plain internal dependency)
+  — that overrides only what's displayed; the underlying `semantic`/`kind` are exactly as derived
+  and re-inference-eligible as any other starter connector. Never `condition`: a Condition means a
+  condition, and a relationship word isn't one — see "Semantic vocabulary" below. An earlier
+  revision of Hexagonal used this same `label` to name the ports themselves ("Inbound Port"/
+  "Outbound Port"); a later pass removed that, since it hid each connector's actual relationship
+  behind a position in the architecture and rode the app's more prominent, bordered-chip caption
+  style while doing it — the opposite of the "quiet annotation" it was meant to be.
+- **A starter reaches for the primitive that's actually true, not the one that's already drawn and
+  looks fine.** Hexagonal's Use Cases/Domain Model/Persistence Adapter/Integration Adapter are
+  `component`, not `service` — none of them is independently deployable, and rendering them as
+  Service purely because Service already existed and looked plausible was exactly the "convenient
+  shape, wrong meaning" mistake "Semantic vocabulary" (below) exists to rule out.
+- **Nothing here sets appearance.** No colour, no font, no personality — only `accent`, which is an
+  enum the theme resolves. Every starter is therefore correct in both themes and all three
+  Intentional Roughness presets without knowing they exist.
+
+Insertion is `editorStore`'s `insertStarter`: `freeOriginFor` (one pass over the nodes, treating
+boundaries as obstacles, unlike `placeNear`) picks a spot clear of existing content, and a single
+`addNodesWithEdges` makes the whole architecture one undo entry.
+
 ## Command surface
 
 `src/commands/registry.ts`'s `commandsFor(ctx)` is a pure function from the current
@@ -142,7 +253,14 @@ existing `editorStore`/`uiStore` action, so the palette introduces no second way
 document. The right-click context menu (`commands/contextMenu.ts`) is a second surface over the
 identical command functions, filtered to a small per-target subset and excluding any command that
 returns a `CommandStage` (a follow-up picker, e.g. "Connect to…") — it's deliberately flat, no
-flyouts.
+flyouts. The empty canvas's starter row (`ui/Editor/EmptyState.tsx`) is a third
+surface over the same commands, for the same reason: two entry points that build their own
+behaviour would eventually disagree about one of them.
+
+One trap worth knowing: `CommandContext.editor` holds live *actions* but a *snapshot* of state, so
+a command that creates something cannot then look it up in `ctx.editor.document` — that document
+predates its own mutation. Such a command works from what the store action returned; see
+`focusBounds` in `commands/search.ts`.
 
 ## Untrusted input
 
@@ -184,7 +302,7 @@ number it, undo, redo, reload, export all three formats, delete locally, import,
 
 ## Deliberately not built
 
-Authentication, accounts, cloud sync, collaboration, comments, AI generation, template libraries,
+Authentication, accounts, cloud sync, collaboration, comments, AI generation, template galleries,
 and icon packs for any cloud provider. Each would be a reasonable product; none of them is this
 one. Kept out of the way rather than designed for: Mermaid import/export, image nodes, and PWA
 install.

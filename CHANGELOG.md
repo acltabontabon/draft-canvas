@@ -4,6 +4,19 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Architecture Starters for Monolith, Modular Monolith, Microservices, Event-Driven, and Hexagonal
+  architectures. Press ⌘K, type the pattern's name, and a composed starting diagram appears —
+  centred, selected, and made of ordinary shapes and connectors you can change straight away. One
+  undo removes the whole thing. An empty canvas offers the same starters under its hint.
+- A new Component shape (Generic, Module, or Adapter), for the logical building blocks inside a
+  larger deployment or boundary — a domain module, a use-case layer, an adapter — without implying
+  they're independently deployable the way a Service is. Each kind has its own quiet silhouette
+  (Module's tab, Adapter's notch on both sides, so it reads the same whichever way it faces), and
+  Component is deliberately smaller and lighter than Service by default, so a mixed diagram reads
+  its hierarchy at a glance. Press `M` or search "component" in ⌘K.
+
 ### Fixed
 
 - Opening or importing a large diagram with many connections fanning out from (or into) the same
