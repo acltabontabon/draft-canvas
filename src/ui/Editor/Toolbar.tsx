@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
-import { DEV_PRESETS, PRESETS, type Preset } from '../../canvas/presets';
+import { DEV_PRESETS, PRESETS, SELECT_TOOLTIP, tooltipContentFor, type Preset } from '../../canvas/presets';
 import { useIsNewFeature } from '../../learning/useNewFeature';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
+import { Tooltip } from '../common/Tooltip';
 import { useTheme } from '../theme/useTheme';
 import { FlowSwitcher } from './FlowSwitcher';
 
@@ -72,15 +73,18 @@ export function Toolbar({
   }, [title]);
 
   const toolButton = (preset: Preset) => (
-    <Button
-      key={preset.id}
-      variant="ghost"
-      active={armed?.id === preset.id}
-      title={`${preset.label} — ${preset.hint} (${preset.shortcut})`}
-      onClick={() => arm(armed?.id === preset.id ? null : preset)}
-    >
-      {preset.label}
-    </Button>
+    <Tooltip key={preset.id} content={tooltipContentFor(preset)}>
+      {(tip) => (
+        <Button
+          variant="ghost"
+          active={armed?.id === preset.id}
+          onClick={() => arm(armed?.id === preset.id ? null : preset)}
+          {...tip}
+        >
+          {preset.label}
+        </Button>
+      )}
+    </Tooltip>
   );
 
   return (
@@ -115,14 +119,13 @@ export function Toolbar({
       </div>
 
       <div className="dc-toolbar-group dc-toolbar-tools">
-        <Button
-          variant="ghost"
-          active={armed === null}
-          title="Select (Esc)"
-          onClick={() => arm(null)}
-        >
-          Select
-        </Button>
+        <Tooltip content={SELECT_TOOLTIP}>
+          {(tip) => (
+            <Button variant="ghost" active={armed === null} onClick={() => arm(null)} {...tip}>
+              Select
+            </Button>
+          )}
+        </Tooltip>
         <span className="dc-toolbar-divider" />
         {PRESETS.map(toolButton)}
         <span className="dc-toolbar-divider" />

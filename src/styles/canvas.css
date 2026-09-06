@@ -576,9 +576,54 @@
   .dc-attachment-card-inner,
   .dc-attachment-card[data-closing='true'] .dc-attachment-card-inner,
   .dc-attachment-popover-inner,
-  .dc-attachment-popover[data-closing='true'] .dc-attachment-popover-inner {
+  .dc-attachment-popover[data-closing='true'] .dc-attachment-popover-inner,
+  .dc-tooltip {
     animation: none;
   }
+}
+
+/* -------------------------------------------------------------- tooltip -- */
+
+/* The toolbar's primitive tooltips (`ui/common/Tooltip.tsx`) — viewport-anchored via `position:
+ * fixed` and portaled to `document.body`, so this chrome intentionally mirrors the popovers below
+ * (border/radius/shadow tokens, `dc-attachment-card-in`'s fade) without sharing their component. */
+.dc-tooltip {
+  z-index: 70;
+  max-width: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface-raised);
+  box-shadow: var(--dc-shadow-panel);
+  pointer-events: none;
+  animation: dc-attachment-card-in 120ms ease;
+}
+
+.dc-tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dc-tooltip-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dc-text);
+}
+
+.dc-tooltip-description {
+  margin: 4px 0 0;
+  color: var(--dc-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dc-tooltip-hint {
+  margin: 4px 0 0;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 @keyframes dc-attachment-card-in {
@@ -1547,6 +1592,49 @@
 
 .dc-empty-keys {
   margin: 14px 0 0;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+/*
+ * The one interactive part of the empty canvas, so it opts back into pointer events the container
+ * turned off. Kept as bare text buttons on purpose: a row of cards or thumbnails here would turn a
+ * blank Draft Canvas into a template picker, which is the opposite of the point.
+ */
+.dc-empty-starters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 10px;
+  margin-top: 18px;
+  pointer-events: auto;
+}
+
+.dc-empty-starter {
+  padding: 3px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.dc-empty-starter:hover {
+  border-color: var(--dc-border);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+}
+
+.dc-empty-starter:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-empty-starters-tail {
   color: var(--dc-text-faint);
   font-size: 12px;
 }
