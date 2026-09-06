@@ -146,11 +146,12 @@ export type ActorKind = (typeof ACTOR_KINDS)[number];
  * module — a Component, never a Service, however service-like its name sounds.
  *
  * Kept deliberately small: `generic` (unspecified — no caption, same convention as every other
- * kind's default), `module` (an internal subdivision — Modular Monolith's own boundary-based
- * modules are a *different*, coarser concept; this is for a single logical piece, not a whole
- * boundary), and `adapter` (a ports-and-adapters translation layer — Hexagonal's own use case).
- * Anything narrower — "Repository," "Controller," "Use Case" — is a *label* a user types onto a
- * `generic` (or `adapter`) Component, never a fourth kind.
+ * kind's default), `module` (an internal subdivision — the Modular Monolith starter's own
+ * Customer/Orders/Payments are exactly this: named, sized modules living inside one deployment
+ * boundary, never independently deployable), and `adapter` (a ports-and-adapters translation
+ * layer — Hexagonal's own use case, and also the Modular Monolith starter's inbound API). Anything
+ * narrower — "Repository," "Controller," "Use Case" — is a *label* a user types onto a `generic`
+ * (or `adapter`) Component, never a fourth kind.
  */
 export const COMPONENT_KINDS = ['generic', 'module', 'adapter'] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];

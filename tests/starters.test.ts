@@ -179,16 +179,48 @@ describe('buildStarter', () => {
     }
   });
 
-  it('models the modular monolith as one deployment holding three domains', () => {
+  it('models the modular monolith as one deployment holding three modules with a controlled, acyclic dependency chain', () => {
     const { nodes, edges } = buildStarter(starterById('modular-monolith')!, { x: 0, y: 0 });
     const deployments = nodes.filter((node) => node.boundaryPreset === 'deployment');
-    const domains = nodes.filter((node) => node.boundaryPreset === 'domain');
     expect(deployments).toHaveLength(1);
-    expect(domains).toHaveLength(3);
-    for (const domain of domains) expect(domain.parentId).toBe(deployments[0]!.id);
-    // Restraint: the modules collaborate through the seams, not through drawn arrows.
-    const domainIds = new Set(domains.map((node) => node.id));
-    expect(edges.some((edge) => domainIds.has(edge.source) && domainIds.has(edge.target))).toBe(false);
+
+    const modules = nodes.filter((node) => node.type === 'component' && node.componentKind === 'module');
+    expect(modules).toHaveLength(3);
+    for (const module of modules) expect(module.parentId).toBe(deployments[0]!.id);
+
+    const api = nodes.find((node) => node.type === 'component' && node.componentKind === 'adapter')!;
+    expect(api).toBeDefined();
+    expect(api.parentId).toBe(deployments[0]!.id);
+
+    // No Shared Infrastructure layer, and no independent Service node at all — everything inside
+    // the boundary is a Component.
+    expect(nodes.some((node) => node.type === 'service')).toBe(false);
+
+    // Exactly two edges among the modules, both an in-process "uses" — deliberate and restrained,
+    // never a mesh.
+    const moduleIds = new Set(modules.map((node) => node.id));
+    const moduleEdges = edges.filter((edge) => moduleIds.has(edge.source) && moduleIds.has(edge.target));
+    expect(moduleEdges).toHaveLength(2);
+    for (const edge of moduleEdges) expect(edge.semantic).toBe('uses');
+
+    // Acyclic: no pair of modules connects in both directions.
+    for (const edge of moduleEdges) {
+      expect(moduleEdges.some((other) => other.source === edge.target && other.target === edge.source)).toBe(
+        false,
+      );
+    }
+
+    // The API fans out to every module.
+    for (const module of modules) {
+      expect(edges.some((edge) => edge.source === api.id && edge.target === module.id)).toBe(true);
+    }
+
+    // One restrained persistence edge into the one shared database — not one per module, and not
+    // zero either: proximity alone isn't enough to say "this application persists here."
+    const database = nodes.find((node) => node.databaseKind === 'sql')!;
+    const persistenceEdges = edges.filter((edge) => edge.target === database.id);
+    expect(persistenceEdges).toHaveLength(1);
+    expect(modules.some((module) => module.id === persistenceEdges[0]!.source)).toBe(true);
   });
 
   it('models event-driven flow as publish then fan-out, with no fake request/response', () => {

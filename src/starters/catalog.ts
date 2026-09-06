@@ -38,15 +38,6 @@ const SERVICE = { width: 176, height: 68 };
 const STORE = { width: 148, height: 88 };
 const TOPIC = { width: 140, height: 48 };
 const ACTOR = { width: 120, height: 92 };
-/**
- * A shared layer inside a boundary: the entry point above the modules, the platform below them.
- * Wider than a default Service so its label fits on one line and it reads as serving all three
- * modules — but nowhere near the boundary's full width, because a Service silhouette stretched to
- * 700px stops looking like a Service and starts looking like a rendering bug (its left-hand cap
- * detaches into a stray bracket). Position carries "this is a layer" perfectly well on its own.
- */
-const LAYER = { width: 240, height: 68 };
-
 const TOP: StarterEdgeSpec['sourceAnchor'] = { side: 'top', offset: 0.5 };
 const BOTTOM: StarterEdgeSpec['sourceAnchor'] = { side: 'bottom', offset: 0.5 };
 const LEFT: StarterEdgeSpec['sourceAnchor'] = { side: 'left', offset: 0.5 };
@@ -150,27 +141,91 @@ const monolith: ArchitectureStarter = {
 
 /* ------------------------------------------------------- modular monolith -- */
 /**
- * Still one deployable application — the same single `deployment` boundary the Monolith uses — but
- * with deliberate internal seams. The modules are `domain` boundaries rather than services,
- * precisely so they cannot be misread as independently deployed things: the contrast that teaches
- * the pattern is *one* deployment boundary here against *three* in Microservices.
+ * One deployable application whose internals are the whole point: three named, acyclically
+ * dependent modules, reached through one internal adapter, all writing to one shared database.
+ * Every choice below exists to keep this from reading as Microservices with the network hop
+ * quietly erased.
  *
- * There are no module-to-module arrows at all. Restraint is the design: the seams do the talking,
- * and the developer draws whatever collaboration their own system actually has.
+ * `Payments`, `Orders`, and `Customer` are `Component`/`module` nodes now, not the empty
+ * `domain`-preset boundaries an earlier revision drew. An empty boundary box says "here is a
+ * zone" and nothing else — it can't be the hero of a diagram, only its container. A Component is
+ * a real, sized, named thing that can still sit inside `Application`'s own boundary while reading
+ * as internal rather than a deployable peer — the same read `docs/ARCHITECTURE.md` already
+ * documents for Hexagonal's Use Cases and Domain Model, applied here to the primitive it names
+ * for exactly this ("an internal subdivision" — `document/types.ts`'s `COMPONENT_KINDS`). Grown
+ * past Component's own default footprint (152×56 → `MODULE`'s 176×76) the same way Hexagonal grew
+ * its one hub node past default for hero status — except here there's no separate "core"
+ * competing for it, so the growth goes straight to the three modules themselves. They stay
+ * larger than `API`, which sits at Component's exact default: the modules are this diagram's
+ * payload, the adapter is only how you reach them.
+ *
+ * `API` is a `Component`/`adapter`, not a `Service`. Drawing it as `service`/`api` — combined
+ * with `actor>service`'s inferred `calls` — made the top of this diagram indistinguishable from
+ * the top of Microservices: an externally-reachable network endpoint. It isn't one; it's the
+ * monolith's own inbound dispatch point, living entirely inside the one `Application` deployment
+ * boundary. `actor>component` still infers the correct `calls` for the one crossing that's real
+ * here (Client → API), and `API`'s own three edges down into the modules are `component>
+ * component`, which has its own exact matrix row (default `uses`, not `service>service`'s
+ * `calls`) specifically so in-process dispatch never reads as a network call — the same reasoning
+ * that gives Hexagonal's Use Cases → Adapters edges their own row.
+ *
+ * The dependency chain between modules — `Payments → Orders`, `Orders → Customer` — is exactly
+ * two edges, on purpose. A modular monolith's whole premise is that module coupling is deliberate
+ * and bounded; a mesh of cross-edges (or a cycle) would draw the opposite. Two edges are enough to
+ * show a real, directed, acyclic dependency without implying anything richer — a starter carries
+ * only enough to establish its pattern. `Orders` sits in the middle of the row specifically
+ * because it's the only module with two edges (one in, one out); either end module has exactly
+ * one, so the chain draws left to right with no crossing.
+ *
+ * `Shared Infrastructure` — an earlier revision's fourth internal layer — is gone entirely. It
+ * added a whole extra tier purely to gesture at "some shared platform code exists," without being
+ * load-bearing for what this starter is actually about: modules and their one shared database.
+ * Removing it is most of why the boundary shrank from 536px tall to 328px.
+ *
+ * The database sits where every other starter puts its external store — outside the one
+ * boundary, a `BAND` below it, centred directly beneath `Orders` — but unlike an unconnected
+ * neighbour, one edge (`Orders → Application Database`, folding `component>database` to
+ * `service>database`'s `writes`) makes "this application persists to one shared store" explicit
+ * rather than left to placement alone. Every module would connect if a starter's own size budget
+ * (`tests/starters.test.ts`'s "stays small enough to be a starting point") allowed it without
+ * turning three long verticals into the very fan the boundary above already spent its one fan-out
+ * on; one restrained connection, from the module the dependency chain already treats as central,
+ * says the same thing without repeating the API fan-out's shape a second time lower down. Sized
+ * to `MODULE`'s own width (176, not `STORE`'s default 148) for two reasons at once: "Application
+ * Database" needs the room on a single line (a data-store cylinder's caption never wraps), and the
+ * match lines it up exactly under `Orders`, keeping the one persistence edge perfectly vertical. A
+ * short annotation, `Module-owned data`, sits beside it to head off the opposite misreading: one
+ * physical store still means logically owned, per-module data, not a shared blob that undercuts
+ * "strongly separated modules."
  */
-const MODULE = { width: 192, height: 132 };
+/** The one inbound interface of the monolith — a routing/dispatch adapter, not an independently
+ *  deployable network peer. Kept at Component's own default footprint (`document/limits.ts`'s
+ *  `componentWidth`/`componentHeight`): a Component that isn't this diagram's hero gets no special
+ *  treatment, exactly like Hexagonal's own Adapters. */
+const API = { width: 152, height: 56 };
+/** The three business modules — the entire reason this diagram exists. Grown past Component's
+ *  default the way Hexagonal grew exactly one component, its hub — but by more, since these three
+ *  aren't sharing hero status with a separate "core." */
+const MODULE = { width: 176, height: 76 };
 const MODULAR_CX = 396;
 const MODULE_COLUMNS = columnsAt(MODULAR_CX, 3, MODULE.width, GUTTER);
 const MODULAR_INNER_LEFT = MODULE_COLUMNS[0]!;
 const MODULAR_INNER_WIDTH = MODULE_COLUMNS[2]! + MODULE.width - MODULAR_INNER_LEFT;
 const MODULAR_API_Y = BOUNDARY_HEADER;
 /** A full `BAND`, not `INNER_BAND`: this is the one gap a fan-out has to plan a shared trunk
- *  across (`edges/bundles.ts`), and a trunk that lands a few pixels above the boundaries it feeds
+ *  across (`edges/bundles.ts`), and a trunk that lands a few pixels above the modules it feeds
  *  reads as a near-miss rather than as routing. */
-const MODULAR_MODULES_Y = MODULAR_API_Y + LAYER.height + BAND;
-const MODULAR_SHARED_Y = MODULAR_MODULES_Y + MODULE.height + INNER_BAND;
-const MODULAR_BOUNDARY_HEIGHT = MODULAR_SHARED_Y + LAYER.height + BOUNDARY_PAD;
+const MODULAR_MODULES_Y = MODULAR_API_Y + API.height + BAND;
+// No further internal tier — Shared Infrastructure is gone, so the modules are the last thing
+// inside the boundary and `BOUNDARY_PAD` closes it directly beneath them.
+const MODULAR_BOUNDARY_HEIGHT = MODULAR_MODULES_Y + MODULE.height + BOUNDARY_PAD;
 const MODULAR_BOUNDARY_WIDTH = MODULAR_INNER_WIDTH + BOUNDARY_PAD * 2;
+const MODULAR_DATABASE_Y = MODULAR_BOUNDARY_HEIGHT + BAND;
+/** `MODULE`'s width, not `STORE`'s default 148: "Application Database" is a data-store caption
+ *  (never wrapped — see `nodes/describe.ts`'s `dataStoreCylinder`), and needs the room on one
+ *  line. The reuse is also what centres this node exactly under `module-orders`. */
+const DATABASE_BOX = { width: MODULE.width, height: STORE.height };
+const MODULAR_NOTE = { width: 104, height: 24 };
 
 const modularMonolith: ArchitectureStarter = {
   id: 'modular-monolith',
@@ -206,56 +261,84 @@ const modularMonolith: ArchitectureStarter = {
     },
     {
       key: 'api',
-      type: 'service',
-      serviceKind: 'api',
-      accent: 'teal',
+      type: 'component',
+      componentKind: 'adapter',
+      text: 'API',
       parent: 'app',
-      x: centeredAt(MODULAR_CX, LAYER.width),
+      x: centeredAt(MODULAR_CX, API.width),
       y: MODULAR_API_Y,
-      ...LAYER,
+      ...API,
     },
-    ...(['Customer', 'Orders', 'Payments'] as const).map(
-      (name, index): StarterNodeSpec => ({
-        key: `module-${index}`,
-        type: 'group',
-        boundaryPreset: 'domain',
-        text: name,
-        parent: 'app',
-        x: MODULE_COLUMNS[index]!,
-        y: MODULAR_MODULES_Y,
-        ...MODULE,
-      }),
-    ),
+    // Left to right: Payments, Orders, Customer. Orders sits in the middle because it's the only
+    // module with two edges (one dependency in, one out) — either end module has exactly one, so
+    // the acyclic chain below draws straight left to right with no crossing.
     {
-      key: 'shared',
-      type: 'service',
-      serviceKind: 'generic',
-      text: 'Shared Infrastructure',
-      accent: 'teal',
+      key: 'module-payments',
+      type: 'component',
+      componentKind: 'module',
+      text: 'Payments',
       parent: 'app',
-      x: centeredAt(MODULAR_CX, LAYER.width),
-      y: MODULAR_SHARED_Y,
-      ...LAYER,
+      x: MODULE_COLUMNS[0]!,
+      y: MODULAR_MODULES_Y,
+      ...MODULE,
+    },
+    {
+      key: 'module-orders',
+      type: 'component',
+      componentKind: 'module',
+      text: 'Orders',
+      parent: 'app',
+      x: MODULE_COLUMNS[1]!,
+      y: MODULAR_MODULES_Y,
+      ...MODULE,
+    },
+    {
+      key: 'module-customer',
+      type: 'component',
+      componentKind: 'module',
+      text: 'Customer',
+      parent: 'app',
+      x: MODULE_COLUMNS[2]!,
+      y: MODULAR_MODULES_Y,
+      ...MODULE,
     },
     {
       key: 'database',
       type: 'database',
       databaseKind: 'sql',
-      text: 'Database',
+      text: 'Application Database',
       accent: 'blue',
-      x: centeredAt(MODULAR_CX, STORE.width),
-      y: MODULAR_BOUNDARY_HEIGHT + BAND,
-      ...STORE,
+      x: centeredAt(MODULAR_CX, DATABASE_BOX.width),
+      y: MODULAR_DATABASE_Y,
+      ...DATABASE_BOX,
+    },
+    {
+      // A plain, zero-semantics annotation (never a Component/Note standing in for the concept) —
+      // placed beside the database, in the space the one persistence edge's own corridor never
+      // enters (that edge runs straight up from the database's centre, not its side).
+      key: 'data-ownership-note',
+      type: 'text',
+      text: 'Module-owned data',
+      annotation: true,
+      x: centeredAt(MODULAR_CX, DATABASE_BOX.width) + DATABASE_BOX.width + GUTTER,
+      y: MODULAR_DATABASE_Y + DATABASE_BOX.height / 2 - MODULAR_NOTE.height / 2,
+      ...MODULAR_NOTE,
     },
   ],
   edges: [
     down('client', 'api'),
     // All three leave the same point on the API bar, so they read as one entry point fanning into
     // three modules rather than three unrelated lines that happen to start nearby.
-    down('api', 'module-0'),
-    down('api', 'module-1'),
-    down('api', 'module-2'),
-    down('shared', 'database'),
+    down('api', 'module-payments'),
+    down('api', 'module-orders'),
+    down('api', 'module-customer'),
+    // The controlled dependency chain — exactly two edges, deliberately not a mesh.
+    { from: 'module-payments', to: 'module-orders', sourceAnchor: RIGHT, targetAnchor: LEFT },
+    { from: 'module-orders', to: 'module-customer', sourceAnchor: RIGHT, targetAnchor: LEFT },
+    // One restrained persistence edge, from the module the chain above already treats as
+    // central — not a second three-way fan competing with the API's own, and not one edge per
+    // module either (see the starter's size budget, and this block's own doc comment).
+    down('module-orders', 'database'),
   ],
 };
 
