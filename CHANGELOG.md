@@ -8,56 +8,34 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-06
+
 ### Added
 
-- Connections that fan out from one component, or converge on one, are now routed automatically
-  through a shared trunk with evenly spaced branches, instead of several near-identical lines
-  competing for the same strip of canvas. The repeated relationship label collapses onto that trunk
-  too, so five calls read as one "calls" rather than five stacked copies. It applies itself when the
-  shape is unmistakable — same source or destination, same relationship, destinations lined up in
-  one direction, and a clear corridor to run through — and otherwise leaves connectors exactly as
-  they were. Nothing is added to your diagram: those five connections are still five independent
-  relationships, and the shared trunk is only how they are drawn. With the optional response path
-  turned on, the reply lines gather into their own dashed return lane running alongside the request
-  trunk rather than weaving through it.
-- Right-click a bundled connector for "Convert to junction" to turn its shared route into a real
-  Junction you control, placed where the branch point already appears so nothing jumps. "Use direct
-  routing" opts a single connector out, and "Tidy connections" in the command palette hands every
-  connector you have taken over back to automatic routing — it never moves a node or changes where
-  a connector attaches.
-- Data Store now has seven distinct storage silhouettes instead of one cylinder wearing different
-  captions: SQL keeps the classic cylinder with a subtle row hint, NoSQL is a loose cluster of
-  offset blocks, Cache is a flat stack of tight slabs, File System is a folder tab, Object Storage
-  is an open vessel, and Search Index is a stack of tabbed cards. Connecting to (or from) each one
-  now offers only the relationships that make architectural sense for it — Cache gets an
-  "invalidates" option databases don't, Object Storage can notify a Queue or Topic the way an
-  "object created" event would, and so on.
-- The Service, Queue, Actor, and Data Store kind pickers now show a live miniature of each option's
-  actual shape instead of plain text, in a compact layout you can scan at a glance. A background
-  worker connecting to a Search Index now defaults to "indexes" rather than "searches."
-- Service now has six distinct silhouettes instead of one rounded card wearing different captions:
-  API has an interface notch on its left edge, Worker is a layered stack of two cards, External has
-  a dashed detached outer frame, Scheduler carries a short pulse of ticks near its corner, and
-  Gateway has a directional entry notch. Two new kinds, Scheduler and Gateway, join Generic/API/
-  Worker/External — Scheduler defaults its outgoing connections to "triggers" and Gateway to
-  "routes," and a Gateway pointed at a data store is flagged as unusual. A fresh Service node's name
-  now follows its kind (a new Worker starts out called "Worker," an External one "External System")
-  until you rename it yourself — after that, Draft Canvas never touches the name again, no matter
-  how many times you change its kind.
+- Connections that fan out from one component, or converge on one, are now routed through a shared
+  trunk with evenly spaced branches instead of a tangle of near-identical lines, and their repeated
+  relationship label collapses onto it. It applies itself automatically when the pattern is clear;
+  your connections stay independent underneath. Right-click a bundled connector for "Convert to
+  junction" to take manual control, or "Use direct routing" to opt one out — "Tidy connections" in
+  the command palette resets every opted-out connector at once.
+- Data Store now has seven distinct silhouettes — SQL, NoSQL, Cache, File System, Object Storage,
+  Search Index, and generic — each offering only the relationships that make sense for it.
+- Service now has six distinct silhouettes, including two new kinds: Scheduler and Gateway.
+- The Service, Queue, Actor, and Data Store kind pickers now show a live shape preview instead of
+  plain text.
+- A new node's name follows its kind (e.g. "Worker," "External System") until you rename it
+  yourself.
 
 ### Changed
 
-- A new Service → Service connection no longer draws a response arrow by default. The return path
-  is implied at the level an architecture diagram works at, and drawing it unasked doubled the lines
-  on exactly the diagrams that were already busiest. Turn it on per connector with the Response
-  toggle; connections that already had one keep it.
+- A new Service → Service connection no longer draws a response arrow by default. Turn it on with
+  the Response toggle; connections that already had one keep it.
 
 ### Fixed
 
-- Changing a node's kind (Service, Data Store, Queue, or Actor) now re-evaluates its existing
-  connections' relationship labels instead of silently leaving a now-stale one in place.
-- Contextual hints (like the note/code attachment nudge on a Service node) no longer appear unless
-  Learn Draft Canvas mode is turned on.
+- Changing a node's kind now re-evaluates its existing connections' relationship labels instead of
+  leaving a stale one in place.
+- Contextual hints no longer appear unless Learn Draft Canvas mode is turned on.
 
 ## [0.4.0] - 2026-09-05
 
