@@ -146,6 +146,17 @@ const monolith: ArchitectureStarter = {
  * Every choice below exists to keep this from reading as Microservices with the network hop
  * quietly erased.
  *
+ * The outer boundary reads `Application` / `Single deployment`, not `Application` under a fixed
+ * `DEPLOYMENT` tag. `boundaryPreset: 'deployment'`'s caption is a closed vocabulary word
+ * (`nodes/describe.ts`'s `BOUNDARY_PRESET_LABELS`) — there's no way to make it say anything but
+ * `DEPLOYMENT` — so saying the actual phrase "single deployment" means dropping the preset
+ * caption (`boundaryPreset: 'boundary'`, the same choice Hexagonal already made for `Application
+ * Core`) and adding one small `annotation: true` text node directly under the boundary's own
+ * title, the identical technique already used for `Inbound ports`/`Outbound ports` there and for
+ * `Module-owned data` below. `Application` stays the one real title (primary, in `groupTitle`);
+ * `Single deployment` rides the quiet annotation style (secondary, muted, no chip) — never the
+ * reverse, and never both fighting for the same line.
+ *
  * `Payments`, `Orders`, and `Customer` are `Component`/`module` nodes now, not the empty
  * `domain`-preset boundaries an earlier revision drew. An empty boundary box says "here is a
  * zone" and nothing else — it can't be the hero of a diagram, only its container. A Component is
@@ -183,20 +194,21 @@ const monolith: ArchitectureStarter = {
  * Removing it is most of why the boundary shrank from 536px tall to 328px.
  *
  * The database sits where every other starter puts its external store — outside the one
- * boundary, a `BAND` below it, centred directly beneath `Orders` — but unlike an unconnected
- * neighbour, one edge (`Orders → Application Database`, folding `component>database` to
- * `service>database`'s `writes`) makes "this application persists to one shared store" explicit
- * rather than left to placement alone. Every module would connect if a starter's own size budget
- * (`tests/starters.test.ts`'s "stays small enough to be a starting point") allowed it without
- * turning three long verticals into the very fan the boundary above already spent its one fan-out
- * on; one restrained connection, from the module the dependency chain already treats as central,
- * says the same thing without repeating the API fan-out's shape a second time lower down. Sized
- * to `MODULE`'s own width (176, not `STORE`'s default 148) for two reasons at once: "Application
- * Database" needs the room on a single line (a data-store cylinder's caption never wraps), and the
- * match lines it up exactly under `Orders`, keeping the one persistence edge perfectly vertical. A
- * short annotation, `Module-owned data`, sits beside it to head off the opposite misreading: one
- * physical store still means logically owned, per-module data, not a shared blob that undercuts
- * "strongly separated modules."
+ * boundary, centred beneath it — but, deliberately, no edge connects it to anything. An earlier
+ * revision drew a single `Orders → Application Database` connector to make "shared store" explicit,
+ * but a single arrow from one named module reads as "Orders owns the database," which is the one
+ * misreading this starter cannot afford — modules are supposed to stay peers. Three edges (one per
+ * module) would say the true thing, but repeats the API fan-out's own shape a second time lower
+ * down and reads as persistence spaghetti for a relationship placement already carries. So: zero
+ * edges, and the two things a reader needs are said without one — proximity plus a centred
+ * position under the whole module row says "the application, not any one module, persists here,"
+ * and the annotation below (`Module-owned data`) says the ownership is still logical, per module,
+ * even though the physical store is one box. Sized to `MODULE`'s own width (176, not `STORE`'s
+ * default 148) because "Application Database" needs the room on a single line — a data-store
+ * cylinder's caption never wraps (`nodes/describe.ts`'s `dataStoreCylinder`) — and the gap above it
+ * is `INNER_BAND` rather than the fuller `BAND` every *connected* boundary-to-external-node gap in
+ * this file uses: with no edge to plan a corridor for, there's nothing left for the extra room to
+ * do.
  */
 /** The one inbound interface of the monolith — a routing/dispatch adapter, not an independently
  *  deployable network peer. Kept at Component's own default footprint (`document/limits.ts`'s
@@ -211,7 +223,20 @@ const MODULAR_CX = 396;
 const MODULE_COLUMNS = columnsAt(MODULAR_CX, 3, MODULE.width, GUTTER);
 const MODULAR_INNER_LEFT = MODULE_COLUMNS[0]!;
 const MODULAR_INNER_WIDTH = MODULE_COLUMNS[2]! + MODULE.width - MODULAR_INNER_LEFT;
-const MODULAR_API_Y = BOUNDARY_HEADER;
+/** Just under the boundary's own title: 9 (the title's own top inset for the `'boundary'` preset
+ *  — `nodes/describe.ts`'s `group()`) plus one `groupTitle` line (12 × 1.35 ≈ 16). Reuses
+ *  `BOUNDARY_HEADER_CAPTION_ONLY` rather than a hand-picked number: it's the same floor
+ *  `tests/starters.test.ts`'s "clear of the boundary caption" check already enforces for every
+ *  starter's children, so this node satisfies it by construction. */
+const MODULAR_SUBTITLE_Y = BOUNDARY_HEADER_CAPTION_ONLY;
+/** Shared by every small `annotation: true` label in this starter — the boundary's own `Single
+ *  deployment` subtitle and the database's `Module-owned data` note — so both read as the same
+ *  quiet, deliberate touch rather than two different afterthoughts. */
+const MODULAR_NOTE = { width: 140, height: 24 };
+const MODULAR_NOTE_GAP = 8;
+// Clears the `Single deployment` subtitle before the API begins — `BOUNDARY_HEADER` alone (sized
+// for a preset caption + title, not a title + a second annotation line) would overlap it.
+const MODULAR_API_Y = MODULAR_SUBTITLE_Y + MODULAR_NOTE.height + MODULAR_NOTE_GAP;
 /** A full `BAND`, not `INNER_BAND`: this is the one gap a fan-out has to plan a shared trunk
  *  across (`edges/bundles.ts`), and a trunk that lands a few pixels above the modules it feeds
  *  reads as a near-miss rather than as routing. */
@@ -220,12 +245,14 @@ const MODULAR_MODULES_Y = MODULAR_API_Y + API.height + BAND;
 // inside the boundary and `BOUNDARY_PAD` closes it directly beneath them.
 const MODULAR_BOUNDARY_HEIGHT = MODULAR_MODULES_Y + MODULE.height + BOUNDARY_PAD;
 const MODULAR_BOUNDARY_WIDTH = MODULAR_INNER_WIDTH + BOUNDARY_PAD * 2;
-const MODULAR_DATABASE_Y = MODULAR_BOUNDARY_HEIGHT + BAND;
+// `INNER_BAND`, not the fuller `BAND`: with no edge connecting the boundary to the database (see
+// this block's own doc comment), there's no routing corridor to plan room for — only enough gap
+// to read as clearly outside the boundary.
+const MODULAR_DATABASE_Y = MODULAR_BOUNDARY_HEIGHT + INNER_BAND;
 /** `MODULE`'s width, not `STORE`'s default 148: "Application Database" is a data-store caption
  *  (never wrapped — see `nodes/describe.ts`'s `dataStoreCylinder`), and needs the room on one
- *  line. The reuse is also what centres this node exactly under `module-orders`. */
+ *  line. */
 const DATABASE_BOX = { width: MODULE.width, height: STORE.height };
-const MODULAR_NOTE = { width: 104, height: 24 };
 
 const modularMonolith: ArchitectureStarter = {
   id: 'modular-monolith',
@@ -250,14 +277,33 @@ const modularMonolith: ArchitectureStarter = {
       ...ACTOR,
     },
     {
+      // `'boundary'`, not `'deployment'`: that preset's caption is the fixed word `DEPLOYMENT`,
+      // and this starter says the actual phrase "single deployment" instead, via the plain
+      // annotation right below (`app-subtitle`) — the same "preset caption is a closed
+      // vocabulary, an annotation is free text" split Hexagonal already established.
       key: 'app',
       type: 'group',
-      boundaryPreset: 'deployment',
+      boundaryPreset: 'boundary',
       text: 'Application',
       x: MODULAR_INNER_LEFT - BOUNDARY_PAD,
       y: 0,
       width: MODULAR_BOUNDARY_WIDTH,
       height: MODULAR_BOUNDARY_HEIGHT,
+    },
+    {
+      // Sits just beneath the boundary's own title (drawn by `group()` itself, not a node) — a
+      // plain annotation, not a second title competing for the same line. `x` is `BOUNDARY_PAD`
+      // in from the boundary's edge, same as every other child, rather than matching the title's
+      // own tighter 12px inset (`nodes/describe.ts`'s `group()`) — a child node is held to the
+      // house child-inset rule, not to the boundary's own hand-drawn label position.
+      key: 'app-subtitle',
+      type: 'text',
+      text: 'Single deployment',
+      annotation: true,
+      parent: 'app',
+      x: MODULAR_INNER_LEFT,
+      y: MODULAR_SUBTITLE_Y,
+      ...MODULAR_NOTE,
     },
     {
       key: 'api',
@@ -314,14 +360,15 @@ const modularMonolith: ArchitectureStarter = {
     },
     {
       // A plain, zero-semantics annotation (never a Component/Note standing in for the concept) —
-      // placed beside the database, in the space the one persistence edge's own corridor never
-      // enters (that edge runs straight up from the database's centre, not its side).
+      // stacked directly beneath the database so it reads as the database's own caption, not a
+      // detached label. Deliberately no edge connects it to the database (see this block's own
+      // doc comment): stacking is what makes the association read, not a connector.
       key: 'data-ownership-note',
       type: 'text',
       text: 'Module-owned data',
       annotation: true,
-      x: centeredAt(MODULAR_CX, DATABASE_BOX.width) + DATABASE_BOX.width + GUTTER,
-      y: MODULAR_DATABASE_Y + DATABASE_BOX.height / 2 - MODULAR_NOTE.height / 2,
+      x: centeredAt(MODULAR_CX, MODULAR_NOTE.width),
+      y: MODULAR_DATABASE_Y + DATABASE_BOX.height + MODULAR_NOTE_GAP,
       ...MODULAR_NOTE,
     },
   ],
@@ -332,13 +379,11 @@ const modularMonolith: ArchitectureStarter = {
     down('api', 'module-payments'),
     down('api', 'module-orders'),
     down('api', 'module-customer'),
-    // The controlled dependency chain — exactly two edges, deliberately not a mesh.
+    // The controlled dependency chain — exactly two edges, deliberately not a mesh. No edge into
+    // the database at all: see this block's own doc comment for why proximity and the annotation
+    // below say "one shared store" better than any single connector would.
     { from: 'module-payments', to: 'module-orders', sourceAnchor: RIGHT, targetAnchor: LEFT },
     { from: 'module-orders', to: 'module-customer', sourceAnchor: RIGHT, targetAnchor: LEFT },
-    // One restrained persistence edge, from the module the chain above already treats as
-    // central — not a second three-way fan competing with the API's own, and not one edge per
-    // module either (see the starter's size budget, and this block's own doc comment).
-    down('module-orders', 'database'),
   ],
 };
 

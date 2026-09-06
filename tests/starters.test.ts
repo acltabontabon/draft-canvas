@@ -179,18 +179,22 @@ describe('buildStarter', () => {
     }
   });
 
-  it('models the modular monolith as one deployment holding three modules with a controlled, acyclic dependency chain', () => {
+  it('models the modular monolith as one application boundary holding three modules with a controlled, acyclic dependency chain', () => {
     const { nodes, edges } = buildStarter(starterById('modular-monolith')!, { x: 0, y: 0 });
-    const deployments = nodes.filter((node) => node.boundaryPreset === 'deployment');
-    expect(deployments).toHaveLength(1);
+    const boundaries = nodes.filter((node) => node.type === 'group');
+    expect(boundaries).toHaveLength(1);
+    const app = boundaries[0]!;
+    // No fixed `DEPLOYMENT` preset caption — the starter says "single deployment" itself, via a
+    // plain annotation, so the boundary uses the one preset with no caption of its own.
+    expect(app.boundaryPreset).toBe('boundary');
 
     const modules = nodes.filter((node) => node.type === 'component' && node.componentKind === 'module');
     expect(modules).toHaveLength(3);
-    for (const module of modules) expect(module.parentId).toBe(deployments[0]!.id);
+    for (const module of modules) expect(module.parentId).toBe(app.id);
 
     const api = nodes.find((node) => node.type === 'component' && node.componentKind === 'adapter')!;
     expect(api).toBeDefined();
-    expect(api.parentId).toBe(deployments[0]!.id);
+    expect(api.parentId).toBe(app.id);
 
     // No Shared Infrastructure layer, and no independent Service node at all — everything inside
     // the boundary is a Component.
@@ -215,12 +219,10 @@ describe('buildStarter', () => {
       expect(edges.some((edge) => edge.source === api.id && edge.target === module.id)).toBe(true);
     }
 
-    // One restrained persistence edge into the one shared database — not one per module, and not
-    // zero either: proximity alone isn't enough to say "this application persists here."
+    // The database has no incoming edges at all — no module singled out as "the one that owns
+    // persistence," and no fan-in either. Placement and its own annotation carry that meaning.
     const database = nodes.find((node) => node.databaseKind === 'sql')!;
-    const persistenceEdges = edges.filter((edge) => edge.target === database.id);
-    expect(persistenceEdges).toHaveLength(1);
-    expect(modules.some((module) => module.id === persistenceEdges[0]!.source)).toBe(true);
+    expect(edges.some((edge) => edge.target === database.id || edge.source === database.id)).toBe(false);
   });
 
   it('models event-driven flow as publish then fan-out, with no fake request/response', () => {
