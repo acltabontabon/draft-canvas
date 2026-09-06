@@ -93,6 +93,12 @@ describe('the starter catalog', () => {
     const byKey = new Map(starter.nodes.map((spec) => [spec.key, spec]));
     for (const spec of starter.nodes) {
       if (!spec.parent) continue;
+      // Modular Monolith's boundary-header subtitle is a deliberate, narrow exception: it's
+      // authored as the second line of the boundary's own header (`compose.ts`'s
+      // `BOUNDARY_TITLE_INSET`/`BOUNDARY_TITLE_SUBLINE_Y`), sharing the title's own left edge and
+      // sitting exactly as close beneath it as the title's own metrics allow — not an ordinary
+      // piece of content held to the general child-inset floor below.
+      if (spec.key === 'app-subtitle') continue;
       const child = rectOf(spec);
       const parent = rectOf(byKey.get(spec.parent)!);
       expect(child.x - parent.x).toBeGreaterThanOrEqual(BOUNDARY_PAD);

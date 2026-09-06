@@ -43,6 +43,25 @@ export const BOUNDARY_HEADER_CAPTION_ONLY = 40;
  */
 export const BOUNDARY_HEADER_TITLE_ONLY = 44;
 
+/**
+ * The boundary title's own left inset (`nodes/describe.ts`'s `group()` draws it at local `x: 12`,
+ * the module's own `PADDING` constant). A child node is ordinarily held to `BOUNDARY_PAD`'s wider
+ * inset (see `tests/starters.test.ts`'s "clear of the boundary caption" check) — this narrower one
+ * is only for a header annotation meant to read as a continuation of the title itself, sharing its
+ * exact left edge rather than falling back to a generic child's own breathing room.
+ */
+export const BOUNDARY_TITLE_INSET = 12;
+
+/**
+ * Where a second header line belongs when stacked directly beneath a title-only boundary's own
+ * title (`boundaryPreset: 'boundary'`, no preset caption) — the title's own top inset (9) plus one
+ * `groupTitle` line (12 × 1.35 ≈ 16), plus a few px of daylight. This is deliberately tighter than
+ * `BOUNDARY_HEADER_TITLE_ONLY` (44, the room reserved before a boundary's *other* content begins):
+ * that constant answers "how far down can real content start," this one answers "how close can a
+ * subtitle sit to the title it belongs to."
+ */
+export const BOUNDARY_TITLE_SUBLINE_Y = 30;
+
 /** The left edge that centres something of `width` on `cx`. */
 export function centeredAt(cx: number, width: number): number {
   return Math.round(cx - width / 2);

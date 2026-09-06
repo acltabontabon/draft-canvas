@@ -24,6 +24,8 @@ import {
   BOUNDARY_HEADER_CAPTION_ONLY,
   BOUNDARY_HEADER_TITLE_ONLY,
   BOUNDARY_PAD,
+  BOUNDARY_TITLE_INSET,
+  BOUNDARY_TITLE_SUBLINE_Y,
   GUTTER,
   INNER_BAND,
   centeredAt,
@@ -158,8 +160,13 @@ const monolith: ArchitectureStarter = {
  * `Single deployable unit` rides the quiet annotation style (secondary, muted, no chip) — and
  * says, specifically, *unit*: this boundary is the one thing that gets built and shipped as a
  * single artifact, not a generic "everything the application owns" container. That distinction is
- * what earns the database its place *outside* it (see below). `API` and all three modules still
- * sit inside this one boundary: nothing here gets its own separate boundary, which is precisely
+ * what earns the database its place *outside* it (see below). The subtitle sits at
+ * `BOUNDARY_TITLE_INSET`/`BOUNDARY_TITLE_SUBLINE_Y` (`compose.ts`) rather than an ordinary child's
+ * `BOUNDARY_PAD` inset and `BOUNDARY_HEADER_CAPTION_ONLY` floor — it shares the title's own left
+ * edge and sits as close beneath it as the title's own metrics allow, deliberately reading as the
+ * second line of one header rather than a detached annotation that happens to be nearby.
+ * `API` and all three modules still sit inside this one boundary: nothing here gets its own
+ * separate boundary, which is precisely
  * what would turn this into Microservices.
  *
  * `Payments`, `Orders`, and `Customer` are `Component`/`module` nodes, not empty boundaries. An
@@ -228,15 +235,21 @@ const monolith: ArchitectureStarter = {
  * matter what word labels it — three modules can't each own the same one node without that
  * reading like three overlapping claims on the same thing, which is exactly backwards: the
  * modules own their *data*, not the shared physical store that happens to hold it. A single
- * `Application → Application Database` edge from the boundary itself was considered too (one
- * high-level "the application persists here" relationship, not a per-module claim) — but a
- * `group` node has no category of its own in `connectorSemantics.ts` (`categoryOf` falls through
- * to `'generic'`), and the capability matrix's own doc comment lists "anything touching a generic
- * node" among its deliberately-absent pairs: there is no inferred relationship here for a starter
- * to draw, and hand-labelling an edge the matrix has no opinion on at all would say something the
- * rest of the app doesn't actually agree with — the one thing `docs/ARCHITECTURE.md`'s own rule
- * for this file ("relationships come from the matrix, never from the catalog") exists to prevent.
- * So: no edge, from anything, to the database. `Application Database` is sized to `MODULE`'s own
+ * `Application → Application Database` edge from the boundary itself was considered twice now (one
+ * high-level "the application persists here" relationship, not a per-module claim) — and twice
+ * ruled out for the same reason: a `group` node has no category of its own in
+ * `connectorSemantics.ts` (`categoryOf` falls through to `'generic'`, exactly alongside `text`,
+ * `note`, and `code` — `tests/connector-semantics.test.ts` pins this explicitly, so it's a tested,
+ * deliberate design decision, not a gap this file could patch on its own authority), and the
+ * capability matrix's own doc comment lists "anything touching a generic node" among its
+ * deliberately-absent pairs. There is no inferred relationship here for a starter to draw, and
+ * hand-labelling an edge the matrix has no opinion on at all would say something the rest of the
+ * app doesn't actually agree with — the one thing `docs/ARCHITECTURE.md`'s own rule for this file
+ * ("relationships come from the matrix, never from the catalog") exists to prevent. Making this
+ * "cleanly supported" would mean reclassifying every `group` node in the app, reversing that
+ * tested decision — a real behaviour change with its own consequences elsewhere, not a
+ * starter-scoped one. So: no edge, from anything, to the database. `Application Database` is sized
+ * to `MODULE`'s own
  * width (176, not `STORE`'s default 148) because its label needs the room on a single line — a
  * data-store cylinder's caption never wraps (`nodes/describe.ts`'s `dataStoreCylinder`) — and one
  * short annotation, `Module-owned data`, stacks directly beneath it: the one plain-language claim
@@ -260,12 +273,12 @@ const MODULAR_INNER_WIDTH = MODULE_COLUMNS[2]! + MODULE.width - MODULAR_INNER_LE
  *  `routeMode: 'direct'` connectors leave from visually distinct points instead of converging on
  *  one shared spot, matching the module columns they land on one-to-one. */
 const FAN_OFFSETS = [0.25, 0.5, 0.75] as const;
-/** Just under the boundary's own title: 9 (the title's own top inset for the `'boundary'` preset
- *  — `nodes/describe.ts`'s `group()`) plus one `groupTitle` line (12 × 1.35 ≈ 16). Reuses
- *  `BOUNDARY_HEADER_CAPTION_ONLY` rather than a hand-picked number: it's the same floor
- *  `tests/starters.test.ts`'s "clear of the boundary caption" check already enforces for every
- *  starter's children, so this node satisfies it by construction. */
-const MODULAR_SUBTITLE_Y = BOUNDARY_HEADER_CAPTION_ONLY;
+// `BOUNDARY_TITLE_SUBLINE_Y`, not `BOUNDARY_HEADER_CAPTION_ONLY`: the latter is the floor an
+// ordinary child of *any* boundary must clear, generous enough to also cover presets with a real
+// caption row above the title; this subtitle isn't ordinary content, it's the second line of the
+// boundary's own header, and sits exactly as close to the title as that header's own metrics
+// allow — see `tests/starters.test.ts`'s narrow, explicit exception for this one node.
+const MODULAR_SUBTITLE_Y = BOUNDARY_TITLE_SUBLINE_Y;
 /** Shared by every small `annotation: true` label in this starter — the boundary's own `Single
  *  deployable unit` subtitle and the database's `Module-owned data` note — so both read as the
  *  same quiet, deliberate touch rather than two different afterthoughts. Width reuses `MODULE`'s
@@ -335,17 +348,18 @@ const modularMonolith: ArchitectureStarter = {
       height: MODULAR_BOUNDARY_HEIGHT,
     },
     {
-      // Sits just beneath the boundary's own title (drawn by `group()` itself, not a node) — a
-      // plain annotation, not a second title competing for the same line. `x` is `BOUNDARY_PAD`
-      // in from the boundary's edge, same as every other child, rather than matching the title's
-      // own tighter 12px inset (`nodes/describe.ts`'s `group()`) — a child node is held to the
-      // house child-inset rule, not to the boundary's own hand-drawn label position.
+      // Sits directly beneath the boundary's own title (drawn by `group()` itself, not a node) —
+      // a plain annotation, not a second title competing for the same line, but deliberately
+      // sharing the title's exact left edge (`BOUNDARY_TITLE_INSET`, 12) rather than falling back
+      // to an ordinary child's wider `BOUNDARY_PAD` inset: this is the second line of one header,
+      // not independent content, and reads as one only if it lines up with the first. See
+      // `tests/starters.test.ts`'s narrow, explicit exception for this one node.
       key: 'app-subtitle',
       type: 'text',
       text: 'Single deployable unit',
       annotation: true,
       parent: 'app',
-      x: MODULAR_INNER_LEFT,
+      x: MODULAR_INNER_LEFT - BOUNDARY_PAD + BOUNDARY_TITLE_INSET,
       y: MODULAR_SUBTITLE_Y,
       ...MODULAR_NOTE,
     },
