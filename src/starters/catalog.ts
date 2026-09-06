@@ -186,24 +186,19 @@ const monolith: ArchitectureStarter = {
  * endpoint. `actor>component` infers the correct `calls` for the one crossing that's real here
  * (Client → API). Its three edges down into the modules are `component>component`, whose own
  * exact matrix row defaults to `uses`, not `service>service`'s `calls` — in-process dispatch never
- * reads as a network call. Each of the three carries `routeMode: 'direct'` and its own anchor
- * point spread across `API`'s bottom edge (`FAN_OFFSETS`: left/centre/right, matching the module
- * columns below), so `edges/bundles.ts`'s Smart Routing never collapses them into one shared trunk
- * with one caption. A bundled fan is exactly right for a plain one-to-many relationship
- * (Microservices' gateway, this same starter's own earlier revision) — but here the three edges
- * are individually meaningful, separately-owned capabilities, and one collapsed trunk visually
- * flattens that into "a single relationship, dispatched three ways," the opposite of what a reader
- * needs to see. Each also sets `routing: 'straight'`: with three separate anchor points already
- * spreading the exits, a plain point-to-point line reads as three deliberately aimed rays — a
- * `smoothstep` path's own independently-computed bend, by contrast, can land at a slightly
- * different height per edge (each travels a different horizontal distance), which is what reads as
- * "wiring" rather than an authored fan. `Payments`, `Orders`, and `Customer` all still show the
- * plain inferred `uses` caption on their own incoming edge — Draft Canvas has no per-connector
- * "keep the semantic, hide the text" toggle (see Hexagonal's own doc comment on the same
- * limitation), so three quiet, unstyled "uses" labels are the least noise three individually
- * meaningful relationships can carry without either re-merging them (exactly what this starter
- * must not do) or inventing new rendering behaviour a starter has no business adding. The API is
- * an inbound adapter into three capabilities, never an orchestration bus.
+ * reads as a network call. All three leave the same point on `API`'s bottom edge
+ * (`down('api', …)`, the plain shared-anchor helper every other fan-out in this file uses), so
+ * `edges/bundles.ts`'s Smart Routing bundles them into one shared trunk with one collapsed "uses"
+ * caption — a symmetric fork reading as one deliberate relationship into three peer capabilities,
+ * not three unrelated lines that happen to start nearby. An earlier revision kept these
+ * individually unbundled (`routeMode: 'direct'`, spread anchors, straight lines) on the theory
+ * that a shared trunk flattens three separately-owned relationships into one; the accepted design
+ * came back to the bundle regardless — the symmetric, single-caption fork reads as more
+ * intentional than three separate diagonals, and the document model underneath is identical
+ * either way (three real, independent, individually-selectable edges — bundling is a rendering
+ * choice, `edges/bundles.ts`'s own doc comment is explicit that nothing about the relationships
+ * themselves changes). The API is an inbound adapter into three capabilities, never an
+ * orchestration bus; the trunk says "one entry point," not "one relationship."
  *
  * Module-to-module coupling is exactly one edge: `Orders → Customer`, captioned `uses public API`
  * rather than the plain inferred `uses` — an explicit `label` override (the one documented escape
@@ -228,33 +223,36 @@ const monolith: ArchitectureStarter = {
  * associated with the application above it: centred on the same axis, one ordinary gap below,
  * with nothing else nearby it could be mistaken for belonging to.
  *
- * It carries no edges at all — not from the modules, and not from the boundary either. An earlier
- * revision drew `Payments → Application Database`/`Orders → …`/`Customer → …`, each labelled
- * `owns`, but every one of those edges necessarily starts at a *module* and ends at the *database
- * node itself*, so the arrow's own endpoints say "Payments owns [the] Application Database" no
- * matter what word labels it — three modules can't each own the same one node without that
- * reading like three overlapping claims on the same thing, which is exactly backwards: the
- * modules own their *data*, not the shared physical store that happens to hold it. A single
- * `Application → Application Database` edge from the boundary itself was considered twice now (one
- * high-level "the application persists here" relationship, not a per-module claim) — and twice
- * ruled out for the same reason: a `group` node has no category of its own in
+ * It carries exactly one edge: `Application → Application Database` (`down('app', 'database')`),
+ * from the boundary itself, not any one module. No per-module edge exists — an earlier revision
+ * drew `Payments → Application Database`/`Orders → …`/`Customer → …`, each labelled `owns`, but
+ * every one of those edges necessarily starts at a *module* and ends at the *database node
+ * itself*, so the arrow's own endpoints say "Payments owns [the] Application Database" no matter
+ * what word labels it — three modules can't each own the same one node without that reading like
+ * three overlapping claims on the same thing, which is exactly backwards: the modules own their
+ * *data*, not the shared physical store that happens to hold it. The boundary-level edge instead
+ * says "the application, as a whole, persists here" — a claim only the boundary itself can
+ * honestly make.
+ *
+ * That edge is deliberately uncaptioned. A `group` node has no category of its own in
  * `connectorSemantics.ts` (`categoryOf` falls through to `'generic'`, exactly alongside `text`,
  * `note`, and `code` — `tests/connector-semantics.test.ts` pins this explicitly, so it's a tested,
  * deliberate design decision, not a gap this file could patch on its own authority), and the
  * capability matrix's own doc comment lists "anything touching a generic node" among its
- * deliberately-absent pairs. There is no inferred relationship here for a starter to draw, and
- * hand-labelling an edge the matrix has no opinion on at all would say something the rest of the
- * app doesn't actually agree with — the one thing `docs/ARCHITECTURE.md`'s own rule for this file
- * ("relationships come from the matrix, never from the catalog") exists to prevent. Making this
- * "cleanly supported" would mean reclassifying every `group` node in the app, reversing that
- * tested decision — a real behaviour change with its own consequences elsewhere, not a
- * starter-scoped one. So: no edge, from anything, to the database. `Application Database` is sized
- * to `MODULE`'s own
- * width (176, not `STORE`'s default 148) because its label needs the room on a single line — a
- * data-store cylinder's caption never wraps (`nodes/describe.ts`'s `dataStoreCylinder`) — and one
- * short annotation, `Module-owned data`, stacks directly beneath it: the one plain-language claim
- * placement and a bare edgeless node can't make on their own, without repeating the module names
- * already visible in the row above.
+ * deliberately-absent pairs — so `inferRelationship` genuinely returns nothing for this pairing,
+ * the same honest "no opinion" a hand-drawn boundary→database connection gets anywhere else in the
+ * app. Rather than force a label onto a relationship the matrix doesn't recognise (which would say
+ * something the rest of the app doesn't actually agree with — the one thing `docs/ARCHITECTURE.md`'s
+ * own rule for this file, "relationships come from the matrix, never from the catalog," exists to
+ * prevent), this connector carries no `label` and gets none: `DraftEdgeView.tsx`'s caption block is
+ * gated on `edge.semantic` being truthy, so an edge with neither an inferred semantic nor an
+ * explicit label renders as a plain, honest line — present because the association is real, silent
+ * because Draft Canvas has no opinion on what to call it at this level. `Application Database` is
+ * sized to `MODULE`'s own width (176, not `STORE`'s default 148) because its label needs the room
+ * on a single line — a data-store cylinder's caption never wraps (`nodes/describe.ts`'s
+ * `dataStoreCylinder`) — and one short annotation, `Module-owned data`, stacks directly beneath it:
+ * the one plain-language claim the boundary-level edge and a bare node can't make on their own,
+ * without repeating the module names already visible in the row above.
  */
 /** The one inbound interface of the monolith — a routing/dispatch adapter, not an independently
  *  deployable network peer. Kept at Component's own default footprint (`document/limits.ts`'s
@@ -269,10 +267,6 @@ const MODULAR_CX = 396;
 const MODULE_COLUMNS = columnsAt(MODULAR_CX, 3, MODULE.width, GUTTER);
 const MODULAR_INNER_LEFT = MODULE_COLUMNS[0]!;
 const MODULAR_INNER_WIDTH = MODULE_COLUMNS[2]! + MODULE.width - MODULAR_INNER_LEFT;
-/** Left/centre/right exit points spread across `API`'s bottom edge, so its three individually
- *  `routeMode: 'direct'` connectors leave from visually distinct points instead of converging on
- *  one shared spot, matching the module columns they land on one-to-one. */
-const FAN_OFFSETS = [0.25, 0.5, 0.75] as const;
 // `BOUNDARY_TITLE_SUBLINE_Y`, not `BOUNDARY_HEADER_CAPTION_ONLY`: the latter is the floor an
 // ordinary child of *any* boundary must clear, generous enough to also cover presets with a real
 // caption row above the title; this subtitle isn't ordinary content, it's the second line of the
@@ -292,11 +286,10 @@ const MODULAR_NOTE_GAP = 8;
 // Clears the `Single deployable unit` subtitle before the API begins — `BOUNDARY_HEADER` alone
 // (sized for a preset caption + title, not a title + a second annotation line) would overlap it.
 const MODULAR_API_Y = MODULAR_SUBTITLE_Y + MODULAR_NOTE.height + MODULAR_NOTE_GAP;
-// `INNER_BAND`, not the fuller `BAND`: each API→module connector is now its own independent,
-// `routeMode: 'direct'` line rather than a bundled trunk (see this block's own doc comment), so
-// there's no shared-corridor routing to plan extra room for — only an ordinary single-relationship
-// caption gap, the same one Monolith's own API→logic edge uses inside its boundary.
-const MODULAR_MODULES_Y = MODULAR_API_Y + API.height + INNER_BAND;
+/** A full `BAND`, not `INNER_BAND`: this is the one gap the API→module fan-out has to plan a
+ *  shared trunk across (`edges/bundles.ts`), and a trunk that lands a few pixels above the modules
+ *  it feeds reads as a near-miss rather than as routing. */
+const MODULAR_MODULES_Y = MODULAR_API_Y + API.height + BAND;
 // The module row is the last thing the boundary contains — the database moved back outside it
 // (see this block's own doc comment) — so `BOUNDARY_PAD` closes the boundary directly beneath it.
 const MODULAR_BOUNDARY_HEIGHT = MODULAR_MODULES_Y + MODULE.height + BOUNDARY_PAD;
@@ -305,8 +298,8 @@ const MODULAR_BOUNDARY_WIDTH = MODULAR_INNER_WIDTH + BOUNDARY_PAD * 2;
  *  line — a data-store cylinder's caption never wraps (`nodes/describe.ts`'s `dataStoreCylinder`).
  */
 const DATABASE_BOX = { width: MODULE.width, height: STORE.height };
-// `INNER_BAND`, not the fuller `BAND`: with no edge connecting the boundary to the database (see
-// this block's own doc comment), there's no routing corridor to plan room for — only enough gap
+// `INNER_BAND`, not the fuller `BAND`: the one boundary→database edge is a single uncaptioned
+// line, not a fan needing trunk-planning room (see this block's own doc comment) — only enough gap
 // to read as clearly its own separate runtime resource, not a part the boundary forgot to include.
 const MODULAR_DATABASE_Y = MODULAR_BOUNDARY_HEIGHT + INNER_BAND;
 const MODULAR_NOTE_Y = MODULAR_DATABASE_Y + DATABASE_BOX.height + MODULAR_NOTE_GAP;
@@ -433,16 +426,20 @@ const modularMonolith: ArchitectureStarter = {
   ],
   edges: [
     down('client', 'api'),
-    // Three individually meaningful connections, not one bundled fan — each opts out of Smart
-    // Routing (`routeMode: 'direct'`), leaves from its own point on API's bottom edge matching the
-    // module column it lands on, and draws as a plain straight line rather than an independently
-    // bent step path. See this block's own doc comment for why.
-    { from: 'api', to: 'module-payments', sourceAnchor: { side: 'bottom', offset: FAN_OFFSETS[0] }, targetAnchor: TOP, routeMode: 'direct', routing: 'straight' },
-    { from: 'api', to: 'module-orders', sourceAnchor: { side: 'bottom', offset: FAN_OFFSETS[1] }, targetAnchor: TOP, routeMode: 'direct', routing: 'straight' },
-    { from: 'api', to: 'module-customer', sourceAnchor: { side: 'bottom', offset: FAN_OFFSETS[2] }, targetAnchor: TOP, routeMode: 'direct', routing: 'straight' },
+    // All three leave the same point on API's bottom edge, so Smart Routing bundles them into one
+    // shared trunk with one collapsed "uses" caption — three individual edges in the document
+    // model (each still its own relationship, still independently selectable/deletable), one
+    // deliberate, symmetric fork on screen. See this block's own doc comment for why this starter
+    // wants the bundle here, unlike the module→database connectors below.
+    down('api', 'module-payments'),
+    down('api', 'module-orders'),
+    down('api', 'module-customer'),
     // The one controlled, explicit module dependency — see this block's own doc comment for why
     // it's exactly one, and why it's captioned as a contract rather than the plain inferred `uses`.
     { from: 'module-orders', to: 'module-customer', sourceAnchor: RIGHT, targetAnchor: LEFT, label: 'uses public API' },
+    // The one high-level "this application persists somewhere" connector — from the boundary
+    // itself, not any one module. Deliberately uncaptioned: see this block's own doc comment.
+    down('app', 'database'),
   ],
 };
 

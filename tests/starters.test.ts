@@ -216,25 +216,28 @@ describe('buildStarter', () => {
     expect(moduleEdges[0]!.semantic).toBe('uses');
     expect(moduleEdges[0]!.label).toBe('uses public API');
 
-    // The API reaches every module individually — three distinct connectors, not one bundled fan
-    // (`routeMode: 'direct'` opts each out of Smart Routing's bundling, and each draws as a plain
-    // straight line rather than an independently-bent step path).
+    // The API reaches every module individually — three distinct edges in the document model,
+    // even though Smart Routing bundles them into one shared trunk with one collapsed caption on
+    // screen (bundling changes rendering, never the underlying relationships).
     for (const module of modules) {
-      const edge = edges.find((e) => e.source === api.id && e.target === module.id);
-      expect(edge).toBeDefined();
-      expect(edge!.routeMode).toBe('direct');
-      expect(edge!.routing).toBe('straight');
+      expect(edges.some((e) => e.source === api.id && e.target === module.id)).toBe(true);
     }
 
     // The database sits outside the boundary — it's a separate runtime resource, not part of the
-    // one deployable unit — and carries no edges at all: a module owns its own *data*, not the
-    // shared physical store, and an arrow from a module (or from the boundary itself, which has
-    // no capability-matrix category of its own to infer a relationship from) to the one database
-    // node would misstate exactly that no matter how it's labelled. Ownership is said in plain
-    // text instead (the one ownership annotation below), not drawn as a relationship.
+    // one deployable unit — and carries exactly one edge, from the boundary itself, not any one
+    // module: a module owns its own *data*, not the shared physical store, so a per-module edge
+    // would misstate exactly that no matter how it's labelled. The boundary-level edge is
+    // deliberately uncaptioned — a `group` node has no category in the capability matrix, so
+    // there's genuinely no inferred relationship to show, and forcing a label onto one would say
+    // something the rest of the app doesn't agree with.
     const database = nodes.find((node) => node.databaseKind === 'sql')!;
     expect(database.parentId).toBeUndefined();
-    expect(edges.some((e) => e.source === database.id || e.target === database.id)).toBe(false);
+    const databaseEdges = edges.filter((e) => e.source === database.id || e.target === database.id);
+    expect(databaseEdges).toHaveLength(1);
+    expect(databaseEdges[0]!.source).toBe(app.id);
+    expect(databaseEdges[0]!.target).toBe(database.id);
+    expect(databaseEdges[0]!.semantic).toBeUndefined();
+    expect(databaseEdges[0]!.label).toBeUndefined();
 
     // The boundary's own subtitle, and the database's single ownership annotation — no repeated
     // module-name list; the modules are already visible in the row above.
