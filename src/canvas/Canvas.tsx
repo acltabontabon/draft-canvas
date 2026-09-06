@@ -254,8 +254,9 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
   const explainActive = useEditorStore((state) => state.flowPlayback.active);
   const focusActive = useEditorStore((state) => state.focus.active);
   // A flow merely selected (not presented) acts as a gentler lens — see
-  // `docs/FLOWS.md`. Suppressed whenever Presentation or Focus already own
-  // the dimming, exactly the mutual exclusion those two already have.
+  // `docs/ARCHITECTURE.md`'s "Flows and presentation". Suppressed whenever
+  // Presentation or Focus already own the dimming, exactly the mutual
+  // exclusion those two already have.
   const lensActive = useEditorStore(
     (state) => state.selectedFlowId !== null && !state.flowPlayback.active && !state.focus.active,
   );

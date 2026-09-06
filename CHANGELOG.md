@@ -444,7 +444,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.4.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.5.0...main
+[0.5.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.2.0...v0.3.0

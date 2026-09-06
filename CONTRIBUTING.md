@@ -69,7 +69,7 @@ a real cost, not a style nitpick.
 This is the part of Draft Canvas most worth getting right, and the part where "looks nice" isn't a
 strong enough reason on its own. Before adding or changing a rule in
 `src/document/connectorSemantics.ts`'s capability matrix (see
-[`docs/architecture-semantics.md`](docs/architecture-semantics.md) for what's there today):
+[`docs/SEMANTICS.md`](docs/SEMANTICS.md) for what's there today):
 
 > When adding architecture-aware behavior, optimize for technical correctness and developer
 > intuition. Draft Canvas should be opinionated where the underlying technology is opinionated, and
@@ -85,14 +85,12 @@ Concretely:
   matrix entry falls back to full, unrestricted freedom, and that's a legitimate outcome, not a gap
   to fill reflexively.
 - Don't add a feature — semantic or otherwise — merely because another diagramming tool has it.
-  Draft Canvas is deliberately not draw.io, Lucidchart, or a UML/BPMN tool; see
-  [`docs/ROADMAP.md`](docs/ROADMAP.md)'s recurring "what this will not become" notes for the kind of
-  restraint the project expects.
+  Draft Canvas is deliberately not draw.io, Lucidchart, or a UML/BPMN tool.
 
 ## Keeping Draft Canvas fast and simple
 
 The whole product bets on staying lightweight. A dependency, a setting, or a new concept all cost
-something — read [`docs/ROADMAP.md`](docs/ROADMAP.md)'s "Standing non-goals" before proposing
-something in that direction (accounts, cloud sync, collaboration, AI generation, icon packs, and a
-few others are deliberately out of scope). If you're unsure whether an idea fits, open an issue and
-ask — that's exactly what issues are for.
+something — read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)'s "Deliberately not built" before
+proposing something in that direction (accounts, cloud sync, collaboration, AI generation, icon
+packs, and a few others are deliberately out of scope). If you're unsure whether an idea fits, open
+an issue and ask — that's exactly what issues are for.

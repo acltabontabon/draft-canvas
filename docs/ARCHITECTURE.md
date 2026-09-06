@@ -1,7 +1,7 @@
 # Architecture
 
-Draft Canvas is a single-page React application with no backend. This document explains how it is
-put together and, more usefully, why each boundary is where it is.
+Draft Canvas is a single-page React application with no backend. This is the load-bearing map:
+what lives where, and the handful of rules that fail silently if broken.
 
 ## Layers
 
@@ -32,395 +32,136 @@ src/
     png/        rasterize
     theme/      tokens
   nodes/        describe.ts — every node's appearance, as pure functions
-  edges/        routing.ts · describe.ts
+  edges/        routing.ts · describe.ts · bundles.ts
   canvas/       Canvas · DraftNodeView · DraftEdgeView · projection · snapping · presets
   presentation/ useFlowPlayback
+  learning/     contextual hints and the opt-in "Learn Draft Canvas" mode
   store/        editorStore · uiStore · selectors · useDocumentSession
-  ui/           Library · Editor · common · theme
+  ui/           Library · Editor · common · theme · personality (Intentional Roughness presets)
 ```
 
 ## The idea that shapes everything: one renderer
 
-The canvas and the file exporter do not draw things twice.
-
-```
-DraftNode ──describeNode()──▶ DisplayList ──emit()──▶ SvgEl tree ──┬─▶ serialize() ─▶ on-screen
-                              (pure)                               └─▶ serialize() ─▶ .svg / .png
-```
-
-`nodes/describe.ts` turns a node into a **display list** — rectangles, ellipses, paths, text
-blocks, code blocks. `render/svg/emit.ts` turns that into an SVG element tree, and
-`render/svg/element.ts` serializes it to a string. The canvas paints that string; the exporter
-writes it to a file.
-
-The alternative — JSX for the screen and a separate exporter for files — is the thing that always
-rots. A month later somebody adjusts a padding value in one and not the other, and nobody notices
-until an exported diagram looks wrong.
-
-Consequences worth knowing:
-
-- **Interactive chrome cannot be expressed in a display list.** Handles, resize frames, selection
-  rings and inline editors live in React and CSS. That is not an oversight; it is how editor
-  furniture is guaranteed never to appear in an exported image.
-- **Node appearance is a pure function**, so it is unit-testable without a browser.
-- Node visuals go through `dangerouslySetInnerHTML` with markup from our own serializer, which
-  escapes every character of user text. `tests/code-card.test.tsx` proves a `<script>` in a label
-  stays inert text.
-
-### Text is laid out exactly once
-
-`render/text/layout.ts` wraps text into lines. **Nothing else ever wraps.** The DOM renders the
-lines it produced, one `<text>` per line, and so does the exporter. Two layout engines would agree
-most of the time, which is worse than not agreeing at all, because you would only find out from a
-customer's screenshot.
-
-Fonts are system stacks only. Nothing is fetched, so the app works offline — and, decisively, an
-SVG rasterized through an `Image` into a `<canvas>` can still resolve its fonts. A webfont would
-silently fail there and every PNG would come out in the wrong typeface. Exported `<text>` carries
-`textLength`, so a diagram opened on a machine with different metrics cannot reflow out of its box.
-
-### Code cards
-
-`render/code/highlight.ts` runs refractor and flattens its tree into one token list per line.
-That flattening is what makes SVG export possible: a nested element tree cannot become `<tspan>`s,
-but `{ text, scope }` per line can be rendered identically as DOM spans and as SVG tspans. Colours
-come from one map in `render/code/theme.ts` that both backends read.
-
-Monospace makes the geometry free: a token's x position is `charWidth × column`, so the code path
-needs no measurement at all and is exactly reproducible.
-
-### The messaging silhouette is a compact glyph, like an actor's
-
-A queue/topic/stream node's silhouette (`nodes/describe.ts`'s `queue()`) is a horizontal cylinder —
-a pipe messages travel through, with a couple of envelope glyphs inside — built the same way the
-database's (vertical) cylinder is: elliptical caps joined by straight edges, one cap's seam redrawn
-on top as a "lid" so it reads as an open tube. It doesn't fill the whole node the way a service or
-database silhouette does; it's a fixed-size glyph anchored to the top of the box, with the label
-living in the full-width space below it — the same relationship an actor's head and shoulders have
-with its own label. That's a deliberate trade: a queue node accepts a connector landing on empty
-space below the tube (exactly as an actor already does below its shoulders) in exchange for the
-label never competing with the tube's cap curvature or icons for room, however long the label is.
-
-The kind (`QUEUE`/`TOPIC`/`STREAM`) renders as a small muted subtext line stacked directly under the
-name — the same small muted style `variantCaption` gives every other variant's corner tag, just
-stacked instead of cornered, since this silhouette has no filled corner to put one in. Both the name
-and the kind are capped to a single line each (ellipsized, never wrapped), and the tube itself is
-kept short enough that even a node sized before this two-line layout existed still fits both lines
-without them running into it.
-
-Connector anchors, resize, and selection needed no changes for this regardless, since all of them
-key off `node.width`/`node.height` alone — `edges/routing.ts` never reads node type, sub-kind, or
-how much of the box a silhouette visually fills.
+The canvas and the file exporter do not draw things twice. `nodes/describe.ts` turns a node into a
+**display list** (pure); `render/svg/emit.ts` turns that into an SVG element tree;
+`render/svg/element.ts` serializes it. The canvas paints that string, the exporter writes it to a
+file — an export is pixel-identical to the screen. Interactive chrome (handles, resize frames,
+selection rings, inline editors) lives in React/CSS so it can never appear in an exported image.
+Node visuals go through `dangerouslySetInnerHTML` with markup from our own escaping serializer —
+`tests/code-card.test.tsx` proves a `<script>` in a label stays inert text. Text wraps in exactly
+one place, `render/text/layout.ts`; nothing else may wrap.
 
 ### Edges are the one exception to "one renderer"
 
-Node appearance is unified through `describeNode`; edge appearance is not. `edges/describe.ts`
-(`describeEdge`) is the pure describer the SVG exporter calls, and `canvas/DraftEdgeView.tsx` is
-an independent, hand-rolled React implementation of the same connector — path, label, step badge,
-async dash, condition chip, arrowhead choice (a shared `<marker>` vs. a per-edge hand-drawn path),
-and which of an edge's two paths carries the click/reconnect hit area versus which is purely
-decorative. They share geometry (`edges/routing.ts`) and marker defs, but nothing enforces that a
-visual addition to one is mirrored in the other. This was true before Flows existed and remains
-true after; it is a known, accepted gap, not an oversight to "fix" in passing — unifying it would
-mean either giving React Flow's edge renderer a pure display-list input (a real, larger change) or
-re-deriving on-screen interactivity (hover, inline editing, drag-to-select) from a description
-format not built for it. If you add a new visual to a connector, add it in both places.
-
-Draft and Sketch's arrowheads deliberately use two different mechanisms, not an inconsistency to
-unify: Draft's is a shared, colour-keyed `<marker>` def (the same fixed shape reused by every edge
-of that colour — cheap, and "restrained" doesn't need per-instance variation); Sketch's is a
-unique inline path per edge, seeded by the edge's own id, since a shared marker has no way to vary
-per instance the way the rest of Sketch's primitives do.
+`edges/describe.ts` (SVG export) and `canvas/DraftEdgeView.tsx` (on-screen) are two independent
+implementations of the same connector — nothing enforces that a visual addition to one is mirrored
+in the other. **If you add a new visual to a connector, add it in both places.**
 
 ## Canvas boundary
 
-The zustand store owns the `DraftDocument`. React Flow is a controlled view of it.
+The zustand store (`store/editorStore.ts`) owns the `DraftDocument`. React Flow is a controlled
+view of it — `canvas/projection.ts` derives its arrays during render and preserves object identity
+for unchanged nodes.
 
-- `canvas/projection.ts` derives React Flow's arrays and **preserves object identity** for nodes
-  whose geometry has not changed, so one node moving re-renders one node.
-- `node.data` carries only `{ id }`. Node components subscribe to the store themselves, so editing
-  a node's text does not touch the projected array at all.
-- The projection is computed during render, not synchronised in an effect, so a document change
-  costs one render rather than two.
+**The document is not written during a drag.** Positions stream to the rendered nodes for
+smoothness; the document updates only when the gesture ends, so one drag is one undo entry.
 
-**The document is not written during a drag.** Position changes stream in per frame and are applied
-to the rendered nodes for smoothness, but the document is only updated when the gesture ends. One
-rule buys three things: one drag is one undo entry, autosave cannot fire sixty times a second, and
-there is no per-frame history to coalesce.
+`edges/routing.ts` is the only module that calls React Flow's path helpers, so an exported
+connector traces exactly the path on screen. Two invariants worth knowing:
 
-### Connectors
-
-`edges/routing.ts` is the only module that calls React Flow's path helpers, and both the live edge
-component and the exporter call it — so an exported connector traces exactly the path on screen.
-
-Endpoints are computed from node rectangles rather than from React Flow's measured handles:
-`getEdgePosition` needs an internal node with measured handle bounds, which an exporter cannot
-have. Owning the anchor maths means one implementation for both, and automatic re-routing for free.
-
-Two details that were bugs first:
-
-- Handles are rendered in **every** mode, including presentation. React Flow resolves an edge's
-  endpoints through them; a node without handles silently loses all its connectors.
-- Dropping a connection anywhere on a node's body connects to it. React Flow only reports a target
-  within its connection radius of a handle, so `Canvas.tsx` hit-tests the drop point itself.
+- **A persisted anchor (`EdgeAnchor` in `document/types.ts`) is never silently moved to a
+  different side** by routing, no matter how the nodes move — only an explicit reconnect changes
+  it.
+- **Smart Routing's shared trunk (`edges/bundles.ts`) is derived presentation state** — never a
+  node, never persisted, never in history or validation. Five bundled connectors are still five
+  rows in `DraftDocument.edges`. It's stored hub-relative rather than as an absolute coordinate,
+  since the document isn't written during a drag and an absolute trunk would lag the branches.
 
 #### Relationship model
 
-"The user decides what connects. Draft Canvas decides how to make it look good" extends to
-*meaning*, not just geometry. `document/connectorSemantics.ts`'s `MATRIX`, keyed by
-`sourceCategory>targetCategory` (`NodeCategory` — a node's `type` plus, for `service`/`database`/
-`queue`, its sub-kind: `external`/`cache`/`topic` each read as their own category), is the single
-source of truth every UI surface reads from: `EdgeInspectorPopover.tsx` narrows the interaction
-picker to `capabilityFor(...)?.relations`, `store/editorStore.ts`'s `connect()`/`reconnectEdge()`
-apply `.defaultRelation`/`.defaultBehavior` on a fresh or re-pointed connector (never overwriting an
-explicit choice — `isEligibleForReinference`), and `DraftEdgeView.tsx`/`edges/describe.ts` read
-`.status` for a subtle canvas warning marker. Deliberately sparse: an undocumented pairing
-(`capabilityFor` returning `undefined`) keeps full, unrestricted freedom — every rule here narrows
-or nudges, never blocks. Extending it to a new pairing means adding one line to `MATRIX`, not
-touching any rendering code — `quickFixesFor` layers a second, edge-aware signal on top (e.g. the
-Queue→Topic "Insert Worker" fix, `store/editorStore.ts`'s `insertWorkerOnEdge`) for the one case a
-static per-pairing rule can't express: whether *this specific edge's* current `semantic` still fits
-its (possibly just re-pointed) endpoints.
-
-#### Anchors, lanes, and obstacle avoidance
-
-A connector's endpoints were originally recomputed from scratch on every render by
-`chooseSides` — the nearest-side heuristic that still serves as the fallback. That heuristic is
-geometry, not intent: it can only ever answer "what looks shortest right now," never "which side
-did the user actually drag this from." `EdgeAnchor` (`document/types.ts`) closes that gap by
-persisting the side and along-side offset a connector was actually dragged from or dropped onto,
-captured once by `Canvas.tsx`'s `onConnect`/quick-connect path and threaded through `connect()` in
-the store. The one rule that makes this worth having: `routeBetween` (`edges/routing.ts`) must
-never silently move a persisted anchor to a different side, no matter how the nodes move
-afterward — only an explicit reconnect (`reconnectEdge`, dragging that endpoint elsewhere) changes
-it. `chooseSides` only ever fills in whichever end has no anchor at all — the live drag preview, or
-any edge from a file written before anchors existed (see the v2→v3 migration in
-[`docs/SCHEMA.md`](SCHEMA.md)).
-
-Two more geometry problems shared the same module because they compose with anchors rather than
-replace them:
-
-- **Parallel edges** between the same node pair (including the callback case, A→B and B→A) would
-  draw exactly on top of one another. `laneIndex` groups edges by their unordered `(source,
-  target)` pair and assigns each a small symmetric offset — `laneNudge` then nudges both endpoints
-  along their own side by that amount, `clampToBoundary` pulling the result back onto the rect's
-  actual edge if the nudge would otherwise walk it past a corner.
-- **Obstacle avoidance** is a single-detour heuristic, not a pathfinder: `detourAround` only
-  handles the case the routing brief actually calls out — source and target share a row or column,
-  and another node sits directly in the corridor between them — and bends the path's one middle
-  segment around whichever side is the shorter detour. A diagonal pairing, or an obstacle outside
-  that direct corridor, is left alone on purpose. Both lanes and obstacle avoidance are skipped
-  during an active drag or resize (`uiStore.ts`'s `interactionActive`) and recomputed once the
-  gesture ends, so the per-frame cost of a drag never grows with the document's edge count.
-
-#### Semantic graph vs. routing graph
-
-Smart Routing (`edges/bundles.ts`) draws several independent connectors through one shared trunk
-when they obviously belong together — the same source or destination, the same relationship,
-destinations lined up in one direction, and a corridor wide enough to run through. The rule that
-makes this safe to have on by default:
-
-> The routing graph may be more complex than the semantic graph, but it must never change what the
-> architecture means. A spine is derived presentation state — never a node, never persisted, never
-> selectable, never in history, validation, export-as-architecture, or the palette. Five bundled
-> connectors are still five rows in `DraftDocument.edges`.
-
-`routingPlan(nodes, edges)` is memoized on the array pair the way `laneIndex` is memoized on
-`edges` alone, and every gate narrows rather than widens: an edge that isn't unmistakably part of a
-fan simply routes exactly as it did before the module existed. Two consequences worth knowing:
-
-- **The spine is stored hub-relative** (`trunkGap`, not an absolute coordinate). The document isn't
-  written during a drag, so an absolute trunk would stay behind while the branches followed the
-  pointer; hub-relative, every member recomputes it from a rect it already has, and dragging the hub
-  moves the bundle rigidly with no re-planning. Quantizing the gap to an 8px grid supplies the
-  hysteresis that keeps small nudges from making the route shimmer.
-- **There is no spine "owner".** Every member draws its own complete path, and the shared run is
-  made byte-identical by seeding its roughening on the *spine* id (`strokeSeed`). Electing one
-  member to draw the trunk is the obvious design and is broken by SVG group opacity: the trunk would
-  sit inside that member's `<g>`, so an owner dimmed by Presentation or a flow lens would drag the
-  whole shared run down with it while its lit siblings floated disconnected.
-
-Two positions are tuned rather than derived, and both were settled by looking at renders:
-
-- **The trunk sits past the corridor's midpoint** (`TRUNK_BIAS`), giving a long shared stem and
-  short branches. That reads as one relationship splitting late; an even split reads as two halves
-  meeting in the middle, and leaves the collapsed caption nowhere clean to sit.
-- **The reply trunk is a companion rail 44px beyond the request trunk**, not a share of the
-  corridor. Two combs facing the same way must interleave somewhere — it is geometrically
-  impossible for neither family to cross the other's trunk — so the choice is *where* the crossing
-  lands. Beyond keeps the primary trunk itself uncrossed and puts each crossing a few pixels into a
-  branch, right by its corner, where it reads as a rail pair. A reply trunk placed *before* the
-  request trunk would instead lay every dashed branch across the primary trunk; one placed far
-  beyond strands it in open space and visibly cuts each request branch in half mid-run. Lane
-  spacing is a constant for the same reason it is on a road: the eye reads it at a fixed size, not
-  as a proportion of how far apart the nodes happen to be. **The request trunk's own position never
-  depends on any of this** — a bundle sits in exactly the same place whether or not its members
-  draw replies.
-
-Branches are peers by construction rather than by policing: identical stroke, identical corner
-radius, tap-offs ordered by destination so none crosses another, and no per-branch decoration —
-no junction dot, no branch marker. A member level with the hub runs straight through, which is what
-the shape is meant to look like, not a special case.
-
-A user should never need a Junction merely to stop five arrows overlapping. Junction stays the
-explicit escape hatch — "Convert to junction" materializes one exactly where the trunk already
-appears to branch — and Smart Routing owns everything before that point.
+`document/connectorSemantics.ts`'s `MATRIX`, keyed by `sourceCategory>targetCategory`, is the
+single source of truth every UI surface reads from: the interaction picker, the default
+relation/behavior on a fresh or re-pointed connector, and the subtle warning marker for an unusual
+pairing. Deliberately sparse — an undocumented pairing keeps full, unrestricted freedom; every rule
+here narrows or nudges, never blocks. See [`docs/SEMANTICS.md`](SEMANTICS.md) for the actual rules.
 
 ## History
 
-Snapshot-based, with structural sharing. Every operation in `document/operations.ts` returns a new
-document that reuses untouched nodes, so an entry costs roughly what actually changed — on the
-order of a kilobyte for a move, in a hundred-node document.
+Snapshot-based, with structural sharing — every operation in `document/operations.ts` returns a
+new document reusing untouched nodes. `beginInteraction`/`endInteraction` bracket a gesture into
+one entry; entries sharing a `coalesceKey` merge, so typing a name is one undo. Viewport changes
+persist but are never recorded.
 
-Command/inverse-command history was the alternative. It halves the memory and doubles the surface
-area: every operation needs a second, inverse implementation, and a bug in one silently corrupts a
-diagram rather than merely drawing it wrong.
-
-- `beginInteraction` / `endInteraction` bracket a gesture into one entry.
-- Entries sharing a `coalesceKey` inside a short window merge, so typing a name is one undo.
-- A gesture that changed nothing leaves the document identical by reference, and no entry is made.
-- Viewport changes are persisted but never recorded — nobody wants undo to reverse a scroll.
-
-Side effects must never run inside a React state updater. React invokes updaters twice in
-development, which recorded every drag twice and made a single undo appear to do nothing.
+Side effects must never run inside a React state updater — React invokes updaters twice in
+development, which recorded every drag twice and made undo appear broken.
 
 ## Persistence
 
-Two IndexedDB stores. `documents` holds summaries; `bodies` holds the documents. The library lists
-titles and timestamps without deserializing a single canvas, which is what keeps the landing screen
-instant when you have twenty diagrams with code cards in them.
-
-Autosave (`storage/autosave.ts`) debounces at 700 ms with a 4 s ceiling, never runs two writes at
-once, and flushes on `visibilitychange` and `pagehide`. `beforeunload` is deliberately avoided: it
-disables the back/forward cache.
+Two IndexedDB stores. `documents` holds summaries; `bodies` holds the documents, so the library
+lists titles and timestamps without deserializing a single canvas. Autosave (`storage/autosave.ts`)
+debounces at 700 ms with a 4 s ceiling and flushes on `visibilitychange`/`pagehide` — never
+`beforeunload`, which disables the back/forward cache.
 
 ### The `src/crypto/` boundary
 
 `bodies` rows are encrypted at rest with AES-256-GCM. `src/crypto/` is the only place that touches
-`crypto.subtle`, and `storage/IndexedDbRepository.ts` is the only caller of `src/crypto/` — nothing
-else in the app knows a document is ever anything but plain JSON.
+`crypto.subtle`, and `storage/IndexedDbRepository.ts` is the only caller of it — nothing else in
+the app knows a document is ever anything but plain JSON.
 
-- `keyStore.ts` gets-or-creates a single, profile-wide, **non-extractable** `CryptoKey`, persisted
-  via IndexedDB's native structured-clone support for `CryptoKey` objects in a separate `keys`
-  store (its own database, not `bodies`' — a corrupted or cleared document store can never take the
-  key down with it, and vice versa). Non-extractable means no code path, including this app's own,
-  can ever read the raw key bytes back out; only `encrypt`/`decrypt` operations are possible.
-- `documentCipher.ts` — `encryptDocument`/`decryptDocument`, one fresh random 12-byte IV per
-  record. `save()` always encrypts before `put`; `load()` decrypts after `get`, then feeds the
-  result through the same `normalizeDocument` funnel as every other untrusted input. A GCM
-  authentication failure (tampered ciphertext, wrong key, corruption) is handled exactly like a
-  malformed record always was: `load()` returns `null` and logs a warning, and **never** overwrites
-  the still-encrypted row — a decrypt failure must not look like an invitation to re-save over the
-  only copy.
-- `migrateStorage.ts` — the one-time sweep from the format's plaintext past. A legacy `{ id,
-  document }` row is encrypted in memory, decrypted back and compared, and only then does a single
-  atomic `put` replace it — never a delete followed by a write, which would leave a window where a
-  crash mid-migration destroys data instead of merely failing to upgrade it.
-- `passphraseExport.ts` is a second, independent use of `crypto.subtle` for the optional
-  `.dcenc` portable export format (PBKDF2 → a one-off AES-256-GCM key, used only for that file and
-  never persisted anywhere). It shares no code and no key material with the profile's local
-  storage key — a passphrase typed for export can never become, or leak, the key that protects
-  everything already saved on this device.
-
-No new npm dependency backs any of this: `crypto.subtle` natively covers both AES-GCM and PBKDF2,
-which is also why `tests/privacy.test.ts`'s exact-length dependency-count assertion never had to
-move for encryption to ship.
-
-The status indicator shows "Saving…" only if a write is still running after 300 ms and holds
-"Saved locally" for 1.4 s, so quick saves do not flicker. It says "Unsaved changes" while an edit
-is queued, because saying otherwise would be a small lie about the one thing the user is trusting.
+- `keyStore.ts` gets-or-creates a single, profile-wide, **non-extractable** `CryptoKey` in its own
+  IndexedDB store (separate from `bodies`, so neither can take the other down).
+- `documentCipher.ts` encrypts before every `put` and decrypts after every `get`. A GCM
+  authentication failure (tampered ciphertext, wrong key) never overwrites the still-encrypted
+  row — a decrypt failure must not look like an invitation to re-save over the only copy.
+- `passphraseExport.ts` is a second, independent use of `crypto.subtle` for the `.dcenc` export
+  format — it shares no key material with the profile's local storage key.
 
 Failures degrade rather than destroy: IndexedDB unavailable falls back to an in-memory repository
-and the UI says so plainly; a quota error surfaces a message telling the user to export; a corrupt
-record is repaired through the same validator as an imported file.
-
-The same posture extends to rendering. Two `ErrorBoundary` instances (`ui/common/ErrorBoundary.tsx`)
-sit in the tree — one around the canvas alone, one around the whole app shell — so a render
-exception anywhere degrades to a recoverable screen instead of unmounting to a blank page. The
-canvas-scoped boundary can remount just the canvas, reload the open document from disk, or return to
-the library; the outer one is the last resort. `lib/diagnostics.ts` logs full context (operation,
-document id, error stack) in development and only ids and counts in production — never node or edge
-content.
+and the UI says so plainly; a corrupt record is repaired through the same validator as an imported
+file.
 
 ## Flows and presentation
 
-A `DraftFlow` is a narration layer over connectors that already exist — it never duplicates a node
-or an edge, only orders references to them. `document/flow.ts` holds the pure operations;
-`presentation/useFlowPlayback.ts` is where playback meets React Flow's viewport.
+A `DraftFlow` narrates connectors that already exist — it never duplicates a node or an edge, only
+orders references to them (`document/flow.ts`). A step usually references one connector, but can
+also spotlight extra nodes/edges or pin its own viewport (a "frame" step). This is deliberately
+distinct from **Focus Mode** (`store/editorStore.ts`'s `FocusState`) — Focus is an arbitrary,
+unordered highlight available any time in edit mode; a frame step is an ordered member of one
+specific Flow, visible only during that Flow's playback.
 
-A `DraftFlowStep` was originally always "one connector" (`edgeId`). It can now also carry
-`extraEdgeIds`/`extraNodeIds` — more members the step spotlights beyond that one connector's own
-endpoints — and an explicit `viewport`, shown verbatim instead of the usual auto-fit-to-bounds. A
-step with `extraNodeIds`/`extraEdgeIds`/`viewport` but no `edgeId` (a "frame" step) is not a special
-case in the data model: `stepIndexOf`/`explainEdgeTier`/`explainNodeTier` treat every member of a
-step identically regardless of whether it arrived via `edgeId` or an extras array, and playback
-resolves a step's members once (`resolveFlowStep` in `useFlowPlayback.ts`) rather than branching on
-which fields happen to be set.
-
-This is a deliberately different concept from **Focus Mode** (`store/editorStore.ts`'s
-`FocusState`):
-Focus is an arbitrary, unordered highlight the user can reach for in edit mode at any time, with no
-relationship to a Flow. A frame step is an ordered member of a specific `DraftFlow`, only visible
-during that flow's playback. Reaching for `FocusState` to model "a step with several members" would
-have collapsed two things that only look similar — one is a story, the other is a spotlight — so
-the two stayed separate, and `DraftFlowStep` grew a richer shape instead.
+Multiple Flows can share early steps and diverge later, since a step only ever references a
+connector that already exists — nothing is copied. A reply is just another connector, not a
+distinct concept.
 
 ## Command surface
 
-`src/commands/` is the ⌘K palette's brain, and it is deliberately thin. `registry.ts`'s
-`commandsFor(ctx)` is a pure function from the current selection, mode, and document to the list
-of commands that make sense right now — re-derived on every keystroke, never registered ahead of
-time or kept in a store. Each command's `run` is one call into an action `store/editorStore.ts`
-or `store/uiStore.ts` already exposes (or a React Flow camera method). That is the whole design:
-the palette introduces no second way to mutate the document, so undo, selection, autosave, and
-every invariant above hold for a command exactly as they hold for the toolbar button or keyboard
-shortcut that does the same thing. A command that needs a two-step answer ("Connect to…" needs a
-target) returns a `CommandStage` — a prompt and a list of options that are themselves commands —
-and the palette swaps its list for them.
-
-`fuzzy.ts` is a small hand-rolled subsequence matcher (word starts, consecutive runs, and prefixes
-score high; keywords let `db` find "Add Data Store") — not a dependency, because the runtime
-dependency list is part of the privacy promise (`tests/privacy.test.ts`). `search.ts` turns named
-nodes, flows, and labelled connectors into "Jump to" commands and moves the camera with the same
-`getViewportForBounds` math Presentation Mode uses. `history.ts` remembers recent and frequent
-commands through `lib/preferences.ts`, one short key per slot. `ui/Editor/CommandPalette.tsx` owns
-nothing but the query, the highlight, and the stage. `useCommandContext.ts` assembles the
-`CommandContext` every command's `run` receives (live store snapshots, the camera, `createAt`);
-it's a hook specifically so a second surface can build the identical context without copying the
-closure.
-
-The right-click context menu (`canvas/ContextMenu.tsx`) is that second surface —
-`commands/contextMenu.ts`'s `contextMenuCommandsFor(ctx, target, point)` calls the same
-`nodeCommands`/`edgeCommands`/`multiCommands` the palette's `commandsFor` calls, then picks a
-small, ordered, separator-grouped subset per target (a node's menu is not an edge's menu is not a
-boundary's), rather than listing everything the palette would. It excludes any command whose `run`
-can return a `CommandStage` — a follow-up picker, like "Connect to…" — since the menu is
-deliberately flat, with no flyouts. `ContextMenu.tsx` itself renders whatever entry list it's
-given and knows nothing about node types or selection shape; `uiStore.contextMenu` holds what's
-open (mirroring `QuickConnectState`'s shape), and `Canvas.tsx`'s `onPaneContextMenu`/
-`onNodeContextMenu`/`onEdgeContextMenu` decide the target, including snapshotting the selection on
-the right button's own `pointerdown` (capture phase) so a right-click on an element already part
-of a multi-selection doesn't lose that selection to React Flow's own default click handling, which
-runs first otherwise. Shift+F10/the Menu key open the identical menu anchored to the current
-selection instead of a click point (`EditorScreen.tsx`'s `openContextMenuFromKeyboard`) — the one
-gap is empty canvas, which has no keyboard-native equivalent of a point to anchor to.
+`src/commands/registry.ts`'s `commandsFor(ctx)` is a pure function from the current
+selection/mode/document to the commands that make sense right now — re-derived on every keystroke,
+never registered ahead of time or kept in a store. Every command's `run` is one call into an
+existing `editorStore`/`uiStore` action, so the palette introduces no second way to mutate the
+document. The right-click context menu (`commands/contextMenu.ts`) is a second surface over the
+identical command functions, filtered to a small per-target subset and excluding any command that
+returns a `CommandStage` (a follow-up picker, e.g. "Connect to…") — it's deliberately flat, no
+flyouts.
 
 ## Untrusted input
 
 `document/validate.ts` is the only door into the document model, used for both imported files and
 records read back from IndexedDB. Its policy is **repair, don't reject**: a diagram with three
-broken edges opens with the other ninety-seven intact, and says what it dropped. Only an
-unrecognisable file, or one written by a newer format, is refused.
-
-It enforces hard caps (file size, element counts, string lengths), clamps coordinates, strips
-control characters, renames duplicate ids, prunes dangling edges, and detaches cyclic groups.
-
-Colour is an enum, not a string, so no user-supplied value ever reaches an SVG `fill`.
+broken edges opens with the other ninety-seven intact, and says what it dropped. It enforces hard
+caps (see `document/limits.ts`), clamps coordinates, strips control characters, renames duplicate
+ids, and detaches cyclic groups. Colour is an enum, not a string, so no user-supplied value ever
+reaches an SVG `fill`.
 
 ## Schema evolution
 
+`document/types.ts` is the source of truth for the document shape — every field on
+`DraftDocument`, `DraftNode`, `DraftEdge`, and `DraftFlow` is defined there.
+
 `document/migrate.ts` is the only place a version number is read. Adding a format version means
-bumping `CURRENT_VERSION` and adding one function there. Nothing in the UI branches on a version.
+bumping `CURRENT_VERSION` and adding one function there, taking a version-`n` object and returning
+a version-`n+1` one. An older file opens through the migration chain; a newer one is refused with a
+message naming both versions, rather than being silently mangled.
 
 ## Testing
 

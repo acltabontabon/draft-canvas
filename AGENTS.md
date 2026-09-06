@@ -44,7 +44,7 @@ Each of these has a failure mode that is silent, delayed, or both.
   `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, `eval`, or `new Function` anywhere
   in the app's own code. The production CSP (injected by a Vite plugin in `vite.config.ts`) sets
   `connect-src 'self'` — no request to any other origin is possible. The one legitimate
-  same-origin exception is the offline Service Worker (`vite-plugin-pwa`, Phase 6), which fetches
+  same-origin exception is the offline Service Worker (`vite-plugin-pwa`), which fetches
   the app's own assets and checks for updates in the background; it never touches IndexedDB or
   canvas content. No webfonts either — an SVG rasterized through `<canvas>` cannot resolve them,
   so every PNG would export in the wrong typeface.
@@ -71,38 +71,13 @@ Each of these has a failure mode that is silent, delayed, or both.
 ## Architecture
 
 Dependencies point one way: `ui/` → `canvas/` → `document/`, with `storage/` and `export/`
-hanging off the document model.
+hanging off the document model. Library and editor are two states of one screen (`src/App.tsx`,
+no router) — that's what lets `dist/` be served from any path (`base: './'`).
 
-**One renderer.** `nodes/describe.ts` turns a node into a display list (pure); `render/svg/emit.ts`
-turns that into an SVG element tree; `render/svg/element.ts` serializes it. The canvas paints that
-string and the exporter writes it to a file — so an export is pixel-identical to the screen.
-Interactive chrome (handles, resize frames, selection rings, inline editors) lives in React/CSS
-precisely so it can never appear in an exported image. Node visuals go through
-`dangerouslySetInnerHTML` with markup from our own escaping serializer.
-
-**Canvas boundary.** The zustand store (`store/editorStore.ts`) owns the `DraftDocument`; React
-Flow is a controlled view. `canvas/projection.ts` derives React Flow's arrays during render and
-preserves object identity for unchanged nodes. `node.data` carries only `{ id }` — node components
-subscribe to the store themselves. **The document is not written during a drag**: positions stream
-to the rendered nodes for smoothness, and the document is updated only when the gesture ends, so
-one drag is one undo entry.
-
-**History** (`history/HistoryStack.ts`) is snapshot-based with structural sharing — operations in
-`document/operations.ts` return new documents reusing untouched nodes.
-`beginInteraction`/`endInteraction` bracket a gesture; entries sharing a `coalesceKey` merge.
-Viewport changes are persisted but never recorded.
-
-**Persistence.** Two IndexedDB stores: `documents` (summaries) and `bodies` (full documents), so
-the library screen lists titles without deserializing any canvas. Autosave debounces 700 ms with a
-4 s ceiling and flushes on `visibilitychange`/`pagehide` (never `beforeunload` — it kills bfcache).
-IndexedDB failure falls back to `MemoryRepository` and the UI says so.
-
-**Untrusted input.** `document/validate.ts` is the only door into the model, for both imported
-files and records read back from IndexedDB. Policy is **repair, don't reject**. Colour is an enum,
-never a user string reaching an SVG `fill`.
-
-**No router.** Library and editor are two states of one screen (`src/App.tsx`), which is what lets
-`dist/` be served from any path (`base: './'`).
+The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
+persistence, the crypto boundary, untrusted input, schema evolution — lives in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The rules above are the invariants that document
+distills into "never break this"; read that file for *why* each one holds.
 
 ## Conventions
 
@@ -115,7 +90,6 @@ Comments explain *why*, not *what*. Several of the ones in `Canvas.tsx`, `autosa
 
 ## Documentation
 
-`docs/ARCHITECTURE.md` (the reasoning behind every boundary) · `docs/SCHEMA.md` (the
-`.draftcanvas` format) · `docs/FLOWS.md` (flows and presentation mode) · `docs/PRIVACY.md` ·
-`SECURITY.md` (threat model and key lifecycle) · `docs/ROADMAP.md` (numbered phases, shipped
-through planned) · `CHANGELOG.md` (user-facing release notes)
+`docs/ARCHITECTURE.md` (the reasoning behind every boundary, plus the `.draftcanvas` format and
+flows/presentation) · `docs/SEMANTICS.md` (the connector capability matrix) · `docs/PRIVACY.md` ·
+`SECURITY.md` (threat model and key lifecycle) · `CHANGELOG.md` (user-facing release notes)

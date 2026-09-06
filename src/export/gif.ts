@@ -1,9 +1,9 @@
 /**
- * Phase 4.3 — Animated Flow Export (GIF). Captures Presentation Mode's
- * existing playback (per-step camera, opacity tiers, connector pulse) to
- * frames, headlessly — see `render/svg/flowFrame.ts` for the per-frame
- * renderer this walks step by step. Not a general media pipeline: GIF only,
- * fixed frame size, and the only knobs are speed and loop, per the roadmap.
+ * Animated Flow Export (GIF). Captures Presentation Mode's existing playback
+ * (per-step camera, opacity tiers, connector pulse) to frames, headlessly —
+ * see `render/svg/flowFrame.ts` for the per-frame renderer this walks step by
+ * step. Not a general media pipeline: GIF only, fixed frame size, and the
+ * only knobs are speed and loop.
  */
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { findFlow } from '../document/flow';

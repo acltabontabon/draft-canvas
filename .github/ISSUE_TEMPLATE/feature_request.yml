@@ -24,7 +24,7 @@ body:
       label: Is this specific to a technology or architecture pattern?
       description: >
         If this touches how connections are inferred, labeled, or flagged (see
-        docs/architecture-semantics.md), say what the technically correct behavior is and why —
+        docs/SEMANTICS.md), say what the technically correct behavior is and why —
         "it would look nicer" isn't enough on its own for a semantic rule.
     validations:
       required: false

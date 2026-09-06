@@ -15,5 +15,5 @@
 
 - [ ] `npm run check` passes locally
 - [ ] Tests added/updated for the behavior that changed
-- [ ] Docs updated if this changes architecture semantics, the document schema, or public behavior
+- [ ] Docs updated if this changes architecture semantics, the document schema (`src/document/types.ts`, `docs/ARCHITECTURE.md`'s "Schema evolution"), or public behavior
 - [ ] For anything large: this was discussed in an issue first
