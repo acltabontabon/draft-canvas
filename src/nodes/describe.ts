@@ -86,11 +86,16 @@ const SERVICE_KIND_LABELS: Partial<Record<ServiceKind, string>> = {
   api: 'API',
   worker: 'WORKER',
   external: 'EXTERNAL',
+  scheduler: 'SCHEDULER',
+  gateway: 'GATEWAY',
 };
 const DATABASE_KIND_LABELS: Partial<Record<DatabaseKind, string>> = {
   sql: 'SQL',
   nosql: 'NOSQL',
   cache: 'CACHE',
+  'file-system': 'FILE SYSTEM',
+  'object-storage': 'OBJECT STORAGE',
+  'search-index': 'SEARCH INDEX',
 };
 const QUEUE_KIND_LABELS: Record<QueueKind, string> = {
   queue: 'QUEUE',
@@ -116,6 +121,133 @@ function variantCaption(node: DraftNode, ctx: DescribeContext, label: string, co
       font: FONTS.variantTag,
       fill: color,
       align: 'end',
+    },
+  ];
+}
+
+/**
+ * Name + kind, stacked as two lines and centered as one block in a window
+ * `top`..`node.height - bottom` — the same treatment `database()`'s cylinder
+ * has always given SQL/NoSQL/Cache, factored out so the Data Store family's
+ * other "silhouette fills the box, label sits in whatever quiet space is
+ * left" kinds (File System, Object Storage) can share it instead of
+ * duplicating the layout math a third and fourth time. Renders nothing when
+ * the node has no name — matching the cylinder's own existing behaviour,
+ * which in practice only applies to a hand-cleared name (a fresh Data Store
+ * node is never created blank).
+ */
+function centeredStackedCaption(
+  node: DraftNode,
+  ctx: DescribeContext,
+  options: { top: number; bottom: number; kindLabel: string; nameColor: string },
+): Shape[] {
+  const text = node.text ?? '';
+  if (!text.trim()) return [];
+  const nameLineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
+  const nameLayout = layoutText(text, {
+    font: FONTS.nodeLabel,
+    maxWidth: Math.max(16, node.width - PADDING * 2),
+    lineHeight: nameLineHeight,
+    maxLines: 1,
+    measurer: ctx.measurer,
+  });
+  const kindFont = FONTS.variantTag;
+  const kindLayout = layoutText(options.kindLabel, {
+    font: kindFont,
+    maxWidth: Math.max(16, node.width - PADDING * 2),
+    lineHeight: kindFont.size * LINE_HEIGHTS.label,
+    maxLines: 1,
+    measurer: ctx.measurer,
+  });
+  const nameGap = 2;
+  const available = node.height - options.top - options.bottom;
+  const groupHeight = nameLayout.height + nameGap + kindLayout.height;
+  const groupTop = options.top + (available - groupHeight) / 2;
+  return [
+    {
+      t: 'text',
+      x: node.width / 2,
+      y: groupTop,
+      layout: nameLayout,
+      font: FONTS.nodeLabel,
+      fill: options.nameColor,
+      align: 'middle',
+    },
+    {
+      t: 'text',
+      x: node.width / 2,
+      y: groupTop + nameLayout.height + nameGap,
+      layout: kindLayout,
+      font: kindFont,
+      fill: ctx.theme.textMuted,
+      align: 'middle',
+    },
+  ];
+}
+
+/**
+ * Name + kind, stacked as two lines pinned a fixed gap under a compact glyph
+ * — the same treatment `queue()` has always given Queue/Topic/Stream,
+ * factored out so the Data Store family's own compact-glyph kinds (NoSQL,
+ * Cache, Search/Index) can share it. Unlike `centeredStackedCaption`, a
+ * missing name still shows the kind alone — every one of this pattern's
+ * kinds is "equally specific" the way Queue's three are, with no "generic,
+ * unspecified" placeholder to fall back to.
+ */
+function pinnedCaption(
+  node: DraftNode,
+  ctx: DescribeContext,
+  options: { top: number; kindLabel: string; nameColor: string },
+): Shape[] {
+  const kindFont = FONTS.variantTag;
+  const kindLayout = layoutText(options.kindLabel, {
+    font: kindFont,
+    maxWidth: Math.max(16, node.width - PADDING * 2),
+    lineHeight: kindFont.size * LINE_HEIGHTS.label,
+    maxLines: 1,
+    measurer: ctx.measurer,
+  });
+  const text = node.text ?? '';
+  const nameGap = 2;
+  if (!text.trim()) {
+    return [
+      {
+        t: 'text',
+        x: node.width / 2,
+        y: options.top,
+        layout: kindLayout,
+        font: kindFont,
+        fill: ctx.theme.textMuted,
+        align: 'middle',
+      },
+    ];
+  }
+  const nameLineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
+  const nameLayout = layoutText(text, {
+    font: FONTS.nodeLabel,
+    maxWidth: Math.max(16, node.width - PADDING * 2),
+    lineHeight: nameLineHeight,
+    maxLines: 1,
+    measurer: ctx.measurer,
+  });
+  return [
+    {
+      t: 'text',
+      x: node.width / 2,
+      y: options.top,
+      layout: nameLayout,
+      font: FONTS.nodeLabel,
+      fill: options.nameColor,
+      align: 'middle',
+    },
+    {
+      t: 'text',
+      x: node.width / 2,
+      y: options.top + nameLayout.height + nameGap,
+      layout: kindLayout,
+      font: kindFont,
+      fill: ctx.theme.textMuted,
+      align: 'middle',
     },
   ];
 }
@@ -297,9 +429,28 @@ function ellipse(node: DraftNode, ctx: DescribeContext): Shape[] {
  * of them look like clip art.
  */
 function service(node: DraftNode, ctx: DescribeContext): Shape[] {
+  switch (node.serviceKind) {
+    case 'api':
+      return serviceApi(node, ctx);
+    case 'worker':
+      return serviceWorker(node, ctx);
+    case 'external':
+      return serviceExternal(node, ctx);
+    case 'scheduler':
+      return serviceScheduler(node, ctx);
+    case 'gateway':
+      return serviceGateway(node, ctx);
+    default:
+      return serviceGeneric(node, ctx);
+  }
+}
+
+/** Generic: the family's neutral baseline — a rounded card with a coloured
+ *  cap. Every other kind's silhouette is a deliberate departure from this
+ *  one, so its own shape never changes once a kind gets its own function. */
+function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'teal');
   const capHeight = 4;
-  const kindLabel = SERVICE_KIND_LABELS[node.serviceKind ?? 'generic'];
   return [
     outlineShape(
       node.id,
@@ -326,7 +477,203 @@ function service(node: DraftNode, ctx: DescribeContext): Shape[] {
       ],
     },
     ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
-    ...(kindLabel ? variantCaption(node, ctx, kindLabel, ctx.theme.textMuted) : []),
+  ];
+}
+
+/**
+ * API: the card's own outline carries an inward notch on its left edge —
+ * a socket cut into the side, reading as "an exposed interface" without
+ * drawing a protocol-specific glyph (no HTTP badge, no globe). The notch
+ * sits at vertical mid-height, well clear of the top cap band, so the cap
+ * is identical to Generic's and stays a plain clipped rect.
+ */
+function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const capHeight = 4;
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const r = 8;
+  const notchH = h * 0.34;
+  const notchDepth = Math.min(8, w * 0.1);
+  const notchTop = y + (h - notchH) / 2;
+  const notchBottom = notchTop + notchH;
+  const nr = 3;
+
+  const d = [
+    `M${x + r},${y}`,
+    `L${x + w - r},${y}`,
+    `Q${x + w},${y} ${x + w},${y + r}`,
+    `L${x + w},${y + h - r}`,
+    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
+    `L${x + r},${y + h}`,
+    `Q${x},${y + h} ${x},${y + h - r}`,
+    `L${x},${notchBottom}`,
+    `L${x + notchDepth - nr},${notchBottom}`,
+    `Q${x + notchDepth},${notchBottom} ${x + notchDepth},${notchBottom - nr}`,
+    `L${x + notchDepth},${notchTop + nr}`,
+    `Q${x + notchDepth},${notchTop} ${x + notchDepth - nr},${notchTop}`,
+    `L${x},${notchTop}`,
+    `L${x},${y + r}`,
+    `Q${x},${y} ${x + r},${y}`,
+    'Z',
+  ].join(' ');
+
+  return [
+    { t: 'path', d, fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
+    {
+      t: 'group',
+      clip: { x, y, w, h, r },
+      children: [{ t: 'rect', x, y, w, h: capHeight, fill: palette.chip }],
+    },
+    ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.api!, ctx.theme.textMuted),
+  ];
+}
+
+/**
+ * Worker: two stacked cards — a plain back layer peeking out bottom-right,
+ * a front layer (with the usual cap) drawn on top. Reads as "a layered
+ * process," distinct from Cache's internal slabs (those sit inside one box;
+ * these two layers are the whole node) and deliberately silent about
+ * *which* async work it does — nothing here implies queue-only consumption.
+ */
+function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const capHeight = 4;
+  const offset = 6;
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
+  const back = { x: 0.75 + offset, y: 0.75 + offset, w: node.width - 1.5 - offset, h: node.height - 1.5 - offset, r: 8 };
+  const front = { x: 0.75, y: 0.75, w: node.width - 1.5 - offset, h: node.height - 1.5 - offset, r: 8 };
+  return [
+    outlineShape(`${node.id}:back`, ctx, back, { fill: palette.fill, stroke }),
+    outlineShape(node.id, ctx, front, { fill: palette.fill, stroke, shadow: true }),
+    {
+      t: 'group',
+      clip: { x: front.x, y: front.y, w: front.w, h: capHeight, r: front.r },
+      children: [{ t: 'rect', x: front.x, y: front.y, w: front.w, h: capHeight, fill: palette.chip }],
+    },
+    ...centredLabel(node, ctx, { top: capHeight, bottom: offset, color: palette.text }),
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.worker!, ctx.theme.textMuted),
+  ];
+}
+
+/**
+ * External: a dashed, detached outer frame around an inset inner card —
+ * double outline, a visible gap, and an interrupted boundary all from one
+ * small change (`Stroke.dash` on a second `outlineShape` call), so a glance
+ * distinguishes "ours" from "outside our ownership" without reading the
+ * caption.
+ */
+function serviceExternal(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const capHeight = 4;
+  const inset = 6;
+  const outer = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
+  const inner = {
+    x: 0.75 + inset,
+    y: 0.75 + inset,
+    w: node.width - 1.5 - inset * 2,
+    h: node.height - 1.5 - inset * 2,
+    r: 6,
+  };
+  return [
+    outlineShape(`${node.id}:frame`, ctx, outer, {
+      fill: 'none',
+      stroke: { color: palette.line, width: 1.25, dash: [4, 3] },
+    }),
+    outlineShape(node.id, ctx, inner, { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true }),
+    {
+      t: 'group',
+      clip: { x: inner.x, y: inner.y, w: inner.w, h: capHeight, r: inner.r },
+      children: [{ t: 'rect', x: inner.x, y: inner.y, w: inner.w, h: capHeight, fill: palette.chip }],
+    },
+    ...centredLabel(node, ctx, { top: inset + capHeight, bottom: inset, color: palette.text }),
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.external!, ctx.theme.textMuted),
+  ];
+}
+
+/**
+ * Scheduler: instead of Generic's one continuous cap, a short cluster of three ticks sits near
+ * the top-left corner — a compact "pulse," not a border. Deliberately clustered and short rather
+ * than evenly spaced across the full width: five evenly-spaced dashes spanning the whole top edge
+ * reads as a perforation (spiral-notebook binding, tear-off ticket), which is exactly the
+ * calendar/notebook association the silhouette needs to avoid. A few marks confined to one
+ * corner, with plain outline for the rest of the top edge, reads as a rhythm accent instead.
+ */
+function serviceScheduler(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const capHeight = 4;
+  const outer = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
+  const tickCount = 3;
+  const tickW = 4;
+  const gap = 4;
+  const startX = outer.x + 10;
+  const ticks: Shape[] = Array.from({ length: tickCount }, (_, i) => ({
+    t: 'rect',
+    x: startX + i * (tickW + gap),
+    y: outer.y,
+    w: tickW,
+    h: capHeight,
+    fill: palette.chip,
+  }));
+  return [
+    outlineShape(node.id, ctx, outer, { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true }),
+    // Grouped (with no clip — the cluster already sits clear of the rounded corner) so the three
+    // ticks read as one cohesive mark, the same way Generic's cap is one grouped unit.
+    { t: 'group', children: ticks },
+    ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.scheduler!, ctx.theme.textMuted),
+  ];
+}
+
+/**
+ * Gateway: a normal rounded-rect service body — same silhouette as Generic — with one
+ * directional chevron notch cut into the left edge, pointing inward. A full trapezoid (the
+ * previous design) reads as a generic flowchart "merge/extract" primitive; a small arrowhead
+ * marking a single entry point reads specifically as "traffic enters here and is routed onward"
+ * without turning the whole node into an unfamiliar shape. The notch sits at vertical mid-height,
+ * clear of the top band, so — like API's rectangular notch — Gateway keeps the ordinary shared
+ * cap instead of needing its own cap-less treatment.
+ */
+function serviceGateway(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const capHeight = 4;
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const r = 8;
+  const notchDepth = Math.min(14, w * 0.14);
+  const notchHalf = h * 0.2;
+  const midY = y + h / 2;
+
+  const d = [
+    `M${x + r},${y}`,
+    `L${x + w - r},${y}`,
+    `Q${x + w},${y} ${x + w},${y + r}`,
+    `L${x + w},${y + h - r}`,
+    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
+    `L${x + r},${y + h}`,
+    `Q${x},${y + h} ${x},${y + h - r}`,
+    `L${x},${midY + notchHalf}`,
+    `L${x + notchDepth},${midY}`,
+    `L${x},${midY - notchHalf}`,
+    `L${x},${y + r}`,
+    `Q${x},${y} ${x + r},${y}`,
+    'Z',
+  ].join(' ');
+
+  return [
+    { t: 'path', d, fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
+    {
+      t: 'group',
+      clip: { x, y, w, h, r },
+      children: [{ t: 'rect', x, y, w, h: capHeight, fill: palette.chip }],
+    },
+    ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.gateway!, ctx.theme.textMuted),
   ];
 }
 
@@ -395,7 +742,32 @@ function cylinderPaths(
   return { body, lid };
 }
 
+/**
+ * Data Store's silhouette varies by kind — see the module comment on why
+ * that matters ("silhouette, not iconography"). Generic and SQL keep the
+ * classic vertical cylinder (`dataStoreCylinder`, unchanged from before this
+ * kind family existed) since both are explicitly meant to still read as an
+ * ordinary database; the other five kinds each get their own outline that
+ * fills the node the same way the cylinder does.
+ */
 function database(node: DraftNode, ctx: DescribeContext): Shape[] {
+  switch (node.databaseKind) {
+    case 'nosql':
+      return dataStoreNoSql(node, ctx);
+    case 'cache':
+      return dataStoreCache(node, ctx);
+    case 'file-system':
+      return dataStoreFileSystem(node, ctx);
+    case 'object-storage':
+      return dataStoreObjectStorage(node, ctx);
+    case 'search-index':
+      return dataStoreSearchIndex(node, ctx);
+    default:
+      return dataStoreCylinder(node, ctx);
+  }
+}
+
+function dataStoreCylinder(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'blue');
   const w = node.width - 1.5;
   const h = node.height - 1.5;
@@ -425,6 +797,22 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
       { t: 'path', d: retrace.body, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
       { t: 'path', d: retrace.lid, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
     );
+  }
+
+  // SQL's one differentiator from Generic: a subtle table/row hint in the cylinder's own cap
+  // band — still unmistakably a database, specifically a relational one, without a new
+  // silhouette. Deliberately independent of the roughness preset (draws at every preset).
+  if (node.databaseKind === 'sql') {
+    const inset = w * 0.28;
+    const rowY1 = y + ry * 0.9;
+    const rowY2 = y + ry * 1.5;
+    shapes.push({
+      t: 'path',
+      d: `M${x + inset},${rowY1} L${x + w - inset},${rowY1} M${x + inset},${rowY2} L${x + w - inset},${rowY2}`,
+      fill: 'none',
+      stroke: { color: palette.line, width: 1 },
+      opacity: 0.5,
+    });
   }
 
   // A named kind (SQL/NoSQL/Cache) reads as a quiet second line directly under the primary
@@ -481,6 +869,236 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
     shapes.push(...centredLabel(node, ctx, { top: innerTop, bottom: innerBottom, color: palette.text }));
   }
 
+  return shapes;
+}
+
+/**
+ * NoSQL: a loose, offset cluster of three blocks, cascading diagonally and
+ * drawn back-to-front so the front one visually overlaps the ones behind it
+ * — "scattered, flexible records," deliberately not a neat aligned stack
+ * (that's Cache's motif, drawn to feel like the opposite of this one).
+ * Abstract on purpose: this communicates "a non-relational persistent
+ * store," not any one specific NoSQL data model.
+ */
+function dataStoreNoSql(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
+
+  const clusterTop = y + h * 0.06;
+  const dx = w * 0.1;
+  const dy = h * 0.14;
+  const blocks = [0, 1, 2].map((i) => ({
+    x: x + dx * i,
+    y: clusterTop + dy * i,
+    w: w * (0.62 - i * 0.1),
+    h: h * (0.3 - i * 0.03),
+  }));
+  const clusterBottom = Math.max(...blocks.map((b) => b.y + b.h));
+
+  const shapes: Shape[] = blocks.map((b) => ({ t: 'rect', x: b.x, y: b.y, w: b.w, h: b.h, r: 6, fill: palette.fill, stroke }));
+  shapes.push(
+    ...pinnedCaption(node, ctx, { top: clusterBottom + 4, kindLabel: DATABASE_KIND_LABELS.nosql!, nameColor: palette.text }),
+  );
+  return shapes;
+}
+
+/**
+ * Cache: neat, tightly-stacked, equal-width slabs — the deliberate opposite
+ * of NoSQL's scattered cluster above. Flatter and more compact than every
+ * other kind's glyph on purpose: a cache should not visually carry the same
+ * architectural weight as a system of record.
+ */
+function dataStoreCache(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
+
+  const slabW = w * 0.74;
+  const slabH = Math.min(10, h * 0.14);
+  const gap = Math.min(5, h * 0.05);
+  const slabX = x + (w - slabW) / 2;
+  const groupTop = y + h * 0.1;
+  const slabs = [0, 1, 2].map((i) => ({ x: slabX, y: groupTop + i * (slabH + gap), w: slabW, h: slabH }));
+  const groupBottom = slabs[slabs.length - 1]!.y + slabH;
+
+  const shapes: Shape[] = slabs.map((s) => ({ t: 'rect', x: s.x, y: s.y, w: s.w, h: s.h, r: 3, fill: palette.fill, stroke }));
+  shapes.push(
+    ...pinnedCaption(node, ctx, { top: groupBottom + 4, kindLabel: DATABASE_KIND_LABELS.cache!, nameColor: palette.text }),
+  );
+  return shapes;
+}
+
+/**
+ * File System: a folder silhouette — a tab merging into a full-width body —
+ * as the *entire* node outline (one closed path, not a body+lid pair), the
+ * same "the silhouette fills the box" treatment the cylinder gets. Kept
+ * architectural/abstract rather than a literal desktop Finder folder: no
+ * dog-ear, no shading, just the tab-and-body shape.
+ */
+function dataStoreFileSystem(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const r = 6;
+  const tabW = w * 0.42;
+  const tabH = Math.min(12, h * 0.18);
+
+  const d = [
+    `M${x + r},${y}`,
+    `L${x + tabW},${y}`,
+    `L${x + tabW},${y + tabH}`,
+    `L${x + w - r},${y + tabH}`,
+    `Q${x + w},${y + tabH} ${x + w},${y + tabH + r}`,
+    `L${x + w},${y + h - r}`,
+    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
+    `L${x + r},${y + h}`,
+    `Q${x},${y + h} ${x},${y + h - r}`,
+    `L${x},${y + r}`,
+    `Q${x},${y} ${x + r},${y}`,
+    'Z',
+  ].join(' ');
+
+  const shapes: Shape[] = [{ t: 'path', d, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } }];
+  shapes.push(
+    ...centeredStackedCaption(node, ctx, {
+      top: tabH + 4,
+      bottom: 6,
+      kindLabel: DATABASE_KIND_LABELS['file-system']!,
+      nameColor: palette.text,
+    }),
+  );
+  return shapes;
+}
+
+/**
+ * Object Storage: an open-top vessel — wider at the rim than at the base,
+ * with a rim line (the cylinder's "lid" convention, reused) and two small
+ * object blocks nested near the base. Deliberately not the AWS S3 icon: no
+ * handle, no lid flap — an abstract storage vessel, not a vendor logo.
+ */
+function dataStoreObjectStorage(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const topW = w * 0.92;
+  const bottomW = w * 0.68;
+  const cornerR = 5;
+  const topLeft = x + (w - topW) / 2;
+  const topRight = topLeft + topW;
+  const bottomLeft = x + (w - bottomW) / 2;
+  const bottomRight = bottomLeft + bottomW;
+  const bottomY = y + h;
+
+  const d = [
+    `M${topLeft},${y}`,
+    `L${topRight},${y}`,
+    `L${bottomRight},${bottomY - cornerR}`,
+    `Q${bottomRight},${bottomY} ${bottomRight - cornerR},${bottomY}`,
+    `L${bottomLeft + cornerR},${bottomY}`,
+    `Q${bottomLeft},${bottomY} ${bottomLeft},${bottomY - cornerR}`,
+    'Z',
+  ].join(' ');
+
+  const rimY = y + 5;
+  const rimInset = topW * 0.05;
+  const rim = `M${topLeft + rimInset},${rimY} L${topRight - rimInset},${rimY}`;
+
+  const objW = 9;
+  const objH = 7;
+  const objGap = 5;
+  const objY = bottomY - objH - 8;
+  const objStartX = x + (w - (objW * 2 + objGap)) / 2;
+  const objStroke: Stroke = { color: palette.line, width: 1.2 };
+
+  const shapes: Shape[] = [
+    { t: 'path', d, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
+    { t: 'path', d: rim, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.6 },
+    { t: 'rect', x: objStartX, y: objY, w: objW, h: objH, r: 2, fill: 'none', stroke: objStroke },
+    { t: 'rect', x: objStartX + objW + objGap, y: objY, w: objW, h: objH, r: 2, fill: 'none', stroke: objStroke },
+  ];
+
+  shapes.push(
+    ...centeredStackedCaption(node, ctx, {
+      top: rimY + 8,
+      bottom: bottomY - objY + 4,
+      kindLabel: DATABASE_KIND_LABELS['object-storage']!,
+      nameColor: palette.text,
+    }),
+  );
+  return shapes;
+}
+
+/**
+ * Search / Index: three stacked "index cards," each with a small tab notch
+ * on its right edge, staggered vertically per card — a card-catalog cue,
+ * not a magnifying glass. Card + tab are one closed path per card, the same
+ * "merge two rounded pieces into one outline" technique the folder uses.
+ */
+function dataStoreSearchIndex(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const cardW = w * 0.8;
+  const cardH = Math.min(14, h * 0.16);
+  const gap = Math.min(4, h * 0.04);
+  const tabW = cardW * 0.18;
+  const tabH = cardH * 0.5;
+  const r = 3;
+  const cardX = x + (w - cardW) / 2;
+  const groupTop = y + h * 0.06;
+
+  function cardPath(cardY: number, tabY: number): string {
+    return [
+      `M${cardX + r},${cardY}`,
+      `L${cardX + cardW - r},${cardY}`,
+      `Q${cardX + cardW},${cardY} ${cardX + cardW},${cardY + r}`,
+      `L${cardX + cardW},${tabY}`,
+      `L${cardX + cardW + tabW},${tabY}`,
+      `L${cardX + cardW + tabW},${tabY + tabH}`,
+      `L${cardX + cardW},${tabY + tabH}`,
+      `L${cardX + cardW},${cardY + cardH - r}`,
+      `Q${cardX + cardW},${cardY + cardH} ${cardX + cardW - r},${cardY + cardH}`,
+      `L${cardX + r},${cardY + cardH}`,
+      `Q${cardX},${cardY + cardH} ${cardX},${cardY + cardH - r}`,
+      `L${cardX},${cardY + r}`,
+      `Q${cardX},${cardY} ${cardX + r},${cardY}`,
+      'Z',
+    ].join(' ');
+  }
+
+  const cards = [0, 1, 2].map((i) => {
+    const cardY = groupTop + i * (cardH + gap);
+    const tabY = i === 0 ? cardY : i === 1 ? cardY + (cardH - tabH) / 2 : cardY + cardH - tabH;
+    return { cardY, d: cardPath(cardY, tabY) };
+  });
+  const groupBottom = cards[cards.length - 1]!.cardY + cardH;
+
+  const shapes: Shape[] = cards.map((c) => ({
+    t: 'path',
+    d: c.d,
+    fill: palette.fill,
+    stroke: { color: palette.line, width: 1.5 },
+  }));
+  shapes.push(
+    ...pinnedCaption(node, ctx, {
+      top: groupBottom + 4,
+      kindLabel: DATABASE_KIND_LABELS['search-index']!,
+      nameColor: palette.text,
+    }),
+  );
   return shapes;
 }
 

@@ -1,13 +1,4 @@
-import {
-  BOUNDARY_PRESETS,
-  CODE_LANGUAGES,
-  ACCENTS,
-  ACTOR_KINDS,
-  DATABASE_KINDS,
-  NOTE_KINDS,
-  QUEUE_KINDS,
-  SERVICE_KINDS,
-} from '../../document/types';
+import { BOUNDARY_PRESETS, CODE_LANGUAGES, ACCENTS, NOTE_KINDS } from '../../document/types';
 import type {
   Accent,
   ActorKind,
@@ -19,19 +10,17 @@ import type {
   ServiceKind,
 } from '../../document/types';
 import type { AlignEdge } from '../../document/operations';
+import { ACTOR_ICON_OPTIONS } from '../../canvas/actorOptions';
+import { DATABASE_ICON_OPTIONS } from '../../canvas/dataStoreOptions';
+import { InspectorSelect } from '../../canvas/InspectorSelect';
+import { QUEUE_ICON_OPTIONS } from '../../canvas/queueOptions';
+import { SERVICE_ICON_OPTIONS } from '../../canvas/serviceOptions';
 import { LANGUAGE_LABELS } from '../../render/code/highlight';
 import { useEditorStore } from '../../store/editorStore';
 import { nodeIndex, edgeIndex } from '../../store/selectors';
 import { useThemeValue } from '../theme/useTheme';
 import { Button } from '../common/Button';
-import {
-  NOTE_LABELS,
-  ACTOR_KIND_OPTION_LABELS,
-  BOUNDARY_PRESET_OPTION_LABELS,
-  SERVICE_KIND_OPTION_LABELS,
-  DATABASE_KIND_OPTION_LABELS,
-  QUEUE_KIND_OPTION_LABELS,
-} from './nodeKindLabels';
+import { NOTE_LABELS, BOUNDARY_PRESET_OPTION_LABELS } from './nodeKindLabels';
 
 /**
  * A contextual strip that appears only when something is selected, and shows
@@ -164,104 +153,70 @@ export function Inspector() {
       {onlyNode?.type === 'service' && (
         <>
           <span className="dc-inspector-divider" />
-          <select
-            className="dc-select"
-            aria-label="Service type"
+          <InspectorSelect
+            className="dc-inspector-toolbar-select"
+            ariaLabel="Service type"
             value={onlyNode.serviceKind ?? 'generic'}
-            onChange={(event) =>
+            options={SERVICE_ICON_OPTIONS}
+            onChange={(value) =>
               store
                 .getState()
-                .updateNodeById(
-                  onlyNode.id,
-                  { serviceKind: event.target.value as ServiceKind },
-                  'Change service type',
-                )
+                .updateNodeById(onlyNode.id, { serviceKind: value as ServiceKind }, 'Change service type')
             }
-          >
-            {SERVICE_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {SERVICE_KIND_OPTION_LABELS[kind]}
-              </option>
-            ))}
-          </select>
+            preferredDirection="up"
+            layout="grid"
+          />
         </>
       )}
 
       {onlyNode?.type === 'database' && (
         <>
           <span className="dc-inspector-divider" />
-          <select
-            className="dc-select"
-            aria-label="Data Store type"
+          <InspectorSelect
+            className="dc-inspector-toolbar-select"
+            ariaLabel="Data Store type"
             value={onlyNode.databaseKind ?? 'generic'}
-            onChange={(event) =>
+            options={DATABASE_ICON_OPTIONS}
+            onChange={(value) =>
               store
                 .getState()
-                .updateNodeById(
-                  onlyNode.id,
-                  { databaseKind: event.target.value as DatabaseKind },
-                  'Change data store type',
-                )
+                .updateNodeById(onlyNode.id, { databaseKind: value as DatabaseKind }, 'Change data store type')
             }
-          >
-            {DATABASE_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {DATABASE_KIND_OPTION_LABELS[kind]}
-              </option>
-            ))}
-          </select>
+            preferredDirection="up"
+            layout="grid"
+          />
         </>
       )}
 
       {onlyNode?.type === 'queue' && (
         <>
           <span className="dc-inspector-divider" />
-          <select
-            className="dc-select"
-            aria-label="Queue type"
+          <InspectorSelect
+            className="dc-inspector-toolbar-select"
+            ariaLabel="Queue type"
             value={onlyNode.queueKind ?? 'queue'}
-            onChange={(event) =>
-              store
-                .getState()
-                .updateNodeById(
-                  onlyNode.id,
-                  { queueKind: event.target.value as QueueKind },
-                  'Change queue type',
-                )
+            options={QUEUE_ICON_OPTIONS}
+            onChange={(value) =>
+              store.getState().updateNodeById(onlyNode.id, { queueKind: value as QueueKind }, 'Change queue type')
             }
-          >
-            {QUEUE_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {QUEUE_KIND_OPTION_LABELS[kind]}
-              </option>
-            ))}
-          </select>
+            preferredDirection="up"
+          />
         </>
       )}
 
       {onlyNode?.type === 'actor' && (
         <>
           <span className="dc-inspector-divider" />
-          <select
-            className="dc-select"
-            aria-label="Actor type"
+          <InspectorSelect
+            className="dc-inspector-toolbar-select"
+            ariaLabel="Actor type"
             value={onlyNode.actorKind ?? 'human'}
-            onChange={(event) =>
-              store
-                .getState()
-                .updateNodeById(
-                  onlyNode.id,
-                  { actorKind: event.target.value as ActorKind },
-                  'Change actor type',
-                )
+            options={ACTOR_ICON_OPTIONS}
+            onChange={(value) =>
+              store.getState().updateNodeById(onlyNode.id, { actorKind: value as ActorKind }, 'Change actor type')
             }
-          >
-            {ACTOR_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {ACTOR_KIND_OPTION_LABELS[kind]}
-              </option>
-            ))}
-          </select>
+            preferredDirection="up"
+          />
         </>
       )}
 

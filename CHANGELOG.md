@@ -8,6 +8,35 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ## [Unreleased]
 
+### Added
+
+- Data Store now has seven distinct storage silhouettes instead of one cylinder wearing different
+  captions: SQL keeps the classic cylinder with a subtle row hint, NoSQL is a loose cluster of
+  offset blocks, Cache is a flat stack of tight slabs, File System is a folder tab, Object Storage
+  is an open vessel, and Search Index is a stack of tabbed cards. Connecting to (or from) each one
+  now offers only the relationships that make architectural sense for it — Cache gets an
+  "invalidates" option databases don't, Object Storage can notify a Queue or Topic the way an
+  "object created" event would, and so on.
+- The Service, Queue, Actor, and Data Store kind pickers now show a live miniature of each option's
+  actual shape instead of plain text, in a compact layout you can scan at a glance. A background
+  worker connecting to a Search Index now defaults to "indexes" rather than "searches."
+- Service now has six distinct silhouettes instead of one rounded card wearing different captions:
+  API has an interface notch on its left edge, Worker is a layered stack of two cards, External has
+  a dashed detached outer frame, Scheduler carries a short pulse of ticks near its corner, and
+  Gateway has a directional entry notch. Two new kinds, Scheduler and Gateway, join Generic/API/
+  Worker/External — Scheduler defaults its outgoing connections to "triggers" and Gateway to
+  "routes," and a Gateway pointed at a data store is flagged as unusual. A fresh Service node's name
+  now follows its kind (a new Worker starts out called "Worker," an External one "External System")
+  until you rename it yourself — after that, Draft Canvas never touches the name again, no matter
+  how many times you change its kind.
+
+### Fixed
+
+- Changing a node's kind (Service, Data Store, Queue, or Actor) now re-evaluates its existing
+  connections' relationship labels instead of silently leaving a now-stale one in place.
+- Contextual hints (like the note/code attachment nudge on a Service node) no longer appear unless
+  Learn Draft Canvas mode is turned on.
+
 ## [0.4.0] - 2026-09-05
 
 ### Added

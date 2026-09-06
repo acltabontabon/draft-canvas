@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   capabilityFor,
   categoryOf,
+  defaultsToResponse,
   inferredJunctionSemantic,
   inferRelationship,
   isEligibleForReinference,
@@ -26,17 +27,30 @@ describe('categoryOf', () => {
     expect(categoryOf({ type: 'queue', queueKind: 'queue' })).toBe('queue');
   });
 
-  it('reads a plain service as service, and an external one as external', () => {
+  it('reads a plain service as service, an external one as external, and a worker as its own category', () => {
     expect(categoryOf({ type: 'service' })).toBe('service');
     expect(categoryOf({ type: 'service', serviceKind: 'generic' })).toBe('service');
     expect(categoryOf({ type: 'service', serviceKind: 'api' })).toBe('service');
     expect(categoryOf({ type: 'service', serviceKind: 'external' })).toBe('external');
+    expect(categoryOf({ type: 'service', serviceKind: 'worker' })).toBe('worker');
+  });
+
+  it('reads Scheduler and Gateway as their own categories', () => {
+    expect(categoryOf({ type: 'service', serviceKind: 'scheduler' })).toBe('scheduler');
+    expect(categoryOf({ type: 'service', serviceKind: 'gateway' })).toBe('gateway');
   });
 
   it('reads a plain database as database, and a cache one as cache', () => {
     expect(categoryOf({ type: 'database' })).toBe('database');
     expect(categoryOf({ type: 'database', databaseKind: 'sql' })).toBe('database');
+    expect(categoryOf({ type: 'database', databaseKind: 'nosql' })).toBe('database');
     expect(categoryOf({ type: 'database', databaseKind: 'cache' })).toBe('cache');
+  });
+
+  it('reads each new Data Store sub-kind as its own category', () => {
+    expect(categoryOf({ type: 'database', databaseKind: 'file-system' })).toBe('fileSystem');
+    expect(categoryOf({ type: 'database', databaseKind: 'object-storage' })).toBe('objectStorage');
+    expect(categoryOf({ type: 'database', databaseKind: 'search-index' })).toBe('searchIndex');
   });
 
   it('reads ellipse (Junction) as its own category, not generic', () => {
@@ -156,10 +170,74 @@ describe('capabilityFor — the capability matrix', () => {
     expect(capabilityFor('external', 'external')).toEqual(capabilityFor('service', 'service'));
   });
 
-  it('service → cache: defaults to writes, no query option (unlike a plain database)', () => {
+  it('worker falls back to being treated as a service for every pairing without its own override', () => {
+    expect(capabilityFor('worker', 'database')).toEqual(capabilityFor('service', 'database'));
+    expect(capabilityFor('database', 'worker')).toEqual(capabilityFor('database', 'service'));
+    expect(capabilityFor('queue', 'worker')).toEqual(capabilityFor('queue', 'service'));
+    expect(capabilityFor('worker', 'queue')).toEqual(capabilityFor('service', 'queue'));
+    expect(capabilityFor('actor', 'worker')).toEqual(capabilityFor('actor', 'service'));
+    expect(capabilityFor('worker', 'worker')).toEqual(capabilityFor('service', 'service'));
+  });
+
+  it('scheduler → service/worker: defaults to triggers, distinct from a plain service call', () => {
+    const toService = capabilityFor('scheduler', 'service')!;
+    expect(toService.defaultRelation).toBe('triggers');
+    expect(toService.relations).toEqual(['triggers', 'calls', 'dependsOn']);
+
+    const toWorker = capabilityFor('scheduler', 'worker')!;
+    expect(toWorker.defaultRelation).toBe('triggers');
+    expect(toWorker.relations).toEqual(['triggers', 'calls', 'dependsOn']);
+    // Worker also resolves away to `service` — without its own key, `scheduler>worker` would
+    // otherwise collapse straight to `service>service`'s plain "calls" default.
+    expect(toWorker.defaultRelation).not.toBe(capabilityFor('service', 'service')!.defaultRelation);
+  });
+
+  it('scheduler → queue/topic needs no matrix entry — it already falls through to the ordinary publish default', () => {
+    expect(capabilityFor('scheduler', 'queue')).toEqual(capabilityFor('service', 'queue'));
+    expect(capabilityFor('scheduler', 'topic')).toEqual(capabilityFor('service', 'topic'));
+  });
+
+  it('scheduler falls back to being treated as a service for every pairing without its own override', () => {
+    expect(capabilityFor('scheduler', 'database')).toEqual(capabilityFor('service', 'database'));
+    expect(capabilityFor('database', 'scheduler')).toEqual(capabilityFor('database', 'service'));
+    expect(capabilityFor('actor', 'scheduler')).toEqual(capabilityFor('actor', 'service'));
+  });
+
+  it('gateway → service/gateway: defaults to routes, distinct from a plain service call', () => {
+    const toService = capabilityFor('gateway', 'service')!;
+    expect(toService.defaultRelation).toBe('routes');
+    expect(toService.relations).toEqual(['routes', 'calls', 'dependsOn']);
+
+    const toGateway = capabilityFor('gateway', 'gateway')!;
+    expect(toGateway.defaultRelation).toBe('routes');
+    expect(toGateway.relations).toEqual(['routes', 'calls', 'dependsOn']);
+  });
+
+  it('gateway routing to any storage kind is flagged unusual with guidance, and gets no default relation', () => {
+    for (const target of ['database', 'cache', 'fileSystem', 'objectStorage', 'searchIndex'] as const) {
+      const cap = capabilityFor('gateway', target)!;
+      expect(cap.status).toBe('unusual');
+      expect(cap.guidance).toBeTruthy();
+      expect(cap.defaultRelation).toBeUndefined();
+    }
+  });
+
+  it('gateway falls back to being treated as a service for every pairing without its own override', () => {
+    expect(capabilityFor('actor', 'gateway')).toEqual(capabilityFor('actor', 'service'));
+    expect(capabilityFor('gateway', 'queue')).toEqual(capabilityFor('service', 'queue'));
+    expect(capabilityFor('queue', 'gateway')).toEqual(capabilityFor('queue', 'service'));
+  });
+
+  it('worker → search index is the one pairing where a Worker gets its own default: indexes, not searches', () => {
+    const cap = capabilityFor('worker', 'searchIndex')!;
+    expect(cap.defaultRelation).toBe('indexes');
+    expect(cap.relations).toEqual(['searches', 'indexes', 'dependsOn']);
+  });
+
+  it('service → cache: defaults to writes, no query option (unlike a plain database), gains "invalidates"', () => {
     const cap = capabilityFor('service', 'cache')!;
     expect(cap.defaultRelation).toBe('writes');
-    expect(cap.relations).toEqual(['writes', 'reads', 'dependsOn']);
+    expect(cap.relations).toEqual(['writes', 'reads', 'invalidates', 'dependsOn']);
     expect(cap.relations).not.toContain('query');
   });
 
@@ -167,6 +245,57 @@ describe('capabilityFor — the capability matrix', () => {
     const cap = capabilityFor('cache', 'service')!;
     expect(cap.defaultRelation).toBe('reads');
     expect(cap.relations).toEqual(['reads', 'dependsOn']);
+  });
+
+  it('service → file system: reads/writes/watches, no database-specific query', () => {
+    const cap = capabilityFor('service', 'fileSystem')!;
+    expect(cap.defaultRelation).toBe('writes');
+    expect(cap.relations).toEqual(['reads', 'writes', 'watches', 'dependsOn']);
+    expect(cap.relations).not.toContain('query');
+  });
+
+  it('file system → service: reads only, never behaves like an ordinary service call', () => {
+    const cap = capabilityFor('fileSystem', 'service')!;
+    expect(cap.defaultRelation).toBe('reads');
+    expect(cap.relations).toEqual(['reads', 'dependsOn']);
+    expect(cap.relations).not.toContain('calls');
+  });
+
+  it('service → object storage: reads/writes, the same vocabulary as the rest of the storage family', () => {
+    const cap = capabilityFor('service', 'objectStorage')!;
+    expect(cap.defaultRelation).toBe('writes');
+    expect(cap.relations).toEqual(['reads', 'writes', 'dependsOn']);
+  });
+
+  it('object storage → service: reads only', () => {
+    const cap = capabilityFor('objectStorage', 'service')!;
+    expect(cap.defaultRelation).toBe('reads');
+    expect(cap.relations).toEqual(['reads', 'dependsOn']);
+  });
+
+  it('object storage may notify a Queue or Topic — the one storage kind with a documented event exception', () => {
+    for (const target of ['queue', 'topic'] as const) {
+      const cap = capabilityFor('objectStorage', target)!;
+      expect(cap.defaultRelation).toBe('publishes');
+      expect(cap.defaultBehavior).toBe('event');
+      expect(cap.relations).toEqual(['publishes', 'event', 'dependsOn']);
+    }
+    // Deliberately not extended to plain database/cache/fileSystem — this is Object Storage's own
+    // documented exception, not "storage can publish events" in general.
+    expect(capabilityFor('database', 'queue')).toBeUndefined();
+    expect(capabilityFor('cache', 'queue')).toBeUndefined();
+    expect(capabilityFor('fileSystem', 'queue')).toBeUndefined();
+  });
+
+  it('service → search index: searches and indexes, deliberately no redundant "reads"', () => {
+    const cap = capabilityFor('service', 'searchIndex')!;
+    expect(cap.defaultRelation).toBe('searches');
+    expect(cap.relations).toEqual(['searches', 'indexes', 'dependsOn']);
+    expect(cap.relations).not.toContain('reads');
+  });
+
+  it('search index → service has no opinion — sparse is correct here, unlike the other storage reverses', () => {
+    expect(capabilityFor('searchIndex', 'service')).toBeUndefined();
   });
 
   it('has no opinion about pairs the spec never described', () => {
@@ -181,6 +310,12 @@ describe('capabilityFor — the capability matrix', () => {
     expect(capabilityFor('database', 'topic')).toBeUndefined();
     expect(capabilityFor('topic', 'database')).toBeUndefined();
   });
+
+  it('the new storage sub-kinds never fall back to a plain database\'s entry for an unlisted pairing', () => {
+    expect(capabilityFor('fileSystem', 'database')).toBeUndefined();
+    expect(capabilityFor('objectStorage', 'fileSystem')).toBeUndefined();
+    expect(capabilityFor('searchIndex', 'cache')).toBeUndefined();
+  });
 });
 
 describe('isSyncPairing — which pairings a request/response can attach to', () => {
@@ -191,6 +326,12 @@ describe('isSyncPairing — which pairings a request/response can attach to', ()
 
   it('is true for actor → service, predetermined-and-sync with no other option', () => {
     expect(isSyncPairing('actor', 'service')).toBe(true);
+  });
+
+  it('is true for a Worker on either end, via the same fallback-to-service treatment as external', () => {
+    expect(isSyncPairing('worker', 'service')).toBe(true);
+    expect(isSyncPairing('service', 'worker')).toBe(true);
+    expect(isSyncPairing('worker', 'worker')).toBe(true);
   });
 
   it('is false for pairings predetermined to something other than sync', () => {
@@ -216,6 +357,32 @@ describe('isSyncPairing — which pairings a request/response can attach to', ()
     expect(isSyncPairing('topic', 'service')).toBe(false);
     expect(isSyncPairing('topic', 'queue')).toBe(false);
     expect(isSyncPairing('queue', 'topic')).toBe(false);
+  });
+
+  it('is false for Scheduler and Gateway — their defaults are triggers/routes, not calls', () => {
+    expect(isSyncPairing('scheduler', 'worker')).toBe(false);
+    expect(isSyncPairing('gateway', 'service')).toBe(false);
+  });
+});
+
+describe('defaultsToResponse — whether a fresh connection defaults its reply line on', () => {
+  it('is true for two service-shaped boxes talking to each other', () => {
+    expect(defaultsToResponse('service', 'service')).toBe(true);
+    expect(defaultsToResponse('worker', 'external')).toBe(true);
+  });
+
+  it('is false for Scheduler even though it folds to service like Worker/External/Gateway do — a schedule firing is fire-and-forget', () => {
+    expect(defaultsToResponse('scheduler', 'worker')).toBe(false);
+    expect(defaultsToResponse('scheduler', 'service')).toBe(false);
+  });
+
+  it('is true for Gateway → service — a reverse proxy genuinely forwards a request and returns the response', () => {
+    expect(defaultsToResponse('gateway', 'service')).toBe(true);
+  });
+
+  it('is false for a person initiating a call, and for anything not service-shaped', () => {
+    expect(defaultsToResponse('actor', 'service')).toBe(false);
+    expect(defaultsToResponse('service', 'database')).toBe(false);
   });
 });
 
@@ -272,6 +439,78 @@ describe('inferRelationship — a thin wrapper over capabilityFor\'s default', (
     const a = createNode({ type: 'database', x: 0, y: 0 });
     const b = createNode({ type: 'database', x: 0, y: 0 });
     expect(inferRelationship(a, b)).toEqual({ semantic: 'ingests', kind: undefined });
+  });
+});
+
+/**
+ * The representative architecture pairings from the Service family redesign spec (§28) —
+ * `inferRelationship`-level, so this exercises the same path a real `connect()` call takes, not
+ * just `capabilityFor` in isolation. Most of these are deliberately *not* new matrix rows — the
+ * point of the test is confirming the existing fallback machinery already gives sensible
+ * architectural vocabulary for External/Worker/API once Scheduler/Gateway exist alongside them.
+ */
+describe('inferRelationship — Service family redesign test matrix (spec §28)', () => {
+  const service = (serviceKind?: CreateNodeInput['serviceKind']) =>
+    createNode({ type: 'service', x: 0, y: 0, serviceKind });
+  const database = (databaseKind?: CreateNodeInput['databaseKind']) =>
+    createNode({ type: 'database', x: 0, y: 0, databaseKind });
+  const queue = (queueKind?: CreateNodeInput['queueKind']) => createNode({ type: 'queue', x: 0, y: 0, queueKind });
+
+  it('External ↔ Gateway/API: calls both ways, exactly like any other service pairing', () => {
+    expect(inferRelationship(service('external'), service('gateway'))).toEqual({ semantic: 'calls', kind: undefined });
+    expect(inferRelationship(service('external'), service('api'))).toEqual({ semantic: 'calls', kind: undefined });
+    expect(inferRelationship(service('api'), service('external'))).toEqual({ semantic: 'calls', kind: undefined });
+  });
+
+  it('Gateway → API: routes, not calls', () => {
+    expect(inferRelationship(service('gateway'), service('api'))).toEqual({ semantic: 'routes', kind: undefined });
+  });
+
+  it('API → API: calls, exactly the plain service default', () => {
+    expect(inferRelationship(service('api'), service('api'))).toEqual({ semantic: 'calls', kind: undefined });
+  });
+
+  it('API → storage: reads/writes/query per storage subtype, same as any other Service', () => {
+    expect(inferRelationship(service('api'), database('sql'))).toEqual({ semantic: 'writes', kind: undefined });
+    expect(inferRelationship(service('api'), database('cache'))).toEqual({ semantic: 'writes', kind: undefined });
+    expect(inferRelationship(service('api'), database('object-storage'))).toEqual({ semantic: 'writes', kind: undefined });
+  });
+
+  it('Worker ↔ Queue/Topic: consumes/publishes both ways, exactly the plain service defaults', () => {
+    expect(inferRelationship(service('worker'), queue())).toEqual({ semantic: 'publishes', kind: 'event' });
+    expect(inferRelationship(queue(), service('worker'))).toEqual({ semantic: 'consumes', kind: 'event' });
+    expect(inferRelationship(service('worker'), queue('topic'))).toEqual({ semantic: 'publishes', kind: 'event' });
+    expect(inferRelationship(queue('topic'), service('worker'))).toEqual({ semantic: 'deliversTo', kind: 'event' });
+  });
+
+  it('Worker → storage: writes/reads/watches per storage subtype', () => {
+    expect(inferRelationship(service('worker'), database('sql'))).toEqual({ semantic: 'writes', kind: undefined });
+    expect(inferRelationship(service('worker'), database('cache'))).toEqual({ semantic: 'writes', kind: undefined });
+    expect(inferRelationship(service('worker'), database('file-system'))).toEqual({ semantic: 'writes', kind: undefined });
+    expect(inferRelationship(service('worker'), database('object-storage'))).toEqual({ semantic: 'writes', kind: undefined });
+  });
+
+  it('Worker → Search Index is the one storage pairing where Worker itself changes the default: indexes, not searches', () => {
+    expect(inferRelationship(service('worker'), database('search-index'))).toEqual({ semantic: 'indexes', kind: undefined });
+    expect(inferRelationship(service('api'), database('search-index'))).toEqual({ semantic: 'searches', kind: undefined });
+  });
+
+  it('Scheduler → Worker/API: triggers; Scheduler → Queue/Topic: publishes', () => {
+    expect(inferRelationship(service('scheduler'), service('worker'))).toEqual({ semantic: 'triggers', kind: undefined });
+    expect(inferRelationship(service('scheduler'), service('api'))).toEqual({ semantic: 'triggers', kind: undefined });
+    expect(inferRelationship(service('scheduler'), queue())).toEqual({ semantic: 'publishes', kind: 'event' });
+    expect(inferRelationship(service('scheduler'), queue('topic'))).toEqual({ semantic: 'publishes', kind: 'event' });
+  });
+
+  it('Gateway → Data Store: has an opinion (unusual, no default) rather than no opinion at all', () => {
+    expect(inferRelationship(service('gateway'), database())).toBeUndefined();
+    expect(capabilityFor('gateway', 'database')!.status).toBe('unusual');
+  });
+
+  it('External → Queue/Topic/Object Storage: may publish/upload, exactly the plain service defaults', () => {
+    expect(inferRelationship(service('external'), queue())).toEqual({ semantic: 'publishes', kind: 'event' });
+    expect(inferRelationship(service('external'), queue('topic'))).toEqual({ semantic: 'publishes', kind: 'event' });
+    expect(inferRelationship(service('external'), database('object-storage'))).toEqual({ semantic: 'writes', kind: undefined });
   });
 });
 
@@ -566,6 +805,182 @@ describe('reconnectEdge() — reclassifying an eligible connector when the topol
     const reverted = store.getState().document.edges[0]!;
     expect(reverted.target).toBe(queue.id);
     expect(reverted.semantic).toBe('publishes');
+  });
+});
+
+describe('updateNodeById() — reclassifying incident edges when a node\'s subtype changes', () => {
+  const store = useEditorStore;
+
+  beforeEach(() => {
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Semantics'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+  });
+
+  it('re-labels an inferred edge when the source node\'s serviceKind changes to Scheduler', () => {
+    const genericService = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const worker = store.getState().addNode({ type: 'service', serviceKind: 'worker', x: 300, y: 0 });
+    const edge = store.getState().connect(genericService.id, worker.id)!;
+    expect(edge.semantic).toBe('calls');
+
+    store.getState().updateNodeById(genericService.id, { serviceKind: 'scheduler' });
+    const stored = store.getState().document.edges[0]!;
+    expect(stored.semantic).toBe('triggers');
+    expect(stored.semanticsOrigin).toBe('inferred');
+  });
+
+  it('does not touch an edge with an explicitly-chosen semantic when the node\'s subtype changes', () => {
+    const genericService = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const worker = store.getState().addNode({ type: 'service', serviceKind: 'worker', x: 300, y: 0 });
+    const edge = store.getState().connect(genericService.id, worker.id)!;
+    store.getState().setEdgeSemantic(edge.id, 'http');
+    expect(store.getState().document.edges[0]!.semanticsOrigin).toBe('explicit');
+
+    store.getState().updateNodeById(genericService.id, { serviceKind: 'scheduler' });
+    const stored = store.getState().document.edges[0]!;
+    expect(stored.semantic).toBe('http');
+    expect(stored.semanticsOrigin).toBe('explicit');
+  });
+
+  it('leaves incident edges alone when the patch touches an unrelated field', () => {
+    const genericService = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const worker = store.getState().addNode({ type: 'service', serviceKind: 'worker', x: 300, y: 0 });
+    const edge = store.getState().connect(genericService.id, worker.id)!;
+    expect(edge.semantic).toBe('calls');
+
+    store.getState().updateNodeById(genericService.id, { text: 'Renamed' });
+    const stored = store.getState().document.edges[0]!;
+    expect(stored.semantic).toBe('calls');
+  });
+});
+
+describe('updateNodeById() — a Service\'s auto-generated label follows its subtype', () => {
+  const store = useEditorStore;
+
+  beforeEach(() => {
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Semantics'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+  });
+
+  function node(id: string) {
+    return store.getState().document.nodes.find((n) => n.id === id)!;
+  }
+
+  it('relabels a still-auto node through a full chain of subtype changes', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    expect(node(service.id).text).toBe('Service');
+
+    store.getState().updateNodeById(service.id, { serviceKind: 'api' });
+    expect(node(service.id).text).toBe('API');
+
+    store.getState().updateNodeById(service.id, { serviceKind: 'worker' });
+    expect(node(service.id).text).toBe('Worker');
+
+    store.getState().updateNodeById(service.id, { serviceKind: 'gateway' });
+    expect(node(service.id).text).toBe('Gateway');
+
+    store.getState().updateNodeById(service.id, { serviceKind: 'external' });
+    expect(node(service.id).text).toBe('External System');
+
+    store.getState().updateNodeById(service.id, { serviceKind: 'generic' });
+    expect(node(service.id).text).toBe('Service');
+  });
+
+  it('never overwrites a name the user typed — an explicit rename survives every later subtype change', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0, serviceKind: 'api' });
+    expect(node(service.id).text).toBe('API');
+
+    store.getState().updateNodeText(service.id, 'Payments');
+    expect(node(service.id).textOrigin).toBe('explicit');
+
+    store.getState().updateNodeById(service.id, { serviceKind: 'worker' });
+    expect(node(service.id).text).toBe('Payments');
+
+    store.getState().updateNodeById(service.id, { serviceKind: 'gateway' });
+    expect(node(service.id).text).toBe('Payments');
+  });
+
+  it('never overwrites a name explicitly supplied at creation, even before any rename', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0, serviceKind: 'api', text: 'Payments API' });
+    store.getState().updateNodeById(service.id, { serviceKind: 'worker' });
+    expect(node(service.id).text).toBe('Payments API');
+  });
+
+  it('an unrelated patch (no serviceKind) never touches the label', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    store.getState().updateNodeById(service.id, { accent: 'violet' });
+    expect(node(service.id).text).toBe('Service');
+  });
+
+  it('undo restores both the label and its origin marker together with the subtype change', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    store.getState().updateNodeById(service.id, { serviceKind: 'api' });
+    expect(node(service.id).text).toBe('API');
+
+    store.getState().undo();
+    expect(node(service.id).text).toBe('Service');
+    expect(node(service.id).serviceKind).toBe('generic');
+
+    store.getState().redo();
+    expect(node(service.id).text).toBe('API');
+    expect(node(service.id).serviceKind).toBe('api');
+  });
+
+  it('undo restores an explicit rename\'s protection after a later subtype change is undone', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0, serviceKind: 'api' });
+    store.getState().updateNodeText(service.id, 'Payments');
+    store.getState().updateNodeById(service.id, { serviceKind: 'worker' });
+    expect(node(service.id).text).toBe('Payments');
+
+    store.getState().undo();
+    expect(node(service.id).text).toBe('Payments');
+    expect(node(service.id).serviceKind).toBe('api');
+    expect(node(service.id).textOrigin).toBe('explicit');
+  });
+
+  it('round-trips through export/import without losing textOrigin or the followed label', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    store.getState().updateNodeById(service.id, { serviceKind: 'gateway' });
+    expect(node(service.id).text).toBe('Gateway');
+
+    const serialized = serializeDocument(store.getState().document);
+    const result = deserializeDocument(serialized);
+    if (!result.ok) throw new Error(result.error);
+    const reloaded = result.document;
+    const reloadedNode = reloaded.nodes.find((n) => n.id === service.id)!;
+    expect(reloadedNode.text).toBe('Gateway');
+    expect(reloadedNode.textOrigin).toBe('auto');
+
+    // And the reloaded node still follows a further subtype change.
+    store.setState({ document: reloaded, history: { past: [], future: [] } });
+    store.getState().updateNodeById(service.id, { serviceKind: 'scheduler' });
+    expect(node(service.id).text).toBe('Scheduler');
+  });
+
+  it('a legacy node with no textOrigin marker at all is never auto-relabeled', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0, serviceKind: 'api' });
+    // Simulate a document saved before `textOrigin` existed: a real label with no origin marker.
+    store.setState({
+      document: {
+        ...store.getState().document,
+        nodes: store.getState().document.nodes.map((n) =>
+          n.id === service.id ? { ...n, text: 'API', textOrigin: undefined } : n,
+        ),
+      },
+    });
+    store.getState().updateNodeById(service.id, { serviceKind: 'worker' });
+    expect(node(service.id).text).toBe('API');
   });
 });
 

@@ -60,4 +60,10 @@ export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   cdc: { label: 'CDC' },
   syncs: { label: 'syncs to' },
   deadLetters: { label: 'dead-letters to' },
+  invalidates: { label: 'invalidates' },
+  watches: { label: 'watches' },
+  searches: { label: 'searches' },
+  indexes: { label: 'indexes' },
+  routes: { label: 'routes' },
+  triggers: { label: 'triggers' },
 };

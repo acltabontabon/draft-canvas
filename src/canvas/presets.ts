@@ -50,13 +50,17 @@ export const PRESETS: Preset[] = [
 
 export const DEV_PRESETS: Preset[] = [
   {
+    // No `text` here, deliberately — a fresh Service node's label should follow whatever
+    // `serviceKind` it's created with (`document/factory.ts`'s `defaultTextFor`), starting as
+    // "Service" for Generic but "API"/"Worker"/etc. for anything created pre-typed (e.g. a
+    // Quick Connect preset or `insertWorkerOnEdge`). Hardcoding "Service" here would mark the
+    // label `textOrigin: 'explicit'` at creation and freeze it forever — see `createNode`.
     id: 'service',
     label: 'Service',
     type: 'service',
     shortcut: 'S',
     hint: 'An application or service',
     accent: 'teal',
-    text: 'Service',
   },
   {
     id: 'database',

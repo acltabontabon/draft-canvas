@@ -593,8 +593,12 @@ describe('live resize', () => {
     const ctx = describeContext(LIGHT);
 
     for (const [type, kindField, kinds] of [
-      ['service', 'serviceKind', ['generic', 'api', 'worker', 'external']],
-      ['database', 'databaseKind', ['generic', 'sql', 'nosql', 'cache']],
+      ['service', 'serviceKind', ['generic', 'api', 'worker', 'external', 'scheduler', 'gateway']],
+      [
+        'database',
+        'databaseKind',
+        ['generic', 'sql', 'nosql', 'cache', 'file-system', 'object-storage', 'search-index'],
+      ],
     ] as const) {
       const variants = kinds.map((kind) =>
         createNode({ type, x: 0, y: 0, text: 'Label', [kindField]: kind } as Parameters<
@@ -603,10 +607,17 @@ describe('live resize', () => {
       );
       const results = variants.map((node) => fillsAndCaptions(ctx, node));
 
-      // The base category's fills (accent-driven silhouette colour) are
-      // identical across every kind of the same type.
+      // Every kind draws with the same accent-driven silhouette colour —
+      // the *set* of distinct filled colours used is identical across every
+      // kind of the same type, even though the new Data Store and Service
+      // silhouettes (unlike the shared cylinder/cap every kind used before
+      // this) legitimately differ in how many shapes carry that fill. Every
+      // kind's cap (or cap-equivalent — Scheduler's tick cluster) stays
+      // grouped, the same way Generic's always has, so its `chip` fill never
+      // surfaces as an extra top-level entry here.
       const [first, ...rest] = results;
-      for (const result of rest) expect(result.fills).toEqual(first!.fills);
+      const paletteOf = (fills: string[]) => new Set(fills.filter((fill) => fill !== 'none'));
+      for (const result of rest) expect(paletteOf(result.fills)).toEqual(paletteOf(first!.fills));
 
       // The default ("generic") kind renders no extra caption; every named
       // kind adds exactly one distinguishing caption on top of the label.
@@ -666,6 +677,72 @@ describe('live resize', () => {
     expect(serviceShapes.some((s) => s.t === 'group')).toBe(true);
     expect(databaseShapes.filter((s) => s.t === 'path').length).toBe(2);
     expect(queuePaths.length).not.toBe(databaseShapes.filter((s) => s.t === 'path').length);
+  });
+
+  it('gives each new Service subtype a genuinely different silhouette, not just a different caption', () => {
+    const ctx = describeContext(LIGHT);
+    const node = (serviceKind: 'generic' | 'api' | 'worker' | 'external' | 'scheduler' | 'gateway') =>
+      createNode({ type: 'service', x: 0, y: 0, width: 176, height: 68, text: 'Orders', serviceKind });
+
+    const genericShapes = describeNode(node('generic'), ctx).shapes;
+    const apiShapes = describeNode(node('api'), ctx).shapes;
+    const workerShapes = describeNode(node('worker'), ctx).shapes;
+    const externalShapes = describeNode(node('external'), ctx).shapes;
+    const gatewayShapes = describeNode(node('gateway'), ctx).shapes;
+
+    // Generic's outline stays a plain rect at Clean; API's and Gateway's own
+    // outline is a hand-built path (the notch/funnel), not a rounded rect.
+    expect(genericShapes.some((s) => s.t === 'rect')).toBe(true);
+    expect(apiShapes.some((s) => s.t === 'path')).toBe(true);
+    expect(gatewayShapes.some((s) => s.t === 'path')).toBe(true);
+
+    // Worker is two stacked cards, not one.
+    const fillBearing = (shapes: typeof genericShapes) =>
+      shapes.filter((s) => (s.t === 'rect' || s.t === 'path') && s.fill && s.fill !== 'none');
+    expect(fillBearing(workerShapes).length).toBe(2);
+    expect(fillBearing(genericShapes).length).toBe(1);
+
+    // External is a dashed outer frame plus an inset inner card — two
+    // outline-shaped elements, one of them unfilled.
+    const outlineShapes = externalShapes.filter((s) => s.t === 'rect' || s.t === 'path');
+    expect(outlineShapes.length).toBe(2);
+    expect(outlineShapes.some((s) => s.fill === 'none')).toBe(true);
+
+    // Every kind's non-text geometry is a genuinely distinct shape list.
+    const signatures = [genericShapes, apiShapes, workerShapes, externalShapes, gatewayShapes].map((shapes) =>
+      JSON.stringify(shapes.filter((s) => s.t !== 'text')),
+    );
+    expect(new Set(signatures).size).toBe(signatures.length);
+  });
+
+  it('gives Scheduler a grouped, compact tick cluster — not a full-width perforated rail', () => {
+    const ctx = describeContext(LIGHT);
+    const scheduler = createNode({ type: 'service', x: 0, y: 0, width: 176, height: 68, text: 'Nightly job', serviceKind: 'scheduler' });
+
+    const schedulerShapes = describeNode(scheduler, ctx).shapes;
+    const schedulerGroups = schedulerShapes.filter((s): s is Extract<typeof s, { t: 'group' }> => s.t === 'group');
+    // One group for the tick cluster (no clip needed) plus none for a solid cap.
+    expect(schedulerGroups.length).toBe(1);
+    const ticks = schedulerGroups[0]!.children;
+    expect(ticks.length).toBe(3);
+    // The cluster stays well clear of the node's right edge — this is a compact accent, not a
+    // rail spanning the full top (which is what would risk the calendar/notebook read).
+    const rightmostTickEdge = Math.max(
+      ...ticks.map((t) => (t.t === 'rect' ? t.x + t.w : 0)),
+    );
+    expect(rightmostTickEdge).toBeLessThan(scheduler.width * 0.5);
+  });
+
+  it('gives Gateway a normal rounded-rect body (with the shared cap) plus one directional entry notch', () => {
+    const ctx = describeContext(LIGHT);
+    const gateway = createNode({ type: 'service', x: 0, y: 0, width: 176, height: 68, text: 'Edge', serviceKind: 'gateway' });
+    const gatewayShapes = describeNode(gateway, ctx).shapes;
+
+    // Gateway now shares Generic's cap convention (a grouped, clipped chip rect) rather than
+    // going capless — the notch alone carries the distinction.
+    expect(gatewayShapes.some((s) => s.t === 'group')).toBe(true);
+    // Its outline is still a hand-built path (the notch rules out the plain-rect `outlineShape`).
+    expect(gatewayShapes.some((s) => s.t === 'path')).toBe(true);
   });
 
   it('gives Human/System/Device distinct silhouettes while keeping the same label and stroke weight', () => {

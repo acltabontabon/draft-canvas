@@ -153,6 +153,29 @@ describe('document model', () => {
   });
 });
 
+describe('createNode — a Service\'s default label follows its subtype', () => {
+  it('names a fresh node for its serviceKind, not the generic "Service" literal', () => {
+    expect(createNode({ type: 'service', x: 0, y: 0 }).text).toBe('Service');
+    expect(createNode({ type: 'service', x: 0, y: 0, serviceKind: 'generic' }).text).toBe('Service');
+    expect(createNode({ type: 'service', x: 0, y: 0, serviceKind: 'api' }).text).toBe('API');
+    expect(createNode({ type: 'service', x: 0, y: 0, serviceKind: 'worker' }).text).toBe('Worker');
+    expect(createNode({ type: 'service', x: 0, y: 0, serviceKind: 'scheduler' }).text).toBe('Scheduler');
+    expect(createNode({ type: 'service', x: 0, y: 0, serviceKind: 'gateway' }).text).toBe('Gateway');
+    expect(createNode({ type: 'service', x: 0, y: 0, serviceKind: 'external' }).text).toBe('External System');
+  });
+
+  it('marks an auto-generated label as textOrigin "auto", so it stays eligible to follow later subtype changes', () => {
+    const node = createNode({ type: 'service', x: 0, y: 0, serviceKind: 'api' });
+    expect(node.textOrigin).toBe('auto');
+  });
+
+  it('marks a caller-supplied label as textOrigin "explicit", regardless of subtype', () => {
+    const node = createNode({ type: 'service', x: 0, y: 0, serviceKind: 'api', text: 'Payments' });
+    expect(node.text).toBe('Payments');
+    expect(node.textOrigin).toBe('explicit');
+  });
+});
+
 describe('containment', () => {
   it('finds every transitive descendant of a boundary', () => {
     const outer = createNode({ type: 'group', x: 0, y: 0, width: 600, height: 600 });
@@ -217,7 +240,7 @@ describe('displayNameFor', () => {
   });
 
   it('falls back to a sub-kind label for Service/Database when text is blank', () => {
-    expect(displayNameFor({ type: 'service', text: '', serviceKind: 'external' })).toBe('External service');
+    expect(displayNameFor({ type: 'service', text: '', serviceKind: 'external' })).toBe('External System');
     expect(displayNameFor({ type: 'database', text: '', databaseKind: 'cache' })).toBe('Cache');
     expect(displayNameFor({ type: 'service', text: '' })).toBe('Service');
     expect(displayNameFor({ type: 'database', text: '' })).toBe('Data Store');

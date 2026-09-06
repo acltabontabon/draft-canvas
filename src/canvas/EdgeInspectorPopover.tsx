@@ -49,6 +49,12 @@ const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   cdc: 'CDC',
   syncs: 'Syncs',
   deadLetters: 'Dead-letters to',
+  invalidates: 'Invalidates',
+  watches: 'Watches',
+  searches: 'Searches',
+  indexes: 'Indexes',
+  routes: 'Routes',
+  triggers: 'Triggers',
 };
 
 const CONNECTOR_KIND_LABELS: Record<ConnectorKind, string> = {
@@ -808,10 +814,13 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
  * `quickFixesFor`. Renders nothing for the ordinary case (a `'valid'` pairing whose edge already
  * picked something `capability.relations` recognizes) — this is a subtle, occasional aside, not a
  * standing panel. `capability.guidance` covers "this pairing itself is unusual" (e.g. Queue →
- * Topic); the fallback covers the narrower case of an edge whose *own* explicit `semantic` no
- * longer fits its (possibly re-pointed) endpoints even though the pairing itself is ordinary — see
- * the spec's "Service → Database 'writes' re-pointed to a Topic" example. Never both at once: one
- * quiet line is the point.
+ * Topic, Gateway → any storage kind) and is shown on its own whenever the matrix sets it, whether
+ * or not a `quickFix` exists — a static "this is unusual" opinion doesn't need a one-click
+ * resolution to be worth surfacing (Gateway → storage has no clean graph transform to offer, so it
+ * has guidance with no fix). The fallback message covers the narrower case of an edge whose *own*
+ * explicit `semantic` no longer fits its (possibly re-pointed) endpoints even though the pairing
+ * itself is ordinary — see the spec's "Service → Database 'writes' re-pointed to a Topic" example.
+ * Never both messages at once: one quiet line is the point.
  */
 function RelationshipGuidance({
   edge,
@@ -823,7 +832,6 @@ function RelationshipGuidance({
   store: typeof useEditorStore;
 }) {
   const fixes = quickFixesFor(capability, edge);
-  if (fixes.length === 0) return null;
   const retarget = fixes.find((fix) => fix.id === 'retarget-relation');
   const message =
     capability?.guidance ??
@@ -835,22 +843,24 @@ function RelationshipGuidance({
   return (
     <div className="dc-relationship-guidance">
       <span className="dc-relationship-guidance-text">{message}</span>
-      <div className="dc-relationship-guidance-actions">
-        {fixes.map((fix) => (
-          <button
-            key={fix.id}
-            type="button"
-            className="dc-relationship-guidance-fix"
-            onClick={() =>
-              fix.id === 'insert-worker'
-                ? store.getState().insertWorkerOnEdge(edge.id)
-                : store.getState().setEdgeSemantic(edge.id, fix.semantic)
-            }
-          >
-            {fix.label}
-          </button>
-        ))}
-      </div>
+      {fixes.length > 0 && (
+        <div className="dc-relationship-guidance-actions">
+          {fixes.map((fix) => (
+            <button
+              key={fix.id}
+              type="button"
+              className="dc-relationship-guidance-fix"
+              onClick={() =>
+                fix.id === 'insert-worker'
+                  ? store.getState().insertWorkerOnEdge(edge.id)
+                  : store.getState().setEdgeSemantic(edge.id, fix.semantic)
+              }
+            >
+              {fix.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

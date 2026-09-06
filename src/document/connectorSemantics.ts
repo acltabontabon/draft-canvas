@@ -4,21 +4,30 @@ import type { ConnectorKind, DraftEdge, DraftNode, EdgeSemantic } from './types'
 /**
  * A node's role for connection-semantics purposes — coarser than
  * `DraftNodeType` (which silhouette to draw) and finer than "ignore the node
- * type entirely." `external`, `cache`, and `topic` come from a node's
- * *sub-kind* (`serviceKind`/`databaseKind`/`queueKind`), not a distinct
- * `DraftNodeType`, because that's what they already are in the document model
- * — see `nodes/describe.ts`. `queueKind: 'stream'` stays folded into `queue`;
- * no relationship rule below distinguishes it from a plain queue. Every
- * `DraftNodeType` not covered here (card, note, code, text, group, ellipse,
- * rounded) reads as `generic`: Draft Canvas has no real basis to infer
- * anything about a plain shape, so it stays out of this entirely.
+ * type entirely." `external`, `worker`, `scheduler`, `gateway`, `cache`, `topic`, `fileSystem`,
+ * `objectStorage`, and `searchIndex` come from a node's *sub-kind*
+ * (`serviceKind`/`databaseKind`/`queueKind`), not a distinct `DraftNodeType`,
+ * because that's what they already are in the document model — see
+ * `nodes/describe.ts`. `queueKind: 'stream'` stays folded into `queue`, and
+ * `databaseKind: 'sql'`/`'nosql'` both stay folded into `database`, and
+ * `serviceKind: 'api'` stays folded into `service` — each gets its own
+ * *shape*, but no relationship rule below distinguishes it from its plain
+ * sibling. Every `DraftNodeType` not covered here (card, note, code, text,
+ * group, ellipse, rounded) reads as `generic`: Draft Canvas has no real basis
+ * to infer anything about a plain shape, so it stays out of this entirely.
  */
 export type NodeCategory =
   | 'actor'
   | 'service'
   | 'external'
+  | 'worker'
+  | 'scheduler'
+  | 'gateway'
   | 'database'
   | 'cache'
+  | 'fileSystem'
+  | 'objectStorage'
+  | 'searchIndex'
   | 'queue'
   | 'topic'
   | 'junction'
@@ -32,9 +41,31 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
     case 'actor':
       return 'actor';
     case 'service':
-      return node.serviceKind === 'external' ? 'external' : 'service';
+      switch (node.serviceKind) {
+        case 'external':
+          return 'external';
+        case 'worker':
+          return 'worker';
+        case 'scheduler':
+          return 'scheduler';
+        case 'gateway':
+          return 'gateway';
+        default:
+          return 'service';
+      }
     case 'database':
-      return node.databaseKind === 'cache' ? 'cache' : 'database';
+      switch (node.databaseKind) {
+        case 'cache':
+          return 'cache';
+        case 'file-system':
+          return 'fileSystem';
+        case 'object-storage':
+          return 'objectStorage';
+        case 'search-index':
+          return 'searchIndex';
+        default:
+          return 'database';
+      }
     case 'queue':
       return node.queueKind === 'topic' ? 'topic' : 'queue';
     case 'ellipse':
@@ -123,21 +154,47 @@ const CALL_BEHAVIORS: ConnectorKind[] = ['sync', 'async', 'callback', 'condition
  * need an entry for every category combination `external` participates in).
  *
  * Deliberately sparse: a pair with no entry (queue↔queue, topic↔topic,
- * actor↔database, database↔topic, anything touching a `generic` node, …) has
- * no contextual opinion at all — `capabilityFor` returns `undefined` and
- * callers fall back to full, unrestricted behaviour, exactly as today. Only
- * pairs the product spec actually describes get a rule; extending this to a
- * new node type or pairing means adding one line here, not touching any
- * rendering code. `cache`/`topic` never fall back to `database`/`queue` for
- * an unlisted pairing — same "no opinion beats a wrong one" rule `external`
- * doesn't follow (see `resolved` below), applied consistently to every other
- * sub-kind-derived category.
+ * actor↔database, database↔topic, fileSystem↔queue, objectStorage↔database,
+ * searchIndex>service, anything touching a `generic` node, …) has no
+ * contextual opinion at all — `capabilityFor` returns `undefined` and callers
+ * fall back to full, unrestricted behaviour, exactly as today. Only pairs the
+ * product spec actually describes get a rule; extending this to a new node
+ * type or pairing means adding one line here, not touching any rendering
+ * code. `cache`/`topic`/`fileSystem`/`objectStorage`/`searchIndex` never fall
+ * back to `database`/`queue` for an unlisted pairing — same "no opinion beats
+ * a wrong one" rule `external` doesn't follow (see `resolved` below), applied
+ * consistently to every other sub-kind-derived category.
  */
 const MATRIX: Record<string, ConnectionCapability> = {
+  // Also covers SQL and NoSQL — both fold into the plain `database` category
+  // (see `categoryOf`): each gets its own *shape*, but the same read/write/
+  // query vocabulary as Generic, deliberately, rather than implementation-
+  // specific verbs like "executes"/"scans" for a distinction the product
+  // spec itself calls optional.
   'service>database': capability(['writes', 'reads', 'query', 'dependsOn'], 'writes', []),
   'database>service': capability(['reads', 'query', 'dependsOn'], 'reads', []),
-  'service>cache': capability(['writes', 'reads', 'dependsOn'], 'writes', []),
+  // Cache gets one verb a plain database connection structurally can't
+  // express — invalidating a cached copy is a different architectural move
+  // than writing through to a system of record.
+  'service>cache': capability(['writes', 'reads', 'invalidates', 'dependsOn'], 'writes', []),
   'cache>service': capability(['reads', 'dependsOn'], 'reads', []),
+  // Read-oriented only, same restraint `database>service`/`cache>service`
+  // already apply — a file system doesn't initiate an ordinary service call.
+  'service>fileSystem': capability(['reads', 'writes', 'watches', 'dependsOn'], 'writes', []),
+  'fileSystem>service': capability(['reads', 'dependsOn'], 'reads', []),
+  'service>objectStorage': capability(['reads', 'writes', 'dependsOn'], 'writes', []),
+  'objectStorage>service': capability(['reads', 'dependsOn'], 'reads', []),
+  // 'reads' deliberately omitted — 'searches' already covers querying, and a
+  // third near-synonym would just be vocabulary bloat.
+  'service>searchIndex': capability(['searches', 'indexes', 'dependsOn'], 'searches', []),
+  // Object storage is the one storage kind that legitimately triggers a
+  // downstream event (e.g. an "object created" notification) — this reuses
+  // the *existing* publish vocabulary (already `service>queue`/`service>
+  // topic`'s own default) rather than inventing a new "notifies" term.
+  // Deliberately not extended to database/cache/fileSystem — this is Object
+  // Storage's own documented exception, not "storage can publish events."
+  'objectStorage>queue': capability(['publishes', 'event', 'dependsOn'], 'publishes', [], 'event'),
+  'objectStorage>topic': capability(['publishes', 'event', 'dependsOn'], 'publishes', [], 'event'),
   'service>queue': capability(['publishes', 'command', 'event', 'dependsOn'], 'publishes', [], 'event'),
   'queue>service': capability(['consumes', 'deliversTo', 'event', 'dependsOn'], 'consumes', [], 'event'),
   'service>service': capability(
@@ -171,12 +228,70 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // common intent when a fresh connection is drawn; the others are equally valid, explicit
   // choices, not lesser alternatives.
   'database>database': capability(['ingests', 'replicates', 'cdc', 'syncs', 'dependsOn'], 'ingests', []),
+  // The one place a Worker's own architectural role (background processor, not a request
+  // handler) changes a default rather than just a shape: an indexer worker builds the index
+  // rather than querying it. Same relation options as the plain `service>searchIndex` entry —
+  // 'indexes' just outranks 'searches' as the likely intent for this specific pairing.
+  'worker>searchIndex': capability(['searches', 'indexes', 'dependsOn'], 'indexes', []),
+  // Scheduler's whole reason for existing: it initiates on a recurring interval, not on being
+  // called, so its default reads 'triggers' rather than the plain-service 'calls' it would
+  // otherwise collapse to. Needs its own key for both `service` and `worker` targets — `worker`
+  // also resolves away to `service`, so it isn't reached by `scheduler>service` alone (see
+  // `capabilityFor`'s both-sides-resolve fallback).
+  'scheduler>service': capability(['triggers', 'calls', 'dependsOn'], 'triggers', []),
+  'scheduler>worker': capability(['triggers', 'calls', 'dependsOn'], 'triggers', []),
+  // Scheduler->Queue/Topic (a schedule initiating work by publishing a message) needs no entry
+  // here at all: `queue`/`topic` are unaffected by `resolved()`, so `capabilityFor` already falls
+  // through Scheduler's own service-fallback straight to `service>queue`/`service>topic`'s
+  // existing 'publishes' default — exactly the right behaviour, for free.
+  // Gateway's whole reason for existing: it directs traffic onward rather than being the
+  // ultimate handler, so its default reads 'routes' rather than plain-service 'calls'.
+  'gateway>service': capability(['routes', 'calls', 'dependsOn'], 'routes', []),
+  // Chained gateways (an edge gateway routing to a BFF) keep the same 'routes' default instead
+  // of collapsing to plain `calls`.
+  'gateway>gateway': capability(['routes', 'calls', 'dependsOn'], 'routes', []),
+  // A gateway routing straight to storage is architecturally unusual — most gateways route to
+  // services, not data stores — so these get a guidance nudge rather than a prominent default,
+  // and deliberately no `quickFix`: there's no clean one-click graph transform for "don't do
+  // this," unlike `queue>topic`'s Insert Worker. One entry per storage category since none of
+  // cache/fileSystem/objectStorage/searchIndex falls back to `database` (see the matrix's own
+  // "no opinion beats a wrong one" rule above) — a single `gateway>database` entry wouldn't
+  // reach any of them, and without an explicit row each would otherwise fall through to the
+  // *prominent* `service>cache`/etc. default instead of being flagged.
+  'gateway>database': capability(['dependsOn', 'writes', 'reads', 'query'], undefined, [], undefined, {
+    status: 'unusual',
+    guidance: 'A Gateway routing directly to a data store is unusual — most gateways route to services, not storage.',
+  }),
+  'gateway>cache': capability(['dependsOn', 'writes', 'reads', 'invalidates'], undefined, [], undefined, {
+    status: 'unusual',
+    guidance: 'A Gateway routing directly to a data store is unusual — most gateways route to services, not storage.',
+  }),
+  'gateway>fileSystem': capability(['dependsOn', 'reads', 'writes', 'watches'], undefined, [], undefined, {
+    status: 'unusual',
+    guidance: 'A Gateway routing directly to a data store is unusual — most gateways route to services, not storage.',
+  }),
+  'gateway>objectStorage': capability(['dependsOn', 'reads', 'writes'], undefined, [], undefined, {
+    status: 'unusual',
+    guidance: 'A Gateway routing directly to a data store is unusual — most gateways route to services, not storage.',
+  }),
+  'gateway>searchIndex': capability(['dependsOn', 'searches', 'indexes'], undefined, [], undefined, {
+    status: 'unusual',
+    guidance: 'A Gateway routing directly to a data store is unusual — most gateways route to services, not storage.',
+  }),
 };
 
-/** `external` is a flavour of `service` for every pairing that doesn't have
- *  its own explicit entry above. */
+/** `external`, `worker`, `scheduler`, and `gateway` are all flavours of `service` for every pairing
+ *  that doesn't have its own explicit entry above — same "no opinion beats a wrong one" rule every
+ *  other sub-kind-derived category follows (see the matrix's own doc comment), just with a
+ *  fallback instead of nothing, because all four remain fundamentally service-shaped (they call
+ *  things, get called, read/write storage) for anything the matrix doesn't say otherwise about.
+ *  Unlike `cache`/`fileSystem`/`objectStorage`/`searchIndex`, none of these four has a failure mode
+ *  where inheriting plain Service semantics would be actively misleading — worst case, an unlisted
+ *  pairing just reads as an ordinary call. */
 function resolved(category: NodeCategory): NodeCategory {
-  return category === 'external' ? 'service' : category;
+  return category === 'external' || category === 'worker' || category === 'scheduler' || category === 'gateway'
+    ? 'service'
+    : category;
 }
 
 /**
@@ -186,8 +301,10 @@ function resolved(category: NodeCategory): NodeCategory {
 export function capabilityFor(source: NodeCategory, target: NodeCategory): ConnectionCapability | undefined {
   const exact = MATRIX[`${source}>${target}`];
   if (exact) return exact;
-  if (source === 'external' || target === 'external') {
-    return MATRIX[`${resolved(source)}>${resolved(target)}`];
+  const resolvedSource = resolved(source);
+  const resolvedTarget = resolved(target);
+  if (resolvedSource !== source || resolvedTarget !== target) {
+    return MATRIX[`${resolvedSource}>${resolvedTarget}`];
   }
   return undefined;
 }
@@ -221,11 +338,13 @@ export function quickFixesFor(
  * Whether a connector between this category pair reads as a single
  * synchronous call — the only shape a request/response pair
  * (`DraftEdge.response`) makes sense on. `'calls'` is the matrix's own
- * marker for exactly this: the three pairings whose `defaultRelation` is
- * `'calls'` (`service>service`/`service>external`, ambiguous enough to offer
- * `'sync'` as a real behaviour choice, and `actor>service`, synchronous by
- * predetermination with no behaviour picker at all) are the only ones this
- * is true for. A pairing predetermined to something else entirely —
+ * marker for exactly this: the pairings whose `defaultRelation` resolves to
+ * `'calls'` — `service>service` itself (ambiguous enough to offer `'sync'`
+ * as a real behaviour choice), every pairing that resolves to it via
+ * `external`/`worker` folding back to `service` (so `service>external`,
+ * anything touching a Worker, and so on), and `actor>service`, synchronous
+ * by predetermination with no behaviour picker at all — are the only ones
+ * this is true for. A pairing predetermined to something else entirely —
  * `service>database`'s `'writes'`, `service>queue`'s `'publishes'`/`'event'`,
  * etc. — reads `false`, even though some of those also have an empty
  * `behaviors` array; emptiness alone doesn't mean "a call," only
@@ -246,9 +365,15 @@ export function isSyncPairing(source: NodeCategory, target: NodeCategory): boole
  * inspector's `canHaveResponse` gate). Only two service-shaped boxes talking
  * to each other reads as a request/response conversation by default; a
  * person initiating a call is not itself a service that structurally
- * replies.
+ * replies. Scheduler is excluded for the same reason, even though it folds
+ * to `service` via `resolved()` like Worker/External/Gateway do — firing on
+ * a schedule is fire-and-forget, not a call that waits for a reply. Gateway
+ * is deliberately *not* excluded: a reverse proxy genuinely does forward a
+ * request and return the response, so `defaultsToResponse('gateway',
+ * 'service')` staying `true` is correct, not an oversight.
  */
 export function defaultsToResponse(source: NodeCategory, target: NodeCategory): boolean {
+  if (source === 'scheduler') return false;
   return resolved(source) === 'service' && resolved(target) === 'service';
 }
 

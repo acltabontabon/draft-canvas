@@ -1147,15 +1147,26 @@
   right: 0;
 }
 
+/* A flex row rather than a plain block so an option's optional `icon` sits beside its label
+ * consistently in both layouts — a bare label (every picker without one, e.g. Boundary/Note/Code)
+ * still renders as a single flex item, visually identical to the old block layout. */
 .dc-inspector-select-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 8px;
   border-radius: 5px;
   color: var(--dc-text);
   font-size: 12.5px;
+  cursor: pointer;
+}
+
+.dc-inspector-select-option-label {
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  cursor: pointer;
 }
 
 .dc-inspector-select-option[data-highlighted='true'] {
@@ -1165,6 +1176,50 @@
 .dc-inspector-select-option[aria-selected='true'] {
   background: var(--dc-selection-soft);
   color: var(--dc-selection);
+}
+
+/* A kind picker's compact 2-column preview grid — scoped entirely under `data-layout='grid'` so a
+ * picker without meaningful visual variety to preview (Boundary, Note, Code, …) keeps rendering as
+ * the plain single-column list above, untouched. Not every family with an `icon` uses this: a
+ * small family (e.g. Queue's three kinds) may read better as a single icon+label column instead —
+ * `layout` is a per-picker choice, not a rule tied to having icons at all. */
+.dc-inspector-select-menu[data-layout='grid'] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  width: 220px;
+}
+
+.dc-inspector-select-menu[data-layout='grid'] .dc-inspector-select-option-label {
+  white-space: normal;
+}
+
+.dc-inspector-select-option-icon {
+  flex: none;
+  width: 28px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dc-text-muted);
+}
+
+.dc-inspector-select-option-icon .dc-shape-preview {
+  width: 100%;
+  height: 100%;
+}
+
+.dc-inspector-select-option[data-highlighted='true'] .dc-inspector-select-option-icon,
+.dc-inspector-select-option[aria-selected='true'] .dc-inspector-select-option-icon {
+  color: currentColor;
+}
+
+/* The bottom-docked multi-selection toolbar (`Inspector.tsx`, `app.css`'s `.dc-inspector`) is a
+ * tight content-sized row, not a stretchy one like the popover's own layout — its `InspectorSelect`
+ * instances size to their content the way the plain `.dc-select` native selects beside them do,
+ * instead of the popover's default `flex: 1`. */
+.dc-inspector-toolbar-select {
+  flex: none;
 }
 
 /* An `InspectorSelect` standing in for `.dc-inspector-split-first`'s plain text input — e.g. the

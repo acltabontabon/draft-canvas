@@ -32,7 +32,18 @@ function renderHint() {
  * forces already-retired hints back into view. See `HintsProvider.tsx`'s `sessionDismissed` set.
  */
 describe('HintStrip dismissal', () => {
-  it('shows the current copy and hides after clicking dismiss', () => {
+  /**
+   * Regression coverage for the bug where a fresh (never-seen, never-retired) hint kept showing
+   * up on every selection regardless of the Learn Draft Canvas toggle — hints must only ever
+   * surface while Learn Mode is explicitly on.
+   */
+  it('stays hidden without Learn Mode, even for a hint never seen before', () => {
+    renderHint();
+    expect(screen.queryByText(HINT_COPY['attachment-slot'])).not.toBeInTheDocument();
+  });
+
+  it('shows the current copy while Learn Mode is on, and hides after clicking dismiss', () => {
+    useUiStore.setState({ learnModeActive: true });
     renderHint();
     expect(screen.getByText(HINT_COPY['attachment-slot'])).toBeInTheDocument();
 

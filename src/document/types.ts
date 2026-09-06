@@ -91,10 +91,18 @@ export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
 
 /** Sub-kinds of the developer presets. Purely a labelling convenience — the
  *  base type's silhouette and accent always dominate; see `nodes/describe.ts`. */
-export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external'] as const;
+export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external', 'scheduler', 'gateway'] as const;
 export type ServiceKind = (typeof SERVICE_KINDS)[number];
 
-export const DATABASE_KINDS = ['generic', 'sql', 'nosql', 'cache'] as const;
+export const DATABASE_KINDS = [
+  'generic',
+  'sql',
+  'nosql',
+  'cache',
+  'file-system',
+  'object-storage',
+  'search-index',
+] as const;
 export type DatabaseKind = (typeof DATABASE_KINDS)[number];
 
 export const QUEUE_KINDS = ['queue', 'topic', 'stream'] as const;
@@ -145,6 +153,12 @@ export const EDGE_SEMANTICS = [
   'cdc',
   'syncs',
   'deadLetters',
+  'invalidates',
+  'watches',
+  'searches',
+  'indexes',
+  'routes',
+  'triggers',
 ] as const;
 export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];
 
@@ -208,6 +222,18 @@ export interface DraftNode {
   parentId?: string;
   /** The node's primary label. Always plain text — never HTML. */
   text?: string;
+  /**
+   * Whether `text` is a system-managed placeholder or a name the user chose — the same
+   * "may this be silently recomputed?" question `DraftEdge.semanticsOrigin` answers for an edge's
+   * `semantic`, applied to a node's label instead. `'auto'`: `createNode` set `text` from a type/kind
+   * default because the caller didn't supply one — `service` nodes' `updateNodeById` handler may
+   * still overwrite it to follow a later `serviceKind` change (see `store/editorStore.ts`).
+   * `'explicit'`: the user typed something (`updateNodeText`) or a caller passed `text` on purpose —
+   * permanent from that point on, even if the typed value happens to match a default. Absent (every
+   * node saved before this field existed): treated as `'explicit'` — a name Draft Canvas can't prove
+   * was auto-generated is never safe to silently rewrite.
+   */
+  textOrigin?: 'auto' | 'explicit';
   accent?: Accent;
   /** `note` nodes only. */
   noteKind?: NoteKind;

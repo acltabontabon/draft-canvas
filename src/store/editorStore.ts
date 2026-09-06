@@ -10,6 +10,7 @@ import {
   createEdge,
   createNode,
   defaultSizeFor,
+  defaultTextFor,
   type CreateNodeInput,
 } from '../document/factory';
 import { queueTubeCenterFraction } from '../nodes/describe';
@@ -438,6 +439,42 @@ function reinferIfEligible(doc: DraftDocument, edgeId: string): DraftDocument {
   });
 }
 
+/** The node fields whose value changes a node's `categoryOf` result (see
+ *  `document/connectorSemantics.ts`) — a change to any of these can make an incident edge's
+ *  inferred relationship stale, so `updateNodeById` re-runs `reinferIfEligible` on every edge
+ *  touching the node whenever a patch touches one of these. */
+const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'actorKind'] as const;
+
+/**
+ * Re-evaluates every edge incident to a node after a patch changes one of `KIND_FIELDS` — the same
+ * "don't silently keep an obviously stale relationship, don't silently delete the edge either"
+ * correction `reinferIfEligible` already gives a reconnected/reversed edge, generalized to a plain
+ * subtype change (switching a Service node from Generic to Worker, a Data Store from Generic to
+ * Cache, etc.). Reuses `reinferIfEligible` unchanged: an edge with an explicit (user-picked)
+ * semantic is never touched; one whose semantic was inferred or never set gets recomputed against
+ * the node's new category.
+ */
+function reinferIncidentEdges(doc: DraftDocument, nodeId: string): DraftDocument {
+  const incidentIds = doc.edges.filter((e) => e.source === nodeId || e.target === nodeId).map((e) => e.id);
+  return incidentIds.reduce((d, edgeId) => reinferIfEligible(d, edgeId), doc);
+}
+
+/**
+ * Follows a Service node's primary label to its new `serviceKind` — "Generic" becomes "Service",
+ * "API" becomes "API", etc. — but only while the label is still system-managed. `before` is the
+ * node as it stood *before* this patch (so a caller-supplied `text` in the same patch, however
+ * unlikely alongside a `serviceKind` change, is respected — this only steps in when the patch
+ * itself left `text` untouched). Reuses `defaultTextFor` — the exact function `createNode` itself
+ * calls — so a node created with a subtype and one that later changes to it always land on the
+ * same name, never a second, drifting copy of the naming table.
+ */
+function applyServiceAutoLabel(doc: DraftDocument, nodeId: string, before: DraftNode, patch: Partial<DraftNode>): DraftDocument {
+  if (before.type !== 'service' || before.textOrigin !== 'auto' || patch.text !== undefined) return doc;
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node) return doc;
+  return updateNode(doc, nodeId, { text: defaultTextFor('service', node.serviceKind) });
+}
+
 /**
  * Anchors for a generated companion's connector (a DLQ, a consumer) — only for the plain
  * horizontal "beside" placement `placeNear` prefers; the rarer collision-avoidance fallbacks
@@ -676,11 +713,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   updateNodeById(id, patch, label = 'Change node') {
-    get().apply(label, (doc) => updateNode(doc, id, patch));
+    get().apply(label, (doc) => {
+      const before = doc.nodes.find((n) => n.id === id);
+      let next = updateNode(doc, id, patch);
+      if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
+      const changesKind = KIND_FIELDS.some((field) => field in patch);
+      return changesKind ? reinferIncidentEdges(next, id) : next;
+    });
   },
 
   updateNodeText(id, text) {
-    get().apply('Edit text', (doc) => updateNode(doc, id, { text }), {
+    // A manual edit is permanent intent from this point on, even if the typed value happens to
+    // match a subtype's own default (e.g. renaming an API to literally "API") — see
+    // `DraftNode.textOrigin`'s doc comment. `updateNodeById`'s Service auto-relabeling never
+    // touches a node once this is set.
+    get().apply('Edit text', (doc) => updateNode(doc, id, { text, textOrigin: 'explicit' }), {
       coalesceKey: `text:${id}`,
     });
   },

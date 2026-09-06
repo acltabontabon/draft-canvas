@@ -91,7 +91,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         y: Math.round(position.y),
         width: size?.width,
         height: size?.height,
-        text: preset.text ?? '',
+        text: preset.text,
         accent: preset.accent,
         noteKind: preset.noteKind,
         language: preset.language,
@@ -120,7 +120,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         type: preset.type,
         x: quickConnect.flowPosition.x,
         y: quickConnect.flowPosition.y,
-        text: preset.text ?? '',
+        text: preset.text,
         accent: preset.accent,
       });
       const edge = createEdge({

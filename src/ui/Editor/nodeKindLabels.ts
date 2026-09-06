@@ -27,6 +27,8 @@ export const SERVICE_KIND_OPTION_LABELS: Record<ServiceKind, string> = {
   api: 'API',
   worker: 'Worker',
   external: 'External',
+  scheduler: 'Scheduler',
+  gateway: 'Gateway',
 };
 
 export const DATABASE_KIND_OPTION_LABELS: Record<DatabaseKind, string> = {
@@ -34,6 +36,9 @@ export const DATABASE_KIND_OPTION_LABELS: Record<DatabaseKind, string> = {
   sql: 'SQL',
   nosql: 'NoSQL',
   cache: 'Cache',
+  'file-system': 'File System',
+  'object-storage': 'Object Storage',
+  'search-index': 'Search Index',
 };
 
 export const QUEUE_KIND_OPTION_LABELS: Record<QueueKind, string> = {

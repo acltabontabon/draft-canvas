@@ -63,6 +63,8 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
       return { width: 88, height: 84 };
     case 'queue':
       return { width: 120, height: 40 };
+    case 'database':
+      return { width: 120, height: 76 };
     case 'note':
       return { width: 120, height: 72 };
     case 'code':
@@ -88,10 +90,15 @@ export function maxSizeFor(type: DraftNodeType): { width: number; height: number
   }
 }
 
-export function defaultTextFor(type: DraftNodeType): string {
+/**
+ * `serviceKind` only matters for `type: 'service'` — every kind gets its own default name (see
+ * `SERVICE_KIND_NAMES`) rather than the generic literal `"Service"`, so a fresh Worker/API/etc.
+ * starts out named for what it *is*, not for its family. Ignored for every other type.
+ */
+export function defaultTextFor(type: DraftNodeType, serviceKind?: ServiceKind): string {
   switch (type) {
     case 'service':
-      return 'Service';
+      return SERVICE_KIND_NAMES[serviceKind ?? 'generic'];
     case 'database':
       return 'Data Store';
     case 'queue':
@@ -110,8 +117,28 @@ export function defaultTextFor(type: DraftNodeType): string {
 }
 
 const QUEUE_KIND_NAMES: Record<QueueKind, string> = { queue: 'Queue', topic: 'Topic', stream: 'Stream' };
-const SERVICE_KIND_NAMES: Partial<Record<ServiceKind, string>> = { api: 'API', worker: 'Worker', external: 'External service' };
-const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = { sql: 'SQL data store', nosql: 'NoSQL data store', cache: 'Cache' };
+/**
+ * Doubles as both the fallback display name (`displayNameFor`, below) and the auto-generated
+ * primary label a fresh Service node starts with (`createNode`) — one table, so the two can't
+ * drift. "External System" (not "External service") reads as a component name, not a sentence
+ * fragment, when it stands alone as a node's whole label.
+ */
+const SERVICE_KIND_NAMES: Record<ServiceKind, string> = {
+  generic: 'Service',
+  api: 'API',
+  worker: 'Worker',
+  external: 'External System',
+  scheduler: 'Scheduler',
+  gateway: 'Gateway',
+};
+const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = {
+  sql: 'SQL data store',
+  nosql: 'NoSQL data store',
+  cache: 'Cache',
+  'file-system': 'File system storage',
+  'object-storage': 'Object storage',
+  'search-index': 'Search index',
+};
 const ACTOR_KIND_NAMES: Record<ActorKind, string> = { human: 'Human', system: 'System', device: 'Device' };
 
 /**
@@ -183,7 +210,12 @@ export function createNode(input: CreateNodeInput): DraftNode {
     width: input.width ?? size.width,
     height: input.height ?? size.height,
     z: input.z ?? 0,
-    text: input.text ?? defaultTextFor(input.type),
+    text: input.text ?? defaultTextFor(input.type, input.serviceKind),
+    // A caller-supplied `text` is a deliberate name, kept forever. An omitted one is a
+    // system-managed placeholder — `updateNodeById`'s Service auto-relabeling (`editorStore.ts`)
+    // is the one place that later reads this to decide whether it may still follow the node's
+    // `serviceKind` (see `DraftNode.textOrigin`'s own doc comment).
+    textOrigin: input.text !== undefined ? 'explicit' : 'auto',
   };
   // `input.accent === 'neutral'` is an explicit choice to preserve (e.g.
   // duplicating a node the user deliberately made grey), not a synonym for

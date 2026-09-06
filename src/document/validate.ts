@@ -276,6 +276,13 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     const label = text(candidate.text, LIMITS.maxTextLength);
     if (label !== undefined) node.text = label;
 
+    // Absent stays absent, same reasoning as `semanticsOrigin` below: a document saved before
+    // this field existed has no way to say its label was auto-generated, so it's left with no
+    // marker at all — `DraftNode.textOrigin`'s own doc comment covers why that reads as
+    // `'explicit'` wherever it's consulted, rather than defaulting the field itself to that value.
+    const textOrigin = oneOfOptional<'auto' | 'explicit'>(candidate.textOrigin, ['auto', 'explicit']);
+    if (textOrigin !== undefined) node.textOrigin = textOrigin;
+
     // `oneOfOptional`, not `oneOf`, is what this needs: a node's own accent is
     // an explicit override of its type's default colour, and neutral (grey)
     // is one of the choices a user can make, not a synonym for "unset". Using

@@ -1,8 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 export interface InspectorSelectOption {
   value: string;
   label: string;
+  /** A small preview rendered before the label — e.g. `DataStoreKindIcon`. Only meaningful
+   *  alongside `layout: 'grid'`; ignored by the default list layout. */
+  icon?: ReactNode;
 }
 
 /**
@@ -26,6 +29,7 @@ export function InspectorSelect({
   className,
   preferredDirection = 'down',
   avoidRect = null,
+  layout = 'list',
 }: {
   value: string;
   options: InspectorSelectOption[];
@@ -45,6 +49,10 @@ export function InspectorSelect({
    *  direction would open toward it gets clamped as if that edge were the viewport boundary, so
    *  the menu prefers shrinking (scrollable) or flipping over actually covering it. */
   avoidRect?: { top: number; bottom: number } | null;
+  /** `'grid'` switches the menu to a compact 2-column layout with room for each option's `icon` —
+   *  used only by the Data Store kind picker, whose seven options are worth previewing visually.
+   *  Defaults to `'list'`, today's exact behaviour, so every other picker is untouched. */
+  layout?: 'list' | 'grid';
 }) {
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
@@ -187,6 +195,7 @@ export function InspectorSelect({
           className="dc-inspector-select-menu"
           data-direction={direction}
           data-h-align={hAlign}
+          data-layout={layout}
           style={{
             ...(maxHeight !== undefined ? { maxHeight } : null),
             ...(menuMaxWidth !== undefined ? { maxWidth: menuMaxWidth } : null),
@@ -233,7 +242,8 @@ export function InspectorSelect({
               onPointerEnter={() => setHighlighted(index)}
               onClick={() => commit(index)}
             >
-              {option.label}
+              {option.icon && <span className="dc-inspector-select-option-icon">{option.icon}</span>}
+              <span className="dc-inspector-select-option-label">{option.label}</span>
             </li>
           ))}
         </ul>

@@ -2,13 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ViewportPortal, useInternalNode, useReactFlow } from '@xyflow/react';
 import {
   ACCENTS,
-  ACTOR_KINDS,
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
-  DATABASE_KINDS,
   NOTE_KINDS,
-  QUEUE_KINDS,
-  SERVICE_KINDS,
   type ActorKind,
   type BoundaryPreset,
   type CodeLanguage,
@@ -24,18 +20,14 @@ import { useUiStore } from '../store/uiStore';
 import { nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
-import {
-  ACTOR_KIND_OPTION_LABELS,
-  BOUNDARY_PRESET_OPTION_LABELS,
-  DATABASE_KIND_OPTION_LABELS,
-  NOTE_LABELS,
-  QUEUE_KIND_OPTION_LABELS,
-  SERVICE_KIND_OPTION_LABELS,
-} from '../ui/Editor/nodeKindLabels';
+import { BOUNDARY_PRESET_OPTION_LABELS, NOTE_LABELS } from '../ui/Editor/nodeKindLabels';
+import { ACTOR_ICON_OPTIONS } from './actorOptions';
+import { DATABASE_ICON_OPTIONS } from './dataStoreOptions';
 import { rectOfInternal } from './edgeGeometry';
-import { useHints } from '../learning/useHints';
 import { HintStrip } from './HintStrip';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
+import { QUEUE_ICON_OPTIONS } from './queueOptions';
+import { SERVICE_ICON_OPTIONS } from './serviceOptions';
 import type { HintId } from '../learning/hints';
 import {
   anchorsForRect,
@@ -53,22 +45,10 @@ const CODE_OPTIONS: InspectorSelectOption[] = CODE_LANGUAGES.map((language) => (
   value: language,
   label: LANGUAGE_LABELS[language],
 }));
-const SERVICE_OPTIONS: InspectorSelectOption[] = SERVICE_KINDS.map((kind) => ({
-  value: kind,
-  label: SERVICE_KIND_OPTION_LABELS[kind],
-}));
-const DATABASE_OPTIONS: InspectorSelectOption[] = DATABASE_KINDS.map((kind) => ({
-  value: kind,
-  label: DATABASE_KIND_OPTION_LABELS[kind],
-}));
-const QUEUE_OPTIONS: InspectorSelectOption[] = QUEUE_KINDS.map((kind) => ({
-  value: kind,
-  label: QUEUE_KIND_OPTION_LABELS[kind],
-}));
-const ACTOR_OPTIONS: InspectorSelectOption[] = ACTOR_KINDS.map((kind) => ({
-  value: kind,
-  label: ACTOR_KIND_OPTION_LABELS[kind],
-}));
+const SERVICE_OPTIONS: InspectorSelectOption[] = SERVICE_ICON_OPTIONS;
+const DATABASE_OPTIONS: InspectorSelectOption[] = DATABASE_ICON_OPTIONS;
+const QUEUE_OPTIONS: InspectorSelectOption[] = QUEUE_ICON_OPTIONS;
+const ACTOR_OPTIONS: InspectorSelectOption[] = ACTOR_ICON_OPTIONS;
 const BOUNDARY_OPTIONS: InspectorSelectOption[] = BOUNDARY_PRESETS.map((preset) => ({
   value: preset,
   label: BOUNDARY_PRESET_OPTION_LABELS[preset],
@@ -114,7 +94,6 @@ export function ElementInspectorPopover() {
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const learnModeActive = useUiStore((state) => state.learnModeActive);
   const interactionActive = useUiStore((state) => state.interactionActive);
-  const { isRetired, isDismissedThisSession } = useHints();
   const store = useEditorStore;
   const theme = useThemeValue();
   const { flowToScreenPosition, screenToFlowPosition } = useReactFlow();
@@ -294,21 +273,10 @@ export function ElementInspectorPopover() {
       : displayNode.type !== 'group' && !displayNode.attachments?.length
         ? 'attachment-slot'
         : null;
-  // Phase 8 — once the element's own hint is learned or dismissed (or it never had one), Learn
-  // mode's deliberate review pass teaches the palette instead. Without Learn mode, this slot must
-  // stay silent once the element's own hint is done — falling back to the palette nudge here too
-  // used to mean it kept reappearing on nearly every selection regardless of the Learn Draft
-  // Canvas toggle, which read as a hint system that ignored its own on/off switch.
-  const primaryDone =
-    primaryHint === null ||
-    hasAnyAttachment ||
-    isRetired(primaryHint) ||
-    isDismissedThisSession(primaryHint);
-  const hintId: HintId | null = learnModeActive
-    ? (primaryHint ?? 'command-palette')
-    : primaryDone
-      ? null
-      : primaryHint;
+  // Phase 8 — once the element's own hint is learned or dismissed (or it never had one), the
+  // palette gets a turn instead. Hints only ever surface at all while Learn Draft Canvas mode is
+  // on (`HintStrip`'s own gate) — nothing here shows outside a Learn mode review pass.
+  const hintId: HintId | null = learnModeActive ? (primaryHint ?? 'command-palette') : null;
   const hintLearned = hintId === 'command-palette' ? false : hasAnyAttachment;
 
   // A dropdown inside this popover should open away from the element, not toward it — mirror
@@ -383,7 +351,13 @@ function ElementInspectorRow({
 }) {
   const currentAccentChip = node.accent !== undefined ? theme.accents[node.accent].chip : undefined;
 
-  const typeControl = ((): { options: InspectorSelectOption[]; value: string; ariaLabel: string; onChange: (value: string) => void } | null => {
+  const typeControl = ((): {
+    options: InspectorSelectOption[];
+    value: string;
+    ariaLabel: string;
+    onChange: (value: string) => void;
+    layout?: 'list' | 'grid';
+  } | null => {
     switch (node.type) {
       case 'note':
         return {
@@ -402,12 +376,17 @@ function ElementInspectorRow({
             store.getState().updateNodeById(node.id, { language: value as CodeLanguage }, 'Change language'),
         };
       case 'service':
+        // Grid, like Data Store: each of the six kinds now has its own real silhouette (see
+        // `nodes/describe.ts`'s `serviceApi`/`serviceWorker`/`serviceExternal`/`serviceScheduler`/
+        // `serviceGateway`), so the preview tiles are genuinely worth scanning visually rather than
+        // reading as six copies of one shape with different text.
         return {
           options: SERVICE_OPTIONS,
           value: node.serviceKind ?? 'generic',
           ariaLabel: 'Service type',
           onChange: (value) =>
             store.getState().updateNodeById(node.id, { serviceKind: value as ServiceKind }, 'Change service type'),
+          layout: 'grid',
         };
       case 'database':
         return {
@@ -418,6 +397,7 @@ function ElementInspectorRow({
             store
               .getState()
               .updateNodeById(node.id, { databaseKind: value as DatabaseKind }, 'Change data store type'),
+          layout: 'grid',
         };
       case 'queue':
         return {
@@ -468,6 +448,7 @@ function ElementInspectorRow({
             onChange={typeControl.onChange}
             preferredDirection={menuDirection}
             avoidRect={menuAvoidRect}
+            layout={typeControl.layout}
           />
         )}
         {node.type === 'group' && (
