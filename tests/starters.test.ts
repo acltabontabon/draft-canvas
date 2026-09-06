@@ -150,9 +150,11 @@ describe('buildStarter', () => {
       // Inferred, not explicit: changing a node's kind afterwards must re-derive these, exactly as
       // it does for a connector the user drew by hand (`isEligibleForReinference`).
       expect(edge.semanticsOrigin).toBe(capability?.defaultRelation ? 'inferred' : undefined);
-      // A starter never doubles its own arrow count with reply lines.
+      // A starter never doubles its own arrow count with reply lines. `routeMode` is deliberately
+      // not checked here — like `label`/`condition`, it's an authored escape hatch (opting a
+      // connector out of Smart Routing's bundling) that changes nothing about the *derived*
+      // semantic/kind asserted above.
       expect(edge.hasResponse).toBeUndefined();
-      expect(edge.routeMode).toBeUndefined();
     }
   });
 
@@ -200,29 +202,32 @@ describe('buildStarter', () => {
     // the boundary is a Component.
     expect(nodes.some((node) => node.type === 'service')).toBe(false);
 
-    // Exactly two edges among the modules, both an in-process "uses" — deliberate and restrained,
-    // never a mesh.
+    // Exactly one edge among the modules — a controlled, explicit dependency, not a chain or a
+    // mesh — captioned as a contract rather than the plain inferred "uses".
     const moduleIds = new Set(modules.map((node) => node.id));
     const moduleEdges = edges.filter((edge) => moduleIds.has(edge.source) && moduleIds.has(edge.target));
-    expect(moduleEdges).toHaveLength(2);
-    for (const edge of moduleEdges) expect(edge.semantic).toBe('uses');
+    expect(moduleEdges).toHaveLength(1);
+    expect(moduleEdges[0]!.semantic).toBe('uses');
+    expect(moduleEdges[0]!.label).toBe('uses public API');
 
-    // Acyclic: no pair of modules connects in both directions.
-    for (const edge of moduleEdges) {
-      expect(moduleEdges.some((other) => other.source === edge.target && other.target === edge.source)).toBe(
-        false,
-      );
-    }
-
-    // The API fans out to every module.
+    // The API reaches every module individually — three distinct connectors, not one bundled fan
+    // (`routeMode: 'direct'` opts each out of Smart Routing's bundling).
     for (const module of modules) {
-      expect(edges.some((edge) => edge.source === api.id && edge.target === module.id)).toBe(true);
+      const edge = edges.find((e) => e.source === api.id && e.target === module.id);
+      expect(edge).toBeDefined();
+      expect(edge!.routeMode).toBe('direct');
     }
 
-    // The database has no incoming edges at all — no module singled out as "the one that owns
-    // persistence," and no fan-in either. Placement and its own annotation carry that meaning.
+    // Every module owns its own connection into the one shared database — three distinct,
+    // unbundled, ownership-labelled edges, not a shared trunk and not zero.
     const database = nodes.find((node) => node.databaseKind === 'sql')!;
-    expect(edges.some((edge) => edge.target === database.id || edge.source === database.id)).toBe(false);
+    expect(database.parentId).toBe(app.id);
+    for (const module of modules) {
+      const edge = edges.find((e) => e.source === module.id && e.target === database.id);
+      expect(edge).toBeDefined();
+      expect(edge!.routeMode).toBe('direct');
+      expect(edge!.label).toBe('owns');
+    }
   });
 
   it('models event-driven flow as publish then fan-out, with no fake request/response', () => {

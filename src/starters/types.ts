@@ -20,6 +20,7 @@ import type {
   DraftNodeType,
   EdgeAnchor,
   QueueKind,
+  RouteMode,
   ServiceKind,
 } from '../document/types';
 
@@ -102,6 +103,18 @@ export interface StarterEdgeSpec {
    * show the plain inferred relationship (`calls`, `writes`, …) in its own quietest style.
    */
   condition?: string;
+  /**
+   * `'direct'` opts this connector out of Smart Routing's fan-out/fan-in bundling
+   * (`edges/bundles.ts`), so it always renders as its own independent line rather than sharing a
+   * trunk with sibling connectors off the same node/side. A starter reaches for this when several
+   * connectors leaving one hub are meant to read as distinct relationships rather than one
+   * collapsed-caption fan — Smart Routing's bundling is exactly right for a plain fan-out, but
+   * wrong for something like an inbound adapter dispatching into separate, independently-owned
+   * capabilities, where one shared trunk/caption would visually flatten them into a single
+   * relationship. Absent means the normal, bundle-eligible default every other starter connector
+   * already uses.
+   */
+  routeMode?: RouteMode;
 }
 
 export interface ArchitectureStarter {

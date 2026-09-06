@@ -133,6 +133,7 @@ export function buildStarter(
         semanticsOrigin: relationship?.semantic ? 'inferred' : undefined,
         ...(spec.label !== undefined ? { label: spec.label } : {}),
         ...(spec.condition !== undefined ? { condition: spec.condition } : {}),
+        ...(spec.routeMode !== undefined ? { routeMode: spec.routeMode } : {}),
       }),
     );
   }
