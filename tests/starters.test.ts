@@ -211,23 +211,29 @@ describe('buildStarter', () => {
     expect(moduleEdges[0]!.label).toBe('uses public API');
 
     // The API reaches every module individually — three distinct connectors, not one bundled fan
-    // (`routeMode: 'direct'` opts each out of Smart Routing's bundling).
+    // (`routeMode: 'direct'` opts each out of Smart Routing's bundling, and each draws as a plain
+    // straight line rather than an independently-bent step path).
     for (const module of modules) {
       const edge = edges.find((e) => e.source === api.id && e.target === module.id);
       expect(edge).toBeDefined();
       expect(edge!.routeMode).toBe('direct');
+      expect(edge!.routing).toBe('straight');
     }
 
-    // Every module owns its own connection into the one shared database — three distinct,
-    // unbundled, ownership-labelled edges, not a shared trunk and not zero.
+    // The database sits inside the boundary but carries no edges at all: a module owns its own
+    // *data*, not the shared physical store, and an arrow from a module to the one database node
+    // would misstate exactly that no matter how it's labelled. Ownership is said in plain text
+    // instead (see the two ownership annotations below), not drawn as a relationship.
     const database = nodes.find((node) => node.databaseKind === 'sql')!;
     expect(database.parentId).toBe(app.id);
-    for (const module of modules) {
-      const edge = edges.find((e) => e.source === module.id && e.target === database.id);
-      expect(edge).toBeDefined();
-      expect(edge!.routeMode).toBe('direct');
-      expect(edge!.label).toBe('owns');
-    }
+    expect(edges.some((e) => e.source === database.id || e.target === database.id)).toBe(false);
+
+    // The two stacked ownership annotations — what the database's own edgeless-ness can't say on
+    // its own.
+    const ownershipNotes = nodes.filter((node) => node.type === 'text' && node.parentId === app.id);
+    expect(ownershipNotes.map((node) => node.text)).toEqual(
+      expect.arrayContaining(['Single deployment', 'Module-owned data', 'Payments | Orders | Customer']),
+    );
   });
 
   it('models event-driven flow as publish then fan-out, with no fake request/response', () => {

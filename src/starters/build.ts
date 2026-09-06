@@ -134,6 +134,7 @@ export function buildStarter(
         ...(spec.label !== undefined ? { label: spec.label } : {}),
         ...(spec.condition !== undefined ? { condition: spec.condition } : {}),
         ...(spec.routeMode !== undefined ? { routeMode: spec.routeMode } : {}),
+        ...(spec.routing !== undefined ? { routing: spec.routing } : {}),
       }),
     );
   }

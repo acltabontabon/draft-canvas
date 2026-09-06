@@ -19,6 +19,7 @@ import type {
   DatabaseKind,
   DraftNodeType,
   EdgeAnchor,
+  EdgeRouting,
   QueueKind,
   RouteMode,
   ServiceKind,
@@ -115,6 +116,14 @@ export interface StarterEdgeSpec {
    * already uses.
    */
   routeMode?: RouteMode;
+  /**
+   * Line style — `'smoothstep'` (the default every other starter connector uses), `'bezier'`, or
+   * `'straight'`. A starter reaches for `'straight'` when several `routeMode: 'direct'` connectors
+   * leave a shared hub at different anchor points and need to read as deliberate, individually
+   * aimed rays rather than each independently computing its own step/bend — a plain point-to-point
+   * line has no bend height to land inconsistently.
+   */
+  routing?: EdgeRouting;
 }
 
 export interface ArchitectureStarter {

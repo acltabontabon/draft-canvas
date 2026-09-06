@@ -178,13 +178,23 @@ const monolith: ArchitectureStarter = {
  * (Client → API). Its three edges down into the modules are `component>component`, whose own
  * exact matrix row defaults to `uses`, not `service>service`'s `calls` — in-process dispatch never
  * reads as a network call. Each of the three carries `routeMode: 'direct'` and its own anchor
- * point spread across `API`'s bottom edge (left/centre/right, matching the module columns below),
- * so `edges/bundles.ts`'s Smart Routing never collapses them into one shared trunk with one
- * caption. A bundled fan is exactly right for a plain one-to-many relationship (Microservices'
- * gateway, this same starter's own earlier revision) — but here the three edges are individually
- * meaningful, separately-owned capabilities, and one collapsed trunk visually flattens that into
- * "a single relationship, dispatched three ways," the opposite of what a reader needs to see. The
- * API is an inbound adapter into three capabilities, never an orchestration bus.
+ * point spread across `API`'s bottom edge (`FAN_OFFSETS`: left/centre/right, matching the module
+ * columns below), so `edges/bundles.ts`'s Smart Routing never collapses them into one shared trunk
+ * with one caption. A bundled fan is exactly right for a plain one-to-many relationship
+ * (Microservices' gateway, this same starter's own earlier revision) — but here the three edges
+ * are individually meaningful, separately-owned capabilities, and one collapsed trunk visually
+ * flattens that into "a single relationship, dispatched three ways," the opposite of what a reader
+ * needs to see. Each also sets `routing: 'straight'`: with three separate anchor points already
+ * spreading the exits, a plain point-to-point line reads as three deliberately aimed rays — a
+ * `smoothstep` path's own independently-computed bend, by contrast, can land at a slightly
+ * different height per edge (each travels a different horizontal distance), which is what reads as
+ * "wiring" rather than an authored fan. `Payments`, `Orders`, and `Customer` all still show the
+ * plain inferred `uses` caption on their own incoming edge — Draft Canvas has no per-connector
+ * "keep the semantic, hide the text" toggle (see Hexagonal's own doc comment on the same
+ * limitation), so three quiet, unstyled "uses" labels are the least noise three individually
+ * meaningful relationships can carry without either re-merging them (exactly what this starter
+ * must not do) or inventing new rendering behaviour a starter has no business adding. The API is
+ * an inbound adapter into three capabilities, never an orchestration bus.
  *
  * Module-to-module coupling is exactly one edge: `Orders → Customer`, captioned `uses public API`
  * rather than the plain inferred `uses` — an explicit `label` override (the one documented escape
@@ -200,22 +210,26 @@ const monolith: ArchitectureStarter = {
  * load-bearing for what this starter is actually about: modules, their explicit contract, and
  * their data.
  *
- * The database moved *inside* the one `Application` boundary, directly beneath the module row —
- * a further revision from letting it sit outside as plain infrastructure. A modular monolith's
- * database is not an external dependency the way a third-party API is; it ships as part of the
- * one deployable unit, and drawing it outside the boundary understated that. Three edges connect
- * it — `Payments → Application Database`, `Orders → …`, `Customer → …` — each labelled `owns`
- * rather than the plain inferred `writes`: the point is not "every module can read and write
- * every table," it's "each module owns its own slice of the one physical store." Bundling these
- * three into one bundled trunk (as Smart Routing would by default) would draw exactly the reading
- * this starter needs to avoid — one shared pipe into an undifferentiated blob — so, like the API's
- * fan above, each carries `routeMode: 'direct'` and its own anchor point spread across the
- * database's top edge, matching the module columns above it one-to-one. `Application Database`
- * itself is sized to `MODULE`'s own width (176, not `STORE`'s default 148) because the label needs
- * the room on a single line — a data-store cylinder's caption never wraps
- * (`nodes/describe.ts`'s `dataStoreCylinder`). A short annotation, `Module-owned data`, sits
- * directly beneath it as the one plain-language summary of what the three `owns` edges already
- * show structurally.
+ * The database sits *inside* the one `Application` boundary, directly beneath the module row — a
+ * modular monolith's database is not an external dependency the way a third-party API is; it
+ * ships as part of the one deployable unit. It carries no edges from the modules at all — an
+ * earlier revision drew `Payments → Application Database`/`Orders → …`/`Customer → …`, each
+ * labelled `owns`, but every one of those edges necessarily starts at a *module* and ends at the
+ * *database node itself*, so the arrow's own endpoints say "Payments owns [the] Application
+ * Database" no matter what word labels it — three modules can't each own the same one node
+ * without that reading like three overlapping claims on the same thing, which is exactly
+ * backwards: the modules own their *data*, not the shared physical store that happens to hold it.
+ * There is no datastore-compartment primitive in Draft Canvas to draw "Payments' own slice" as a
+ * distinct, connectable thing (only a whole `database` node, never a piece of one), so the
+ * accurate claim is said the only way it can be here — as plain text, not a drawn relationship.
+ * `Application Database` is sized to `MODULE`'s own width (176, not `STORE`'s default 148) because
+ * its label needs the room on a single line — a data-store cylinder's caption never wraps
+ * (`nodes/describe.ts`'s `dataStoreCylinder`) — and two short annotations stack directly beneath
+ * it: `Module-owned data` names the property, and `Payments | Orders | Customer` names who
+ * specifically owns a slice, in the same left-to-right order as the module row above. Both are
+ * plain `annotation: true` text, never a fake per-module node or a schema/table visualization —
+ * exactly the restraint Hexagonal's own port labels already established for a concept with no
+ * dedicated primitive yet.
  */
 /** The one inbound interface of the monolith — a routing/dispatch adapter, not an independently
  *  deployable network peer. Kept at Component's own default footprint (`document/limits.ts`'s
@@ -230,10 +244,9 @@ const MODULAR_CX = 396;
 const MODULE_COLUMNS = columnsAt(MODULAR_CX, 3, MODULE.width, GUTTER);
 const MODULAR_INNER_LEFT = MODULE_COLUMNS[0]!;
 const MODULAR_INNER_WIDTH = MODULE_COLUMNS[2]! + MODULE.width - MODULAR_INNER_LEFT;
-/** Left/centre/right exit points spread across a hub's own edge — `API`'s bottom, and the
- *  database's top — so three individually `routeMode: 'direct'` connectors leave/arrive at
- *  visually distinct points instead of converging on one shared spot, matching the module
- *  columns they align with one-to-one. */
+/** Left/centre/right exit points spread across `API`'s bottom edge, so its three individually
+ *  `routeMode: 'direct'` connectors leave from visually distinct points instead of converging on
+ *  one shared spot, matching the module columns they land on one-to-one. */
 const FAN_OFFSETS = [0.25, 0.5, 0.75] as const;
 /** Just under the boundary's own title: 9 (the title's own top inset for the `'boundary'` preset
  *  — `nodes/describe.ts`'s `group()`) plus one `groupTitle` line (12 × 1.35 ≈ 16). Reuses
@@ -242,9 +255,13 @@ const FAN_OFFSETS = [0.25, 0.5, 0.75] as const;
  *  starter's children, so this node satisfies it by construction. */
 const MODULAR_SUBTITLE_Y = BOUNDARY_HEADER_CAPTION_ONLY;
 /** Shared by every small `annotation: true` label in this starter — the boundary's own `Single
- *  deployment` subtitle and the database's `Module-owned data` note — so both read as the same
- *  quiet, deliberate touch rather than two different afterthoughts. */
-const MODULAR_NOTE = { width: 140, height: 24 };
+ *  deployment` subtitle and the database's two ownership notes — so all read as the same quiet,
+ *  deliberate touch rather than unrelated afterthoughts. Width reuses `MODULE`'s own 176: the
+ *  longest of the four, `Payments | Orders | Customer`, measures ~140px at this style's real font
+ *  metrics (`connectorCaption`, 9.5px/500) — measured directly in a canvas context, not estimated,
+ *  since the fallback text measurer this repo's own test environment uses under-measures real
+ *  browser font metrics by a wide enough margin to pass a check here and still visibly clip live. */
+const MODULAR_NOTE = { width: MODULE.width, height: 24 };
 const MODULAR_NOTE_GAP = 8;
 // Clears the `Single deployment` subtitle before the API begins — `BOUNDARY_HEADER` alone (sized
 // for a preset caption + title, not a title + a second annotation line) would overlap it.
@@ -261,8 +278,11 @@ const DATABASE_BOX = { width: MODULE.width, height: STORE.height };
 // Inside the boundary now, directly beneath the module row — an ordinary internal layer gap.
 const MODULAR_DATABASE_Y = MODULAR_MODULES_Y + MODULE.height + INNER_BAND;
 const MODULAR_NOTE_Y = MODULAR_DATABASE_Y + DATABASE_BOX.height + MODULAR_NOTE_GAP;
-// The boundary now closes beneath the ownership annotation, the last thing it contains.
-const MODULAR_BOUNDARY_HEIGHT = MODULAR_NOTE_Y + MODULAR_NOTE.height + BOUNDARY_PAD;
+// Tight, not `MODULAR_NOTE_GAP`: these two lines are one caption block ("what" then "who"), the
+// same close spacing `nameGap` gives a database's own stacked name/kind pair in `describe.ts`.
+const MODULAR_NOTE2_Y = MODULAR_NOTE_Y + MODULAR_NOTE.height + 2;
+// The boundary now closes beneath the ownership annotations, the last thing it contains.
+const MODULAR_BOUNDARY_HEIGHT = MODULAR_NOTE2_Y + MODULAR_NOTE.height + BOUNDARY_PAD;
 const MODULAR_BOUNDARY_WIDTH = MODULAR_INNER_WIDTH + BOUNDARY_PAD * 2;
 
 const modularMonolith: ArchitectureStarter = {
@@ -374,8 +394,7 @@ const modularMonolith: ArchitectureStarter = {
     {
       // A plain, zero-semantics annotation (never a Component/Note standing in for the concept) —
       // stacked directly beneath the database so it reads as the database's own caption, not a
-      // detached label. The one plain-language summary of what the three `owns` edges below
-      // already show structurally.
+      // detached label. Names the property; `data-ownership-who` below names who holds it.
       key: 'data-ownership-note',
       type: 'text',
       text: 'Module-owned data',
@@ -385,23 +404,31 @@ const modularMonolith: ArchitectureStarter = {
       y: MODULAR_NOTE_Y,
       ...MODULAR_NOTE,
     },
+    {
+      // No drawn edge says this instead — see this block's own doc comment for why an edge from
+      // each module to the one database node would misstate the claim no matter how it's labelled.
+      key: 'data-ownership-who',
+      type: 'text',
+      text: 'Payments | Orders | Customer',
+      annotation: true,
+      parent: 'app',
+      x: centeredAt(MODULAR_CX, MODULAR_NOTE.width),
+      y: MODULAR_NOTE2_Y,
+      ...MODULAR_NOTE,
+    },
   ],
   edges: [
     down('client', 'api'),
     // Three individually meaningful connections, not one bundled fan — each opts out of Smart
-    // Routing (`routeMode: 'direct'`) and leaves from its own point on API's bottom edge, matching
-    // the module column it lands on. See this block's own doc comment for why.
-    { from: 'api', to: 'module-payments', sourceAnchor: { side: 'bottom', offset: FAN_OFFSETS[0] }, targetAnchor: TOP, routeMode: 'direct' },
-    { from: 'api', to: 'module-orders', sourceAnchor: { side: 'bottom', offset: FAN_OFFSETS[1] }, targetAnchor: TOP, routeMode: 'direct' },
-    { from: 'api', to: 'module-customer', sourceAnchor: { side: 'bottom', offset: FAN_OFFSETS[2] }, targetAnchor: TOP, routeMode: 'direct' },
+    // Routing (`routeMode: 'direct'`), leaves from its own point on API's bottom edge matching the
+    // module column it lands on, and draws as a plain straight line rather than an independently
+    // bent step path. See this block's own doc comment for why.
+    { from: 'api', to: 'module-payments', sourceAnchor: { side: 'bottom', offset: FAN_OFFSETS[0] }, targetAnchor: TOP, routeMode: 'direct', routing: 'straight' },
+    { from: 'api', to: 'module-orders', sourceAnchor: { side: 'bottom', offset: FAN_OFFSETS[1] }, targetAnchor: TOP, routeMode: 'direct', routing: 'straight' },
+    { from: 'api', to: 'module-customer', sourceAnchor: { side: 'bottom', offset: FAN_OFFSETS[2] }, targetAnchor: TOP, routeMode: 'direct', routing: 'straight' },
     // The one controlled, explicit module dependency — see this block's own doc comment for why
     // it's exactly one, and why it's captioned as a contract rather than the plain inferred `uses`.
     { from: 'module-orders', to: 'module-customer', sourceAnchor: RIGHT, targetAnchor: LEFT, label: 'uses public API' },
-    // Each module owns its own slice of the one shared store — three individual, unbundled
-    // connections into the database's top edge, the mirror of the API fan-out above.
-    { from: 'module-payments', to: 'database', sourceAnchor: BOTTOM, targetAnchor: { side: 'top', offset: FAN_OFFSETS[0] }, routeMode: 'direct', label: 'owns' },
-    { from: 'module-orders', to: 'database', sourceAnchor: BOTTOM, targetAnchor: { side: 'top', offset: FAN_OFFSETS[1] }, routeMode: 'direct', label: 'owns' },
-    { from: 'module-customer', to: 'database', sourceAnchor: BOTTOM, targetAnchor: { side: 'top', offset: FAN_OFFSETS[2] }, routeMode: 'direct', label: 'owns' },
   ],
 };
 
