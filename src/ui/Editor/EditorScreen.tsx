@@ -15,7 +15,7 @@ import { boundsOf } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isEditableTarget } from '../../lib/isEditableTarget';
 import { logDiagnostic } from '../../lib/diagnostics';
-import { useEditorStore } from '../../store/editorStore';
+import { flowFitViewNodes, useEditorStore } from '../../store/editorStore';
 import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
@@ -180,13 +180,16 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   );
 
   const onFit = useCallback(() => {
-    void fitView({ padding: 0.2, duration: 320 });
+    void fitView({ padding: 0.2, duration: 320, nodes: flowFitViewNodes(useEditorStore.getState()) });
   }, [fitView]);
 
   const onPresent = useCallback(() => {
+    // Read before `playback.start()` flips `flowPlayback.active` — otherwise the fit-view
+    // guard would see playback as already active and skip scoping to the presented flow.
+    const nodes = flowFitViewNodes(useEditorStore.getState());
     setMode('present');
     if (playback.canStart) playback.start();
-    void fitView({ padding: 0.18, duration: 320 });
+    void fitView({ padding: 0.18, duration: 320, nodes });
   }, [playback, fitView, setMode]);
 
   const presenting = mode === 'present';
@@ -510,7 +513,7 @@ function useKeyboard({
         case '!':
           // Shift+1 — the conventional fit-to-view chord.
           event.preventDefault();
-          void fitView({ padding: 0.2, duration: 320 });
+          void fitView({ padding: 0.2, duration: 320, nodes: flowFitViewNodes(state) });
           return;
         case '+':
         case '=':

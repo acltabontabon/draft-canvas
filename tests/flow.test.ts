@@ -9,6 +9,7 @@ import {
   deleteFlow,
   explainEdgeTier,
   explainNodeTier,
+  flowMemberNodeIds,
   lensEdgeTier,
   lensNodeTier,
   moveStepInFlow,
@@ -148,6 +149,26 @@ describe('flow.ts pure functions', () => {
     expect(lensNodeTier(flow, edges, 'z')).toBe('member');
     expect(lensNodeTier(flow, edges, 'c')).toBe('dimmed');
     expect(lensNodeTier(undefined, edges, 'a')).toBe('dimmed');
+  });
+
+  it('flowMemberNodeIds: lists only member nodes, and is empty for a flow with no steps', () => {
+    const memberEdge = createEdge({ source: 'a', target: 'b', id: 'e1' });
+    const otherEdge = createEdge({ source: 'c', target: 'd', id: 'e2' });
+    const doc = {
+      ...createDocument('X'),
+      nodes: [
+        createNode({ type: 'service', x: 0, y: 0, id: 'a' }),
+        createNode({ type: 'service', x: 0, y: 0, id: 'b' }),
+        createNode({ type: 'service', x: 0, y: 0, id: 'c' }),
+        createNode({ type: 'service', x: 0, y: 0, id: 'd' }),
+      ],
+      edges: [memberEdge, otherEdge],
+    };
+    const flow = createFlow({ title: 'X' });
+    flow.steps = [{ id: 's1', edgeId: 'e1' }];
+
+    expect(flowMemberNodeIds(doc, flow)).toEqual(['a', 'b']);
+    expect(flowMemberNodeIds(doc, createFlow({ title: 'Empty' }))).toEqual([]);
   });
 
   it('adds a step to a flow, refusing a duplicate edge or an edge that does not exist', () => {

@@ -131,6 +131,12 @@ export function lensNodeTier(flow: DraftFlow | undefined, edges: Iterable<DraftE
   return frameStepPositions(flow, nodeId).length > 0 ? 'member' : 'dimmed';
 }
 
+/** Ids of every node the flow lens marks 'member' for the given flow — used to scope
+ *  fit-to-view to just a flow's shapes instead of the whole canvas. */
+export function flowMemberNodeIds(doc: DraftDocument, flow: DraftFlow): string[] {
+  return doc.nodes.filter((n) => lensNodeTier(flow, doc.edges, n.id) === 'member').map((n) => n.id);
+}
+
 function withFlows(doc: DraftDocument, flows: DraftFlow[]): DraftDocument {
   return flows === doc.flows ? doc : { ...doc, flows };
 }

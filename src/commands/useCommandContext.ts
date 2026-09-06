@@ -3,7 +3,7 @@ import { useReactFlow, useStore } from '@xyflow/react';
 import type { Preset } from '../canvas/presets';
 import type { DraftNode } from '../document/types';
 import type { FlowPlaybackController } from '../presentation/useFlowPlayback';
-import { useEditorStore } from '../store/editorStore';
+import { flowFitViewNodes, useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { useTheme } from '../ui/theme/useTheme';
 import type { CommandContext } from './types';
@@ -30,15 +30,26 @@ export function useCommandContext({ createAt, createAtPointer, playback }: UseCo
   const { toggle: toggleTheme } = useTheme();
 
   return useCallback(
-    (): CommandContext => ({
-      editor: useEditorStore.getState(),
-      ui: useUiStore.getState(),
-      camera: { fitView, zoomIn, zoomOut, screenToFlowPosition, setViewport, viewWidth, viewHeight },
-      playback,
-      createAt,
-      createAtPointer,
-      toggleTheme,
-    }),
+    (): CommandContext => {
+      const editor = useEditorStore.getState();
+      return {
+        editor,
+        ui: useUiStore.getState(),
+        camera: {
+          fitView: (options) => fitView({ ...options, nodes: options?.nodes ?? flowFitViewNodes(editor) }),
+          zoomIn,
+          zoomOut,
+          screenToFlowPosition,
+          setViewport,
+          viewWidth,
+          viewHeight,
+        },
+        playback,
+        createAt,
+        createAtPointer,
+        toggleTheme,
+      };
+    },
     [
       createAt,
       createAtPointer,

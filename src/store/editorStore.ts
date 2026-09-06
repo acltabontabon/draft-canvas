@@ -61,6 +61,8 @@ import {
   addStepExtraEdge,
   addStepExtraNode,
   deleteFlow,
+  findFlow,
+  flowMemberNodeIds,
   moveStepInFlow,
   removeStepExtraEdge,
   removeStepExtraNode,
@@ -74,7 +76,6 @@ import { relationshipCaptionLabel, SEMANTIC_DEFAULTS } from '../document/edgeSem
 import {
   capabilityFor,
   categoryOf,
-  defaultsToResponse,
   inferredJunctionSemantic,
   inferRelationship,
   isEligibleForReinference,
@@ -92,8 +93,11 @@ import type {
   DraftViewport,
   EdgeAnchor,
   EdgeSemantic,
+  RouteMode,
   Side,
 } from '../document/types';
+import { routingPlan } from '../edges/bundles';
+import { rectOf, trunkCoordinate } from '../edges/routing';
 import {
   EMPTY_HISTORY,
   EMPTY_SELECTION,
@@ -263,6 +267,16 @@ export interface EditorStore {
   setEdgeResponse: (id: string, response: string) => void;
   /** Toggles the reply line's existence, independent of `response`'s text — see `DraftEdge.hasResponse`. */
   setEdgeHasResponse: (id: string, hasResponse: boolean) => void;
+  /** Takes one connector's routing out of the router's hands, or hands it back
+   *  — see `DraftEdge.routeMode`. */
+  setEdgeRouteMode: (id: string, mode: RouteMode | undefined) => void;
+  /** Hands every manually-routed connector back to Smart Routing, in one undo
+   *  step. Never moves a node, and never touches an anchor. */
+  tidyConnections: () => void;
+  /** Materializes a real Junction where a connector's shared routing trunk
+   *  already appears to branch, and re-points that bundle's members through
+   *  it — the deliberate step from automatic routing to explicit control. */
+  convertBundleToJunction: (edgeId: string) => void;
   toggleEdgeAsync: (id: string) => void;
   /** Sets (or clears) a connector's flow-behaviour kind — see `ConnectorKind`. */
   setEdgeKind: (id: string, kind: ConnectorKind | undefined) => void;
@@ -427,14 +441,14 @@ function reinferIfEligible(doc: DraftDocument, edgeId: string): DraftDocument {
   const targetNode = doc.nodes.find((n) => n.id === edge.target);
   if (!sourceNode || !targetNode) return doc;
   const relationship = inferRelationshipThroughJunctions(doc, sourceNode, targetNode);
-  const hasResponse = defaultsToResponse(
-    resolveTransparentCategory(doc, sourceNode.id, 'source'),
-    resolveTransparentCategory(doc, targetNode.id, 'target'),
-  );
+  // `hasResponse` is deliberately *absent* from this patch rather than passed
+  // as `undefined`: `applyPatch` deletes keys whose value is undefined, so
+  // naming it here at all would strip an explicit "Show response path" every
+  // time the connector was reversed or re-pointed. Re-inference is about
+  // `semantic`/`kind`; the reply line is the user's own call.
   return updateEdge(doc, edgeId, {
     semantic: relationship?.semantic,
     kind: relationship?.kind,
-    hasResponse: hasResponse || undefined,
     semanticsOrigin: relationship ? 'inferred' : undefined,
   });
 }
@@ -563,6 +577,18 @@ function reconcileSessionState(
   return patch;
 }
 
+/** React Flow `fitView({ nodes })` input scoped to the selected flow, or `undefined` to fit
+ *  everything — mirrors the exact guard `lensMemberFor` uses in `DraftNodeView.tsx` so
+ *  fit-to-view and the dimming lens agree on when a flow is "active" (not during
+ *  playback/focus, and only when the flow actually has members). */
+export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefined {
+  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active) return undefined;
+  const flow = findFlow(state.document, state.selectedFlowId);
+  if (!flow) return undefined;
+  const ids = flowMemberNodeIds(state.document, flow);
+  return ids.length > 0 ? ids.map((id) => ({ id })) : undefined;
+}
+
 export const useEditorStore = create<EditorStore>((set, get) => ({
   document: createDocument(),
   history: EMPTY_HISTORY,
@@ -685,13 +711,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const targetNode = state.document.nodes.find((n) => n.id === target);
     const relationship =
       sourceNode && targetNode ? inferRelationshipThroughJunctions(state.document, sourceNode, targetNode) : undefined;
-    const hasResponse =
-      sourceNode && targetNode
-        ? defaultsToResponse(
-            resolveTransparentCategory(state.document, sourceNode.id, 'source'),
-            resolveTransparentCategory(state.document, targetNode.id, 'target'),
-          )
-        : false;
     const edge = createEdge({
       source,
       target,
@@ -703,7 +722,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       targetAnchor: targetSide ? { side: targetSide, offset: targetOffset } : undefined,
       kind: relationship?.kind,
       semantic: relationship?.semantic,
-      hasResponse: hasResponse || undefined,
+      // No reply line by default, even between two services. At the altitude
+      // an architecture diagram works at the return path is implied, and
+      // drawing it unasked doubles the lines on the busiest kind of diagram.
+      // It stays one click away in the connector's own editor ("Show response
+      // path"), and any document that already persisted `hasResponse: true`
+      // keeps rendering exactly as it did.
       semanticsOrigin: relationship ? 'inferred' : undefined,
     });
     state.apply('Connect', (doc) => addEdges(doc, [edge]), {
@@ -917,6 +941,116 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setEdgeHasResponse(id, hasResponse) {
     get().apply('Toggle response', (doc) =>
       updateEdge(doc, id, { hasResponse: hasResponse || undefined, semanticsOrigin: 'explicit' }),
+    );
+  },
+
+  setEdgeRouteMode(id, mode) {
+    get().apply(mode === 'direct' ? 'Use direct routing' : 'Use smart routing', (doc) =>
+      updateEdge(doc, id, { routeMode: mode }),
+    );
+  },
+
+  tidyConnections() {
+    const state = get();
+    // Deliberately the *only* thing this clears. An anchor is where the user
+    // dragged a connector to attach, and `docs/ARCHITECTURE.md` is explicit
+    // that routing never moves one — so "Tidy connections" stays safe to run
+    // without first checking what it will do. Everything else Smart Routing
+    // would tidy is derived per render and needs nothing persisted to undo.
+    const manual = state.document.edges.filter((edge) => edge.routeMode);
+    if (manual.length === 0) return;
+    state.apply('Tidy connections', (doc) =>
+      manual.reduce((next, edge) => updateEdge(next, edge.id, { routeMode: undefined }), doc),
+    );
+  },
+
+  convertBundleToJunction(edgeId) {
+    const state = get();
+    const plan = routingPlan(state.document.nodes, state.document.edges);
+    const spine = plan.spineFor(edgeId);
+    if (!spine) return;
+    const memberIds = plan.membersOf(spine.id);
+    const members = memberIds
+      .map((id: string) => state.document.edges.find((e: DraftEdge) => e.id === id))
+      .filter((e): e is DraftEdge => Boolean(e));
+    if (members.length === 0) return;
+
+    const hubId = spine.hub === 'source' ? members[0]!.source : members[0]!.target;
+    const hub = state.document.nodes.find((n) => n.id === hubId);
+    if (!hub) return;
+
+    // Placed exactly where the trunk already meets the stem, so materializing
+    // the Junction is visually a no-op — the user gets a handle on the point
+    // they were already looking at, not a diagram that jumps.
+    const hubRect = rectOf(hub);
+    const trunk = trunkCoordinate(hubRect, spine);
+    const anchor = spine.hub === 'source' ? members[0]!.sourceAnchor : members[0]!.targetAnchor;
+    const offset = anchor?.offset ?? 0.5;
+    const vertical = spine.hubSide === 'left' || spine.hubSide === 'right';
+    const cross = vertical ? hubRect.y + hubRect.height * offset : hubRect.x + hubRect.width * offset;
+    const size = defaultSizeFor('ellipse');
+    const junction = createNode({
+      type: 'ellipse',
+      x: Math.round((vertical ? trunk : cross) - size.width / 2),
+      y: Math.round((vertical ? cross : trunk) - size.height / 2),
+      z: Math.max(hub.z, ...members.map((edge: DraftEdge) => {
+        const far = state.document.nodes.find((n) => n.id === (spine.hub === 'source' ? edge.target : edge.source));
+        return far?.z ?? 0;
+      })),
+    });
+
+    // The compatibility gate that formed this bundle already guarantees every
+    // member agrees on all of these, so the shared leg can carry them without
+    // having to reconcile anything.
+    const template = members[0]!;
+    const shared = createEdge({
+      source: spine.hub === 'source' ? hubId : junction.id,
+      target: spine.hub === 'source' ? junction.id : hubId,
+      semantic: template.semantic,
+      kind: template.kind,
+      directed: template.directed,
+      async: template.async,
+      hasResponse: template.hasResponse,
+      accent: template.accent,
+      semanticsOrigin: template.semanticsOrigin,
+      // The hub end keeps exactly the anchor the members already used; the
+      // Junction end gets none — it only has four handles, all at a side's
+      // midpoint, so a 0.25/0.75 offset would be meaningless there.
+      sourceAnchor: spine.hub === 'source' ? template.sourceAnchor : undefined,
+      targetAnchor: spine.hub === 'source' ? undefined : template.targetAnchor,
+    });
+
+    // Everything that belongs to one specific relationship — its label, its
+    // condition, its attachments — moves onto that member's own leg, never
+    // onto the shared one.
+    const legs = members.map((edge: DraftEdge) => {
+      const leg = createEdge({
+        source: spine.hub === 'source' ? junction.id : edge.source,
+        target: spine.hub === 'source' ? edge.target : junction.id,
+        label: edge.label,
+        semantic: edge.semantic,
+        kind: edge.kind,
+        directed: edge.directed,
+        async: edge.async,
+        hasResponse: edge.hasResponse,
+        accent: edge.accent,
+        semanticsOrigin: edge.semanticsOrigin,
+        deliveryAttempts: edge.deliveryAttempts,
+        sourceAnchor: spine.hub === 'source' ? undefined : edge.sourceAnchor,
+        targetAnchor: spine.hub === 'source' ? edge.targetAnchor : undefined,
+      });
+      if (edge.condition) leg.condition = edge.condition;
+      if (edge.response) leg.response = edge.response;
+      if (edge.attachments) leg.attachments = edge.attachments;
+      return leg;
+    });
+
+    // One entry, exactly like `insertWorkerOnEdge` — undo restores the bundle
+    // in a single step rather than unpicking six separate edits.
+    state.apply(
+      'Convert to junction',
+      (doc) => addEdges(addNodes(removeElements(doc, [], memberIds), [junction]), [shared, ...legs]),
+      { selection: { nodes: [junction.id], edges: [] } },
     );
   },
 

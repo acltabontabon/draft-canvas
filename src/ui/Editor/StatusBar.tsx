@@ -1,5 +1,5 @@
 import { useReactFlow, useStore } from '@xyflow/react';
-import { useEditorStore } from '../../store/editorStore';
+import { flowFitViewNodes, useEditorStore } from '../../store/editorStore';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 
@@ -62,7 +62,7 @@ export function StatusBar({ durable }: { durable: boolean }) {
         <button
           type="button"
           className="dc-zoom-value"
-          onClick={() => void fitView({ padding: 0.2, duration: 300 })}
+          onClick={() => void fitView({ padding: 0.2, duration: 300, nodes: flowFitViewNodes(useEditorStore.getState()) })}
           title="Fit to view"
         >
           {Math.round(zoom * 100)}%
