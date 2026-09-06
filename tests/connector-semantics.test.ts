@@ -365,7 +365,7 @@ describe('isSyncPairing — which pairings a request/response can attach to', ()
   });
 });
 
-describe('defaultsToResponse — whether a fresh connection defaults its reply line on', () => {
+describe('defaultsToResponse — which pairings the reply line is offered for', () => {
   it('is true for two service-shaped boxes talking to each other', () => {
     expect(defaultsToResponse('service', 'service')).toBe(true);
     expect(defaultsToResponse('worker', 'external')).toBe(true);
@@ -383,6 +383,56 @@ describe('defaultsToResponse — whether a fresh connection defaults its reply l
   it('is false for a person initiating a call, and for anything not service-shaped', () => {
     expect(defaultsToResponse('actor', 'service')).toBe(false);
     expect(defaultsToResponse('service', 'database')).toBe(false);
+  });
+
+  it('no longer turns the reply line on by itself — it only decides who is offered it', () => {
+    // The predicate still gates `EdgeInspectorPopover`'s Request/Response
+    // section, but `connect()` stopped acting on it: at the altitude an
+    // architecture diagram works at, the return path is implied, and drawing
+    // it unasked doubles the lines on the busiest kind of diagram.
+    const store = useEditorStore;
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Response default'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 300, y: 0 });
+    const edge = store.getState().connect(a.id, b.id)!;
+
+    expect(defaultsToResponse('service', 'service')).toBe(true);
+    expect(edge.hasResponse).toBeUndefined();
+  });
+
+  it('keeps a reply line the user explicitly asked for across a reverse', () => {
+    const store = useEditorStore;
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Response kept'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 300, y: 0 });
+    const edge = store.getState().connect(a.id, b.id)!;
+    // Deliberately *not* via `setEdgeHasResponse`, which stamps
+    // `semanticsOrigin: 'explicit'` and makes the edge ineligible for
+    // re-inference entirely — that would exercise the guard rather than the
+    // patch. This is the shape a document saved before this change comes back
+    // as: a reply line present on a still-inferred connector.
+    store.getState().updateEdgeById(edge.id, { hasResponse: true });
+    expect(store.getState().document.edges[0]!.semanticsOrigin).toBe('inferred');
+
+    store.getState().reverseEdge(edge.id);
+    // Re-inference must not name `hasResponse` in its patch at all: `applyPatch`
+    // deletes keys whose value is undefined, so naming it would silently drop
+    // the reply line every time a connector was reversed or re-pointed.
+    expect(store.getState().document.edges[0]!.hasResponse).toBe(true);
   });
 });
 

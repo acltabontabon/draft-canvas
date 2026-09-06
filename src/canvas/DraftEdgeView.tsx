@@ -7,16 +7,20 @@ import { markerRef } from '../render/svg/markers';
 import {
   LABEL_LINE_GAP,
   RESPONSE_SEED_SUFFIX,
+  arrowSeed,
   endTangent,
   labelLaneOffset,
   laneIndex,
   rectOf,
   responseLaneFor,
+  responseSpineFor,
   routeBetween,
   snappedAnchorForDrop,
+  strokeSeed,
   type Rect,
   type Side,
 } from '../edges/routing';
+import { routingPlan } from '../edges/bundles';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
@@ -190,6 +194,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Only the edges whose own lane actually shifts re-render when a sibling
   // connector is added or removed between the same two nodes.
   const laneOffset = useEditorStore((state) => laneIndex(state.document.edges).get(id)?.offset ?? 0);
+  // The shared fan-out/fan-in trunk this connector belongs to, if any. Safe to
+  // subscribe to as an object: `routingPlan` is memoized on the (nodes, edges)
+  // array pair, so an unchanged document hands back the very same spine and
+  // zustand's default equality skips the re-render. A node move invalidates
+  // the plan, but every bundled connector's geometry has genuinely changed by
+  // then anyway.
+  const spine = useEditorStore((state) => routingPlan(state.document.nodes, state.document.edges).spineFor(id));
   // Obstacle avoidance needs every other node's committed geometry, which no
   // per-edge subscription can narrow down further — so this one re-renders
   // whenever any node's position/size commits, not only its own endpoints.
@@ -329,6 +340,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     },
     lane: laneOffset,
     obstacles,
+    // An endpoint being dragged is on its way out of this bundle — keeping it
+    // on the trunk would rubber-band it back to a group it is leaving.
+    spine: dragOverride ? undefined : spine,
   });
   // A label chip is far taller than the line's own lane nudge — extra
   // separation on top of it is what keeps parallel labels from stacking.
@@ -358,8 +372,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // exactly as precise as Clean regardless of how bold Sketch's wobble gets —
   // see the hit-path/decorative-path split further down.
   const profile = PERSONALITY_PROFILES[preset];
-  const drawnPath = roughenPath(route.d, `${edge.id}:0`, profile.outline, profile.bow);
-  const secondStrokePath = profile.strokes === 2 ? roughenPath(route.d, `${edge.id}:1`, profile.outline, profile.bow) : null;
+  // Bundle members each draw the whole shared trunk, so they must wobble it
+  // identically or it frays into a rope — see `strokeSeed`.
+  const seed = strokeSeed(edge.id, route.trunkLabel ? spine : undefined);
+  const drawnPath = roughenPath(route.d, `${seed}:0`, profile.outline, profile.bow);
+  const secondStrokePath = profile.strokes === 2 ? roughenPath(route.d, `${seed}:1`, profile.outline, profile.bow) : null;
   // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
   // `render/roughness/roughArrow.ts`.
   const usesHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';
@@ -367,7 +384,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     ? sketchArrowPath(
         route.target,
         endTangent(route, edge.routing, 'target'),
-        `${edge.id}:arrow`,
+        arrowSeed(edge.id, route.trunkLabel ? spine : undefined),
         profile.arrowJitter,
         markerVariantForEdge(edge),
       )
@@ -388,10 +405,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         },
         lane: responseLane,
         obstacles,
+        spine: dragOverride ? undefined : responseSpineFor(spine),
       })
     : null;
   const responseDrawnPath = responseRoute
-    ? roughenPath(responseRoute.d, `${edge.id}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow)
+    ? roughenPath(responseRoute.d, `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow)
     : null;
   const responseUsesHandDrawnArrow = responseRoute && edge.directed && profile.arrowStyle === 'per-edge-hand';
   const responseArrowPath = responseUsesHandDrawnArrow
@@ -581,8 +599,18 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           no visible text at all. `captionAnchor`'s `awayFromResponse` flag is what keeps this from
           landing on top of the response line's own label — see its own doc comment. */}
       {!hasLabel && !hasStep && edge.semantic && (() => {
-        const caption = captionAnchor(route.labelSide, labelX, labelY, edge.hasResponse ? Math.sign(responseLane) : 0);
         const isUnusual = relationshipStatus === 'unusual' || relationshipStatus === 'questionable';
+        // A bundle's members all share one relationship, so repeating its
+        // caption down every branch is the exact "calls / calls / calls"
+        // column Smart Routing exists to remove: every member draws it at the
+        // same point on the shared stem instead, where the identical copies
+        // overdraw into one label. An architecturally unusual pairing keeps
+        // its own caption on its own branch — that warning is about this
+        // relationship, not its siblings. Mirrors `edges/describe.ts`.
+        const collapsed = Boolean(route.trunkLabel) && !isUnusual;
+        const captionAt = collapsed ? route.trunkLabel! : { x: labelX, y: labelY };
+        const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
+        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, edge.hasResponse ? Math.sign(responseLane) : 0);
         const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse, edge.deliveryAttempts);
         return (
           <text
@@ -941,6 +969,10 @@ function EdgeEndpointHandle({
 const BADGE_OFFSET = 22;
 
 function badgeX(route: ReturnType<typeof routeBetween>): number {
+  // Every member of a fan-out leaves its hub from the same anchor, so walking
+  // outward from `source` would stack all N badges on one point — see
+  // `badgePoint` in `edges/describe.ts`.
+  if (route.branchStart) return route.branchStart.x + Math.sign(route.target.x - route.branchStart.x) * BADGE_OFFSET;
   const side = route.source.side;
   if (side === 'left') return route.source.x - BADGE_OFFSET;
   if (side === 'right') return route.source.x + BADGE_OFFSET;
@@ -948,6 +980,7 @@ function badgeX(route: ReturnType<typeof routeBetween>): number {
 }
 
 function badgeY(route: ReturnType<typeof routeBetween>): number {
+  if (route.branchStart) return route.branchStart.y + Math.sign(route.target.y - route.branchStart.y) * BADGE_OFFSET;
   const side = route.source.side;
   if (side === 'top') return route.source.y - BADGE_OFFSET;
   if (side === 'bottom') return route.source.y + BADGE_OFFSET;

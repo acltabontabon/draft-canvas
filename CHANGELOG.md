@@ -10,6 +10,21 @@ milestones; **0.1.0 is the first production-ready release.**
 
 ### Added
 
+- Connections that fan out from one component, or converge on one, are now routed automatically
+  through a shared trunk with evenly spaced branches, instead of several near-identical lines
+  competing for the same strip of canvas. The repeated relationship label collapses onto that trunk
+  too, so five calls read as one "calls" rather than five stacked copies. It applies itself when the
+  shape is unmistakable — same source or destination, same relationship, destinations lined up in
+  one direction, and a clear corridor to run through — and otherwise leaves connectors exactly as
+  they were. Nothing is added to your diagram: those five connections are still five independent
+  relationships, and the shared trunk is only how they are drawn. With the optional response path
+  turned on, the reply lines gather into their own dashed return lane running alongside the request
+  trunk rather than weaving through it.
+- Right-click a bundled connector for "Convert to junction" to turn its shared route into a real
+  Junction you control, placed where the branch point already appears so nothing jumps. "Use direct
+  routing" opts a single connector out, and "Tidy connections" in the command palette hands every
+  connector you have taken over back to automatic routing — it never moves a node or changes where
+  a connector attaches.
 - Data Store now has seven distinct storage silhouettes instead of one cylinder wearing different
   captions: SQL keeps the classic cylinder with a subtle row hint, NoSQL is a loose cluster of
   offset blocks, Cache is a flat stack of tight slabs, File System is a folder tab, Object Storage
@@ -29,6 +44,13 @@ milestones; **0.1.0 is the first production-ready release.**
   now follows its kind (a new Worker starts out called "Worker," an External one "External System")
   until you rename it yourself — after that, Draft Canvas never touches the name again, no matter
   how many times you change its kind.
+
+### Changed
+
+- A new Service → Service connection no longer draws a response arrow by default. The return path
+  is implied at the level an architecture diagram works at, and drawing it unasked doubled the lines
+  on exactly the diagrams that were already busiest. Turn it on per connector with the Response
+  toggle; connections that already had one keep it.
 
 ### Fixed
 

@@ -16,6 +16,7 @@ import { isEdgeFocused } from '../src/store/editorStore';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { projectNodes, projectEdges } from '../src/canvas/projection';
 import { laneIndex, rectOf, routeEdge } from '../src/edges/routing';
+import { routingPlan } from '../src/edges/bundles';
 import type { DraftDocument } from '../src/document/types';
 
 /**
@@ -264,6 +265,27 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
     // Generous, for the same reason as the other budgets here: this exists to
     // catch an accidental quadratic blowup, not to police milliseconds.
     expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  /**
+   * Smart Routing's planner runs over the whole document rather than one edge
+   * at a time, and — unlike `laneIndex` — a node move invalidates it, so it
+   * re-plans once per drag *commit*. That makes it the one piece of routing
+   * whose cost could plausibly grow with the document; this pins it to the
+   * same fixture and the same generous budget as the per-edge routing above.
+   */
+  it('plans routing spines for the whole document within budget', () => {
+    const started = performance.now();
+    // Ten commits' worth: a fresh nodes array each time defeats the memo, so
+    // this measures real planning work, not cache hits.
+    for (let i = 0; i < 10; i += 1) {
+      routingPlan(doc.nodes.map((node) => ({ ...node })), doc.edges);
+    }
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it('reuses the routing plan for an unchanged (nodes, edges) pair', () => {
+    expect(routingPlan(doc.nodes, doc.edges)).toBe(routingPlan(doc.nodes, doc.edges));
   });
 
   it('rebuilds the lane index only when the edges array identity actually changes', () => {

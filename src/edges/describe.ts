@@ -12,12 +12,16 @@ import type { PersonalityPreset } from '../ui/personality/usePersonality';
 import {
   LABEL_LINE_GAP,
   RESPONSE_SEED_SUFFIX,
+  arrowSeed,
   endTangent,
   labelLaneOffset,
   rectOf,
   responseLaneFor,
+  responseSpineFor,
   routeBetween,
   routeEdge,
+  strokeSeed,
+  type EdgeSpine,
   type RoutedEdge,
   type Side,
 } from './routing';
@@ -34,6 +38,12 @@ export interface EdgeDescribeContext {
   stepIndex?: number;
   /** This edge's parallel-lane slot — see `laneIndex` in `store/selectors.ts`. */
   lane?: number;
+  /**
+   * The shared fan-out/fan-in trunk this connector travels along, if the
+   * planner grouped it into one — see `edges/bundles.ts`. Absent means route
+   * independently, exactly as every connector did before this field existed.
+   */
+  spine?: EdgeSpine;
   /** Phase 5.2 — Intentional Roughness. Defaults to `'clean'` at call sites
    *  that construct this object directly without a preset. */
   preset?: PersonalityPreset;
@@ -143,7 +153,7 @@ export function describeEdge(
   const obstacles = [...nodes.values()]
     .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
     .map(rectOf);
-  const route = routeEdge(edge, nodes, { lane: ctx.lane, obstacles });
+  const route = routeEdge(edge, nodes, { lane: ctx.lane, obstacles, spine: ctx.spine });
   if (!route) return null;
 
   // A label chip is far taller than the line's own lane nudge — extra
@@ -163,6 +173,9 @@ export function describeEdge(
   const profile = PERSONALITY_PROFILES[ctx.preset ?? 'clean'];
   const strokeBase = { color, width: 1.6, linecap: 'round' as const, dash: dashForEdge(edge) };
   const variant = markerVariantForEdge(edge);
+  // A bundle's members each draw the whole shared trunk, so they must wobble
+  // it identically or it frays into a rope — see `strokeSeed`.
+  const seed = strokeSeed(edge.id, ctx.spine);
   // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
   // `render/roughness/roughArrow.ts`. `roughenPath` is the identity function at
   // `outline === 0 && bow === 0` (Clean), so the base line needs no separate branch.
@@ -171,7 +184,7 @@ export function describeEdge(
   const line: Shape[] = [
     {
       t: 'path',
-      d: roughenPath(route.d, `${edge.id}:0`, profile.outline, profile.bow),
+      d: roughenPath(route.d, `${seed}:0`, profile.outline, profile.bow),
       fill: 'none',
       stroke: strokeBase,
       markerEnd,
@@ -180,7 +193,7 @@ export function describeEdge(
       ? ([
           {
             t: 'path',
-            d: roughenPath(route.d, `${edge.id}:1`, profile.outline, profile.bow),
+            d: roughenPath(route.d, `${seed}:1`, profile.outline, profile.bow),
             fill: 'none',
             stroke: { ...strokeBase, width: 1 },
             opacity: 0.5,
@@ -194,7 +207,7 @@ export function describeEdge(
             d: sketchArrowPath(
               route.target,
               endTangent(route, edge.routing, 'target'),
-              `${edge.id}:arrow`,
+              arrowSeed(edge.id, ctx.spine),
               profile.arrowJitter,
               variant,
             ),
@@ -223,12 +236,13 @@ export function describeEdge(
         anchors: { source: edge.targetAnchor, target: edge.sourceAnchor },
         lane: responseLane,
         obstacles,
+        spine: responseSpineFor(ctx.spine),
       });
       // Roughened exactly like the primary line — this used to draw `responseRoute.d` straight,
       // which meant the reply line stayed perfectly crisp in every export while the live canvas
       // (`DraftEdgeView.tsx`) already wobbled it; fixed to match, using the same shared seed
       // suffix so the two renderers can't quietly disagree on it again.
-      const responseD = roughenPath(responseRoute.d, `${edge.id}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow);
+      const responseD = roughenPath(responseRoute.d, `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow);
       const responseHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';
       responseLine = [
         {
@@ -350,7 +364,20 @@ export function describeEdge(
         measurer: ctx.measurer,
       });
       const captionResponseAway = edge.hasResponse ? Math.sign(responseLaneFor(ctx.lane ?? 0)) : 0;
-      const caption = captionAnchor(route.labelSide, labelX, labelY, captionLayout.height, captionResponseAway);
+      // A bundle's members all share one relationship, so repeating its
+      // caption down every branch is pure noise — the exact "calls / calls /
+      // calls / calls / calls" column this feature exists to remove. Every
+      // member instead draws it at the same point on the shared stem, where
+      // the N identical copies overdraw into one crisp label.
+      //
+      // A connector flagged as an architecturally unusual pairing keeps its
+      // own caption on its own branch: that warning is about this specific
+      // relationship, and hoisting it onto the trunk would attach it to
+      // siblings it isn't true of.
+      const collapsed = Boolean(route.trunkLabel) && !isUnusual;
+      const captionAt = collapsed ? route.trunkLabel! : { x: labelX, y: labelY };
+      const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
+      const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout.height, captionResponseAway);
       overlay.push({
         t: 'text',
         x: caption.x,
@@ -548,6 +575,17 @@ const OUTWARD: Record<Side, { x: number; y: number }> = {
  * unusable from the exporter.
  */
 function badgePoint(route: RoutedEdge, routing: EdgeRouting): { x: number; y: number } {
+  // Every member of a fan-out leaves its hub from the *same* anchor, so
+  // walking outward from `source` would stack all N step badges on one point.
+  // `branchStart` is where this connector stops sharing and becomes its own
+  // line, which is the first place a badge can identify which one it is.
+  if (route.branchStart) {
+    const dx = route.target.x - route.branchStart.x;
+    const dy = route.target.y - route.branchStart.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const t = Math.min(0.4, BADGE_OFFSET / length);
+    return { x: route.branchStart.x + dx * t, y: route.branchStart.y + dy * t };
+  }
   if (routing === 'straight') {
     const dx = route.target.x - route.source.x;
     const dy = route.target.y - route.source.y;

@@ -22,6 +22,17 @@ function reset() {
 }
 
 describe('clipboard codec', () => {
+  it('preserves a manual routing override across copy and paste', () => {
+    const a = createNode({ type: 'service', x: 0, y: 0 });
+    const b = createNode({ type: 'service', x: 400, y: 0 });
+    const edge = createEdge({ source: a.id, target: b.id, routeMode: 'direct' });
+    // A fragment round-trips through `normalizeDocument`, so a field missing
+    // from that normalizer is stripped here and nowhere else — the quiet way
+    // to lose a user's choice.
+    const decoded = decodeClipboard(encodeClipboard({ nodes: [a, b], edges: [edge] }));
+    expect(decoded!.edges[0]!.routeMode).toBe('direct');
+  });
+
   it('round-trips nodes and edges', () => {
     const a = createNode({ type: 'note', x: 0, y: 0, text: 'A' });
     const b = createNode({ type: 'note', x: 200, y: 0, text: 'B' });

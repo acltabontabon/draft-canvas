@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 9;
+export const CURRENT_VERSION = 10;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -58,6 +58,16 @@ export type Accent = (typeof ACCENTS)[number];
 
 export const EDGE_ROUTINGS = ['smoothstep', 'bezier', 'straight'] as const;
 export type EdgeRouting = (typeof EDGE_ROUTINGS)[number];
+
+/**
+ * How much freedom the router has over a connector's path. Deliberately not a
+ * full mode enum: "smart" is the absence of a value, so every edge ever
+ * written — including every file saved before this field existed — is already
+ * in the automatic mode, and only a user who explicitly took control leaves a
+ * trace. See `DraftEdge.routeMode`.
+ */
+export const ROUTE_MODES = ['direct'] as const;
+export type RouteMode = (typeof ROUTE_MODES)[number];
 
 /**
  * The four logical connection edges a node exposes. Lives here, not in
@@ -327,6 +337,18 @@ export interface DraftEdge {
    */
   sourceAnchor?: EdgeAnchor;
   targetAnchor?: EdgeAnchor;
+  /**
+   * Set only once the user has explicitly taken this connector's routing into
+   * their own hands — "auto until touched". Absent, the router is free to
+   * bundle it into a shared fan-out/fan-in trunk (`edges/bundles.ts`);
+   * `'direct'` opts it out and routes it on its own, exactly as every
+   * connector did before Smart Routing existed.
+   *
+   * Note this is about *how much freedom the router has*, not about line
+   * style — that's `routing` above, which stays independent. A `'direct'`
+   * connector is still a smoothstep/bezier/straight one.
+   */
+  routeMode?: RouteMode;
   /**
    * Whether `semantic`/`kind` were set by `connectorSemantics.ts`'s inference
    * or chosen by the user. Absent means "never explicitly chosen" — the same

@@ -193,20 +193,24 @@ test.describe('Database → Database relationships', () => {
 });
 
 test.describe('Request/response default caption', () => {
-  test('a fresh Service → Service connector shows a subtle "requests" caption; picking HTTP replaces it', async ({
+  test('a fresh Service → Service connector shows a subtle "calls" caption; picking HTTP replaces it', async ({
     page,
   }) => {
-    await newCanvas(page, 'Requests default caption');
+    await newCanvas(page, 'Calls default caption');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await expect(page.locator('svg text').filter({ hasText: 'requests' })).toBeVisible();
+    // "requests" is what `relationshipCaptionLabel` returns for a call that
+    // draws its reply line. A fresh connector no longer turns that on by
+    // itself, so the caption is the plain relationship — turning Response on
+    // in the connector's own editor is what brings "requests" back.
+    await expect(page.locator('svg text').filter({ hasText: 'calls' })).toBeVisible();
 
     await inspectorSelect(page, 'Protocol').click();
     await page.getByRole('option', { name: 'HTTP', exact: true }).click();
 
-    await expect(page.locator('svg text').filter({ hasText: 'requests' })).toHaveCount(0);
+    await expect(page.locator('svg text').filter({ hasText: 'calls' })).toHaveCount(0);
     await expect(page.locator('svg text').filter({ hasText: 'HTTP' })).toBeVisible();
   });
 });

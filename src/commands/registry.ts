@@ -3,6 +3,7 @@ import { categoryOf } from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { createAttachment, defaultSizeFor, displayNameFor } from '../document/factory';
 import { LIMITS } from '../document/limits';
+import { routingPlan } from '../edges/bundles';
 import { descendantsOf } from '../document/operations';
 import {
   CONNECTOR_KINDS,
@@ -353,6 +354,16 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       group: 'canvas',
       shortcut: `${MOD_SYMBOL} Shift Z`,
       run: (inner) => inner.editor.redo(),
+    });
+  }
+  if (ctx.editor.document.edges.some((edge) => edge.routeMode)) {
+    commands.push({
+      id: 'tidy-connections',
+      title: 'Tidy connections',
+      group: 'canvas',
+      keywords: ['route', 'routing', 'clean up', 'arrange', 'straighten', 'smart'],
+      hint: 'Re-route every connector automatically',
+      run: (inner) => inner.editor.tidyConnections(),
     });
   }
   if (ctx.editor.document.nodes.length > 0) {
@@ -768,6 +779,12 @@ function deleteCommand(title: string): Command {
   };
 }
 
+/** Whether this connector is currently drawn through a shared routing trunk —
+ *  the one situation where "Convert to junction" has something to convert. */
+function isBundled(ctx: CommandContext, edge: DraftEdge): boolean {
+  return routingPlan(ctx.editor.document.nodes, ctx.editor.document.edges).spineFor(edge.id) !== undefined;
+}
+
 export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   const semanticTitle = edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : 'Plain';
   const flowsContaining = ctx.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId === edge.id));
@@ -835,6 +852,14 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       group: 'connector',
       keywords: ['reply', 'return', 'request response', '200'],
       run: (inner) => inner.editor.setEdgeHasResponse(edge.id, !edge.hasResponse),
+    },
+    {
+      id: 'edge-route-direct',
+      title: edge.routeMode === 'direct' ? 'Use smart routing' : 'Use direct routing',
+      group: 'connector',
+      keywords: ['route', 'routing', 'bundle', 'trunk', 'straighten', 'manual', 'auto'],
+      hint: edge.routeMode === 'direct' ? 'Let the router bundle this again' : 'Route this one on its own',
+      run: (inner) => inner.editor.setEdgeRouteMode(edge.id, edge.routeMode === 'direct' ? undefined : 'direct'),
     },
     {
       id: 'edge-reverse',
@@ -912,6 +937,16 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
     },
     { ...deleteCommand('Delete connector'), group: 'connector' },
   ];
+  if (isBundled(ctx, edge)) {
+    commands.push({
+      id: 'edge-convert-to-junction',
+      title: 'Convert to junction',
+      group: 'connector',
+      keywords: ['junction', 'branch', 'trunk', 'bundle', 'split', 'explicit'],
+      hint: 'Turn this shared route into a real element',
+      run: (inner) => inner.editor.convertBundleToJunction(edge.id),
+    });
+  }
   if ((edge.attachments?.length ?? 0) < LIMITS.maxAttachmentsPerEdge) {
     commands.push(
       addAttachmentCommand({ hostKind: 'edge', edge }, 'note', 'connector'),

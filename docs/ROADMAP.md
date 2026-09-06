@@ -144,6 +144,16 @@ a collection of arrows.*
   dead-letter destination is typically a separate topic managed by a consumer/framework, not a
   queue-shaped DLQ). A generated DLQ never offers its own DLQ.
 
+- **2.9 Smart connection routing** — ✅ Done. A fan-out from one component, or a fan-in to one, is
+  recognised automatically and drawn through a shared routing trunk with evenly distributed
+  branches; the members' repeated relationship caption collapses onto that trunk. The trunk is a
+  *visual* artifact only — never a node, never persisted, never in history or validation — so five
+  bundled connections remain five independent relationships (see `edges/bundles.ts` and
+  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)'s semantic-graph/routing-graph note). Junction keeps its
+  role, sharpened: Smart Routing is convenience and automation, Junction is precision and explicit
+  control, reachable from a bundle via "Convert to junction". A Service → Service connection no
+  longer defaults its reply line on.
+
 ## Phase 3 — Flow & Presentation
 
 *Purpose: draw the system once, then tell as many stories over it as the meeting needs.*

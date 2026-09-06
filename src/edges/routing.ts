@@ -188,6 +188,35 @@ export interface RoutedEdge {
   labelSide: Side;
   source: Anchor;
   target: Anchor;
+  /**
+   * Where this connector's own, unshared run begins — set only for a bundled
+   * fan-out (`EdgeSpine`), where every member leaves the hub from the *same*
+   * point and only diverges once it taps off the trunk.
+   *
+   * Anything that would otherwise be placed relative to `source` and must stay
+   * distinguishable per connector reads this instead: a step badge walked
+   * outward from a shared source anchor would draw all N badges on one point.
+   */
+  branchStart?: { x: number; y: number };
+  /**
+   * Where a bundle's single shared relationship caption belongs — the midpoint
+   * of the stem between the hub and the trunk, which is the longest run on the
+   * path and the one furthest from every branch bend (see the routing brief's
+   * "smart label placement"). Set only for a bundled edge whose members all
+   * agree on that caption; each member draws it at this same point, so the N
+   * copies overdraw into one crisp label instead of repeating down the column.
+   */
+  trunkLabel?: { x: number; y: number };
+  /**
+   * Which side of the stem the collapsed caption sits on.
+   *
+   * Derived from the spine's own orientation rather than per-member geometry,
+   * unlike `labelSide`. Every member draws that one caption at the same point,
+   * so they must all agree on the side too — deriving it from each member's own
+   * far node could let one disagree and render the shared caption a second time,
+   * a few pixels off, as a faint double image.
+   */
+  trunkLabelSide?: Side;
 }
 
 /** The direction of travel arriving at a side's own anchor — the inward-pointing counterpart to
@@ -229,6 +258,34 @@ export function endTangent(route: RoutedEdge, routing: EdgeRouting, end: 'source
  *  `edges/describe.ts` and `DraftEdgeView.tsx` so the two renderers can never silently disagree
  *  on it the way they already once did (the reply line wobbled live but not in exports). */
 export const RESPONSE_SEED_SUFFIX = ':response';
+
+/**
+ * The seed a connector's drawn stroke wobbles with — its own id normally, but
+ * its *spine's* id once it's bundled.
+ *
+ * Bundle members each draw their own complete path, shared trunk included, so
+ * at a hand-drawn preset N independently-seeded copies of that trunk would
+ * read as a frayed rope instead of one line. Sharing the seed makes them
+ * identical instead: `roughenPath` jitters by point *ordinal*, and every
+ * member's path has the same structure up to its own tap-off point, so the
+ * shared run gets the same offsets applied to the same coordinates and the
+ * copies land exactly on top of each other. Past the tap-off the coordinates
+ * diverge, so the branches still wobble independently — which is correct,
+ * they are different lines.
+ */
+export function strokeSeed(edgeId: string, spine: EdgeSpine | undefined): string {
+  return spine ? spine.id : edgeId;
+}
+
+/**
+ * The seed a hand-drawn arrowhead wobbles with. Only a fan-*in* needs the
+ * shared one: its members all land on the same hub anchor, so independently
+ * jittered heads would pile up as a smudge. A fan-out's heads each land on
+ * their own destination and stay per-edge.
+ */
+export function arrowSeed(edgeId: string, spine: EdgeSpine | undefined): string {
+  return spine && spine.hub === 'target' ? `${spine.id}:arrow` : `${edgeId}:arrow`;
+}
 
 /** Gap, in canvas pixels, between the line and a label chip's near edge. Shared by
  *  `DraftEdgeView.tsx` (transform-based) and `edges/describe.ts` (direct rect math) so the two
@@ -298,8 +355,75 @@ export interface RouteAnchors {
   target?: EdgeAnchor;
 }
 
+/**
+ * Which pair of sides a connector actually leaves and arrives on: a persisted
+ * anchor wins for whichever end has one, `chooseSides` fills in whichever
+ * doesn't.
+ *
+ * Extracted from `routeBetween` (its only caller until bundling existed) so
+ * `edges/bundles.ts` can group edges by the side they *will* be routed on
+ * without re-deriving that rule. Two copies of "how a side is resolved" would
+ * drift the first time either changed, and a planner that disagreed with the
+ * router about a hub's side would bundle edges that then draw somewhere else.
+ */
+export function resolveSides(
+  sourceRect: Rect,
+  targetRect: Rect,
+  anchors?: RouteAnchors,
+): { source: Side; target: Side } {
+  // Cheap, and only needed for whichever side has no persisted anchor.
+  const fallback = !anchors?.source || !anchors?.target ? chooseSides(sourceRect, targetRect) : null;
+  return {
+    source: anchors?.source?.side ?? fallback!.source,
+    target: anchors?.target?.side ?? fallback!.target,
+  };
+}
+
+/**
+ * A shared visual routing trunk that several independent connectors travel
+ * along — the "fan-out"/"fan-in" spine planned by `edges/bundles.ts`.
+ *
+ * **This is presentation state, not architecture.** A spine is never a node,
+ * never persisted, never selectable, and never participates in validation or
+ * semantics. Five connectors sharing a spine are still five independent
+ * relationships; the spine only decides where their lines happen to run. See
+ * `edges/bundles.ts` for the grouping rules and `docs/ARCHITECTURE.md`'s
+ * "semantic graph vs. routing graph" note.
+ *
+ * `trunkGap` is measured from the hub's own rect rather than stored as an
+ * absolute coordinate on purpose: the document isn't written during a drag
+ * (see `docs/ARCHITECTURE.md`), so an absolute trunk would stay behind while
+ * the branches followed the pointer. Hub-relative, every member recomputes the
+ * trunk from a rect it already has, and dragging the hub moves the whole
+ * bundle rigidly with no re-planning at all.
+ */
+export interface EdgeSpine {
+  /** Stable identity for this spine. Seeds the shared trunk's roughening so
+   *  every member wobbles identically and the copies overlay exactly. */
+  id: string;
+  /** Whether the shared end is this edge's source (fan-out) or target (fan-in). */
+  hub: 'source' | 'target';
+  /** The hub side every member leaves from / arrives on. */
+  hubSide: Side;
+  /** Distance from the hub rect's `hubSide` edge out to the trunk. */
+  trunkGap: number;
+  /** Width of the whole corridor — hub face to the nearest far node's face.
+   *  Lets the reply trunk pick a position proportionally rather than sitting a
+   *  fixed few pixels off the request trunk; see `responseSpineFor`. */
+  corridor: number;
+  /** How many connectors share this spine — never fewer than `MIN_SPINE_MEMBERS`. */
+  count: number;
+}
+
 export interface RouteOptions {
   anchors?: RouteAnchors;
+  /**
+   * The shared trunk this edge travels along, when `edges/bundles.ts` grouped
+   * it into one. Absent — by far the common case — routes exactly as it always
+   * has. Only ever set for `smoothstep`: a bezier or straight line has no
+   * orthogonal run to share.
+   */
+  spine?: EdgeSpine;
   /**
    * This edge's slot within the group of edges sharing its (unordered) node
    * pair — `0` for a lone edge (by far the common case), otherwise a small
@@ -357,6 +481,58 @@ export const RESPONSE_LANE_DELTA = 1.8;
 export function responseLaneFor(laneOffset: number): number {
   return laneOffset + Math.sign(laneOffset || 1) * RESPONSE_LANE_DELTA;
 }
+
+/**
+ * How far the reply trunk sits beyond the request trunk.
+ *
+ * A constant, not a share of the corridor: this is lane spacing, and lane
+ * spacing is something the eye reads at a fixed size regardless of how far
+ * apart the nodes happen to be. Tuned by eye against the alternatives — much
+ * tighter and the two rails read as one slightly thick line; much wider and
+ * the reply trunk stops being a companion rail and starts looking like a
+ * second, unrelated trunk stranded in open space, with each request branch
+ * visibly cut in half on its way past it.
+ */
+const RESPONSE_TRUNK_LANE = 44;
+
+/**
+ * A bundle's spine as seen by its own reply line.
+ *
+ * Two things change, and both matter.
+ *
+ * The hub changes *role*. The reply is routed by calling `routeBetween` with
+ * source and target swapped, but the hub node itself does not move — so the
+ * fan-out every request shares out of its source is a fan-in every reply
+ * shares back into its target. Handing the request's own spine to that second
+ * call would point `hub` at the wrong end entirely and collapse every reply
+ * onto the destinations.
+ *
+ * And the reply gets its own trunk, placed *beyond* the request's — between it
+ * and the destinations — rather than a few pixels alongside. Beyond, not
+ * before: a reply trunk nearer the hub would make every branch cross the
+ * request trunk on its way out to it, N crossings instead of the single one
+ * the shared return stem already makes. Kept well clear of the request trunk
+ * so the two read as a request lane and a return lane rather than one line
+ * drawn twice.
+ *
+ * The request trunk's own position never depends on any of this — a bundle
+ * sits in exactly the same place whether or not its members draw reply lines.
+ */
+export function responseSpineFor(spine: EdgeSpine | undefined): EdgeSpine | undefined {
+  if (!spine) return undefined;
+  return {
+    ...spine,
+    id: `${spine.id}${RESPONSE_SEED_SUFFIX}`,
+    hub: spine.hub === 'source' ? 'target' : 'source',
+    // Never past the far nodes it has to stop short of; `MIN_BRANCH`'s worth
+    // of run-in is the same clearance the request branches get.
+    trunkGap: Math.min(spine.trunkGap + RESPONSE_TRUNK_LANE, spine.corridor - MIN_SPINE_BRANCH),
+  };
+}
+
+/** Mirrors `MIN_BRANCH` in `edges/bundles.ts` — the run-in every branch,
+ *  request or reply, keeps clear of the node it lands on. */
+const MIN_SPINE_BRANCH = 28;
 
 /**
  * Shifts an anchor point along its own side by `lane` slots, clamped so a
@@ -550,6 +726,99 @@ function buildDetourPath(
 }
 
 /**
+ * Where a spine's trunk actually runs right now, given the hub's *current*
+ * rect. Recomputed per render rather than stored, which is what lets a bundle
+ * track a hub being dragged without the planner running at all — see
+ * `EdgeSpine.trunkGap`.
+ */
+export function trunkCoordinate(hubRect: Rect, spine: EdgeSpine): number {
+  switch (spine.hubSide) {
+    case 'right':
+      return hubRect.x + hubRect.width + spine.trunkGap;
+    case 'left':
+      return hubRect.x - spine.trunkGap;
+    case 'bottom':
+      return hubRect.y + hubRect.height + spine.trunkGap;
+    case 'top':
+      return hubRect.y - spine.trunkGap;
+  }
+}
+
+/** Drops points a previous one already sits on, so an aligned member (its far
+ *  anchor level with the hub's) collapses its two trunk turns into one instead
+ *  of handing `roundedStepPath` a zero-length segment to round. */
+function dedupePoints(points: readonly { x: number; y: number }[]): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  for (const point of points) {
+    const last = out[out.length - 1];
+    if (last && Math.abs(last.x - point.x) < 0.01 && Math.abs(last.y - point.y) < 0.01) continue;
+    out.push(point);
+  }
+  return out;
+}
+
+/**
+ * The two-corner orthogonal path a bundled connector takes: out of the hub to
+ * the shared trunk, along the trunk to this member's own tap-off point, then
+ * straight into its far anchor.
+ *
+ *     from ──────┐ trunk
+ *                ├──────► to        (this member)
+ *                ├──────► …         (a sibling, sharing everything left of its own tap)
+ *
+ * The tap-off point is simply the far anchor's own cross-axis coordinate, so
+ * the branch is always a single straight run and members never cross each
+ * other inside the bundle — that ordering is free rather than solved for.
+ * Built through the same `roundedStepPath` a detour uses, so a bundled
+ * connector's corners read as the same routing style as every other one.
+ */
+function buildSpinePath(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  spine: EdgeSpine,
+  trunk: number,
+): {
+  d: string;
+  labelX: number;
+  labelY: number;
+  branchStart?: { x: number; y: number };
+  trunkLabel: { x: number; y: number };
+  trunkLabelSide: Side;
+} {
+  // A hub side of left/right puts the trunk on a vertical line at x = `trunk`;
+  // top/bottom puts it on a horizontal one at y = `trunk`.
+  const verticalTrunk = isHorizontalSide(spine.hubSide);
+  const enter = verticalTrunk ? { x: trunk, y: from.y } : { x: from.x, y: trunk };
+  const leave = verticalTrunk ? { x: trunk, y: to.y } : { x: to.x, y: trunk };
+
+  // Fan-out shares the run *into* the trunk and diverges after it; fan-in is
+  // the mirror image — each member has its own run up to the trunk and shares
+  // everything from there into the hub.
+  const fanOut = spine.hub === 'source';
+  const branchFrom = fanOut ? leave : from;
+  const branchTo = fanOut ? to : enter;
+  const stemFrom = fanOut ? from : leave;
+  const stemTo = fanOut ? enter : to;
+
+  return {
+    d: roundedStepPath(dedupePoints([from, enter, leave, to]), 10),
+    // The member's own branch midpoint — never the whole path's midpoint,
+    // which would sit on the shared trunk and stack every member's label,
+    // attachment chips and condition text on one point.
+    labelX: (branchFrom.x + branchTo.x) / 2,
+    labelY: (branchFrom.y + branchTo.y) / 2,
+    // Only a fan-out needs this: fan-in members each have their own source
+    // anchor already, so anything placed from `source` is distinct anyway.
+    branchStart: fanOut ? leave : undefined,
+    trunkLabel: { x: (stemFrom.x + stemTo.x) / 2, y: (stemFrom.y + stemTo.y) / 2 },
+    // A horizontal stem takes its caption above; a vertical one takes it
+    // beside. Same defaults `labelSideFor` picks for those orientations, just
+    // decided once for the whole bundle.
+    trunkLabelSide: verticalTrunk ? 'top' : 'right',
+  };
+}
+
+/**
  * Which side of the line a label chip should sit on, so it never straddles the stroke. Kept
  * deliberately simple and deterministic — no obstacle scan beyond the two endpoints' own nodes,
  * no solver — per the same "smart but not clever" preference `chooseSides` already follows.
@@ -600,10 +869,7 @@ export function routeBetween(
   options?: RouteOptions,
 ): RoutedEdge {
   const anchors = options?.anchors;
-  // Cheap, and only needed for whichever side has no persisted anchor.
-  const fallback = !anchors?.source || !anchors?.target ? chooseSides(sourceRect, targetRect) : null;
-  const sourceSide = anchors?.source?.side ?? fallback!.source;
-  const targetSide = anchors?.target?.side ?? fallback!.target;
+  const { source: sourceSide, target: targetSide } = resolveSides(sourceRect, targetRect, anchors);
 
   const sourcePoint = anchorPoint(sourceRect, sourceSide, anchors?.source?.offset);
   const targetPoint = anchorPoint(targetRect, targetSide, anchors?.target?.offset);
@@ -632,6 +898,9 @@ export function routeBetween(
   let path: string;
   let labelX: number;
   let labelY: number;
+  let branchStart: { x: number; y: number } | undefined;
+  let trunkLabel: { x: number; y: number } | undefined;
+  let trunkLabelSide: Side | undefined;
 
   switch (routing) {
     case 'straight': {
@@ -655,6 +924,22 @@ export function routeBetween(
     }
     case 'smoothstep':
     default: {
+      // A bundled connector already has its corridor chosen for it — the
+      // planner picked a trunk that clears obstacles for the whole group, so
+      // this edge must not also bend around one on its own and leave the
+      // shared run.
+      const spine = options?.spine;
+      if (spine) {
+        const hubRect = spine.hub === 'source' ? sourceRect : targetRect;
+        const built = buildSpinePath(from, to, spine, trunkCoordinate(hubRect, spine));
+        path = built.d;
+        labelX = built.labelX;
+        labelY = built.labelY;
+        branchStart = built.branchStart;
+        trunkLabel = built.trunkLabel;
+        trunkLabelSide = built.trunkLabelSide;
+        break;
+      }
       // Obstacle avoidance only applies to the orthogonal style — a forced
       // straight or bezier line has no "bend" to route around anything with.
       const detour = detourAround(from, to, sourceSide, targetSide, options?.obstacles ?? []);
@@ -680,6 +965,9 @@ export function routeBetween(
     labelSide: labelSideFor(sourceRect, targetRect, sourceSide, targetSide, { x: labelX, y: labelY }),
     source: { ...from, side: sourceSide },
     target: { ...to, side: targetSide },
+    branchStart,
+    trunkLabel,
+    trunkLabelSide,
   };
 }
 

@@ -4,6 +4,7 @@ import { findFlow, stepIndexOf } from '../../document/flow';
 import { boundsOf } from '../../document/operations';
 import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../../document/types';
 import { laneIndex } from '../../edges/routing';
+import { routingPlan } from '../../edges/bundles';
 import { blurRadiusFor } from '../backgroundAnchor';
 import { themeFor, type Theme, type ThemeName } from '../theme/tokens';
 import { getMeasurer } from '../text/measure';
@@ -187,6 +188,12 @@ export function buildScene(
 
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const lanes = laneIndex(edges);
+  // Planned over the *filtered* arrays on purpose. A "selection only" export
+  // that leaves out part of a fan-out should route what remains as the smaller
+  // group it now is — re-expanding to independent lines if it drops below a
+  // bundle's floor — rather than drawing branches off a trunk whose other
+  // members aren't in the picture.
+  const plan = routingPlan(nodes, edges);
 
   beginClipScope('export');
 
@@ -197,7 +204,7 @@ export function buildScene(
   for (const edge of edges) {
     const stepIndex = stepIndexOf(options.selectedFlow, edge.id);
     const lane = lanes.get(edge.id)?.offset ?? 0;
-    const described = describeEdge(edge, nodeMap, { ...edgeCtx, stepIndex, lane });
+    const described = describeEdge(edge, nodeMap, { ...edgeCtx, stepIndex, lane, spine: plan.spineFor(edge.id) });
     if (!described) continue;
     if (edge.directed) arrowColors.add(described.color);
 

@@ -29,6 +29,7 @@ import {
   NOTE_KINDS,
   EDGE_SEMANTICS,
   QUEUE_KINDS,
+  ROUTE_MODES,
   SERVICE_KINDS,
   SIDES,
   type Accent,
@@ -53,6 +54,7 @@ import {
   type GridMode,
   type NoteKind,
   type QueueKind,
+  type RouteMode,
   type ServiceKind,
 } from './types';
 
@@ -487,6 +489,14 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
       'explicit',
     ]);
     if (semanticsOrigin) edge.semanticsOrigin = semanticsOrigin;
+
+    // Absent means Smart Routing, so an unrecognised value must fall back to
+    // absent rather than to a literal — see `DraftEdge.routeMode`. This also
+    // carries the override through copy/paste: `clipboardCodec.ts` round-trips
+    // a fragment through this same normalizer, so an omission here would
+    // silently strip the user's choice on every paste.
+    const routeMode = oneOfOptional<RouteMode>(candidate.routeMode, ROUTE_MODES);
+    if (routeMode) edge.routeMode = routeMode;
 
     const sourceAnchor = parseAnchor(candidate.sourceAnchor);
     if (sourceAnchor) edge.sourceAnchor = sourceAnchor;

@@ -215,10 +215,12 @@ describe('commandsFor — contextual (8.2)', () => {
     const edge = state.connect(api.id, db.id)!;
     state.setSelection({ nodes: [], edges: [edge.id] });
     const ctx = stubContext();
-    expect(ids(ctx).slice(0, 11)).toEqual([
-      'edge-semantic', 'edge-kind', 'edge-async', 'edge-response', 'edge-reverse',
+    expect(ids(ctx).slice(0, 12)).toEqual([
+      'edge-semantic', 'edge-kind', 'edge-async', 'edge-response', 'edge-route-direct', 'edge-reverse',
       'edge-reconnect-source', 'edge-reconnect-target', 'edge-add-to-flow', 'spotlight', 'edit-text', 'delete',
     ]);
+    // A lone connector is not part of any fan, so there is nothing to convert.
+    expect(ids(ctx)).not.toContain('edge-convert-to-junction');
 
     const semantics = stageOf(ctx, 'edge-semantic');
     expect(semantics.options.at(-1)!.title).toBe('None');

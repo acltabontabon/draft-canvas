@@ -69,6 +69,20 @@ describe('.draftcanvas round trip', () => {
     expect(result.document.settings).toEqual(original.settings);
   });
 
+  it('carries a manual routing override through the file format', () => {
+    const a = createNode({ type: 'service', x: 0, y: 0 });
+    const b = createNode({ type: 'service', x: 400, y: 0 });
+    const doc = addEdges(addNodes(createDocument('Routing'), [a, b]), [
+      createEdge({ source: a.id, target: b.id, routeMode: 'direct' }),
+    ]);
+    const result = deserializeDocument(serializeDocument(doc));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Absent means Smart Routing, so silently dropping this on save would
+    // hand a connector the user took control of back to the router.
+    expect(result.document.edges[0]!.routeMode).toBe('direct');
+  });
+
   it('is byte-stable across repeated writes', () => {
     const doc = richDocument();
     expect(serializeDocument(doc)).toBe(serializeDocument(doc));

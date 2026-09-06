@@ -284,6 +284,8 @@ describe('contextMenuCommandsFor — an edge', () => {
       'edge-async',
       'edge-response',
       'sep',
+      'edge-route-direct',
+      'sep',
       'attach-note',
       'attach-code',
       'sep',
@@ -291,6 +293,21 @@ describe('contextMenuCommandsFor — an edge', () => {
       'sep',
       'delete',
     ]);
+    // This connector is on its own, so "Convert to junction" has no shared
+    // trunk to convert and must not be offered — the more valuable half of
+    // this assertion, since the entry is conditional.
+    expect(types).not.toContain('edge-convert-to-junction');
+  });
+
+  it('offers Convert to junction only for a connector drawn through a shared trunk', () => {
+    const state = useEditorStore.getState();
+    const hub = state.addNode({ type: 'service', x: 0, y: 400, text: 'Hub' });
+    const edges = [0, 1, 2].map((i) => {
+      const target = state.addNode({ type: 'service', x: 700, y: i * 220, text: `T${i}` });
+      return state.connect(hub.id, target.id)!;
+    });
+    const types = edgeMenu(edges[0]!.id).map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
+    expect(types).toContain('edge-convert-to-junction');
   });
 
   it('hides Add Note/Add Code once the (lower, edge-specific) attachment cap is reached', () => {

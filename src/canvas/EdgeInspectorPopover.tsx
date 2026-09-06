@@ -20,7 +20,8 @@ import {
   type ConnectionCapability,
 } from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
-import { routeBetween } from '../edges/routing';
+import { laneIndex, routeBetween } from '../edges/routing';
+import { routingPlan } from '../edges/bundles';
 import type { HintId } from '../learning/hints';
 import { useEditorStore } from '../store/editorStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
@@ -239,8 +240,16 @@ export function EdgeInspectorPopover() {
   const targetRect = rectOfInternal(displayTarget);
   if (!sourceRect || !targetRect) return null;
 
+  // The third caller of `routeBetween`, alongside the live edge component and
+  // the exporter — and it has to route the connector the same way they do, or
+  // the panel anchors to a point the line never passes through. `lane` was
+  // already missing here (harmless while the drift was a few pixels); a shared
+  // trunk makes it matter, since an un-bundled label point sits out in open
+  // canvas far from the branch the user actually clicked.
   const route = routeBetween(sourceRect, targetRect, displayEdge.routing, {
     anchors: { source: displayEdge.sourceAnchor, target: displayEdge.targetAnchor },
+    lane: laneIndex(document.edges).get(displayEdge.id)?.offset ?? 0,
+    spine: routingPlan(document.nodes, document.edges).spineFor(displayEdge.id),
   });
   // Two independent reasons to prefer sitting below the connector instead of above it: the
   // node-overlap heuristic every popover/attachment row already shares (a short connector whose

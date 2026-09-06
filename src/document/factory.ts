@@ -20,6 +20,7 @@ import {
   type EdgeSemantic,
   type NoteKind,
   type QueueKind,
+  type RouteMode,
   type ServiceKind,
 } from './types';
 
@@ -283,6 +284,9 @@ export interface CreateEdgeInput {
   semantic?: EdgeSemantic;
   hasResponse?: boolean;
   semanticsOrigin?: DraftEdge['semanticsOrigin'];
+  /** Set only when the user has explicitly taken this connector's routing over
+   *  — see `DraftEdge.routeMode`. */
+  routeMode?: RouteMode;
   /** Born-dashed, e.g. a generated dead-letter route — every other edge in the app only ever
    *  gains `async` after creation, via `toggleEdgeAsync`/`setEdgeKind('async')`. */
   async?: boolean;
@@ -305,6 +309,7 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
   if (input.semantic) edge.semantic = input.semantic;
   if (input.hasResponse) edge.hasResponse = input.hasResponse;
   if (input.semanticsOrigin) edge.semanticsOrigin = input.semanticsOrigin;
+  if (input.routeMode) edge.routeMode = input.routeMode;
   if (input.async) edge.async = true;
   if (input.deliveryAttempts !== undefined) edge.deliveryAttempts = input.deliveryAttempts;
   return edge;

@@ -125,6 +125,11 @@ function edgeMenu(commands: Command[]): ContextMenuEntry[] {
   return grouped([
     pick(commands, ['edit-text']),
     pick(commands, ['edge-reverse', 'edge-async', 'edge-response']),
+    // Both routing entries are plain actions, not pickers, so they clear the
+    // stage-command rule above. `pick` silently drops whichever is absent —
+    // "Convert to junction" only exists while this connector is actually
+    // drawn through a shared trunk.
+    pick(commands, ['edge-route-direct', 'edge-convert-to-junction']),
     pick(commands, ['attach-note', 'attach-code']),
     pick(commands, ['spotlight']),
     pick(commands, ['delete']),

@@ -225,6 +225,17 @@ function migrateAddProjectId(doc: Record<string, unknown>): Record<string, unkno
 }
 
 /**
+ * v9 has no `routeMode` on any connector — the same structural no-op shape as
+ * `migrateAddProjectId` above. Absent already means Smart Routing, which is
+ * exactly how every v9 connector should behave, so there is nothing to
+ * backfill. The entry exists so the funnel stays total: without it a v9 file
+ * could silently mean either "before the field" or "after it".
+ */
+function migrateAddRouteMode(doc: Record<string, unknown>): Record<string, unknown> {
+  return doc;
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
@@ -236,6 +247,7 @@ const MIGRATIONS: Record<number, Migration> = {
   6: migrateCardAndRoundedToNote,
   7: migrateHasResponse,
   8: migrateAddProjectId,
+  9: migrateAddRouteMode,
 };
 
 export class UnsupportedVersionError extends Error {

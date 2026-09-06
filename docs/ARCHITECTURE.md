@@ -213,6 +213,59 @@ replace them:
   during an active drag or resize (`uiStore.ts`'s `interactionActive`) and recomputed once the
   gesture ends, so the per-frame cost of a drag never grows with the document's edge count.
 
+#### Semantic graph vs. routing graph
+
+Smart Routing (`edges/bundles.ts`) draws several independent connectors through one shared trunk
+when they obviously belong together — the same source or destination, the same relationship,
+destinations lined up in one direction, and a corridor wide enough to run through. The rule that
+makes this safe to have on by default:
+
+> The routing graph may be more complex than the semantic graph, but it must never change what the
+> architecture means. A spine is derived presentation state — never a node, never persisted, never
+> selectable, never in history, validation, export-as-architecture, or the palette. Five bundled
+> connectors are still five rows in `DraftDocument.edges`.
+
+`routingPlan(nodes, edges)` is memoized on the array pair the way `laneIndex` is memoized on
+`edges` alone, and every gate narrows rather than widens: an edge that isn't unmistakably part of a
+fan simply routes exactly as it did before the module existed. Two consequences worth knowing:
+
+- **The spine is stored hub-relative** (`trunkGap`, not an absolute coordinate). The document isn't
+  written during a drag, so an absolute trunk would stay behind while the branches followed the
+  pointer; hub-relative, every member recomputes it from a rect it already has, and dragging the hub
+  moves the bundle rigidly with no re-planning. Quantizing the gap to an 8px grid supplies the
+  hysteresis that keeps small nudges from making the route shimmer.
+- **There is no spine "owner".** Every member draws its own complete path, and the shared run is
+  made byte-identical by seeding its roughening on the *spine* id (`strokeSeed`). Electing one
+  member to draw the trunk is the obvious design and is broken by SVG group opacity: the trunk would
+  sit inside that member's `<g>`, so an owner dimmed by Presentation or a flow lens would drag the
+  whole shared run down with it while its lit siblings floated disconnected.
+
+Two positions are tuned rather than derived, and both were settled by looking at renders:
+
+- **The trunk sits past the corridor's midpoint** (`TRUNK_BIAS`), giving a long shared stem and
+  short branches. That reads as one relationship splitting late; an even split reads as two halves
+  meeting in the middle, and leaves the collapsed caption nowhere clean to sit.
+- **The reply trunk is a companion rail 44px beyond the request trunk**, not a share of the
+  corridor. Two combs facing the same way must interleave somewhere — it is geometrically
+  impossible for neither family to cross the other's trunk — so the choice is *where* the crossing
+  lands. Beyond keeps the primary trunk itself uncrossed and puts each crossing a few pixels into a
+  branch, right by its corner, where it reads as a rail pair. A reply trunk placed *before* the
+  request trunk would instead lay every dashed branch across the primary trunk; one placed far
+  beyond strands it in open space and visibly cuts each request branch in half mid-run. Lane
+  spacing is a constant for the same reason it is on a road: the eye reads it at a fixed size, not
+  as a proportion of how far apart the nodes happen to be. **The request trunk's own position never
+  depends on any of this** — a bundle sits in exactly the same place whether or not its members
+  draw replies.
+
+Branches are peers by construction rather than by policing: identical stroke, identical corner
+radius, tap-offs ordered by destination so none crosses another, and no per-branch decoration —
+no junction dot, no branch marker. A member level with the hub runs straight through, which is what
+the shape is meant to look like, not a special case.
+
+A user should never need a Junction merely to stop five arrows overlapping. Junction stays the
+explicit escape hatch — "Convert to junction" materializes one exactly where the trunk already
+appears to branch — and Smart Routing owns everything before that point.
+
 ## History
 
 Snapshot-based, with structural sharing. Every operation in `document/operations.ts` returns a new

@@ -155,7 +155,7 @@ test.describe('contextual connector toolbar', () => {
     await expect(page.getByLabel('Condition')).toBeVisible();
   });
 
-  test('Service → Service defaults to Generic Call + Sync, with Request/Response ready to go', async ({ page }) => {
+  test('Service → Service defaults to Generic Call + Sync, with Request/Response offered but off', async ({ page }) => {
     await newCanvas(page, 'Service to service toolbar');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
@@ -177,10 +177,12 @@ test.describe('contextual connector toolbar', () => {
     await expect(page.getByRole('option')).toHaveText(['Sync', 'Async']);
     await page.keyboard.press('Escape');
 
-    // A fresh Service → Service connector already defaults to a request/response
-    // interaction (see `document/connectorSemantics.ts`'s `defaultsToResponse`) —
-    // the Response section reflects that "On" state without the user touching anything.
-    await expect(page.getByTitle('Draw a quieter reply line back to the caller')).toHaveText('On');
+    // The Response section is *offered* for this pairing (that's what
+    // `defaultsToResponse` still decides) but starts Off: at the altitude an
+    // architecture diagram works at the return path is implied, and drawing it
+    // unasked doubles the lines on the busiest kind of diagram. One click here
+    // brings it back.
+    await expect(page.getByTitle('Draw a quieter reply line back to the caller')).toHaveText('Off');
   });
 
   test('Service → Service: switching Protocol to HTTP splits Request into a method dropdown + text', async ({
@@ -215,7 +217,12 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Service', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    await expect(page.getByTitle('Draw a quieter reply line back to the caller')).toHaveText('On');
+    // Offered, and off by default — this test is about Async *removing* the
+    // section, so turn it on first to have something to remove.
+    const responseToggle = page.getByTitle('Draw a quieter reply line back to the caller');
+    await expect(responseToggle).toHaveText('Off');
+    await responseToggle.click();
+    await expect(responseToggle).toHaveText('On');
     await expect(page.locator('.dc-edge-async-marker')).toHaveCount(0);
 
     await chooseInspectorOption(page, 'Interaction mode', 'Async');
