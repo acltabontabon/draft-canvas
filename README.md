@@ -41,14 +41,6 @@ See [docs/PRIVACY.md](docs/PRIVACY.md) for what's stored where.
 ⚠️ **Clearing your browser's site data deletes your diagrams.** Export a `.draftcanvas` file
 for anything you want to keep.
 
-## Opinionated where it matters
-
-Draft Canvas understands architectural relationships: a service writes to a database, a queue is
-consumed (not published into), topics fan out. It nudges you toward sensible defaults and flags
-unusual pairings — but never blocks a connection you drew on purpose.
-
-See [docs/SEMANTICS.md](docs/SEMANTICS.md) for the exact rules.
-
 ## Docs
 
 - [Architecture](docs/ARCHITECTURE.md) — how it works and why
