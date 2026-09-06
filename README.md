@@ -52,8 +52,3 @@ for anything you want to keep.
 
 Bugs, features, and PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Follows a standard
 [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## License
-
-[Apache 2.0](LICENSE). The name and logo identify this project. Forking and modifying the code is
-welcome; don't present a fork as official.
