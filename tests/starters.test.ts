@@ -220,20 +220,23 @@ describe('buildStarter', () => {
       expect(edge!.routing).toBe('straight');
     }
 
-    // The database sits inside the boundary but carries no edges at all: a module owns its own
-    // *data*, not the shared physical store, and an arrow from a module to the one database node
-    // would misstate exactly that no matter how it's labelled. Ownership is said in plain text
-    // instead (see the two ownership annotations below), not drawn as a relationship.
+    // The database sits outside the boundary — it's a separate runtime resource, not part of the
+    // one deployable unit — and carries no edges at all: a module owns its own *data*, not the
+    // shared physical store, and an arrow from a module (or from the boundary itself, which has
+    // no capability-matrix category of its own to infer a relationship from) to the one database
+    // node would misstate exactly that no matter how it's labelled. Ownership is said in plain
+    // text instead (the one ownership annotation below), not drawn as a relationship.
     const database = nodes.find((node) => node.databaseKind === 'sql')!;
-    expect(database.parentId).toBe(app.id);
+    expect(database.parentId).toBeUndefined();
     expect(edges.some((e) => e.source === database.id || e.target === database.id)).toBe(false);
 
-    // The two stacked ownership annotations — what the database's own edgeless-ness can't say on
-    // its own.
-    const ownershipNotes = nodes.filter((node) => node.type === 'text' && node.parentId === app.id);
-    expect(ownershipNotes.map((node) => node.text)).toEqual(
-      expect.arrayContaining(['Single deployment', 'Module-owned data', 'Payments | Orders | Customer']),
-    );
+    // The boundary's own subtitle, and the database's single ownership annotation — no repeated
+    // module-name list; the modules are already visible in the row above.
+    const subtitle = nodes.find((node) => node.parentId === app.id && node.type === 'text');
+    expect(subtitle?.text).toBe('Single deployable unit');
+    const ownershipNote = nodes.find((node) => node.type === 'text' && node.parentId !== app.id);
+    expect(ownershipNote?.text).toBe('Module-owned data');
+    expect(nodes.some((node) => node.text === 'Payments | Orders | Customer')).toBe(false);
   });
 
   it('models event-driven flow as publish then fan-out, with no fake request/response', () => {

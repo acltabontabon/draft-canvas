@@ -147,18 +147,20 @@ const monolith: ArchitectureStarter = {
  * architecture, a request-fan-out bus, or a linear pipeline — the four misreadings a Modular
  * Monolith most needs to avoid.
  *
- * The outer boundary reads `Application` / `Single deployment`, not `Application` under a fixed
- * `DEPLOYMENT` tag. `boundaryPreset: 'deployment'`'s caption is a closed vocabulary word
+ * The outer boundary reads `Application` / `Single deployable unit`, not `Application` under a
+ * fixed `DEPLOYMENT` tag. `boundaryPreset: 'deployment'`'s caption is a closed vocabulary word
  * (`nodes/describe.ts`'s `BOUNDARY_PRESET_LABELS`) — there's no way to make it say anything but
- * `DEPLOYMENT` — so saying the actual phrase "single deployment" means dropping the preset
- * caption (`boundaryPreset: 'boundary'`, the same choice Hexagonal already made for `Application
- * Core`) and adding one small `annotation: true` text node directly under the boundary's own
- * title, the identical technique already used for `Inbound ports`/`Outbound ports` there and for
+ * `DEPLOYMENT` — so saying the actual phrase means dropping the preset caption
+ * (`boundaryPreset: 'boundary'`, the same choice Hexagonal already made for `Application Core`)
+ * and adding one small `annotation: true` text node directly under the boundary's own title, the
+ * identical technique already used for `Inbound ports`/`Outbound ports` there and for
  * `Module-owned data` below. `Application` stays the one real title (primary, in `groupTitle`);
- * `Single deployment` rides the quiet annotation style (secondary, muted, no chip). Everything
- * that belongs to the monolith — `API`, all three modules, and now the database itself — sits
- * inside this one boundary: nothing here gets its own separate boundary, which is precisely what
- * would turn this into Microservices.
+ * `Single deployable unit` rides the quiet annotation style (secondary, muted, no chip) — and
+ * says, specifically, *unit*: this boundary is the one thing that gets built and shipped as a
+ * single artifact, not a generic "everything the application owns" container. That distinction is
+ * what earns the database its place *outside* it (see below). `API` and all three modules still
+ * sit inside this one boundary: nothing here gets its own separate boundary, which is precisely
+ * what would turn this into Microservices.
  *
  * `Payments`, `Orders`, and `Customer` are `Component`/`module` nodes, not empty boundaries. An
  * empty boundary box says "here is a zone" and nothing else — it can't be the hero of a diagram,
@@ -210,26 +212,36 @@ const monolith: ArchitectureStarter = {
  * load-bearing for what this starter is actually about: modules, their explicit contract, and
  * their data.
  *
- * The database sits *inside* the one `Application` boundary, directly beneath the module row — a
- * modular monolith's database is not an external dependency the way a third-party API is; it
- * ships as part of the one deployable unit. It carries no edges from the modules at all — an
- * earlier revision drew `Payments → Application Database`/`Orders → …`/`Customer → …`, each
- * labelled `owns`, but every one of those edges necessarily starts at a *module* and ends at the
- * *database node itself*, so the arrow's own endpoints say "Payments owns [the] Application
- * Database" no matter what word labels it — three modules can't each own the same one node
- * without that reading like three overlapping claims on the same thing, which is exactly
- * backwards: the modules own their *data*, not the shared physical store that happens to hold it.
- * There is no datastore-compartment primitive in Draft Canvas to draw "Payments' own slice" as a
- * distinct, connectable thing (only a whole `database` node, never a piece of one), so the
- * accurate claim is said the only way it can be here — as plain text, not a drawn relationship.
- * `Application Database` is sized to `MODULE`'s own width (176, not `STORE`'s default 148) because
- * its label needs the room on a single line — a data-store cylinder's caption never wraps
- * (`nodes/describe.ts`'s `dataStoreCylinder`) — and two short annotations stack directly beneath
- * it: `Module-owned data` names the property, and `Payments | Orders | Customer` names who
- * specifically owns a slice, in the same left-to-right order as the module row above. Both are
- * plain `annotation: true` text, never a fake per-module node or a schema/table visualization —
- * exactly the restraint Hexagonal's own port labels already established for a concept with no
- * dedicated primitive yet.
+ * The database sits *outside* the one `Application` boundary, centred directly beneath it — the
+ * boundary is the single deployable *unit*, and a database is normally its own separate runtime
+ * resource, not something that ships inside the same deployed artifact as the application code. A
+ * previous revision moved it inside on the reasoning that a modular monolith's database "ships as
+ * part of the one deployable unit"; that blurred exactly the distinction `Single deployable unit`
+ * now exists to draw, and is reverted here. Placement alone still keeps it visibly, unambiguously
+ * associated with the application above it: centred on the same axis, one ordinary gap below,
+ * with nothing else nearby it could be mistaken for belonging to.
+ *
+ * It carries no edges at all — not from the modules, and not from the boundary either. An earlier
+ * revision drew `Payments → Application Database`/`Orders → …`/`Customer → …`, each labelled
+ * `owns`, but every one of those edges necessarily starts at a *module* and ends at the *database
+ * node itself*, so the arrow's own endpoints say "Payments owns [the] Application Database" no
+ * matter what word labels it — three modules can't each own the same one node without that
+ * reading like three overlapping claims on the same thing, which is exactly backwards: the
+ * modules own their *data*, not the shared physical store that happens to hold it. A single
+ * `Application → Application Database` edge from the boundary itself was considered too (one
+ * high-level "the application persists here" relationship, not a per-module claim) — but a
+ * `group` node has no category of its own in `connectorSemantics.ts` (`categoryOf` falls through
+ * to `'generic'`), and the capability matrix's own doc comment lists "anything touching a generic
+ * node" among its deliberately-absent pairs: there is no inferred relationship here for a starter
+ * to draw, and hand-labelling an edge the matrix has no opinion on at all would say something the
+ * rest of the app doesn't actually agree with — the one thing `docs/ARCHITECTURE.md`'s own rule
+ * for this file ("relationships come from the matrix, never from the catalog") exists to prevent.
+ * So: no edge, from anything, to the database. `Application Database` is sized to `MODULE`'s own
+ * width (176, not `STORE`'s default 148) because its label needs the room on a single line — a
+ * data-store cylinder's caption never wraps (`nodes/describe.ts`'s `dataStoreCylinder`) — and one
+ * short annotation, `Module-owned data`, stacks directly beneath it: the one plain-language claim
+ * placement and a bare edgeless node can't make on their own, without repeating the module names
+ * already visible in the row above.
  */
 /** The one inbound interface of the monolith — a routing/dispatch adapter, not an independently
  *  deployable network peer. Kept at Component's own default footprint (`document/limits.ts`'s
@@ -255,35 +267,36 @@ const FAN_OFFSETS = [0.25, 0.5, 0.75] as const;
  *  starter's children, so this node satisfies it by construction. */
 const MODULAR_SUBTITLE_Y = BOUNDARY_HEADER_CAPTION_ONLY;
 /** Shared by every small `annotation: true` label in this starter — the boundary's own `Single
- *  deployment` subtitle and the database's two ownership notes — so all read as the same quiet,
- *  deliberate touch rather than unrelated afterthoughts. Width reuses `MODULE`'s own 176: the
- *  longest of the four, `Payments | Orders | Customer`, measures ~140px at this style's real font
- *  metrics (`connectorCaption`, 9.5px/500) — measured directly in a canvas context, not estimated,
- *  since the fallback text measurer this repo's own test environment uses under-measures real
- *  browser font metrics by a wide enough margin to pass a check here and still visibly clip live. */
+ *  deployable unit` subtitle and the database's `Module-owned data` note — so both read as the
+ *  same quiet, deliberate touch rather than two different afterthoughts. Width reuses `MODULE`'s
+ *  own 176, comfortably past what either text needs at this style's real font metrics
+ *  (`connectorCaption`, 9.5px/500, measured directly in a canvas context rather than estimated —
+ *  the fallback text measurer this repo's own test environment uses under-measures real browser
+ *  font metrics by a wide enough margin to pass a narrower check here and still visibly clip live).
+ */
 const MODULAR_NOTE = { width: MODULE.width, height: 24 };
 const MODULAR_NOTE_GAP = 8;
-// Clears the `Single deployment` subtitle before the API begins — `BOUNDARY_HEADER` alone (sized
-// for a preset caption + title, not a title + a second annotation line) would overlap it.
+// Clears the `Single deployable unit` subtitle before the API begins — `BOUNDARY_HEADER` alone
+// (sized for a preset caption + title, not a title + a second annotation line) would overlap it.
 const MODULAR_API_Y = MODULAR_SUBTITLE_Y + MODULAR_NOTE.height + MODULAR_NOTE_GAP;
 // `INNER_BAND`, not the fuller `BAND`: each API→module connector is now its own independent,
 // `routeMode: 'direct'` line rather than a bundled trunk (see this block's own doc comment), so
 // there's no shared-corridor routing to plan extra room for — only an ordinary single-relationship
 // caption gap, the same one Monolith's own API→logic edge uses inside its boundary.
 const MODULAR_MODULES_Y = MODULAR_API_Y + API.height + INNER_BAND;
+// The module row is the last thing the boundary contains — the database moved back outside it
+// (see this block's own doc comment) — so `BOUNDARY_PAD` closes the boundary directly beneath it.
+const MODULAR_BOUNDARY_HEIGHT = MODULAR_MODULES_Y + MODULE.height + BOUNDARY_PAD;
+const MODULAR_BOUNDARY_WIDTH = MODULAR_INNER_WIDTH + BOUNDARY_PAD * 2;
 /** `MODULE`'s width, not `STORE`'s default 148: "Application Database" needs the room on a single
  *  line — a data-store cylinder's caption never wraps (`nodes/describe.ts`'s `dataStoreCylinder`).
  */
 const DATABASE_BOX = { width: MODULE.width, height: STORE.height };
-// Inside the boundary now, directly beneath the module row — an ordinary internal layer gap.
-const MODULAR_DATABASE_Y = MODULAR_MODULES_Y + MODULE.height + INNER_BAND;
+// `INNER_BAND`, not the fuller `BAND`: with no edge connecting the boundary to the database (see
+// this block's own doc comment), there's no routing corridor to plan room for — only enough gap
+// to read as clearly its own separate runtime resource, not a part the boundary forgot to include.
+const MODULAR_DATABASE_Y = MODULAR_BOUNDARY_HEIGHT + INNER_BAND;
 const MODULAR_NOTE_Y = MODULAR_DATABASE_Y + DATABASE_BOX.height + MODULAR_NOTE_GAP;
-// Tight, not `MODULAR_NOTE_GAP`: these two lines are one caption block ("what" then "who"), the
-// same close spacing `nameGap` gives a database's own stacked name/kind pair in `describe.ts`.
-const MODULAR_NOTE2_Y = MODULAR_NOTE_Y + MODULAR_NOTE.height + 2;
-// The boundary now closes beneath the ownership annotations, the last thing it contains.
-const MODULAR_BOUNDARY_HEIGHT = MODULAR_NOTE2_Y + MODULAR_NOTE.height + BOUNDARY_PAD;
-const MODULAR_BOUNDARY_WIDTH = MODULAR_INNER_WIDTH + BOUNDARY_PAD * 2;
 
 const modularMonolith: ArchitectureStarter = {
   id: 'modular-monolith',
@@ -309,7 +322,7 @@ const modularMonolith: ArchitectureStarter = {
     },
     {
       // `'boundary'`, not `'deployment'`: that preset's caption is the fixed word `DEPLOYMENT`,
-      // and this starter says the actual phrase "single deployment" instead, via the plain
+      // and this starter says the actual phrase "single deployable unit" instead, via the plain
       // annotation right below (`app-subtitle`) — the same "preset caption is a closed
       // vocabulary, an annotation is free text" split Hexagonal already established.
       key: 'app',
@@ -329,7 +342,7 @@ const modularMonolith: ArchitectureStarter = {
       // house child-inset rule, not to the boundary's own hand-drawn label position.
       key: 'app-subtitle',
       type: 'text',
-      text: 'Single deployment',
+      text: 'Single deployable unit',
       annotation: true,
       parent: 'app',
       x: MODULAR_INNER_LEFT,
@@ -380,40 +393,27 @@ const modularMonolith: ArchitectureStarter = {
       ...MODULE,
     },
     {
-      // Inside `app` now, not outside it — see this block's own doc comment.
+      // Outside `app`, not inside it — see this block's own doc comment. Centred on the same
+      // `MODULAR_CX` axis as everything above it, so the association reads from alignment alone.
       key: 'database',
       type: 'database',
       databaseKind: 'sql',
       text: 'Application Database',
       accent: 'blue',
-      parent: 'app',
       x: centeredAt(MODULAR_CX, DATABASE_BOX.width),
       y: MODULAR_DATABASE_Y,
       ...DATABASE_BOX,
     },
     {
       // A plain, zero-semantics annotation (never a Component/Note standing in for the concept) —
-      // stacked directly beneath the database so it reads as the database's own caption, not a
-      // detached label. Names the property; `data-ownership-who` below names who holds it.
+      // stacked directly beneath the database so it reads as its own caption, not a detached
+      // label. No module-name list here: the modules are already visible in the row above.
       key: 'data-ownership-note',
       type: 'text',
       text: 'Module-owned data',
       annotation: true,
-      parent: 'app',
       x: centeredAt(MODULAR_CX, MODULAR_NOTE.width),
       y: MODULAR_NOTE_Y,
-      ...MODULAR_NOTE,
-    },
-    {
-      // No drawn edge says this instead — see this block's own doc comment for why an edge from
-      // each module to the one database node would misstate the claim no matter how it's labelled.
-      key: 'data-ownership-who',
-      type: 'text',
-      text: 'Payments | Orders | Customer',
-      annotation: true,
-      parent: 'app',
-      x: centeredAt(MODULAR_CX, MODULAR_NOTE.width),
-      y: MODULAR_NOTE2_Y,
       ...MODULAR_NOTE,
     },
   ],
