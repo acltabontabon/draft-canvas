@@ -146,6 +146,11 @@ test.describe('attachments', () => {
     const serviceCenter = { x: serviceBox.x + serviceBox.width / 2, y: serviceBox.y + serviceBox.height / 2 };
 
     const release = await dragNodeCenterTo(page, code, serviceCenter);
+    // Same wait every other full-overlap attach test in this file does before releasing — the
+    // instant-arm path is still set on the drag's last frame (`Canvas.tsx`'s `onNodesChange`),
+    // which can land via `requestAnimationFrame` slightly after the synthetic move resolves.
+    // Releasing before the armed affordance is visible races that frame.
+    await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
     await release();
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
 
@@ -191,6 +196,8 @@ test.describe('attachments', () => {
       x: serviceCenter.x,
       y: serviceCenter.y,
     });
+    // Same wait as the first attach above — see that comment.
+    await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
     await release2();
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
 
