@@ -72,6 +72,21 @@ const TRUNK_BIAS = 0.62;
 /** Clearance kept between the trunk and any node it would otherwise run through. */
 const TRUNK_OBSTACLE_MARGIN = 20;
 
+/**
+ * Total obstacle-rect checks a single `computePlan` call may spend across every
+ * group it considers, counted in `runBlocked`. `planTrunkGap` searches outward
+ * from the preferred gap in `TRUNK_QUANTUM` steps, and each step re-tests every
+ * obstacle for the hub's stem, the trunk, and every branch — with enough nodes,
+ * a wide corridor, and several qualifying fan-out groups in one diagram, that
+ * search has no natural upper bound and can block the main thread for a very
+ * long time. A budget this generous never engages for an ordinary diagram (it
+ * comfortably covers dozens of large fans against a diagram of a few hundred
+ * nodes); past it, the remaining groups simply route independently — already
+ * the correct, designed fallback for "nothing clears" — rather than the whole
+ * canvas hanging.
+ */
+const MAX_ROUTING_PLAN_OPS = 500_000;
+
 const OPPOSITE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
 const isHorizontalSide = (side: Side) => side === 'left' || side === 'right';
 
@@ -218,7 +233,9 @@ function runBlocked(
   x2: number,
   y2: number,
   obstacles: readonly Rect[],
+  budget: { remaining: number },
 ): boolean {
+  budget.remaining -= obstacles.length;
   const loX = Math.min(x1, x2) - TRUNK_OBSTACLE_MARGIN;
   const hiX = Math.max(x1, x2) + TRUNK_OBSTACLE_MARGIN;
   const loY = Math.min(y1, y2) - TRUNK_OBSTACLE_MARGIN;
@@ -249,6 +266,7 @@ function planTrunkGap(
   members: readonly Candidate[],
   hub: 'source' | 'target',
   obstacles: readonly Rect[],
+  budget: { remaining: number },
 ): { gap: number; corridor: number } | null {
   const outward = hubSide === 'right' || hubSide === 'bottom' ? 1 : -1;
   const start = hubFace(hubRect, hubSide);
@@ -279,16 +297,16 @@ function planTrunkGap(
     const enter = at(gap, hubCross);
     const hubPoint = verticalTrunk ? { x: start, y: hubCross } : { x: hubCross, y: start };
     // The shared stem out of the hub.
-    if (runBlocked(hubPoint.x, hubPoint.y, enter.x, enter.y, obstacles)) return true;
+    if (runBlocked(hubPoint.x, hubPoint.y, enter.x, enter.y, obstacles, budget)) return true;
     // The trunk itself, across the whole range its branches tap off over.
     const trunkLo = at(gap, crossFrom);
     const trunkHi = at(gap, crossTo);
-    if (runBlocked(trunkLo.x, trunkLo.y, trunkHi.x, trunkHi.y, obstacles)) return true;
+    if (runBlocked(trunkLo.x, trunkLo.y, trunkHi.x, trunkHi.y, obstacles, budget)) return true;
     // And every branch's own run in to its far node.
     return branches.some((branch) => {
       const tap = at(gap, branch.cross);
       const end = verticalTrunk ? { x: branch.face, y: branch.cross } : { x: branch.cross, y: branch.face };
-      return runBlocked(tap.x, tap.y, end.x, end.y, obstacles);
+      return runBlocked(tap.x, tap.y, end.x, end.y, obstacles, budget);
     });
   };
 
@@ -297,6 +315,7 @@ function planTrunkGap(
   // Walk outward and inward together, so the trunk lands on the nearest clear
   // position on either side rather than always drifting one way.
   for (let step = TRUNK_QUANTUM; step <= usable; step += TRUNK_QUANTUM) {
+    if (budget.remaining <= 0) return null;
     for (const gap of [first + step, first - step]) {
       if (gap < MIN_STEM || gap > usable) continue;
       if (!blocked(gap)) return { gap, corridor: nearest };
@@ -380,7 +399,13 @@ function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): 
     (a, b) => b.members.length - a.members.length || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
   );
 
+  // Shared across every group this call considers — see `MAX_ROUTING_PLAN_OPS`.
+  // Groups are sorted largest-first, so a budget cutoff mid-diagram still
+  // bundles the fans that tidy the most lines before falling back.
+  const budget = { remaining: MAX_ROUTING_PLAN_OPS };
+
   for (const group of ordered) {
+    if (budget.remaining <= 0) break;
     const free = group.members.filter((candidate) => !assigned.has(candidate.edge.id));
     if (free.length < MIN_SPINE_MEMBERS) continue;
 
@@ -417,6 +442,7 @@ function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): 
       free,
       group.hub,
       obstacles.filter((entry) => !endpoints.has(entry.id)).map((entry) => entry.rect),
+      budget,
     );
     if (placed === null) continue;
 

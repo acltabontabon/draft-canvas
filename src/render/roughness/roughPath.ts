@@ -13,7 +13,7 @@ function parseSegments(d: string): PathSegment[] {
   const commandRe = /([MLQC])([^MLQC]*)/g;
   let match: RegExpExecArray | null;
   while ((match = commandRe.exec(d))) {
-    const nums = (match[2].match(NUMBER_RE) ?? []).map(Number);
+    const nums = (match[2]?.match(NUMBER_RE) ?? []).map(Number);
     segments.push({ cmd: match[1]!, nums });
   }
   return segments;

@@ -401,6 +401,16 @@ describe('reconnectEdge', () => {
     expect(reconnectEdge(doc, 'missing', 'source', 'c', 'bottom')).toBe(doc);
   });
 
+  it('is a no-op rather than creating a dangling reference for an unknown target node id', () => {
+    // Guards the same invariant `addEdges` already enforces for new edges: a reconnect must never
+    // leave an edge pointing at a node that doesn't exist, e.g. one deleted by a concurrent action
+    // in the moment between the drop and this call committing.
+    const doc = fixture();
+    const next = reconnectEdge(doc, 'e1', 'source', 'does-not-exist', 'bottom');
+    expect(next).toBe(doc);
+    expect(next.edges[0]!.source).toBe('a');
+  });
+
   it('is one undo step through the store', () => {
     __resetInteraction();
     useEditorStore.setState({

@@ -35,7 +35,7 @@ describe('initServiceWorker', () => {
     );
     expect(onUpdateReady).not.toHaveBeenCalled();
 
-    registerSWMock.mock.calls[0][0].onNeedRefresh();
+    registerSWMock.mock.calls[0]![0].onNeedRefresh();
     expect(onUpdateReady).toHaveBeenCalledOnce();
 
     activate?.();

@@ -84,6 +84,32 @@ describe('undo and redo', () => {
     expect(store.getState().history.past).toHaveLength(before + 2);
   });
 
+  it('a second beginInteraction before the first is closed auto-closes it as its own entry', () => {
+    // Adversarial case: a resize interrupted by a drag starting on the same node before
+    // `onResizeEnd` fires (e.g. a fast pointer sequence) would call `beginInteraction` twice with
+    // no `endInteraction` in between. Regression for a real bug: `beginInteraction` used to
+    // overwrite `interaction` unconditionally, silently rebasing the new gesture's "before" onto
+    // the first gesture's already-mutated document — permanently baking the first gesture's change
+    // into the document with no way to undo it on its own. It must instead auto-close the still-open
+    // interaction as its own history entry before starting the new one.
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0, width: 176, height: 68 });
+    const before = store.getState().history.past.length;
+
+    store.getState().beginInteraction('Resize');
+    store.getState().updateNodeById(node.id, { width: 260 }, 'Resize');
+
+    store.getState().beginInteraction('Move');
+    store.getState().commitPositions(new Map([[node.id, { x: 50, y: 0 }]]));
+    store.getState().endInteraction();
+
+    expect(store.getState().history.past).toHaveLength(before + 2);
+    store.getState().undo();
+    expect(store.getState().document.nodes[0]!.x).toBe(0);
+    expect(store.getState().document.nodes[0]!.width).toBe(260);
+    store.getState().undo();
+    expect(store.getState().document.nodes[0]!.width).toBe(176);
+  });
+
   it('creates no entry for a click that moved nothing', () => {
     const node = store.getState().addNode({ type: 'note', x: 10, y: 10 });
     const before = store.getState().history.past.length;
@@ -331,5 +357,19 @@ describe('undo and redo', () => {
     const before = store.getState().history.past.length;
     store.getState().cutSelection();
     expect(store.getState().history.past.length).toBe(before);
+  });
+
+  it('caps history at HISTORY_LIMIT, dropping the oldest entries without corrupting the stack', () => {
+    for (let i = 0; i < 200; i += 1) {
+      store.getState().addNode({ type: 'note', x: i, y: 0, text: String(i) });
+    }
+    const past = store.getState().history.past;
+    expect(past).toHaveLength(150);
+    // The oldest surviving entry is #50 (0-indexed nodes 0..49 fell off the front).
+    expect(past[0]!.after.nodes.at(-1)!.text).toBe('50');
+    expect(past.at(-1)!.after.nodes.at(-1)!.text).toBe('199');
+
+    store.getState().undo();
+    expect(store.getState().document.nodes.at(-1)!.text).toBe('198');
   });
 });

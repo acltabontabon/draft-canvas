@@ -4,6 +4,15 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Opening or importing a large diagram with many connections fanning out from (or into) the same
+  component could freeze the tab for a very long time. Smart Routing's connector-bundling now
+  gives up cleanly on the rare corridor it can't fit in time, instead of searching indefinitely.
+- Interrupting a drag or resize with another gesture before it finished (for example, starting a
+  new drag on the same element in quick succession) could bake the interrupted change into the
+  document with no way to undo it on its own. It now always gets its own undo step.
+
 ## [0.5.0] - 2026-09-06
 
 ### Added

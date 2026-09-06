@@ -209,6 +209,44 @@ describe('importing untrusted files', () => {
     expect(Number.isFinite(result.document.viewport.x)).toBe(true);
   });
 
+  it('repairs malformed attachments instead of letting them poison the node', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        {
+          id: 'a',
+          type: 'service',
+          x: 0,
+          y: 0,
+          attachments: [
+            'not an object',
+            { id: 'dup', type: 'note', text: 'first' },
+            { id: 'dup', type: 'note', text: 'second, same id as the one before' },
+            { type: 'bogus-type', text: 'unknown attachment type' },
+            { id: 'sized', type: 'note', width: 'nope', height: -999999 },
+            ...Array.from({ length: LIMITS.maxAttachmentsPerNode + 5 }, (_, i) => ({
+              id: `extra${i}`,
+              type: 'note',
+              text: `overflow ${i}`,
+            })),
+          ],
+        },
+      ],
+      edges: [],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const attachments = result.document.nodes[0]!.attachments ?? [];
+    // Capped, non-object entries dropped, and every surviving id is unique.
+    expect(attachments.length).toBeLessThanOrEqual(LIMITS.maxAttachmentsPerNode);
+    expect(new Set(attachments.map((a) => a.id)).size).toBe(attachments.length);
+    for (const attachment of attachments) {
+      if (attachment.width !== undefined) expect(Number.isFinite(attachment.width)).toBe(true);
+      if (attachment.height !== undefined) expect(Number.isFinite(attachment.height)).toBe(true);
+    }
+  });
+
   it('strips control characters from text but keeps newlines and tabs', () => {
     const result = parse({
       ...base,

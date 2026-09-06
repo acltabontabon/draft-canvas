@@ -13,7 +13,7 @@ canvas/            interaction: selection, dragging, snapping, connecting
 document/          the document model — pure, serializable, framework-free
   ↓
 storage/           IndexedDB persistence and autosave
-export/            .draftcanvas, SVG and PNG
+export/            .draftcanvas, SVG, PNG and GIF
 ```
 
 Dependencies point one way. `document/` imports neither React nor React Flow, which is what lets

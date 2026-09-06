@@ -19,10 +19,14 @@ import type {
 } from './types';
 
 const clampCoord = (n: number) =>
-  Math.max(-LIMITS.maxCoordinate, Math.min(LIMITS.maxCoordinate, Math.round(n)));
+  Number.isFinite(n)
+    ? Math.max(-LIMITS.maxCoordinate, Math.min(LIMITS.maxCoordinate, Math.round(n)))
+    : 0;
 
 const clampSize = (n: number) =>
-  Math.max(LIMITS.minNodeSize, Math.min(LIMITS.maxNodeSize, Math.round(n)));
+  Number.isFinite(n)
+    ? Math.max(LIMITS.minNodeSize, Math.min(LIMITS.maxNodeSize, Math.round(n)))
+    : LIMITS.minNodeSize;
 
 /** `attachment.width`/`height` should always be set by `createAttachment` — this is a safety
  *  net for attachments predating that guarantee (e.g. loaded from an older saved document). */
@@ -126,6 +130,10 @@ export function reconnectEdge(
   newSide: Side | undefined,
   newOffset = 0.5,
 ): DraftDocument {
+  // Mirrors `addEdges`' own guard: a reconnect racing a concurrent delete of the node being
+  // dropped onto (or handed a stale id from any other caller) must never leave the edge pointing
+  // at a node that no longer exists.
+  if (!doc.nodes.some((node) => node.id === newNodeId)) return doc;
   const anchor = newSide ? { side: newSide, offset: newOffset } : undefined;
   let changed = false;
   const edges = doc.edges.map((edge) => {

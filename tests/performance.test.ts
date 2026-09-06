@@ -364,4 +364,22 @@ describe('drag hit-testing at the schema node/edge ceiling', () => {
     // not to police milliseconds on a variable CI machine.
     expect(performance.now() - started).toBeLessThan(25_000);
   });
+
+  /**
+   * Regression for a real hang found manually driving the app at this scale:
+   * `computePlan`'s trunk-gap search (`planTrunkGap`/`runBlocked` in
+   * `edges/bundles.ts`) re-tests every obstacle node on every `TRUNK_QUANTUM`
+   * step of the corridor, for every qualifying fan-out group — a cost with no
+   * upper bound as node/edge count grows, unlike the O(n) hit-testing above.
+   * At this document's scale it froze the browser's main thread for well over
+   * a minute before `MAX_ROUTING_PLAN_OPS` capped the total work. `doc`'s own
+   * "plans routing spines... within budget" test above only exercises the
+   * 100-node fixture, which never had enough obstacles or corridor width to
+   * reach the pathological case — this is the ceiling-scale counterpart.
+   */
+  it('plans routing spines for a 5,000-node document without hanging the main thread', () => {
+    const started = performance.now();
+    routingPlan(ceilingDoc.nodes, ceilingDoc.edges);
+    expect(performance.now() - started).toBeLessThan(5_000);
+  });
 });

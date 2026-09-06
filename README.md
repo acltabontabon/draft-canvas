@@ -45,6 +45,7 @@ for anything you want to keep.
 
 - [Architecture](docs/ARCHITECTURE.md) — how it works and why
 - [Diagram semantics](docs/SEMANTICS.md) — what it understands about your diagrams
+- [Schema and versioning](docs/SCHEMA.md) — the `.draftcanvas` format and its migration contract
 - [Privacy](docs/PRIVACY.md) — what's stored where
 - [Contributing](CONTRIBUTING.md) — how to run it locally
 

@@ -662,6 +662,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   beginInteraction(label) {
+    // A still-open interaction here means the gesture that should have called `endInteraction`
+    // never did (e.g. a resize interrupted mid-drag by a new gesture starting on the same node
+    // before its own end event fires). Closing it out first — rather than overwriting `interaction`
+    // with a fresh baseline — keeps that earlier gesture's change on the undo stack as its own
+    // entry instead of silently baking it into whatever comes next with no way to undo it alone.
+    if (interaction) get().endInteraction();
     const state = get();
     interaction = { label, document: state.document, selection: state.selection };
   },

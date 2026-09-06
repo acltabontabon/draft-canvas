@@ -82,6 +82,14 @@ describe('document model', () => {
     expect(next.nodes[0]!.width).toBeGreaterThanOrEqual(24);
   });
 
+  it('never lets a non-finite coordinate or size patch through as NaN/Infinity', () => {
+    const { doc, a } = sample();
+    const next = updateNode(doc, a.id, { x: NaN, y: Infinity, width: NaN, height: -Infinity });
+    for (const value of [next.nodes[0]!.x, next.nodes[0]!.y, next.nodes[0]!.width, next.nodes[0]!.height]) {
+      expect(Number.isFinite(value)).toBe(true);
+    }
+  });
+
   it('falls back to a placeholder for a blank title', () => {
     expect(setTitle(createDocument(), '   ').metadata.title).toBe('Untitled canvas');
   });

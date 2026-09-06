@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDocument, createEdge, createNode } from '../src/document/factory';
+import { createAttachment, createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
 import { addFlow, createFlow } from '../src/document/flow';
 import { deserializeDocument, serializeDocument, fileNameFor } from '../src/export/project';
@@ -31,6 +31,10 @@ function richDocument() {
     text: 'Why is this retried twice?',
     noteKind: 'question',
   });
+  note.attachments = [createAttachment({ type: 'note', text: 'Follow up with the payments team' })];
+
+  const boundary = createNode({ type: 'group', x: 20, y: 40, width: 420, height: 300, text: 'Order domain' });
+  db.parentId = boundary.id;
 
   const published = createEdge({
     source: service.id,
@@ -40,7 +44,7 @@ function richDocument() {
   const persisted = createEdge({ source: service.id, target: db.id });
   persisted.details = { language: 'sql', code: 'select * from orders where id = ?' };
 
-  let doc = addNodes(createDocument('Payment Flow'), [service, queue, db, code, note]);
+  let doc = addNodes(createDocument('Payment Flow'), [service, queue, db, code, note, boundary]);
   doc = addEdges(doc, [published, persisted]);
   const flow = createFlow({ title: 'Happy path' });
   flow.steps = [

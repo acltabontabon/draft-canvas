@@ -91,5 +91,7 @@ Comments explain *why*, not *what*. Several of the ones in `Canvas.tsx`, `autosa
 ## Documentation
 
 `docs/ARCHITECTURE.md` (the reasoning behind every boundary, plus the `.draftcanvas` format and
-flows/presentation) · `docs/SEMANTICS.md` (the connector capability matrix) · `docs/PRIVACY.md` ·
-`SECURITY.md` (threat model and key lifecycle) · `CHANGELOG.md` (user-facing release notes)
+flows/presentation) · `docs/SEMANTICS.md` (the connector capability matrix) ·
+`docs/SCHEMA.md` (schema version history and the migration/import-validation contract) ·
+`docs/PRIVACY.md` · `SECURITY.md` (threat model and key lifecycle) ·
+`CHANGELOG.md` (user-facing release notes)
