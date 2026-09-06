@@ -53,11 +53,6 @@ for anything you want to keep.
 Bugs, features, and PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Follows a standard
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## Status
-
-v0.5.0. See [CHANGELOG.md](CHANGELOG.md) for release history. Gated by test coverage and browser
-verification; pre-1.0 means the shape can still change.
-
 ## License
 
 [Apache 2.0](LICENSE). The name and logo identify this project. Forking and modifying the code is
