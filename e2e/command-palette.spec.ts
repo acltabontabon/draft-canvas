@@ -113,18 +113,39 @@ test.describe('command palette — jump', () => {
 });
 
 test.describe('command palette — discoverability', () => {
-  test('a selected node teaches ⌘K once its own hint is dismissed, until the palette has opened', async ({ page }) => {
+  test('a node with its own hint teaches that first, dismissibly, only while Learn mode is on', async ({
+    page,
+  }) => {
     await newCanvas(page, 'Palette hint');
-    // Created from the toolbar on purpose: opening the palette is what retires the ⌘K hint, so
-    // it must not have opened yet when the hint chain is checked.
+    // Hints only ever surface while Learn Draft Canvas mode is on (see HintStrip.tsx) — nothing
+    // shows before the toggle, and dismissing one hides it for the rest of the session.
     await page.getByRole('button', { name: 'Note', exact: true }).click();
     await page.locator('.react-flow__pane').click({ position: { x: 400, y: 300 } });
     await page.keyboard.press('Escape');
     await page.locator('.dc-node').first().click();
+    await expect(page.locator('.dc-hint-strip')).toHaveCount(0);
 
+    await page.getByRole('button', { name: 'Learn Draft Canvas' }).click();
     const strip = page.locator('.dc-hint-strip');
     await expect(strip).toContainText('Attach a note or code snippet');
     await strip.getByRole('button', { name: 'Dismiss hint' }).click();
+    await expect(strip).toHaveCount(0);
+
+    // Re-selecting the same node keeps it dismissed for the rest of this session.
+    await page.keyboard.press('Escape');
+    await page.locator('.dc-node').first().click();
+    await expect(strip).toHaveCount(0);
+  });
+
+  test('an element with no hint of its own teaches ⌘K instead, until the palette has opened', async ({ page }) => {
+    await newCanvas(page, 'Palette hint — boundary');
+    await page.getByRole('button', { name: 'Learn Draft Canvas' }).click();
+    // A boundary has no attachment/semantics hint of its own, so it falls straight to the ⌘K hint.
+    await page.locator('.react-flow__pane').click({ button: 'right', position: { x: 400, y: 300 } });
+    await page.getByRole('menuitem', { name: 'Add Boundary' }).click();
+    await expect(page.locator('.dc-node[data-type="group"][data-selected="true"]')).toHaveCount(1);
+
+    const strip = page.locator('.dc-hint-strip');
     await expect(strip).toContainText('to act on this from the keyboard');
 
     await openPalette(page);

@@ -438,8 +438,8 @@ test.describe('editing', () => {
     await create(page, 'Note', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click();
 
-    await page.keyboard.press('Meta+c');
-    await page.keyboard.press('Meta+v');
+    await page.keyboard.press('ControlOrMeta+c');
+    await page.keyboard.press('ControlOrMeta+v');
     await expect(page.locator('.dc-node')).toHaveCount(2);
 
     await page.keyboard.press('Meta+d');
@@ -449,7 +449,7 @@ test.describe('editing', () => {
     await expect(page.locator('.dc-node')).toHaveCount(2);
 
     await page.keyboard.press('Meta+a');
-    await page.keyboard.press('Meta+x');
+    await page.keyboard.press('ControlOrMeta+x');
     await expect(page.locator('.dc-node')).toHaveCount(0);
 
     await page.keyboard.press('Meta+z');
@@ -461,14 +461,14 @@ test.describe('editing', () => {
     // reload after copying is what forces this test through the OS clipboard instead. Plain
     // Cmd/Ctrl+V itself never calls `navigator.clipboard.readText()` — it reads a native `paste`
     // event's `clipboardData` directly, which needs no permission at all — so granting
-    // `clipboard-read` here isn't what makes the later `Meta+v` work; it's what lets the
+    // `clipboard-read` here isn't what makes the later `ControlOrMeta+v` work; it's what lets the
     // `readText()` poll just below observe that the earlier `writeText()` actually landed.
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
     await newCanvas(page, 'Clipboard source');
     await create(page, 'Note', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click();
-    await page.keyboard.press('Meta+c');
+    await page.keyboard.press('ControlOrMeta+c');
     // The OS-clipboard write is fire-and-forget; wait for it to actually
     // land before navigating away, or the write's promise never resolves.
     await expect
@@ -483,7 +483,7 @@ test.describe('editing', () => {
     // the permission granted — a plain click after navigating in gives it that.
     await page.locator('.react-flow__pane').click();
 
-    await page.keyboard.press('Meta+v');
+    await page.keyboard.press('ControlOrMeta+v');
     await expect(page.locator('.dc-node')).toHaveCount(1);
   });
 

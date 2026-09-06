@@ -133,6 +133,13 @@ test.describe('contextual connector toolbar', () => {
       'Replicates',
       'CDC',
       'Syncs',
+      'Dead-letters to',
+      'Invalidates',
+      'Watches',
+      'Searches',
+      'Indexes',
+      'Routes',
+      'Triggers',
     ]);
   });
 
@@ -317,6 +324,13 @@ test.describe('Junction connector', () => {
       'Replicates',
       'CDC',
       'Syncs',
+      'Dead-letters to',
+      'Invalidates',
+      'Watches',
+      'Searches',
+      'Indexes',
+      'Routes',
+      'Triggers',
     ]);
     await page.keyboard.press('Escape');
 
