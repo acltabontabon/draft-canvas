@@ -85,7 +85,7 @@ describe('insertStarter', () => {
   it('clears one starter at a time, newest first', () => {
     store.getState().insertStarter('monolith');
     store.getState().insertStarter('event-driven');
-    expect(store.getState().document.nodes).toHaveLength(12);
+    expect(store.getState().document.nodes).toHaveLength(13);
     store.getState().undo();
     expect(store.getState().document.nodes).toHaveLength(6);
     store.getState().undo();

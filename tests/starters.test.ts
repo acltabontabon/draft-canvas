@@ -246,20 +246,66 @@ describe('buildStarter', () => {
     expect(nodes.filter((node) => node.type === 'text')).toHaveLength(1);
   });
 
-  it('models event-driven flow as publish then fan-out, with no fake request/response', () => {
+  it('models event-driven flow as one producer publishing to a topic that fans out to independent, generic-shaped consumers', () => {
     const { nodes, edges } = buildStarter(starterById('event-driven')!, { x: 0, y: 0 });
-    const topic = nodes.find((node) => node.queueKind === 'topic')!;
-    expect(edges.filter((edge) => edge.target === topic.id).map((edge) => edge.semantic)).toEqual([
-      'publishes',
-    ]);
-    const delivered = edges.filter((edge) => edge.source === topic.id);
-    expect(delivered).toHaveLength(2);
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    const edgesFrom = (id: string) => edges.filter((e) => e.source === id);
+    const edgesTo = (id: string) => edges.filter((e) => e.target === id);
+
+    const producer = byText('Producer Service');
+    const topic = byText('Domain Events');
+    const consumerA = byText('Consumer A');
+    const consumerB = byText('Consumer B');
+    const consumerC = byText('Consumer C');
+    const store = byText('Data Store');
+
+    expect(nodes.filter((n) => n.queueKind === 'topic')).toHaveLength(1);
+    expect(topic.type).toBe('queue');
+
+    // Published to exactly once, quietly (no override on the publish itself) — the producer's only edge.
+    const published = edgesTo(topic.id);
+    expect(published).toHaveLength(1);
+    expect(published[0]!.source).toBe(producer.id);
+    expect(published[0]!.semantic).toBe('publishes');
+    expect(published[0]!.label).toBeUndefined();
+    expect(edgesFrom(producer.id)).toHaveLength(1);
+
+    // Fans out to exactly three independent consumers, each a plain inferred `deliversTo`/`event`
+    // relationship with no override — left free to bundle into Smart Routing's shared trunk with one
+    // collapsed caption, since all three say the same thing about the same topic.
+    const delivered = edgesFrom(topic.id);
+    expect(delivered).toHaveLength(3);
+    expect(new Set(delivered.map((e) => e.target))).toEqual(new Set([consumerA.id, consumerB.id, consumerC.id]));
     for (const edge of delivered) {
       expect(edge.semantic).toBe('deliversTo');
       expect(edge.kind).toBe('event');
+      expect(edge.label).toBeUndefined();
+      expect(edge.routeMode).toBeUndefined();
     }
-    // Consumers own their own state; nothing reads back up the pipeline.
-    expect(edges.filter((edge) => edge.target === topic.id)).toHaveLength(1);
+
+    // Every consumer is a plain, generic Service — never defaulted to Worker.
+    for (const consumer of [consumerA, consumerB, consumerC]) {
+      expect(consumer.type).toBe('service');
+      expect(consumer.serviceKind).toBe('generic');
+    }
+
+    // Exactly one consumer owns exactly one store — not one under every column, and no consumer
+    // reaches back into the topology (no second event, no reply, no call to the producer).
+    expect(nodes.filter((n) => n.type === 'database')).toHaveLength(1);
+    const writes = edgesTo(store.id);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.source).toBe(consumerA.id);
+    expect(writes[0]!.semantic).toBe('writes');
+    expect(edgesFrom(consumerA.id)).toEqual([writes[0]]);
+    expect(edgesFrom(consumerB.id)).toHaveLength(0);
+    expect(edgesFrom(consumerC.id)).toHaveLength(0);
+
+    // Exactly five edges, exactly one event name — nothing scattered, nothing chained.
+    expect(edges).toHaveLength(5);
+    const eventLabel = byText('DomainEvent');
+    expect(eventLabel.type).toBe('text');
+    expect(eventLabel.annotation).toBe(true);
+    expect(eventLabel.parentId).toBeUndefined();
   });
 
   it('keeps hexagonal technology outside the core and its ports on one vertical axis each', () => {

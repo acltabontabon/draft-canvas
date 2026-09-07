@@ -536,28 +536,60 @@ const microservices: ArchitectureStarter = {
 
 /* ---------------------------------------------------------- event-driven -- */
 /**
- * Asynchronous decoupling, drawn as a fan.
+ * The fundamental shape of Event-Driven Architecture, and nothing else: a producer publishes, a
+ * Topic fans the event out, independent consumers react. No business domain, no chained second
+ * event, no persistence-for-every-consumer symmetry — this starter answers exactly one question
+ * ("how does a producer publish an event that multiple independent consumers can react to
+ * asynchronously?") and stops the moment the answer is on the canvas. A previous revision told an
+ * order/fulfillment story with two chained topics; that taught a specific application, not the
+ * pattern, and made the starter harder to reshape into someone's own architecture. This one is
+ * deliberately closer to blank than full.
  *
- * The vertical axis is the message's journey — publish, distribute, consume, persist — and the
- * symmetric split under the Topic is the fan-out itself. No boundaries: this starter is about flow,
- * not ownership, and a box around any of it would say something the pattern doesn't.
+ * `Producer Service → Domain Events` infers `publishes`; `Domain Events → Consumer {A,B,C}` infers
+ * `deliversTo` (a topic fans out to every subscriber, unlike a Queue's `consumes` — see
+ * `connectorSemantics.ts`'s own comment on `topic>service`), both as `event` behaviour. No override
+ * on the wording here: three same-source edges hit Smart Routing's `MIN_SPINE_MEMBERS` threshold
+ * (`edges/bundles.ts`) and bundle into one shared trunk with one collapsed caption, which is exactly
+ * the clean "one topic, one fan, one label" picture this starter wants — a per-branch override would
+ * either triple-print down the shared stem or force the branches apart into separate rays, either way
+ * spending more ink than the shape needs. `deliversTo`'s own plain-English rendering, "delivers to",
+ * is the one caption on the whole diagram that isn't the tersest possible word, and that's fine: it's
+ * the one relationship in the picture worth a beat of extra reading, because it *is* the fan-out.
  *
- * The connectors' directions are the semantics, not decoration: `service → topic` infers
- * `publishes`, `topic → service` infers `deliversTo` (a topic fans out to every subscriber), and
- * both come back from the matrix as `event` behaviour, so the asynchrony is drawn rather than
- * asserted. There is deliberately no dead-letter queue: the model attaches a DLQ to a plain Queue,
- * never to a Topic (`store/editorStore.ts`'s `addDeadLetterQueue`), and bending this composition to
- * fit one would cost its symmetry. "Add DLQ" is a right-click away once a Queue exists.
+ * Consumers are plain `serviceKind: 'generic'` Services, not Workers: a real event consumer could be
+ * a service, a projection, a stream processor, a function — defaulting the shape to Worker would
+ * silently claim EDA implies background-job architecture, which it doesn't. Only one consumer owns a
+ * Data Store, not all three — persistence-per-consumer would read as a mechanical requirement of
+ * "being a consumer" rather than the per-reaction decision it actually is, and a store under every
+ * column is exactly the forced symmetry this revision removes. The other two consumers are left
+ * exactly as bare as a real one might be.
+ *
+ * Exactly one event name (`DomainEvent`) appears once, beside the publish edge, as a plain
+ * `text`/`annotation` node rather than `edge.label` — Hexagonal already tried a bordered chip for its
+ * port names and reverted it for being "the opposite of annotation, no matter how short the words
+ * are" (see that starter's own comment below), and an event name deserves the same restraint: unboxed,
+ * quieter than a node's own name, offset to the side of its connector so it can't become a routing
+ * obstacle for the straight vertical line it sits beside (`edges/routing.ts`'s `OBSTACLE_BAND`). It
+ * exists once, to show that *something* travels the asynchronous boundary — not as a running commentary
+ * on every edge.
+ *
+ * No boundaries (this is about flow, not deployment ownership), no DLQ (the model attaches one to a
+ * plain Queue, never a Topic — `store/editorStore.ts`'s `addDeadLetterQueue` — and "Add DLQ" stays a
+ * right-click away once a Queue exists), no second topic, no saga/CQRS/outbox/schema-registry — every
+ * one of those is a real, separate, more opinionated starter this one deliberately isn't.
+ *
+ * The producer has no edge to, and no anchor tuned toward, any individual consumer — its only
+ * connection is to the topic, so adding a fourth consumer later is purely a Topic-side change.
  */
-const EVENT_CX = 224;
-const EVENT_CONSUMER_GUTTER = 96;
-const EVENT_COLUMNS = columnsAt(EVENT_CX, 2, SERVICE.width, EVENT_CONSUMER_GUTTER);
+const EVENT_CX = 264;
+const EVENT_COLUMNS = columnsAt(EVENT_CX, 3, SERVICE.width, GUTTER);
+const EVENT_CONSUMER_Y = 0;
 const EVENT_STORE_Y = SERVICE.height + BAND;
 
 const eventDriven: ArchitectureStarter = {
   id: 'event-driven',
   name: 'Event-Driven',
-  description: 'A producer publishing to a topic that fans out to consumers',
+  description: 'A producer, a topic, and independent consumers',
   aliases: [
     'event driven',
     'event-driven',
@@ -575,56 +607,82 @@ const eventDriven: ArchitectureStarter = {
       key: 'producer',
       type: 'service',
       serviceKind: 'generic',
-      text: 'Producer',
+      text: 'Producer Service',
       accent: 'teal',
       x: centeredAt(EVENT_CX, SERVICE.width),
       y: -(BAND * 2 + TOPIC.height + SERVICE.height),
       ...SERVICE,
     },
     {
-      // A Queue's name is always its kind — there is no text field to type into, by design
-      // (`document/factory.ts`'s `defaultTextFor`) — so this one is deliberately unnamed.
       key: 'topic',
       type: 'queue',
       queueKind: 'topic',
+      text: 'Domain Events',
       accent: 'violet',
       x: centeredAt(EVENT_CX, TOPIC.width),
       y: -(BAND + TOPIC.height),
       ...TOPIC,
     },
-    ...(['A', 'B'] as const).flatMap((suffix, index): StarterNodeSpec[] => {
-      const left = EVENT_COLUMNS[index]!;
-      return [
-        {
-          key: `consumer-${index}`,
-          type: 'service',
-          serviceKind: 'worker',
-          text: `Consumer ${suffix}`,
-          accent: 'teal',
-          x: left,
-          y: 0,
-          ...SERVICE,
-        },
-        {
-          key: `store-${index}`,
-          type: 'database',
-          databaseKind: 'sql',
-          text: `Store ${suffix}`,
-          accent: 'blue',
-          x: centeredAt(left + SERVICE.width / 2, STORE.width),
-          y: EVENT_STORE_Y,
-          ...STORE,
-        },
-      ];
-    }),
+    {
+      key: 'domain-event-label',
+      type: 'text',
+      text: 'DomainEvent',
+      annotation: true,
+      x: centeredAt(EVENT_CX, TOPIC.width) + TOPIC.width + 44,
+      y: -(BAND + TOPIC.height) - Math.round(BAND / 2) - 12,
+      width: 110,
+      height: 24,
+    },
+    {
+      key: 'consumer-a',
+      type: 'service',
+      serviceKind: 'generic',
+      text: 'Consumer A',
+      accent: 'teal',
+      x: EVENT_COLUMNS[0]!,
+      y: EVENT_CONSUMER_Y,
+      ...SERVICE,
+    },
+    {
+      key: 'consumer-b',
+      type: 'service',
+      serviceKind: 'generic',
+      text: 'Consumer B',
+      accent: 'teal',
+      x: EVENT_COLUMNS[1]!,
+      y: EVENT_CONSUMER_Y,
+      ...SERVICE,
+    },
+    {
+      key: 'consumer-c',
+      type: 'service',
+      serviceKind: 'generic',
+      text: 'Consumer C',
+      accent: 'teal',
+      x: EVENT_COLUMNS[2]!,
+      y: EVENT_CONSUMER_Y,
+      ...SERVICE,
+    },
+    {
+      key: 'store',
+      type: 'database',
+      databaseKind: 'generic',
+      text: 'Data Store',
+      accent: 'blue',
+      x: centeredAt(EVENT_COLUMNS[0]! + SERVICE.width / 2, STORE.width),
+      y: EVENT_STORE_Y,
+      ...STORE,
+    },
   ],
   edges: [
     down('producer', 'topic'),
-    // Both leave the topic's midpoint: one topic, many subscribers, drawn as one split.
-    down('topic', 'consumer-0'),
-    down('topic', 'consumer-1'),
-    down('consumer-0', 'store-0'),
-    down('consumer-1', 'store-1'),
+    // All three leave the topic's midpoint: one topic, many subscribers, drawn as one fan. Smart
+    // Routing bundles them into a shared trunk with one collapsed "delivers to" caption rather than
+    // three repeated ones (`edges/bundles.ts`).
+    down('topic', 'consumer-a'),
+    down('topic', 'consumer-b'),
+    down('topic', 'consumer-c'),
+    down('consumer-a', 'store'),
   ],
 };
 
