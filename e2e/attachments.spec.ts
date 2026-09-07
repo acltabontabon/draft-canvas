@@ -192,9 +192,14 @@ test.describe('attachments', () => {
     await expect(detached).toHaveAttribute('data-selected', 'true');
 
     // Re-attach, then delete the attachment outright, with one undo restoring it.
+    // Re-measured, not the `serviceCenter` from before the popover round-trip above: opening it
+    // can leave the page horizontally scrolled (an unrelated pre-existing overflow — see
+    // `document.documentElement.scrollWidth` vs `window.innerWidth`), which would silently shift
+    // every screen coordinate captured before it and make a stale target miss the node entirely.
+    const serviceBoxNow = (await service.boundingBox())!;
     const release2 = await dragNodeCenterTo(page, detached, {
-      x: serviceCenter.x,
-      y: serviceCenter.y,
+      x: serviceBoxNow.x + serviceBoxNow.width / 2,
+      y: serviceBoxNow.y + serviceBoxNow.height / 2,
     });
     // Same wait as the first attach above — see that comment.
     await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
