@@ -246,7 +246,7 @@ describe('buildStarter', () => {
     expect(nodes.filter((node) => node.type === 'text')).toHaveLength(1);
   });
 
-  it('models event-driven flow as one producer publishing to a topic that fans out to independent, generic-shaped consumers', () => {
+  it('models event-driven flow as one producer publishing to a topic that fans out to three named architectural reactions', () => {
     const { nodes, edges } = buildStarter(starterById('event-driven')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     const edgesFrom = (id: string) => edges.filter((e) => e.source === id);
@@ -254,10 +254,10 @@ describe('buildStarter', () => {
 
     const producer = byText('Producer Service');
     const topic = byText('Domain Events');
-    const consumerA = byText('Consumer A');
-    const consumerB = byText('Consumer B');
-    const consumerC = byText('Consumer C');
-    const store = byText('Data Store');
+    const projection = byText('Projection Service');
+    const processing = byText('Processing Service');
+    const integration = byText('Integration Service');
+    const store = byText('Read Store');
 
     expect(nodes.filter((n) => n.queueKind === 'topic')).toHaveLength(1);
     expect(topic.type).toBe('queue');
@@ -270,35 +270,35 @@ describe('buildStarter', () => {
     expect(published[0]!.label).toBeUndefined();
     expect(edgesFrom(producer.id)).toHaveLength(1);
 
-    // Fans out to exactly three independent consumers, each a plain inferred `deliversTo`/`event`
-    // relationship with no override — left free to bundle into Smart Routing's shared trunk with one
-    // collapsed caption, since all three say the same thing about the same topic.
+    // Fans out to exactly three independent reactions, each an inferred `deliversTo`/`event`
+    // relationship displayed as "consumes" (the one deliberate display override in this starter) and
+    // kept out of Smart Routing's bundling — three individual rays, never one shared delivery bus.
     const delivered = edgesFrom(topic.id);
     expect(delivered).toHaveLength(3);
-    expect(new Set(delivered.map((e) => e.target))).toEqual(new Set([consumerA.id, consumerB.id, consumerC.id]));
+    expect(new Set(delivered.map((e) => e.target))).toEqual(new Set([projection.id, processing.id, integration.id]));
     for (const edge of delivered) {
       expect(edge.semantic).toBe('deliversTo');
       expect(edge.kind).toBe('event');
-      expect(edge.label).toBeUndefined();
-      expect(edge.routeMode).toBeUndefined();
+      expect(edge.label).toBe('consumes');
+      expect(edge.routeMode).toBe('direct');
     }
 
     // Every consumer is a plain, generic Service — never defaulted to Worker.
-    for (const consumer of [consumerA, consumerB, consumerC]) {
+    for (const consumer of [projection, processing, integration]) {
       expect(consumer.type).toBe('service');
       expect(consumer.serviceKind).toBe('generic');
     }
 
-    // Exactly one consumer owns exactly one store — not one under every column, and no consumer
-    // reaches back into the topology (no second event, no reply, no call to the producer).
+    // Only Projection Service owns a store — not one under every column, and no reaction chains back
+    // into the topology (no second event, no reply, no call to the producer).
     expect(nodes.filter((n) => n.type === 'database')).toHaveLength(1);
     const writes = edgesTo(store.id);
     expect(writes).toHaveLength(1);
-    expect(writes[0]!.source).toBe(consumerA.id);
+    expect(writes[0]!.source).toBe(projection.id);
     expect(writes[0]!.semantic).toBe('writes');
-    expect(edgesFrom(consumerA.id)).toEqual([writes[0]]);
-    expect(edgesFrom(consumerB.id)).toHaveLength(0);
-    expect(edgesFrom(consumerC.id)).toHaveLength(0);
+    expect(edgesFrom(projection.id)).toEqual([writes[0]]);
+    expect(edgesFrom(processing.id)).toHaveLength(0);
+    expect(edgesFrom(integration.id)).toHaveLength(0);
 
     // Exactly five edges, exactly one event name — nothing scattered, nothing chained.
     expect(edges).toHaveLength(5);

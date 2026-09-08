@@ -536,60 +536,87 @@ const microservices: ArchitectureStarter = {
 
 /* ---------------------------------------------------------- event-driven -- */
 /**
- * The fundamental shape of Event-Driven Architecture, and nothing else: a producer publishes, a
- * Topic fans the event out, independent consumers react. No business domain, no chained second
- * event, no persistence-for-every-consumer symmetry — this starter answers exactly one question
- * ("how does a producer publish an event that multiple independent consumers can react to
- * asynchronously?") and stops the moment the answer is on the canvas. A previous revision told an
- * order/fulfillment story with two chained topics; that taught a specific application, not the
- * pattern, and made the starter harder to reshape into someone's own architecture. This one is
- * deliberately closer to blank than full.
+ * The fundamental shape of Event-Driven Architecture, taught through architectural roles rather than
+ * anonymous shapes: a producer publishes without knowing who reacts, a Topic is the asynchronous
+ * boundary, and three independently-named consumers subscribe for three different, genuinely common
+ * reasons. "Consumer A/B/C" (an earlier revision's shape) drew the right topology but taught nothing —
+ * a developer could copy the fan-out without ever learning *why* event consumers exist. Naming them
+ * `Projection Service`, `Processing Service`, and `Integration Service` answers that without smuggling
+ * in a business domain: every one of those three is a real, generic reason a system reacts to events,
+ * and every one is a plain noun a developer can immediately rename for their own architecture.
  *
- * `Producer Service → Domain Events` infers `publishes`; `Domain Events → Consumer {A,B,C}` infers
- * `deliversTo` (a topic fans out to every subscriber, unlike a Queue's `consumes` — see
- * `connectorSemantics.ts`'s own comment on `topic>service`), both as `event` behaviour. No override
- * on the wording here: three same-source edges hit Smart Routing's `MIN_SPINE_MEMBERS` threshold
- * (`edges/bundles.ts`) and bundle into one shared trunk with one collapsed caption, which is exactly
- * the clean "one topic, one fan, one label" picture this starter wants — a per-branch override would
- * either triple-print down the shared stem or force the branches apart into separate rays, either way
- * spending more ink than the shape needs. `deliversTo`'s own plain-English rendering, "delivers to",
- * is the one caption on the whole diagram that isn't the tersest possible word, and that's fine: it's
- * the one relationship in the picture worth a beat of extra reading, because it *is* the fan-out.
+ * `Producer Service → Domain Events` infers `publishes`; `Domain Events → {Projection, Processing,
+ * Integration} Service` infers `deliversTo` (a topic fans out to every subscriber, unlike a Queue's
+ * `consumes` — see `connectorSemantics.ts`'s own comment on `topic>service`), both as `event`
+ * behaviour. `deliversTo`'s plain-English reading is accurate but transport-flavoured, so the three
+ * fan-out edges carry an explicit `label: 'consumes'` — the one *display* override in this starter,
+ * changing nothing about the edge's real `semantic`/`kind` (still `deliversTo`/`event`, still
+ * re-inferred like any hand-drawn connector), only what's shown; it rides the app's bordered chip
+ * style, not the quiet inferred caption `publishes`/`writes` use elsewhere here. Each of the three
+ * is also its own independent, straight ray (`routeMode: 'direct'`, `routing: 'straight'`) rather than
+ * Smart Routing's default bundle: three same-source edges hit `edges/bundles.ts`'s
+ * `MIN_SPINE_MEMBERS` threshold, and a shared trunk with one collapsed caption reads as a delivery
+ * bus — a piece of messaging infrastructure, not three independent architectural reactions. A fan of
+ * three individually-aimed, individually-captioned lines keeps every consumer legibly its own thing.
  *
- * Consumers are plain `serviceKind: 'generic'` Services, not Workers: a real event consumer could be
- * a service, a projection, a stream processor, a function — defaulting the shape to Worker would
- * silently claim EDA implies background-job architecture, which it doesn't. Only one consumer owns a
- * Data Store, not all three — persistence-per-consumer would read as a mechanical requirement of
- * "being a consumer" rather than the per-reaction decision it actually is, and a store under every
- * column is exactly the forced symmetry this revision removes. The other two consumers are left
- * exactly as bare as a real one might be.
+ * Only `Projection Service` owns a `Read Store` (`writes`) — the other two stay bare. Persistence
+ * under every column would read as a mechanical requirement of "being a consumer" rather than the
+ * per-role decision it actually is, and a Projection specifically building a queryable read model from
+ * events is the one of the three whose whole job implies a store; `Processing Service` acts without
+ * necessarily persisting anything of its own, `Integration Service` hands off to something outside the
+ * diagram. This is `Event → Projection → Read Model`, deliberately not spelled out or labelled as
+ * CQRS — a name that implies a stack of decisions (command/query separation, an actual write side) this
+ * one small store doesn't make.
  *
  * Exactly one event name (`DomainEvent`) appears once, beside the publish edge, as a plain
  * `text`/`annotation` node rather than `edge.label` — Hexagonal already tried a bordered chip for its
  * port names and reverted it for being "the opposite of annotation, no matter how short the words
- * are" (see that starter's own comment below), and an event name deserves the same restraint: unboxed,
+ * are" (see that starter's own comment below); an event name deserves the same restraint: unboxed,
  * quieter than a node's own name, offset to the side of its connector so it can't become a routing
- * obstacle for the straight vertical line it sits beside (`edges/routing.ts`'s `OBSTACLE_BAND`). It
- * exists once, to show that *something* travels the asynchronous boundary — not as a running commentary
- * on every edge.
+ * obstacle for the straight vertical line it sits beside (`edges/routing.ts`'s `OBSTACLE_BAND`).
  *
- * No boundaries (this is about flow, not deployment ownership), no DLQ (the model attaches one to a
- * plain Queue, never a Topic — `store/editorStore.ts`'s `addDeadLetterQueue` — and "Add DLQ" stays a
- * right-click away once a Queue exists), no second topic, no saga/CQRS/outbox/schema-registry — every
- * one of those is a real, separate, more opinionated starter this one deliberately isn't.
- *
- * The producer has no edge to, and no anchor tuned toward, any individual consumer — its only
- * connection is to the topic, so adding a fourth consumer later is purely a Topic-side change.
+ * The three consumers sit on a tighter gutter than the shared `GUTTER` other starters' rows use —
+ * "keep them relatively close to the topic" is explicit in this starter's spec, so the composition
+ * reads as one contained architecture with whitespace *around* it, not three services stretched to
+ * fill the canvas with gaps between them. No boundaries (this is about flow, not deployment
+ * ownership), no DLQ (the model attaches one to a plain Queue, never a Topic —
+ * `store/editorStore.ts`'s `addDeadLetterQueue` — and "Add DLQ" stays a right-click away once a Queue
+ * exists), no second topic, no consumer groups/partitions/saga/CQRS label/schema registry — every one
+ * of those is a real, separate, more opinionated starter this one deliberately isn't. The producer has
+ * no edge to, and no anchor tuned toward, any individual consumer — its only connection is to the
+ * topic, so adding a fourth reaction later is purely a Topic-side change.
  */
 const EVENT_CX = 264;
-const EVENT_COLUMNS = columnsAt(EVENT_CX, 3, SERVICE.width, GUTTER);
+// Tighter than the shared `GUTTER` other starters' rows use — this starter's own spec asks the three
+// consumers to stay "relatively close to the topic," reading as one contained architecture rather than
+// three services spread to fill the canvas.
+const EVENT_CONSUMER_GUTTER = 48;
+const EVENT_COLUMNS = columnsAt(EVENT_CX, 3, SERVICE.width, EVENT_CONSUMER_GUTTER);
 const EVENT_CONSUMER_Y = 0;
 const EVENT_STORE_Y = SERVICE.height + BAND;
+// Fans the Topic→Consumer edges across the topic's own width rather than all three leaving its dead
+// centre — three individually-aimed rays read as three distinct reactions, not a shared delivery bus.
+const EVENT_FAN_LEFT: StarterEdgeSpec['sourceAnchor'] = { side: 'bottom', offset: 0.15 };
+const EVENT_FAN_RIGHT: StarterEdgeSpec['sourceAnchor'] = { side: 'bottom', offset: 0.85 };
+
+/** One branch of the Topic's fan-out — see this starter's own doc comment for why each is a direct,
+ *  straight, individually-labelled ray rather than a bundled trunk. */
+function consumesFromTopic(topic: string, consumer: string, sourceAnchor: StarterEdgeSpec['sourceAnchor']): StarterEdgeSpec {
+  return {
+    from: topic,
+    to: consumer,
+    sourceAnchor,
+    targetAnchor: TOP,
+    label: 'consumes',
+    routeMode: 'direct',
+    routing: 'straight',
+  };
+}
 
 const eventDriven: ArchitectureStarter = {
   id: 'event-driven',
   name: 'Event-Driven',
-  description: 'A producer, a topic, and independent consumers',
+  description: 'A producer, a topic, and why consumers react to it',
   aliases: [
     'event driven',
     'event-driven',
@@ -634,30 +661,30 @@ const eventDriven: ArchitectureStarter = {
       height: 24,
     },
     {
-      key: 'consumer-a',
+      key: 'projection-service',
       type: 'service',
       serviceKind: 'generic',
-      text: 'Consumer A',
+      text: 'Projection Service',
       accent: 'teal',
       x: EVENT_COLUMNS[0]!,
       y: EVENT_CONSUMER_Y,
       ...SERVICE,
     },
     {
-      key: 'consumer-b',
+      key: 'processing-service',
       type: 'service',
       serviceKind: 'generic',
-      text: 'Consumer B',
+      text: 'Processing Service',
       accent: 'teal',
       x: EVENT_COLUMNS[1]!,
       y: EVENT_CONSUMER_Y,
       ...SERVICE,
     },
     {
-      key: 'consumer-c',
+      key: 'integration-service',
       type: 'service',
       serviceKind: 'generic',
-      text: 'Consumer C',
+      text: 'Integration Service',
       accent: 'teal',
       x: EVENT_COLUMNS[2]!,
       y: EVENT_CONSUMER_Y,
@@ -667,7 +694,7 @@ const eventDriven: ArchitectureStarter = {
       key: 'store',
       type: 'database',
       databaseKind: 'generic',
-      text: 'Data Store',
+      text: 'Read Store',
       accent: 'blue',
       x: centeredAt(EVENT_COLUMNS[0]! + SERVICE.width / 2, STORE.width),
       y: EVENT_STORE_Y,
@@ -676,13 +703,10 @@ const eventDriven: ArchitectureStarter = {
   ],
   edges: [
     down('producer', 'topic'),
-    // All three leave the topic's midpoint: one topic, many subscribers, drawn as one fan. Smart
-    // Routing bundles them into a shared trunk with one collapsed "delivers to" caption rather than
-    // three repeated ones (`edges/bundles.ts`).
-    down('topic', 'consumer-a'),
-    down('topic', 'consumer-b'),
-    down('topic', 'consumer-c'),
-    down('consumer-a', 'store'),
+    consumesFromTopic('topic', 'projection-service', EVENT_FAN_LEFT),
+    consumesFromTopic('topic', 'processing-service', BOTTOM),
+    consumesFromTopic('topic', 'integration-service', EVENT_FAN_RIGHT),
+    down('projection-service', 'store'),
   ],
 };
 
