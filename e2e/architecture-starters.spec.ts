@@ -70,7 +70,7 @@ test.describe('architecture starters', () => {
     await expect(starters).toBeVisible();
 
     await starters.getByRole('button', { name: 'Event-Driven' }).click();
-    await expect(page.locator('.dc-node')).toHaveCount(6);
+    await expect(page.locator('.dc-node')).toHaveCount(7);
     await expect(starters).toBeHidden();
   });
 
