@@ -4,27 +4,20 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-09
+
 ### Added
 
-- Architecture Starters for Monolith, Modular Monolith, Microservices, Event-Driven, and Hexagonal
-  architectures. Press ⌘K, type the pattern's name, and a composed starting diagram appears —
-  centred, selected, and made of ordinary shapes and connectors you can change straight away. One
-  undo removes the whole thing. An empty canvas offers the same starters under its hint.
-- A new Component shape (Generic, Module, or Adapter), for the logical building blocks inside a
-  larger deployment or boundary — a domain module, a use-case layer, an adapter — without implying
-  they're independently deployable the way a Service is. Each kind has its own quiet silhouette
-  (Module's tab, Adapter's notch on both sides, so it reads the same whichever way it faces), and
-  Component is deliberately smaller and lighter than Service by default, so a mixed diagram reads
-  its hierarchy at a glance. Press `M` or search "component" in ⌘K.
+- Architecture Starters — press ⌘K and type a pattern's name (Monolith, Modular Monolith,
+  Microservices, Event-Driven, Hexagonal) to drop in a ready-made starting diagram you can change
+  right away. An empty canvas offers the same starters under its hint.
+- A new Component shape (Generic, Module, or Adapter) for the logical building blocks inside a
+  boundary, deliberately smaller and lighter than Service. Press `M` or search "component" in ⌘K.
 
 ### Fixed
 
-- Opening or importing a large diagram with many connections fanning out from (or into) the same
-  component could freeze the tab for a very long time. Smart Routing's connector-bundling now
-  gives up cleanly on the rare corridor it can't fit in time, instead of searching indefinitely.
-- Interrupting a drag or resize with another gesture before it finished (for example, starting a
-  new drag on the same element in quick succession) could bake the interrupted change into the
-  document with no way to undo it on its own. It now always gets its own undo step.
+- Large diagrams with many connections fanning into or out of one component could freeze the tab.
+- Interrupting a drag or resize with another gesture could bake the change in with no way to undo it.
 
 ## [0.5.0] - 2026-09-06
 
@@ -462,7 +455,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.5.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.6.0...main
+[0.6.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.0...v0.3.1
