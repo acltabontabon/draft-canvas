@@ -4,6 +4,8 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-10
+
 ### Added
 
 - Every diagram in your library now shows a small fingerprint of its topology beside its name —
@@ -578,7 +580,9 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.6.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.8.0...main
+[0.8.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.3.1...v0.4.0
