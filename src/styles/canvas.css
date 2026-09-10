@@ -396,6 +396,28 @@
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  /* The chip itself is editable in place (double-click — see `DraftEdgeView.tsx`), so it takes
+     pointer events even though its `.dc-edge-meta` row doesn't; the row stays inert so the empty
+     space around the chip never competes with the line's own hit-box. */
+  pointer-events: all;
+  cursor: text;
+  user-select: none;
+  transition: border-color 120ms ease;
+}
+
+.dc-edge-condition:hover,
+.dc-edge-condition[data-editing='true'] {
+  border-color: var(--dc-text-muted);
+}
+
+.dc-edge-condition-input {
+  width: 96px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+  user-select: text;
 }
 
 /* A request/response connector's own reply line and label — see `DraftEdgeView.tsx`. Compact by

@@ -25,7 +25,8 @@ Connections are reasoned about using `NodeCategory` — coarser than a node's sh
 | `actor` | the Actor shape |
 | `service` | the Service shape, any `serviceKind` except `external` |
 | `external` | Service shape with `serviceKind: 'external'` |
-| `component` | the Component shape, any `componentKind` — see below |
+| `component` | the Component shape, `componentKind` of `generic`/`module`/`adapter` — see below |
+| `port` | Component shape with `componentKind: 'port'` — a contract, see below |
 | `database` | Database shape, `databaseKind` of `generic`/`sql`/`nosql` |
 | `cache` | Database shape, `databaseKind: 'cache'` |
 | `fileSystem` | Database shape, `databaseKind: 'file-system'` |
@@ -33,6 +34,7 @@ Connections are reasoned about using `NodeCategory` — coarser than a node's sh
 | `searchIndex` | Database shape, `databaseKind: 'search-index'` |
 | `queue` | Queue shape, `queueKind` of `queue`/`stream` |
 | `topic` | Queue shape, `queueKind: 'topic'` |
+| `deadLetter` | Queue shape with `deliveryRole: 'dead-letter'` — the DLQ "Add DLQ" generates |
 | `junction` | the Junction (ellipse) shape — see below |
 | `generic` | text, note, code, and group — no relationship rule applies |
 
@@ -44,8 +46,22 @@ tell them apart. But the *relationship vocabulary* a Component participates in �
 calls, depends on — is exactly Service's own: for matrix lookups only, Component resolves to
 `service` the same way `external`/`worker`/`scheduler`/`gateway` already do (see "The capability
 matrix" below), so Service → Database's "writes" default is also Component → Database's, with no
-duplicated table. `componentKind` (Generic/Module/Adapter) never affects this — none of Component's
-kinds carries its own relationship rule, unlike Service's.
+duplicated table. `componentKind` Generic/Module/Adapter never affect this — none of those three
+carries its own relationship rule.
+
+**Port** is the one Component kind that does. A port is a *contract* — the interface an
+application core, a plugin host, or a module defines and something else implements or calls — not
+a thing that does work, so it takes part in exactly two relationships: it is called (by a Service)
+or used (by a Component), and it is implemented by whatever sits behind it. It gets its own
+category and its own rows, and never folds to `service` or `component`: an unlisted pairing that
+touches a port stays neutral rather than inheriting verbs a contract can't have. Every arrow keeps
+its runtime direction; the word `implemented by` on the connector *leaving* a port is what says the
+thing after it depends on the port's owner — dependency inversion, stated rather than drawn
+backwards.
+
+**Dead-letter queue** works the same way on the messaging side: a DLQ resolves to `queue` for every
+pairing without its own row (a re-drive worker consumes it exactly like any queue), and has its own
+category only so the pairing that *feeds* it — Queue → DLQ — can carry its own rule.
 
 ## The capability matrix
 
@@ -72,25 +88,40 @@ unrestricted connector.
 | Topic → Service | deliversTo, consumes, dependsOn | deliversTo | a topic fans out to every subscriber |
 | Topic → Queue | fansOut, deliversTo, dependsOn | fansOut | |
 | Queue → Topic | dependsOn, event | *(none)* | **`status: 'unusual'`** — see below |
+| Queue → Dead-letter queue | deadLetters, dependsOn | deadLetters | `failure` behaviour and a dashed (`async`) line — the same edge "Add DLQ" generates; `deliveryAttempts` captions it "after N attempts" |
+| Topic → Dead-letter queue | dependsOn | *(none)* | **`status: 'unusual'`** — a topic never dead-letters; retries and a DLQ belong to each consumer's own queue |
 | Service → Service | calls, http, grpc, command, query, event, dependsOn | calls | the one pairing with a full sync/async/callback/conditional/retry/failure/fallback picker |
 | Service → External | same as Service → Service | calls | `external` is a flavour of `service` for any pairing without its own row |
+| Component → Component | uses, dependsOn, calls | uses | an in-process dependency, never a network call; checked before the `service` fold |
+| Service → Port | calls, dependsOn | calls | |
+| Component → Port | uses, dependsOn | uses | |
+| Port → Component / Service | implementedBy, dependsOn | implementedBy | the thing after the port depends on the port's owner |
+| Port → Database | dependsOn | *(none)* | **`status: 'unusual'`** — a port is a contract; something implements it and talks to the store |
 | Actor → Service | calls, http, command | calls | synchronous by predetermination, no behaviour picker |
 | Database → Database | ingests, replicates, cdc, syncs, dependsOn | ingests | data movement, not a request/response shape |
 
 A relation offered here is a *suggestion*, never a restriction — the inspector always keeps an
 edge's current value selectable even if it's not in the list.
 
-Exactly one pairing carries `status: 'unusual'` today: **Queue → Topic** (a queue doesn't typically
-publish into a topic). Drawing it anyway works fine — the inspector shows a small marker and a
-guidance note, with a one-click **Insert Worker** fix that splices a service node in between and
-re-derives both new connectors' semantics from the matrix.
+A pairing marked `status: 'unusual'` — **Queue → Topic** (a queue doesn't typically publish into a
+topic), **Topic → Dead-letter queue** (a topic never dead-letters), **Port → Database** (a contract
+wired straight to storage), and a Gateway routing straight into storage — is still drawable with no
+friction: the inspector shows a small marker and a guidance
+note. Queue → Topic additionally offers a one-click **Insert Worker** fix that splices a service node
+in between and re-derives both new connectors' semantics from the matrix.
+
+A capability may also set `defaultAsync`, asking a freshly inferred connector for a dashed line as
+well as its default behaviour. Only Queue → Dead-letter queue does today: `failure` has no dash
+pattern of its own, and dead-lettering is genuinely asynchronous. Everything else leaves dashing to
+the behaviour (`event` dots its own line) or to the user.
 
 ## Two independent vocabularies
 
 - **`EdgeSemantic`** — what the connection *represents*: `http`, `grpc`, `event`, `command`,
   `query`, `reads`, `writes`, `publishes`, `consumes`, `calls`, `dependsOn`, `fansOut`,
   `deliversTo`, `ingests`, `replicates`, `cdc`, `syncs`, `deadLetters`, `invalidates`, `watches`,
-  `searches`, `indexes`. A label convenience only — never changes the connector's colour.
+  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implementedBy`. A label convenience only —
+  never changes the connector's colour.
 - **`ConnectorKind`** — how it *behaves*: `sync`, `async`, `event`, `callback`, `conditional`,
   `retry`, `failure`, `fallback`. Drives the solid/dashed line and small glyphs, not the caption.
 

@@ -148,12 +148,17 @@ export type ActorKind = (typeof ACTOR_KINDS)[number];
  * Kept deliberately small: `generic` (unspecified — no caption, same convention as every other
  * kind's default), `module` (an internal subdivision — the Modular Monolith starter's own
  * Customer/Orders/Payments are exactly this: named, sized modules living inside one deployment
- * boundary, never independently deployable), and `adapter` (a ports-and-adapters translation
- * layer — Hexagonal's own use case, and also the Modular Monolith starter's inbound API). Anything
- * narrower — "Repository," "Controller," "Use Case" — is a *label* a user types onto a `generic`
- * (or `adapter`) Component, never a fourth kind.
+ * boundary, never independently deployable), `adapter` (a ports-and-adapters translation layer —
+ * Hexagonal's own use case, and also the Modular Monolith starter's inbound API), and `port` (a
+ * *contract* — an interface the thing that owns it defines and something else implements or
+ * calls: Hexagonal's inbound/outbound ports, a plugin boundary, a module's published interface).
+ * Port is the one kind that is categorically not "a Component with a role": it isn't a thing that
+ * does work, it's the shape of an agreement, and it takes part in different relationships than any
+ * other kind (it is only ever called/used, and implemented — see `connectorSemantics.ts`'s `port`
+ * category). Anything narrower than these four — "Repository," "Controller," "Use Case" — is a
+ * *label* a user types onto a `generic` (or `adapter`) Component, never a fifth kind.
  */
-export const COMPONENT_KINDS = ['generic', 'module', 'adapter'] as const;
+export const COMPONENT_KINDS = ['generic', 'module', 'adapter', 'port'] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];
 
 /** Loose, technology-neutral presets for a `group` boundary. A preset only
@@ -189,6 +194,7 @@ export const EDGE_SEMANTICS = [
   'indexes',
   'routes',
   'triggers',
+  'implementedBy',
 ] as const;
 export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];
 

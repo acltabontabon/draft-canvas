@@ -13,7 +13,7 @@ import {
   defaultTextFor,
   type CreateNodeInput,
 } from '../document/factory';
-import { queueTubeCenterFraction } from '../nodes/describe';
+import { queueTubeCenterFraction } from '../document/queueGeometry';
 import { FONTS } from '../render/text/fonts';
 import { getMeasurer } from '../render/text/measure';
 import {
@@ -75,6 +75,7 @@ import {
   updateFlowStepCaption as updateFlowStepCaptionOp,
 } from '../document/flow';
 import { relationshipCaptionLabel, SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import { DEFAULTS } from '../document/limits';
 import {
   capabilityFor,
   categoryOf,
@@ -429,10 +430,10 @@ function inferRelationshipThroughJunctions(
   const inherited =
     categoryOf(sourceNode) === 'junction' ? inferredJunctionSemantic(graph, sourceNode.id) : undefined;
   if (inherited !== undefined && (!capability || capability.relations.includes(inherited))) {
-    return { semantic: inherited, kind: capability?.defaultBehavior };
+    return { semantic: inherited, kind: capability?.defaultBehavior, async: capability?.defaultAsync };
   }
   if (!capability?.defaultRelation) return undefined;
-  return { semantic: capability.defaultRelation, kind: capability.defaultBehavior };
+  return { semantic: capability.defaultRelation, kind: capability.defaultBehavior, async: capability.defaultAsync };
 }
 
 /**
@@ -456,10 +457,14 @@ function reinferIfEligible(doc: DraftDocument, edgeId: string): DraftDocument {
   // naming it here at all would strip an explicit "Show response path" every
   // time the connector was reversed or re-pointed. Re-inference is about
   // `semantic`/`kind`; the reply line is the user's own call.
+  // `async` likewise only ever *joins* the patch, never as `undefined`: the matrix asks for a
+  // dashed line on a handful of pairings and has no opinion on the rest, and "no opinion" must
+  // not read as "switch the user's own dashing off."
   return updateEdge(doc, edgeId, {
     semantic: relationship?.semantic,
     kind: relationship?.kind,
     semanticsOrigin: relationship ? 'inferred' : undefined,
+    ...(relationship?.async ? { async: true } : {}),
   });
 }
 
@@ -763,6 +768,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       targetAnchor: targetSide ? { side: targetSide, offset: targetOffset } : undefined,
       kind: relationship?.kind,
       semantic: relationship?.semantic,
+      async: relationship?.async,
       // No reply line by default, even between two services. At the altitude
       // an architecture diagram works at the return path is implied, and
       // drawing it unasked doubles the lines on the busiest kind of diagram.
@@ -793,9 +799,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // match a subtype's own default (e.g. renaming an API to literally "API") — see
     // `DraftNode.textOrigin`'s doc comment. `updateNodeById`'s Service auto-relabeling never
     // touches a node once this is set.
-    get().apply('Edit text', (doc) => updateNode(doc, id, { text, textOrigin: 'explicit' }), {
-      coalesceKey: `text:${id}`,
-    });
+    get().apply(
+      'Edit text',
+      (doc) => {
+        const patch: Partial<DraftNode> = { text, textOrigin: 'explicit' };
+        // A queue-family node's name stacks above its kind caption under the tube, so naming one
+        // moves it between the two default boxes (`DEFAULTS.queueHeight`/`queueNamedHeight`):
+        // grow when a name first appears, shrink back only when the name is cleared from a box
+        // still at exactly the named default — a box the user has sized by hand is never touched.
+        const node = doc.nodes.find((n) => n.id === id);
+        if (node?.type === 'queue') {
+          const named = text.trim().length > 0;
+          if (named && node.height < DEFAULTS.queueNamedHeight) patch.height = DEFAULTS.queueNamedHeight;
+          else if (!named && node.height === DEFAULTS.queueNamedHeight) patch.height = DEFAULTS.queueHeight;
+        }
+        return updateNode(doc, id, patch);
+      },
+      { coalesceKey: `text:${id}` },
+    );
   },
 
   updateEdgeById(id, patch, label = 'Change connection') {
@@ -846,6 +867,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       target: worker.id,
       semantic: toWorker?.defaultRelation,
       kind: toWorker?.defaultBehavior,
+      async: toWorker?.defaultAsync,
       semanticsOrigin: toWorker?.defaultRelation ? 'inferred' : undefined,
     });
     const edgeFromWorker = createEdge({
@@ -853,6 +875,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       target: edge.target,
       semantic: fromWorker?.defaultRelation,
       kind: fromWorker?.defaultBehavior,
+      async: fromWorker?.defaultAsync,
       semanticsOrigin: fromWorker?.defaultRelation ? 'inferred' : undefined,
     });
 
@@ -880,13 +903,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const caption = relationshipCaptionLabel('deadLetters', undefined, 3);
     const { x, y } = placeNear(state.document, source, size, gapForCaption(caption));
     const dlq = createNode({ type: 'queue', queueKind: 'queue', deliveryRole: 'dead-letter', x, y, z: source.z });
+    // The relationship comes from the same capability matrix a hand-drawn Queue → DLQ connector
+    // reads (`queue>deadLetter`: dead-letters, failure, dashed) — not restated here — and stays
+    // `inferred` exactly like that hand-drawn one, so re-pointing it later re-reads it the same way.
+    // Only the attempt count is this action's own opinion: three is the conventional default.
     const edge = createEdge({
       source: source.id,
       target: dlq.id,
-      kind: 'failure',
-      semantic: 'deadLetters',
-      semanticsOrigin: 'explicit',
-      async: true,
+      ...inferRelationship(source, dlq),
+      semanticsOrigin: 'inferred',
       deliveryAttempts: 3,
       ...horizontalAnchorsFor(source, dlq),
     });
@@ -928,6 +953,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       target: worker.id,
       semantic: capability?.defaultRelation,
       kind: capability?.defaultBehavior,
+      async: capability?.defaultAsync,
       semanticsOrigin: capability?.defaultRelation ? 'inferred' : undefined,
       ...horizontalAnchorsFor(source, worker),
     });

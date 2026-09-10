@@ -693,7 +693,11 @@ function serviceGateway(node: DraftNode, ctx: DescribeContext): Shape[] {
 const COMPONENT_KIND_LABELS: Partial<Record<ComponentKind, string>> = {
   module: 'MODULE',
   adapter: 'ADAPTER',
+  port: 'PORT',
 };
+/** Same dash array a Boundary's outline and a generated DLQ already use — "dashed = not a concrete
+ *  thing" is an established meaning in this app, and a Port is exactly that: a contract. */
+const PORT_DASH = [6, 5];
 
 /**
  * Component's own stroke — a shade thinner than every other primitive's shared 1.5px
@@ -721,9 +725,51 @@ function component(node: DraftNode, ctx: DescribeContext): Shape[] {
       return componentModule(node, ctx);
     case 'adapter':
       return componentAdapter(node, ctx);
+    case 'port':
+      return componentPort(node, ctx);
     default:
       return componentGeneric(node, ctx);
   }
+}
+
+/**
+ * Port: Generic's body drawn as a dashed outline — the one Component kind that isn't a thing
+ * doing work but the shape of an agreement, so it borrows the "not concrete" dash a Boundary and a
+ * DLQ already speak rather than inventing a glyph. Its `PORT` tag sits centred *under* the name (a
+ * queue's name-over-kind stacking) instead of in the corner every other kind uses: a port is meant
+ * to be small, and at the width a one-word port name needs, a corner tag would sit on top of the
+ * name itself. The name is held above the tag by exactly the tag's own line plus its inset, so the
+ * two never touch at any height a port is likely to be drawn at.
+ */
+function componentPort(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const tagFont = FONTS.variantTag;
+  const tagInset = 6;
+  const tagLayout = layoutText(COMPONENT_KIND_LABELS.port!, {
+    font: tagFont,
+    maxWidth: Math.max(16, node.width - PADDING * 2),
+    lineHeight: tagFont.size * LINE_HEIGHTS.label,
+    maxLines: 1,
+    measurer: ctx.measurer,
+  });
+  return [
+    outlineShape(
+      node.id,
+      ctx,
+      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
+      { fill: palette.fill, stroke: { ...componentStroke(ctx, node), dash: PORT_DASH }, shadow: true },
+    ),
+    ...centredLabel(node, ctx, { top: 0, bottom: tagLayout.height + tagInset + 2, color: '' }),
+    {
+      t: 'text',
+      x: node.width / 2,
+      y: node.height - tagLayout.height - tagInset,
+      layout: tagLayout,
+      font: tagFont,
+      fill: ctx.theme.textMuted,
+      align: 'middle',
+    },
+  ];
 }
 
 /** Generic: the family's neutral baseline — a plain rounded box, no cap, no notch, `neutral`
@@ -1346,24 +1392,6 @@ function tubePaths(
   return { body, lid };
 }
 
-/**
- * Where a Queue/Topic/Stream node's tube glyph sits, vertically, as a fraction (0..1) of the
- * node's own full height — mirrors `queue()`'s own `y`/`tubeH` geometry exactly. The tube is a
- * compact glyph anchored near the top of the box (the kind caption sits in the remaining space
- * below it, see `queue()`), so its own visual centre sits well above the box's vertical midpoint —
- * a connector anchored at the default `offset: 0.5` lands at the boundary between the tube and its
- * caption, not the tube's centre. Exported so a connector that's generated programmatically for a
- * queue-family node (rather than picked up by the live nearest-side fallback) can set an explicit
- * `EdgeAnchor.offset` that actually lands on the glyph — see `store/editorStore.ts`'s
- * `addDeadLetterQueue`/`addConsumer`.
- */
-export function queueTubeCenterFraction(height: number): number {
-  const h = height - 1.5;
-  const tubeH = Math.min(32, h * 0.5);
-  const top = 0.75;
-  return (top + tubeH / 2) / height;
-}
-
 /** Same dash array `group()`'s boundary outline already uses — "dashed = subordinate" is an
  *  established visual meaning in this app, not a new one invented for the DLQ treatment. */
 const DLQ_DASH = [6, 5];
@@ -1383,6 +1411,8 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // subtext live below it, stacked, in the full-width space that leaves —
   // kept small enough that even a pre-existing (shorter) queue node has room
   // for both lines without them running into the tube.
+  // `document/queueGeometry.ts`'s `queueTubeCenterFraction` mirrors this `y`/`tubeH` arithmetic
+  // for anything placing a connector on the tube ahead of rendering — keep the two in step.
   const tubeH = Math.min(32, h * 0.5);
   // Capped at half the tube's own height, not just a width fraction — a cap
   // wider than the tube is tall reads as a flattened oval bulging past the
@@ -1554,8 +1584,8 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
       },
     );
   } else {
-    // No name — a queue node can no longer be given one — so the kind is the
-    // only label, sitting right under the tube.
+    // No name (the default for a queue-family node — one is optional, never
+    // prefilled), so the kind is the only label, sitting right under the tube.
     shapes.push({
       t: 'text',
       x: node.width / 2,

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { capabilityFor, categoryOf } from '../src/document/connectorSemantics';
 import { relationshipCaptionLabel } from '../src/document/edgeSemantics';
-import { createDocument, defaultSizeFor, defaultTextFor, displayNameFor, minSizeFor } from '../src/document/factory';
+import { createDocument, createNode, defaultSizeFor, defaultTextFor, displayNameFor, minSizeFor } from '../src/document/factory';
 import { DEFAULTS } from '../src/document/limits';
 import { deserializeDocument, serializeDocument } from '../src/export/project';
 import { describeContext, describeNode } from '../src/nodes/describe';
@@ -217,6 +217,31 @@ describe('Component — visual family: distinct but related silhouettes', () => 
     expect((module as { d: string }).d).not.toBe((adapter as { d: string }).d);
   });
 
+  it('Port keeps the plain body but draws it dashed — a contract, not a concrete thing', () => {
+    const outlineOf = (kind: ComponentKind) =>
+      describeNode(nodeFor(kind), ctx).shapes.find((s) => s.t === 'rect' || s.t === 'path')!;
+    const generic = outlineOf('generic');
+    const port = outlineOf('port');
+    expect(port.t).toBe('rect');
+    expect('stroke' in port && port.stroke?.dash).toEqual([6, 5]);
+    expect('stroke' in generic && generic.stroke?.dash).toBeUndefined();
+  });
+
+  it('a small Port fits a one-word name and its centred PORT tag inside its own box', () => {
+    const port = createNode({ type: 'component', componentKind: 'port', text: 'Persistence', x: 0, y: 0, width: 120, height: 44 });
+    const texts = describeNode(port, ctx).shapes.filter((s) => s.t === 'text');
+    expect(texts.map((s) => s.layout.lines.map((l) => l.text).join(''))).toEqual(['Persistence', 'PORT']);
+    for (const shape of texts) {
+      expect(shape.layout.truncated).toBe(false);
+      expect(shape.y).toBeGreaterThanOrEqual(0);
+      expect(shape.y + shape.layout.height).toBeLessThanOrEqual(port.height);
+      expect(shape.align).toBe('middle');
+    }
+    const name = texts[0]!;
+    const tag = texts[1]!;
+    expect(name.y + name.layout.height).toBeLessThanOrEqual(tag.y);
+  });
+
   it('Module and Adapter each carry their own corner caption; Generic carries none', () => {
     const captionOf = (kind: ComponentKind) =>
       describeNode(nodeFor(kind), ctx)
@@ -225,6 +250,7 @@ describe('Component — visual family: distinct but related silhouettes', () => 
     expect(captionOf('generic')).toEqual([]);
     expect(captionOf('module')).toContain('MODULE');
     expect(captionOf('adapter')).toContain('ADAPTER');
+    expect(captionOf('port')).toContain('PORT');
   });
 
   it('all three kinds share the same body radius and stroke weight — one family, not three shapes', () => {
@@ -247,10 +273,9 @@ describe('Component — visual family: distinct but related silhouettes', () => 
 });
 
 describe('Component — categoryOf and the capability matrix', () => {
-  it('is its own category — never silently folded into "generic" or "service"', () => {
+  it('is its own category — never silently folded into "generic" or "service"; only Port sub-divides it', () => {
     for (const kind of COMPONENT_KINDS) {
-      expect(categoryOf({ type: 'component' } as never)).toBe('component');
-      void kind;
+      expect(categoryOf({ type: 'component', componentKind: kind })).toBe(kind === 'port' ? 'port' : 'component');
     }
   });
 

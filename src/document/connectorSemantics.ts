@@ -28,8 +28,13 @@ import type { ConnectorKind, DraftEdge, DraftNode, EdgeSemantic } from './types'
  * one place that folding would be wrong — a Component talking to *another* Component or Adapter,
  * where "calls" wrongly implies a network hop — gets its own exact `component>component` row
  * instead (see the `MATRIX` below), which `capabilityFor` checks before `resolved()` ever runs.
- * `componentKind` (generic/module/adapter) never sub-divides the category further — unlike
- * Service's kinds, none of Component's carries its own relationship rule.
+ * `componentKind` generic/module/adapter never sub-divide the category further — none of those
+ * three carries its own relationship rule. `port` is the one Component kind that does: a port is
+ * a *contract*, not a thing that does work, and it takes part in exactly two relationships — it
+ * is called or used by whatever depends on it, and implemented by whatever satisfies it — so it
+ * gets its own `port` category with its own rows below, and never folds to `service` or
+ * `component` (a port doesn't write to a database or publish to a queue; something that
+ * implements it does).
  */
 export type NodeCategory =
   | 'actor'
@@ -39,6 +44,7 @@ export type NodeCategory =
   | 'scheduler'
   | 'gateway'
   | 'component'
+  | 'port'
   | 'database'
   | 'cache'
   | 'fileSystem'
@@ -47,10 +53,11 @@ export type NodeCategory =
   | 'queue'
   | 'topic'
   | 'junction'
+  | 'deadLetter'
   | 'generic';
 
 type CategorizableNode = Pick<DraftNode, 'type'> &
-  Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind' | 'queueKind'>>;
+  Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind' | 'queueKind' | 'deliveryRole' | 'componentKind'>>;
 
 export function categoryOf(node: CategorizableNode): NodeCategory {
   switch (node.type) {
@@ -83,11 +90,17 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
           return 'database';
       }
     case 'queue':
+      // A dead-letter queue is still a queue-shaped thing (`resolved()` folds it back to `queue`
+      // for every pairing without its own row), but the pairing that *feeds* it — a queue
+      // parking a message it gave up on — is its own relationship, so it needs its own category
+      // for the matrix to see it at all. Checked ahead of `queueKind`: a DLQ is always a plain
+      // queue underneath (`addDeadLetterQueue` never generates one for a Topic or a Stream).
+      if (node.deliveryRole === 'dead-letter') return 'deadLetter';
       return node.queueKind === 'topic' ? 'topic' : 'queue';
     case 'ellipse':
       return 'junction';
     case 'component':
-      return 'component';
+      return node.componentKind === 'port' ? 'port' : 'component';
     default:
       return 'generic';
   }
@@ -140,6 +153,15 @@ export interface ConnectionCapability {
   defaultRelation?: EdgeSemantic;
   behaviors: readonly ConnectorKind[];
   defaultBehavior?: ConnectorKind;
+  /**
+   * Whether a freshly inferred connector for this pairing is asynchronous (`DraftEdge.async`) —
+   * a dashed line — as well as carrying `defaultBehavior`. Most pairings leave this unset: an
+   * `event` behaviour already dots its own line, and a call is synchronous unless the user says
+   * otherwise. Only a pairing whose behaviour has no dash of its own but whose meaning is
+   * genuinely asynchronous (a queue dead-lettering a message after its delivery attempts run
+   * out) needs it.
+   */
+  defaultAsync?: boolean;
   status?: RelationshipStatus;
   guidance?: string;
   quickFix?: RelationshipQuickFix;
@@ -150,7 +172,7 @@ function capability(
   defaultRelation: EdgeSemantic | undefined,
   behaviors: ConnectorKind[],
   defaultBehavior?: ConnectorKind,
-  opinion?: Pick<ConnectionCapability, 'status' | 'guidance' | 'quickFix'>,
+  opinion?: Pick<ConnectionCapability, 'status' | 'guidance' | 'quickFix' | 'defaultAsync'>,
 ): ConnectionCapability {
   return { relations, defaultRelation, behaviors, defaultBehavior, ...opinion };
 }
@@ -231,6 +253,22 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // (writes/reads/publishes/calls), which is exactly right: "internal-like toward the application,
   // service-like toward infrastructure" falls out of `categoryOf` alone, no new sub-category needed.
   'component>component': capability(['uses', 'dependsOn', 'calls'], 'uses', []),
+  // A port is a contract owned by whatever sits behind it (an application core's inbound/outbound
+  // ports, a plugin boundary, a module's published interface). Every arrow keeps its runtime
+  // direction — a caller calls the port, the port is implemented by what sits behind it — and the
+  // words are what carry dependency inversion: `implementedBy` says the thing *after* the port
+  // depends on the port's owner, not the other way round. `port` never folds (see `resolved()`),
+  // so any pairing not listed here has no opinion: a port doesn't write, publish, or route.
+  'service>port': capability(['calls', 'dependsOn'], 'calls', []),
+  'component>port': capability(['uses', 'dependsOn'], 'uses', []),
+  'port>component': capability(['implementedBy', 'dependsOn'], 'implementedBy', []),
+  'port>service': capability(['implementedBy', 'dependsOn'], 'implementedBy', []),
+  // The one mistake worth a nudge: wiring a port straight to storage makes the port look like an
+  // infrastructure-owned thing. It's a contract; an adapter implements it and talks to the store.
+  'port>database': capability(['dependsOn'], undefined, [], undefined, {
+    status: 'unusual',
+    guidance: 'A port is a contract — something implements it and talks to the data store.',
+  }),
   'actor>service': capability(['calls', 'http', 'command'], 'calls', []),
   'service>external': capability(
     ['calls', 'http', 'grpc', 'command', 'event', 'dependsOn'],
@@ -251,6 +289,21 @@ const MATRIX: Record<string, ConnectionCapability> = {
     status: 'unusual',
     guidance: "A queue doesn't typically publish to a topic — something usually consumes it and forwards the message.",
     quickFix: { id: 'insert-worker', label: 'Insert Worker' },
+  }),
+  // A queue parking a message it has given up delivering — the same edge `addDeadLetterQueue`
+  // generates, now also what a hand-drawn Queue → DLQ connector infers, so the two can't drift.
+  // `failure` has no dash pattern of its own (`edges/kindStyle.ts`), and dead-lettering is
+  // genuinely asynchronous, so this is the one row that also asks for a dashed line.
+  'queue>deadLetter': capability(['deadLetters', 'dependsOn'], 'deadLetters', [], 'failure', {
+    defaultAsync: true,
+  }),
+  // A Topic never dead-letters: it fans a message out and is done. Retries, and where a poison
+  // message ends up after they run out, belong to each consumer's own delivery path — the same
+  // rule `addDeadLetterQueue` enforces by refusing a Topic, restated here as guidance for a
+  // connector someone draws by hand rather than a dead end.
+  'topic>deadLetter': capability(['dependsOn'], undefined, [], undefined, {
+    status: 'unusual',
+    guidance: "A topic doesn't dead-letter — retries and a DLQ belong to each consumer's own queue.",
   }),
   // Deliberately not JDBC/synchronous-request-shaped — see `defaultsToResponse`, which this
   // pairing is intentionally absent from. "Ingests" is the default because it's the most
@@ -309,7 +362,10 @@ const MATRIX: Record<string, ConnectionCapability> = {
   }),
 };
 
-/** `external`, `worker`, `scheduler`, `gateway`, and `component` are all flavours of `service` for
+/** `port` never folds — a contract is not a flavour of anything, and an unlisted pairing that touched
+ *  it should stay neutral rather than inherit `service`'s or `component`'s verbs. `deadLetter` is a flavour of `queue` (a DLQ is consumed, re-driven and published into exactly like
+ *  any other queue — only the pairing that feeds it has its own row above), and `external`,
+ *  `worker`, `scheduler`, `gateway`, and `component` are all flavours of `service` for
  *  every pairing that doesn't have its own explicit entry above — same "no opinion beats a wrong
  *  one" rule every other sub-kind-derived category follows (see the matrix's own doc comment), just
  *  with a fallback instead of nothing, because all five remain fundamentally service-shaped (they
@@ -322,6 +378,7 @@ const MATRIX: Record<string, ConnectionCapability> = {
  *  wrong — two Components talking to each other — has its own exact `component>component` row
  *  above instead, checked first by `capabilityFor` before this fallback is ever reached. */
 function resolved(category: NodeCategory): NodeCategory {
+  if (category === 'deadLetter') return 'queue';
   return category === 'external' ||
     category === 'worker' ||
     category === 'scheduler' ||
@@ -485,7 +542,7 @@ export function inferredJunctionSemantic(graph: GraphLike, junctionNodeId: strin
   return semantics.size === 1 ? [...semantics][0] : undefined;
 }
 
-type Relationship = { kind?: ConnectorKind; semantic?: EdgeSemantic };
+type Relationship = { kind?: ConnectorKind; semantic?: EdgeSemantic; async?: boolean };
 
 /**
  * Infers a connector's relationship semantics from what it actually connects
@@ -499,7 +556,7 @@ type Relationship = { kind?: ConnectorKind; semantic?: EdgeSemantic };
 export function inferRelationship(source: CategorizableNode, target: CategorizableNode): Relationship | undefined {
   const found = capabilityFor(categoryOf(source), categoryOf(target));
   if (!found?.defaultRelation) return undefined;
-  return { semantic: found.defaultRelation, kind: found.defaultBehavior };
+  return { semantic: found.defaultRelation, kind: found.defaultBehavior, async: found.defaultAsync };
 }
 
 /**

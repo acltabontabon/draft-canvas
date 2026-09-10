@@ -65,4 +65,5 @@ export const COMPONENT_KIND_OPTION_LABELS: Record<ComponentKind, string> = {
   generic: 'Generic',
   module: 'Module',
   adapter: 'Adapter',
+  port: 'Port',
 };

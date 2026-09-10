@@ -56,14 +56,21 @@ export const DEFAULTS = {
    *  as a stretched database icon rather than a deliberate container shape. */
   dataStoreWidth: 148,
   dataStoreHeight: 88,
-  /** The tube is a compact glyph anchored to the top, with only its kind
-   *  caption (no editable name — see `defaultTextFor`) sitting snugly below
-   *  it — sized to leave just enough margin below the caption for a
-   *  top/bottom-anchored connector to meet the node without a visible gap.
-   *  Narrower than the standard node width too, now that it's this short —
-   *  the full 176px read as a stretched bar around a much smaller glyph. */
+  /** The tube is a compact glyph anchored to the top, with its kind caption
+   *  sitting snugly below it — sized to leave just enough margin below the
+   *  caption for a top/bottom-anchored connector to meet the node without a
+   *  visible gap. A queue starts with no name of its own (`defaultTextFor`),
+   *  so this is the caption-only height. Narrower than the standard node
+   *  width too, now that it's this short — the full 176px read as a
+   *  stretched bar around a much smaller glyph. */
   queueWidth: 140,
   queueHeight: 48,
+  /** The same box once a queue-family node has been given a name: the name and the kind caption
+   *  stack under the tube (`nodes/describe.ts`'s `queue()` — tube 34, a 14px name line, a 2px gap,
+   *  a 9px kind line, and the same bottom margin as the caption-only box). `createNode` uses it
+   *  for a queue created with a name, and `updateNodeText` grows/shrinks between the two defaults
+   *  as a name is typed or cleared — never touching a box the user has sized by hand. */
+  queueNamedHeight: 72,
   /** ~13%/~18% smaller than Service's own default (`nodeWidth`/`nodeHeight`) — a deliberate visual
    *  hierarchy, not just a stylistic choice: a Component is meant to read at a glance as something
    *  contained within a larger boundary, never a peer of the deployable/runtime things around it.

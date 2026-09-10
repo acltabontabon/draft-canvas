@@ -540,6 +540,15 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
 
         Object.assign(attachment, validateAttachableFields(rawAttachment, attachmentType));
 
+        // Kept for the same reason a node's attachment keeps it: detaching restores the card at
+        // the size it had, not a default.
+        const width = finite(rawAttachment.width, Number.NaN);
+        const height = finite(rawAttachment.height, Number.NaN);
+        if (Number.isFinite(width) && Number.isFinite(height)) {
+          attachment.width = clamp(width, LIMITS.minNodeSize, LIMITS.maxNodeSize);
+          attachment.height = clamp(height, LIMITS.minNodeSize, LIMITS.maxNodeSize);
+        }
+
         attachments.push(attachment);
       }
       if (attachments.length > 0) edge.attachments = attachments;

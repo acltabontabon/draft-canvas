@@ -686,10 +686,12 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
     );
   }
   if (node.type === 'queue') {
-    // Consuming from it is universally valid for a plain Queue or a Stream (both resolve to the
-    // `'queue'` category — `categoryOf` already folds `queueKind: 'stream'` in) but not for a
-    // Topic: a fan-out subscriber is a different relationship, not offered here.
-    if (categoryOf(node) === 'queue') {
+    // Consuming from it is universally valid for a plain Queue, a Stream (`categoryOf` already
+    // folds `queueKind: 'stream'` in) or a DLQ (a re-drive worker reads a dead-letter queue like
+    // any other) but not for a Topic: a fan-out subscriber is a different relationship, not
+    // offered here.
+    const category = categoryOf(node);
+    if (category === 'queue' || category === 'deadLetter') {
       commands.push({
         id: 'add-consumer',
         title: 'Add Consumer',
@@ -804,7 +806,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       id: 'edge-semantic',
       title: 'Change relationship…',
       group: 'connector',
-      keywords: ['semantic', 'http', 'event', 'reads', 'writes', 'publishes', 'consumes', 'calls', 'meaning', 'type'],
+      keywords: ['semantic', 'http', 'event', 'reads', 'writes', 'publishes', 'consumes', 'calls', 'implements', 'implemented by', 'meaning', 'type'],
       hint: semanticTitle,
       run: () => ({
         prompt: 'Relationship',

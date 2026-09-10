@@ -27,6 +27,17 @@ describe('categoryOf', () => {
     expect(categoryOf({ type: 'queue', queueKind: 'queue' })).toBe('queue');
   });
 
+  it('reads a port component as its own category, and every other component kind as component', () => {
+    expect(categoryOf({ type: 'component', componentKind: 'port' })).toBe('port');
+    expect(categoryOf({ type: 'component', componentKind: 'adapter' })).toBe('component');
+    expect(categoryOf({ type: 'component' })).toBe('component');
+  });
+
+  it('reads a dead-letter queue as its own category, ahead of its queue kind', () => {
+    expect(categoryOf({ type: 'queue', queueKind: 'queue', deliveryRole: 'dead-letter' })).toBe('deadLetter');
+    expect(categoryOf({ type: 'queue', deliveryRole: 'dead-letter' })).toBe('deadLetter');
+  });
+
   it('reads a plain service as service, an external one as external, and a worker as its own category', () => {
     expect(categoryOf({ type: 'service' })).toBe('service');
     expect(categoryOf({ type: 'service', serviceKind: 'generic' })).toBe('service');
@@ -98,6 +109,51 @@ describe('capabilityFor — the capability matrix', () => {
 
   it('queue → queue is ambiguous — no capability at all', () => {
     expect(capabilityFor('queue', 'queue')).toBeUndefined();
+  });
+
+  it('queue → dead-letter queue: defaults to dead-letters as a dashed failure route, no behaviour picker', () => {
+    const cap = capabilityFor('queue', 'deadLetter')!;
+    expect(cap.relations).toEqual(['deadLetters', 'dependsOn']);
+    expect(cap.defaultRelation).toBe('deadLetters');
+    expect(cap.behaviors).toEqual([]);
+    expect(cap.defaultBehavior).toBe('failure');
+    expect(cap.defaultAsync).toBe(true);
+    expect(cap.status).toBeUndefined();
+  });
+
+  it('topic → dead-letter queue: unusual, no default, guidance only — a topic never dead-letters', () => {
+    const cap = capabilityFor('topic', 'deadLetter')!;
+    expect(cap.defaultRelation).toBeUndefined();
+    expect(cap.status).toBe('unusual');
+    expect(cap.guidance).toMatch(/consumer's own queue/);
+    expect(cap.quickFix).toBeUndefined();
+    expect(cap.relations).not.toContain('deadLetters');
+  });
+
+  it('port: called by services, used by components, implemented by whatever sits behind it', () => {
+    expect(capabilityFor('service', 'port')).toMatchObject({ defaultRelation: 'calls', behaviors: [] });
+    expect(capabilityFor('component', 'port')).toMatchObject({ defaultRelation: 'uses', behaviors: [] });
+    expect(capabilityFor('port', 'component')).toMatchObject({ defaultRelation: 'implementedBy', behaviors: [] });
+    expect(capabilityFor('port', 'service')).toMatchObject({ defaultRelation: 'implementedBy', behaviors: [] });
+    // Service flavours fold as usual on the non-port side…
+    expect(capabilityFor('worker', 'port')).toEqual(capabilityFor('service', 'port'));
+    expect(capabilityFor('external', 'port')).toEqual(capabilityFor('service', 'port'));
+    expect(capabilityFor('port', 'external')).toEqual(capabilityFor('port', 'service'));
+    // …but a port itself never folds: unlisted pairings stay neutral, and storage gets a nudge.
+    expect(capabilityFor('port', 'port')).toBeUndefined();
+    expect(capabilityFor('port', 'queue')).toBeUndefined();
+    expect(capabilityFor('database', 'port')).toBeUndefined();
+    const toStore = capabilityFor('port', 'database')!;
+    expect(toStore.defaultRelation).toBeUndefined();
+    expect(toStore.status).toBe('unusual');
+    expect(toStore.guidance).toMatch(/contract/);
+  });
+
+  it('a dead-letter queue is otherwise a plain queue for every pairing without its own row', () => {
+    expect(capabilityFor('deadLetter', 'service')).toEqual(capabilityFor('queue', 'service'));
+    expect(capabilityFor('deadLetter', 'worker')).toEqual(capabilityFor('queue', 'service'));
+    expect(capabilityFor('service', 'deadLetter')).toEqual(capabilityFor('service', 'queue'));
+    expect(capabilityFor('deadLetter', 'deadLetter')).toBeUndefined();
   });
 
   it('service → topic: defaults to publishes, same shape as service → queue', () => {
@@ -461,6 +517,24 @@ describe('inferRelationship — a thin wrapper over capabilityFor\'s default', (
     expect(
       inferRelationship({ type: 'database', databaseKind: 'cache' }, { type: 'service' }),
     ).toEqual({ semantic: 'reads', kind: undefined });
+  });
+
+  it('infers a port relationship in runtime direction with the inversion in the word', () => {
+    const port = { type: 'component', componentKind: 'port' } as const;
+    const adapter = { type: 'component', componentKind: 'adapter' } as const;
+    expect(inferRelationship({ type: 'service', serviceKind: 'api' }, port)).toEqual({ semantic: 'calls', kind: undefined });
+    expect(inferRelationship({ type: 'component' }, port)).toEqual({ semantic: 'uses', kind: undefined });
+    expect(inferRelationship(port, adapter)).toEqual({ semantic: 'implementedBy', kind: undefined });
+    expect(inferRelationship(port, { type: 'service' })).toEqual({ semantic: 'implementedBy', kind: undefined });
+    expect(inferRelationship(port, { type: 'database' })).toBeUndefined();
+  });
+
+  it('infers a dashed dead-letter route from a queue into a DLQ, and nothing from a topic into one', () => {
+    const dlq = { type: 'queue', deliveryRole: 'dead-letter' } as const;
+    expect(inferRelationship({ type: 'queue' }, dlq)).toEqual({ semantic: 'deadLetters', kind: 'failure', async: true });
+    expect(inferRelationship({ type: 'queue', queueKind: 'topic' }, dlq)).toBeUndefined();
+    // Everything else the matrix infers is left to its behaviour's own dash — no `async` opinion.
+    expect(inferRelationship({ type: 'queue' }, { type: 'service' })?.async).toBeUndefined();
   });
 
   it('stays neutral for undocumented pairs and for queue → queue', () => {

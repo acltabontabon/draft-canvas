@@ -153,6 +153,7 @@ const COMPONENT_KIND_NAMES: Record<ComponentKind, string> = {
   generic: 'Component',
   module: 'Module',
   adapter: 'Adapter',
+  port: 'Port',
 };
 
 /**
@@ -229,7 +230,10 @@ export function createNode(input: CreateNodeInput): DraftNode {
     x: input.x,
     y: input.y,
     width: input.width ?? size.width,
-    height: input.height ?? size.height,
+    // A queue-family node created *with* a name needs the taller box that fits the name and its
+    // kind caption stacked under the tube — see `DEFAULTS.queueNamedHeight`.
+    height:
+      input.height ?? (input.type === 'queue' && input.text?.trim() ? DEFAULTS.queueNamedHeight : size.height),
     z: input.z ?? 0,
     text: input.text ?? defaultTextFor(input.type, input.serviceKind, input.componentKind),
     // A caller-supplied `text` is a deliberate name, kept forever. An omitted one is a

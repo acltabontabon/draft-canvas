@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
-import { queueTubeCenterFraction } from '../src/nodes/describe';
+import { queueTubeCenterFraction } from '../src/document/queueGeometry';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 describe('addDeadLetterQueue() / removeDeadLetterQueue() — "Add DLQ"', () => {
@@ -38,7 +38,8 @@ describe('addDeadLetterQueue() / removeDeadLetterQueue() — "Add DLQ"', () => {
     expect(edge.kind).toBe('failure');
     expect(edge.async).toBe(true);
     expect(edge.deliveryAttempts).toBe(3);
-    expect(edge.semanticsOrigin).toBe('explicit');
+    // Derived from the matrix's own `queue>deadLetter` row, so it re-infers like any hand-drawn edge.
+    expect(edge.semanticsOrigin).toBe('inferred');
 
     expect(store.getState().selection).toEqual({ nodes: [dlq.id], edges: [] });
   });

@@ -171,6 +171,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const focus = useEditorStore((state) => state.focus);
   const mode = useEditorStore((state) => state.mode);
   const updateEdgeLabel = useEditorStore((state) => state.updateEdgeLabel);
+  const setEdgeCondition = useEditorStore((state) => state.setEdgeCondition);
   const updateEdgeAttachment = useEditorStore((state) => state.updateEdgeAttachment);
   const removeEdgeAttachment = useEditorStore((state) => state.removeEdgeAttachment);
   const detachEdgeAttachment = useEditorStore((state) => state.detachEdgeAttachment);
@@ -216,6 +217,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
   const [editing, setEditing] = useState(false);
   const stopEditing = useCallback(() => setEditing(false), []);
+  // The condition chip is editable in place exactly like the label chip: anything a diagram shows
+  // on a connector, the person looking at it can double-click and change — a route rule shouldn't
+  // send them hunting for the inspector's own Condition field.
+  const [editingCondition, setEditingCondition] = useState(false);
+  const stopEditingCondition = useCallback(() => setEditingCondition(false), []);
   const editRequested = useUiStore((state) => state.editRequestId === id);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
 
@@ -736,8 +742,36 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               transform: conditionTransform(route.labelSide, labelX, labelY),
             }}
           >
-            <span className="dc-edge-condition" style={{ color }}>
-              {conditionText}
+            <span
+              className="dc-edge-condition"
+              data-editing={editingCondition ? 'true' : undefined}
+              style={{ color }}
+              title={mode === 'edit' && !editingCondition ? 'Double-click to edit' : undefined}
+              onDoubleClick={() => mode === 'edit' && setEditingCondition(true)}
+            >
+              {editingCondition ? (
+                <input
+                  autoFocus
+                  className="dc-edge-condition-input"
+                  aria-label="Condition"
+                  defaultValue={edge.condition ?? ''}
+                  spellCheck={false}
+                  onBlur={(event) => {
+                    setEdgeCondition(edge.id, event.currentTarget.value.trim());
+                    stopEditingCondition();
+                  }}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === 'Enter') {
+                      setEdgeCondition(edge.id, event.currentTarget.value.trim());
+                      stopEditingCondition();
+                    }
+                    if (event.key === 'Escape') stopEditingCondition();
+                  }}
+                />
+              ) : (
+                conditionText
+              )}
             </span>
           </div>
         )}

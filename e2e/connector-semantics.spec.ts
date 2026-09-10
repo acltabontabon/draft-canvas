@@ -141,6 +141,7 @@ test.describe('contextual connector toolbar', () => {
       'Indexes',
       'Routes',
       'Triggers',
+      'Implemented by',
     ]);
   });
 
@@ -333,6 +334,7 @@ test.describe('Junction connector', () => {
       'Indexes',
       'Routes',
       'Triggers',
+      'Implemented by',
     ]);
     await page.keyboard.press('Escape');
 

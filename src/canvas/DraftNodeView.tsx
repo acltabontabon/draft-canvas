@@ -87,8 +87,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     if (!editRequested) return;
     useUiStore.getState().requestEdit(null);
     // oxlint-disable-next-line set-state-in-effect -- one-shot external command, see comment above.
-    if (mode !== 'present' && node?.type !== 'queue') setEditing(true);
-  }, [editRequested, mode, node?.type]);
+    if (mode !== 'present') setEditing(true);
+  }, [editRequested, mode]);
 
   useLayoutEffect(() => {
     if (!editing) return;
@@ -160,9 +160,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const isCode = node.type === 'code';
 
   const beginEditing = () => {
-    // A queue's name is always just its kind (Queue/Topic/Stream) — see
-    // `nodes/describe.ts`'s `queue()` — so there is nothing here to type.
-    if (readOnly || node.type === 'queue') return;
+    if (readOnly) return;
     setEditing(true);
   };
 
