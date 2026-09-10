@@ -156,7 +156,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
             tabIndex={0}
           >
             <div className="dc-flow-item-head" onClick={() => setSelectedFlowId(null)}>
-              <span className="dc-flow-expand" aria-hidden="true" />
+              <span className="dc-flow-expand-spacer" aria-hidden="true" />
               <button type="button" className="dc-flow-title" tabIndex={-1}>
                 Diagram
               </button>
@@ -374,7 +374,9 @@ function StepRow({
           {edge ? (
             <>
               {source ? displayNameFor(source) : 'Untitled'}
+              {' '}
               <span className="dc-flow-step-arrow">→</span>
+              {' '}
               {target ? displayNameFor(target) : 'Untitled'}
             </>
           ) : extraNodes.length > 0 ? (
@@ -384,7 +386,12 @@ function StepRow({
           ) : (
             'Empty step'
           )}
-          {detail && <em className="dc-flow-step-caption">{detail}</em>}
+          {detail && (
+            <>
+              {' '}
+              <em className="dc-flow-step-caption">{detail}</em>
+            </>
+          )}
         </button>
         <span className="dc-flow-step-actions">
           <Button

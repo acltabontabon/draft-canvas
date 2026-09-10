@@ -27,14 +27,14 @@ async function createNode(page: Page, tool: string, at: { x: number; y: number }
 }
 
 /**
- * Opens the full Flow management panel (rename, reorder, remove steps) via
- * the compact flow switcher's "Manage flows…" action — the switcher itself
- * (`Flows ⟨name⟩ ▾`, title "Switch flows (F)") is a different, lighter
- * surface for just picking which flow is the active lens.
+ * Shows the Flows panel — the one surface for flows — unless it is already showing. Creating
+ * a flow opens the panel on its own (to name it), and the toolbar's "Flows" button is a toggle,
+ * so clicking blindly would close it again.
  */
 async function openFlowPanel(page: Page) {
-  await page.getByTitle('Switch flows (F)').click();
-  await page.getByRole('button', { name: 'Manage flows…' }).click();
+  const panel = page.locator('.dc-flow-panel');
+  if (!(await panel.isVisible())) await page.getByTitle('Flows (F)').click();
+  await expect(panel).toBeVisible();
 }
 
 async function closeFlowPanel(page: Page) {
@@ -89,28 +89,48 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
 }
 
 /**
- * Selects a connector (by its position in `document.edges` creation order —
- * see `clickEdgeBetween`) and adds it to a flow via the popover's
- * flow-membership panel — checking an existing flow's box, or starting a
- * brand new one.
+ * Selects a connector (by its position in `document.edges` creation order — see
+ * `clickEdgeBetween`) and adds it to a flow through the popover's flow chip, whose behaviour
+ * follows its `data-flow-state`: with no flows at all (`none`) one click starts a flow with this
+ * connector; with an active flow the connector isn't in (`add`) one click appends it; otherwise
+ * (`list`) it opens the membership checklist. Starting a new flow lands in the Flows panel's name
+ * field — `newTitle` types a name, or Enter keeps the default ("Untitled flow", numbered after).
  */
-async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: string) {
+async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: string, newTitle?: string) {
   await clickEdgeBetween(page, edgeIndex);
-  await page.locator('[title="Flow membership"]').click();
+  const chip = page.locator('[title="Flow membership"]');
+  await expect(chip).toBeVisible();
+  const state = await chip.getAttribute('data-flow-state');
 
-  // Not `.dc-edge-inspector-panel` — that base class is now shared with the connector's own
-  // always-visible contextual editor too; `.dc-edge-inspector-membership` is this checklist's
-  // own distinguishing class.
-  const panel = page.locator('.dc-edge-inspector-membership');
-  await expect(panel).toBeVisible();
-  if (existingFlowTitle) {
+  if (!existingFlowTitle) {
+    if (state === 'none') {
+      await chip.click();
+    } else {
+      // Only the checklist can start a *second* flow from a connector.
+      expect(state).toBe('list');
+      await chip.click();
+      await page.getByRole('button', { name: '+ New flow' }).click();
+    }
+    const field = page.locator('.dc-flow-title-input');
+    await expect(field).toBeFocused();
+    if (newTitle) await field.fill(newTitle);
+    await field.press('Enter');
+    return;
+  }
+
+  if (state === 'add' && (await chip.textContent()) === `Add to ${existingFlowTitle}`) {
+    await chip.click();
+  } else {
+    await chip.click();
+    // Not `.dc-edge-inspector-panel` — that base class is shared with the connector's own
+    // contextual editor; `.dc-edge-inspector-membership` is this checklist's own class.
+    await expect(page.locator('.dc-edge-inspector-membership')).toBeVisible();
     const checkbox = page.getByRole('checkbox', { name: existingFlowTitle });
     await expect(checkbox).not.toBeChecked();
     await checkbox.check();
     await expect(checkbox).toBeChecked();
-  } else {
-    await page.getByRole('button', { name: '+ New flow' }).click();
   }
+  await expect(chip).toContainText(existingFlowTitle);
 }
 
 test.describe('Draft Canvas', () => {
@@ -257,7 +277,7 @@ test.describe('Draft Canvas', () => {
     // The flow survived the round trip too — not just the raw nodes/edges.
     await openFlowPanel(page);
     await expect(page.locator('.dc-flow-item')).toHaveCount(1);
-    await expect(page.locator('.dc-flow-item')).toContainText('1 steps');
+    await expect(page.locator('.dc-flow-item')).toContainText('1 step');
     await closeFlowPanel(page);
 
     // And it is editable again, not a read-only import.
@@ -300,8 +320,8 @@ test.describe('Draft Canvas', () => {
     await addToFlow(page, 1, 'Untitled flow');
     await expect(page.locator('.dc-edge-step')).toHaveCount(2);
 
-    await page.getByTitle(/^Present/).click();
-    // Exactly one flow exists, so presentation starts it directly.
+    await page.getByTitle('Present (Cmd+Enter)').click();
+    // The flow just built is the active one, so presentation starts it directly.
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
     await expect(page.locator('.dc-canvas[data-explain="on"]')).toBeVisible();
@@ -331,7 +351,7 @@ test.describe('Draft Canvas', () => {
     await page.locator('.dc-node').first().click();
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
 
-    await page.getByTitle(/^Present/).click();
+    await page.getByTitle('Present (Cmd+Enter)').click();
     await expect(page.locator('.dc-canvas[data-explain="on"], .react-flow')).toBeVisible();
     // A selection ring from editing has no meaning in a read-only
     // presentation, and no drag-in-progress chrome (guides, attach

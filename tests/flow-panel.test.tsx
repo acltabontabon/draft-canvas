@@ -185,7 +185,7 @@ describe('FlowPanel', () => {
 
     fireEvent.click(screen.getByLabelText('Expand'));
     const step = screen.getByRole('button', { name: /^A.*B.*calls$/ });
-    expect(step.textContent).toBe('A→Bcalls');
+    expect(step.textContent).toBe('A → B calls');
     fireEvent.click(step);
     expect(useEditorStore.getState().selection.edges).toEqual([edge.id]);
   });

@@ -20,14 +20,24 @@ async function createNode(page: Page, tool: string, at: { x: number; y: number }
 }
 
 /**
- * Opens the full Flow management panel (rename, reorder, remove steps) via
- * the compact flow switcher's "Manage flows…" action — the switcher itself
- * (`Flows ⟨name⟩ ▾`, title "Switch flows (F)") is a different, lighter
- * surface for just picking which flow is the active lens.
+ * Shows the Flows panel — the one surface for flows — unless it is already showing. Creating
+ * a flow opens the panel on its own (to name it), and the toolbar's "Flows" button is a toggle,
+ * so clicking blindly would close it again.
  */
 async function openFlowPanel(page: Page) {
-  await page.getByTitle('Switch flows (F)').click();
-  await page.getByRole('button', { name: 'Manage flows…' }).click();
+  const panel = page.locator('.dc-flow-panel');
+  if (!(await panel.isVisible())) await page.getByTitle('Flows (F)').click();
+  await expect(panel).toBeVisible();
+}
+
+/** Renames the `index`-th flow in the panel the way a user does: double-click the name, type, Enter. */
+async function renameFlow(page: Page, index: number, title: string) {
+  const row = page.locator('.dc-flow-item').nth(index);
+  await row.locator('.dc-flow-title').dblclick();
+  const field = page.locator('.dc-flow-title-input');
+  await field.fill(title);
+  await field.press('Enter');
+  await expect(row.locator('.dc-flow-title')).toHaveText(title);
 }
 
 async function closeFlowPanel(page: Page) {
@@ -77,28 +87,48 @@ async function clickEdgeBetween(page: Page, edgeIndex: number) {
 }
 
 /**
- * Selects a connector (by its position in `document.edges` creation order —
- * see `clickEdgeBetween`) and adds it to a flow via the popover's
- * flow-membership panel — checking an existing flow's box, or starting a
- * brand new one.
+ * Selects a connector (by its position in `document.edges` creation order — see
+ * `clickEdgeBetween`) and adds it to a flow through the popover's flow chip, whose behaviour
+ * follows its `data-flow-state`: with no flows at all (`none`) one click starts a flow with this
+ * connector; with an active flow the connector isn't in (`add`) one click appends it; otherwise
+ * (`list`) it opens the membership checklist. Starting a new flow lands in the Flows panel's name
+ * field — `newTitle` types a name, or Enter keeps the default ("Untitled flow", numbered after).
  */
-async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: string) {
+async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: string, newTitle?: string) {
   await clickEdgeBetween(page, edgeIndex);
-  await page.locator('[title="Flow membership"]').click();
+  const chip = page.locator('[title="Flow membership"]');
+  await expect(chip).toBeVisible();
+  const state = await chip.getAttribute('data-flow-state');
 
-  // Not `.dc-edge-inspector-panel` — that base class is now shared with the connector's own
-  // always-visible contextual editor too; `.dc-edge-inspector-membership` is this checklist's
-  // own distinguishing class.
-  const panel = page.locator('.dc-edge-inspector-membership');
-  await expect(panel).toBeVisible();
-  if (existingFlowTitle) {
+  if (!existingFlowTitle) {
+    if (state === 'none') {
+      await chip.click();
+    } else {
+      // Only the checklist can start a *second* flow from a connector.
+      expect(state).toBe('list');
+      await chip.click();
+      await page.getByRole('button', { name: '+ New flow' }).click();
+    }
+    const field = page.locator('.dc-flow-title-input');
+    await expect(field).toBeFocused();
+    if (newTitle) await field.fill(newTitle);
+    await field.press('Enter');
+    return;
+  }
+
+  if (state === 'add' && (await chip.textContent()) === `Add to ${existingFlowTitle}`) {
+    await chip.click();
+  } else {
+    await chip.click();
+    // Not `.dc-edge-inspector-panel` — that base class is shared with the connector's own
+    // contextual editor; `.dc-edge-inspector-membership` is this checklist's own class.
+    await expect(page.locator('.dc-edge-inspector-membership')).toBeVisible();
     const checkbox = page.getByRole('checkbox', { name: existingFlowTitle });
     await expect(checkbox).not.toBeChecked();
     await checkbox.check();
     await expect(checkbox).toBeChecked();
-  } else {
-    await page.getByRole('button', { name: '+ New flow' }).click();
   }
+  await expect(chip).toContainText(existingFlowTitle);
 }
 
 /**
@@ -133,16 +163,14 @@ test.describe('Flows', () => {
     await addToFlow(page, 2, 'Untitled flow');
     await expect(page.locator('.dc-edge-step')).toHaveCount(3);
 
-    // Rename it from the Flow panel.
+    // Rename it in place, in the Flow panel.
     await openFlowPanel(page);
-    const titleField = page.locator('.dc-flow-title-input');
-    await titleField.fill('Happy path');
-    await titleField.blur();
+    await renameFlow(page, 0, 'Happy path');
     await expect(page.locator('.dc-flow-item')).toContainText('3 steps');
     await closeFlowPanel(page);
 
-    // Present it — a single flow starts directly, no picker.
-    await page.getByTitle(/^Present/).click();
+    // Present it — the active flow starts directly, no picker.
+    await page.getByTitle('Present (Cmd+Enter)').click();
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Happy path');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 3');
@@ -165,11 +193,8 @@ test.describe('Flows', () => {
 
     await addToFlow(page, 0);
 
-    // The title lives in an input's value, not text content.
     await openFlowPanel(page);
-    await page.locator('.dc-flow-title-input').fill('Renamed flow');
-    await page.locator('.dc-flow-title-input').blur();
-    await expect(page.locator('.dc-flow-title-input')).toHaveValue('Renamed flow');
+    await renameFlow(page, 0, 'Renamed flow');
 
     // Survives a reload — this is a document edit, not transient UI state.
     // A reload lands back on the library, so re-open the diagram first, and
@@ -179,7 +204,7 @@ test.describe('Flows', () => {
     await page.locator('.dc-library-item', { hasText: 'Rename persistence' }).click();
     await expect(page.locator('.dc-editor')).toBeVisible();
     await openFlowPanel(page);
-    await expect(page.locator('.dc-flow-title-input')).toHaveValue('Renamed flow');
+    await expect(page.locator('.dc-flow-item .dc-flow-title')).toHaveText('Renamed flow');
   });
 
   test('a freshly opened document with one flow shows its step badges immediately', async ({ page }) => {
@@ -208,7 +233,9 @@ test.describe('Flows', () => {
     await addToFlow(page, 1, 'Untitled flow');
 
     await openFlowPanel(page);
-    await page.locator('.dc-flow-expand').click();
+    // A freshly created flow is already expanded; only click if it isn't.
+    const expand = page.locator('.dc-flow-expand');
+    if ((await expand.getAttribute('aria-expanded')) !== 'true') await expand.click();
     const steps = page.locator('.dc-flow-step-row');
     await expect(steps).toHaveCount(2);
     await expect(steps.nth(0)).toContainText('Client → API');
@@ -228,26 +255,21 @@ test.describe('Flows', () => {
     await buildArchitecture(page);
     await openFlowPanel(page);
 
-    // Flow A: Client -> API -> Payment.
-    await addToFlow(page, 0);
-    await page.locator('.dc-flow-title-input').fill('Happy path');
-    await page.locator('.dc-flow-title-input').blur();
+    // Flow A: Client -> API -> Payment. Named as it is created; the second connector is one
+    // click because "Happy path" is now the active flow.
+    await addToFlow(page, 0, undefined, 'Happy path');
     await addToFlow(page, 1, 'Happy path');
 
-    // Flow B: shares the first step, then goes straight from API to the queue.
-    await addToFlow(page, 0);
-    const titles = page.locator('.dc-flow-title-input');
-    await expect(titles).toHaveCount(2);
-    await titles.nth(1).fill('Fast path');
-    await titles.nth(1).blur();
+    // Flow B: shares the first step, then goes straight from API to the queue. Its first
+    // connector already belongs to Happy path, so the chip opens the checklist to start it.
+    await addToFlow(page, 0, undefined, 'Fast path');
     await addToFlow(page, 2, 'Fast path');
 
     await expect(page.locator('.dc-flow-item')).toHaveCount(2);
     await expect(page.locator('.dc-flow-item').nth(0)).toContainText('2 steps');
     await expect(page.locator('.dc-flow-item').nth(1)).toContainText('2 steps');
 
-    // Present the second flow explicitly from its own row (input values are
-    // not matched by text locators, so scope by row position instead).
+    // Present the second flow explicitly from its own row.
     await page.locator('.dc-flow-item').nth(1).getByRole('button', { name: /^Present/ }).click();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Fast path');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
@@ -310,7 +332,7 @@ test.describe('Flows', () => {
     });
     await expect(page.locator('.dc-editor')).toBeVisible();
 
-    await page.getByTitle(/^Present/).click();
+    await page.getByTitle('Present (Cmd+Enter)').click();
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Walkthrough');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 1');

@@ -1132,6 +1132,12 @@ kbd {
   color: var(--dc-text);
 }
 
+/* Keeps "Diagram" aligned with the flow rows, which have a real expand chevron. */
+.dc-flow-expand-spacer {
+  flex-shrink: 0;
+  width: 18px;
+}
+
 .dc-flow-title {
   flex: 1;
   min-width: 0;
@@ -1260,12 +1266,11 @@ kbd {
 }
 
 .dc-flow-step-arrow {
-  margin: 0 4px;
   color: var(--dc-text-faint);
 }
 
 .dc-flow-step-caption {
-  margin-left: 6px;
+  margin-left: 2px;
   color: var(--dc-text-faint);
   font-size: 11px;
   font-style: normal;
