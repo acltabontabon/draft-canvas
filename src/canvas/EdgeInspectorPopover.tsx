@@ -504,6 +504,7 @@ function MembershipPanel({ edgeId, store }: { edgeId: string; store: typeof useE
         onClick={() => {
           const state = store.getState();
           const flowId = state.createFlow();
+          if (!flowId) return;
           state.addEdgeToFlow(flowId, edgeId);
           state.setSelectedFlowId(flowId);
         }}

@@ -34,7 +34,7 @@ describe('FlowSwitcher keyboard access', () => {
   beforeEach(reset);
 
   it('selects a focused flow row on Enter and closes the menu', () => {
-    const flowId = useEditorStore.getState().createFlow('Checkout');
+    const flowId = useEditorStore.getState().createFlow('Checkout')!;
     render(<FlowSwitcher />);
 
     const row = screen.getByText('Checkout').closest('[role="menuitemradio"]') as HTMLElement;
@@ -46,7 +46,7 @@ describe('FlowSwitcher keyboard access', () => {
   });
 
   it('selects a focused flow row on Space', () => {
-    const flowId = useEditorStore.getState().createFlow('Refund');
+    const flowId = useEditorStore.getState().createFlow('Refund')!;
     render(<FlowSwitcher />);
 
     const row = screen.getByText('Refund').closest('[role="menuitemradio"]') as HTMLElement;

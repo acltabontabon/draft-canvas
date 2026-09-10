@@ -65,12 +65,33 @@ describe('commandsFor — edit mode', () => {
 
   it('"Switch to flow…" is a two-step command listing Diagram and each flow', () => {
     const state = useEditorStore.getState();
-    const checkout = state.createFlow('Checkout');
+    const checkout = state.createFlow('Checkout')!;
     const ctx = stubContext();
     const stage = commandsFor(ctx).find((command) => command.id === 'switch-flow')!.run(ctx);
     expect(stage && 'options' in stage ? stage.options.map((o) => o.title) : []).toEqual(['Diagram', 'Checkout']);
     if (stage && 'options' in stage) stage.options[1]!.run(ctx);
     expect(useEditorStore.getState().selectedFlowId).toBe(checkout);
+  });
+
+  it('"Add to flow…" does not offer a flow the connector is already an extra member of', () => {
+    const state = useEditorStore.getState();
+    const a = state.addNode({ type: 'service', x: 0, y: 0, text: 'A' });
+    const b = state.addNode({ type: 'service', x: 300, y: 0, text: 'B' });
+    const c = state.addNode({ type: 'service', x: 600, y: 0, text: 'C' });
+    const primary = state.connect(a.id, b.id)!;
+    const extra = state.connect(b.id, c.id)!;
+    const checkout = state.createFlow('Checkout')!;
+    state.createFlow('Refund');
+    state.addEdgeToFlow(checkout, primary.id);
+    const stepId = useEditorStore.getState().document.flows[0]!.steps[0]!.id;
+    state.addFlowStepExtraEdge(checkout, stepId, extra.id);
+    state.setSelection({ nodes: [], edges: [extra.id] });
+
+    const ctx = stubContext();
+    const command = commandsFor(ctx).find((c) => c.id === 'edge-add-to-flow')!;
+    expect(command.hint).toBe('In Checkout');
+    const stage = command.run(ctx);
+    expect(stage && 'options' in stage ? stage.options.map((o) => o.title) : []).toEqual(['Refund', 'New flow']);
   });
 
   it('Start presentation enters present mode and starts playback when a flow exists', () => {
@@ -255,7 +276,7 @@ describe('commandsFor — contextual (8.2)', () => {
     const api = state.addNode({ type: 'service', x: 0, y: 0, text: 'API' });
     const db = state.addNode({ type: 'database', x: 300, y: 0, text: 'DB' });
     const edge = state.connect(api.id, db.id)!;
-    const checkout = state.createFlow('Checkout');
+    const checkout = state.createFlow('Checkout')!;
     state.createFlow('Refund');
     state.addEdgeToFlow(checkout, edge.id);
     state.setSelection({ nodes: [], edges: [edge.id] });

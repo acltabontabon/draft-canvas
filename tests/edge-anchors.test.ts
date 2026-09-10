@@ -488,7 +488,7 @@ describe('reverseEdge', () => {
     const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const b = store.getState().addNode({ type: 'service', x: 300, y: 0 });
     const edge = store.getState().connect(a.id, b.id)!;
-    const flowId = store.getState().createFlow('Checkout');
+    const flowId = store.getState().createFlow('Checkout')!;
     store.getState().addEdgeToFlow(flowId, edge.id);
     const past = store.getState().history.past.length;
 

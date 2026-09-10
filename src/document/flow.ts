@@ -32,6 +32,49 @@ export function findFlow(doc: DraftDocument, flowId: string): DraftFlow | undefi
   return doc.flows.find((flow) => flow.id === flowId);
 }
 
+const DEFAULT_FLOW_TITLE = 'Untitled flow';
+
+/**
+ * The default title for a flow created without one: `Untitled flow`, then `Untitled flow 2`, …
+ * — the first not already taken. A run of identically-named "Untitled flow"s is indistinguishable
+ * in every picker (switcher, palette, connector chip), and since a new flow is meant to be renamed
+ * in the same motion as creating it, the number only ever matters for the ones a user abandons.
+ */
+export function nextFlowTitle(doc: DraftDocument): string {
+  const taken = new Set(doc.flows.map((flow) => flow.title));
+  if (!taken.has(DEFAULT_FLOW_TITLE)) return DEFAULT_FLOW_TITLE;
+  for (let n = 2; ; n += 1) {
+    const candidate = `${DEFAULT_FLOW_TITLE} ${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/**
+ * Whether the flow lights anything up: some step still resolves to a live connector (primary or
+ * extra) or a spotlit node. A brand-new flow, or one whose every member has since been deleted,
+ * has nothing to show — so it is no lens (selecting it must not dim the whole diagram) and
+ * nothing to present. `pruneFlowSteps` keeps dangling references out of a saved document, but a
+ * freshly created flow is legitimately empty, which is the case this exists for.
+ */
+export function flowHasMembers(doc: DraftDocument, flow: DraftFlow): boolean {
+  if (flow.steps.length === 0) return false;
+  const edgeIds = new Set(doc.edges.map((edge) => edge.id));
+  const nodeIds = new Set(doc.nodes.map((node) => node.id));
+  return flow.steps.some(
+    (step) =>
+      (step.edgeId !== undefined && edgeIds.has(step.edgeId)) ||
+      step.extraEdgeIds?.some((id) => edgeIds.has(id)) ||
+      step.extraNodeIds?.some((id) => nodeIds.has(id)),
+  );
+}
+
+/** Whether presenting the flow would show at least one step — `flowHasMembers`, or a step that
+ *  pins its own viewport (a "frame" step with nothing but a camera position still plays). Mirrors
+ *  `resolveFlowStep`'s non-null rule in `presentation/useFlowPlayback.ts`. */
+export function flowIsPlayable(doc: DraftDocument, flow: DraftFlow): boolean {
+  return flowHasMembers(doc, flow) || flow.steps.some((step) => step.viewport !== undefined);
+}
+
 /**
  * 1-based position of an edge within a flow's steps, or `undefined` if it
  * isn't referenced by any — whether as a step's primary connector or one of
@@ -342,6 +385,51 @@ export function setStepViewport(
     const { viewport: _drop, ...rest } = step;
     return rest;
   });
+}
+
+/**
+ * Rewrites every step that names `edgeId` to name `replacementEdgeIds` instead — for a connector
+ * being replaced by a chain (inserting a worker between two nodes splits `A → B` into `A → W`,
+ * `W → B`). A step whose primary connector it was keeps the first replacement and gets one new
+ * step per remaining replacement spliced in right after it, so the story reads `A → W`, `W → B`
+ * where it used to read `A → B`; a step listing it as an extra gets all replacements in place.
+ * Without this, `removeElements` prunes the step and the flow silently loses a beat. Respects the
+ * per-flow step and per-step extra-member caps; no-op if `edgeId` is in no flow.
+ */
+export function spliceEdgeInFlows(
+  doc: DraftDocument,
+  edgeId: string,
+  replacementEdgeIds: readonly string[],
+): DraftDocument {
+  if (replacementEdgeIds.length === 0 || doc.flows.length === 0) return doc;
+  const [first, ...rest] = replacementEdgeIds as [string, ...string[]];
+  let docChanged = false;
+  const flows = doc.flows.map((flow) => {
+    if (stepIndexOf(flow, edgeId) === undefined) return flow;
+    const steps: DraftFlowStep[] = [];
+    for (const step of flow.steps) {
+      if (step.edgeId === edgeId) {
+        steps.push({ ...step, edgeId: first });
+        for (const id of rest) {
+          if (steps.length >= LIMITS.maxStepsPerFlow) break;
+          steps.push({ id: createId('fs'), edgeId: id });
+        }
+        continue;
+      }
+      if (step.extraEdgeIds?.includes(edgeId)) {
+        const extraEdgeIds = step.extraEdgeIds
+          .flatMap((id) => (id === edgeId ? replacementEdgeIds : [id]))
+          .filter((id, index, all) => all.indexOf(id) === index)
+          .slice(0, LIMITS.maxExtraMembersPerStep);
+        steps.push({ ...step, extraEdgeIds });
+        continue;
+      }
+      steps.push(step);
+    }
+    docChanged = true;
+    return { ...flow, steps };
+  });
+  return docChanged ? withFlows(doc, flows) : doc;
 }
 
 /**

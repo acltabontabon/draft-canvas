@@ -191,7 +191,7 @@ describe('routing matrix: a node deleted mid-flow leaves its surviving sibling u
     const c = store.getState().addNode({ type: 'queue', x: 600, y: 0 });
     const e1 = store.getState().connect(a.id, b.id, 'right', 'left')!;
     const e2 = store.getState().connect(b.id, c.id, 'right', 'left')!;
-    const flowId = store.getState().createFlow('Happy path');
+    const flowId = store.getState().createFlow('Happy path')!;
     store.getState().addEdgeToFlow(flowId, e1.id);
     store.getState().addEdgeToFlow(flowId, e2.id);
 

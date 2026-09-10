@@ -64,8 +64,12 @@ import {
   addStepExtraNode,
   deleteFlow,
   findFlow,
+  flowHasMembers,
   flowMemberNodeIds,
   moveStepInFlow,
+  nextFlowTitle,
+  pruneFlowSteps,
+  spliceEdgeInFlows,
   removeStepExtraEdge,
   removeStepExtraNode,
   removeStepFromFlow,
@@ -90,6 +94,7 @@ import type {
   Attachment,
   DraftDocument,
   DraftEdge,
+  DraftFlow,
   DraftNode,
   ConnectorKind,
   DraftSettings,
@@ -352,7 +357,8 @@ export interface EditorStore {
   reparentNode: (nodeId: string, boundaryId: string | null) => void;
 
   /* Flows */
-  createFlow: (title?: string) => string;
+  /** Returns the new flow's id, or `null` when the document is already at `LIMITS.maxFlows`. */
+  createFlow: (title?: string) => string | null;
   renameFlow: (flowId: string, title: string) => void;
   /** Sets, or clears (`accent: null`), a flow's lens accent — see `DraftFlow.accent`. */
   setFlowAccent: (flowId: string, accent: Accent | null) => void;
@@ -604,13 +610,27 @@ function reconcileSessionState(
   return patch;
 }
 
-/** React Flow `fitView({ nodes })` input scoped to the selected flow, or `undefined` to fit
- *  everything — mirrors the exact guard `lensMemberFor` uses in `DraftNodeView.tsx` so
- *  fit-to-view and the dimming lens agree on when a flow is "active" (not during
- *  playback/focus, and only when the flow actually has members). */
-export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefined {
+/**
+ * The flow currently acting as the canvas lens (members lit, everything else dimmed), or
+ * `undefined` when there is none. The single source of truth for "is a lens on" — the canvas
+ * container, every node and edge, and fit-to-view all ask this rather than each re-deriving it,
+ * so they can never disagree. There is no lens during playback or Focus (those own dimming), and
+ * — deliberately — none for a flow with nothing in it: a brand-new empty flow is the *selected*
+ * flow (the panel highlights it, the connector chip offers "Add to it") but must not grey out the
+ * entire diagram before it has a single step. Step badges follow `selectedFlowId` directly; they
+ * are moot for an empty flow anyway.
+ */
+export function lensFlow(
+  state: Pick<EditorStore, 'document' | 'selectedFlowId' | 'flowPlayback' | 'focus'>,
+): DraftFlow | undefined {
   if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active) return undefined;
   const flow = findFlow(state.document, state.selectedFlowId);
+  return flow && flowHasMembers(state.document, flow) ? flow : undefined;
+}
+
+/** React Flow `fitView({ nodes })` input scoped to the lens flow, or `undefined` to fit everything. */
+export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefined {
+  const flow = lensFlow(state);
   if (!flow) return undefined;
   const ids = flowMemberNodeIds(state.document, flow);
   return ids.length > 0 ? ids.map((id) => ({ id })) : undefined;
@@ -881,7 +901,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     state.apply(
       'Insert worker',
-      (doc) => addEdges(addNodes(removeElements(doc, [], [edgeId]), [worker]), [edgeToWorker, edgeFromWorker]),
+      // Replacements are added and spliced into any flow steps *before* the original connector
+      // goes, so a flow that told `A → B` now tells `A → W`, `W → B` instead of losing the beat.
+      (doc) =>
+        removeElements(
+          spliceEdgeInFlows(
+            addEdges(addNodes(doc, [worker]), [edgeToWorker, edgeFromWorker]),
+            edgeId,
+            [edgeToWorker.id, edgeFromWorker.id],
+          ),
+          [],
+          [edgeId],
+        ),
       { selection: { nodes: [worker.id], edges: [] } },
     );
   },
@@ -1322,8 +1353,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       'Ungroup',
       (doc) => {
         const detached = setParent(doc, children, undefined);
-        // Remove only the boundary; `removeElements` would take the contents too.
-        return { ...detached, nodes: detached.nodes.filter((n) => !boundaryIds.has(n.id)) };
+        // Remove only the boundary; `removeElements` would take the contents too — but that also
+        // means skipping its flow cleanup, so a boundary spotlit by a flow step is pruned here.
+        return pruneFlowSteps(
+          { ...detached, nodes: detached.nodes.filter((n) => !boundaryIds.has(n.id)) },
+          new Set(),
+          boundaryIds,
+        );
       },
       { selection: { nodes: children, edges: [] } },
     );
@@ -1443,9 +1479,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   createFlow(title) {
-    const flow = createFlowEntity({ title });
+    const flow = createFlowEntity({ title: title?.trim() || nextFlowTitle(get().document) });
     get().apply('Create flow', (doc) => addFlow(doc, flow));
-    return flow.id;
+    // `addFlow` silently refuses at the cap; without this check a caller would go on to select
+    // and append steps to a flow that doesn't exist.
+    return get().document.flows.some((f) => f.id === flow.id) ? flow.id : null;
   },
 
   renameFlow(flowId, title) {

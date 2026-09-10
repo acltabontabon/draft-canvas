@@ -36,6 +36,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
           aria-label="New flow"
           onClick={() => {
             const id = store.getState().createFlow();
+            if (!id) return;
             setSelectedFlowId(id);
             setExpandedId(id);
           }}

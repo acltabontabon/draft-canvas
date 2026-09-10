@@ -9,10 +9,13 @@ import {
   deleteFlow,
   explainEdgeTier,
   explainNodeTier,
+  flowHasMembers,
+  flowIsPlayable,
   flowMemberNodeIds,
   lensEdgeTier,
   lensNodeTier,
   moveStepInFlow,
+  nextFlowTitle,
   pruneFlowSteps,
   removeStepExtraEdge,
   removeStepExtraNode,
@@ -20,6 +23,7 @@ import {
   renameFlow,
   setFlowAccent,
   setStepViewport,
+  spliceEdgeInFlows,
   stepIndexOf,
   updateFlowStepCaption,
 } from '../src/document/flow';
@@ -27,7 +31,8 @@ import { removeElements } from '../src/document/operations';
 import { resolveFlowStep, stepFocusBounds } from '../src/presentation/useFlowPlayback';
 import { parseDocument } from '../src/document/validate';
 import { CURRENT_VERSION, DRAFT_FORMAT } from '../src/document/types';
-import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { LIMITS } from '../src/document/limits';
+import { __resetInteraction, flowFitViewNodes, lensFlow, useEditorStore } from '../src/store/editorStore';
 
 const store = useEditorStore;
 
@@ -446,7 +451,7 @@ describe('flows through the store', () => {
 
   it('creates a flow and adds connectors to it in order', () => {
     const { edges } = chain(3);
-    const flowId = store.getState().createFlow('Happy path');
+    const flowId = store.getState().createFlow('Happy path')!;
     for (const edge of edges) store.getState().addEdgeToFlow(flowId, edge.id);
 
     const flow = store.getState().document.flows.find((f) => f.id === flowId)!;
@@ -455,8 +460,8 @@ describe('flows through the store', () => {
 
   it('lets the same connector belong to two different flows at different positions', () => {
     const { edges } = chain(3);
-    const happy = store.getState().createFlow('Happy path');
-    const retry = store.getState().createFlow('Retry');
+    const happy = store.getState().createFlow('Happy path')!;
+    const retry = store.getState().createFlow('Retry')!;
 
     store.getState().addEdgeToFlow(happy, edges[0]!.id);
     store.getState().addEdgeToFlow(happy, edges[1]!.id);
@@ -474,7 +479,7 @@ describe('flows through the store', () => {
 
   it('reorders a step earlier or later', () => {
     const { edges } = chain(3);
-    const flowId = store.getState().createFlow();
+    const flowId = store.getState().createFlow()!;
     for (const edge of edges) store.getState().addEdgeToFlow(flowId, edge.id);
     const steps = store.getState().document.flows[0]!.steps;
 
@@ -488,8 +493,8 @@ describe('flows through the store', () => {
 
   it('removes a step without affecting other flows referencing the same connector', () => {
     const { edges } = chain(2);
-    const a = store.getState().createFlow('A');
-    const b = store.getState().createFlow('B');
+    const a = store.getState().createFlow('A')!;
+    const b = store.getState().createFlow('B')!;
     store.getState().addEdgeToFlow(a, edges[0]!.id);
     store.getState().addEdgeToFlow(b, edges[0]!.id);
 
@@ -503,7 +508,7 @@ describe('flows through the store', () => {
 
   it('drops a flow step when its connector is deleted, leaving the rest in order', () => {
     const { edges } = chain(3);
-    const flowId = store.getState().createFlow();
+    const flowId = store.getState().createFlow()!;
     for (const edge of edges) store.getState().addEdgeToFlow(flowId, edge.id);
 
     store.getState().setSelection({ nodes: [], edges: [edges[1]!.id] });
@@ -515,7 +520,7 @@ describe('flows through the store', () => {
 
   it('resets playback and the selected flow when the presented flow is deleted', () => {
     const { edges } = chain(1);
-    const flowId = store.getState().createFlow();
+    const flowId = store.getState().createFlow()!;
     store.getState().addEdgeToFlow(flowId, edges[0]!.id);
     store.getState().setSelectedFlowId(flowId);
     store.getState().setFlowPlayback({ active: true, flowId, step: 1 });
@@ -528,7 +533,7 @@ describe('flows through the store', () => {
 
   it('undoing a flow deletion restores which flow was selected and its playback state', () => {
     const { edges } = chain(1);
-    const flowId = store.getState().createFlow();
+    const flowId = store.getState().createFlow()!;
     store.getState().addEdgeToFlow(flowId, edges[0]!.id);
     store.getState().setSelectedFlowId(flowId);
     store.getState().setFlowPlayback({ active: true, flowId, step: 1 });
@@ -551,7 +556,7 @@ describe('flows through the store', () => {
 
   it('undoing a flow deletion restores flow-edit mode too, if it was active for that flow', () => {
     const { edges } = chain(1);
-    const flowId = store.getState().createFlow();
+    const flowId = store.getState().createFlow()!;
     store.getState().addEdgeToFlow(flowId, edges[0]!.id);
     store.getState().enterFlowEdit(flowId);
 
@@ -569,8 +574,8 @@ describe('flows through the store', () => {
 
   it('does not disturb flow session state for an unrelated flow deletion', () => {
     const { edges } = chain(2);
-    const kept = store.getState().createFlow('Kept');
-    const removed = store.getState().createFlow('Removed');
+    const kept = store.getState().createFlow('Kept')!;
+    const removed = store.getState().createFlow('Removed')!;
     store.getState().addEdgeToFlow(kept, edges[0]!.id);
     store.getState().addEdgeToFlow(removed, edges[1]!.id);
     store.getState().setSelectedFlowId(kept);
@@ -603,7 +608,7 @@ describe('flows through the store', () => {
   it('supports undoing a flow creation and a step addition', () => {
     const { edges } = chain(1);
     const before = store.getState().history.past.length;
-    const flowId = store.getState().createFlow();
+    const flowId = store.getState().createFlow()!;
     store.getState().addEdgeToFlow(flowId, edges[0]!.id);
     expect(store.getState().history.past.length).toBe(before + 2);
 
@@ -614,7 +619,7 @@ describe('flows through the store', () => {
   });
 
   it('coalesces rapid flow renames into one undo step', () => {
-    const flowId = store.getState().createFlow('A');
+    const flowId = store.getState().createFlow('A')!;
     const before = store.getState().history.past.length;
     store.getState().renameFlow(flowId, 'Ha');
     store.getState().renameFlow(flowId, 'Happ');
@@ -624,7 +629,7 @@ describe('flows through the store', () => {
   });
 
   it('sets a flow accent through the store, undoably', () => {
-    const flowId = store.getState().createFlow('A');
+    const flowId = store.getState().createFlow('A')!;
     const before = store.getState().history.past.length;
     store.getState().setFlowAccent(flowId, 'amber');
     expect(store.getState().document.flows[0]!.accent).toBe('amber');
@@ -635,7 +640,7 @@ describe('flows through the store', () => {
 
   it('never touches history when playback or the selected flow overlay changes', () => {
     const { edges } = chain(1);
-    const flowId = store.getState().createFlow();
+    const flowId = store.getState().createFlow()!;
     store.getState().addEdgeToFlow(flowId, edges[0]!.id);
     const before = store.getState().history.past.length;
 
@@ -644,6 +649,113 @@ describe('flows through the store', () => {
     store.getState().setFlowPlayback({ active: false });
 
     expect(store.getState().history.past.length).toBe(before);
+  });
+});
+
+describe('flow hardening — empty flows, caps, and connector replacement', () => {
+  beforeEach(() => chain(0));
+
+  it('numbers default titles so abandoned untitled flows stay distinguishable', () => {
+    let doc = createDocument('X');
+    expect(nextFlowTitle(doc)).toBe('Untitled flow');
+    doc = addFlow(doc, createFlow({ id: 'f1' }));
+    expect(nextFlowTitle(doc)).toBe('Untitled flow 2');
+    doc = addFlow(doc, createFlow({ id: 'f2', title: 'Untitled flow 2' }));
+    expect(nextFlowTitle(doc)).toBe('Untitled flow 3');
+    // The first default is exactly "Untitled flow" — a renamed first flow frees it up again.
+    expect(nextFlowTitle(renameFlow(doc, 'f1', 'Checkout'))).toBe('Untitled flow');
+  });
+
+  it('createFlow() through the store uses the numbered default and reports refusal at the cap', () => {
+    const first = store.getState().createFlow()!;
+    const second = store.getState().createFlow()!;
+    const titles = store.getState().document.flows.map((f) => f.title);
+    expect(titles).toEqual(['Untitled flow', 'Untitled flow 2']);
+    expect(first).not.toBe(second);
+
+    while (store.getState().document.flows.length < LIMITS.maxFlows) store.getState().createFlow('x');
+    const history = store.getState().history.past.length;
+    expect(store.getState().createFlow('one too many')).toBeNull();
+    expect(store.getState().document.flows).toHaveLength(LIMITS.maxFlows);
+    expect(store.getState().history.past.length).toBe(history);
+  });
+
+  it('an empty flow has no members and is not playable; a viewport-only frame step is playable', () => {
+    const { edges } = chain(1);
+    let doc = addFlow(store.getState().document, createFlow({ id: 'f1' }));
+    expect(flowHasMembers(doc, doc.flows[0]!)).toBe(false);
+    expect(flowIsPlayable(doc, doc.flows[0]!)).toBe(false);
+
+    doc = addStepToFlow(doc, 'f1', edges[0]!.id);
+    expect(flowHasMembers(doc, doc.flows[0]!)).toBe(true);
+    expect(flowIsPlayable(doc, doc.flows[0]!)).toBe(true);
+
+    const frameOnly = { ...doc.flows[0]!, steps: [{ id: 's', viewport: { x: 0, y: 0, zoom: 1 } }] };
+    expect(flowHasMembers(doc, frameOnly)).toBe(false);
+    expect(flowIsPlayable(doc, frameOnly)).toBe(true);
+  });
+
+  it('selecting an empty flow is not a lens — nothing dims until it has a step', () => {
+    const { edges } = chain(1);
+    const flowId = store.getState().createFlow('Checkout')!;
+    store.getState().setSelectedFlowId(flowId);
+    expect(lensFlow(store.getState())).toBeUndefined();
+    expect(flowFitViewNodes(store.getState())).toBeUndefined();
+
+    store.getState().addEdgeToFlow(flowId, edges[0]!.id);
+    expect(lensFlow(store.getState())?.id).toBe(flowId);
+    expect(flowFitViewNodes(store.getState())).toHaveLength(2);
+
+    store.getState().setFlowPlayback({ active: true, flowId, step: 1 });
+    expect(lensFlow(store.getState())).toBeUndefined();
+  });
+
+  it('ungrouping a boundary that a step spotlit prunes it from the step', () => {
+    const { edges } = chain(1);
+    const boundary = store.getState().addNode({ type: 'group', x: -50, y: -50, text: 'Deployment' });
+    const flowId = store.getState().createFlow('Checkout')!;
+    store.getState().addEdgeToFlow(flowId, edges[0]!.id);
+    const stepId = store.getState().document.flows[0]!.steps[0]!.id;
+    store.getState().addFlowStepExtraNode(flowId, stepId, boundary.id);
+    expect(store.getState().document.flows[0]!.steps[0]!.extraNodeIds).toEqual([boundary.id]);
+
+    store.getState().setSelection({ nodes: [boundary.id], edges: [] });
+    store.getState().ungroupSelection();
+
+    const step = store.getState().document.flows[0]!.steps[0]!;
+    expect(store.getState().document.nodes.some((n) => n.id === boundary.id)).toBe(false);
+    expect(step.extraNodeIds).toBeUndefined();
+    expect(step.edgeId).toBe(edges[0]!.id);
+  });
+
+  it('spliceEdgeInFlows rewrites a primary step into a chain and an extra in place', () => {
+    const flow = createFlow({ id: 'f1' });
+    flow.steps = [
+      { id: 's1', edgeId: 'e1' },
+      { id: 's2', edgeId: 'e2', extraEdgeIds: ['e1', 'e9'] },
+      { id: 's3', edgeId: 'e3' },
+    ];
+    const doc = { ...createDocument('X'), flows: [flow] };
+    const next = spliceEdgeInFlows(doc, 'e1', ['a', 'b']);
+    expect(next.flows[0]!.steps.map((s) => s.edgeId)).toEqual(['a', 'b', 'e2', 'e3']);
+    expect(next.flows[0]!.steps[0]!.id).toBe('s1');
+    expect(next.flows[0]!.steps[2]!.extraEdgeIds).toEqual(['a', 'b', 'e9']);
+    expect(spliceEdgeInFlows(doc, 'unrelated', ['a'])).toBe(doc);
+  });
+
+  it('inserting a worker on a flow connector keeps the story: A → W, W → B where A → B was', () => {
+    const { nodes, edges } = chain(2);
+    const flowId = store.getState().createFlow('Checkout')!;
+    store.getState().addEdgeToFlow(flowId, edges[0]!.id);
+    store.getState().addEdgeToFlow(flowId, edges[1]!.id);
+
+    store.getState().insertWorkerOnEdge(edges[0]!.id);
+
+    const doc = store.getState().document;
+    const toWorker = doc.edges.find((e) => e.source === nodes[0]!.id)!;
+    const fromWorker = doc.edges.find((e) => e.target === nodes[1]!.id)!;
+    expect(doc.flows[0]!.steps.map((s) => s.edgeId)).toEqual([toWorker.id, fromWorker.id, edges[1]!.id]);
+    expect(stepIndexOf(doc.flows[0]!, edges[1]!.id)).toBe(3);
   });
 });
 

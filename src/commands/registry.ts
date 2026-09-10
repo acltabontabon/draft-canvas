@@ -2,6 +2,7 @@ import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../canvas/presets';
 import { categoryOf } from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { createAttachment, defaultSizeFor, displayNameFor } from '../document/factory';
+import { stepIndexOf } from '../document/flow';
 import { LIMITS } from '../document/limits';
 import { routingPlan } from '../edges/bundles';
 import { boundsOf, descendantsOf } from '../document/operations';
@@ -276,6 +277,7 @@ function flowCommands(ctx: CommandContext): Command[] {
       keywords: ['create flow', 'story', 'path', 'walkthrough'],
       run: (inner) => {
         const id = inner.editor.createFlow();
+        if (!id) return;
         inner.editor.setSelectedFlowId(id);
         inner.ui.setFlowPanelOpen(true);
       },
@@ -519,6 +521,7 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
 
 function startFlowWith(ctx: CommandContext, edge: DraftEdge) {
   const flowId = ctx.editor.createFlow();
+  if (!flowId) return;
   ctx.editor.addEdgeToFlow(flowId, edge.id);
   ctx.editor.setSelectedFlowId(flowId);
   ctx.editor.setSelection({ nodes: [], edges: [edge.id] });
@@ -799,7 +802,9 @@ function isBundled(ctx: CommandContext, edge: DraftEdge): boolean {
 
 export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   const semanticTitle = edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : 'Plain';
-  const flowsContaining = ctx.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId === edge.id));
+  // `stepIndexOf`, not a primary-`edgeId` scan: a connector that is only an *extra* member of a
+  // step is still in that flow, and offering to add it again would be a silent no-op.
+  const flowsContaining = ctx.editor.document.flows.filter((flow) => stepIndexOf(flow, edge.id) !== undefined);
   const flowsAvailable = ctx.editor.document.flows.filter((flow) => !flowsContaining.includes(flow));
   const commands: Command[] = [
     {

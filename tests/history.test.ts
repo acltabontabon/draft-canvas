@@ -179,7 +179,7 @@ describe('undo and redo', () => {
    * mirrors that for the three fields undo/redo themselves own.
    */
   it('undo clears selectedFlowId when the selected flow no longer exists in the restored document', () => {
-    const flowId = store.getState().createFlow('Checkout');
+    const flowId = store.getState().createFlow('Checkout')!;
     store.getState().setSelectedFlowId(flowId);
     expect(store.getState().selectedFlowId).toBe(flowId);
 
@@ -196,7 +196,7 @@ describe('undo and redo', () => {
   });
 
   it('undo exits flow-edit mode when the edited flow no longer exists in the restored document', () => {
-    const flowId = store.getState().createFlow('Checkout');
+    const flowId = store.getState().createFlow('Checkout')!;
     store.getState().enterFlowEdit(flowId);
     expect(store.getState().flowEdit).toEqual({ active: true, flowId });
 

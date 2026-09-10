@@ -78,7 +78,7 @@ describe('jumpCommands', () => {
     const b = state.addNode({ type: 'service', x: 300, y: 0, text: 'B' });
     state.addNode({ type: 'service', x: 900, y: 0, text: 'Far away' });
     const edge = state.connect(a.id, b.id)!;
-    const flowId = state.createFlow('Checkout');
+    const flowId = state.createFlow('Checkout')!;
     state.addEdgeToFlow(flowId, edge.id);
     const ctx = stubContext();
     jumpCommands(useEditorStore.getState().document).find((row) => row.title === 'Checkout')!.run(ctx);

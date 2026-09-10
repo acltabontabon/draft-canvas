@@ -134,7 +134,7 @@ describe('CommandPalette', () => {
   });
 
   it('picking a stage option runs it and closes', () => {
-    const flowId = useEditorStore.getState().createFlow('Checkout');
+    const flowId = useEditorStore.getState().createFlow('Checkout')!;
     mount();
     fireEvent.change(input(), { target: { value: 'switch' } });
     key('Enter');

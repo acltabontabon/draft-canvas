@@ -30,7 +30,7 @@ describe('flow-edit mode', () => {
   beforeEach(reset);
 
   it('enters and exits flow-edit mode for a given flow', () => {
-    const flowId = store.getState().createFlow('Checkout');
+    const flowId = store.getState().createFlow('Checkout')!;
     store.getState().enterFlowEdit(flowId);
     expect(store.getState().flowEdit).toEqual({ active: true, flowId });
 
@@ -42,14 +42,14 @@ describe('flow-edit mode', () => {
     store.getState().enterFocus(['n1'], []);
     expect(store.getState().focus.active).toBe(true);
 
-    const flowId = store.getState().createFlow('Checkout');
+    const flowId = store.getState().createFlow('Checkout')!;
     store.getState().enterFlowEdit(flowId);
     expect(store.getState().flowEdit.active).toBe(true);
     expect(store.getState().focus.active).toBe(false);
   });
 
   it('entering flow-edit exits active playback', () => {
-    const flowId = store.getState().createFlow('Checkout');
+    const flowId = store.getState().createFlow('Checkout')!;
     store.getState().setFlowPlayback({ active: true, flowId, step: 1 });
     expect(store.getState().flowPlayback.active).toBe(true);
 
@@ -59,7 +59,7 @@ describe('flow-edit mode', () => {
   });
 
   it('starting playback exits an active flow-edit session', () => {
-    const flowId = store.getState().createFlow('Checkout');
+    const flowId = store.getState().createFlow('Checkout')!;
     store.getState().enterFlowEdit(flowId);
     expect(store.getState().flowEdit.active).toBe(true);
 
@@ -69,7 +69,7 @@ describe('flow-edit mode', () => {
   });
 
   it('entering Focus exits an active flow-edit session', () => {
-    const flowId = store.getState().createFlow('Checkout');
+    const flowId = store.getState().createFlow('Checkout')!;
     store.getState().enterFlowEdit(flowId);
 
     store.getState().enterFocus(['n1'], []);
@@ -78,7 +78,7 @@ describe('flow-edit mode', () => {
   });
 
   it('switching to present mode exits an active flow-edit session', () => {
-    const flowId = store.getState().createFlow('Checkout');
+    const flowId = store.getState().createFlow('Checkout')!;
     store.getState().enterFlowEdit(flowId);
 
     store.getState().setMode('present');
@@ -86,7 +86,7 @@ describe('flow-edit mode', () => {
   });
 
   it('deleting the flow currently being edited exits flow-edit, mirroring selectedFlowId/flowPlayback cleanup', () => {
-    const flowId = store.getState().createFlow('Checkout');
+    const flowId = store.getState().createFlow('Checkout')!;
     store.getState().setSelectedFlowId(flowId);
     store.getState().enterFlowEdit(flowId);
 
@@ -96,8 +96,8 @@ describe('flow-edit mode', () => {
   });
 
   it('deleting an unrelated flow leaves an active flow-edit session untouched', () => {
-    const flowId = store.getState().createFlow('Checkout');
-    const otherId = store.getState().createFlow('Refund');
+    const flowId = store.getState().createFlow('Checkout')!;
+    const otherId = store.getState().createFlow('Refund')!;
     store.getState().enterFlowEdit(flowId);
 
     store.getState().deleteFlow(otherId);
