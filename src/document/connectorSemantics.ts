@@ -269,7 +269,9 @@ const MATRIX: Record<string, ConnectionCapability> = {
     status: 'unusual',
     guidance: 'A port is a contract — something implements it and talks to the data store.',
   }),
-  'actor>service': capability(['calls', 'http', 'command'], 'calls', []),
+  // `command` and `query` because a person's request is one or the other more often than it's
+  // neither — the two halves of CQRS, read straight off the client's own connectors.
+  'actor>service': capability(['calls', 'http', 'command', 'query'], 'calls', []),
   'service>external': capability(
     ['calls', 'http', 'grpc', 'command', 'event', 'dependsOn'],
     'calls',

@@ -203,10 +203,10 @@ export function useDocumentSession(): DocumentSession {
         // palette uses for an empty canvas, plus a viewport that shows it —
         // see `openingViewportFor` for why the editor won't do that itself.
         const size = starterSize(starter);
-        const { nodes, edges } = buildStarter(starter, freeOriginFor(document, size));
+        const { nodes, edges, flows } = buildStarter(starter, freeOriginFor(document, size));
         const screen =
           typeof window === 'undefined' ? null : { width: window.innerWidth, height: window.innerHeight };
-        document = { ...document, nodes, edges, ...(screen ? { viewport: openingViewportFor(size, screen) } : {}) };
+        document = { ...document, nodes, edges, flows, ...(screen ? { viewport: openingViewportFor(size, screen) } : {}) };
       }
       await adoptDocument(document);
     },

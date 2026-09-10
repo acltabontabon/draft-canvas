@@ -22,6 +22,7 @@ import type {
   DraftNodeType,
   EdgeAnchor,
   EdgeRouting,
+  EdgeSemantic,
   QueueKind,
   RouteMode,
   ServiceKind,
@@ -33,9 +34,33 @@ export const STARTER_IDS = [
   'microservices',
   'event-driven',
   'hexagonal',
+  'bff',
+  'cqrs',
+  'saga-orchestration',
+  'transactional-outbox',
 ] as const;
 
 export type StarterId = (typeof STARTER_IDS)[number];
+
+/**
+ * Where a starter sits in discovery. *Starter* is the umbrella: one architectural idea at one
+ * scope. An `architecture` answers "how are the major parts of this system organized?"; a
+ * `pattern` answers "how do I solve this particular recurring design problem?" — a saga, an
+ * outbox. The line is pragmatic, not academic (BFF and CQRS are strictly patterns, but they shape
+ * a system's structure enough to belong with the architectures), it exists only so the palette
+ * can show two short lists instead of one long one, and it never implies exclusivity: a real
+ * system composes several — Event-Driven with CQRS and an Outbox, Microservices with a BFF and a
+ * Saga. A pattern starter is drawn at the scope of the problem it solves, never padded to look
+ * like an architecture.
+ */
+export type StarterCategory = 'architecture' | 'pattern';
+
+/** The two categories in display order, with the header each discovery surface shows for it —
+ *  the palette, the empty canvas and the Library welcome all read this one list. */
+export const STARTER_CATEGORIES: readonly { id: StarterCategory; label: string }[] = [
+  { id: 'architecture', label: 'Architectures' },
+  { id: 'pattern', label: 'Patterns' },
+];
 
 /**
  * One element of a starter, in the starter's own coordinate space — the top-left corner of the
@@ -96,10 +121,30 @@ export interface StarterNodeSpec {
  * re-derive it from whatever the nodes' relative positions happen to be.
  */
 export interface StarterEdgeSpec {
+  /**
+   * A starter-local name for this connector, resolved to its generated edge id at build time —
+   * the same idea as `StarterNodeSpec.key`, and only needed on a connector a `StarterFlowSpec`
+   * step refers to. It is also the only thing that tells two connectors between the same pair of
+   * nodes apart (a saga orchestrator's "reserve" and its later "refund" to the same service), so
+   * `from`/`to` deliberately isn't the identity.
+   */
+  key?: string;
   from: string;
   to: string;
   sourceAnchor?: EdgeAnchor;
   targetAnchor?: EdgeAnchor;
+  /**
+   * A relation other than the pairing's default, chosen from the ones the capability matrix
+   * already *offers* for it — exactly what a user gets by picking it in the inspector, and stamped
+   * `semanticsOrigin: 'explicit'` the same way. This is not an escape from "relationships come
+   * from the matrix": `build.ts` ignores a value the matrix doesn't list for the pair, so a starter
+   * still cannot state a relationship the rest of the app would disagree with. It exists for the
+   * pairing whose default is the wrong fact for one composition — a query API reaching a read
+   * store is `reads`, never `service>database`'s default `writes`; a client submitting to a
+   * command API is a `command`, not a plain `calls`. Behaviour (`kind`) and dashing stay the
+   * pairing's own defaults.
+   */
+  semantic?: EdgeSemantic;
   /**
    * An explicit caption, overriding whatever the capability matrix would otherwise show — the
    * *port* a connector crosses (e.g. "Inbound Port"), which is a position in the architecture, not
@@ -156,8 +201,30 @@ export interface StarterEdgeSpec {
   attachments?: CreateAttachmentInput[];
 }
 
+/** One step of a predefined flow: the connector it walks (by `StarterEdgeSpec.key`) and an
+ *  optional caption — exactly what `document/flow.ts`'s `addStepToFlow` accepts. */
+export interface StarterFlowStepSpec {
+  edgeKey: string;
+  caption?: string;
+}
+
+/**
+ * A flow a starter ships with — an ordered walkthrough of its own connectors, built into an
+ * ordinary `DraftFlow` alongside the nodes and edges. This is how a starter carries a *second
+ * reading* of the same diagram without a second diagram: CQRS's write path and read path, a
+ * saga's happy path and its compensation. Nothing is duplicated; steps only reference connectors
+ * by key, so a flow can never disagree with the composition it belongs to. Selecting the flow
+ * dims everything outside it (`flow.ts`'s lens tiers) and presenting it walks the steps in order.
+ */
+export interface StarterFlowSpec {
+  title: string;
+  accent?: Accent;
+  steps: StarterFlowStepSpec[];
+}
+
 export interface ArchitectureStarter {
   id: StarterId;
+  category: StarterCategory;
   /** The command palette's row title. A pattern name, never "… template". */
   name: string;
   /** One line, shown as the palette row's muted hint. */
@@ -173,4 +240,6 @@ export interface ArchitectureStarter {
   aliases: string[];
   nodes: StarterNodeSpec[];
   edges: StarterEdgeSpec[];
+  /** Predefined flows over `edges` — see `StarterFlowSpec`. Absent means none, the common case. */
+  flows?: StarterFlowSpec[];
 }

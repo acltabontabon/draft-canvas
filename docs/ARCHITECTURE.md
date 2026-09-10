@@ -232,11 +232,18 @@ gates Present everywhere: the panel's ▶, the picker, and the palette never off
 Connector replacements keep a flow's story intact — inserting a worker on `A → B` rewrites that
 step into `A → W`, `W → B` (`spliceEdgeInFlows`) rather than losing the beat.
 
-## Architecture starters
+## Starters
 
-`src/starters/` holds five authored opening compositions (Monolith, Modular Monolith,
-Microservices, Event-Driven, Hexagonal) and the function that turns one into document elements. It
-is a *starter*, not a template: everything it creates is an ordinary `DraftNode`/`DraftEdge`, and
+`src/starters/` holds nine authored opening compositions and the function that turns one into
+document elements. *Starter* is the umbrella; each is one architectural idea at one scope, and the
+catalog's `category` splits them for discovery only: **Architectures** answer "how are the major
+parts of this system organized?" (Monolith, Modular Monolith, Microservices, Event-Driven,
+Hexagonal, Backend for Frontend, CQRS — the last two are strictly patterns, but they shape a
+system's structure enough to sit here), **Patterns** answer "how do I solve this recurring design
+problem?" (Saga (Orchestration), Transactional Outbox). A pattern starter is drawn at the scope of
+the problem it solves, never padded to resemble an architecture, and nothing implies the starters
+are alternatives — a real system is Event-Driven *with* CQRS *and* an outbox. It is a *starter*,
+not a template: everything it creates is an ordinary `DraftNode`/`DraftEdge`/`DraftFlow`, and
 nothing anywhere records that a node came from one. That is the whole design — there is no starter
 object to keep consistent, no mode to leave, and no second way to edit what it made.
 
@@ -264,8 +271,18 @@ carry the weight:
   author facts that aren't relationships at all: a queue's `deliveryRole` (Event-Driven's DLQ), an
   edge's `deliveryAttempts` (its "after 3 attempts" caption), click-to-reveal `attachments` on a
   node or a connector (an example event payload, an operational note), and a `condition` only where
-  a branch genuinely has one (Microservices' gateway routes carry their route rules) — the
-  connector's own `semantic`/`kind`/`async` are still exactly what the matrix says.
+  a branch genuinely has one (Microservices' gateway routes carry their route rules; the saga's
+  compensation runs "if inventory fails") — the connector's own `semantic`/`kind`/`async` are still
+  exactly what the matrix says. The one sanctioned nudge is `StarterEdgeSpec.semantic`: a relation
+  the matrix *already offers* for the pairing, picked over its default and stamped
+  `semanticsOrigin: 'explicit'` exactly as the inspector would (CQRS's query API `reads` its store
+  rather than `service>database`'s default `writes`). `build.ts` ignores anything the matrix
+  doesn't list, so the rule holds.
+- **A starter may ship flows.** `ArchitectureStarter.flows` names connectors by their
+  starter-local `key` and builds ordinary `DraftFlow`s alongside the nodes and edges — inserted in
+  the same undo entry (`addNodesWithEdges` takes them), saved in the same document. It is how a
+  starter carries a second reading of one diagram without a second diagram: a saga's happy path
+  and its compensation, CQRS's write path and read path.
 - **A starter reaches for the primitive that's actually true, not the one that's already drawn and
   looks fine.** Hexagonal's Use Cases/Domain Model/Persistence Adapter/Integration Adapter are
   `component`, not `service` — none of them is independently deployable, and rendering them as

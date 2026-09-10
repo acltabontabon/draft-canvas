@@ -418,13 +418,22 @@ describe('architecture starters', () => {
 
   const top = (query: string) => rank(query, commandsFor(stubContext()))[0]!.entry.id;
 
-  it('offers one row per starter, in its own group, each with a one-line description', () => {
-    const starters = commandsFor(stubContext()).filter((command) => command.group === 'starter');
+  it('offers one row per starter, under Architectures then Patterns, each with a one-line description', () => {
+    const starters = commandsFor(stubContext()).filter(
+      (command) => command.group === 'starter' || command.group === 'pattern',
+    );
     expect(starters.map((command) => command.id)).toEqual(STARTER_IDS.map((id) => `starter-${id}`));
     for (const command of starters) {
       expect(command.hint).toBeTruthy();
       expect(command.title).not.toMatch(/template/i);
     }
+    // The two headers stay contiguous: every architecture precedes every pattern.
+    const groups = starters.map((command) => command.group);
+    expect(groups.lastIndexOf('starter')).toBeLessThan(groups.indexOf('pattern'));
+    expect(starters.filter((command) => command.group === 'pattern').map((command) => command.id)).toEqual([
+      'starter-saga-orchestration',
+      'starter-transactional-outbox',
+    ]);
   });
 
   it.each([
@@ -447,6 +456,16 @@ describe('architecture starters', () => {
     ['ports adapters', 'hexagonal'],
     ['hex architecture', 'hexagonal'],
     ['clean-ish architecture', 'hexagonal'],
+    ['bff', 'bff'],
+    ['backend for frontend', 'bff'],
+    ['cqrs', 'cqrs'],
+    ['command query', 'cqrs'],
+    ['read model', 'cqrs'],
+    ['saga', 'saga-orchestration'],
+    ['compensation', 'saga-orchestration'],
+    ['distributed transaction', 'saga-orchestration'],
+    ['outbox', 'transactional-outbox'],
+    ['dual write', 'transactional-outbox'],
   ])('"%s" leads with the %s starter', (query, id) => {
     expect(top(query)).toBe(`starter-${id}`);
   });

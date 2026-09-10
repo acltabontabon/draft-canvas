@@ -1,11 +1,13 @@
 /**
- * The five Architecture Starters, composed by hand.
+ * The Starters, composed by hand: seven architectures and two patterns (see `StarterCategory`).
  *
  * Every coordinate here is deliberate. These are canonical diagrams whose structure is known in
- * advance, so the composition is authored rather than solved: hierarchy reads top to bottom,
- * columns share a gutter, related things align on the same axis, and each starter carries only
- * enough elements to establish its pattern. The empty space is part of the design — a starter is
- * the first thirty seconds of a diagram, not a reference architecture.
+ * advance, so the composition is authored rather than solved: hierarchy reads top to bottom (or,
+ * for a pipeline, left to right), columns share a gutter, related things align on the same axis,
+ * and each starter carries only enough elements to establish its idea — a pattern starter is drawn
+ * at the scope of the problem it solves, never grown to look like an architecture. The empty space
+ * is part of the design — a starter is the first thirty seconds of a diagram, not a reference
+ * architecture, and a real system composes several of them.
  *
  * Two rules the compositions follow, and one they don't:
  *
@@ -98,6 +100,7 @@ const MONOLITH_EXTERNAL_X = MONOLITH_BOUNDARY_WIDTH + GUTTER;
 
 const monolith: ArchitectureStarter = {
   id: 'monolith',
+  category: 'architecture',
   name: 'Monolith',
   description: 'One deployable application over one data store',
   aliases: ['monolith', 'monolithic', 'single deployment', 'one application'],
@@ -355,6 +358,7 @@ const MODULAR_DATABASE_Y = MODULAR_BOUNDARY_HEIGHT + INNER_BAND;
 
 const modularMonolith: ArchitectureStarter = {
   id: 'modular-monolith',
+  category: 'architecture',
   name: 'Modular Monolith',
   description: 'One deployment, strongly separated modules',
   aliases: [
@@ -554,6 +558,7 @@ const MICRO_DELIVER_OUT: StarterEdgeSpec['sourceAnchor'] = { side: 'top', offset
 
 const microservices: ArchitectureStarter = {
   id: 'microservices',
+  category: 'architecture',
   name: 'Microservices',
   description: 'Independent services behind a gateway, each owning its data',
   aliases: [
@@ -747,6 +752,7 @@ const EVENT_LANE_NAMES = ['Projection Service', 'Processing Service', 'Integrati
 
 const eventDriven: ArchitectureStarter = {
   id: 'event-driven',
+  category: 'architecture',
   name: 'Event-Driven',
   description: 'A producer, a topic, and consumers that own their delivery',
   aliases: [
@@ -972,6 +978,7 @@ const HEX_TECH_X = HEX_DRIVEN_X + HEX_ADAPTER.width + GUTTER;
 
 const hexagonal: ArchitectureStarter = {
   id: 'hexagonal',
+  category: 'architecture',
   name: 'Hexagonal',
   description: 'A domain core reached only through inbound/outbound ports',
   aliases: [
@@ -1132,10 +1139,787 @@ const hexagonal: ArchitectureStarter = {
   ],
 };
 
+/* ------------------------------------------------------ backend for frontend -- */
+/**
+ * Two client experiences, each with its own backend adapter, sharing one set of domain services —
+ * drawn with the shared services *in the middle* and an experience on either side, so the sentence
+ * "different clients get tailored backends; the domain stays shared and independent" reads before
+ * a single label does, and no connector ever crosses another.
+ *
+ * **What each element is.**
+ * - `Web Client` / `Mobile Client` are `device` Actors: the pattern is about *client experiences*,
+ *   and a browser and a phone are the two that most often diverge in what they need.
+ * - `Web BFF` / `Mobile BFF` are `gateway` Services: they direct traffic onward rather than being
+ *   the ultimate handler, so `gateway>service` infers `routes` — and yet there is deliberately
+ *   **no API Gateway** here. A gateway is one shared front door (routing, auth, rate limits — see
+ *   Microservices); a BFF is *one client's* adapter, shaping and aggregating calls for that
+ *   experience alone. Drawing both would blur exactly the distinction this starter exists to make,
+ *   and the Web BFF's note says so in one line.
+ * - Each client and its BFF share a boundary titled for the *experience*, not the technology: the
+ *   BFF belongs to the team that owns that client, which is the whole reason it may be tailored.
+ *   Two boundaries, not one, is what says "not a shared layer." Nothing here says every client
+ *   *must* have one — the diagram shows the shape once per experience that wants it.
+ * - `Customer`, `Orders`, `Recommendations` are `api` Services inside a `Domain services`
+ *   boundary — shared capabilities with their own owners. A BFF composes them; it never owns them,
+ *   and it is never where business rules live (the boundary's note carries that rule).
+ *
+ * **Routing.** The Web BFF's three connectors leave its right-middle point, so Smart Routing draws
+ * one trunk with one collapsed `routes`; the Mobile BFF's two leave its left-middle point for one
+ * funnel of its own. The two fans meet the services from opposite sides, so the asymmetry — only
+ * the web experience uses Recommendations — is visible as a shorter fan, not as a crossing line.
+ * The adapter row sits level with the middle service so each stem meets its trunk at the trunk's
+ * own centre. Everything is a synchronous request: a BFF is a request-time adapter, and this is
+ * the one starter where nothing is dashed on purpose.
+ */
+const BFF_BOX_WIDTH = SERVICE.width + BOUNDARY_PAD * 2;
+const BFF_CLIENT_Y = BOUNDARY_HEADER_TITLE_ONLY;
+/** Tighter than `INNER_BAND`: the `calls` caption between a client and its adapter sits inside a
+ *  box that already separates the pair from everything else (the same reasoning as Hexagonal's
+ *  `HEX_DOMAIN_GAP`), and the adapter row has to land level with the middle domain service. */
+const BFF_CLIENT_GAP = 64;
+const BFF_ADAPTER_Y = BFF_CLIENT_Y + ACTOR.height + BFF_CLIENT_GAP;
+const BFF_BOX_HEIGHT = BFF_ADAPTER_Y + SERVICE.height + BOUNDARY_PAD;
+/** Wider than `INNER_BAND` so the two fans' branches have clear air between them, and so the
+ *  middle service's centre lands exactly on the adapter row. */
+const BFF_SERVICE_GAP = 88;
+const BFF_SERVICE_Y = (index: number) => BOUNDARY_HEADER_TITLE_ONLY + index * (SERVICE.height + BFF_SERVICE_GAP);
+const BFF_DOMAIN_HEIGHT = BFF_SERVICE_Y(2) + SERVICE.height + BOUNDARY_PAD;
+/** A full `BAND` either side of the domain: each fan's trunk corridor plus its collapsed caption. */
+const BFF_GUTTER = BAND;
+const BFF_WEB_X = 0;
+const BFF_DOMAIN_X = BFF_WEB_X + BFF_BOX_WIDTH + BFF_GUTTER;
+const BFF_MOBILE_X = BFF_DOMAIN_X + BFF_BOX_WIDTH + BFF_GUTTER;
+const BFF_SERVICES = ['customer', 'orders', 'recommendations'] as const;
+const BFF_SERVICE_NAMES = ['Customer Service', 'Orders Service', 'Recommendations Service'] as const;
+
+function bffExperience(
+  key: 'web' | 'mobile',
+  left: number,
+  title: string,
+  client: string,
+  adapter: string,
+  note: string,
+): StarterNodeSpec[] {
+  const cx = left + BFF_BOX_WIDTH / 2;
+  return [
+    {
+      key: `${key}-box`,
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: title,
+      x: left,
+      y: 0,
+      width: BFF_BOX_WIDTH,
+      height: BFF_BOX_HEIGHT,
+    },
+    {
+      key: `${key}-client`,
+      type: 'actor',
+      actorKind: 'device',
+      text: client,
+      parent: `${key}-box`,
+      x: centeredAt(cx, ACTOR.width),
+      y: BFF_CLIENT_Y,
+      ...ACTOR,
+    },
+    {
+      key: `${key}-bff`,
+      type: 'service',
+      serviceKind: 'gateway',
+      text: adapter,
+      accent: 'teal',
+      parent: `${key}-box`,
+      x: left + BOUNDARY_PAD,
+      y: BFF_ADAPTER_Y,
+      ...SERVICE,
+      attachments: [{ type: 'note', text: note }],
+    },
+  ];
+}
+
+const backendForFrontend: ArchitectureStarter = {
+  id: 'bff',
+  category: 'architecture',
+  name: 'Backend for Frontend',
+  description: 'Backend adapters tailored to each client experience',
+  aliases: ['bff', 'backend for frontend', 'backends for frontends', 'client adapter', 'per-client api'],
+  nodes: [
+    ...bffExperience(
+      'web',
+      BFF_WEB_X,
+      'Web experience',
+      'Web Client',
+      'Web BFF',
+      'Shapes and aggregates backend calls for the web app. Not a shared gateway, not the domain.',
+    ),
+    {
+      key: 'domain',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'Domain services',
+      x: BFF_DOMAIN_X,
+      y: 0,
+      width: BFF_BOX_WIDTH,
+      height: BFF_DOMAIN_HEIGHT,
+      attachments: [
+        { type: 'note', text: 'Shared capabilities with their own owners. A BFF composes them; it never owns them.' },
+      ],
+    },
+    ...BFF_SERVICES.map(
+      (key, index): StarterNodeSpec => ({
+        key,
+        type: 'service',
+        serviceKind: 'api',
+        text: BFF_SERVICE_NAMES[index],
+        accent: 'teal',
+        parent: 'domain',
+        x: BFF_DOMAIN_X + BOUNDARY_PAD,
+        y: BFF_SERVICE_Y(index),
+        ...SERVICE,
+      }),
+    ),
+    ...bffExperience(
+      'mobile',
+      BFF_MOBILE_X,
+      'Mobile experience',
+      'Mobile Client',
+      'Mobile BFF',
+      'Fewer round trips, smaller payloads — what a phone on a slow network needs.',
+    ),
+  ],
+  edges: [
+    down('web-client', 'web-bff'),
+    down('mobile-client', 'mobile-bff'),
+    // One fan per adapter, from opposite sides — see this block's doc comment.
+    ...BFF_SERVICES.map((key) => across('web-bff', key)),
+    { from: 'mobile-bff', to: 'customer', sourceAnchor: LEFT, targetAnchor: RIGHT },
+    { from: 'mobile-bff', to: 'orders', sourceAnchor: LEFT, targetAnchor: RIGHT },
+  ],
+};
+
+/* ------------------------------------------------------------------- cqrs -- */
+/**
+ * Command Query Responsibility Segregation: one client, two sides. The **Command** side accepts
+ * intent, changes the write model, persists it and announces what happened; the **Query** side
+ * answers questions from a read model shaped for exactly those questions. The two boundaries sit
+ * side by side and the *only* thing connecting them is an event and the projection that consumes
+ * it — drawn in the gap between them, so "the read side is kept current asynchronously, and reads
+ * never touch the write model" is the picture, not a footnote.
+ *
+ * **What this starter is careful not to say.**
+ * - *CQRS is not Event Sourcing.* There is no event store: `Write Store` holds current state, and
+ *   `Domain Events` is a Topic carrying facts to whoever cares, exactly as in Event-Driven.
+ * - *Two models, not necessarily two databases.* `Write Store` and `Read Store` are drawn apart
+ *   because the *models* differ; the read store's note says in one line that they may share a
+ *   physical database. Both are generic Data Stores — the engine is the team's call.
+ * - *Commands express intent; queries never mutate.* The client's two connectors say it in the
+ *   relationship words themselves: `command` into the command API, `query` into the query API
+ *   (both offered by `actor>service`, picked here rather than the plain `calls` default). The
+ *   query API's connector to its store is `reads` — `service>database` offers it, and its `writes`
+ *   default would be the single most misleading word this diagram could carry.
+ *
+ * **What each element is.** `Command API` and `Query API` are `api` Services — the two entry
+ * points, and the two things that scale and evolve independently. `Write Model` is a Component:
+ * the domain logic inside the command side, smaller than the service that fronts it. `Projection
+ * Service` is a `worker` — a topic-fed background process, the same reasoning Event-Driven's
+ * consumers follow — and it sits *between* the sides because that is where it belongs: it consumes
+ * the write side's facts and writes the read side's store, and owns nothing else. Each boundary's
+ * subtitle says the side's one rule in three words, the same header technique Hexagonal and
+ * Modular Monolith use.
+ *
+ * **Routing.** Rows align across all three columns: APIs on the top row, the write model and the
+ * topic on the middle row, the stores and the projection on the bottom row. Every bridge connector
+ * is therefore a level line or a plain drop, and nothing crosses. The client's two connectors
+ * leave the same point but never bundle — `command` and `query` are different relationships, which
+ * is precisely the point.
+ *
+ * **Flows.** *Submit command* walks the write path through to the projection landing in the read
+ * store — the async tail is part of what "submitting a command" means here. *Read projection* is
+ * the two-step query path. Selecting either dims the other side entirely.
+ */
+const CQRS_BOX_WIDTH = SERVICE.width + BOUNDARY_PAD * 2;
+const CQRS_SUBTITLE = { width: 176, height: 24 };
+/** First content row clears the boundary's subtitle — the same arithmetic as `MODULAR_API_Y`. */
+const CQRS_TOP = BOUNDARY_TITLE_SUBLINE_Y + CQRS_SUBTITLE.height + 8;
+/** Component's own default footprint: the write model is internal to its side, visibly narrower
+ *  than the Service above it. */
+const CQRS_MODEL = { width: 152, height: 56 };
+const CQRS_API_Y = CQRS_TOP;
+const CQRS_MODEL_Y = CQRS_API_Y + SERVICE.height + INNER_BAND;
+const CQRS_STORE_Y = CQRS_MODEL_Y + CQRS_MODEL.height + INNER_BAND;
+const CQRS_BOX_HEIGHT = CQRS_STORE_Y + STORE.height + BOUNDARY_PAD;
+const CQRS_COMMAND_X = 0;
+const CQRS_BRIDGE_X = CQRS_COMMAND_X + CQRS_BOX_WIDTH + GUTTER;
+const CQRS_BRIDGE_CX = CQRS_BRIDGE_X + SERVICE.width / 2;
+const CQRS_QUERY_X = CQRS_BRIDGE_X + SERVICE.width + GUTTER;
+const CQRS_COMMAND_CX = CQRS_COMMAND_X + CQRS_BOX_WIDTH / 2;
+const CQRS_QUERY_CX = CQRS_QUERY_X + CQRS_BOX_WIDTH / 2;
+const CQRS_MODEL_CENTER = CQRS_MODEL_Y + CQRS_MODEL.height / 2;
+const CQRS_STORE_CENTER = CQRS_STORE_Y + STORE.height / 2;
+
+function cqrsSide(key: 'command' | 'query', left: number, title: string, subtitle: string): StarterNodeSpec[] {
+  return [
+    {
+      key: `${key}-box`,
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: title,
+      x: left,
+      y: 0,
+      width: CQRS_BOX_WIDTH,
+      height: CQRS_BOX_HEIGHT,
+    },
+    {
+      key: `${key}-subtitle`,
+      type: 'text',
+      text: subtitle,
+      annotation: true,
+      parent: `${key}-box`,
+      x: left + BOUNDARY_TITLE_INSET,
+      y: BOUNDARY_TITLE_SUBLINE_Y,
+      ...CQRS_SUBTITLE,
+    },
+  ];
+}
+
+const cqrs: ArchitectureStarter = {
+  id: 'cqrs',
+  category: 'architecture',
+  name: 'CQRS',
+  description: 'Separate write and read models that evolve independently',
+  aliases: ['cqrs', 'command query', 'command query responsibility segregation', 'read model', 'write model', 'projection'],
+  nodes: [
+    {
+      key: 'client',
+      type: 'actor',
+      actorKind: 'human',
+      text: 'Client',
+      x: centeredAt(CQRS_BRIDGE_CX, ACTOR.width),
+      y: -(BAND + ACTOR.height),
+      ...ACTOR,
+    },
+    ...cqrsSide('command', CQRS_COMMAND_X, 'Command', 'Expresses intent'),
+    {
+      key: 'command-api',
+      type: 'service',
+      serviceKind: 'api',
+      text: 'Command API',
+      accent: 'teal',
+      parent: 'command-box',
+      x: CQRS_COMMAND_X + BOUNDARY_PAD,
+      y: CQRS_API_Y,
+      ...SERVICE,
+      attachments: [
+        {
+          type: 'code',
+          text: 'PlaceOrder',
+          language: 'json',
+          // An imperative, named for what the caller wants — never a row to upsert.
+          code: ['{', '  "type": "PlaceOrder",', '  "customerId": "cus_1182",', '  "lines": [{ "sku": "A-100", "qty": 2 }]', '}'].join(
+            '\n',
+          ),
+        },
+      ],
+    },
+    {
+      key: 'write-model',
+      type: 'component',
+      componentKind: 'generic',
+      text: 'Write Model',
+      parent: 'command-box',
+      x: centeredAt(CQRS_COMMAND_CX, CQRS_MODEL.width),
+      y: CQRS_MODEL_Y,
+      ...CQRS_MODEL,
+    },
+    {
+      key: 'write-store',
+      type: 'database',
+      databaseKind: 'generic',
+      text: 'Write Store',
+      accent: 'blue',
+      parent: 'command-box',
+      x: centeredAt(CQRS_COMMAND_CX, STORE.width),
+      y: CQRS_STORE_Y,
+      ...STORE,
+    },
+    {
+      key: 'events',
+      type: 'queue',
+      queueKind: 'topic',
+      text: 'Domain Events',
+      x: centeredAt(CQRS_BRIDGE_CX, NAMED_QUEUE.width),
+      y: centeredAt(CQRS_MODEL_CENTER, NAMED_QUEUE.height),
+      ...NAMED_QUEUE,
+    },
+    {
+      key: 'projection',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Projection Service',
+      accent: 'teal',
+      x: CQRS_BRIDGE_X,
+      y: centeredAt(CQRS_STORE_CENTER, SERVICE.height),
+      ...SERVICE,
+    },
+    ...cqrsSide('query', CQRS_QUERY_X, 'Query', 'Never mutates state'),
+    {
+      key: 'query-api',
+      type: 'service',
+      serviceKind: 'api',
+      text: 'Query API',
+      accent: 'teal',
+      parent: 'query-box',
+      x: CQRS_QUERY_X + BOUNDARY_PAD,
+      y: CQRS_API_Y,
+      ...SERVICE,
+    },
+    {
+      key: 'read-store',
+      type: 'database',
+      databaseKind: 'generic',
+      text: 'Read Store',
+      accent: 'blue',
+      parent: 'query-box',
+      x: centeredAt(CQRS_QUERY_CX, STORE.width),
+      y: CQRS_STORE_Y,
+      ...STORE,
+      attachments: [
+        {
+          type: 'note',
+          text: 'Shaped for the questions asked of it — a projection, not the write model. May share a physical database: CQRS separates models, not necessarily databases.',
+        },
+      ],
+    },
+  ],
+  edges: [
+    { key: 'submit', ...down('client', 'command-api'), semantic: 'command' },
+    { key: 'handle', ...down('command-api', 'write-model'), semantic: 'command' },
+    { key: 'persist', ...down('write-model', 'write-store') },
+    {
+      key: 'publish',
+      ...across('write-model', 'events'),
+      attachments: [{ type: 'note', text: 'OrderPlaced — a fact, published after the write store commits.' }],
+    },
+    { key: 'project', ...down('events', 'projection') },
+    { key: 'materialize', ...across('projection', 'read-store') },
+    { key: 'query', ...down('client', 'query-api'), semantic: 'query' },
+    { key: 'read', ...down('query-api', 'read-store'), semantic: 'reads' },
+  ],
+  flows: [
+    {
+      title: 'Submit command',
+      accent: 'amber',
+      steps: [
+        { edgeKey: 'submit', caption: 'The client states what it wants' },
+        { edgeKey: 'handle' },
+        { edgeKey: 'persist', caption: 'Current state, in the write model’s shape' },
+        { edgeKey: 'publish', caption: 'A fact leaves the command side' },
+        { edgeKey: 'project' },
+        { edgeKey: 'materialize', caption: 'The read model catches up' },
+      ],
+    },
+    {
+      title: 'Read projection',
+      accent: 'green',
+      steps: [
+        { edgeKey: 'query', caption: 'The client asks a question' },
+        { edgeKey: 'read', caption: 'Answered from the read model — nothing changes' },
+      ],
+    },
+  ],
+};
+
+/* ---------------------------------------------------- saga (orchestration) -- */
+/**
+ * A business transaction across services, coordinated by one orchestrator as a *sequence of
+ * local transactions* — and, when a later step fails, *compensating actions* for the steps that
+ * already succeeded. A pattern, not an architecture: it is drawn at the scope of one business
+ * process, and expects to be dropped into a Microservices or Event-Driven diagram that already
+ * exists.
+ *
+ * **What this starter is careful not to say.**
+ * - *This is not a distributed ACID transaction.* Each participant owns its own store and commits
+ *   locally (`writes`, one per participant); nothing spans them. The orchestrator's note says what
+ *   it does own: the saga's state and the order of steps — never each service's data.
+ * - *Compensation is not rollback.* `Refund payment` is one more command to Payment, a new local
+ *   transaction that semantically undoes an earlier one, drawn as its own connector with the
+ *   condition under which it runs. Nothing here rewinds anything. The orchestrator's note says
+ *   both halves of that in one breath; the refund connector itself carries no chip, so its label
+ *   and condition stay legible on the arc.
+ * - *Not necessarily HTTP.* Every step is a `command` (`service>service` offers it, picked over
+ *   the plain `calls` default): a command can travel as a request or as a message, and the
+ *   orchestrator only needs a reply either way. The participants are generic Services for the same
+ *   reason — nothing says they are HTTP APIs.
+ *
+ * **What each element is.** `Order Service` (`api`) starts the saga; it is the one thing a client
+ * talks to. `Saga Orchestrator` is a plain Service with the one accent no other element carries:
+ * it is the coordinator, and its role reads from being the hub every step leaves from. (There is
+ * no "orchestrator" kind, and one would serve only this starter — a choreographed saga has no
+ * coordinator at all.) `Payment`, `Inventory`, `Fulfillment` are peers in one row, each over its
+ * own store.
+ *
+ * **Routing.** The three steps leave the orchestrator's bottom edge at three different points as
+ * individually aimed straight rays (`routeMode: 'direct'`, `routing: 'straight'` — the technique
+ * Hexagonal's ports use), never one bundle: each carries its own step name, and one collapsed
+ * caption would erase the sequence. Read left to right, they are the order of the happy path. The
+ * compensation is a second connector to Payment, leaving the orchestrator's left side and arriving
+ * at Payment's left side as a bezier arc *outside* the columns — a visibly different path, so the
+ * default canvas already says "this one is the exception" without dimming anything.
+ *
+ * **Flows.** *Happy path* walks every step and every local commit in execution order.
+ * *Compensation* is three beats: reserve payment (succeeded), reserve inventory (fails), refund
+ * payment — with everything else dimmed, the whole idea of the pattern is the only thing lit.
+ */
+/** Wider than the shared `GUTTER`: three step captions sit side by side at the rays' midpoints. */
+const SAGA_GUTTER = 96;
+const SAGA_CX = (SERVICE.width * 3 + SAGA_GUTTER * 2) / 2;
+const SAGA_COLUMNS = columnsAt(SAGA_CX, 3, SERVICE.width, SAGA_GUTTER);
+const SAGA_ORDER_Y = 0;
+const SAGA_ORCHESTRATOR_Y = SAGA_ORDER_Y + SERVICE.height + BAND;
+/** Deeper than `BAND`: the three rays' captions all sit at the same height, and the outer rays
+ *  need the extra run to read as aimed rather than splayed. */
+const SAGA_STEP_BAND = BAND + 24;
+const SAGA_PARTICIPANT_Y = SAGA_ORCHESTRATOR_Y + SERVICE.height + SAGA_STEP_BAND;
+const SAGA_STORE_Y = SAGA_PARTICIPANT_Y + SERVICE.height + INNER_BAND;
+const SAGA_PARTICIPANTS = ['payment', 'inventory', 'fulfillment'] as const;
+const SAGA_PARTICIPANT_NAMES = ['Payment Service', 'Inventory Service', 'Fulfillment Service'] as const;
+const SAGA_STEP_NAMES = ['Reserve payment', 'Reserve inventory', 'Schedule fulfillment'] as const;
+const SAGA_STEP_KEYS = ['reserve-payment', 'reserve-inventory', 'schedule-fulfillment'] as const;
+/** Where each ray leaves the orchestrator's bottom edge — aimed, not fanned from one point. */
+const SAGA_RAY_OFFSETS = [0.25, 0.5, 0.75] as const;
+
+const sagaOrchestration: ArchitectureStarter = {
+  id: 'saga-orchestration',
+  category: 'pattern',
+  name: 'Saga (Orchestration)',
+  description: 'Local transactions plus compensation, coordinated',
+  aliases: [
+    'saga',
+    'saga orchestration',
+    'orchestrated saga',
+    'distributed transaction',
+    'compensating transaction',
+    'compensation',
+  ],
+  nodes: [
+    {
+      key: 'order',
+      type: 'service',
+      serviceKind: 'api',
+      text: 'Order Service',
+      accent: 'teal',
+      x: centeredAt(SAGA_CX, SERVICE.width),
+      y: SAGA_ORDER_Y,
+      ...SERVICE,
+    },
+    {
+      key: 'orchestrator',
+      type: 'service',
+      serviceKind: 'generic',
+      text: 'Saga Orchestrator',
+      accent: 'violet',
+      x: centeredAt(SAGA_CX, SERVICE.width),
+      y: SAGA_ORCHESTRATOR_Y,
+      ...SERVICE,
+      attachments: [
+        {
+          type: 'note',
+          text: 'Owns the saga’s state and the order of steps. Each service owns its own data and commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.',
+        },
+      ],
+    },
+    ...SAGA_PARTICIPANTS.flatMap((key, index): StarterNodeSpec[] => [
+      {
+        key,
+        type: 'service',
+        serviceKind: 'generic',
+        text: SAGA_PARTICIPANT_NAMES[index],
+        accent: 'teal',
+        x: SAGA_COLUMNS[index]!,
+        y: SAGA_PARTICIPANT_Y,
+        ...SERVICE,
+      },
+      {
+        key: `${key}-store`,
+        type: 'database',
+        databaseKind: 'generic',
+        text: `${SAGA_PARTICIPANT_NAMES[index].replace(' Service', '')} DB`,
+        accent: 'blue',
+        x: centeredAt(SAGA_COLUMNS[index]! + SERVICE.width / 2, STORE.width),
+        y: SAGA_STORE_Y,
+        ...STORE,
+      },
+    ]),
+  ],
+  edges: [
+    { key: 'start', ...down('order', 'orchestrator'), semantic: 'command', label: 'Start saga' },
+    ...SAGA_PARTICIPANTS.map(
+      (key, index): StarterEdgeSpec => ({
+        key: SAGA_STEP_KEYS[index],
+        from: 'orchestrator',
+        to: key,
+        sourceAnchor: { side: 'bottom', offset: SAGA_RAY_OFFSETS[index]! },
+        targetAnchor: TOP,
+        semantic: 'command',
+        label: SAGA_STEP_NAMES[index],
+        routeMode: 'direct',
+        routing: 'straight',
+        ...(key === 'inventory'
+          ? {
+              attachments: [
+                {
+                  type: 'note' as const,
+                  text: 'Fails in this example — the orchestrator then compensates the steps that already succeeded.',
+                },
+              ],
+            }
+          : {}),
+      }),
+    ),
+    ...SAGA_PARTICIPANTS.map((key) => ({ key: `commit-${key}`, ...down(key, `${key}-store`) })),
+    {
+      key: 'refund',
+      from: 'orchestrator',
+      to: 'payment',
+      sourceAnchor: LEFT,
+      targetAnchor: LEFT,
+      semantic: 'command',
+      label: 'Refund payment',
+      condition: 'if inventory fails',
+      routeMode: 'direct',
+      routing: 'bezier',
+    },
+  ],
+  flows: [
+    {
+      title: 'Happy path',
+      accent: 'green',
+      steps: [
+        { edgeKey: 'start' },
+        { edgeKey: 'reserve-payment' },
+        { edgeKey: 'commit-payment', caption: 'Local transaction commits' },
+        { edgeKey: 'reserve-inventory' },
+        { edgeKey: 'commit-inventory', caption: 'Local transaction commits' },
+        { edgeKey: 'schedule-fulfillment' },
+        { edgeKey: 'commit-fulfillment', caption: 'Local transaction commits — saga complete' },
+      ],
+    },
+    {
+      title: 'Compensation',
+      accent: 'rose',
+      steps: [
+        { edgeKey: 'reserve-payment', caption: 'Succeeded' },
+        { edgeKey: 'reserve-inventory', caption: 'Fails' },
+        { edgeKey: 'refund', caption: 'Undo the step that already succeeded' },
+      ],
+    },
+  ],
+};
+
+/* ----------------------------------------------------- transactional outbox -- */
+/**
+ * How a service publishes an event *reliably*: it never writes to the broker at all. The business
+ * row and an outbox row are written in **one local transaction** — the boundary in the middle of
+ * this diagram is that transaction, and its subtitle is the invariant — and a separate publisher
+ * reads unpublished outbox rows afterwards and hands them to the broker. Read left to right:
+ * write atomically, publish asynchronously, consume independently.
+ *
+ * **What this starter is careful not to say.**
+ * - *Not a dual write.* The single most common way this picture goes wrong is `Service → DB` and
+ *   `Service → Broker` as two independent arrows. Here the producer has exactly one fan, both of
+ *   whose branches land inside the transaction boundary, and the broker is three columns away with
+ *   nothing connecting it to the producer. The producer's note says it outright.
+ * - *The outbox is a table, not a queue.* `Outbox` is a Data Store, drawn beside `Business Data`
+ *   inside the same transaction — it is the same database. Its note carries the two operational
+ *   facts a meeting can skip: rows are marked published (or deleted) after the broker acks, and the
+ *   publisher may poll or tail the log (CDC); either is this same shape.
+ * - *At-least-once, not exactly-once.* A publisher that crashes after the broker acks and before
+ *   marking the row will publish again. The consumer's note is the one reliability annotation this
+ *   diagram carries: dedupe on the event id.
+ *
+ * **What each element is.** `Producer Service` is an `api` Service — the thing handling the request
+ * that changes state. `Outbox Publisher` is a `worker`: a background process, not a request
+ * handler, and the *only* thing that talks to the broker. `Domain Events` is a Topic (named
+ * exactly as Event-Driven and CQRS name theirs — this starter drops into either), and `Consumer
+ * Service` is a `worker` that processes the event on its own schedule.
+ *
+ * **Routing.** The two writes leave the producer's right-middle point for one bundled trunk with
+ * one `writes` caption — one action, two rows. The rest is a single level line along the outbox's
+ * row: `reads` → `publishes` → `delivers to`. `Business Data` sits above that line, touched by
+ * nothing downstream: what gets published is the outbox, never the business table.
+ *
+ * **Flows.** Three short beats — *Service transaction*, *Outbox publication*, *Event consumption*
+ * — because the pattern's whole point is that these happen at three different times.
+ */
+const OUTBOX_SUBTITLE = { width: 200, height: 24 };
+const OUTBOX_TOP = BOUNDARY_TITLE_SUBLINE_Y + OUTBOX_SUBTITLE.height + 8;
+/** Tighter than `INNER_BAND`: two rows of one transaction, not two layers of an architecture. */
+const OUTBOX_ROW_GAP = 40;
+const OUTBOX_BUSINESS_Y = OUTBOX_TOP;
+const OUTBOX_RECORD_Y = OUTBOX_BUSINESS_Y + STORE.height + OUTBOX_ROW_GAP;
+const OUTBOX_BOX_WIDTH = STORE.width + BOUNDARY_PAD * 2;
+const OUTBOX_BOX_HEIGHT = OUTBOX_RECORD_Y + STORE.height + BOUNDARY_PAD;
+const OUTBOX_PRODUCER_X = 0;
+/** A full `BAND`: the fan's trunk corridor plus its collapsed `writes` caption. */
+const OUTBOX_BOX_X = OUTBOX_PRODUCER_X + SERVICE.width + BAND;
+const OUTBOX_STORE_X = OUTBOX_BOX_X + BOUNDARY_PAD;
+/** A full `BAND` again: this gap carries the one explicit caption in the starter, `reads
+ *  unpublished`, which needs more run than the shared `GUTTER` gives a one-word relationship. */
+const OUTBOX_PUBLISHER_X = OUTBOX_BOX_X + OUTBOX_BOX_WIDTH + BAND;
+const OUTBOX_TOPIC_X = OUTBOX_PUBLISHER_X + SERVICE.width + GUTTER;
+const OUTBOX_CONSUMER_X = OUTBOX_TOPIC_X + NAMED_QUEUE.width + GUTTER;
+/** The producer faces the middle of the two rows it writes; everything downstream sits on the
+ *  outbox row. */
+const OUTBOX_ROWS_CENTER = (OUTBOX_BUSINESS_Y + OUTBOX_RECORD_Y + STORE.height) / 2;
+const OUTBOX_RECORD_CENTER = OUTBOX_RECORD_Y + STORE.height / 2;
+
+const transactionalOutbox: ArchitectureStarter = {
+  id: 'transactional-outbox',
+  category: 'pattern',
+  name: 'Transactional Outbox',
+  description: 'Persist state and event intent atomically, publish after',
+  aliases: ['outbox', 'transactional outbox', 'outbox pattern', 'dual write', 'reliable publish', 'cdc'],
+  nodes: [
+    {
+      key: 'producer',
+      type: 'service',
+      serviceKind: 'api',
+      text: 'Producer Service',
+      accent: 'teal',
+      x: OUTBOX_PRODUCER_X,
+      y: centeredAt(OUTBOX_ROWS_CENTER, SERVICE.height),
+      ...SERVICE,
+      attachments: [
+        {
+          type: 'note',
+          text: 'Never talks to the broker. If the transaction rolls back, the event was never written either.',
+        },
+      ],
+    },
+    {
+      key: 'transaction',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'One local transaction',
+      x: OUTBOX_BOX_X,
+      y: 0,
+      width: OUTBOX_BOX_WIDTH,
+      height: OUTBOX_BOX_HEIGHT,
+    },
+    {
+      key: 'transaction-subtitle',
+      type: 'text',
+      text: 'Committed together, or not at all',
+      annotation: true,
+      parent: 'transaction',
+      x: OUTBOX_BOX_X + BOUNDARY_TITLE_INSET,
+      y: BOUNDARY_TITLE_SUBLINE_Y,
+      ...OUTBOX_SUBTITLE,
+    },
+    {
+      key: 'business',
+      type: 'database',
+      databaseKind: 'generic',
+      text: 'Business Data',
+      accent: 'blue',
+      parent: 'transaction',
+      x: OUTBOX_STORE_X,
+      y: OUTBOX_BUSINESS_Y,
+      ...STORE,
+    },
+    {
+      key: 'outbox',
+      type: 'database',
+      databaseKind: 'generic',
+      text: 'Outbox',
+      accent: 'blue',
+      parent: 'transaction',
+      x: OUTBOX_STORE_X,
+      y: OUTBOX_RECORD_Y,
+      ...STORE,
+      attachments: [
+        {
+          type: 'note',
+          text: 'A table in the same database. Rows are marked published (or deleted) after the broker acks. Poll it, or tail the log (CDC) — same shape.',
+        },
+      ],
+    },
+    {
+      key: 'publisher',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Outbox Publisher',
+      accent: 'teal',
+      x: OUTBOX_PUBLISHER_X,
+      y: centeredAt(OUTBOX_RECORD_CENTER, SERVICE.height),
+      ...SERVICE,
+    },
+    {
+      key: 'events',
+      type: 'queue',
+      queueKind: 'topic',
+      text: 'Domain Events',
+      x: OUTBOX_TOPIC_X,
+      y: centeredAt(OUTBOX_RECORD_CENTER, NAMED_QUEUE.height),
+      ...NAMED_QUEUE,
+    },
+    {
+      key: 'consumer',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Consumer Service',
+      accent: 'teal',
+      x: OUTBOX_CONSUMER_X,
+      y: centeredAt(OUTBOX_RECORD_CENTER, SERVICE.height),
+      ...SERVICE,
+      attachments: [
+        { type: 'note', text: 'At-least-once: the same event can arrive twice. Dedupe on the event id.' },
+      ],
+    },
+  ],
+  edges: [
+    // One fan, both branches inside the transaction — see this block's doc comment.
+    { key: 'write-business', ...across('producer', 'business') },
+    { key: 'write-outbox', ...across('producer', 'outbox') },
+    { key: 'relay', ...across('outbox', 'publisher'), label: 'reads unpublished' },
+    { key: 'publish', ...across('publisher', 'events') },
+    { key: 'deliver', ...across('events', 'consumer') },
+  ],
+  flows: [
+    {
+      title: 'Service transaction',
+      accent: 'amber',
+      steps: [
+        { edgeKey: 'write-business', caption: 'The business change' },
+        { edgeKey: 'write-outbox', caption: 'And the event to publish — same transaction' },
+      ],
+    },
+    {
+      title: 'Outbox publication',
+      accent: 'violet',
+      steps: [
+        { edgeKey: 'relay', caption: 'Later, and independently' },
+        { edgeKey: 'publish', caption: 'Then mark the row published' },
+      ],
+    },
+    {
+      title: 'Event consumption',
+      accent: 'green',
+      steps: [{ edgeKey: 'deliver', caption: 'Possibly more than once — the consumer dedupes' }],
+    },
+  ],
+};
+
+/** Architectures first, then patterns — the palette's two headers stay contiguous by construction
+ *  (`commands/registry.ts`'s `starterCommands`). */
 export const ARCHITECTURE_STARTERS: readonly ArchitectureStarter[] = [
   monolith,
   modularMonolith,
   microservices,
   eventDriven,
   hexagonal,
+  backendForFrontend,
+  cqrs,
+  sagaOrchestration,
+  transactionalOutbox,
 ];

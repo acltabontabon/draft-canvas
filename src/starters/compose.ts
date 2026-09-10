@@ -2,7 +2,7 @@
  * The composition vocabulary the starter catalog is authored against.
  *
  * Deliberately tiny. These are shared spacing constants and three placement helpers — not a layout
- * engine, and not a substitute for authoring. Draft Canvas has no auto-layout library, and for five
+ * engine, and not a substitute for authoring. Draft Canvas has no auto-layout library, and for nine
  * diagrams whose structure is known in advance it doesn't want one: a generic solver produces
  * something defensible, and what a starter needs is something *composed*. Everything the helpers
  * below can't express is a literal coordinate in `catalog.ts`, on purpose.

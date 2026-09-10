@@ -1103,9 +1103,12 @@ function selectionCommands(ctx: CommandContext): Command[] {
   return [];
 }
 
-/** Every command that applies to `ctx` right now, in display order. */
 /**
- * Architecture Starters — one row per composed opening diagram (`src/starters/`).
+ * Starters — one row per composed opening diagram (`src/starters/`), under two headers:
+ * *Architectures* (how the major parts of a system are organized) and *Patterns* (how one
+ * recurring design problem is solved — a saga, an outbox). The split is the catalog's own
+ * `category`, kept purely for discoverability; a starter is one architectural idea at one scope,
+ * and a real system composes several of them, so nothing here reads as a choice between them.
  *
  * These are not a template browser and deliberately not a separate surface: a starter is a name for
  * `insertStarter`, exactly as "Add Service" is a name for `addNode`. The row adds only the camera
@@ -1114,18 +1117,21 @@ function selectionCommands(ctx: CommandContext): Command[] {
  * They never depend on `ctx`, so unlike the selection-driven builders this one takes no argument —
  * a starter applies to any canvas, empty or not. Exported for the same reason `nodeCommands` is:
  * the empty canvas's starter row is a second surface over these identical commands, not a second
- * implementation of them (`ui/Editor/EmptyState.tsx`).
+ * implementation of them (`ui/Editor/EmptyState.tsx`). The catalog lists every architecture before
+ * any pattern, which is what keeps the two headers contiguous without sorting here.
  */
 export function starterCommands(): Command[] {
   return ARCHITECTURE_STARTERS.map((starter) => ({
     id: `starter-${starter.id}`,
     title: starter.name,
-    group: 'starter',
+    group: starter.category === 'pattern' ? 'pattern' : 'starter',
     keywords: starter.aliases,
     hint: starter.description,
     run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter.id))),
   }));
 }
+
+/** Every command that applies to `ctx` right now, in display order. */
 
 export function commandsFor(ctx: CommandContext): Command[] {
   if (ctx.editor.mode === 'present') return presentModeCommands(ctx);

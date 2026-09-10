@@ -6,14 +6,19 @@
  * insert twice on one canvas.
  */
 
-import { inferRelationship } from '../document/connectorSemantics';
+import { capabilityFor, categoryOf, inferRelationship } from '../document/connectorSemantics';
 import { createAttachment, createEdge, createNode, defaultSizeFor } from '../document/factory';
-import type { DraftEdge, DraftNode } from '../document/types';
+import { createFlow } from '../document/flow';
+import { createId } from '../document/ids';
+import { LIMITS } from '../document/limits';
+import type { DraftEdge, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
 import type { ArchitectureStarter, StarterNodeSpec } from './types';
 
 export interface BuiltStarter {
   nodes: DraftNode[];
   edges: DraftEdge[];
+  /** The starter's predefined flows, already pointing at `edges`' generated ids. Empty for most. */
+  flows: DraftFlow[];
 }
 
 /** How many `group` ancestors a spec has. Drives z-order so a nested boundary sits in front of the
@@ -117,6 +122,7 @@ export function buildStarter(
   }
 
   const edges: DraftEdge[] = [];
+  const edgeIds = new Map<string, string>();
   for (const spec of starter.edges) {
     const sourceId = ids.get(spec.from);
     const targetId = ids.get(spec.to);
@@ -124,15 +130,19 @@ export function buildStarter(
     const source = byId.get(sourceId)!;
     const target = byId.get(targetId)!;
     const relationship = inferRelationship(source, target);
+    // An authored relation counts only if the matrix offers it for this pairing — see
+    // `StarterEdgeSpec.semantic`. Then it is the user's own explicit pick, origin included.
+    const offered = capabilityFor(categoryOf(source), categoryOf(target))?.relations ?? [];
+    const explicit = spec.semantic !== undefined && offered.includes(spec.semantic) ? spec.semantic : undefined;
     const edge = createEdge({
       source: sourceId,
       target: targetId,
       sourceAnchor: spec.sourceAnchor,
       targetAnchor: spec.targetAnchor,
-      semantic: relationship?.semantic,
+      semantic: explicit ?? relationship?.semantic,
       kind: relationship?.kind,
       async: relationship?.async,
-      semanticsOrigin: relationship?.semantic ? 'inferred' : undefined,
+      semanticsOrigin: explicit ? 'explicit' : relationship?.semantic ? 'inferred' : undefined,
       ...(spec.label !== undefined ? { label: spec.label } : {}),
       ...(spec.condition !== undefined ? { condition: spec.condition } : {}),
       ...(spec.routeMode !== undefined ? { routeMode: spec.routeMode } : {}),
@@ -141,8 +151,26 @@ export function buildStarter(
     });
     // Same assignment `convertToJunction` makes — `createEdge` has no attachment input of its own.
     if (spec.attachments?.length) edge.attachments = spec.attachments.map(createAttachment);
+    if (spec.key !== undefined) edgeIds.set(spec.key, edge.id);
     edges.push(edge);
   }
 
-  return { nodes, edges };
+  // A flow is built the way `addStepToFlow` would build it, one step per resolved key, so a
+  // starter's flow is indistinguishable from one the user assembled by hand. An unresolved key is
+  // skipped rather than thrown: `tests/starters.test.ts` guarantees the catalog has none.
+  const flows: DraftFlow[] = (starter.flows ?? []).map((spec) => {
+    const flow = createFlow({ title: spec.title });
+    if (spec.accent) flow.accent = spec.accent;
+    for (const stepSpec of spec.steps) {
+      if (flow.steps.length >= LIMITS.maxStepsPerFlow) break;
+      const edgeId = edgeIds.get(stepSpec.edgeKey);
+      if (!edgeId) continue;
+      const step: DraftFlowStep = { id: createId('fs'), edgeId };
+      if (stepSpec.caption?.trim()) step.caption = stepSpec.caption.trim().slice(0, LIMITS.maxLabelLength);
+      flow.steps.push(step);
+    }
+    return flow;
+  });
+
+  return { nodes, edges, flows };
 }

@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
+import { createFlow, flowHasMembers } from '../src/document/flow';
+import { LIMITS } from '../src/document/limits';
 import { boundsOf, freeOriginFor, INSERT_GAP } from '../src/document/operations';
 import type { Bounds } from '../src/document/operations';
+import { parseDocument } from '../src/document/validate';
 import { ARCHITECTURE_STARTERS, starterSize } from '../src/starters';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
@@ -90,6 +93,77 @@ describe('insertStarter', () => {
     expect(store.getState().document.nodes).toHaveLength(7);
     store.getState().undo();
     expect(store.getState().document.nodes).toHaveLength(0);
+  });
+
+  it.each(ARCHITECTURE_STARTERS.filter((s) => s.flows?.length).map((s) => [s.name, s] as const))(
+    'ships %s with its predefined flows, every step pointing at a live connector',
+    (_label, starter) => {
+      store.getState().insertStarter(starter.id);
+      const doc = store.getState().document;
+      expect(doc.flows.map((flow) => flow.title)).toEqual(starter.flows!.map((flow) => flow.title));
+      const edgeIds = new Set(doc.edges.map((edge) => edge.id));
+      doc.flows.forEach((flow, index) => {
+        expect(flow.steps).toHaveLength(starter.flows![index]!.steps.length);
+        expect(flowHasMembers(doc, flow)).toBe(true);
+        for (const step of flow.steps) expect(edgeIds.has(step.edgeId!)).toBe(true);
+        expect(flow.accent).toBe(starter.flows![index]!.accent);
+      });
+    },
+  );
+
+  it('takes the flows out with one undo and brings them back with one redo', () => {
+    store.getState().insertStarter('saga-orchestration');
+    expect(store.getState().history.past).toHaveLength(1);
+    const flows = store.getState().document.flows;
+    expect(flows).toHaveLength(2);
+
+    store.getState().undo();
+    expect(store.getState().document.flows).toEqual([]);
+    expect(store.getState().document.nodes).toEqual([]);
+
+    store.getState().redo();
+    expect(store.getState().document.flows).toEqual(flows);
+  });
+
+  it('inserts the same starter twice with two independent sets of flows', () => {
+    store.getState().insertStarter('cqrs');
+    store.getState().insertStarter('cqrs');
+    const doc = store.getState().document;
+    expect(doc.flows).toHaveLength(4);
+    expect(new Set(doc.flows.map((flow) => flow.id)).size).toBe(4);
+    const stepIds = doc.flows.flatMap((flow) => flow.steps.map((step) => step.id));
+    expect(new Set(stepIds).size).toBe(stepIds.length);
+    // The second copy's flows walk the second copy's connectors, not the first's.
+    const stepEdges = (flow: (typeof doc.flows)[number]) => flow.steps.map((step) => step.edgeId);
+    expect(stepEdges(doc.flows[0]!).some((id) => stepEdges(doc.flows[2]!).includes(id))).toBe(false);
+  });
+
+  it('leaves existing flows alone, and still inserts the diagram when the flow cap is already reached', () => {
+    const mine = createFlow({ title: 'Mine' });
+    store.setState((state) => ({ document: { ...state.document, flows: [mine] } }));
+    store.getState().insertStarter('transactional-outbox');
+    expect(store.getState().document.flows[0]).toEqual(mine);
+    expect(store.getState().document.flows).toHaveLength(4);
+
+    reset();
+    const full = Array.from({ length: LIMITS.maxFlows }, (_, i) => createFlow({ title: `Flow ${i}` }));
+    store.setState((state) => ({ document: { ...state.document, flows: full } }));
+    const created = store.getState().insertStarter('transactional-outbox');
+    expect(created).toHaveLength(8);
+    expect(store.getState().document.flows).toHaveLength(LIMITS.maxFlows);
+  });
+
+  it('keeps its flows through a save and reopen', () => {
+    store.getState().insertStarter('saga-orchestration');
+    const before = store.getState().document;
+    const result = parseDocument(JSON.stringify(before));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.repairs).toEqual([]);
+    expect(result.document.flows).toEqual(before.flows);
+    expect(result.document.edges.map((edge) => [edge.id, edge.semantic, edge.semanticsOrigin])).toEqual(
+      before.edges.map((edge) => [edge.id, edge.semantic, edge.semanticsOrigin]),
+    );
   });
 
   it('does nothing at all for an id that is not in the catalog', () => {

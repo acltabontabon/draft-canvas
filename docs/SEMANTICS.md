@@ -97,7 +97,7 @@ unrestricted connector.
 | Component → Port | uses, dependsOn | uses | |
 | Port → Component / Service | implementedBy, dependsOn | implementedBy | the thing after the port depends on the port's owner |
 | Port → Database | dependsOn | *(none)* | **`status: 'unusual'`** — a port is a contract; something implements it and talks to the store |
-| Actor → Service | calls, http, command | calls | synchronous by predetermination, no behaviour picker |
+| Actor → Service | calls, http, command, query | calls | synchronous by predetermination, no behaviour picker |
 | Database → Database | ingests, replicates, cdc, syncs, dependsOn | ingests | data movement, not a request/response shape |
 
 A relation offered here is a *suggestion*, never a restriction — the inspector always keeps an

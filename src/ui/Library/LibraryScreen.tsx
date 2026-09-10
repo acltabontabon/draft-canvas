@@ -4,7 +4,7 @@ import { looksLikeSecureExport, readSecureProjectFile } from '../../export/secur
 import type { DraftSummary } from '../../document/types';
 import type { NormalizeResult } from '../../document/validate';
 import { PRODUCT } from '../../product';
-import { ARCHITECTURE_STARTERS } from '../../starters';
+import { ARCHITECTURE_STARTERS, STARTER_CATEGORIES } from '../../starters';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
@@ -218,18 +218,27 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
               <div className="dc-library-empty dc-library-welcome">
                 <p>Nothing here yet.</p>
                 <p className="dc-muted">Start blank, or with an architecture Draft Canvas already knows.</p>
-                <div className="dc-library-starters" role="group" aria-label="Architecture starters">
-                  {ARCHITECTURE_STARTERS.map((starter) => (
-                    <button
-                      key={starter.id}
-                      type="button"
-                      className="dc-library-starter"
-                      aria-label={`Start from ${starter.name}`}
-                      title={starter.description}
-                      onClick={() => void session.newDocument(undefined, starter.id)}
-                    >
-                      {starter.name}
-                    </button>
+                <div className="dc-library-starters" role="group" aria-label="Starters">
+                  {STARTER_CATEGORIES.map((category) => (
+                    <div key={category.id} className="dc-library-starter-row" role="group" aria-label={category.label}>
+                      <span className="dc-library-starter-label" aria-hidden="true">
+                        {category.label}
+                      </span>
+                      <span className="dc-library-starter-buttons">
+                        {ARCHITECTURE_STARTERS.filter((starter) => starter.category === category.id).map((starter) => (
+                          <button
+                            key={starter.id}
+                            type="button"
+                            className="dc-library-starter"
+                            aria-label={`Start from ${starter.name}`}
+                            title={starter.description}
+                            onClick={() => void session.newDocument(undefined, starter.id)}
+                          >
+                            {starter.name}
+                          </button>
+                        ))}
+                      </span>
+                    </div>
                   ))}
                 </div>
                 <p className="dc-muted">

@@ -206,7 +206,7 @@ describe('capabilityFor — the capability matrix', () => {
   it('actor → service: defaults to calls, a small relation set, no behaviour picker', () => {
     const cap = capabilityFor('actor', 'service')!;
     expect(cap.defaultRelation).toBe('calls');
-    expect(cap.relations).toEqual(['calls', 'http', 'command']);
+    expect(cap.relations).toEqual(['calls', 'http', 'command', 'query']);
     expect(cap.behaviors).toEqual([]);
   });
 

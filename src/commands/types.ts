@@ -4,6 +4,7 @@ import type { DraftNode } from '../document/types';
 import type { FlowPlaybackController } from '../presentation/useFlowPlayback';
 import type { EditorStore } from '../store/editorStore';
 import type { UiStore } from '../store/uiStore';
+import { STARTER_CATEGORIES } from '../starters/types';
 
 /**
  * Phase 8 — the command surface's vocabulary. A command is a *thin* front-end onto an operation
@@ -20,6 +21,7 @@ export type CommandGroup =
   | 'connector'
   | 'create'
   | 'starter'
+  | 'pattern'
   | 'flow'
   | 'jump'
   | 'view'
@@ -30,7 +32,10 @@ export const GROUP_LABELS: Record<CommandGroup, string> = {
   selection: 'Selection',
   connector: 'Connector',
   create: 'Create',
-  starter: 'Architecture starters',
+  // Both are Starters (`src/starters/`); the two headers are its `StarterCategory` split, so the
+  // list reads as two short groups rather than one long one. See that type for what the line means.
+  starter: STARTER_CATEGORIES[0]!.label,
+  pattern: STARTER_CATEGORIES[1]!.label,
   flow: 'Flows',
   jump: 'Jump to',
   view: 'View',

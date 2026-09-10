@@ -211,9 +211,11 @@ export interface EditorStore {
 
   /* Editing commands */
   addNode: (input: CreateNodeInput) => DraftNode;
-  addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string) => void;
+  /** One undoable bulk add. `flows` (a starter's predefined walkthroughs) join the same entry, so
+   *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. */
+  addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string, flows?: DraftFlow[]) => void;
   /**
-   * Inserts an Architecture Starter — a composed opening diagram — as one undoable action, clear of
+   * Inserts a Starter — a composed opening diagram — as one undoable action, clear of
    * whatever is already on the canvas, and leaves it selected. Returns the nodes it created, the
    * way `addNode` returns the one it created: a caller that wants to move the camera onto them
    * cannot find them in its own `CommandContext`, whose document predates this call. See
@@ -724,10 +726,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return node;
   },
 
-  addNodesWithEdges(nodes, edges, label) {
-    get().apply(label, (doc) => addEdges(addNodes(doc, nodes), edges), {
-      selection: { nodes: nodes.map((n) => n.id), edges: [] },
-    });
+  addNodesWithEdges(nodes, edges, label, flows = []) {
+    get().apply(
+      label,
+      (doc) => flows.reduce((next, flow) => addFlow(next, flow), addEdges(addNodes(doc, nodes), edges)),
+      { selection: { nodes: nodes.map((n) => n.id), edges: [] } },
+    );
   },
 
   insertStarter(starterId) {
@@ -738,8 +742,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // (`freeOriginFor`, one pass over the document) and what it contains (`buildStarter`, pure).
     // The insert itself is then the plainest bulk add there is, which is what makes one ⌘Z undo
     // the whole architecture and one ⌘⇧Z bring it back.
-    const { nodes, edges } = buildStarter(starter, freeOriginFor(state.document, starterSize(starter)));
-    state.addNodesWithEdges(nodes, edges, `Insert ${starter.name}`);
+    const { nodes, edges, flows } = buildStarter(starter, freeOriginFor(state.document, starterSize(starter)));
+    state.addNodesWithEdges(nodes, edges, `Insert ${starter.name}`, flows);
     return nodes;
   },
 

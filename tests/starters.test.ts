@@ -36,9 +36,38 @@ const each = (name: string, run: (starter: ArchitectureStarter) => void) =>
   );
 
 describe('the starter catalog', () => {
-  it('exposes exactly the five declared starters, each reachable by id', () => {
+  it('exposes exactly the nine declared starters, each reachable by id, architectures before patterns', () => {
     expect(ARCHITECTURE_STARTERS.map((starter) => starter.id)).toEqual([...STARTER_IDS]);
     for (const id of STARTER_IDS) expect(starterById(id)?.id).toBe(id);
+    const categories = ARCHITECTURE_STARTERS.map((starter) => starter.category);
+    expect(categories.lastIndexOf('architecture')).toBeLessThan(categories.indexOf('pattern'));
+    expect(ARCHITECTURE_STARTERS.filter((s) => s.category === 'pattern').map((s) => s.id)).toEqual([
+      'saga-orchestration',
+      'transactional-outbox',
+    ]);
+  });
+
+  each('names every connector key once, and every flow step by one of them', (starter) => {
+    const keys = starter.edges.flatMap((edge) => (edge.key === undefined ? [] : [edge.key]));
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const flow of starter.flows ?? []) {
+      expect(flow.title.trim()).not.toBe('');
+      expect(flow.steps.length).toBeGreaterThan(0);
+      for (const step of flow.steps) expect(keys).toContain(step.edgeKey);
+      // One connector is one beat of a flow — `addStepToFlow` refuses a repeat too.
+      expect(new Set(flow.steps.map((step) => step.edgeKey)).size).toBe(flow.steps.length);
+    }
+  });
+
+  each('authors only relations the matrix already offers for the pairing', (starter) => {
+    const byKey = new Map(starter.nodes.map((spec) => [spec.key, spec]));
+    for (const edge of starter.edges) {
+      if (edge.semantic === undefined) continue;
+      const source = byKey.get(edge.from)!;
+      const target = byKey.get(edge.to)!;
+      const offered = capabilityFor(categoryOf(source as DraftNode), categoryOf(target as DraftNode))?.relations;
+      expect(offered, `${starter.name}: ${edge.from} → ${edge.to} authors "${edge.semantic}"`).toContain(edge.semantic);
+    }
   });
 
   each('names itself and describes itself in one line', (starter) => {
@@ -152,23 +181,32 @@ describe('buildStarter', () => {
     const { nodes, edges } = buildStarter(starter, { x: 0, y: 0 });
     const byId = new Map(nodes.map((node) => [node.id, node]));
     expect(edges).toHaveLength(starter.edges.length);
-    for (const edge of edges) {
+    edges.forEach((edge, index) => {
       const capability = capabilityFor(
         categoryOf(byId.get(edge.source)!),
         categoryOf(byId.get(edge.target)!),
       );
-      expect(edge.semantic).toBe(capability?.defaultRelation);
+      const authored = starter.edges[index]!.semantic;
+      if (authored !== undefined) {
+        // An authored relation is one the matrix offers for the pairing, stamped the way the
+        // inspector stamps a user's own pick — so it survives a later re-inference, as it should.
+        expect(capability?.relations).toContain(authored);
+        expect(edge.semantic).toBe(authored);
+        expect(edge.semanticsOrigin).toBe('explicit');
+      } else {
+        expect(edge.semantic).toBe(capability?.defaultRelation);
+        // Inferred, not explicit: changing a node's kind afterwards must re-derive these, exactly as
+        // it does for a connector the user drew by hand (`isEligibleForReinference`).
+        expect(edge.semanticsOrigin).toBe(capability?.defaultRelation ? 'inferred' : undefined);
+      }
       expect(edge.kind).toBe(capability?.defaultBehavior);
-      // Inferred, not explicit: changing a node's kind afterwards must re-derive these, exactly as
-      // it does for a connector the user drew by hand (`isEligibleForReinference`).
-      expect(edge.semanticsOrigin).toBe(capability?.defaultRelation ? 'inferred' : undefined);
       // A starter never doubles its own arrow count with reply lines. `routeMode` is deliberately
       // not checked here — like `label`/`condition`, it's an authored escape hatch (opting a
       // connector out of Smart Routing's bundling) that changes nothing about the *derived*
       // semantic/kind asserted above.
       expect(edge.async).toBe(capability?.defaultAsync || undefined);
       expect(edge.hasResponse).toBeUndefined();
-    }
+    });
   });
 
   it('models microservices as one entry point, independent deployables, service-owned data, and event integration', () => {
@@ -578,6 +616,175 @@ describe('buildStarter', () => {
   // should-be-straight line a few pixels sideways — worse-looking under Sketch/Draft's hand-drawn
   // stroke, but a real routing decision, not personality styling. Every connector authored as a
   // plain vertical (same x on both ends) must stay one — no interior `Q` (quadratic) command.
+  it('models BFF as one tailored adapter per client experience over shared, independent domain services', () => {
+    const { nodes, edges, flows } = buildStarter(starterById('bff')!, { x: 0, y: 0 });
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    expect(nodes).toHaveLength(10);
+    expect(edges).toHaveLength(7);
+    expect(flows).toEqual([]);
+
+    // Two BFFs, both gateways, each inside its own experience boundary with its own client — and
+    // no shared gateway anywhere: BFF ≠ API Gateway is the whole lesson.
+    const adapters = nodes.filter((node) => node.serviceKind === 'gateway');
+    expect(adapters.map((node) => node.text).sort()).toEqual(['Mobile BFF', 'Web BFF']);
+    expect(new Set(adapters.map((node) => node.parentId)).size).toBe(2);
+    for (const adapter of adapters) {
+      const client = nodes.find((node) => node.type === 'actor' && node.parentId === adapter.parentId)!;
+      expect(client.actorKind).toBe('device');
+      expect(edges.filter((edge) => edge.source === client.id).map((edge) => edge.target)).toEqual([adapter.id]);
+      // Every connector leaving an adapter routes into the domain — never into another adapter.
+      for (const edge of edges.filter((edge) => edge.source === adapter.id)) {
+        expect(edge.semantic).toBe('routes');
+        expect(nodes.find((node) => node.id === edge.target)!.parentId).toBe(byText('Domain services').id);
+      }
+    }
+    // Tailored, not uniform: the web experience uses one more capability than mobile does.
+    expect(edges.filter((edge) => edge.source === byText('Web BFF').id)).toHaveLength(3);
+    expect(edges.filter((edge) => edge.source === byText('Mobile BFF').id)).toHaveLength(2);
+    // Shared domain services are independent of each other, and nothing here is asynchronous.
+    const domain = nodes.filter((node) => node.parentId === byText('Domain services').id);
+    expect(domain).toHaveLength(3);
+    for (const edge of edges) {
+      expect(domain.some((node) => node.id === edge.source)).toBe(false);
+      expect(edge.async).toBeUndefined();
+      expect(edge.kind === undefined || edge.kind === 'sync').toBe(true);
+    }
+  });
+
+  it('models CQRS as intent in, questions answered from a projection, with an event as the only bridge', () => {
+    const { nodes, edges, flows } = buildStarter(starterById('cqrs')!, { x: 0, y: 0 });
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    const between = (from: string, to: string) =>
+      edges.find((edge) => edge.source === byText(from).id && edge.target === byText(to).id)!;
+    expect(nodes).toHaveLength(12);
+    expect(edges).toHaveLength(8);
+
+    // Commands express intent; queries never mutate — said by the relationship words themselves.
+    expect(between('Client', 'Command API').semantic).toBe('command');
+    expect(between('Client', 'Query API').semantic).toBe('query');
+    expect(between('Query API', 'Read Store').semantic).toBe('reads');
+    expect(between('Write Model', 'Write Store').semantic).toBe('writes');
+    // Not Event Sourcing: no event store, and the topic carries facts, not state.
+    expect(nodes.filter((node) => node.type === 'database').map((node) => node.text).sort()).toEqual(['Read Store', 'Write Store']);
+    expect(byText('Domain Events').queueKind).toBe('topic');
+    expect(between('Write Model', 'Domain Events').semantic).toBe('publishes');
+    // The only path between the two sides is event → projection → read store.
+    const command = byText('Command').id;
+    const query = byText('Query').id;
+    const sideOf = (id: string) => nodes.find((node) => node.id === id)!.parentId;
+    for (const edge of edges) {
+      const crosses = sideOf(edge.source) === command && sideOf(edge.target) === query;
+      expect(crosses).toBe(false);
+      expect(sideOf(edge.source) === query && sideOf(edge.target) === command).toBe(false);
+    }
+    expect(between('Projection Service', 'Read Store').semantic).toBe('writes');
+    expect(byText('Projection Service').serviceKind).toBe('worker');
+    // Nothing on the query side is written by the command side, and vice versa.
+    expect(edges.filter((edge) => edge.target === byText('Read Store').id).map((edge) => edge.semantic).sort()).toEqual(['reads', 'writes']);
+    expect(edges.filter((edge) => edge.target === byText('Write Store').id)).toHaveLength(1);
+
+    // Two flows: the whole write story including the async tail, and the two-step read.
+    expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
+      ['Submit command', 6],
+      ['Read projection', 2],
+    ]);
+    const edgeIds = new Set(edges.map((edge) => edge.id));
+    for (const flow of flows) for (const step of flow.steps) expect(edgeIds.has(step.edgeId!)).toBe(true);
+    expect(flows[1]!.steps.map((step) => step.edgeId)).toEqual([
+      between('Client', 'Query API').id,
+      between('Query API', 'Read Store').id,
+    ]);
+  });
+
+  it('models the saga as a coordinator issuing commands to services that each commit locally, plus one compensation', () => {
+    const { nodes, edges, flows } = buildStarter(starterById('saga-orchestration')!, { x: 0, y: 0 });
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    expect(nodes).toHaveLength(8);
+    expect(edges).toHaveLength(8);
+    expect(nodes.filter((node) => node.type === 'group')).toHaveLength(0);
+
+    const orchestrator = byText('Saga Orchestrator');
+    // The one accent nobody else carries: the coordinator reads as the coordinator.
+    expect(nodes.filter((node) => node.accent === orchestrator.accent)).toEqual([orchestrator]);
+    // Every step is a command from the orchestrator — transport-neutral, never a plain call.
+    const steps = edges.filter((edge) => edge.source === orchestrator.id);
+    expect(steps).toHaveLength(4);
+    for (const step of steps) {
+      expect(step.semantic).toBe('command');
+      expect(step.label).toBeTruthy();
+      expect(step.routeMode).toBe('direct');
+    }
+    // Each participant owns exactly its own store and commits locally — no cross-service write.
+    for (const name of ['Payment', 'Inventory', 'Fulfillment']) {
+      const service = byText(`${name} Service`);
+      const store = byText(`${name} DB`);
+      const writes = edges.filter((edge) => edge.target === store.id);
+      expect(writes).toHaveLength(1);
+      expect(writes[0]!.source).toBe(service.id);
+      expect(writes[0]!.semantic).toBe('writes');
+    }
+    // Compensation is a second, conditioned command to the service whose step already succeeded.
+    const toPayment = steps.filter((edge) => edge.target === byText('Payment Service').id);
+    expect(toPayment).toHaveLength(2);
+    const refund = toPayment.find((edge) => edge.condition)!;
+    expect(refund.label).toBe('Refund payment');
+    expect(refund.routing).toBe('bezier');
+    expect(JSON.stringify(refund.sourceAnchor)).not.toBe(JSON.stringify(toPayment.find((e) => e !== refund)!.sourceAnchor));
+    // The three happy-path rays leave the orchestrator at three different points.
+    const rays = steps.filter((edge) => edge !== refund && edge.target !== byText('Saga Orchestrator').id);
+    expect(new Set(rays.map((edge) => edge.sourceAnchor?.offset)).size).toBe(3);
+
+    expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
+      ['Happy path', 7],
+      ['Compensation', 3],
+    ]);
+    const happy = flows[0]!.steps.map((step) => step.edgeId);
+    expect(happy).not.toContain(refund.id);
+    const compensation = flows[1]!.steps.map((step) => step.edgeId);
+    expect(compensation[2]).toBe(refund.id);
+    expect(compensation[1]).toBe(steps.find((edge) => edge.target === byText('Inventory Service').id)!.id);
+  });
+
+  it('models the outbox as one atomic write of state and event, published later, consumed independently', () => {
+    const { nodes, edges, flows } = buildStarter(starterById('transactional-outbox')!, { x: 0, y: 0 });
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    expect(nodes).toHaveLength(8);
+    expect(edges).toHaveLength(5);
+
+    // The outbox is a table, not a queue, and it lives in the same transaction as the business row.
+    const transaction = byText('One local transaction');
+    expect(transaction.type).toBe('group');
+    expect(byText('Outbox').type).toBe('database');
+    expect(byText('Business Data').parentId).toBe(transaction.id);
+    expect(byText('Outbox').parentId).toBe(transaction.id);
+    // No dual write: the producer's only connectors land inside the transaction, from one point,
+    // and nothing links the producer to the broker.
+    const producer = byText('Producer Service');
+    const writes = edges.filter((edge) => edge.source === producer.id);
+    expect(writes).toHaveLength(2);
+    expect(new Set(writes.map((edge) => JSON.stringify(edge.sourceAnchor))).size).toBe(1);
+    for (const write of writes) {
+      expect(write.semantic).toBe('writes');
+      expect(nodes.find((node) => node.id === write.target)!.parentId).toBe(transaction.id);
+    }
+    expect(edges.some((edge) => edge.source === producer.id && edge.target === byText('Domain Events').id)).toBe(false);
+    // Publication is a separate worker reading the outbox; consumption is separate again.
+    const chain = ['Outbox', 'Outbox Publisher', 'Domain Events', 'Consumer Service'];
+    const semantics = chain.slice(1).map(
+      (to, index) => edges.find((edge) => edge.source === byText(chain[index]!).id && edge.target === byText(to).id)!.semantic,
+    );
+    expect(semantics).toEqual(['reads', 'publishes', 'deliversTo']);
+    expect(byText('Outbox Publisher').serviceKind).toBe('worker');
+    expect(byText('Consumer Service').serviceKind).toBe('worker');
+    expect(byText('Business Data').id).not.toBe(edges.find((edge) => edge.target === byText('Outbox Publisher').id)!.source);
+
+    expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
+      ['Service transaction', 2],
+      ['Outbox publication', 2],
+      ['Event consumption', 1],
+    ]);
+  });
+
   it('routes every straight-authored connector as an actual straight line, not a hidden detour', () => {
     for (const starter of ARCHITECTURE_STARTERS) {
       const { nodes, edges } = buildStarter(starter, { x: 0, y: 0 });

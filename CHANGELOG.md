@@ -4,6 +4,27 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Four new starters. Under **Architectures**: **Backend for Frontend** (a web and a mobile
+  experience, each with its own tailored adapter over shared services) and **CQRS** (a command
+  side and a query side, bridged only by an event). Under **Patterns**: **Saga (Orchestration)**
+  (one coordinator issuing commands to services that each commit locally, with an explicit
+  compensating action) and **Transactional Outbox** (a service writes its data and its outbox
+  record in one transaction; a separate publisher delivers the event afterwards).
+- Starters can now come with ready-made flows. CQRS opens with *Submit command* and *Read
+  projection*; the saga with *Happy path* and *Compensation*; the outbox with *Service
+  transaction*, *Outbox publication*, and *Event consumption*. Select one to dim everything else,
+  or present it to step through — they're ordinary flows, so rename, reorder, or delete them like
+  any other.
+- A connector from a person to a service can now be marked as a `query`, not just a `command`.
+
+### Changed
+
+- ⌘K groups starters under **Architectures** and **Patterns** instead of one long list.
+- The starter list on a blank canvas and in an empty library is now grouped by category and kept
+  to a tidy width, instead of running the full length of the screen.
+
 ## [0.8.0] - 2026-09-10
 
 ### Added

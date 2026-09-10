@@ -1667,32 +1667,176 @@
  * turned off. Kept as bare text buttons on purpose: a row of cards or thumbnails here would turn a
  * blank Draft Canvas into a template picker, which is the opposite of the point.
  */
+/*
+ * Two columns: a category gutter, and the starters themselves.
+ *
+ * `auto` on the label column sizes it to "Architectures" (the longer word) and both rows share
+ * that one track, so the labels land flush on one right edge and both button groups start flush
+ * on the next — alignment a pair of independently-sized flex rows can't give you when their
+ * labels are different lengths.
+ *
+ * The button column is *capped* rather than left to run. Seven architecture names on one line
+ * stretched this hint into a bar nearly the width of the canvas — twice the shortcut row above it,
+ * which is what made an empty canvas feel busy. Capped, they wrap into a block about as wide as
+ * that row, so the whole empty state reads as one centred column of decreasing emphasis instead
+ * of three short lines with a wide bar hanging off the bottom.
+ */
 .dc-empty-starters {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px 10px;
-  margin-top: 18px;
+  /*
+   * The rhythm of the whole lower half, in one number each.
+   *
+   * This is the gap between the two categories, and it is deliberately only a little more than the
+   * 6px between a label and its own starters: that ratio is what binds each label to the names
+   * under it while still letting the two groups read as one secondary launcher. Spaced evenly
+   * instead, the section falls apart into four disconnected horizontal bands — the divider, a
+   * label, some names, another label — which is exactly how it read before this pass.
+   *
+   * The one generous gap is the one above the divider, because that is the only boundary here that
+   * separates two different kinds of offer rather than two parts of the same one.
+   */
+  gap: 14px;
+  /* Plus `.dc-empty`'s own 6px, so 30px of air above the divider against 18px below it. */
+  margin-top: 24px;
   pointer-events: auto;
 }
 
+/*
+ * The one line between "here is how to draw" and "or open with one of these" — two different kinds
+ * of offer, and the eye wants a cue that it has crossed from one to the other. It fades out at both
+ * ends instead of stopping dead: a hard-edged rule reads as chrome, as a box someone has drawn on
+ * the canvas, which is the one thing this layer must never look like.
+ */
+.dc-empty-starters::before {
+  content: '';
+  width: 180px;
+  height: 1px;
+  margin-bottom: 4px;
+  /* A plateau, not a single peak: a plain transparent→colour→transparent ramp is at full strength
+   * for one pixel in the middle and reads as a smudge rather than a line. `border-strong` because
+   * plain `--dc-border` against the canvas is about four percent of contrast in the light theme —
+   * invisible, which is quieter than quiet. */
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--dc-border-strong) 30%,
+    var(--dc-border-strong) 70%,
+    transparent
+  );
+  opacity: 0.75;
+}
+
+/* Label above its starters, both centred — the whole empty state then hangs off one centre line,
+ * which a label in a left gutter can't do: the gutter balances the block's *box* while leaving its
+ * visual weight (the names) sitting off to the right of everything above it. */
+.dc-empty-starter-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/*
+ * A label here is organisation, not content: it says which shelf you are looking at and then gets
+ * out of the way. Small, widely tracked and slightly transparent does that — enough to establish
+ * the hierarchy, not enough to compete with the names underneath, which are the only thing on this
+ * layer anyone actually came to read. The uppercase stays: at this size it is what makes a word
+ * read as a category rather than as one more option.
+ *
+ * `text-indent` puts the tracking's trailing space back on the left. Letter-spacing adds it after
+ * the final letter too, so a centred word without this sits half a space left of the axis
+ * everything else on this layer is centred on — visible at 0.12em, and precisely the sort of
+ * half-pixel wrongness that makes a composition feel accidental.
+ */
+.dc-empty-starter-label {
+  color: var(--dc-text-faint);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.82;
+}
+
+.dc-empty-starter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 3px 4px;
+  /*
+   * Capped rather than left to run. Seven architecture names on one line stretched this hint into
+   * a bar nearly the width of the canvas — twice the shortcut row above it — which is what made an
+   * empty canvas feel busy. Capped, they wrap into a centred block about as wide as that row.
+   *
+   * The wrap is content-aware on purpose: names break where they happen to fill the line, and each
+   * line centres itself, which is lighter than forcing them into equal columns to make the rows
+   * symmetrical. `calc(100vw - 96px)` rather than a fraction of the viewport, so the same
+   * principle holds at any width — the block simply takes one more line on a narrow window, always
+   * with a real margin either side, and never depends on a hand-tuned position.
+   *
+   * 420 is a measure, not a break point: the seven architectures run 384px through four names and
+   * 466px through five, so any cap between them lets the line break itself after Event-Driven,
+   * with ~40px of slack on either side for whatever the platform's font metrics do to those
+   * numbers. Overshoot it and the wrap simply lands 5/2 or 3/4 — still a natural centred wrap,
+   * never a broken one. It also happens to leave the second line (277px) and the patterns line
+   * (278px) the same width, which is worth having and costs nothing.
+   */
+  max-width: min(420px, calc(100vw - 96px));
+}
+
+/*
+ * At rest a starter is a word on the canvas: no border, no fill, no chrome of any kind — the same
+ * restraint the shortcut row above it keeps. The padding is the only part of it that isn't
+ * typography, and it is invisible: it exists so the thing you can click is comfortably bigger than
+ * the glyphs you are aiming at (about 30px tall, well past the 24px a pointer wants), not so the
+ * word can wear a box.
+ */
 .dc-empty-starter {
-  padding: 3px 9px;
-  border: 1px solid transparent;
+  position: relative;
+  padding: 5px 9px;
+  border: 0;
   border-radius: var(--dc-radius-sm);
   background: none;
   color: var(--dc-text-muted);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+  transition: color 120ms ease, background-color 120ms ease;
 }
 
-.dc-empty-starter:hover {
-  border-color: var(--dc-border);
+/*
+ * The affordance, and the only moving part: a hairline that grows out of the centre of the word.
+ * It is inset to the padding so it underlines the *word* rather than the hit area — a rule the
+ * full width of the box would draw the box, which is the thing this treatment exists to avoid —
+ * and it is the selection colour, so hovering a starter answers in the same voice as selecting
+ * anything else on the canvas.
+ */
+.dc-empty-starter::after {
+  content: '';
+  position: absolute;
+  inset-inline: 9px;
+  bottom: 3px;
+  height: 1px;
+  border-radius: 1px;
+  background: var(--dc-selection);
+  transform: scaleX(0);
+  transition: transform 140ms ease;
+}
+
+.dc-empty-starter:hover,
+.dc-empty-starter:focus-visible {
+  /* One step up off the canvas — #ffffff on #fbfbfc in the light theme. Enough to confirm the
+   * pointer is on target, far too little to read as a button appearing. */
   background: var(--dc-surface);
   color: var(--dc-text);
+}
+
+.dc-empty-starter:hover::after,
+.dc-empty-starter:focus-visible::after {
+  transform: scaleX(1);
 }
 
 .dc-empty-starter:focus-visible {
@@ -1700,9 +1844,10 @@
   outline-offset: 1px;
 }
 
-.dc-empty-starters-tail {
-  color: var(--dc-text-faint);
-  font-size: 12px;
+@media (prefers-reduced-motion: reduce) {
+  .dc-empty-starter::after {
+    transition: none;
+  }
 }
 
 /* ------------------------------------------------------------- explain --- */

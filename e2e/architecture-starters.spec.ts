@@ -31,7 +31,7 @@ test.describe('architecture starters', () => {
     // Distinct from an ordinary command, and described in one line.
     const row = page.getByRole('option', { selected: true });
     await expect(row).toContainText('Microservices');
-    await expect(row).toContainText('Architecture starters');
+    await expect(row).toContainText('Architectures');
     await page.keyboard.press('Enter');
 
     await expect(page.locator('.dc-node')).toHaveCount(12);
@@ -84,7 +84,7 @@ test.describe('architecture starters', () => {
     page,
   }) => {
     await newCanvas(page, 'Starter empty state');
-    const starters = page.getByRole('group', { name: 'Architecture starters' });
+    const starters = page.getByRole('group', { name: 'Starters' });
     await expect(starters).toBeVisible();
 
     await starters.getByRole('button', { name: 'Event-Driven' }).click();

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument } from '../src/document/factory';
@@ -24,11 +24,18 @@ const renderEmpty = (onInsertStarter = vi.fn()) => ({
 describe('EmptyState', () => {
   it('offers every starter as a plain button, grouped and labelled for a screen reader', () => {
     renderEmpty();
-    const group = screen.getByRole('group', { name: 'Architecture starters' });
+    const group = screen.getByRole('group', { name: 'Starters' });
     expect(group).toBeInTheDocument();
     for (const starter of ARCHITECTURE_STARTERS) {
       expect(screen.getByRole('button', { name: starter.name })).toBeInTheDocument();
     }
+    // One row per category, the same split the palette shows, each named for a screen reader.
+    const architectures = within(screen.getByRole('group', { name: 'Architectures' })).getAllByRole('button');
+    const patterns = within(screen.getByRole('group', { name: 'Patterns' })).getAllByRole('button');
+    expect(architectures.map((b) => b.textContent)).toEqual(
+      ARCHITECTURE_STARTERS.filter((s) => s.category === 'architecture').map((s) => s.name),
+    );
+    expect(patterns.map((b) => b.textContent)).toEqual(['Saga (Orchestration)', 'Transactional Outbox']);
   });
 
   it('inserts the starter it names', async () => {
@@ -56,7 +63,7 @@ describe('EmptyState', () => {
   it('stays away during a presentation', () => {
     useEditorStore.setState({ mode: 'present' });
     renderEmpty();
-    expect(screen.queryByRole('group', { name: 'Architecture starters' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Starters' })).not.toBeInTheDocument();
   });
 
   it('keeps the surrounding copy decorative, so nothing but the buttons is announced', () => {

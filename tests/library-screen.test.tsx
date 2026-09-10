@@ -72,13 +72,17 @@ describe('LibraryScreen — an empty workspace', () => {
     expect(screen.getByRole('heading', { name: 'Recently edited' })).toBeInTheDocument();
     expect(screen.getByText('Nothing here yet.')).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Diagram views' })).not.toBeInTheDocument();
-    const starters = within(screen.getByRole('group', { name: 'Architecture starters' })).getAllByRole('button');
+    const starters = within(screen.getByRole('group', { name: 'Starters' })).getAllByRole('button');
     expect(starters.map((button) => button.getAttribute('aria-label'))).toEqual([
       'Start from Monolith',
       'Start from Modular Monolith',
       'Start from Microservices',
       'Start from Event-Driven',
       'Start from Hexagonal',
+      'Start from Backend for Frontend',
+      'Start from CQRS',
+      'Start from Saga (Orchestration)',
+      'Start from Transactional Outbox',
     ]);
   });
 
