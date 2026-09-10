@@ -116,7 +116,8 @@ function startPresentation(ctx: CommandContext) {
 function presentFlowStage(ctx: CommandContext): CommandStage {
   return {
     prompt: 'Present flow',
-    options: ctx.editor.document.flows.map((flow) => ({
+    // Only flows with something to show — see `useFlowPlayback`'s `flows`.
+    options: ctx.playback.flows.map((flow) => ({
       id: `present-flow:${flow.id}`,
       title: flow.title,
       hint: `${flow.steps.length} step${flow.steps.length === 1 ? '' : 's'}`,

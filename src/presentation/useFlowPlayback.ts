@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { getViewportForBounds, useReactFlow, useStore } from '@xyflow/react';
-import { findFlow } from '../document/flow';
+import { findFlow, flowIsPlayable } from '../document/flow';
 import type { DraftEdge, DraftFlowStep, DraftFlow, DraftNode, DraftViewport } from '../document/types';
 import { nodeIndex } from '../store/selectors';
 import { useEditorStore } from '../store/editorStore';
@@ -80,7 +80,8 @@ export function stepFocusBounds(target: FlowPlaybackStep, nodesById: Map<string,
 }
 
 export interface FlowPlaybackController {
-  /** Every flow in the document — used to render the picker when none is chosen yet. */
+  /** The document's *playable* flows (at least one step that resolves) — what the picker, the
+   *  palette's "Present flow…" stage and `start()` choose from. An empty flow is never offered. */
   flows: DraftFlow[];
   flow: DraftFlow | null;
   steps: FlowPlaybackStep[];
@@ -194,10 +195,18 @@ export function useFlowPlayback(): FlowPlaybackController {
     [focusOn, setFlowPlayback, steps],
   );
 
+  // Only flows that would actually show a step. The picker, the palette's "Present flow…"
+  // and `start()` all draw from this — an empty flow is never offered, so "Present" never
+  // silently does nothing.
+  const playableFlows = useMemo(
+    () => document.flows.filter((candidate) => flowIsPlayable(document, candidate)),
+    [document],
+  );
+
   const pickFlow = useCallback(
     (flowId: string) => {
       const chosen = findFlow(document, flowId);
-      if (!chosen || chosen.steps.length === 0) return;
+      if (!chosen || !flowIsPlayable(document, chosen)) return;
       setFlowPlayback({ active: true, flowId, step: 1 });
       // Canvas step badges follow whichever flow is being presented.
       useEditorStore.getState().setSelectedFlowId(flowId);
@@ -217,13 +226,17 @@ export function useFlowPlayback(): FlowPlaybackController {
   );
 
   const start = useCallback(() => {
-    if (document.flows.length === 0) return;
-    if (document.flows.length === 1) {
-      pickFlow(document.flows[0]!.id);
+    if (playableFlows.length === 0) return;
+    // The active flow is what the user has been building and looking at — present that. Only
+    // without one (or with an empty one) fall back to the single playable flow, then the picker.
+    const active = useEditorStore.getState().selectedFlowId;
+    const preferred = playableFlows.find((candidate) => candidate.id === active) ?? (playableFlows.length === 1 ? playableFlows[0] : undefined);
+    if (preferred) {
+      pickFlow(preferred.id);
       return;
     }
     setFlowPlayback({ active: true, flowId: null, step: 0 });
-  }, [document.flows, pickFlow, setFlowPlayback]);
+  }, [playableFlows, pickFlow, setFlowPlayback]);
 
   const stop = useCallback(() => setFlowPlayback({ active: false, flowId: null, step: 0 }), [setFlowPlayback]);
   const next = useCallback(() => goTo(flowPlayback.step + 1), [flowPlayback.step, goTo]);
@@ -256,14 +269,14 @@ export function useFlowPlayback(): FlowPlaybackController {
   }, [flowPlayback.step, flowPlayback.flowId, flowPlayback.active, setFlowPlayback]);
 
   return {
-    flows: document.flows,
+    flows: playableFlows,
     flow,
     steps,
     step: flowPlayback.step,
     current,
     active: flowPlayback.active,
     picking: flowPlayback.active && flowPlayback.flowId === null,
-    canStart: document.flows.length > 0,
+    canStart: playableFlows.length > 0,
     start,
     pickFlow,
     stop,

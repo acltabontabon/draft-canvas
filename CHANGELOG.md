@@ -4,8 +4,38 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Flows now live in one place. The toolbar's "Flows" button (or `F`) toggles the Flows panel,
+  which replaces the old dropdown, "Manage flows…", and the separate flow-edit mode. Click a
+  flow to make it the active one, click "Diagram" to step back out; Present, Rename and Delete
+  appear when you hover or focus a row.
+- Naming a flow is part of creating it: "New flow" — from the panel, the command palette, or a
+  connector — opens the new row's name field with the default selected, so you just type and
+  press Enter. Existing flows rename in place: double-click the name, use the pencil, or press
+  F2. Escape keeps the old name.
+- Adding a connector to the flow you're working on is one click: with an active flow, a selected
+  connector's chip reads "Add to Checkout". Once a connector is in a flow the chip shows which
+  step it is ("Checkout · 3"), and opens the membership list — now with step numbers — for
+  joining or leaving other flows.
+- Present starts the active flow when it has steps, instead of always asking which one.
+- The Flows panel's empty state now explains what a flow is and offers "New flow" directly.
+- A step's spotlight and pinned-view tools sit behind a "⋯" on the step instead of always showing.
+- Default flow names are numbered ("Untitled flow 2") so untouched flows stay tellable apart.
+
 ### Fixed
 
+- Selecting a flow with no steps no longer dims the entire diagram.
+- Inserting a worker on a connector that is a flow step keeps the story: the step becomes
+  `A → Worker` followed by `Worker → B` instead of silently disappearing.
+- Ungrouping a boundary that a flow step spotlit no longer leaves the step pointing at a node
+  that is gone.
+- Leaving a flow from a connector's membership list only removes that connector, even when it
+  was one of several the step spotlights.
+- The command palette's "Add to flow…" no longer offers a flow the connector is already part of
+  as an extra member.
+- Flows and the Present picker never offer an empty flow, and "1 steps" reads "1 step".
+- A long flow name no longer pushes the toolbar off the edge of the window.
 - A tagged node's name (API, WORKER, EXTERNAL, GATEWAY, SCHEDULER, MODULE, ADAPTER) no longer
   crowds its own kind tag: the name is centred in the room above the tag row, so a long name like
   "Integration Service" reads as a title with a small tag beneath it instead of two lines jammed

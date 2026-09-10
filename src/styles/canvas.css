@@ -1463,6 +1463,20 @@
   cursor: pointer;
 }
 
+.dc-edge-inspector-membership-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-edge-inspector-membership-step {
+  flex-shrink: 0;
+  color: var(--dc-text-faint);
+  font-size: 11px;
+}
+
 /* ------------------------------------------------------- quick connect -- */
 
 .dc-quick-connect {

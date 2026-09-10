@@ -205,6 +205,23 @@ Multiple Flows can share early steps and diverge later, since a step only ever r
 connector that already exists — nothing is copied. A reply is just another connector, not a
 distinct concept.
 
+There is one surface for flows: the Flows panel (`ui/Editor/FlowPanel.tsx`), toggled by the
+toolbar's "Flows" button or `F`. Its rows are the flows; clicking one makes it the **active flow**
+(`editorStore.selectedFlowId`) — the panel highlights it, the toolbar reads "Flows · Checkout",
+its step badges show on the canvas, and a selected connector's chip offers "Add to Checkout" as a
+one-click append. "Diagram" is a real first row for leaving that context. Names are edited in
+place, and every "new flow" entry point (the panel, the palette, a connector's chip, "Start flow
+here") creates the flow *and* opens its name field via the one-shot
+`uiStore.flowRenameRequestId`, so naming is part of creating.
+
+Selecting a flow also turns on the **lens** — members lit, the rest dimmed — but only once it has
+something to show: `lensFlow` (`store/editorStore.ts`) is the single rule every canvas element
+and fit-to-view consult, and it is `undefined` during playback/Focus and for an empty flow, so a
+brand-new flow never greys out the whole diagram. Likewise `flowIsPlayable` (`document/flow.ts`)
+gates Present everywhere: the panel's ▶, the picker, and the palette never offer an empty flow.
+Connector replacements keep a flow's story intact — inserting a worker on `A → B` rewrites that
+step into `A → W`, `W → B` (`spliceEdgeInFlows`) rather than losing the beat.
+
 ## Architecture starters
 
 `src/starters/` holds five authored opening compositions (Monolith, Modular Monolith,

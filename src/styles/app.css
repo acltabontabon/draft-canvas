@@ -1047,9 +1047,10 @@ kbd {
 
 .dc-flow-panel-header {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 6px;
-  padding: 10px 8px 10px 14px;
+  gap: 2px;
+  padding: 7px 8px 7px 14px;
   border-bottom: 1px solid var(--dc-border);
 }
 
@@ -1058,12 +1059,24 @@ kbd {
   font-size: 13px;
 }
 
+/* The empty state teaches the concept and offers the one thing to do next. */
 .dc-flow-panel-empty {
-  margin: 0;
-  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px 16px;
   color: var(--dc-text-muted);
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.5;
+}
+
+.dc-flow-panel-empty p {
+  margin: 0;
+}
+
+.dc-flow-panel-empty strong {
+  color: var(--dc-text);
 }
 
 .dc-flow-list {
@@ -1073,54 +1086,129 @@ kbd {
   list-style: none;
 }
 
-.dc-flow-item {
+/* A row is one flow (or "Diagram"). Focusable as a whole so the keyboard can walk the list;
+   the inner name/expand buttons are `tabIndex={-1}` — one tab stop per row. */
+.dc-flow-row {
   border-radius: var(--dc-radius);
+  outline: none;
 }
 
-.dc-flow-item[data-selected='true'] {
+.dc-flow-row:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--dc-selection);
+}
+
+.dc-flow-row[data-selected='true'] {
   background: var(--dc-selection-soft);
 }
 
 .dc-flow-item-head {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 4px;
+  gap: 2px;
+  min-height: 30px;
+  padding: 2px 4px 2px 2px;
   cursor: pointer;
+}
+
+.dc-flow-item-head:hover {
+  background: color-mix(in srgb, var(--dc-surface-raised) 70%, transparent);
+  border-radius: var(--dc-radius);
 }
 
 .dc-flow-expand {
-  padding: 0 2px;
+  flex-shrink: 0;
+  width: 18px;
+  height: 22px;
+  padding: 0;
   border: 0;
+  border-radius: 4px;
   background: none;
-  color: var(--dc-text-muted);
-  font-size: 11px;
+  color: var(--dc-text-faint);
+  font-size: 10px;
   cursor: pointer;
 }
 
-.dc-flow-title-input {
+.dc-flow-expand:hover {
+  color: var(--dc-text);
+}
+
+.dc-flow-title {
   flex: 1;
   min-width: 0;
-  padding: 2px 4px;
+  padding: 3px 6px;
   border: 1px solid transparent;
   border-radius: 4px;
-  background: transparent;
+  background: none;
   color: var(--dc-text);
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
 }
 
-.dc-flow-title-input:hover,
-.dc-flow-title-input:focus {
-  border-color: var(--dc-border);
-  background: var(--dc-surface-raised);
+.dc-flow-row[data-selected='true'] .dc-flow-title {
+  color: var(--dc-selection);
+}
+
+.dc-flow-diagram .dc-flow-title {
+  color: var(--dc-text-muted);
+  font-weight: 500;
+}
+
+.dc-flow-diagram[data-selected='true'] .dc-flow-title {
+  color: var(--dc-selection);
+}
+
+/* Rename mode: the same slot, now a field — visibly a field, since the name is selected and
+   about to be typed over. */
+.dc-flow-title-input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--dc-selection);
+  border-radius: 4px;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dc-selection-soft);
 }
 
 .dc-flow-step-count {
   flex-shrink: 0;
+  margin: 0 2px 0 4px;
   font-size: 10.5px;
   white-space: nowrap;
+}
+
+/* Per-row actions stay out of the way until the row is hovered or holds focus — except the
+   active flow's Present, which is the primary action for "the flow I'm on" and always shows.
+   Opacity, not display: the buttons keep their box (no layout shift on hover) and stay
+   reachable for assistive tech and automation. */
+.dc-flow-item-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 0;
+}
+
+.dc-flow-item-actions .dc-button {
+  width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  opacity: 0;
+  transition: opacity 120ms ease, background 90ms ease, color 90ms ease;
+}
+
+.dc-flow-item-head:hover .dc-flow-item-actions .dc-button,
+.dc-flow-row:focus-within .dc-flow-item-actions .dc-button,
+.dc-flow-row[data-selected='true'] .dc-flow-present {
+  opacity: 1;
 }
 
 .dc-flow-steps {
@@ -1129,11 +1217,16 @@ kbd {
   list-style: none;
 }
 
+.dc-flow-step-row-group {
+  border-radius: var(--dc-radius-sm);
+}
+
 .dc-flow-step-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 4px 3px 8px;
+  gap: 2px;
+  min-height: 26px;
+  padding: 1px 4px 1px 6px;
 }
 
 .dc-flow-step-index {
@@ -1142,30 +1235,71 @@ kbd {
   color: var(--dc-text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .dc-flow-step-label {
   flex: 1;
-  overflow: hidden;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
   color: var(--dc-text);
+  font: inherit;
   font-size: 12px;
-  text-overflow: ellipsis;
+  text-align: left;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 
+.dc-flow-step-label:hover {
+  background: var(--dc-surface-raised);
+}
+
+.dc-flow-step-arrow {
+  margin: 0 4px;
+  color: var(--dc-text-faint);
+}
+
 .dc-flow-step-caption {
-  color: var(--dc-text-muted);
+  margin-left: 6px;
+  color: var(--dc-text-faint);
+  font-size: 11px;
   font-style: normal;
 }
 
-.dc-flow-step-row-group {
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--dc-border);
+.dc-flow-step-actions {
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
-.dc-flow-step-row-group:last-child {
-  border-bottom: none;
+.dc-flow-step-actions .dc-button {
+  width: 22px;
+  height: 22px;
+  padding: 0 3px;
+  opacity: 0;
+  transition: opacity 120ms ease, background 90ms ease, color 90ms ease;
+}
+
+.dc-flow-step-row-group:hover .dc-flow-step-actions .dc-button,
+.dc-flow-step-row-group:focus-within .dc-flow-step-actions .dc-button,
+.dc-flow-step-actions .dc-button[data-active='true'] {
+  opacity: 1;
+}
+
+.dc-flow-steps-empty {
+  padding: 2px 10px 8px 28px;
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.dc-flow-steps-empty strong {
+  color: var(--dc-text);
+  font-weight: 600;
 }
 
 .dc-flow-step-extras,
@@ -1174,7 +1308,7 @@ kbd {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  padding: 0 4px 3px 28px;
+  padding: 0 4px 5px 28px;
 }
 
 .dc-flow-step-chip {
@@ -1190,7 +1324,15 @@ kbd {
   white-space: nowrap;
 }
 
+.dc-flow-step-chip .dc-button {
+  width: 18px;
+  height: 18px;
+  padding: 0 2px;
+}
+
 .dc-flow-step-tools .dc-button {
+  height: 22px;
+  padding: 0 7px;
   font-size: 11px;
 }
 

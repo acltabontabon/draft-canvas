@@ -6,6 +6,7 @@ import {
   EDGE_SEMANTICS,
   type ConnectorKind,
   type DraftEdge,
+  type DraftFlow,
   type DraftNode,
   type EdgeSemantic,
 } from '../document/types';
@@ -24,6 +25,7 @@ import { laneIndex, routeBetween, type Rect } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import type { HintId } from '../learning/hints';
 import { useEditorStore } from '../store/editorStore';
+import { useUiStore } from '../store/uiStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
@@ -384,16 +386,12 @@ function EdgeInspectorRow({
   store: typeof useEditorStore;
 }) {
   const flows = useEditorStore((state) => state.document.flows);
+  const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const memberOf = flows.filter((flow) => stepIndexOf(flow, edge.id) !== undefined);
   const [editingLabel, setEditingLabel] = useState(false);
 
   const caption = edge.label || (edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : null);
-  const flowChipLabel =
-    memberOf.length === 0
-      ? 'Add to flow'
-      : memberOf.length === 1
-        ? memberOf[0]!.title
-        : `${memberOf[0]!.title} +${memberOf.length - 1}`;
+  const flowChip = flowChipFor(flows, selectedFlowId, memberOf, edge.id);
 
   // A connector fanning *out* of a Junction is a branch — the branching structure itself already
   // communicates that ("approved"/"rejected", "yes"/"no"), so a contextual placeholder nudges
@@ -442,10 +440,26 @@ function EdgeInspectorRow({
           type="button"
           className="dc-edge-inspector-flows"
           data-empty={memberOf.length === 0 ? 'true' : undefined}
+          data-flow-state={flowChip.state}
           title="Flow membership"
-          onClick={() => setMembershipOpen(!membershipOpen)}
+          onClick={() => {
+            const state = store.getState();
+            switch (flowChip.state) {
+              case 'none':
+                // No flows at all: one click starts one with this connector, and the panel
+                // opens on its name — the same create-and-name motion as everywhere else.
+                startFlowWithEdge(store, edge.id);
+                return;
+              case 'add':
+                // The active flow is the context — one click, no picker.
+                state.addEdgeToFlow(flowChip.flow.id, edge.id);
+                return;
+              default:
+                setMembershipOpen(!membershipOpen);
+            }
+          }}
         >
-          {flowChipLabel}
+          {flowChip.label}
         </button>
       </div>
 
@@ -456,11 +470,48 @@ function EdgeInspectorRow({
 }
 
 /**
- * One checkbox per flow — checked means this connector is a step of it.
- * Toggling is immediate and reversible, no separate commit step (spec: "make
- * joining/leaving flows obvious and reversible"). Deliberately does not
- * expose rename or step reordering here — that stays in `FlowPanel`'s deep
- * editing surface; a membership checklist is not the place for it.
+ * What the connector's flow chip says and does, in order of how much the app already knows.
+ * `none`: no flows exist — clicking starts one with this connector. `add`: there is an active
+ * flow and this connector isn't in it — clicking appends it, one click, no picker; the active
+ * flow *is* the context, so "Add to Checkout" is the honest label. Otherwise (`list`) the chip
+ * names where the connector already is, with its step number, and clicking opens the checklist
+ * for the less common moves: joining another flow, leaving one, starting a second.
+ */
+function flowChipFor(
+  flows: DraftFlow[],
+  selectedFlowId: string | null,
+  memberOf: DraftFlow[],
+  edgeId: string,
+): { state: 'none'; label: string } | { state: 'add'; label: string; flow: DraftFlow } | { state: 'list'; label: string } {
+  if (flows.length === 0) return { state: 'none', label: 'Add to flow' };
+  const active = selectedFlowId ? flows.find((flow) => flow.id === selectedFlowId) : undefined;
+  if (memberOf.length === 0) {
+    return active ? { state: 'add', label: `Add to ${active.title}`, flow: active } : { state: 'list', label: 'Add to flow' };
+  }
+  // Lead with the active flow when the connector is in it; otherwise the first flow it's in.
+  const lead = (active && memberOf.includes(active) ? active : memberOf[0])!;
+  const others = memberOf.length - 1;
+  return { state: 'list', label: `${lead.title} · ${stepIndexOf(lead, edgeId)}${others > 0 ? ` +${others}` : ''}` };
+}
+
+/** Starts a new flow with this connector as its first step, makes it the active flow, and hands
+ *  it to the Flows panel to be named — the same create-and-name motion the panel and palette use. */
+function startFlowWithEdge(store: typeof useEditorStore, edgeId: string) {
+  const state = store.getState();
+  const flowId = state.createFlow();
+  if (!flowId) return;
+  state.addEdgeToFlow(flowId, edgeId);
+  state.setSelectedFlowId(flowId);
+  const ui = useUiStore.getState();
+  ui.setFlowPanelOpen(true);
+  ui.requestFlowRename(flowId);
+}
+
+/**
+ * One checkbox per flow — checked means this connector is a step of it, and the row says which
+ * step. Toggling is immediate and reversible, no separate commit step. Deliberately does not
+ * expose rename or step reordering here — that is the Flows panel's job; a membership checklist
+ * is not the place for it.
  */
 function MembershipPanel({ edgeId, store }: { edgeId: string; store: typeof useEditorStore }) {
   const flows = useEditorStore((state) => state.document.flows);
@@ -472,20 +523,20 @@ function MembershipPanel({ edgeId, store }: { edgeId: string; store: typeof useE
     <div className="dc-edge-inspector-panel dc-edge-inspector-membership">
       <ul className="dc-edge-inspector-membership-list">
         {flows.map((flow) => {
-          const stepId = flow.steps.find(
-            (step) => step.edgeId === edgeId || step.extraEdgeIds?.includes(edgeId),
-          )?.id;
-          const member = stepId !== undefined;
+          const step = flow.steps.find((s) => s.edgeId === edgeId || s.extraEdgeIds?.includes(edgeId));
+          const position = stepIndexOf(flow, edgeId);
           return (
             <li key={flow.id}>
               <label className="dc-edge-inspector-membership-row">
                 <input
                   type="checkbox"
-                  checked={member}
+                  checked={step !== undefined}
                   onChange={() => {
                     const state = store.getState();
-                    if (member && stepId) {
-                      state.removeFlowStep(flow.id, stepId);
+                    if (step) {
+                      // Leaving a step it merely spotlights must not delete the step itself.
+                      if (step.edgeId === edgeId) state.removeFlowStep(flow.id, step.id);
+                      else state.removeFlowStepExtraEdge(flow.id, step.id, edgeId);
                     } else {
                       state.addEdgeToFlow(flow.id, edgeId);
                       // Immediate visual feedback: this flow's lens lights up right away.
@@ -493,22 +544,16 @@ function MembershipPanel({ edgeId, store }: { edgeId: string; store: typeof useE
                     }
                   }}
                 />
-                {flow.title}
+                <span className="dc-edge-inspector-membership-title">{flow.title}</span>
+                {position !== undefined && (
+                  <span className="dc-edge-inspector-membership-step">step {position}</span>
+                )}
               </label>
             </li>
           );
         })}
       </ul>
-      <Button
-        variant="quiet"
-        onClick={() => {
-          const state = store.getState();
-          const flowId = state.createFlow();
-          if (!flowId) return;
-          state.addEdgeToFlow(flowId, edgeId);
-          state.setSelectedFlowId(flowId);
-        }}
-      >
+      <Button variant="quiet" onClick={() => startFlowWithEdge(store, edgeId)}>
         + New flow
       </Button>
     </div>
