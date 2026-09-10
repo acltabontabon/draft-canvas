@@ -931,9 +931,10 @@ const HEX_CORE_CENTER = (HEX_ROW_A_CENTER + HEX_ROW_B_CENTER) / 2;
 // the smallest of the working pieces; a Port smaller still — a contract, not a thing doing work.
 const HEX_USE_CASES = { width: 172, height: 64 };
 const HEX_DOMAIN = { width: 140, height: 50 };
-/** Matches `DEFAULTS.componentWidth`/`componentHeight` exactly — an Adapter here is sized no
- *  differently than one created from the toolbar/⌘K. */
-const HEX_ADAPTER = { width: 152, height: 56 };
+/** Component's default height, but wider than its default 152: "Persistence Adapter" has to stay
+ *  on one line above the ADAPTER tag row at real browser font metrics, and 172 is as wide as a
+ *  Component may be while every Service in this starter still out-sizes it. */
+const HEX_ADAPTER = { width: 172, height: 56 };
 /** Wide enough for a one-word port name at `nodeLabel` with the family's own padding, tall enough
  *  for the name and the centred `PORT` tag beneath it (`nodes/describe.ts`'s `componentPort`). */
 const HEX_PORT = { width: 120, height: 44 };

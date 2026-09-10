@@ -105,6 +105,20 @@ const QUEUE_KIND_LABELS: Record<QueueKind, string> = {
 };
 
 /**
+ * The vertical room a `variantCaption` tag takes at the bottom of a node — its own line, its
+ * bottom inset, and a little daylight above it. A tagged node's name is centred in the space
+ * *above* this row, never in the whole box: centring in the whole box parks a long name ("Integration
+ * Service", "External System") right on top of its own WORKER/EXTERNAL tag, the two a few pixels
+ * apart and overlapping horizontally, so they read as one crowded line instead of a title and a
+ * small tag beneath it. Reserving the row also means a name that would wrap into that row is
+ * kept to one line instead (`centredLabel`'s `maxLines` follows the available height).
+ */
+const TAG_ROW_GAP = 2;
+function tagRow(inset = 5): number {
+  return FONTS.variantTag.size * LINE_HEIGHTS.label + inset + TAG_ROW_GAP;
+}
+
+/**
  * A small, muted corner tag — the one shared visual for every node variant. `inset` only exists
  * for a shape whose own silhouette intrudes on the default bottom-right corner (Adapter's notch);
  * every other caller keeps the plain 7/5 default.
@@ -540,7 +554,7 @@ function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
       clip: { x, y, w, h, r },
       children: [{ t: 'rect', x, y, w, h: capHeight, fill: palette.chip }],
     },
-    ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
+    ...centredLabel(node, ctx, { top: capHeight, bottom: tagRow(), color: palette.text }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.api!, ctx.theme.textMuted),
   ];
 }
@@ -567,7 +581,7 @@ function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
       clip: { x: front.x, y: front.y, w: front.w, h: capHeight, r: front.r },
       children: [{ t: 'rect', x: front.x, y: front.y, w: front.w, h: capHeight, fill: palette.chip }],
     },
-    ...centredLabel(node, ctx, { top: capHeight, bottom: offset, color: palette.text }),
+    ...centredLabel(node, ctx, { top: capHeight, bottom: Math.max(offset, tagRow()), color: palette.text }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.worker!, ctx.theme.textMuted),
   ];
 }
@@ -602,7 +616,7 @@ function serviceExternal(node: DraftNode, ctx: DescribeContext): Shape[] {
       clip: { x: inner.x, y: inner.y, w: inner.w, h: capHeight, r: inner.r },
       children: [{ t: 'rect', x: inner.x, y: inner.y, w: inner.w, h: capHeight, fill: palette.chip }],
     },
-    ...centredLabel(node, ctx, { top: inset + capHeight, bottom: inset, color: palette.text }),
+    ...centredLabel(node, ctx, { top: inset + capHeight, bottom: Math.max(inset, tagRow()), color: palette.text }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.external!, ctx.theme.textMuted),
   ];
 }
@@ -636,7 +650,7 @@ function serviceScheduler(node: DraftNode, ctx: DescribeContext): Shape[] {
     // Grouped (with no clip — the cluster already sits clear of the rounded corner) so the three
     // ticks read as one cohesive mark, the same way Generic's cap is one grouped unit.
     { t: 'group', children: ticks },
-    ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
+    ...centredLabel(node, ctx, { top: capHeight, bottom: tagRow(), color: palette.text }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.scheduler!, ctx.theme.textMuted),
   ];
 }
@@ -685,7 +699,7 @@ function serviceGateway(node: DraftNode, ctx: DescribeContext): Shape[] {
       clip: { x, y, w, h, r },
       children: [{ t: 'rect', x, y, w, h: capHeight, fill: palette.chip }],
     },
-    ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
+    ...centredLabel(node, ctx, { top: capHeight, bottom: tagRow(), color: palette.text }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.gateway!, ctx.theme.textMuted),
   ];
 }
@@ -829,7 +843,7 @@ function componentModule(node: DraftNode, ctx: DescribeContext): Shape[] {
 
   return [
     { t: 'path', d, fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
-    ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
+    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '' }),
     ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.module!, ctx.theme.textMuted),
   ];
 }
@@ -901,7 +915,7 @@ function componentAdapter(node: DraftNode, ctx: DescribeContext): Shape[] {
 
   return [
     { t: 'path', d, fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
-    ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
+    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '' }),
     ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.adapter!, ctx.theme.textMuted, captionInset),
   ];
 }

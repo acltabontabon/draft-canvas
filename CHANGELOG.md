@@ -4,6 +4,13 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- A tagged node's name (API, WORKER, EXTERNAL, GATEWAY, SCHEDULER, MODULE, ADAPTER) no longer
+  crowds its own kind tag: the name is centred in the room above the tag row, so a long name like
+  "Integration Service" reads as a title with a small tag beneath it instead of two lines jammed
+  together.
+
 ## [0.7.0] - 2026-09-10
 
 ### Added
