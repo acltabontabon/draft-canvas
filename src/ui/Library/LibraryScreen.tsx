@@ -3,14 +3,19 @@ import { readProjectFile } from '../../export/project';
 import { looksLikeSecureExport, readSecureProjectFile } from '../../export/secureProject';
 import type { DraftSummary } from '../../document/types';
 import type { NormalizeResult } from '../../document/validate';
+import { PRODUCT } from '../../product';
+import { ARCHITECTURE_STARTERS } from '../../starters';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Modal } from '../common/Modal';
-import { PrivacyNote } from '../PrivacyNote';
-import { ProjectSidebar } from './ProjectSidebar';
+import { useTheme } from '../theme/useTheme';
+import { Fingerprint } from './Fingerprint';
+import { LocalNote } from './LocalNote';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
+import { ProjectSidebar } from './ProjectSidebar';
+import { thoughtForDay } from './draftThoughts';
 import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
 
 /**
@@ -20,6 +25,12 @@ import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
  * Deliberately still not a file manager. One flat, optional grouping — no
  * nested folders, no required setup before creating a canvas — plus local
  * search and sort, so it stays scannable at dozens or hundreds of diagrams.
+ *
+ * It is also the only page most people see before deciding what Draft Canvas
+ * is, so the product introduces itself here — but by being itself, not by
+ * describing itself: a fingerprint of each diagram's topology, one opinion
+ * at the foot of the page. The list stays the point. Nothing here is a tour,
+ * a card, or a banner.
  */
 export function LibraryScreen({ session }: { session: DocumentSession }) {
   const notify = useUiStore((state) => state.notify);
@@ -33,7 +44,9 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   const setView = useUiStore((state) => state.setLibraryView);
   const moveMenuOpenFor = useUiStore((state) => state.moveMenuOpenFor);
   const setMoveMenuOpenFor = useUiStore((state) => state.setMoveMenuOpenFor);
+  const { name: themeName, toggle: toggleTheme } = useTheme();
   const fileInput = useRef<HTMLInputElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<DraftSummary | null>(null);
   const [renaming, setRenaming] = useState<DraftSummary | null>(null);
   const [securePendingFile, setSecurePendingFile] = useState<File | null>(null);
@@ -48,9 +61,31 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     }
   }, [session.projects, setView, view]);
 
+  // `/` reaches the search box from anywhere on the page that isn't already
+  // taking keys — the one shortcut this screen has, and the one every
+  // developer tool teaches. Never while a dialog is up.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      event.preventDefault();
+      searchInput.current?.focus();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useRelativeTimeTick();
+
   const searching = searchQuery.trim().length > 0;
   const canvases = visibleCanvases(session.library, session.projects, view, searchQuery, sort);
   const heading = headingFor(view, session.projects, searching);
+  const empty = session.ready && session.library.length === 0;
+  // A nav with nothing to navigate: no canvases and no projects means the
+  // sidebar would be three views of the same empty list.
+  const showSidebar = session.library.length > 0 || session.projects.length > 0;
 
   const finishImport = async (result: NormalizeResult) => {
     if (!result.ok) {
@@ -78,36 +113,46 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     <div className="dc-library">
       <div className="dc-library-inner">
         <header className="dc-library-header">
-          <div>
-            <div className="dc-brand">
-              <h1>Draft Canvas</h1>
-              <span className="dc-badge-anchor">
-                <button
-                  type="button"
-                  className="dc-brand-about"
-                  onClick={() => setAboutOpen(true)}
-                  aria-label="About Draft Canvas"
-                  title={updateReady ? 'About Draft Canvas — update ready' : 'About Draft Canvas'}
-                >
-                  <Icon name="info" size={14} />
-                </button>
-                {updateReady && <span className="dc-update-dot" aria-hidden="true" />}
-              </span>
-            </div>
-            <p className="dc-lede">A local-first canvas for explaining software.</p>
+        <div className="dc-brand">
+            <h1>{PRODUCT.name}</h1>
+            <span className="dc-badge-anchor">
+              <button
+                type="button"
+                className="dc-brand-about"
+                onClick={() => setAboutOpen(true)}
+                aria-label="About Draft Canvas"
+                title={updateReady ? 'About Draft Canvas — update ready' : 'About Draft Canvas'}
+              >
+                <Icon name="info" size={14} />
+              </button>
+              {updateReady && <span className="dc-update-dot" aria-hidden="true" />}
+            </span>
+            <button
+              type="button"
+              className="dc-brand-about"
+              onClick={toggleTheme}
+              aria-label={themeName === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              title={themeName === 'dark' ? 'Light theme' : 'Dark theme'}
+            >
+              <Icon name={themeName === 'dark' ? 'sun' : 'moon'} size={14} />
+            </button>
           </div>
+          <p className="dc-lede">{PRODUCT.tagline}</p>
+          <p className="dc-lede-aside">{PRODUCT.aside}</p>
         </header>
 
         <div className="dc-library-toolbar">
           <label className="dc-library-search">
             <Icon name="search" size={14} />
             <input
+              ref={searchInput}
               type="search"
               placeholder="Search diagrams…"
               aria-label="Search diagrams"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
+            {!searching && <kbd aria-hidden="true">/</kbd>}
           </label>
           <div className="dc-library-actions">
             <Button
@@ -141,42 +186,70 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
         />
 
         <div className="dc-library-body">
-          <ProjectSidebar session={session} library={session.library} view={view} onViewChange={setView} />
+          {showSidebar && (
+            <ProjectSidebar session={session} library={session.library} view={view} onViewChange={setView} />
+          )}
 
           <section className="dc-library-list">
             <div className="dc-library-list-head">
-              <h2>{heading}</h2>
-              <div className="dc-library-list-head-right">
-                {!(view.kind === 'recent' && !searching) && (
-                  <select
-                    className="dc-select"
-                    aria-label="Sort diagrams"
-                    value={sort}
-                    onChange={(event) => setSort(event.target.value as LibrarySort)}
-                  >
-                    <option value="updatedAt">Last edited</option>
-                    <option value="createdAt">Created</option>
-                    <option value="name">Name</option>
-                  </select>
-                )}
-                <span className="dc-muted">Stored only on this device.</span>
+              <div className="dc-library-list-head-left">
+                <h2>{heading}</h2>
+                <span className="dc-library-count" aria-live="polite">
+                  {searching ? `${canvases.length} of ${session.library.length}` : ''}
+                </span>
               </div>
+              {!(view.kind === 'recent' && !searching) && (
+                <select
+                  className="dc-select dc-library-sort"
+                  aria-label="Sort diagrams"
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value as LibrarySort)}
+                >
+                  <option value="updatedAt">Last edited</option>
+                  <option value="createdAt">Created</option>
+                  <option value="name">Name</option>
+                </select>
+              )}
             </div>
 
             {!session.ready && <p className="dc-muted dc-library-empty">Opening local storage…</p>}
 
-            {session.ready && session.library.length === 0 && (
-              <div className="dc-library-empty">
+            {empty && (
+              <div className="dc-library-empty dc-library-welcome">
                 <p>Nothing here yet.</p>
+                <p className="dc-muted">Start blank, or with an architecture Draft Canvas already knows.</p>
+                <div className="dc-library-starters" role="group" aria-label="Architecture starters">
+                  {ARCHITECTURE_STARTERS.map((starter) => (
+                    <button
+                      key={starter.id}
+                      type="button"
+                      className="dc-library-starter"
+                      aria-label={`Start from ${starter.name}`}
+                      title={starter.description}
+                      onClick={() => void session.newDocument(undefined, starter.id)}
+                    >
+                      {starter.name}
+                    </button>
+                  ))}
+                </div>
                 <p className="dc-muted">
-                  Create a canvas, or import a <code>.draftcanvas</code> file you exported earlier.
+                  Or import a <code>.draftcanvas</code> file you exported earlier.
                 </p>
               </div>
             )}
 
             {session.ready && session.library.length > 0 && canvases.length === 0 && (
               <div className="dc-library-empty">
-                <p>{searching ? 'No diagrams match your search.' : 'Nothing here yet.'}</p>
+                {searching ? (
+                  <>
+                    <p>No diagrams match &ldquo;{searchQuery.trim()}&rdquo;.</p>
+                    <Button variant="quiet" icon="close" onClick={() => setSearchQuery('')}>
+                      Clear search
+                    </Button>
+                  </>
+                ) : (
+                  <p>Nothing here yet.</p>
+                )}
               </div>
             )}
 
@@ -186,19 +259,23 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                   <button
                     type="button"
                     className="dc-library-item"
+                    title={entry.title.length > 40 ? entry.title : undefined}
                     onClick={() => void session.openDocument(entry.id)}
                   >
-                    <span className="dc-library-item-title">{entry.title}</span>
-                    <span className="dc-library-item-meta">
-                      {relativeTime(entry.updatedAt)}
-                      <span className="dc-dot" />
-                      {entry.nodeCount} {entry.nodeCount === 1 ? 'element' : 'elements'}
-                      {entry.edgeCount > 0 && (
-                        <>
-                          <span className="dc-dot" />
-                          {entry.edgeCount} {entry.edgeCount === 1 ? 'connection' : 'connections'}
-                        </>
-                      )}
+                    <Fingerprint shape={entry.shape} />
+                    <span className="dc-library-item-text">
+                      <span className="dc-library-item-title">{entry.title}</span>
+                      <span className="dc-library-item-meta">
+                        {relativeTime(entry.updatedAt)}
+                        <span className="dc-dot" />
+                        {entry.nodeCount} {entry.nodeCount === 1 ? 'element' : 'elements'}
+                        {entry.edgeCount > 0 && (
+                          <>
+                            <span className="dc-dot" />
+                            {entry.edgeCount} {entry.edgeCount === 1 ? 'connection' : 'connections'}
+                          </>
+                        )}
+                      </span>
                     </span>
                   </button>
                   <div className="dc-library-item-actions">
@@ -243,7 +320,15 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
           </section>
         </div>
 
-        <PrivacyNote durable={session.durable} />
+        {session.ready && (
+          <footer className="dc-library-foot">
+            <p className="dc-thought">
+              <Icon name="pencil" size={13} />
+              <span>{thoughtForDay()}</span>
+            </p>
+            <LocalNote durable={session.durable} repository={session.repository} />
+          </footer>
+        )}
       </div>
 
       {confirmDelete && (
@@ -302,6 +387,40 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
       )}
     </div>
   );
+}
+
+/**
+ * "2 minutes ago" is computed at render, so a list left on screen would say
+ * "just now" forever. One re-render a minute keeps it honest — and none at
+ * all while the tab is hidden, where nobody is reading it.
+ */
+function useRelativeTimeTick(): void {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    let timer: number | undefined;
+    const stop = () => {
+      if (timer !== undefined) window.clearInterval(timer);
+      timer = undefined;
+    };
+    const start = () => {
+      stop();
+      timer = window.setInterval(() => setTick((tick) => tick + 1), 60_000);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        setTick((tick) => tick + 1);
+        start();
+      } else {
+        stop();
+      }
+    };
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
 }
 
 function SecureImportPrompt({
@@ -429,4 +548,3 @@ function relativeTime(at: number): string {
   }
   return 'just now';
 }
-

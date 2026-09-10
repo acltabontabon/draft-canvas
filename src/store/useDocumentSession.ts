@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
+import { freeOriginFor, openingViewportFor } from '../document/operations';
 import { createId } from '../document/ids';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { logDiagnostic } from '../lib/diagnostics';
+import { buildStarter, starterById, starterSize, type StarterId } from '../starters';
 import { Autosave } from '../storage/autosave';
 import { getRepository, type DraftRepository } from '../storage';
 import { IndexedDbRepository } from '../storage/IndexedDbRepository';
@@ -17,7 +19,9 @@ export interface DocumentSession {
   library: DraftSummary[];
   refreshLibrary: () => Promise<void>;
   openDocument: (id: string) => Promise<void>;
-  newDocument: (title?: string) => Promise<void>;
+  /** A blank canvas, or — given a `starterId` — one already holding that
+   *  Architecture Starter, titled after it unless `title` says otherwise. */
+  newDocument: (title?: string, starterId?: StarterId) => Promise<void>;
   adoptDocument: (document: DraftDocument) => Promise<void>;
   closeDocument: () => Promise<void>;
   renameDocument: (id: string, title: string) => Promise<void>;
@@ -80,9 +84,22 @@ export function useDocumentSession(): DocumentSession {
       // and a diagram it hasn't reached yet is just still plaintext, not
       // broken (`load()` migrates it lazily the moment it is opened anyway).
       if (repo instanceof IndexedDbRepository) {
-        void repo.migrateLegacyRecords().catch((error: unknown) => {
-          console.warn('[draft-canvas] Background encryption sweep failed:', error);
-        });
+        void repo
+          .migrateLegacyRecords()
+          .catch((error: unknown) => {
+            console.warn('[draft-canvas] Background encryption sweep failed:', error);
+          })
+          // Chained, not parallel: both sweeps decrypt bodies, and running
+          // them together would decrypt the oldest records twice at once.
+          // The library re-reads only when a row actually changed — the
+          // common case, every launch after the first, changes nothing.
+          .then(() => repo.backfillSummaries())
+          .then(async ({ updated }) => {
+            if (updated > 0 && !cancelled) setLibrary(await repo.list());
+          })
+          .catch((error: unknown) => {
+            console.warn('[draft-canvas] Library fingerprint backfill failed:', error);
+          });
       }
     })();
     return () => {
@@ -177,8 +194,21 @@ export function useDocumentSession(): DocumentSession {
   );
 
   const newDocument = useCallback(
-    async (title?: string) => {
-      await adoptDocument(createDocument(title ?? 'Untitled canvas'));
+    async (title?: string, starterId?: StarterId) => {
+      const starter = starterId ? starterById(starterId) : undefined;
+      let document = createDocument(title ?? starter?.name ?? 'Untitled canvas');
+      if (starter) {
+        // The starter is the canvas's initial state, not an edit: there is
+        // nothing to undo, exactly as with an imported file. Same origin the
+        // palette uses for an empty canvas, plus a viewport that shows it —
+        // see `openingViewportFor` for why the editor won't do that itself.
+        const size = starterSize(starter);
+        const { nodes, edges } = buildStarter(starter, freeOriginFor(document, size));
+        const screen =
+          typeof window === 'undefined' ? null : { width: window.innerWidth, height: window.innerHeight };
+        document = { ...document, nodes, edges, ...(screen ? { viewport: openingViewportFor(size, screen) } : {}) };
+      }
+      await adoptDocument(document);
     },
     [adoptDocument],
   );
@@ -296,6 +326,21 @@ export function useDocumentSession(): DocumentSession {
     },
     [notify, refreshLibrary, repository],
   );
+
+  // The library can change under this tab — a canvas created, renamed, or
+  // deleted in another one. One read on return is cheap, and it only runs
+  // while the list is what is on screen.
+  useEffect(() => {
+    if (!repository || openId) return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      void Promise.all([refreshLibrary(), refreshProjects()]).catch((error: unknown) => {
+        logDiagnostic(error, { operation: 'library-visibility-refresh' });
+      });
+    };
+    window.addEventListener('visibilitychange', onVisible);
+    return () => window.removeEventListener('visibilitychange', onVisible);
+  }, [openId, refreshLibrary, refreshProjects, repository]);
 
   return {
     ready,

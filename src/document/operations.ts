@@ -735,6 +735,30 @@ export function freeOriginFor(
   return { x: clampCoord(bounds.x), y: clampCoord(bounds.y + bounds.height + gap) };
 }
 
+/**
+ * The viewport that shows a block of `size` centred on the origin — where
+ * `freeOriginFor` puts the first thing inserted on an empty canvas.
+ *
+ * Needed when a canvas is *created* already holding an Architecture Starter.
+ * The editor opens at `document.viewport` verbatim and never fits on open (so
+ * a returning user lands exactly where they left off), which means a seeded
+ * canvas has to carry the right viewport before the editor ever mounts.
+ * `padding` leaves air around the block; zoom is capped at 1 so a small
+ * starter is not blown up to fill a large screen.
+ */
+export function openingViewportFor(
+  size: { width: number; height: number },
+  screen: { width: number; height: number },
+  padding = 0.8,
+): { x: number; y: number; zoom: number } {
+  const fit = Math.min(
+    (padding * screen.width) / Math.max(size.width, 1),
+    (padding * screen.height) / Math.max(size.height, 1),
+  );
+  const zoom = Math.min(1, Math.max(0.1, fit));
+  return { x: screen.width / 2, y: screen.height / 2, zoom };
+}
+
 /* ---------------------------------------------------------------- groups --- */
 
 /** Every node transitively parented under `id` — used so dragging a boundary

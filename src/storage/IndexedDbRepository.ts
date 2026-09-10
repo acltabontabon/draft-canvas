@@ -12,6 +12,7 @@ import {
   summarize,
   type DraftRepository,
 } from './DraftRepository';
+import { isLibraryShape, libraryShapeOf } from '../document/shape';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 
 const DB_NAME = 'draft-canvas';
@@ -132,6 +133,35 @@ export class IndexedDbRepository implements DraftRepository {
    * edge dropped) is left for the next real edit to persist, same as always.
    */
   async load(id: string): Promise<DraftDocument | null> {
+    const read = await this.readBody(id);
+    if (!read) return null;
+    const { document, wasEncrypted, priorVersion } = read;
+    if (!wasEncrypted || priorVersion !== document.version) {
+      // Best-effort: the caller still gets the correctly migrated in-memory
+      // document either way, and the next real edit persists it through the
+      // ordinary `save()` path — a failure here only loses the "derive once"
+      // optimisation, never correctness.
+      try {
+        await this.saveVerified(document);
+      } catch (error) {
+        console.warn(
+          `[draft-canvas] Could not persist the migrated copy of record ${id}; continuing with the in-memory version:`,
+          error,
+        );
+      }
+    }
+    return document;
+  }
+
+  /**
+   * The read half of `load()` — decrypt (or accept a legacy plaintext row),
+   * then validate and migrate in memory — with none of its write-back. Split
+   * out so `backfillSummaries()` can look at a body without also re-encrypting
+   * and rewriting it, which for the oldest records is the expensive part.
+   */
+  private async readBody(
+    id: string,
+  ): Promise<{ document: DraftDocument; wasEncrypted: boolean; priorVersion: unknown } | null> {
     let fetched;
     try {
       fetched = await this.db.get('bodies', id);
@@ -172,21 +202,51 @@ export class IndexedDbRepository implements DraftRepository {
     }
 
     const priorVersion = isRecord(rawDocument) ? rawDocument.version : undefined;
-    if (!wasEncrypted || priorVersion !== result.document.version) {
-      // Best-effort: the caller still gets the correctly migrated in-memory
-      // document either way, and the next real edit persists it through the
-      // ordinary `save()` path — a failure here only loses the "derive once"
-      // optimisation, never correctness.
+    return { document: result.document, wasEncrypted, priorVersion };
+  }
+
+  /**
+   * Gives every summary written before fingerprints existed its `shape`, once.
+   * Same posture as `migrateLegacyRecords()`: kicked off at startup, never
+   * blocking, each row independent, a row it hasn't reached yet is simply a
+   * list entry without a thumbnail.
+   *
+   * Only the `documents` store is written, and only its `shape` field. The
+   * merge happens against the row as it is *at write time*, inside one
+   * transaction, so a rename or autosave that landed while this body was
+   * being decrypted keeps its title, project, and — critically — `updatedAt`,
+   * which is the index the library is sorted by. Bodies are never touched:
+   * that is `load()`'s and the encryption sweep's job, not this one's.
+   */
+  async backfillSummaries(): Promise<{ updated: number; failed: number; skipped: number }> {
+    const rows = await this.db.getAll('documents');
+    const stale = rows.filter((row) => row.nodeCount > 0 && !isLibraryShape(row.shape));
+    let updated = 0;
+    let failed = 0;
+    let skipped = 0;
+    for (const row of stale) {
       try {
-        await this.saveVerified(result.document);
+        const read = await this.readBody(row.id);
+        if (!read) {
+          failed += 1;
+          continue;
+        }
+        const shape = libraryShapeOf(read.document.nodes, read.document.edges);
+        const tx = this.db.transaction('documents', 'readwrite');
+        const current = await tx.store.get(row.id);
+        if (!current || isLibraryShape(current.shape)) {
+          skipped += 1;
+        } else {
+          await tx.store.put({ ...current, shape });
+          updated += 1;
+        }
+        await tx.done;
       } catch (error) {
-        console.warn(
-          `[draft-canvas] Could not persist the migrated copy of record ${id}; continuing with the in-memory version:`,
-          error,
-        );
+        failed += 1;
+        console.warn(`[draft-canvas] Could not fingerprint local record ${row.id}:`, error);
       }
     }
-    return result.document;
+    return { updated, failed, skipped };
   }
 
   async save(document: DraftDocument): Promise<void> {

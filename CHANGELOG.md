@@ -4,7 +4,33 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Every diagram in your library now shows a small fingerprint of its topology beside its name —
+  the services, stores, queues, and boundaries and how they connect, drawn from the diagram's
+  shape rather than a screenshot — so "the checkout one" is recognisable at a glance in a list of
+  untitled canvases. Diagrams saved by an earlier version get theirs filled in quietly the first
+  time the app opens.
+- A brand-new workspace offers the five Architecture Starters (Monolith, Modular Monolith,
+  Microservices, Event-Driven, Hexagonal) right on the home screen. Picking one creates a canvas
+  already holding that architecture, titled after it and opened in view.
+- The home screen has a theme toggle, and `/` jumps to the search box. Searching now says how
+  many diagrams matched, a miss quotes what you typed, and "Clear search" is one click.
+- One "draft thought" at the foot of the home screen — a single line about how Draft Canvas
+  thinks, which changes daily.
+
 ### Changed
+
+- The home screen introduces the product by being it: the tagline from the About panel (the
+  page used to say something different) and a second line with a little more attitude.
+- The large "Stored on this device" panel is now one quiet line at the foot of the page —
+  "Stored on this device — nothing you draw leaves it." — with the honest detail (site data,
+  export, how much local storage is in use) one click away. When a browser is blocking storage
+  the line becomes the warning and starts open.
+- A workspace with no diagrams and no projects no longer shows the sidebar — three views of the
+  same empty list — until there is something to organise.
+- The library re-reads itself when you return to the tab, so a diagram created or deleted in
+  another tab shows up without a reload, and "just now" stops being stale.
 
 - Notes are now plain multiline text that behaves like it: Enter starts a new line, clicking
   away, Escape, or Cmd/Ctrl+Enter finishes the note, and a new Note (`N`, the toolbar, the
@@ -41,6 +67,11 @@ All notable changes to Draft Canvas are documented here.
 - Default flow names are numbered ("Untitled flow 2") so untouched flows stay tellable apart.
 
 ### Fixed
+
+- Long diagram titles no longer wrap into several lines on the home screen; they truncate and
+  show in full on hover. Long project names no longer overflow the "Move to project" menu, and
+  the home screen's toolbar no longer runs off the edge of a phone-width window.
+- The home screen's sort control was quietly restyling every dropdown in the app.
 
 - Selecting a flow with no steps no longer dims the entire diagram.
 - Inserting a worker on a connector that is a flow step keeps the story: the step becomes

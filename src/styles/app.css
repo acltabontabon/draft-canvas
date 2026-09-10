@@ -213,8 +213,14 @@ kbd {
 
 .dc-lede {
   margin: 6px 0 0;
-  color: var(--dc-text-muted);
+  color: var(--dc-text);
   font-size: 15px;
+}
+
+.dc-lede-aside {
+  margin: 3px 0 0;
+  color: var(--dc-text-faint);
+  font-size: 13.5px;
 }
 
 .dc-library-toolbar {
@@ -255,6 +261,17 @@ kbd {
 
 .dc-library-search input:focus {
   outline: none;
+}
+
+.dc-library-search kbd {
+  min-width: 16px;
+  padding: 0 4px;
+  color: var(--dc-text-faint);
+  font-size: 10.5px;
+}
+
+.dc-library-search:focus-within kbd {
+  display: none;
 }
 
 .dc-library-actions {
@@ -405,43 +422,16 @@ kbd {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--dc-border);
 }
 
-.dc-library-list-head-right {
+.dc-library-list-head-left {
   display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.dc-select {
-  height: 26px;
-  padding: 0 4px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-sm);
-  background: var(--dc-surface);
-  color: var(--dc-text-muted);
-  font: inherit;
-  font-size: 12px;
-}
-
-@media (max-width: 640px) {
-  .dc-library-body {
-    flex-direction: column;
-  }
-
-  .dc-library-sidebar {
-    width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 4px 12px;
-  }
-
-  .dc-sidebar-section {
-    margin-top: 12px;
-    width: 100%;
-  }
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
 }
 
 .dc-library-list-head h2 {
@@ -451,9 +441,23 @@ kbd {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--dc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dc-library-list-head span {
+.dc-library-count {
+  flex-shrink: 0;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+/* Sized for a list header, not a form — the global `.dc-select` is the form one. */
+.dc-library-sort {
+  height: 26px;
+  padding: 0 4px;
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
   font-size: 12px;
 }
 
@@ -471,10 +475,11 @@ kbd {
 
 .dc-library-item {
   flex: 1;
+  min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 14px 4px;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 4px;
   border: 0;
   background: none;
   color: inherit;
@@ -483,9 +488,19 @@ kbd {
   cursor: pointer;
 }
 
+.dc-library-item-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .dc-library-item-title {
   font-size: 15px;
   font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dc-library-item:hover .dc-library-item-title {
@@ -495,6 +510,86 @@ kbd {
 .dc-library-item-meta {
   color: var(--dc-text-muted);
   font-size: 12px;
+}
+
+/*
+ * The fingerprint: each row's topology, in the row's own muted colour, lit
+ * to the selection colour with the title on hover. Every mark is
+ * `currentColor` (see `Fingerprint.tsx`), so these rules are the whole
+ * palette — strokes for outlines, low-opacity fills for the solid kinds.
+ */
+.dc-fingerprint {
+  flex-shrink: 0;
+  width: 56px;
+  height: 32px;
+  color: var(--dc-text-muted);
+  transition: color 90ms ease;
+}
+
+.dc-library-item:hover .dc-fingerprint {
+  color: var(--dc-selection);
+}
+
+.dc-fingerprint-empty {
+  fill: none;
+  stroke: currentColor;
+  stroke-dasharray: 2 2;
+  opacity: 0.3;
+}
+
+.dc-fingerprint-edge {
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.32;
+}
+
+.dc-fingerprint-service,
+.dc-fingerprint-topic {
+  fill: currentColor;
+  fill-opacity: 0.22;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.dc-fingerprint-component {
+  fill: currentColor;
+  fill-opacity: 0.1;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-opacity: 0.7;
+}
+
+.dc-fingerprint-external {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-dasharray: 2 1.5;
+}
+
+.dc-fingerprint-database rect,
+.dc-fingerprint-queue,
+.dc-fingerprint-actor {
+  fill: var(--dc-canvas);
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.dc-fingerprint-database line {
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.8;
+}
+
+.dc-fingerprint-junction {
+  fill: currentColor;
+}
+
+.dc-fingerprint-boundary {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  opacity: 0.4;
 }
 
 .dc-library-item-actions {
@@ -546,6 +641,13 @@ kbd {
   cursor: pointer;
 }
 
+.dc-move-menu-row > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dc-move-menu-row:hover {
   background: var(--dc-surface-raised);
 }
@@ -573,37 +675,201 @@ kbd {
   margin: 0 0 6px;
 }
 
-/* -------------------------------------------------------------- privacy -- */
+.dc-library-empty .dc-button {
+  margin-top: 6px;
+}
 
-.dc-privacy {
-  margin-top: 56px;
-  padding: 18px 20px;
+/*
+ * The empty workspace's starter row: the same bare-text buttons the empty
+ * canvas uses, and for the same reason — an architecture is a click away,
+ * but a row of cards here would turn the first screen into a template
+ * gallery, which is the opposite of the point.
+ */
+.dc-library-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 12px 0 16px;
+}
+
+.dc-library-starter {
+  padding: 3px 9px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.dc-library-starter:hover {
+  border-color: var(--dc-border-strong);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+}
+
+/* ------------------------------------------------------- library foot -- */
+
+/*
+ * One quiet row under the list: a thought on the left, the local-first
+ * promise on the right. Both in the faint colour, both one line — the
+ * personality of the product and the fact about the product, and neither
+ * shouting.
+ */
+.dc-library-foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 48px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-thought {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  max-width: 46ch;
+  color: var(--dc-text-faint);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.dc-thought svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.dc-local {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  max-width: 420px;
+}
+
+.dc-local-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-faint);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: right;
+  cursor: pointer;
+}
+
+.dc-local-toggle svg {
+  flex-shrink: 0;
+}
+
+.dc-local-toggle:hover {
+  color: var(--dc-text-muted);
+  background: var(--dc-surface-raised);
+}
+
+.dc-local-more {
+  color: var(--dc-text-faint);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.dc-local[data-warn='true'] .dc-local-toggle {
+  color: var(--dc-danger);
+}
+
+.dc-local-detail {
+  margin-top: 6px;
+  max-width: 46ch;
+  padding: 10px 12px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius);
   background: var(--dc-surface);
-}
-
-.dc-privacy h3 {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.dc-privacy p {
-  margin: 0 0 6px;
-  font-size: 13px;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
   line-height: 1.6;
+  text-align: left;
 }
 
-.dc-privacy p:last-child {
+.dc-local-detail p {
+  margin: 0 0 6px;
+}
+
+.dc-local-detail p:last-child {
   margin-bottom: 0;
 }
 
-.dc-privacy code {
-  font-size: 12px;
+.dc-local-detail code {
+  font-size: 11.5px;
+}
+
+/*
+ * Draft Canvas is a desktop tool; a narrow screen is for looking at a diagram
+ * someone shared, not for building one. The list folds, and the hover-only
+ * actions stay visible because there is no hover.
+ */
+@media (max-width: 720px) {
+  .dc-library {
+    padding: 32px 18px 48px;
+  }
+
+  .dc-library-search kbd {
+    display: none;
+  }
+
+  /* Search on its own row; the two actions under it, never off the edge. */
+  .dc-library-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .dc-library-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .dc-library-body {
+    flex-direction: column;
+  }
+
+  .dc-library-sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+
+  .dc-sidebar-section {
+    margin-top: 12px;
+    width: 100%;
+  }
+
+  .dc-library-item-actions {
+    opacity: 1;
+  }
+
+  .dc-library-foot {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dc-local {
+    align-items: flex-start;
+    max-width: none;
+  }
+
+  .dc-local-toggle {
+    text-align: left;
+  }
 }
 
 /* --------------------------------------------------------------- editor -- */
@@ -1806,19 +2072,6 @@ kbd {
 @media (max-width: 720px) {
   .dc-shortcuts {
     grid-template-columns: 1fr;
-  }
-
-  .dc-library {
-    padding: 32px 18px 48px;
-  }
-
-  .dc-library-header {
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .dc-library-item-actions {
-    opacity: 1;
   }
 
   /* Title on the first row, the tool palette scrolling on its own below. */

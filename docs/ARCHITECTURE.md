@@ -174,6 +174,16 @@ lists titles and timestamps without deserializing a single canvas. Autosave (`st
 debounces at 700 ms with a 4 s ceiling and flushes on `visibilitychange`/`pagehide` — never
 `beforeunload`, which disables the back/forward cache.
 
+A summary also carries the canvas's *fingerprint* (`LibraryShape`, computed by
+`document/shape.ts` on every save): each architectural node's kind and box, scaled to a
+1000-unit frame, plus which of them connect. It is the one body-derived thing in the plaintext
+store, and it is there so the home screen can draw a thumbnail per row without decrypting
+anything. The line it holds is *silhouettes, never words*: no label, note, code, or connector
+text is ever summarised, and anything that would need those belongs in `bodies`.
+`IndexedDbRepository.backfillSummaries()` fills the field in once, at startup, for rows an older
+build wrote — the same fire-and-forget posture as the encryption sweep, and it writes only the
+`documents` store.
+
 ### The `src/crypto/` boundary
 
 `bodies` rows are encrypted at rest with AES-256-GCM. `src/crypto/` is the only place that touches

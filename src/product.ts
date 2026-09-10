@@ -3,13 +3,16 @@ import { author, version } from '../package.json';
 /**
  * Draft Canvas' own identity, in one place.
  *
- * The About panel (`ui/common/AboutDialog.tsx`) is the only reader today, but
- * keeping it here — rather than inline in that component — is what stops the
- * name, tagline or version from drifting if a second surface ever needs them.
+ * The About panel (`ui/common/AboutDialog.tsx`) and the home screen
+ * (`ui/Library/LibraryScreen.tsx`) both read from here — keeping it in one
+ * place, rather than inline in either, is what stops the name, tagline or
+ * version from drifting between them.
  */
 export const PRODUCT = {
   name: 'Draft Canvas',
   tagline: 'For meetings that suddenly need a diagram.',
+  /** The home screen's second line — the tagline's attitude, one notch quieter. */
+  aside: 'Sketch the system before someone asks if you can draw that.',
   description: 'Sketch systems, flows, code, and ideas without breaking the conversation.',
   privacy: 'Local-first. Nothing you draw leaves your device.',
   author: author.name,

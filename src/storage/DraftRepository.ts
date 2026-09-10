@@ -1,3 +1,4 @@
+import { libraryShapeOf } from '../document/shape';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 
 /**
@@ -86,5 +87,6 @@ export function summarize(document: DraftDocument): DraftSummary {
     nodeCount: document.nodes.length,
     edgeCount: document.edges.length,
     ...(document.metadata.projectId ? { projectId: document.metadata.projectId } : {}),
+    ...(document.nodes.length > 0 ? { shape: libraryShapeOf(document.nodes, document.edges) } : {}),
   };
 }

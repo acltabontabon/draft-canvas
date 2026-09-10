@@ -433,3 +433,135 @@ describe('autosave', () => {
     autosave.dispose();
   });
 });
+
+/* ------------------------------------------------------- fingerprints ---- */
+
+/** Writes a `documents` row as-is, standing in for a summary an older build
+ *  wrote before `shape` existed. */
+function putRawSummary(summary: unknown): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('draft-canvas');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction('documents', 'readwrite');
+      tx.objectStore('documents').put(summary);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+
+/** Writes an unrecognisable `bodies` row — a crashed write, say. */
+function putGarbageBody(id: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('draft-canvas');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction('bodies', 'readwrite');
+      tx.objectStore('bodies').put({ id, nonsense: true });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+
+async function stripShape(repository: IndexedDbRepository, id: string): Promise<void> {
+  const row = (await repository.list()).find((entry) => entry.id === id)!;
+  const { shape: _shape, ...rest } = row;
+  await putRawSummary(rest);
+}
+
+describe('library fingerprints', () => {
+  it('every save writes a shape into the summary, and MemoryRepository derives one too', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Shaped', 2);
+    await repository.save(doc);
+    const [row] = await repository.list();
+    expect(row!.shape?.nodes).toHaveLength(2);
+    expect(row!.shape?.nodes[0]![0]).toBe('service');
+
+    const memory = new MemoryRepository();
+    await memory.save(doc);
+    expect((await memory.list())[0]!.shape?.nodes).toHaveLength(2);
+  });
+
+  it('leaves an empty canvas without a shape', async () => {
+    const repository = await IndexedDbRepository.open();
+    await repository.save(createDocument('Blank'));
+    expect((await repository.list())[0]!.shape).toBeUndefined();
+  });
+
+  it('backfills rows that lack a shape without touching their order, updatedAt, or bodies', async () => {
+    const repository = await IndexedDbRepository.open();
+    const older = documentWith('Older', 2);
+    const newer = documentWith('Newer', 3);
+    await repository.save(older);
+    await repository.save({ ...newer, metadata: { ...newer.metadata, updatedAt: newer.metadata.updatedAt + 1000 } });
+    const before = await repository.list();
+    await stripShape(repository, older.metadata.id);
+    await stripShape(repository, newer.metadata.id);
+    expect((await repository.list()).every((row) => row.shape === undefined)).toBe(true);
+    const bodyBefore = await readRawRow(older.metadata.id);
+
+    expect(await repository.backfillSummaries()).toEqual({ updated: 2, failed: 0, skipped: 0 });
+
+    const after = await repository.list();
+    expect(after.map((row) => row.id)).toEqual(before.map((row) => row.id));
+    expect(after.map((row) => row.updatedAt)).toEqual(before.map((row) => row.updatedAt));
+    expect(after.find((row) => row.id === newer.metadata.id)!.shape?.nodes).toHaveLength(3);
+    expect(await readRawRow(older.metadata.id)).toEqual(bodyBefore);
+
+    // Nothing left to do: the second launch is free.
+    expect(await repository.backfillSummaries()).toEqual({ updated: 0, failed: 0, skipped: 0 });
+  });
+
+  it('fingerprints a legacy plaintext body without encrypting it — that is the other sweep\'s job', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Legacy', 2);
+    await writeLegacyPlaintextRow(doc);
+    const { shape: _shape, ...summary } = await (async () => {
+      // Build the summary the old build would have written: counts, no shape.
+      const { summarize } = await import('../src/storage/DraftRepository');
+      return summarize(doc);
+    })();
+    await putRawSummary(summary);
+
+    expect(await repository.backfillSummaries()).toMatchObject({ updated: 1, failed: 0 });
+    expect((await repository.list())[0]!.shape?.nodes).toHaveLength(2);
+    expect(isEncryptedBody(await readRawRow(doc.metadata.id))).toBe(false);
+  });
+
+  it('skips empty canvases, counts unreadable bodies as failed, and keeps going', async () => {
+    const repository = await IndexedDbRepository.open();
+    const blank = createDocument('Blank');
+    const good = documentWith('Good', 2);
+    await repository.save(blank);
+    await repository.save(good);
+    await stripShape(repository, good.metadata.id);
+    await putRawSummary({ id: 'ghost', title: 'Ghost', createdAt: 1, updatedAt: 1, nodeCount: 4, edgeCount: 0 });
+    await putGarbageBody('ghost');
+
+    expect(await repository.backfillSummaries()).toEqual({ updated: 1, failed: 1, skipped: 0 });
+    const rows = await repository.list();
+    expect(rows.find((row) => row.id === good.metadata.id)!.shape?.nodes).toHaveLength(2);
+    expect(rows.find((row) => row.id === 'ghost')!.shape).toBeUndefined();
+    expect(rows.find((row) => row.id === blank.metadata.id)!.shape).toBeUndefined();
+  });
+
+  it('never clobbers a rename that lands while a body is being read', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Before', 2);
+    await repository.save(doc);
+    await stripShape(repository, doc.metadata.id);
+
+    // `rename()` goes through `save()`, which writes a fresh, shaped summary —
+    // exactly the row the backfill must then leave alone.
+    const rename = repository.rename(doc.metadata.id, 'After');
+    const backfill = repository.backfillSummaries();
+    await Promise.all([rename, backfill]);
+
+    const [row] = await repository.list();
+    expect(row!.title).toBe('After');
+    expect(row!.shape?.nodes).toHaveLength(2);
+  });
+});

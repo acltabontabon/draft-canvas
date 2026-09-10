@@ -536,7 +536,47 @@ export interface DraftDocument {
   flows: DraftFlow[];
 }
 
-/** Lightweight row for the local library listing. Never holds canvas contents. */
+/** Bump when `libraryShapeOf` changes what it records — the only lever for
+ *  re-deriving every stored `LibraryShape` without a database version bump. */
+export const SHAPE_VERSION = 1;
+
+/** The nine silhouettes a library fingerprint distinguishes — `categoryOf`'s
+ *  eighteen categories folded to what is still legible at a few pixels. */
+export type ShapeKind =
+  | 'service'
+  | 'external'
+  | 'database'
+  | 'queue'
+  | 'topic'
+  | 'actor'
+  | 'component'
+  | 'junction'
+  | 'boundary';
+
+/**
+ * A canvas's topology, reduced to what makes it recognisable in a list: each
+ * architectural node's kind and box (integers, scaled so the longer axis of
+ * the content is 1000) and which of them are connected. No text of any kind.
+ * See `document/shape.ts`.
+ */
+export interface LibraryShape {
+  v: number;
+  w: number;
+  h: number;
+  nodes: Array<[kind: ShapeKind, x: number, y: number, w: number, h: number]>;
+  edges: Array<[from: number, to: number]>;
+}
+
+/**
+ * Lightweight row for the local library listing. Never holds canvas text.
+ *
+ * `shape` is the one body-derived field, and it is stored in the plaintext
+ * `documents` store alongside the title on purpose: it holds node kinds and
+ * relative positions only — never a label, a note, a code card, or a
+ * connector's words — and reading every encrypted body just to draw the
+ * list would make the landing screen sluggish. Anything that would widen
+ * this beyond silhouettes belongs in the encrypted body.
+ */
 export interface DraftSummary {
   id: string;
   title: string;
@@ -546,4 +586,7 @@ export interface DraftSummary {
   edgeCount: number;
   /** Denormalized from `DraftMetadata.projectId` — see `summarize()`. */
   projectId?: string;
+  /** Absent for a canvas with no nodes, or one summarised by an older build
+   *  (backfilled once at startup — see `IndexedDbRepository.backfillSummaries`). */
+  shape?: LibraryShape;
 }
