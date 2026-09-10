@@ -20,7 +20,7 @@ import { descendantsOf } from '../document/operations';
 import type { DraftDocument, Side } from '../document/types';
 import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
 import { isEditableTarget } from '../lib/isEditableTarget';
-import { useEditorStore } from '../store/editorStore';
+import { lensFlow, useEditorStore } from '../store/editorStore';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { CanvasBackground } from './CanvasBackground';
@@ -254,12 +254,9 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
   const explainActive = useEditorStore((state) => state.flowPlayback.active);
   const focusActive = useEditorStore((state) => state.focus.active);
   // A flow merely selected (not presented) acts as a gentler lens — see
-  // `docs/ARCHITECTURE.md`'s "Flows and presentation". Suppressed whenever
-  // Presentation or Focus already own the dimming, exactly the mutual
-  // exclusion those two already have.
-  const lensActive = useEditorStore(
-    (state) => state.selectedFlowId !== null && !state.flowPlayback.active && !state.focus.active,
-  );
+  // `docs/ARCHITECTURE.md`'s "Flows and presentation". `lensFlow` owns the rule for when that
+  // lens is on (never during Presentation/Focus, never for an empty flow).
+  const lensActive = useEditorStore((state) => lensFlow(state) !== undefined);
   const theme = useThemeValue();
 
   const store = useEditorStore;

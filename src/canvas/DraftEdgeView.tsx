@@ -29,7 +29,7 @@ import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { roughenPath } from '../render/roughness/roughPath';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { accentOf } from '../render/theme/tokens';
-import { isEdgeFocused, useEditorStore } from '../store/editorStore';
+import { isEdgeFocused, lensFlow, useEditorStore } from '../store/editorStore';
 import { selectEdge, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
@@ -168,6 +168,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const flows = useEditorStore((state) => state.document.flows);
   const flowPlayback = useEditorStore((state) => state.flowPlayback);
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
+  // The flow object comes straight out of `document.flows`, so its identity only changes when the
+  // flow itself does — this subscription doesn't re-render every edge on unrelated store writes.
+  const lensFlowValue = useEditorStore(lensFlow);
   const focus = useEditorStore((state) => state.focus);
   const mode = useEditorStore((state) => state.mode);
   const updateEdgeLabel = useEditorStore((state) => state.updateEdgeLabel);
@@ -277,17 +280,18 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Merely *selecting* a flow (not presenting it) is a gentler lens: every
   // member reads equally lit, there is no step progression — see
   // `lensEdgeTier`'s own comment for why this is a distinct primitive from
-  // `explainEdgeTier` above, not a degenerate case of it. Suppressed while
-  // Presentation or Focus already own the dimming.
-  const lensActive = Boolean(overlayFlow) && !flowPlayback.active && !focus.active;
-  const lensTier = lensActive && edge ? lensEdgeTier(overlayFlow, edge.id) : 'dimmed';
+  // `explainEdgeTier` above, not a degenerate case of it. `lensFlow` decides
+  // when the lens is on at all (not during Presentation/Focus, and not for an
+  // empty flow); step badges above follow `selectedFlowId` regardless.
+  const lensActive = lensFlowValue !== undefined;
+  const lensTier = lensActive && edge ? lensEdgeTier(lensFlowValue, edge.id) : 'dimmed';
   const lensMember = lensActive && lensTier === 'member';
   const lensDimmed = lensActive && lensTier === 'dimmed';
   // The flow's own identity colour, temporarily worn by its member
   // connectors while it's the active lens — never a permanent per-edge
   // colour, since a connector can belong to several flows. See
   // `DraftFlow.accent`.
-  const lensAccent = lensMember && overlayFlow?.accent ? accentOf(theme, overlayFlow.accent).chip : undefined;
+  const lensAccent = lensMember && lensFlowValue?.accent ? accentOf(theme, lensFlowValue.accent).chip : undefined;
   // Presentation gets the same identity colour, but only on the one
   // connector actively being explained right now — not every member at
   // once, the way the selection lens above does. Presentation already layers
@@ -303,19 +307,23 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // time) — not a loop like Presentation's `dc-flow-pulse`, and not
   // retriggered by anything else that causes a re-render.
   const [lensPulsing, setLensPulsing] = useState(false);
-  const prevSelectedFlowRef = useRef(selectedFlowId);
+  // Keyed on the *lens* flow, not `selectedFlowId`: a lens appearing or switching is the moment
+  // to pulse — which includes a brand-new flow gaining its first step, and excludes selecting an
+  // empty one (no lens yet, nothing to announce).
+  const lensFlowId = lensFlowValue?.id ?? null;
+  const prevLensFlowRef = useRef(lensFlowId);
   useEffect(() => {
     // The `switched` guard, not the dependency array, is what actually
     // decides whether to pulse — so listing `lensMember` here only means the
     // effect also runs (and immediately no-ops) when it flips on its own
-    // (e.g. presenting starts/stops) without `selectedFlowId` changing.
-    const switched = prevSelectedFlowRef.current !== selectedFlowId;
-    prevSelectedFlowRef.current = selectedFlowId;
+    // (e.g. presenting starts/stops) without the lens flow changing.
+    const switched = prevLensFlowRef.current !== lensFlowId;
+    prevLensFlowRef.current = lensFlowId;
     if (!switched || !lensMember) return;
     setLensPulsing(true);
     const timeout = setTimeout(() => setLensPulsing(false), 650);
     return () => clearTimeout(timeout);
-  }, [selectedFlowId, lensMember]);
+  }, [lensFlowId, lensMember]);
 
   if (!edge || !sourceNode || !targetNode) return null;
 

@@ -7,7 +7,7 @@ import { CODE_LAYOUT, describeContext, describeNode, naturalCodeSize } from '../
 import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
-import { useEditorStore, type EditorStore } from '../store/editorStore';
+import { lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { edgeIndex, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
@@ -401,17 +401,15 @@ function explainTierFor(state: EditorStore, id: string): ExplainTier {
 /** Whether this node belongs to the selected (not presented) flow's lens —
  *  suppressed whenever Presentation or Focus already own the dimming. */
 function lensMemberFor(state: EditorStore, id: string): boolean {
-  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active) return false;
-  const flow = state.document.flows.find((f) => f.id === state.selectedFlowId);
-  return lensNodeTier(flow, edgeIndex(state.document.edges).values(), id) === 'member';
+  const flow = lensFlow(state);
+  return flow ? lensNodeTier(flow, edgeIndex(state.document.edges).values(), id) === 'member' : false;
 }
 
 /** A member node's ring colour while lensed, if its flow has one set — mirrors the accent tint
  *  member edges already wear (`DraftEdgeView.tsx`'s `lensAccent`). Undefined (falling back to a
  *  neutral border token in CSS) when the flow has no accent, or the node isn't a member. */
 function lensAccentFor(state: EditorStore, theme: Theme, id: string): string | undefined {
-  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active) return undefined;
-  const flow = state.document.flows.find((f) => f.id === state.selectedFlowId);
+  const flow = lensFlow(state);
   if (!flow?.accent) return undefined;
   const isMember = lensNodeTier(flow, edgeIndex(state.document.edges).values(), id) === 'member';
   return isMember ? accentOf(theme, flow.accent).chip : undefined;
