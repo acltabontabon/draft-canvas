@@ -4,6 +4,8 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-10
+
 ### Added
 
 - A Port kind for Components — a dashed contract box with a PORT tag. Draft Canvas knows what a
