@@ -236,7 +236,6 @@ function flowCommands(ctx: CommandContext): Command[] {
       title: 'Switch to flow…',
       group: 'flow',
       keywords: ['lens', 'view', 'select flow'],
-      shortcut: 'F',
       run: (inner) => ({
         prompt: 'Switch to',
         options: [
@@ -276,17 +275,15 @@ function flowCommands(ctx: CommandContext): Command[] {
       group: 'flow',
       keywords: ['create flow', 'story', 'path', 'walkthrough'],
       run: (inner) => {
-        const id = inner.editor.createFlow();
-        if (!id) return;
-        inner.editor.setSelectedFlowId(id);
-        inner.ui.setFlowPanelOpen(true);
+        newFlow(inner);
       },
     },
     {
       id: 'flow-manage',
-      title: 'Manage flows…',
+      title: 'Show flows',
       group: 'flow',
-      keywords: ['rename', 'reorder', 'steps', 'panel'],
+      keywords: ['manage', 'rename', 'reorder', 'steps', 'panel'],
+      shortcut: 'F',
       run: (inner) => inner.ui.setFlowPanelOpen(true),
     },
   );
@@ -519,11 +516,24 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
   return { prompt: 'Connect to', options: [...existing, ...fresh] };
 }
 
-function startFlowWith(ctx: CommandContext, edge: DraftEdge) {
+/**
+ * The one way a flow comes into being from a command: created, made the active flow, and handed
+ * to the panel to be named right away (`requestFlowRename`) — naming is part of creating, not a
+ * separate "manage" errand. Returns the id, or `null` at the flow cap (nothing happens then).
+ */
+function newFlow(ctx: CommandContext): string | null {
   const flowId = ctx.editor.createFlow();
+  if (!flowId) return null;
+  ctx.editor.setSelectedFlowId(flowId);
+  ctx.ui.setFlowPanelOpen(true);
+  ctx.ui.requestFlowRename(flowId);
+  return flowId;
+}
+
+function startFlowWith(ctx: CommandContext, edge: DraftEdge) {
+  const flowId = newFlow(ctx);
   if (!flowId) return;
   ctx.editor.addEdgeToFlow(flowId, edge.id);
-  ctx.editor.setSelectedFlowId(flowId);
   ctx.editor.setSelection({ nodes: [], edges: [edge.id] });
 }
 

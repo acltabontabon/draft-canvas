@@ -11,7 +11,7 @@ interface MoveToProjectMenuProps {
 
 /**
  * A small popover listing Unorganized + every project, opened from a canvas
- * row's folder icon. Modeled on `FlowSwitcher.tsx`'s dropdown — the closest
+ * row's folder icon. Modeled on `ContextMenu.tsx`'s menu — the closest
  * existing menu pattern — rather than introducing a new generic Menu system
  * for this one use.
  */

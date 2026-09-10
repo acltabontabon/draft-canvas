@@ -169,14 +169,13 @@ describe('undo and redo', () => {
   /**
    * `undo`/`redo` swap `document` directly rather than through `setDocument`
    * (which resets everything, correctly, for an unrelated document) — so
-   * unlike a fresh open, `selectedFlowId`/`focus`/`flowEdit` used to keep
-   * pointing at ids the restored document no longer has. Confirmed
-   * non-crashing everywhere it's read (every consumer already guards with
-   * `.find()`/optional-chaining), but a real state-hygiene gap: e.g.
-   * undoing a flow's creation while `flowEdit` was on it left the exit
-   * banner silently gone with no way back out. `flowPlayback` already
-   * self-heals the same way via its own effect (`useFlowPlayback.ts`) — this
-   * mirrors that for the three fields undo/redo themselves own.
+   * unlike a fresh open, `selectedFlowId`/`focus` used to keep pointing at
+   * ids the restored document no longer has. Confirmed non-crashing
+   * everywhere it's read (every consumer already guards with
+   * `.find()`/optional-chaining), but a real state-hygiene gap. `flowPlayback`
+   * already self-heals the same way via its own effect
+   * (`useFlowPlayback.ts`) — this mirrors that for the fields undo/redo
+   * themselves own.
    */
   it('undo clears selectedFlowId when the selected flow no longer exists in the restored document', () => {
     const flowId = store.getState().createFlow('Checkout')!;
@@ -193,16 +192,6 @@ describe('undo and redo', () => {
     // reconciliation only ever drops a now-invalid reference, it never
     // re-adds one that was already cleared.
     expect(store.getState().selectedFlowId).toBeNull();
-  });
-
-  it('undo exits flow-edit mode when the edited flow no longer exists in the restored document', () => {
-    const flowId = store.getState().createFlow('Checkout')!;
-    store.getState().enterFlowEdit(flowId);
-    expect(store.getState().flowEdit).toEqual({ active: true, flowId });
-
-    store.getState().undo();
-    expect(store.getState().document.flows).toHaveLength(0);
-    expect(store.getState().flowEdit).toEqual({ active: false, flowId: null });
   });
 
   it('undo drops focused ids that no longer exist, exiting focus entirely once none survive', () => {

@@ -8,10 +8,10 @@ export interface Selection {
 export const EMPTY_SELECTION: Selection = { nodes: [], edges: [] };
 
 /**
- * A snapshot of `editorStore`'s `selectedFlowId`/`flowPlayback`/`flowEdit` fields — mirrored
+ * A snapshot of `editorStore`'s `selectedFlowId`/`flowPlayback` fields — mirrored
  * structurally here rather than imported from `store/editorStore.ts`, since that module already
  * imports this one (an import the other way would be circular). Deliberately *not* a general
- * mechanism: `flowPlayback`/`focus`/`flowEdit` are documented in `editorStore.ts` as "never pushed
+ * mechanism: `flowPlayback`/`focus` are documented in `editorStore.ts` as "never pushed
  * to history" because playing or editing a flow is not itself an editorial action, and that stays
  * true — nothing here changes when playback starts/stops or which flow is selected. This exists
  * for exactly one case: `deleteFlow` forcibly clears these fields as a *side effect* of a document
@@ -21,7 +21,6 @@ export const EMPTY_SELECTION: Selection = { nodes: [], edges: [] };
 export interface FlowSessionSnapshot {
   selectedFlowId: string | null;
   flowPlayback: { active: boolean; flowId: string | null; step: number; phase?: 'request' | 'response' };
-  flowEdit: { active: boolean; flowId: string | null };
 }
 
 export interface HistoryEntry {

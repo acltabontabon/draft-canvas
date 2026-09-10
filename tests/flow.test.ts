@@ -554,24 +554,6 @@ describe('flows through the store', () => {
     expect(store.getState().flowPlayback).toEqual({ active: false, flowId: null, step: 0 });
   });
 
-  it('undoing a flow deletion restores flow-edit mode too, if it was active for that flow', () => {
-    const { edges } = chain(1);
-    const flowId = store.getState().createFlow()!;
-    store.getState().addEdgeToFlow(flowId, edges[0]!.id);
-    store.getState().enterFlowEdit(flowId);
-
-    store.getState().deleteFlow(flowId);
-    expect(store.getState().flowEdit).toEqual({ active: false, flowId: null });
-
-    store.getState().undo();
-
-    expect(store.getState().flowEdit).toEqual({ active: true, flowId });
-
-    store.getState().redo();
-
-    expect(store.getState().flowEdit).toEqual({ active: false, flowId: null });
-  });
-
   it('does not disturb flow session state for an unrelated flow deletion', () => {
     const { edges } = chain(2);
     const kept = store.getState().createFlow('Kept')!;

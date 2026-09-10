@@ -32,7 +32,7 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
       [`${mod} +`, 'Zoom in'],
       [`${mod} −`, 'Zoom out'],
       ['Space + drag', 'Pan'],
-      ['F', 'Switch flows'],
+      ['F', 'Flows panel'],
       [`${mod} Enter`, 'Present'],
       [`${mod} E`, 'Export'],
       ['→ ←', 'Next / previous step in a walkthrough'],

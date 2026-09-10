@@ -20,7 +20,6 @@ function reset() {
     mode: 'edit',
     flowPlayback: { active: false, flowId: null, step: 0 },
     focus: { active: false, nodeIds: [], edgeIds: [] },
-    flowEdit: { active: false, flowId: null },
     selectedFlowId: null,
   });
   useUiStore.setState({ commandPaletteOpen: false, learnModeActive: false });

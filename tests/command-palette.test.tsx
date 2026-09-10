@@ -34,12 +34,10 @@ function reset() {
     mode: 'edit',
     flowPlayback: { active: false, flowId: null, step: 0 },
     focus: { active: false, nodeIds: [], edgeIds: [] },
-    flowEdit: { active: false, flowId: null },
     selectedFlowId: null,
   });
   useUiStore.setState({
     commandPaletteOpen: true,
-    flowSwitcherOpen: false,
     quickConnect: null,
     learnModeActive: false,
   });
@@ -262,15 +260,13 @@ describe('CommandPalette', () => {
     expect(screen.getByText('Undo')).toBeInTheDocument();
   });
 
-  it('closes the flow switcher and any quick-connect menu when it opens', () => {
+  it('closes any quick-connect menu when it opens', () => {
     useUiStore.setState({
       commandPaletteOpen: false,
-      flowSwitcherOpen: true,
       quickConnect: { flowPosition: { x: 0, y: 0 }, screenPosition: { x: 0, y: 0 } },
     });
     mount();
     act(() => useUiStore.getState().setCommandPaletteOpen(true));
-    expect(useUiStore.getState().flowSwitcherOpen).toBe(false);
     expect(useUiStore.getState().quickConnect).toBeNull();
   });
 });

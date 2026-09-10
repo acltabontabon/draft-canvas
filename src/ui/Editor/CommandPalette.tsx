@@ -42,13 +42,12 @@ type Entry = Command | (CommandOption & { group?: undefined });
  * Deliberately not built on `Modal`: a title bar and close button are exactly the chrome a
  * palette shouldn't have. It borrows `Modal`'s conventions instead — a capture-phase Escape
  * that stops before `EditorScreen`'s own Escape cascade, a backdrop that closes on pointer-down,
- * `role="dialog"` — and `FlowSwitcher`'s keyboard mechanics (a ref for the highlight so the
+ * `role="dialog"` — and `ContextMenu`'s keyboard mechanics (a ref for the highlight so the
  * listener is registered once per open, not once per keystroke).
  */
 export function CommandPalette({ createAt, createAtPointer, playback }: CommandPaletteProps) {
   const open = useUiStore((state) => state.commandPaletteOpen);
   const setOpen = useUiStore((state) => state.setCommandPaletteOpen);
-  const setFlowSwitcherOpen = useUiStore((state) => state.setFlowSwitcherOpen);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
   const learnModeActive = useUiStore((state) => state.learnModeActive);
   // Reactive slices only so an open palette re-lists as the world changes underneath it — the
@@ -109,14 +108,13 @@ export function CommandPalette({ createAt, createAtPointer, playback }: CommandP
     setStage(null);
     setStageRoot(null);
     setHighlight(0);
-    setFlowSwitcherOpen(false);
     setQuickConnect(null);
     // Synchronous, not deferred to a frame: a backgrounded tab may not paint a frame for a
     // while, and the first keystroke must land in this input, not on the canvas behind it.
     inputRef.current?.focus();
     // Opening it once is the whole lesson (Phase 7.2) — the "press ⌘K" hint has nothing left to say.
     retireHint('command-palette');
-  }, [open, retireHint, setFlowSwitcherOpen, setQuickConnect]);
+  }, [open, retireHint, setQuickConnect]);
 
   useEffect(() => {
     highlightRef.current = highlight;

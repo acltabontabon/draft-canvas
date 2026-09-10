@@ -22,7 +22,6 @@ import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { useThemeValue } from '../theme/useTheme';
-import { EditingFlowBanner } from './EditingFlowBanner';
 import { EmptyState } from './EmptyState';
 import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
@@ -277,7 +276,6 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         {!presenting && <FlowPanel playback={playback} />}
         <FlowBar playback={playback} />
         <FocusIndicator />
-        {!presenting && <EditingFlowBanner />}
 
         {presenting && (
           <div className="dc-present-exit">
@@ -329,7 +327,7 @@ function useKeyboard({
   const setExportOpen = useUiStore((state) => state.setExportOpen);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const arm = useUiStore((state) => state.arm);
-  const setFlowSwitcherOpen = useUiStore((state) => state.setFlowSwitcherOpen);
+  const setFlowPanelOpen = useUiStore((state) => state.setFlowPanelOpen);
   const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const { fitView, zoomIn, zoomOut, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
 
@@ -500,7 +498,6 @@ function useKeyboard({
         case 'Escape':
           arm(null);
           if (state.focus.active) state.exitFocus();
-          else if (state.flowEdit.active) state.exitFlowEdit();
           else if (playback.active) playback.stop();
           else state.setSelection({ nodes: [], edges: [] });
           return;
@@ -521,7 +518,7 @@ function useKeyboard({
           // branch; Shift+F falls through unhandled rather than toggling.
           if (event.shiftKey || event.altKey) break;
           event.preventDefault();
-          setFlowSwitcherOpen(!useUiStore.getState().flowSwitcherOpen);
+          setFlowPanelOpen(!useUiStore.getState().flowPanelOpen);
           return;
         case '!':
           // Shift+1 — the conventional fit-to-view chord.
@@ -591,7 +588,7 @@ function useKeyboard({
     screenToFlowPosition,
     setCommandPaletteOpen,
     setExportOpen,
-    setFlowSwitcherOpen,
+    setFlowPanelOpen,
     setShortcutsOpen,
     store,
     zoomIn,

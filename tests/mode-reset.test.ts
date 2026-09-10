@@ -15,7 +15,6 @@ function reset() {
     mode: 'edit',
     flowPlayback: { active: false, flowId: null, step: 0 },
     focus: { active: false, nodeIds: [], edgeIds: [] },
-    flowEdit: { active: false, flowId: null },
     selectedFlowId: null,
   });
 }
@@ -24,7 +23,7 @@ function reset() {
  * Regression coverage: opening a different diagram right after presenting one used to carry
  * `mode: 'present'` forward, so the newly opened diagram appeared with all editing chrome hidden
  * instead of landing in edit mode. `setDocument` resets every other per-session mode (selection,
- * focus, flow-edit, playback) but was missing `mode` itself.
+ * focus, playback) but was missing `mode` itself.
  */
 describe('setDocument resets mode', () => {
   beforeEach(reset);

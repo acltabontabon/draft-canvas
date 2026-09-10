@@ -7,7 +7,6 @@ import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Tooltip } from '../common/Tooltip';
 import { useTheme } from '../theme/useTheme';
-import { FlowSwitcher } from './FlowSwitcher';
 
 interface ToolbarProps {
   title: string;
@@ -37,6 +36,11 @@ export function Toolbar({
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
+  const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
+  const setFlowPanelOpen = useUiStore((state) => state.setFlowPanelOpen);
+  const activeFlowTitle = useEditorStore((state) =>
+    state.selectedFlowId ? state.document.flows.find((flow) => flow.id === state.selectedFlowId)?.title : undefined,
+  );
   const updateReady = useUiStore((state) => state.updateReady);
   const learnModeActive = useUiStore((state) => state.learnModeActive);
   const setLearnModeActive = useUiStore((state) => state.setLearnModeActive);
@@ -155,7 +159,25 @@ export function Toolbar({
           />
           {paletteIsNew && <span className="dc-new-dot" aria-hidden="true" />}
         </span>
-        <FlowSwitcher />
+        {/* Reads as state, not a menu: "Flows" alone, or "Flows · Checkout" while one is active.
+            Everything you can do to a flow lives in the panel this toggles. */}
+        <Button
+          variant="ghost"
+          active={flowPanelOpen}
+          className="dc-flow-toggle"
+          onClick={() => setFlowPanelOpen(!flowPanelOpen)}
+          title="Flows (F)"
+        >
+          Flows
+          {activeFlowTitle && (
+            <>
+              <span className="dc-flow-toggle-sep" aria-hidden="true">
+                ·
+              </span>
+              <span className="dc-flow-toggle-title">{activeFlowTitle}</span>
+            </>
+          )}
+        </Button>
         <Button icon="present" variant="ghost" onClick={onPresent} title="Present (Cmd+Enter)" />
         <span className="dc-toolbar-divider" />
         <Button icon="export" variant="quiet" onClick={onExport} title="Export (Cmd+E)" />

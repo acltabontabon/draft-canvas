@@ -119,10 +119,15 @@ export interface UiStore {
    * "current step" reveal for a node attachment.
    */
   presentationReveal: { edgeId: string; attachmentId: string } | null;
-  /** Whether the Flow list drawer is visible. */
+  /** Whether the Flows panel — the one surface for flows (`FlowPanel.tsx`) — is visible. */
   flowPanelOpen: boolean;
-  /** Whether the compact toolbar flow switcher's dropdown is open — see `FlowSwitcher.tsx`. */
-  flowSwitcherOpen: boolean;
+  /**
+   * A flow id the panel should open in rename mode, with its title selected — set by every
+   * "new flow" entry point so naming is part of creating, not a separate errand. One-shot, like
+   * `editRequestId`: `FlowPanel` consumes and clears it, so a remount (leaving present mode) or a
+   * document switch never re-enters rename mode on its own.
+   */
+  flowRenameRequestId: string | null;
   /**
    * True for the duration of a node drag or resize gesture. Distinct from
    * `editorStore`'s own `interaction` bracket, which only decides history
@@ -198,7 +203,7 @@ export interface UiStore {
   ) => void;
   setPresentationReveal: (target: { edgeId: string; attachmentId: string } | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
-  setFlowSwitcherOpen: (open: boolean) => void;
+  requestFlowRename: (flowId: string | null) => void;
   setInteractionActive: (active: boolean) => void;
   requestEdit: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone']) => void;
@@ -250,7 +255,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   openAttachmentDetail: null,
   presentationReveal: null,
   flowPanelOpen: false,
-  flowSwitcherOpen: false,
+  flowRenameRequestId: null,
   interactionActive: false,
   editRequestId: null,
   updateReady: false,
@@ -295,7 +300,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
-  setFlowSwitcherOpen: (flowSwitcherOpen) => set({ flowSwitcherOpen }),
+  requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
   setInteractionActive: (interactionActive) =>
     set((state) => (state.interactionActive === interactionActive ? state : { interactionActive })),
   requestEdit: (editRequestId) => set({ editRequestId }),
