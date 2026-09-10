@@ -2061,3 +2061,182 @@
     filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 60%, transparent));
   }
 }
+
+/* ------------------------------------------------- intent continuation -- */
+
+/* The ghost: an offer drawn in flow space (inside the viewport portal, so it pans and zooms
+   with the diagram) at reduced opacity with a dashed outline in the plain border colour — not
+   the selection colour, whose dashed form already means "drag-to-attach armed". Distinguished
+   by more than opacity: the outline, the pill, and the key glyph all say "not yours yet". */
+.dc-ghost {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.dc-ghost-edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  opacity: 0.55;
+}
+
+.dc-ghost-node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0.42;
+  transition: opacity 120ms ease;
+}
+
+.dc-ghost-node::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1px dashed var(--dc-border-strong);
+  border-radius: calc(var(--dc-radius) + 3px);
+  pointer-events: none;
+}
+
+.dc-ghost-node[data-type='ellipse']::after {
+  border-radius: 50%;
+}
+
+.dc-ghost-surface {
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* A selection-driven ghost is itself the click target; a drop-menu preview is the menu's. */
+.dc-ghost[data-trigger='select'] .dc-ghost-node {
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.dc-ghost[data-trigger='select'] .dc-ghost-node:hover {
+  opacity: 0.6;
+}
+
+.dc-ghost-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px 9px;
+  border: 1px solid var(--dc-border);
+  border-radius: 999px;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font: 500 11px/1.4 var(--dc-font);
+  white-space: nowrap;
+  box-shadow: var(--dc-shadow-panel);
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.dc-ghost-pill:hover,
+.dc-ghost-pill:focus-visible {
+  background: var(--dc-selection-soft);
+  border-color: var(--dc-selection);
+  outline: none;
+}
+
+.dc-ghost-pill-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dc-ghost-pill kbd {
+  padding: 0 4px;
+  border: 1px solid var(--dc-border);
+  border-radius: 4px;
+  color: var(--dc-text-muted);
+  font: 500 10px/1.5 var(--dc-mono);
+}
+
+/* Learn mode's second line: the rule's own one-sentence reason. */
+.dc-ghost-reason {
+  color: var(--dc-text-muted);
+  font-weight: 400;
+}
+
+.dc-ghost-pill:has(.dc-ghost-reason) {
+  border-radius: 10px;
+}
+
+/* A gesture in flight owns the canvas; the ghost yields until it ends. */
+.react-flow.connecting .dc-ghost,
+.dc-editor[data-reconnecting='true'] .dc-ghost {
+  visibility: hidden;
+}
+
+/* The settle: a just-accepted node fades up from ghost opacity to real. Under reduced motion the
+   ghost is simply replaced by the node, which is already the right end state. */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-ghost-node,
+  .dc-ghost-pill {
+    animation: dc-attachment-card-in 120ms ease;
+  }
+
+  .dc-node[data-settle='true'] {
+    animation: dc-ghost-settle 180ms ease-out 1;
+  }
+}
+
+@keyframes dc-ghost-settle {
+  from {
+    opacity: 0.42;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Quick Connect rows: a shape preview per row, the highlighted row (keyboard or pointer) is
+   what the ghost previews, and a suggested row carries a small selection-coloured mark. */
+.dc-quick-connect-row {
+  display: contents;
+}
+
+.dc-quick-connect-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-quick-connect-item .dc-shape-preview {
+  width: 30px;
+  height: 20px;
+  flex: none;
+}
+
+.dc-quick-connect-item[data-highlighted='true'] {
+  background: var(--dc-surface-raised);
+}
+
+.dc-quick-connect-item[data-suggested='true']::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--dc-selection);
+}
+
+.dc-quick-connect-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--dc-border);
+}
+
+/* Typing into a node is a gesture too: the ghost yields for it. */
+.dc-canvas:has(.dc-node[data-editing='true']) .dc-ghost {
+  visibility: hidden;
+}

@@ -40,6 +40,8 @@ import {
   type DraftRfNode,
 } from './projection';
 import { boundsOfRects, computeSnap, sameGuides, type Guide } from './snapping';
+import { ContinuationGhost } from './ContinuationGhost';
+import { useContinuation } from './useContinuation';
 
 /**
  * These must be module-scope constants. An object literal defined during render
@@ -234,6 +236,7 @@ export interface CanvasProps {
     sourceOffset: number | undefined,
     flowPosition: { x: number; y: number },
     screenPosition: { x: number; y: number },
+    center: { x: number; y: number },
   ) => void;
   /**
    * Called instead of `onCreateAt` when the canvas is double-clicked with no
@@ -263,6 +266,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
   const { screenToFlowPosition, flowToScreenPosition, getNodes } = useReactFlow();
 
   const interactive = mode === 'edit';
+  useContinuation(interactive);
 
   const [guides, setGuides] = useState<Guide[]>([]);
   const attachArmedTarget = useUiStore((state) => state.attachArmedTarget);
@@ -814,6 +818,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
         sourceAnchor?.offset,
         { x: Math.round(position.x - 88), y: Math.round(position.y - 34) },
         { x: point.clientX, y: point.clientY },
+        position,
       );
     },
     [onQuickConnectMenu, screenToFlowPosition, store],
@@ -1098,6 +1103,8 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
                 }
               />
             ))}
+
+          {interactive && <ContinuationGhost />}
 
           {interactive && attachTarget && (
             <div

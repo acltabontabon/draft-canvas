@@ -19,6 +19,7 @@ import {
   strokeSeed,
   type Rect,
   type Side,
+  captionAnchor,
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
@@ -77,39 +78,6 @@ function labelChipTransform(side: Side, x: number, y: number): string {
     case 'bottom':
       return `translate(-50%, 0) translate(${x}px, ${y + LABEL_LINE_GAP}px)`;
   }
-}
-
-/**
- * The same line-clearance idea as `labelChipTransform`, for the plain SVG `<text>` caption: a
- * fixed offset (the pre-existing behaviour) already clears the line itself just fine, since it
- * moves the text off the line's own coordinate on whichever axis the line runs along.
- *
- * `responseAway` carries the *signed* direction of this connector's own response line (the sign
- * of `responseLaneFor(laneOffset)` — see `edges/routing.ts`), or `0` when there is none
- * (`!edge.hasResponse`). The response's own label sits at `OPPOSITE_SIDE[side]` (see
- * `labelChipTransform`), so a caption whose default direction happens to match the response
- * line's own side would land right next to (or on top of) it — flipping to the opposite direction
- * whenever the signs agree keeps the caption clear regardless of orientation, instead of the
- * single hardcoded `side === 'top'` case this used to be scoped to (which left every vertical
- * connector — `side === 'right'`/`'left'` — with no such correction at all).
- */
-function captionAnchor(
-  side: Side,
-  x: number,
-  y: number,
-  responseAway = 0,
-): { x: number; y: number; textAnchor: 'start' | 'middle' | 'end'; dominantBaseline?: 'middle' } {
-  if (side === 'right') {
-    return responseAway > 0
-      ? { x: x - LABEL_LINE_GAP, y, textAnchor: 'end', dominantBaseline: 'middle' }
-      : { x: x + LABEL_LINE_GAP, y, textAnchor: 'start', dominantBaseline: 'middle' };
-  }
-  if (side === 'left') {
-    return responseAway < 0
-      ? { x: x + LABEL_LINE_GAP, y, textAnchor: 'start', dominantBaseline: 'middle' }
-      : { x: x - LABEL_LINE_GAP, y, textAnchor: 'end', dominantBaseline: 'middle' };
-  }
-  return responseAway > 0 ? { x, y: y - 14, textAnchor: 'middle' } : { x, y: y + 14, textAnchor: 'middle' };
 }
 
 /** Same idea for the condition chip — stacked below the caption for a horizontal line

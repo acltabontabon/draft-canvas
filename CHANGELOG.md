@@ -6,6 +6,26 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
+- Draft Canvas now sketches the obvious next move. Select a topic that has a publisher and a
+  translucent queue appears beside it, already connected; press Tab (or click it) and it becomes
+  real, in one undoable step — and the new queue, having no consumer yet, offers a worker in turn.
+  A queue with no consumer suggests a worker; a gateway with nothing routed suggests a service.
+  Nothing else is suggested: a service, a person, a data store or a finished shape stays quiet.
+  Escape waves a suggestion away for that node until its connections change, and drawing anything
+  yourself makes it step aside. Every suggestion comes from the same relationship rules your own
+  connectors follow — it is not AI, and nothing leaves your machine.
+- Dropping a connector on empty canvas now leads with what fits: the picker lists the suggestions
+  for that node first, highlights the best one, and shows a preview of the highlighted row where
+  you let go — arrow keys move through every option, Enter or Tab takes it. A queue that already
+  has a consumer offers a dead-letter queue here.
+- With Learn mode on, a suggestion explains itself in one sentence ("This queue has no consumer.").
+- Canvas Settings has an Intent Continuation switch, and ⌘K can turn it on or off.
+
+### Fixed
+
+- An element created from the Quick Connect picker now gets the same inferred relationship its
+  connector would have had if you'd drawn it by hand.
+
 - Four new starters. Under **Architectures**: **Backend for Frontend** (a web and a mobile
   experience, each with its own tailored adapter over shared services) and **CQRS** (a command
   side and a query side, bridged only by an event). Under **Patterns**: **Saga (Orchestration)**

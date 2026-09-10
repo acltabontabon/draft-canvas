@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { Preset } from '../canvas/presets';
+import { dismissalKey, type ContinuationTrigger, type DismissalKey, type MaterializedContinuation } from '../continuation';
 import type { Side } from '../document/types';
+import { readPreference, writePreference } from '../lib/preferences';
 
 export type Toast = { id: number; message: string; tone: 'info' | 'error' };
 
@@ -22,6 +24,9 @@ export interface QuickConnectState {
   sourceOffset?: number;
   flowPosition: { x: number; y: number };
   screenPosition: { x: number; y: number };
+  /** The raw drop point in flow coordinates (`flowPosition` is that point already offset for a
+   *  default-sized box) — so a picker row of any size can be centred on where the user let go. */
+  center?: { x: number; y: number };
 }
 
 /** The specific anchor (side + offset, one of `ANCHOR_OFFSETS`) a reconnect
@@ -51,6 +56,29 @@ export interface ContextMenuState {
   target: ContextMenuTarget;
   screenPosition: { x: number; y: number };
   flowPosition: { x: number; y: number };
+}
+
+/**
+ * The one continuation Draft Canvas is currently offering — see `src/continuation/` for how it is
+ * chosen and `canvas/ContinuationGhost.tsx` for how it is shown. `trigger` records which moment
+ * produced it: a `'select'` offer is owned by `useContinuation` (recomputed as the document and
+ * selection move); a `'drop'` offer is owned by the Quick Connect menu for as long as it is open.
+ * Ephemeral by construction — never persisted, never in history, never in the document.
+ */
+export interface ContinuationOffer extends MaterializedContinuation {
+  trigger: ContinuationTrigger;
+}
+
+const CONTINUATION_PREFERENCE = 'continuation';
+
+/** On unless the device says otherwise. Read once at startup; a preference store that is not
+ *  usable at that moment (blocked storage, a test harness still wiring up) means "on". */
+function initialContinuationsEnabled(): boolean {
+  try {
+    return readPreference(CONTINUATION_PREFERENCE) !== 'off';
+  } catch {
+    return true;
+  }
 }
 
 export interface UiStore {
@@ -162,6 +190,23 @@ export interface UiStore {
    * locally. Consumed (cleared) by `ExportDialog` the moment it opens.
    */
   exportSelectionRequested: boolean;
+  /** Intent Continuation's current offer, if any. */
+  continuation: ContinuationOffer | null;
+  /**
+   * Offers the user has waved away this session, pinned to the exact neighborhood they were made
+   * in (`dismissalKey`): Escape on a ghost keeps it away for that node until something about that
+   * node's connections changes, and no longer. Session-only — cleared on document switch, never
+   * saved, never profiled.
+   */
+  continuationDismissals: ReadonlySet<DismissalKey>;
+  /** The device preference for Intent Continuation — on unless switched off in Canvas Settings. */
+  continuationsEnabled: boolean;
+  /**
+   * The node an accepted continuation just created, so its view can play the one-shot "settle"
+   * (ghost → real) animation. Same shape and lifecycle as `jumpFlashId`: consumed and cleared by
+   * the view itself.
+   */
+  settleNodeId: string | null;
   /** Phase 7.4 — "Learn Draft Canvas" mode. Deliberately not persisted: an opt-in pass a user
    *  asks for each time, never a saved setting — see `HintStrip.tsx`, which shows a hint
    *  regardless of its own retired state while this is true. */
@@ -220,6 +265,15 @@ export interface UiStore {
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
   setLearnModeActive: (active: boolean) => void;
+  /** Identity-preserving: an offer equal in rule, anchor, neighborhood, trigger and position keeps
+   *  the object (and ids) already held, so unrelated document changes never re-mint a ghost. */
+  setContinuation: (offer: ContinuationOffer | null) => void;
+  /** Waves the current offer away for as long as its anchor's neighborhood stays the same. */
+  dismissContinuation: () => void;
+  /** On document switch: nothing about the previous diagram's offers applies to the next. */
+  resetContinuation: () => void;
+  setContinuationsEnabled: (enabled: boolean) => void;
+  setSettleNodeId: (id: string | null) => void;
   setLibrarySearchQuery: (query: string) => void;
   setLibrarySort: (sort: UiStore['librarySort']) => void;
   setLibraryView: (view: UiStore['libraryView']) => void;
@@ -263,6 +317,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
   exportSelectionRequested: false,
   jumpFlashId: null,
   learnModeActive: false,
+  continuation: null,
+  continuationDismissals: new Set<DismissalKey>(),
+  continuationsEnabled: initialContinuationsEnabled(),
+  settleNodeId: null,
   librarySearchQuery: '',
   librarySort: 'updatedAt',
   libraryView: { kind: 'recent' },
@@ -326,6 +384,22 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setJumpFlashId: (jumpFlashId) =>
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
   setLearnModeActive: (learnModeActive) => set({ learnModeActive }),
+  setContinuation: (next) =>
+    set((state) => (sameOffer(state.continuation, next) ? state : { continuation: next })),
+  dismissContinuation: () =>
+    set((state) => {
+      const offer = state.continuation;
+      if (!offer) return state;
+      const continuationDismissals = new Set(state.continuationDismissals);
+      continuationDismissals.add(dismissalKey(offer.anchorId, offer.ruleId, offer.neighborhoodKey));
+      return { continuation: null, continuationDismissals };
+    }),
+  resetContinuation: () => set({ continuation: null, continuationDismissals: new Set<DismissalKey>(), settleNodeId: null }),
+  setContinuationsEnabled: (continuationsEnabled) => {
+    writePreference(CONTINUATION_PREFERENCE, continuationsEnabled ? 'on' : 'off');
+    set((state) => ({ continuationsEnabled, continuation: continuationsEnabled ? state.continuation : null }));
+  },
+  setSettleNodeId: (settleNodeId) => set((state) => (state.settleNodeId === settleNodeId ? state : { settleNodeId })),
   setLibrarySearchQuery: (librarySearchQuery) => set({ librarySearchQuery }),
   setLibrarySort: (librarySort) => set({ librarySort }),
   setLibraryView: (libraryView) => set({ libraryView }),
@@ -337,6 +411,22 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set({ clipboardPermissionRequest: null });
   },
 }));
+
+function sameOffer(a: ContinuationOffer | null, b: ContinuationOffer | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const pa = a.nodes[0];
+  const pb = b.nodes[0];
+  return (
+    a.trigger === b.trigger &&
+    a.ruleId === b.ruleId &&
+    a.anchorId === b.anchorId &&
+    a.neighborhoodKey === b.neighborhoodKey &&
+    pa?.x === pb?.x &&
+    pa?.y === pb?.y &&
+    pa?.parentId === pb?.parentId
+  );
+}
 
 /**
  * The last pointer position in canvas coordinates.

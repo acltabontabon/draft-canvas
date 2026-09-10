@@ -34,6 +34,7 @@ src/
   nodes/        describe.ts — every node's appearance, as pure functions
   edges/        routing.ts · describe.ts · bundles.ts
   canvas/       Canvas · DraftNodeView · DraftEdgeView · projection · snapping · presets
+  continuation/ Intent Continuation — rules · context · engine · materialize (see below)
   presentation/ useFlowPlayback
   learning/     contextual hints and the opt-in "Learn Draft Canvas" mode
   store/        editorStore · uiStore · selectors · useDocumentSession
@@ -296,6 +297,50 @@ Insertion is `editorStore`'s `insertStarter`: `freeOriginFor` (one pass over the
 boundaries as obstacles, unlike `placeNear`) picks a spot clear of existing content, and a single
 `addNodesWithEdges` makes the whole architecture one undo entry.
 
+## Intent Continuation
+
+`src/continuation/` is the deterministic "next move": given one node and its one-hop surroundings,
+which technically valid, architecturally useful additions is Draft Canvas confident enough to
+sketch in place? A Topic with a publisher and no delivery path gets a ghost Queue; a Queue with
+inbound and no consumer gets a ghost Worker; a Gateway with nothing routed gets a Service. Tab or a
+click on the ghost adds it as one undo step; Escape waves it away for that node until its
+connections change; drawing anything yourself simply makes it stale. Silence is the default — a
+Service, an Actor, a Data Store, a finished shape offer nothing. Not AI: no network, no telemetry,
+no adaptation, and the same document, selection and dismissals always produce the same answer.
+
+The layering is the point:
+
+- **Validity is the matrix, never a rule.** `engine.ts` resolves every connector a rule proposes
+  through `capabilityFor` and drops the candidate unless the pairing has a default relation and no
+  `unusual`/`questionable` status. A rule says *when it applies* and *what it adds*; it cannot
+  surface a pairing `connectorSemantics.ts` would not infer, and follows the matrix if that changes.
+- **Ranking is declaration order.** `rules.ts` is a static array in two tiers: `primary` ("the
+  thing you were about to draw" — may appear unprompted, on selection) and `secondary` ("a
+  defensible companion" — only once the user shows intent, by dropping a connector on empty
+  canvas). No scores, no weights; a weaker idea is not a rule.
+- **Suppression is generic.** An equivalent relationship already leaving the node (compared on
+  semantic, so a hand-drawn `Queue → Service` counts as the consumer a `Queue → Worker` rule would
+  add), a dismissal pinned to the node's exact neighborhood fingerprint, and the tier gate all live
+  in the engine, not in rules.
+- **Preview is the result.** `materialize.ts` turns an offer into real, positioned nodes and
+  connectors — `placeNear` for placement, `inferRelationship` for semantics, the same helpers
+  `addConsumer`/`addDeadLetterQueue` use — once. The ghost draws those objects; accepting commits
+  those objects through `addNodesWithEdges`. Nothing is computed twice, so they cannot drift. If
+  there is no clear place to put it, there is no preview.
+- **Presentation knows nothing about topics.** The offer lives in `uiStore.continuation`
+  (ephemeral, never in history or the document). `canvas/ContinuationGhost.tsx` draws it inside
+  the viewport portal with the real `describeNode` and routing pipelines at reduced opacity; the
+  Quick Connect picker (`canvas/quickConnectItems.ts`) lists the same offers first and previews
+  whichever row is highlighted. Both accept through one store action.
+
+Two moments produce an offer. *Select* — a single node, nothing else happening — is the quiet one,
+where only a `primary` rule may speak and `canvas/useContinuation.ts` re-evaluates only when a
+document write, the selected node, a dismissal or a mode gate changes, never on pointer movement.
+*Drop* — a connector released on empty canvas — is explicit, so every rule that applies is offered,
+ordered, with the picker's standing presets after them; a ghost dismissed earlier is still listed
+there, since Escape meant "not unprompted", not "never". Each rule carries one authored `reason`
+sentence; Learn mode shows it under the ghost's pill, and `docs/SEMANTICS.md` lists them.
+
 ## Command surface
 
 `src/commands/registry.ts`'s `commandsFor(ctx)` is a pure function from the current
@@ -347,6 +392,7 @@ message naming both versions, rather than being silently mangled.
 | XSS through node content | `tests/code-card.test.tsx` |
 | The privacy claim | `tests/privacy.test.ts` |
 | 100 nodes / 180 edges | `tests/performance.test.ts` |
+| Intent Continuation rules, matrix guard, dismissal, materialization, accept/undo | `tests/continuation.test.ts`, `tests/quick-connect-items.test.ts`, `e2e/intent-continuation.spec.ts` |
 | The critical journey, in a browser | `e2e/critical-journey.spec.ts` |
 
 The end-to-end test drives the real UI through the whole journey: build a diagram, connect and

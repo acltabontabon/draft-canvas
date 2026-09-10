@@ -1,17 +1,27 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useUiStore } from '../store/uiStore';
-import { QUICK_CONNECT_PRESETS, type Preset } from './presets';
 import {
   anchorsForRect,
   placementTransform,
   resolvePlacement,
   type PlacementPoint,
 } from './popoverPlacement';
+import type { QuickConnectItem } from './quickConnectItems';
+import { ShapePreview } from './ShapePreview';
 
 export interface QuickConnectMenuProps {
   /** Screen coordinates — fixed for the life of the menu. */
   screenPosition: { x: number; y: number };
-  onSelect: (preset: Preset) => void;
+  /** The screen-space box the menu should sit clear of — the ghost previewing the highlighted row
+   *  is centred on the drop point, and a menu anchored to that point would cover half of it. Fixed
+   *  for the life of the menu like `screenPosition`; absent for a picker with nothing to preview. */
+  anchorRect?: { x: number; y: number; width: number; height: number };
+  /** Rows, best first — see `quickConnectItems`. */
+  items: QuickConnectItem[];
+  onSelect: (item: QuickConnectItem) => void;
+  /** The row the keyboard/pointer is on, so the caller can preview it. Called with the first row
+   *  on open, then on every change; never with an out-of-range index. */
+  onHighlight?: (item: QuickConnectItem) => void;
   onDismiss: () => void;
 }
 
@@ -30,22 +40,32 @@ const RIGHT_CLEARANCE_WITH_FLOW_PANEL = 312;
 const GAP = 6;
 
 /**
- * The tiny type picker offered whenever Draft Canvas needs the user to
- * choose a type rather than guess one: a connection dragged onto empty
- * canvas, or a double-click on empty canvas with no tool armed — see
- * `QuickConnectState` in `store/uiStore.ts`. Deliberately a plain list
- * driven by `QUICK_CONNECT_PRESETS` — not bespoke JSX per option — so a
- * later pass can add arrow-key navigation or promote a recently-used type
- * without restructuring this component.
+ * The tiny type picker offered whenever Draft Canvas needs the user to choose a type rather than
+ * guess one: a connection dragged onto empty canvas, or a double-click on empty canvas with no
+ * tool armed — see `QuickConnectState` in `store/uiStore.ts`.
+ *
+ * Its rows are data (`quickConnectItems`), best first: when the source node has an obvious next
+ * move, that move leads and is already highlighted, so Enter (or Tab) takes it and the ghost on
+ * the canvas shows what that means before anything is created. Arrows move the highlight — and
+ * the ghost with it — through every row, suggested or not. A choice, still, never a guess; the
+ * suggestion just goes first.
  *
  * Clamped to the viewport the same way the flow-anchored popovers are (`popoverPlacement.ts`),
  * just with an identity flow-to-screen conversion since this anchor is screen-fixed to begin
  * with. No placement-stability state is needed here, unlike those — `screenPosition` never moves
  * during this menu's lifetime, so there's nothing to flip against.
  */
-export function QuickConnectMenu({ screenPosition, onSelect, onDismiss }: QuickConnectMenuProps) {
+export function QuickConnectMenu({
+  screenPosition,
+  anchorRect,
+  items,
+  onSelect,
+  onHighlight,
+  onDismiss,
+}: QuickConnectMenuProps) {
   const panel = useRef<HTMLDivElement>(null);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
+  const [highlighted, setHighlighted] = useState(0);
 
   const [measuredSize, setMeasuredSize] = useState({ width: 0, height: 0 });
   // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -57,11 +77,37 @@ export function QuickConnectMenu({ screenPosition, onSelect, onDismiss }: QuickC
     }
   });
 
+  // The highlighted row is what the canvas previews; report it whenever it (or the row set) changes.
+  const current = items[Math.min(highlighted, items.length - 1)];
+  useEffect(() => {
+    if (current) onHighlight?.(current);
+  }, [current, onHighlight]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onDismiss();
+      switch (event.key) {
+        case 'Escape':
+          event.stopPropagation();
+          onDismiss();
+          return;
+        case 'ArrowDown':
+        case 'ArrowUp': {
+          event.preventDefault();
+          event.stopPropagation();
+          const delta = event.key === 'ArrowDown' ? 1 : -1;
+          setHighlighted((index) => (index + delta + items.length) % items.length);
+          return;
+        }
+        case 'Enter':
+        case 'Tab': {
+          event.preventDefault();
+          event.stopPropagation();
+          const item = items[Math.min(highlighted, items.length - 1)];
+          if (item) onSelect(item);
+          return;
+        }
+        default:
+          return;
       }
     };
     const onPointerDown = (event: PointerEvent) => {
@@ -76,7 +122,7 @@ export function QuickConnectMenu({ screenPosition, onSelect, onDismiss }: QuickC
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };
-  }, [onDismiss]);
+  }, [onDismiss, onSelect, items, highlighted]);
 
   const clearances = {
     gap: GAP,
@@ -85,9 +131,12 @@ export function QuickConnectMenu({ screenPosition, onSelect, onDismiss }: QuickC
     left: LEFT_CLEARANCE,
     right: flowPanelOpen ? RIGHT_CLEARANCE_WITH_FLOW_PANEL : LEFT_CLEARANCE,
   };
-  const anchors = anchorsForRect({ x: screenPosition.x, y: screenPosition.y, width: 0, height: 0 });
+  const anchors = anchorsForRect(anchorRect ?? { x: screenPosition.x, y: screenPosition.y, width: 0, height: 0 });
   const placement = resolvePlacement('below', anchors, identity, measuredSize, clearances);
   const transform = placementTransform(placement, anchors, measuredSize, clearances, identity, identity);
+
+  const firstPreset = items.findIndex((item) => item.kind === 'preset');
+  const hasSuggestions = firstPreset > 0;
 
   return (
     <div
@@ -97,16 +146,22 @@ export function QuickConnectMenu({ screenPosition, onSelect, onDismiss }: QuickC
       aria-label="Add element"
       style={{ transform }}
     >
-      {QUICK_CONNECT_PRESETS.map((preset) => (
-        <button
-          key={preset.id}
-          type="button"
-          role="menuitem"
-          className="dc-quick-connect-item"
-          onClick={() => onSelect(preset)}
-        >
-          {preset.label}
-        </button>
+      {items.map((item, index) => (
+        <div key={item.id} className="dc-quick-connect-row">
+          {hasSuggestions && index === firstPreset && <div className="dc-quick-connect-separator" role="separator" />}
+          <button
+            type="button"
+            role="menuitem"
+            className="dc-quick-connect-item"
+            data-highlighted={index === highlighted ? 'true' : undefined}
+            data-suggested={item.kind === 'continuation' ? 'true' : undefined}
+            onPointerEnter={() => setHighlighted(index)}
+            onClick={() => onSelect(item)}
+          >
+            <ShapePreview node={item.node} width={30} height={20} />
+            <span>{item.label}</span>
+          </button>
+        </div>
       ))}
     </div>
   );

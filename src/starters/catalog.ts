@@ -1643,7 +1643,7 @@ const sagaOrchestration: ArchitectureStarter = {
         key: `${key}-store`,
         type: 'database',
         databaseKind: 'generic',
-        text: `${SAGA_PARTICIPANT_NAMES[index].replace(' Service', '')} DB`,
+        text: `${SAGA_PARTICIPANT_NAMES[index]!.replace(' Service', '')} DB`,
         accent: 'blue',
         x: centeredAt(SAGA_COLUMNS[index]! + SERVICE.width / 2, STORE.width),
         y: SAGA_STORE_Y,

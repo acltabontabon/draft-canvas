@@ -4,7 +4,7 @@ The contributor-facing reference for what Draft Canvas actually understands abou
 draw — the concrete rules, not the reasoning behind them (for that, see
 [`docs/ARCHITECTURE.md`'s Relationship model](ARCHITECTURE.md#relationship-model)). Everything below
 is implemented and tested (`tests/connector-semantics.test.ts`, `tests/edge-semantics.test.ts`,
-`tests/edge-kinds.test.ts`).
+`tests/edge-kinds.test.ts`, `tests/continuation.test.ts`).
 
 ## The one rule everything else follows
 
@@ -135,3 +135,25 @@ The Junction shape (an ellipse) organizes topology and has no meaning of its own
 through one resolves by looking at what actually feeds it — `Service → Junction → Database` still
 infers `writes`. If a Junction has no clear single category on one side, it resolves to
 `'junction'` itself, and the connector falls back to the full, unrestricted vocabulary.
+
+## Intent Continuation rules
+
+The next moves Draft Canvas will sketch for a selected node (see
+[`docs/ARCHITECTURE.md`'s Intent Continuation](ARCHITECTURE.md#intent-continuation)). Every
+connector a rule adds is inferred from the capability matrix above — a rule that proposed a pairing
+the matrix does not offer, or flags `unusual`, is dropped by the engine before it can show. Order
+is ranking. `primary` may appear unprompted on selection; `secondary` only in the picker a
+connector dropped on empty canvas opens.
+
+<!-- continuation-rules:start — generated from `src/continuation/rules.ts`; `tests/continuation.test.ts` fails on drift -->
+| Rule | Tier | Adds | Reason |
+| --- | --- | --- | --- |
+| `topic-fan-out-queue` | primary | Queue | This topic has a publisher but no delivery path. |
+| `topic-fan-out-worker` | secondary | Worker | Subscribers can also receive directly from the topic. |
+| `queue-consumer` | primary | Worker | This queue has no consumer. |
+| `queue-dead-letter` | secondary | Dead-letter queue | This queue has a consumer but no dead-letter path. |
+| `gateway-route` | primary | Service | This gateway doesn't route to anything yet. |
+<!-- continuation-rules:end -->
+
+Deliberately no rule starts from a plain Service, an Actor or a Data Store: each has too many valid
+next moves for any one of them to be *the* move, and no suggestion beats a weak one.

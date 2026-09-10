@@ -918,7 +918,7 @@ test.describe('editing', () => {
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
   });
 
-  test('Enter is a no-op while the Quick Connect menu or an attachment popover is open', async ({
+  test('Enter never starts editing while an attachment popover is open, and picks the highlighted row of an open Quick Connect menu', async ({
     page,
   }) => {
     await newCanvas(page, 'Keyboard enter overlays');
@@ -967,9 +967,12 @@ test.describe('editing', () => {
     await page.mouse.up();
     await expect(page.locator('.dc-quick-connect')).toBeVisible();
 
+    // The menu owns Enter: it takes the highlighted row (the first — a Service, since nothing is
+    // suggested for a plain Service) rather than opening any editor behind it.
     await page.keyboard.press('Enter');
     await expect(page.locator('.dc-node-editor')).toHaveCount(0);
-    await expect(page.locator('.dc-quick-connect')).toBeVisible();
+    await expect(page.locator('.dc-quick-connect')).toBeHidden();
+    await expect(page.locator('.dc-node[data-type="service"]')).toHaveCount(2);
   });
 });
 

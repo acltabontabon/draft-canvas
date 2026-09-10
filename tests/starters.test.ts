@@ -65,7 +65,7 @@ describe('the starter catalog', () => {
       if (edge.semantic === undefined) continue;
       const source = byKey.get(edge.from)!;
       const target = byKey.get(edge.to)!;
-      const offered = capabilityFor(categoryOf(source as DraftNode), categoryOf(target as DraftNode))?.relations;
+      const offered = capabilityFor(categoryOf(source as unknown as DraftNode), categoryOf(target as unknown as DraftNode))?.relations;
       expect(offered, `${starter.name}: ${edge.from} → ${edge.to} authors "${edge.semantic}"`).toContain(edge.semantic);
     }
   });

@@ -7,12 +7,13 @@ import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
+import { offerFor, quickConnectItems, type QuickConnectItem } from '../../canvas/quickConnectItems';
 import { contextMenuCommandsFor } from '../../commands/contextMenu';
 import { starterCommands } from '../../commands/registry';
 import type { Command } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
 import type { StarterId } from '../../starters';
-import { createEdge, createNode } from '../../document/factory';
+import { DEFAULTS } from '../../document/limits';
 import { boundsOf } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isEditableTarget } from '../../lib/isEditableTarget';
@@ -36,6 +37,14 @@ import { Toolbar } from './Toolbar';
 import { Button } from '../common/Button';
 import { ClipboardPermissionDialog } from '../common/ClipboardPermissionDialog';
 import { ErrorBoundary } from '../common/ErrorBoundary';
+
+/** Whether keyboard focus is on the canvas itself (or nowhere in particular) rather than on a
+ *  control around it — the only place a bare Tab may mean "accept the suggestion". */
+function focusIsOnCanvas(): boolean {
+  const active = document.activeElement;
+  if (!active || active === document.body) return true;
+  return active.closest('.react-flow, .dc-ghost') !== null;
+}
 
 /** Sample content for a fresh code card, so it is never a blank grey box. */
 const CODE_SAMPLES: Record<string, string> = {
@@ -61,7 +70,12 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   // Memoized so `QuickConnectMenu`/`ContextMenu`'s own listener-cleanup effects (keyed on
   // `onDismiss`) don't tear down and re-register on every unrelated `EditorScreen` re-render
   // while the menu is open — a fresh inline arrow here would give them a new identity every time.
-  const dismissQuickConnect = useCallback(() => setQuickConnect(null), [setQuickConnect]);
+  const setContinuation = useUiStore((state) => state.setContinuation);
+  const dismissQuickConnect = useCallback(() => {
+    setQuickConnect(null);
+    // The menu owned that preview; it goes with the menu.
+    if (useUiStore.getState().continuation?.trigger === 'drop') setContinuation(null);
+  }, [setQuickConnect, setContinuation]);
   const dismissContextMenu = useCallback(() => setContextMenu(null), [setContextMenu]);
   // Reactive only so the menu's own contents stay correct if the world changes underneath it while
   // it's open (e.g. an undo from elsewhere) — read live via `getState()` inside `buildContext`/
@@ -71,7 +85,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
 
   const theme = useThemeValue();
   const playback = useFlowPlayback();
-  const { fitView, screenToFlowPosition } = useReactFlow();
+  const { fitView, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
 
   // Bumped to force a clean remount of the boundary + Canvas below, e.g. from
   // the "Reload canvas" recovery action — a fresh `key` discards whatever
@@ -110,37 +124,63 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   );
 
   /**
-   * Creates the chosen type at the Quick Connect drop point. Also wires it
-   * to `quickConnect.source` when present — absent means this menu was
-   * opened by a plain double-click-to-create, not a connector drop.
+   * The picker's rows for the current Quick Connect state — the engine's suggestions for the
+   * source node first, then the standing presets. Recomputed only when the menu opens or the
+   * document changes underneath it (same reasoning as `contextMenuEntries` below).
+   */
+  const quickConnectRows = useMemo(
+    () => (quickConnect ? quickConnectItems(editorDocument, quickConnect) : []),
+    [quickConnect, editorDocument],
+  );
+
+  /**
+   * Where the drop ghost sits on screen, so the menu can stand clear of it. Sized to the largest
+   * default box any row previews (a Service), centred on the drop point, and measured once when
+   * the menu opens — the menu itself is screen-fixed, so its anchor must be too.
+   */
+  const quickConnectAnchorRect = useMemo(() => {
+    if (!quickConnect?.center) return undefined;
+    const { center } = quickConnect;
+    const topLeft = flowToScreenPosition({ x: center.x - DEFAULTS.nodeWidth / 2, y: center.y - DEFAULTS.nodeHeight / 2 });
+    const bottomRight = flowToScreenPosition({ x: center.x + DEFAULTS.nodeWidth / 2, y: center.y + DEFAULTS.nodeHeight / 2 });
+    return { x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y };
+    // Measured once per menu: `quickConnect` identity is the open/close signal.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickConnect]);
+
+  /** The row under the highlight becomes the ghost on the canvas — a preview, not a creation. */
+  const onQuickConnectHighlight = useCallback(
+    (item: QuickConnectItem) => {
+      if (!quickConnect?.source) return;
+      const offer = offerFor(store.getState().document, quickConnect, item);
+      setContinuation(offer ?? null);
+    },
+    [quickConnect, setContinuation, store],
+  );
+
+  /**
+   * Creates the chosen row at the Quick Connect drop point. With a `source` (a connector dropped
+   * on empty canvas) the new node is wired to it through the very same materialized offer the
+   * ghost was drawn from — one undoable step, matrix-inferred semantics, no second opinion.
+   * Without one (a plain double-click-to-create) it is simply created at `flowPosition`.
    */
   const onQuickConnectSelect = useCallback(
-    (preset: Preset) => {
+    (item: QuickConnectItem) => {
       if (!quickConnect) return;
       if (!quickConnect.source) {
-        createAt(preset, quickConnect.flowPosition);
+        if (item.kind === 'preset') createAt(item.preset, quickConnect.flowPosition);
         setQuickConnect(null);
         return;
       }
-      const created = createNode({
-        type: preset.type,
-        x: quickConnect.flowPosition.x,
-        y: quickConnect.flowPosition.y,
-        text: preset.text,
-        accent: preset.accent,
-      });
-      const edge = createEdge({
-        source: quickConnect.source,
-        target: created.id,
-        sourceAnchor: quickConnect.sourceSide
-          ? { side: quickConnect.sourceSide, offset: quickConnect.sourceOffset ?? 0.5 }
-          : undefined,
-      });
-      store.getState().addNodesWithEdges([created], [edge], 'Connect to new node');
-      if (created.type === 'note') useUiStore.getState().requestEdit(created.id);
+      const offer = offerFor(store.getState().document, quickConnect, item);
+      if (offer) {
+        store.getState().acceptContinuation(offer);
+        if (offer.nodes[0]?.type === 'note') useUiStore.getState().requestEdit(offer.nodes[0].id);
+      }
+      setContinuation(null);
       setQuickConnect(null);
     },
-    [createAt, quickConnect, setQuickConnect, store],
+    [createAt, quickConnect, setContinuation, setQuickConnect, store],
   );
 
   /** Places a new element under the cursor, or in the middle of the view. */
@@ -251,8 +291,15 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         >
           <Canvas
             onCreateAt={(position) => armed && createAt(armed, position)}
-            onQuickConnectMenu={(source, sourceSide, sourceOffset, flowPosition, screenPosition) =>
-              setQuickConnect({ source, sourceSide, sourceOffset, flowPosition, screenPosition })
+            onQuickConnectMenu={(source, sourceSide, sourceOffset, flowPosition, screenPosition, center) =>
+              setQuickConnect({
+                source,
+                sourceSide,
+                sourceOffset,
+                flowPosition,
+                screenPosition,
+                center,
+              })
             }
             onEmptyCanvasMenu={(flowPosition, screenPosition) =>
               setQuickConnect({ flowPosition, screenPosition })
@@ -262,7 +309,10 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         {quickConnect && (
           <QuickConnectMenu
             screenPosition={quickConnect.screenPosition}
+            anchorRect={quickConnectAnchorRect}
+            items={quickConnectRows}
             onSelect={onQuickConnectSelect}
+            onHighlight={onQuickConnectHighlight}
             onDismiss={dismissQuickConnect}
           />
         )}
@@ -278,6 +328,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         {!presenting && <EdgeInspectorPopover />}
         {!presenting && <ElementInspectorPopover />}
         <EmptyState onInsertStarter={insertStarter} />
+        {!presenting && <ContinuationAnnouncer />}
         {!presenting && <Inspector />}
         {!presenting && <FlowPanel playback={playback} />}
         <FlowBar playback={playback} />
@@ -322,6 +373,24 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
  * the moment focus is inside an input — otherwise pressing "n" while renaming a
  * node would spawn a note.
  */
+/**
+ * The one screen-reader-facing signal Intent Continuation makes: a polite announcement when a new
+ * offer appears — once per offer, never on a re-show — so a ghost that is only visual otherwise
+ * is still discoverable without a pointer.
+ */
+function ContinuationAnnouncer() {
+  const message = useUiStore((state) =>
+    state.continuation?.trigger === 'select'
+      ? `Suggested: ${state.continuation.label}. Press Tab to add it.`
+      : '',
+  );
+  return (
+    <div className="dc-sr-only" aria-live="polite">
+      {message}
+    </div>
+  );
+}
+
 function useKeyboard({
   createAtPointer,
   playback,
@@ -416,6 +485,24 @@ function useKeyboard({
     return () => window.removeEventListener('paste', onPaste);
   }, [store, screenToFlowPosition]);
 
+  // Escape on a ghost, ahead of everyone else. React Flow deselects a focused node on Escape from
+  // its own handler on the node element, and every popover has its own capture-phase Escape; a
+  // capture-phase listener registered here runs before any of them, so one Escape means exactly
+  // "wave the suggestion away" — the selection it was offered for stays put — and nothing else.
+  useEffect(() => {
+    const onEscapeCapture = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || isEditableTarget(event.target)) return;
+      const uiState = useUiStore.getState();
+      if (uiState.continuation?.trigger !== 'select') return;
+      if (uiState.quickConnect || uiState.contextMenu || uiState.commandPaletteOpen) return;
+      event.preventDefault();
+      event.stopPropagation();
+      uiState.dismissContinuation();
+    };
+    window.addEventListener('keydown', onEscapeCapture, true);
+    return () => window.removeEventListener('keydown', onEscapeCapture, true);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditableTarget(event.target)) return;
@@ -501,12 +588,27 @@ function useKeyboard({
           event.preventDefault();
           state.deleteSelection();
           return;
-        case 'Escape':
+        case 'Escape': {
           arm(null);
           if (state.focus.active) state.exitFocus();
           else if (playback.active) playback.stop();
           else state.setSelection({ nodes: [], edges: [] });
           return;
+        }
+        case 'Tab': {
+          // Tab accepts the ghost — and only then. With no offer showing, or with focus anywhere
+          // but the canvas itself (a toolbar button, say), Tab stays the browser's: `isEditableTarget`
+          // above only knows inputs, so this is the check that keeps focus traversal intact.
+          if (event.shiftKey || event.altKey) break;
+          if (playback.active || state.focus.active) break;
+          const uiState = useUiStore.getState();
+          const offer = uiState.continuation;
+          if (!offer || offer.trigger !== 'select' || uiState.quickConnect || uiState.openAttachmentDetail) break;
+          if (!focusIsOnCanvas()) break;
+          event.preventDefault();
+          state.acceptContinuation(offer);
+          return;
+        }
         case '?':
           setShortcutsOpen(true);
           return;

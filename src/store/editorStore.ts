@@ -13,8 +13,7 @@ import {
   defaultTextFor,
   type CreateNodeInput,
 } from '../document/factory';
-import { queueTubeCenterFraction } from '../document/queueGeometry';
-import { FONTS } from '../render/text/fonts';
+import { gapForCaption, horizontalAnchorsFor, type MaterializedContinuation } from '../continuation';
 import { getMeasurer } from '../render/text/measure';
 import { naturalNoteHeight } from '../nodes/describe';
 import {
@@ -26,7 +25,6 @@ import {
   boundsOf,
   bringForward,
   bringToFront,
-  COMPANION_GAP,
   detachFromEdge as detachFromEdgeOp,
   detachFromNode,
   distributeNodes,
@@ -100,7 +98,6 @@ import type {
   ConnectorKind,
   DraftSettings,
   DraftViewport,
-  EdgeAnchor,
   EdgeSemantic,
   RouteMode,
   Side,
@@ -222,6 +219,13 @@ export interface EditorStore {
    * `src/starters/`.
    */
   insertStarter: (starterId: StarterId) => DraftNode[];
+  /**
+   * Accepts an Intent Continuation offer (see `src/continuation/`): the previewed nodes and
+   * connectors become real in one undoable step, the offer's primary node is selected (so the
+   * next offer can chain from it) and marked to settle in. The offer itself is cleared here, not
+   * by the caller, so every accept path — Tab, click, ⌘K — leaves the UI in the same state.
+   */
+  acceptContinuation: (offer: MaterializedContinuation) => void;
   connect: (
     source: string,
     target: string,
@@ -509,44 +513,6 @@ function applyComponentAutoLabel(doc: DraftDocument, nodeId: string, before: Dra
   return updateNode(doc, nodeId, { text: defaultTextFor('component', undefined, node.componentKind) });
 }
 
-/**
- * Anchors for a generated companion's connector (a DLQ, a consumer) — only for the plain
- * horizontal "beside" placement `placeNear` prefers; the rarer collision-avoidance fallbacks
- * (below, below-right, …) are left to the routing system's own live nearest-side heuristic, which
- * already picks a sensible side for a non-horizontal pairing. For a queue-family endpoint on the
- * horizontal path, `offset: 0.5` (the default) would land the connector at the boundary between
- * the tube glyph and its caption below — see `queueTubeCenterFraction`'s own doc comment — so the
- * relevant side gets an explicit offset that lands on the tube's own visual centre instead.
- */
-function horizontalAnchorsFor(
-  source: Pick<DraftNode, 'x' | 'y' | 'width' | 'height' | 'type'>,
-  target: Pick<DraftNode, 'x' | 'y' | 'width' | 'height' | 'type'>,
-): { sourceAnchor?: EdgeAnchor; targetAnchor?: EdgeAnchor } {
-  const isHorizontal = target.y === source.y && target.x >= source.x + source.width;
-  if (!isHorizontal) return {};
-  return {
-    sourceAnchor: source.type === 'queue' ? { side: 'right', offset: queueTubeCenterFraction(source.height) } : undefined,
-    targetAnchor: target.type === 'queue' ? { side: 'left', offset: queueTubeCenterFraction(target.height) } : undefined,
-  };
-}
-
-/** Comfortable clearance on each side of a connector's own caption, so it never reads as crowding
- *  either endpoint it sits between. */
-const CAPTION_CLEARANCE = 16;
-
-/**
- * How far apart a generated companion (a DLQ, a consumer) needs to land so its connector's own
- * caption — "after 3 attempts", "consumes", … — fits in the gap without overlapping either node,
- * given the plain horizontal placement `placeNear` prefers puts the caption right in the middle of
- * that gap. Never smaller than `placeNear`'s own default spacing, so a short/absent caption keeps
- * today's compact placement exactly as it was.
- */
-function gapForCaption(caption: string | undefined): number {
-  if (!caption) return COMPANION_GAP;
-  const width = getMeasurer().width(caption, FONTS.connectorCaption);
-  return Math.max(COMPANION_GAP, width + CAPTION_CLEARANCE * 2);
-}
-
 let interaction: Interaction | null = null;
 /** The last system-clipboard text `syncClipboardFromSystem` has already
  *  applied, so an unchanged clipboard doesn't keep resetting `pasteRepeat`. */
@@ -633,6 +599,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setDocument(document, options) {
     interaction = null;
+    useUiStore.getState().resetContinuation();
     set((state) => ({
       document,
       history: options?.resetHistory === false ? state.history : EMPTY_HISTORY,
@@ -732,6 +699,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       (doc) => flows.reduce((next, flow) => addFlow(next, flow), addEdges(addNodes(doc, nodes), edges)),
       { selection: { nodes: nodes.map((n) => n.id), edges: [] } },
     );
+  },
+
+  acceptContinuation(offer) {
+    const state = get();
+    // A stale offer (its anchor was deleted underneath it) adds nothing.
+    if (!state.document.nodes.some((n) => n.id === offer.anchorId)) return;
+    state.addNodesWithEdges(offer.nodes, offer.edges, `Add ${offer.label}`);
+    const ui = useUiStore.getState();
+    ui.setContinuation(null);
+    ui.setSettleNodeId(offer.primaryNodeId);
   },
 
   insertStarter(starterId) {

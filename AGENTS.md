@@ -72,7 +72,9 @@ Each of these has a failure mode that is silent, delayed, or both.
 - **Edges are the one exception to "one renderer."** Unlike nodes, `src/canvas/DraftEdgeView.tsx`
   (on-screen) and `src/edges/describe.ts` (SVG export) are two independent implementations of the
   same connector. A visual addition to a connector — a badge, a dash pattern, a chip — must be
-  made in both, by hand; nothing enforces parity. See `docs/ARCHITECTURE.md`.
+  made in both, by hand; nothing enforces parity. See `docs/ARCHITECTURE.md`. (Intent
+  Continuation's ghost connector in `src/canvas/ContinuationGhost.tsx` is a preview, never
+  exported, and reuses the routing/dash/marker helpers rather than restating them — it is exempt.)
 
 ## Architecture
 
@@ -81,7 +83,8 @@ hanging off the document model. Library and editor are two states of one screen 
 no router) — that's what lets `dist/` be served from any path (`base: './'`).
 
 `src/starters/` sits beside `document/` (it imports only that, and is not part of the file format);
-`store/` and `commands/` consume it. The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
+`store/` and `commands/` consume it. `src/continuation/` sits there too (it imports `document/` and
+`render/text` only) — the deterministic next-move rules; `store/`, `commands/` and `canvas/` consume it. The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
 persistence, the crypto boundary, untrusted input, schema evolution — lives in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The rules above are the invariants that document
 distills into "never break this"; read that file for *why* each one holds.

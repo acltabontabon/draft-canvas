@@ -15,6 +15,7 @@ import {
   type DraftNode,
 } from '../document/types';
 import { requestClipboardRead } from '../lib/clipboardPermission';
+import { continuationsFor, materialize } from '../continuation';
 import { MOD_SYMBOL } from '../lib/platform';
 import { pointer } from '../store/uiStore';
 import { focusBounds, focusNodes } from './search';
@@ -336,6 +337,13 @@ function viewCommands(ctx: CommandContext): Command[] {
     });
   }
   commands.push({
+    id: 'continuation-toggle',
+    title: ctx.ui.continuationsEnabled ? 'Turn off Intent Continuation' : 'Turn on Intent Continuation',
+    group: 'view',
+    keywords: ['suggest', 'suggestion', 'ghost', 'next', 'continue', 'assist', 'autocomplete'],
+    run: (inner) => inner.ui.setContinuationsEnabled(!inner.ui.continuationsEnabled),
+  });
+  commands.push({
     id: 'theme-toggle',
     title: 'Toggle light / dark theme',
     group: 'view',
@@ -643,9 +651,39 @@ function addAttachmentCommand(
   };
 }
 
+/**
+ * The keyboard-free, hover-free path to Intent Continuation's current offer for this node — the
+ * same accept Tab and a click on the ghost perform. Prefers the offer already on screen (same ids,
+ * same placement); otherwise asks the engine directly, so ⌘K still offers it when there was no
+ * room to draw a ghost.
+ */
+function continuationCommandFor(ctx: CommandContext, node: DraftNode): Command | undefined {
+  if (!ctx.ui.continuationsEnabled) return undefined;
+  const shown = ctx.ui.continuation;
+  const offer =
+    shown && shown.anchorId === node.id && shown.trigger === 'select'
+      ? shown
+      : (() => {
+          const [first] = continuationsFor(ctx.editor.document, node.id, 'select', ctx.ui.continuationDismissals);
+          return first ? materialize(ctx.editor.document, first) : undefined;
+        })();
+  if (!offer) return undefined;
+  return {
+    id: 'accept-continuation',
+    title: `Add ${offer.label}`,
+    group: 'selection',
+    keywords: ['suggested', 'continue', 'next', 'ghost', offer.label.toLowerCase()],
+    hint: 'Suggested',
+    shortcut: 'Tab',
+    run: (inner) => inner.editor.acceptContinuation(offer),
+  };
+}
+
 export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
   const commands: Command[] = [];
   const isBoundary = node.type === 'group';
+  const suggested = continuationCommandFor(ctx, node);
+  if (suggested) commands.push(suggested);
   if (!isBoundary) {
     commands.push({
       id: 'connect-to',

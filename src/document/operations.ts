@@ -671,12 +671,30 @@ function rectsOverlap(a: Bounds, b: Bounds): boolean {
  * A small, bounded search for where a generated companion node should land near `host` — never
  * stacked on top of an unrelated node it happens to fall on. Tries a short, fixed list of
  * candidate offsets (right, below, below-right, above-right, further below) and returns the first
- * whose rect doesn't overlap any existing node. A boundary (`group`) is never treated as an
- * obstacle — landing inside one is normal, not a collision, the same rule node-drag-to-attach
- * detection already applies for the same reason. This is deliberately not a general free-space
- * solver: if every candidate collides (a genuinely crowded corner of the diagram), it falls back
- * to the first (plain right-of-host) candidate anyway, same as `detachFromNode` always has, just
- * having tried a few smarter positions first.
+ * whose rect doesn't overlap any existing node, or `undefined` when every candidate collides (a
+ * genuinely crowded corner of the diagram). A boundary (`group`) is never treated as an obstacle —
+ * landing inside one is normal, not a collision, the same rule node-drag-to-attach detection
+ * already applies for the same reason. This is deliberately not a general free-space solver.
+ *
+ * `placeNear` is the forgiving wrapper every *committed* companion uses; this is for a caller that
+ * would rather show nothing than something on top of the user's content — a preview.
+ */
+export function tryPlaceNear(
+  doc: DraftDocument,
+  host: Pick<DraftNode, 'id' | 'x' | 'y' | 'width' | 'height'>,
+  size: { width: number; height: number },
+  gap: number = COMPANION_GAP,
+): { x: number; y: number } | undefined {
+  const obstacles = doc.nodes.filter((n) => n.id !== host.id && n.type !== 'group');
+  const chosen = companionCandidates(host, size, gap).find((rect) => !obstacles.some((n) => rectsOverlap(rect, n)));
+  if (!chosen) return undefined;
+  return clampCompanion(chosen, host, size);
+}
+
+/**
+ * `tryPlaceNear`, but if every candidate collides it falls back to the first (plain right-of-host)
+ * candidate anyway, same as `detachFromNode` always has, just having tried a few smarter positions
+ * first.
  */
 export function placeNear(
   doc: DraftDocument,
@@ -684,15 +702,28 @@ export function placeNear(
   size: { width: number; height: number },
   gap: number = COMPANION_GAP,
 ): { x: number; y: number } {
-  const obstacles = doc.nodes.filter((n) => n.id !== host.id && n.type !== 'group');
-  const candidates: Bounds[] = [
+  return tryPlaceNear(doc, host, size, gap) ?? clampCompanion(companionCandidates(host, size, gap)[0]!, host, size);
+}
+
+function companionCandidates(
+  host: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>,
+  size: { width: number; height: number },
+  gap: number,
+): Bounds[] {
+  return [
     { x: host.x + host.width + gap, y: host.y, ...size },
     { x: host.x, y: host.y + host.height + COMPANION_GAP, ...size },
     { x: host.x + host.width + gap, y: host.y + host.height + COMPANION_GAP, ...size },
     { x: host.x + host.width + gap, y: host.y - size.height - COMPANION_GAP, ...size },
     { x: host.x, y: host.y + host.height + COMPANION_GAP * 2 + size.height, ...size },
   ];
-  const chosen = candidates.find((rect) => !obstacles.some((n) => rectsOverlap(rect, n))) ?? candidates[0]!;
+}
+
+function clampCompanion(
+  chosen: Bounds,
+  host: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>,
+  size: { width: number; height: number },
+): { x: number; y: number } {
   let { x, y } = chosen;
   if (x + size.width > LIMITS.maxCoordinate) {
     x = host.x;
