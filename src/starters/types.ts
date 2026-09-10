@@ -11,12 +11,14 @@
  * nothing that isn't already in it.
  */
 
+import type { CreateAttachmentInput } from '../document/factory';
 import type {
   Accent,
   ActorKind,
   BoundaryPreset,
   ComponentKind,
   DatabaseKind,
+  DeliveryRole,
   DraftNodeType,
   EdgeAnchor,
   EdgeRouting,
@@ -52,7 +54,13 @@ export interface StarterNodeSpec {
   /** Omitted means the type's own default from `factory.ts`'s `defaultSizeFor`. */
   width?: number;
   height?: number;
-  /** Omitted means the type/kind's own default label. Queues never take one — see `defaultTextFor`. */
+  /**
+   * Omitted means the type/kind's own default label. A queue's default is no name at all (see
+   * `defaultTextFor` — its kind caption is its label, and a name is optional, never prefilled);
+   * a starter names only the queue-family node a composition genuinely revolves around
+   * (Event-Driven's `Domain Events` topic), never a plain delivery queue, and sizes it with the
+   * named-queue box (`DEFAULTS.queueNamedHeight`) so the name and caption fit inside it.
+   */
   text?: string;
   accent?: Accent;
   serviceKind?: ServiceKind;
@@ -63,6 +71,13 @@ export interface StarterNodeSpec {
   boundaryPreset?: BoundaryPreset;
   /** `text` nodes only — see `DraftNode.annotation`. */
   annotation?: boolean;
+  /** `queue` nodes only — see `DraftNode.deliveryRole`. A dead-letter queue is drawn as one
+   *  (dashed tube, `DLQ` caption) and categorised as one by the capability matrix. */
+  deliveryRole?: DeliveryRole;
+  /** Supporting detail folded into the node as click-to-reveal chips (`DraftNode.attachments`) —
+   *  the same depth-without-a-visible-node mechanism `StarterEdgeSpec.attachments` gives a
+   *  connector. `id`s are minted at build time. */
+  attachments?: CreateAttachmentInput[];
   /** Another spec's `key`. Resolved to `parentId`; coordinates stay absolute, as everywhere else. */
   parent?: string;
 }
@@ -124,6 +139,21 @@ export interface StarterEdgeSpec {
    * line has no bend height to land inconsistently.
    */
   routing?: EdgeRouting;
+  /**
+   * How many delivery attempts precede this connector's failure route — only meaningful on an
+   * edge the matrix infers as `deadLetters` (see `DraftEdge.deliveryAttempts`), where it renders
+   * as the caption "after N attempts." A number, not a relationship: the relationship itself is
+   * still derived.
+   */
+  deliveryAttempts?: number;
+  /**
+   * Supporting detail folded into the connector as click-to-reveal chips (`DraftEdge.attachments`)
+   * — an event's example payload on the connector that publishes it, an operational note on a
+   * dead-letter route. The one place a starter carries *depth* without adding a single visible
+   * node: the chip is small, the card opens only on a click, and nothing about the connector's own
+   * semantics changes. `id`s are minted at build time.
+   */
+  attachments?: CreateAttachmentInput[];
 }
 
 export interface ArchitectureStarter {

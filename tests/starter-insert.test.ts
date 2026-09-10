@@ -57,7 +57,7 @@ describe('insertStarter', () => {
     store.getState().redo();
     const after = store.getState();
     expect(after.document.nodes.map((node) => node.id)).toEqual(created.map((node) => node.id));
-    expect(after.document.edges).toHaveLength(7);
+    expect(after.document.edges).toHaveLength(9);
     expect(after.selection.nodes).toEqual(created.map((node) => node.id));
   });
 
@@ -77,17 +77,17 @@ describe('insertStarter', () => {
     expect(intersects(first, second)).toBe(false);
     expect(second.x).toBeGreaterThanOrEqual(first.x + first.width + INSERT_GAP);
     // Both are still whole: nothing was merged, nothing reused an id.
-    expect(store.getState().document.nodes).toHaveLength(22);
-    expect(store.getState().document.edges).toHaveLength(14);
-    expect(new Set(store.getState().document.nodes.map((node) => node.id)).size).toBe(22);
+    expect(store.getState().document.nodes).toHaveLength(24);
+    expect(store.getState().document.edges).toHaveLength(18);
+    expect(new Set(store.getState().document.nodes.map((node) => node.id)).size).toBe(24);
   });
 
   it('clears one starter at a time, newest first', () => {
     store.getState().insertStarter('monolith');
     store.getState().insertStarter('event-driven');
-    expect(store.getState().document.nodes).toHaveLength(13);
+    expect(store.getState().document.nodes).toHaveLength(18);
     store.getState().undo();
-    expect(store.getState().document.nodes).toHaveLength(6);
+    expect(store.getState().document.nodes).toHaveLength(7);
     store.getState().undo();
     expect(store.getState().document.nodes).toHaveLength(0);
   });

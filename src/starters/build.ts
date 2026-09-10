@@ -7,7 +7,7 @@
  */
 
 import { inferRelationship } from '../document/connectorSemantics';
-import { createEdge, createNode, defaultSizeFor } from '../document/factory';
+import { createAttachment, createEdge, createNode, defaultSizeFor } from '../document/factory';
 import type { DraftEdge, DraftNode } from '../document/types';
 import type { ArchitectureStarter, StarterNodeSpec } from './types';
 
@@ -100,7 +100,9 @@ export function buildStarter(
       ...(spec.componentKind ? { componentKind: spec.componentKind } : {}),
       ...(spec.boundaryPreset ? { boundaryPreset: spec.boundaryPreset } : {}),
       ...(spec.annotation ? { annotation: spec.annotation } : {}),
+      ...(spec.deliveryRole ? { deliveryRole: spec.deliveryRole } : {}),
     });
+    if (spec.attachments?.length) node.attachments = spec.attachments.map(createAttachment);
     ids.set(spec.key, node.id);
     return node;
   });
@@ -122,21 +124,24 @@ export function buildStarter(
     const source = byId.get(sourceId)!;
     const target = byId.get(targetId)!;
     const relationship = inferRelationship(source, target);
-    edges.push(
-      createEdge({
-        source: sourceId,
-        target: targetId,
-        sourceAnchor: spec.sourceAnchor,
-        targetAnchor: spec.targetAnchor,
-        semantic: relationship?.semantic,
-        kind: relationship?.kind,
-        semanticsOrigin: relationship?.semantic ? 'inferred' : undefined,
-        ...(spec.label !== undefined ? { label: spec.label } : {}),
-        ...(spec.condition !== undefined ? { condition: spec.condition } : {}),
-        ...(spec.routeMode !== undefined ? { routeMode: spec.routeMode } : {}),
-        ...(spec.routing !== undefined ? { routing: spec.routing } : {}),
-      }),
-    );
+    const edge = createEdge({
+      source: sourceId,
+      target: targetId,
+      sourceAnchor: spec.sourceAnchor,
+      targetAnchor: spec.targetAnchor,
+      semantic: relationship?.semantic,
+      kind: relationship?.kind,
+      async: relationship?.async,
+      semanticsOrigin: relationship?.semantic ? 'inferred' : undefined,
+      ...(spec.label !== undefined ? { label: spec.label } : {}),
+      ...(spec.condition !== undefined ? { condition: spec.condition } : {}),
+      ...(spec.routeMode !== undefined ? { routeMode: spec.routeMode } : {}),
+      ...(spec.routing !== undefined ? { routing: spec.routing } : {}),
+      ...(spec.deliveryAttempts !== undefined ? { deliveryAttempts: spec.deliveryAttempts } : {}),
+    });
+    // Same assignment `convertToJunction` makes — `createEdge` has no attachment input of its own.
+    if (spec.attachments?.length) edge.attachments = spec.attachments.map(createAttachment);
+    edges.push(edge);
   }
 
   return { nodes, edges };

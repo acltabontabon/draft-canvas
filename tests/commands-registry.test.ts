@@ -449,8 +449,8 @@ describe('architecture starters', () => {
   it('inserts the architecture and moves the camera onto it', () => {
     const ctx = stubContext();
     commandsFor(ctx).find((command) => command.id === 'starter-microservices')!.run(ctx);
-    expect(useEditorStore.getState().document.nodes).toHaveLength(11);
-    expect(useEditorStore.getState().selection.nodes).toHaveLength(11);
+    expect(useEditorStore.getState().document.nodes).toHaveLength(12);
+    expect(useEditorStore.getState().selection.nodes).toHaveLength(12);
     // The command context's `document` predates its own insert, so the camera move has to come
     // from what the store handed back — see `focusBounds`.
     expect(ctx.camera.setViewport).toHaveBeenCalledTimes(1);

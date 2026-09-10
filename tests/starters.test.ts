@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { capabilityFor, categoryOf } from '../src/document/connectorSemantics';
 import { routeEdge, rectOf as rectOfNode } from '../src/edges/routing';
 import type { DraftNode } from '../src/document/types';
-import { BOUNDARY_PAD, BOUNDARY_HEADER_CAPTION_ONLY } from '../src/starters/compose';
+import { BOUNDARY_PAD, BOUNDARY_HEADER_CAPTION_ONLY, BOUNDARY_TITLE_SUBLINE_Y } from '../src/starters/compose';
 import { ARCHITECTURE_STARTERS, STARTER_IDS, starterById, starterSize } from '../src/starters';
 import { buildStarter, sizeOfSpec } from '../src/starters/build';
 import type { ArchitectureStarter, StarterNodeSpec } from '../src/starters/types';
@@ -53,8 +53,10 @@ describe('the starter catalog', () => {
   });
 
   each('stays small enough to be a starting point', (starter) => {
-    expect(starter.nodes.length).toBeLessThanOrEqual(12);
-    expect(starter.edges.length).toBeLessThanOrEqual(8);
+    // 13, not 12: Hexagonal carries a boundary and that boundary's one subtitle on top of its eleven
+    // architectural elements — the elements themselves stay well inside "a starting point."
+    expect(starter.nodes.length).toBeLessThanOrEqual(13);
+    expect(starter.edges.length).toBeLessThanOrEqual(10);
   });
 
   each('references only keys it declares', (starter) => {
@@ -93,12 +95,12 @@ describe('the starter catalog', () => {
     const byKey = new Map(starter.nodes.map((spec) => [spec.key, spec]));
     for (const spec of starter.nodes) {
       if (!spec.parent) continue;
-      // Modular Monolith's boundary-header subtitle is a deliberate, narrow exception: it's
+      // A boundary-header subtitle (Modular Monolith's, Hexagonal's) is a deliberate, narrow exception: it's
       // authored as the second line of the boundary's own header (`compose.ts`'s
       // `BOUNDARY_TITLE_INSET`/`BOUNDARY_TITLE_SUBLINE_Y`), sharing the title's own left edge and
       // sitting exactly as close beneath it as the title's own metrics allow — not an ordinary
       // piece of content held to the general child-inset floor below.
-      if (spec.key === 'app-subtitle') continue;
+      if (spec.type === 'text' && spec.annotation && spec.y === byKey.get(spec.parent)!.y + BOUNDARY_TITLE_SUBLINE_Y) continue;
       const child = rectOf(spec);
       const parent = rectOf(byKey.get(spec.parent)!);
       expect(child.x - parent.x).toBeGreaterThanOrEqual(BOUNDARY_PAD);
@@ -122,8 +124,12 @@ describe('buildStarter', () => {
   });
 
   each('is deterministic in everything but identity', (starter) => {
+    // Attachment ids are minted per build too — compare their content, not their identity.
     const geometry = (nodes: DraftNode[]) =>
-      nodes.map(({ id: _id, parentId: _parentId, ...rest }) => rest);
+      nodes.map(({ id: _id, parentId: _parentId, attachments, ...rest }) => ({
+        ...rest,
+        attachments: attachments?.map(({ id: _attachmentId, ...attachment }) => attachment),
+      }));
     const first = buildStarter(starter, { x: 0, y: 0 });
     const second = buildStarter(starter, { x: 0, y: 0 });
     expect(geometry(second.nodes)).toEqual(geometry(first.nodes));
@@ -160,31 +166,73 @@ describe('buildStarter', () => {
       // not checked here — like `label`/`condition`, it's an authored escape hatch (opting a
       // connector out of Smart Routing's bundling) that changes nothing about the *derived*
       // semantic/kind asserted above.
+      expect(edge.async).toBe(capability?.defaultAsync || undefined);
       expect(edge.hasResponse).toBeUndefined();
     }
   });
 
-  it('models microservices as service-owned data, never a shared database', () => {
+  it('models microservices as one entry point, independent deployables, service-owned data, and event integration', () => {
     const { nodes, edges } = buildStarter(starterById('microservices')!, { x: 0, y: 0 });
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    expect(nodes).toHaveLength(12);
+    expect(edges).toHaveLength(9);
+    expect(nodes.filter((n) => n.type === 'text')).toHaveLength(0);
+
+    // One public entry point: the gateway routes to every API service, each branch with the route
+    // rule that selects it — a Condition used for what a Condition means.
+    const gateway = nodes.find((node) => node.serviceKind === 'gateway')!;
+    const routes = edges.filter((edge) => edge.source === gateway.id);
+    expect(routes).toHaveLength(3);
+    expect(routes.map((edge) => edge.semantic)).toEqual(['routes', 'routes', 'routes']);
+    expect(new Set(routes.map((edge) => edge.condition))).toEqual(new Set(['/accounts/*', '/orders/*', '/payments/*']));
+    // All three leave the same point, so Smart Routing can draw them as one trunk.
+    expect(new Set(routes.map((edge) => JSON.stringify(edge.sourceAnchor))).size).toBe(1);
+    const apis = nodes.filter((node) => node.serviceKind === 'api');
+    expect(apis).toHaveLength(3);
+    expect(new Set(routes.map((edge) => edge.target))).toEqual(new Set(apis.map((node) => node.id)));
+
+    // Database per service: three generic stores, each written by exactly one service.
     const stores = nodes.filter((node) => node.type === 'database');
     expect(stores).toHaveLength(3);
-    // Each store is written by exactly one service, and each service writes exactly one store.
     for (const store of stores) {
+      expect(store.databaseKind).toBe('generic');
       const writers = edges.filter((edge) => edge.target === store.id);
       expect(writers).toHaveLength(1);
       expect(writers[0]!.semantic).toBe('writes');
     }
-    // Every service sits inside its own deployment boundary, and no two share one.
+
+    // Independent deployables: every service sits inside its own deployment boundary, no two
+    // share one, and the topic belongs to none of them.
     const boundaries = nodes.filter((node) => node.boundaryPreset === 'deployment');
     expect(boundaries).toHaveLength(3);
     expect(new Set(nodes.filter((node) => node.parentId).map((node) => node.parentId)).size).toBe(3);
-    // No service calls another service: the whole point of the gateway fan.
+    const topic = byText('Order Events');
+    expect(topic).toMatchObject({ type: 'queue', queueKind: 'topic' });
+    expect(topic.parentId).toBeUndefined();
+    for (const boundary of boundaries) expect(overlaps(topic, boundary)).toBe(false);
+
+    // Integrate through events: Orders publishes, the topic delivers to Payments — and no service
+    // ever calls another service or touches another's store.
+    const publish = edges.find((edge) => edge.source === byText('Orders').id && edge.target === topic.id)!;
+    expect(publish).toMatchObject({ semantic: 'publishes', kind: 'event' });
+    expect(publish.label).toBeUndefined();
+    const deliver = edges.find((edge) => edge.source === topic.id)!;
+    expect(deliver).toMatchObject({ target: byText('Payments').id, semantic: 'deliversTo', kind: 'event' });
     const services = new Set(nodes.filter((node) => node.type === 'service').map((node) => node.id));
-    const gateway = nodes.find((node) => node.serviceKind === 'gateway')!;
     for (const edge of edges) {
       if (edge.source === gateway.id) continue;
       expect(services.has(edge.source) && services.has(edge.target)).toBe(false);
     }
+
+    // Exactly three notes of production depth: the gateway's job, a private store, when an event
+    // may be emitted — all click-to-reveal, never a visible node.
+    const nodeNotes = nodes.flatMap((node) => node.attachments ?? []);
+    const edgeNotes = edges.flatMap((edge) => edge.attachments ?? []);
+    expect(nodeNotes.map((a) => a.type)).toEqual(['note', 'note']);
+    expect(gateway.attachments).toHaveLength(1);
+    expect(byText('Orders DB').attachments).toHaveLength(1);
+    expect(edgeNotes).toHaveLength(1);
+    expect(publish.attachments?.[0]?.text).toMatch(/OrderPlaced/);
   });
 
   it('models the modular monolith as one application boundary holding three modules with a controlled, acyclic dependency chain', () => {
@@ -230,7 +278,8 @@ describe('buildStarter', () => {
     // deliberately uncaptioned — a `group` node has no category in the capability matrix, so
     // there's genuinely no inferred relationship to show, and forcing a label onto one would say
     // something the rest of the app doesn't agree with.
-    const database = nodes.find((node) => node.databaseKind === 'sql')!;
+    const database = nodes.find((node) => node.type === 'database')!;
+    expect(database.databaseKind).toBe('generic');
     expect(database.parentId).toBeUndefined();
     const databaseEdges = edges.filter((e) => e.source === database.id || e.target === database.id);
     expect(databaseEdges).toHaveLength(1);
@@ -244,9 +293,70 @@ describe('buildStarter', () => {
     const subtitle = nodes.find((node) => node.parentId === app.id && node.type === 'text');
     expect(subtitle?.text).toBe('Single deployable unit');
     expect(nodes.filter((node) => node.type === 'text')).toHaveLength(1);
+
+    // Two notes of production depth — on the boundary and on the store — and nothing on any edge.
+    expect(app.attachments).toHaveLength(1);
+    expect(database.attachments).toHaveLength(1);
+    expect(nodes.flatMap((node) => node.attachments ?? [])).toHaveLength(2);
+    expect(edges.flatMap((edge) => edge.attachments ?? [])).toHaveLength(0);
   });
 
-  it('models event-driven flow as one producer publishing to a topic that fans out to three named architectural reactions', () => {
+  it('models the monolith as one deployment boundary holding three layered components over one outside store', () => {
+    const { nodes, edges } = buildStarter(starterById('monolith')!, { x: 0, y: 0 });
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    expect(nodes).toHaveLength(7);
+    expect(edges).toHaveLength(5);
+    expect(nodes.filter((node) => node.type === 'text')).toHaveLength(0);
+
+    const app = nodes.find((node) => node.type === 'group')!;
+    expect(app.boundaryPreset).toBe('deployment');
+    const layers = ['API', 'Business Logic', 'Data Access'].map(byText);
+    for (const layer of layers) {
+      expect(layer.type).toBe('component');
+      expect(layer.parentId).toBe(app.id);
+    }
+    expect(layers.map((layer) => layer.componentKind)).toEqual(['adapter', 'generic', 'adapter']);
+    // Stacked top to bottom on one axis, and nothing inside the boundary is a Service.
+    expect(new Set(layers.map((layer) => layer.x + layer.width / 2)).size).toBe(1);
+    expect(layers[0]!.y).toBeLessThan(layers[1]!.y);
+    expect(layers[1]!.y).toBeLessThan(layers[2]!.y);
+    expect(nodes.filter((node) => node.parentId === app.id)).toHaveLength(3);
+    expect(nodes.some((node) => node.type === 'service' && node.parentId === app.id)).toBe(false);
+
+    // The store is generic, outside, below; the external system is outside, level with the logic.
+    const database = byText('Database');
+    expect(database).toMatchObject({ type: 'database', databaseKind: 'generic' });
+    expect(database.parentId).toBeUndefined();
+    expect(database.y).toBeGreaterThan(app.y + app.height);
+    const external = byText('External System');
+    expect(external).toMatchObject({ type: 'service', serviceKind: 'external' });
+    expect(external.x).toBeGreaterThan(app.x + app.width);
+    const logic = byText('Business Logic');
+    expect(external.y + external.height / 2).toBe(logic.y + logic.height / 2);
+
+    const edgeBetween = (fromText: string, toText: string) =>
+      edges.find((e) => e.source === byText(fromText).id && e.target === byText(toText).id)!;
+    for (const [fromText, toText, semantic] of [
+      ['Client', 'API', 'calls'],
+      ['API', 'Business Logic', 'uses'],
+      ['Business Logic', 'Data Access', 'uses'],
+      ['Data Access', 'Database', 'writes'],
+      ['Business Logic', 'External System', 'calls'],
+    ] as const) {
+      const edge = edgeBetween(fromText, toText);
+      expect(edge, `${fromText} → ${toText}`).toBeDefined();
+      expect(edge.semantic).toBe(semantic);
+      expect(edge.label).toBeUndefined();
+      expect(edge.condition).toBeUndefined();
+    }
+
+    // Two notes: what "one artifact" means, and that the schema ships with the release.
+    expect(app.attachments).toHaveLength(1);
+    expect(database.attachments).toHaveLength(1);
+    expect(nodes.flatMap((node) => node.attachments ?? [])).toHaveLength(2);
+  });
+
+  it('models event-driven flow as one producer, a topic fanning out to three consumer-owned queues, and one failure route', () => {
     const { nodes, edges } = buildStarter(starterById('event-driven')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     const edgesFrom = (id: string) => edges.filter((e) => e.source === id);
@@ -254,108 +364,163 @@ describe('buildStarter', () => {
 
     const producer = byText('Producer Service');
     const topic = byText('Domain Events');
-    const projection = byText('Projection Service');
-    const processing = byText('Processing Service');
-    const integration = byText('Integration Service');
+    const workers = ['Projection Service', 'Processing Service', 'Integration Service'].map(byText);
+    const [projection, processing, integration] = workers as [DraftNode, DraftNode, DraftNode];
     const store = byText('Read Store');
+    const external = byText('External System');
+    const queues = nodes.filter((n) => n.type === 'queue' && n.queueKind === 'queue' && !n.deliveryRole);
+    const dlq = nodes.find((n) => n.deliveryRole === 'dead-letter')!;
 
-    expect(nodes.filter((n) => n.queueKind === 'topic')).toHaveLength(1);
-    expect(topic.type).toBe('queue');
+    // Eleven elements, ten connections, no free-floating text, no boundary, no junction.
+    expect(nodes).toHaveLength(11);
+    expect(edges).toHaveLength(10);
+    expect(nodes.filter((n) => n.type === 'text' || n.type === 'group' || n.type === 'ellipse')).toHaveLength(0);
+    expect(nodes.filter((n) => n.queueKind === 'topic')).toEqual([topic]);
+    expect(queues).toHaveLength(3);
+    // Delivery queues carry no name of their own — ownership reads from sitting above their worker.
+    for (const queue of queues) expect(queue.text ?? '').toBe('');
 
-    // Published to exactly once, quietly (no override on the publish itself) — the producer's only edge.
+    // The producer publishes exactly once, to the topic, and names one concrete past-tense event.
+    expect(edgesFrom(producer.id)).toHaveLength(1);
     const published = edgesTo(topic.id);
     expect(published).toHaveLength(1);
     expect(published[0]!.source).toBe(producer.id);
     expect(published[0]!.semantic).toBe('publishes');
-    expect(published[0]!.label).toBeUndefined();
-    expect(edgesFrom(producer.id)).toHaveLength(1);
+    expect(published[0]!.kind).toBe('event');
+    expect(published[0]!.label).toBe('publishes OrderCreated');
+    expect(published[0]!.attachments).toHaveLength(1);
+    expect(published[0]!.attachments![0]!.type).toBe('code');
+    expect(published[0]!.attachments![0]!.code).toContain('"type": "OrderCreated"');
 
-    // Fans out to exactly three independent reactions, each an inferred `deliversTo`/`event`
-    // relationship displayed as "consumes" (the one deliberate display override in this starter) and
-    // kept out of Smart Routing's bundling — three individual rays, never one shared delivery bus.
-    const delivered = edgesFrom(topic.id);
-    expect(delivered).toHaveLength(3);
-    expect(new Set(delivered.map((e) => e.target))).toEqual(new Set([projection.id, processing.id, integration.id]));
-    for (const edge of delivered) {
-      expect(edge.semantic).toBe('deliversTo');
+    // The topic fans out to each queue — inferred, unoverridden, and bundle-eligible (one trunk).
+    const fanned = edgesFrom(topic.id);
+    expect(fanned).toHaveLength(3);
+    expect(new Set(fanned.map((e) => e.target))).toEqual(new Set(queues.map((q) => q.id)));
+    for (const edge of fanned) {
+      expect(edge.semantic).toBe('fansOut');
       expect(edge.kind).toBe('event');
-      expect(edge.label).toBe('consumes');
-      expect(edge.routeMode).toBe('direct');
+      expect(edge.label).toBeUndefined();
+      expect(edge.routeMode).toBeUndefined();
+      expect(edge.sourceAnchor).toEqual({ side: 'bottom', offset: 0.5 });
+      expect(edge.targetAnchor).toEqual({ side: 'top', offset: 0.5 });
     }
 
-    // Every consumer is a plain, generic Service — never defaulted to Worker.
-    for (const consumer of [projection, processing, integration]) {
-      expect(consumer.type).toBe('service');
-      expect(consumer.serviceKind).toBe('generic');
+    // Every consumer is a Worker fed by exactly one queue of its own, directly above it.
+    for (const worker of workers) {
+      expect(worker.type).toBe('service');
+      expect(worker.serviceKind).toBe('worker');
+      const consumes = edgesTo(worker.id);
+      expect(consumes).toHaveLength(1);
+      expect(consumes[0]!.semantic).toBe('consumes');
+      expect(consumes[0]!.kind).toBe('event');
+      const queue = nodes.find((n) => n.id === consumes[0]!.source)!;
+      expect(queues).toContain(queue);
+      expect(queue.x + queue.width / 2).toBe(worker.x + worker.width / 2);
+      expect(queue.y + queue.height).toBeLessThan(worker.y);
     }
 
-    // Only Projection Service owns a store — not one under every column, and no reaction chains back
-    // into the topology (no second event, no reply, no call to the producer).
-    expect(nodes.filter((n) => n.type === 'database')).toHaveLength(1);
-    const writes = edgesTo(store.id);
-    expect(writes).toHaveLength(1);
-    expect(writes[0]!.source).toBe(projection.id);
-    expect(writes[0]!.semantic).toBe('writes');
-    expect(edgesFrom(projection.id)).toEqual([writes[0]]);
+    // Projection owns the only store (writes); Integration calls the only external system (a
+    // synchronous, solid call — the one non-event line); Processing owns nothing below it.
+    expect(nodes.filter((n) => n.type === 'database')).toEqual([store]);
+    expect(store.databaseKind).toBe('generic');
+    expect(edgesFrom(projection.id).map((e) => [e.target, e.semantic])).toEqual([[store.id, 'writes']]);
+    expect(external.serviceKind).toBe('external');
+    const calls = edgesFrom(integration.id);
+    expect(calls.map((e) => [e.target, e.semantic, e.kind, e.async])).toEqual([[external.id, 'calls', undefined, undefined]]);
     expect(edgesFrom(processing.id)).toHaveLength(0);
-    expect(edgesFrom(integration.id)).toHaveLength(0);
 
-    // Exactly five edges, exactly one event name — nothing scattered, nothing chained.
-    expect(edges).toHaveLength(5);
-    const eventLabel = byText('DomainEvent');
-    expect(eventLabel.type).toBe('text');
-    expect(eventLabel.annotation).toBe(true);
-    expect(eventLabel.parentId).toBeUndefined();
+    // One DLQ, beside the Integration queue only, on a dashed, inferred dead-letter route.
+    expect(nodes.filter((n) => n.deliveryRole === 'dead-letter')).toEqual([dlq]);
+    const integrationQueue = nodes.find((n) => n.id === edgesTo(integration.id)[0]!.source)!;
+    const deadLetters = edgesTo(dlq.id);
+    expect(deadLetters).toHaveLength(1);
+    expect(deadLetters[0]!.source).toBe(integrationQueue.id);
+    expect(deadLetters[0]!.semantic).toBe('deadLetters');
+    expect(deadLetters[0]!.kind).toBe('failure');
+    expect(deadLetters[0]!.async).toBe(true);
+    expect(deadLetters[0]!.semanticsOrigin).toBe('inferred');
+    expect(deadLetters[0]!.deliveryAttempts).toBe(3);
+    expect(deadLetters[0]!.attachments?.[0]?.type).toBe('note');
+    expect(dlq.y).toBe(integrationQueue.y);
+    expect(dlq.x).toBeGreaterThan(integrationQueue.x + integrationQueue.width);
+    expect(edgesFrom(dlq.id)).toHaveLength(0);
+    // The DLQ is the only node right of the three lanes — never mistakable for a fourth consumer.
+    expect(nodes.filter((n) => n.x >= dlq.x)).toEqual([dlq]);
+
+    // Exactly two attachments in the whole starter — depth on click, never a visible extra node.
+    expect(edges.flatMap((e) => e.attachments ?? [])).toHaveLength(2);
   });
 
-  it('keeps hexagonal technology outside the core and its ports on one vertical axis each', () => {
-    const starter = starterById('hexagonal')!;
-    const { nodes, edges } = buildStarter(starter, { x: 0, y: 0 });
+  it('keeps hexagonal technology outside the core, and routes every crossing through a port the core owns', () => {
+    const { nodes, edges } = buildStarter(starterById('hexagonal')!, { x: 0, y: 0 });
     const core = nodes.find((node) => node.type === 'group')!;
     const inside = new Set(nodes.filter((node) => node.parentId === core.id).map((node) => node.id));
+    const ports = nodes.filter((node) => node.componentKind === 'port');
+    const portIds = new Set(ports.map((port) => port.id));
+
+    expect(nodes).toHaveLength(13);
+    expect(edges).toHaveLength(10);
+    expect(nodes.filter((node) => node.type === 'group')).toEqual([core]);
+
+    // The core owns its contracts: all three ports live inside it. Everything infrastructural —
+    // adapters, the store, the external system, the driving services — lives outside it.
+    expect(ports).toHaveLength(3);
+    for (const port of ports) expect(inside.has(port.id)).toBe(true);
     for (const node of nodes) {
       if (inside.has(node.id) || node.id === core.id) continue;
-      // Adapters, technology and band labels all live outside the core's rectangle.
       expect(overlaps(node, core)).toBe(false);
     }
-    expect(nodes.filter((node) => node.databaseKind === 'sql')).toHaveLength(1);
+    const database = nodes.find((node) => node.type === 'database')!;
+    expect(nodes.filter((node) => node.type === 'database')).toEqual([database]);
+    expect(database.databaseKind).toBe('generic');
     expect(nodes.filter((node) => node.serviceKind === 'external')).toHaveLength(1);
-    // Two connectors point into the core and two point out of it — the dependency story.
-    expect(edges.filter((edge) => inside.has(edge.target) && !inside.has(edge.source))).toHaveLength(2);
-    expect(edges.filter((edge) => inside.has(edge.source) && !inside.has(edge.target))).toHaveLength(2);
+
+    // Every connector crossing the boundary meets a port on the inside — nothing outside ever
+    // touches Use Cases or the Domain Model directly, in either direction.
+    const crossingIn = edges.filter((edge) => inside.has(edge.target) && !inside.has(edge.source));
+    const crossingOut = edges.filter((edge) => inside.has(edge.source) && !inside.has(edge.target));
+    expect(crossingIn).toHaveLength(2);
+    for (const edge of crossingIn) expect(portIds.has(edge.target)).toBe(true);
+    expect(crossingOut).toHaveLength(2);
+    for (const edge of crossingOut) expect(portIds.has(edge.source)).toBe(true);
+
+    // One shared inbound port (both driving adapters call the same use cases), and each outbound
+    // port has exactly one implementer.
+    const inboundPort = nodes.find((node) => node.text === 'Inbound')!;
+    expect(crossingIn.every((edge) => edge.target === inboundPort.id)).toBe(true);
+    for (const port of ports) {
+      const out = edges.filter((edge) => edge.source === port.id);
+      expect(out).toHaveLength(1);
+    }
   });
 
-  // The whole point of the Component/Label vocabulary pass: the driving adapters stay real
-  // Services (they're genuine runtime roles), everything logical inside/around the core is a
-  // Component, and no relationship ever rides on a Condition.
-  it('uses Component (never Service) for every internal architectural piece, honestly', () => {
+  it('gives every piece the kind that is true of it: Services drive, Components work, Ports promise', () => {
     const { nodes, edges } = buildStarter(starterById('hexagonal')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    const core = nodes.find((node) => node.type === 'group')!;
 
-    expect(byText('REST API').type).toBe('service');
-    expect(byText('REST API').serviceKind).toBe('api');
-    expect(byText('Message Consumer').type).toBe('service');
-    expect(byText('Message Consumer').serviceKind).toBe('worker');
-
+    expect(byText('REST API')).toMatchObject({ type: 'service', serviceKind: 'api' });
+    expect(byText('Message Consumer')).toMatchObject({ type: 'service', serviceKind: 'worker' });
     expect(byText('Use Cases')).toMatchObject({ type: 'component', componentKind: 'generic' });
     expect(byText('Domain Model')).toMatchObject({ type: 'component', componentKind: 'generic' });
+    for (const name of ['Inbound', 'Persistence', 'Integration']) {
+      expect(byText(name)).toMatchObject({ type: 'component', componentKind: 'port', parentId: core.id });
+    }
     expect(byText('Persistence Adapter')).toMatchObject({ type: 'component', componentKind: 'adapter' });
     expect(byText('Integration Adapter')).toMatchObject({ type: 'component', componentKind: 'adapter' });
-
+    expect(byText('External System')).toMatchObject({ type: 'service', serviceKind: 'external' });
     expect(nodes.some((n) => n.type === 'service' && n.serviceKind === undefined)).toBe(false);
 
-    // No Condition anywhere in this starter — a port designation was never a condition.
+    // The one annotation is the core's own subtitle — never a floating label, never a Condition.
+    const labels = nodes.filter((n) => n.type === 'text');
+    expect(labels).toHaveLength(1);
+    expect(labels[0]).toMatchObject({ text: 'Dependencies point inward', annotation: true, parentId: core.id });
     expect(edges.every((e) => e.condition === undefined)).toBe(true);
   });
 
-  // A later refinement pass removed "Inbound Port"/"Outbound Port" edge labels entirely: they hid
-  // each connector's actual relationship (all four quietly defaulted to `calls` underneath) behind
-  // a position in the architecture, and rode the app's more prominent label-chip style while doing
-  // it. Every crossing connector now carries no `label` override at all — `component>component`
-  // has its own exact `MATRIX` row (default relation `uses`) in `connectorSemantics.ts`, so the
-  // internal/driven side infers `uses` naturally, through the same quiet caption style `calls`
-  // already used on the driving side, never a bordered chip standing in for a port name.
-  it('lets every crossing connector read its own natural relationship, quietly — never a port name', () => {
+  // Every arrow points the way a request travels; dependency inversion is carried by where the
+  // ports sit (inside the core) and by the word on the connector leaving each one.
+  it('reads runtime flow left to right while the relationship words carry dependency inversion', () => {
     const { nodes, edges } = buildStarter(starterById('hexagonal')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     const edgeBetween = (fromText: string, toText: string) => {
@@ -364,45 +529,30 @@ describe('buildStarter', () => {
       return edges.find((e) => e.source === from && e.target === to)!;
     };
 
-    for (const [fromText, toText] of [
-      ['REST API', 'Use Cases'],
-      ['Message Consumer', 'Use Cases'],
-    ] as const) {
+    const expected: Array<[string, string, string]> = [
+      ['REST API', 'Inbound', 'calls'],
+      ['Message Consumer', 'Inbound', 'calls'],
+      ['Inbound', 'Use Cases', 'implementedBy'],
+      ['Use Cases', 'Domain Model', 'uses'],
+      ['Use Cases', 'Persistence', 'uses'],
+      ['Use Cases', 'Integration', 'uses'],
+      ['Persistence', 'Persistence Adapter', 'implementedBy'],
+      ['Integration', 'Integration Adapter', 'implementedBy'],
+      ['Persistence Adapter', 'Database', 'writes'],
+      ['Integration Adapter', 'External System', 'calls'],
+    ];
+    for (const [fromText, toText, semantic] of expected) {
       const edge = edgeBetween(fromText, toText);
+      expect(edge, `${fromText} → ${toText}`).toBeDefined();
+      expect(edge.semantic, `${fromText} → ${toText}`).toBe(semantic);
       expect(edge.label).toBeUndefined();
-      expect(edge.semantic).toBe('calls');
+      expect(edge.semanticsOrigin).toBe('inferred');
     }
 
-    for (const [fromText, toText] of [
-      ['Use Cases', 'Domain Model'],
-      ['Use Cases', 'Persistence Adapter'],
-      ['Use Cases', 'Integration Adapter'],
-    ] as const) {
-      const edge = edgeBetween(fromText, toText);
-      expect(edge.label).toBeUndefined();
-      expect(edge.semantic).toBe('uses');
-    }
-
-    // Persistence Adapter → Database and Integration Adapter → External System are untouched by
-    // this pass — reads/writes and calls are already the right words for genuine infrastructure.
-    expect(edgeBetween('Persistence Adapter', 'Database').label).toBeUndefined();
-    expect(edgeBetween('Integration Adapter', 'External System').label).toBeUndefined();
-  });
-
-  // A later revision restored the "Inbound ports"/"Outbound ports" terminology this same pass had
-  // removed — but as exactly one plain Label annotation per side (never a per-connector caption),
-  // exactly the "Label / edge annotation, never Condition" mechanism the vocabulary rules require.
-  it('names each side of the core with exactly one quiet Label — never a Condition, Note, Component, or Service standing in', () => {
-    const { nodes } = buildStarter(starterById('hexagonal')!, { x: 0, y: 0 });
-    const inbound = nodes.filter((n) => n.text === 'Inbound ports');
-    const outbound = nodes.filter((n) => n.text === 'Outbound ports');
-    expect(inbound).toHaveLength(1);
-    expect(outbound).toHaveLength(1);
-    for (const label of [...inbound, ...outbound]) {
-      expect(label.type).toBe('text');
-      expect(label.annotation).toBe(true);
-      expect(label.parentId).toBeUndefined();
-    }
+    // The funnel shares one point on the inbound port; the fork shares one point on Use Cases —
+    // that's what lets Smart Routing draw each as one trunk with one collapsed caption.
+    expect(edgeBetween('REST API', 'Inbound').targetAnchor).toEqual(edgeBetween('Message Consumer', 'Inbound').targetAnchor);
+    expect(edgeBetween('Use Cases', 'Persistence').sourceAnchor).toEqual(edgeBetween('Use Cases', 'Integration').sourceAnchor);
   });
 
   // The visual-hierarchy point of the whole Component primitive: in a starter that mixes both,
@@ -448,6 +598,35 @@ describe('buildStarter', () => {
         expect(
           route?.d.includes('Q'),
           `${starter.name}: "${source.text ?? source.type}" → "${target.text ?? target.type}" was authored straight but routes with a detour`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  // The same guard for the *horizontal* starters: a connector authored level (same y on both
+  // ends, left/right anchors) must route as one straight line too — a Port node sits in exactly
+  // the corridors Hexagonal's funnel and fork travel through, so this is where a hidden detour
+  // would first appear.
+  it('routes every level-authored connector as an actual straight line, not a hidden detour', () => {
+    for (const starter of ARCHITECTURE_STARTERS) {
+      const { nodes, edges } = buildStarter(starter, { x: 0, y: 0 });
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      for (const edge of edges) {
+        const source = byId.get(edge.source)!;
+        const target = byId.get(edge.target)!;
+        const sourceY = source.y + source.height * (edge.sourceAnchor?.offset ?? 0.5);
+        const targetY = target.y + target.height * (edge.targetAnchor?.offset ?? 0.5);
+        const sourceIsHorizontal = edge.sourceAnchor?.side === 'left' || edge.sourceAnchor?.side === 'right';
+        const targetIsHorizontal = edge.targetAnchor?.side === 'left' || edge.targetAnchor?.side === 'right';
+        if (!sourceIsHorizontal || !targetIsHorizontal || Math.abs(sourceY - targetY) > 0.5) continue;
+
+        const obstacles = nodes
+          .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
+          .map(rectOfNode);
+        const route = routeEdge(edge, byId, { obstacles });
+        expect(
+          route?.d.includes('Q'),
+          `${starter.name}: "${source.text ?? source.type}" → "${target.text ?? target.type}" was authored level but routes with a detour`,
         ).toBe(false);
       }
     }

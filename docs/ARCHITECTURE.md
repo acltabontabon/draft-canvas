@@ -110,11 +110,12 @@ inherits whatever the model actually says, not what a screenshot suggested it me
 addition: a logical architectural building block *inside* a larger deployment or boundary — a
 domain module, a use-case layer, a ports-and-adapters adapter — with none of Service's deployment,
 network-boundary, or process-boundary implications. Kept deliberately small: `generic` (no kind
-caption, same "unspecified" convention Service's own default kind follows), `module`, and `adapter`
-— never a kind for what a label already says ("Repository," "Controller," "Use Case" are text a
-user types onto a Component, not a fourth kind to add). Its rendering (`nodes/describe.ts`'s
+caption, same "unspecified" convention Service's own default kind follows), `module`, `adapter`,
+and `port` — never a kind for what a label already says ("Repository," "Controller," "Use Case" are
+text a user types onto a Component, not a fifth kind to add). Its rendering (`nodes/describe.ts`'s
 `component()`) gives each kind its own small, one-sided departure from a shared plain body — Module
-a tab stepping up from the top edge, Adapter a notch cut into the right — the same "one restrained
+a tab stepping up from the top edge, Adapter a notch cut into both vertical edges, Port a dashed
+outline with its tag centred under the name — the same "one restrained
 mark per kind" discipline Service's own kinds follow, just quieter throughout: no cap band ever, a
 thinner shared stroke, `neutral` accent by default, and — per an explicit later pass — a noticeably
 smaller default footprint than Service's own (`document/limits.ts`'s `componentWidth`/
@@ -140,19 +141,21 @@ sits near or is connected to, and it is never a substitute for an edge's own `se
 annotation like "Driving Adapters" and a relationship caption like "calls" are different concepts
 that happen to both be text.
 
-**Port/Interface** was investigated and deliberately *not* added as a primitive in this pass. The
-concept is real (Hexagonal's inbound/outbound ports, a Component's provided/required interfaces,
-plugin boundaries) and the eventual shape is probably a lightweight attachment on a Component/
-boundary's edge — closer to the existing anchor/attachment system (`document/types.ts`'s
-`EdgeAnchor`, `Attachment`) than a new independently-sized node — but building that cleanly needs
-its own pass, not one folded into a vocabulary cleanup. Naming a port on an edge turned out not to
-be a clean stand-in either — Hexagonal tried it (a plain `label` reading "Inbound Port"/"Outbound
-Port"), and a later pass removed it: the override hid the connector's actual relationship
-underneath, and rode the app's one *bolder* caption style while doing it, the opposite of the quiet
-annotation a port name is supposed to be. Until a real Port/Interface concept exists, a starter
-should let a crossing connector's own relationship word (`calls`, `uses`, …) do the talking instead
-of naming the crossing itself — and, as ever, never reach for `condition` to fake the visual weight
-a port name used to have.
+**Port** (`componentKind: 'port'`) is the Component kind that isn't a thing doing work but a
+*contract*: the interface an application core, a plugin host, or a module defines, and something
+else implements or calls — Hexagonal's inbound/outbound ports, a Component's provided/required
+interfaces, a plugin boundary. An earlier pass had deferred it, guessing the eventual shape would be
+an attachment on a boundary's edge; what actually made it clean was noticing that a port is a
+Component in every structural sense (inside a boundary, never deployable, moved/resized/edited
+like one) and only differs in *what it relates to*. So it is a kind, with the one thing no other
+Component kind has: its own `categoryOf` category and its own capability-matrix rows
+(`connectorSemantics.ts` — a port is called or used, and `implementedBy`; it never folds to
+`service`, so it can't be wired to storage without a nudge). Every connector keeps its runtime
+direction; the word on the connector *leaving* a port is what carries dependency inversion — see
+[`docs/SEMANTICS.md`](SEMANTICS.md#node-categories). What this replaced in the Hexagonal starter
+were two floating "Inbound ports"/"Outbound ports" labels that belonged to nothing, and before
+them an edge `label` naming the crossing that hid the connector's own relationship — and, as ever,
+`condition` is never a stand-in for either.
 
 ## History
 
@@ -230,7 +233,12 @@ carry the weight:
   revision of Hexagonal used this same `label` to name the ports themselves ("Inbound Port"/
   "Outbound Port"); a later pass removed that, since it hid each connector's actual relationship
   behind a position in the architecture and rode the app's more prominent, bordered-chip caption
-  style while doing it — the opposite of the "quiet annotation" it was meant to be.
+  style while doing it — the opposite of the "quiet annotation" it was meant to be. A spec may also
+  author facts that aren't relationships at all: a queue's `deliveryRole` (Event-Driven's DLQ), an
+  edge's `deliveryAttempts` (its "after 3 attempts" caption), click-to-reveal `attachments` on a
+  node or a connector (an example event payload, an operational note), and a `condition` only where
+  a branch genuinely has one (Microservices' gateway routes carry their route rules) — the
+  connector's own `semantic`/`kind`/`async` are still exactly what the matrix says.
 - **A starter reaches for the primitive that's actually true, not the one that's already drawn and
   looks fine.** Hexagonal's Use Cases/Domain Model/Persistence Adapter/Integration Adapter are
   `component`, not `service` — none of them is independently deployable, and rendering them as

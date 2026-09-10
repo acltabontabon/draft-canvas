@@ -4,6 +4,42 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- A Port kind for Components — a dashed contract box with a PORT tag. Draft Canvas knows what a
+  port is: a Service calls it, a Component uses it, and the connector leaving it reads
+  "implemented by", so a ports-and-adapters diagram states dependency inversion without drawing
+  arrows backwards. Wiring a port straight to a data store gets a gentle note.
+
+### Changed
+
+- A connector's condition chip is now edited in place: double-click it, type, press Enter —
+  the same gesture a connector's label already has.
+- The Monolith starter is now the classic layered shape: API, Business Logic and Data Access as
+  components inside one deployment, a generic data store below, and notes on what "one artifact"
+  means and how the schema ships. The Modular Monolith keeps its composition and gains a generic
+  store plus notes on build-time module boundaries and one-database-three-schemas.
+- The Microservices starter now shows how services integrate: Orders publishes to an Order
+  Events topic that delivers to Payments, so no service calls another or reads its tables. The
+  gateway's routes carry their route rules, the services are API services, the stores are generic
+  data stores, and three click-to-reveal notes cover what the gateway owns, why a store is
+  private, and when an event may be emitted.
+- The Hexagonal starter now shows real ports: REST API and Message Consumer call one Inbound port
+  inside the Application Core, Use Cases owns Persistence and Integration ports, and each is
+  implemented by its adapter outside the core. The core's subtitle says the rest: "Dependencies
+  point inward". The database is a generic Data Store.
+- The Event-Driven starter is now a production-shaped baseline: a producer publishes `OrderCreated`
+  to a topic, the topic fans out to a queue per consumer, three Worker services react
+  independently (one builds a read store, one calls an external system), and the integration path
+  shows retry and a dead-letter queue. Click the chips on the publish and dead-letter connectors
+  for an example event payload and an operational note.
+- Queues, Topics, Streams and DLQs can be given a name again — double-click one (or press Enter)
+  and type. The name sits above the kind caption, and the box grows to fit it; leave it empty and
+  the node stays the compact caption-only shape it has today.
+- Drawing a connector from a Queue to a dead-letter queue now infers the same dashed
+  "dead-letters to" route the Add DLQ command creates, and aiming one at a Topic gets a gentle
+  note that retries and DLQs belong to each consumer's own queue.
+
 ## [0.6.0] - 2026-09-09
 
 ### Added
