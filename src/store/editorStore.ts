@@ -16,6 +16,7 @@ import {
 import { queueTubeCenterFraction } from '../document/queueGeometry';
 import { FONTS } from '../render/text/fonts';
 import { getMeasurer } from '../render/text/measure';
+import { naturalNoteHeight } from '../nodes/describe';
 import {
   addEdges,
   addNodes,
@@ -228,7 +229,8 @@ export interface EditorStore {
     targetOffset?: number,
   ) => DraftEdge | null;
   updateNodeById: (id: string, patch: Partial<Omit<DraftNode, 'id'>>, label?: string) => void;
-  updateNodeText: (id: string, text: string) => void;
+  /** `height` lets a note commit its grown-to-fit box in the same undo step as the text. */
+  updateNodeText: (id: string, text: string, options?: { height?: number }) => void;
   updateEdgeById: (id: string, patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>, label?: string) => void;
   /** Dragging an existing connector's endpoint to a new node/side. */
   reconnectEdge: (
@@ -785,12 +787,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       let next = updateNode(doc, id, patch);
       if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
       if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
+      if (before?.type === 'note' && 'noteKind' in patch) next = growNoteToFit(next, id);
       const changesKind = KIND_FIELDS.some((field) => field in patch);
       return changesKind ? reinferIncidentEdges(next, id) : next;
     });
   },
 
-  updateNodeText(id, text) {
+  updateNodeText(id, text, options) {
     // A manual edit is permanent intent from this point on, even if the typed value happens to
     // match a subtype's own default (e.g. renaming an API to literally "API") — see
     // `DraftNode.textOrigin`'s doc comment. `updateNodeById`'s Service auto-relabeling never
@@ -799,6 +802,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       'Edit text',
       (doc) => {
         const patch: Partial<DraftNode> = { text, textOrigin: 'explicit' };
+        if (options?.height !== undefined) patch.height = options.height;
         // A queue-family node's name stacks above its kind caption under the tube, so naming one
         // moves it between the two default boxes (`DEFAULTS.queueHeight`/`queueNamedHeight`):
         // grow when a name first appears, shrink back only when the name is cleared from a box
@@ -1657,4 +1661,16 @@ export function __resetInteraction(): void {
 /** Test seam: the last-synced system-clipboard text lives outside the store too. */
 export function __resetClipboardSync(): void {
   lastSystemClipboardText = null;
+}
+
+/**
+ * Switching a note to a tagged kind (Question, Warning, Decision) pushes its body down by a tag
+ * line; without this the last line of a note that fit exactly would turn into an ellipsis. The
+ * same grow-only rule the canvas applies when text is committed — never shrinks.
+ */
+function growNoteToFit(doc: DraftDocument, id: string): DraftDocument {
+  const node = doc.nodes.find((n) => n.id === id);
+  if (!node || node.type !== 'note') return doc;
+  const needed = naturalNoteHeight(node, node.text ?? '', { measurer: getMeasurer() });
+  return needed > node.height ? updateNode(doc, id, { height: needed }) : doc;
 }

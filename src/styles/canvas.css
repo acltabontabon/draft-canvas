@@ -95,6 +95,35 @@
   tab-size: 2;
 }
 
+/* A note's editor is the note: same fill (set inline from the accent token), same text rectangle,
+   no second frame inside the selection ring. The ring itself thickens while editing — that, and
+   the caret, are the whole "this box owns the keyboard" signal. */
+.dc-node-editor-note {
+  outline: none;
+  border-radius: 0;
+}
+
+.dc-node-editor-note::placeholder {
+  color: var(--dc-text-faint);
+  opacity: 1;
+}
+
+.dc-node[data-editing='true']::after {
+  border-width: 2px;
+}
+
+/* Chrome, like the selection ring: the hint never reaches the display list, so an empty note
+   exports as an empty note. */
+.dc-note-placeholder {
+  position: absolute;
+  overflow: hidden;
+  color: var(--dc-text-faint);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* Sits in the code card's own header row — visible on hover/selection only,
    the same restraint as connection handles, so a small card is never crowded. */
 .dc-code-copy {
@@ -1776,6 +1805,14 @@
 .dc-canvas[data-lens='on'] .react-flow__node:not(:has(.dc-node[data-lens-member='true'])) {
   opacity: 0.45;
   transition: opacity 180ms ease;
+}
+
+/* Whatever Focus or a lens dims, a box being typed into is fully legible. Same specificity as
+   the two dimming rules above, so this has to come after both of them. */
+.dc-canvas[data-focus='on'] .react-flow__node:has(.dc-node[data-editing='true']),
+.dc-canvas[data-lens='on'] .react-flow__node:has(.dc-node[data-editing='true']) {
+  opacity: 1;
+  filter: none;
 }
 
 .dc-canvas[data-lens='on'] .dc-edge[data-lens-dimmed='true'] {

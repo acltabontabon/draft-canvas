@@ -367,6 +367,9 @@ test.describe('Draft Canvas', () => {
     await page.locator(CANVAS).hover({ position: { x: 400, y: 300 } });
     await page.keyboard.press('n');
     await expect(page.locator('.dc-node[data-type="note"]')).toHaveCount(1);
+    // The new note owns the keyboard until it is committed — the next shortcut must not land in it.
+    await expect(page.locator('.dc-node-editor')).toBeFocused();
+    await page.keyboard.press('Escape');
 
     await page.locator(CANVAS).hover({ position: { x: 700, y: 300 } });
     await page.keyboard.press('c');

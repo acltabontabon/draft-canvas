@@ -70,7 +70,7 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
     case 'database':
       return { width: 120, height: 76 };
     case 'note':
-      return { width: 120, height: 72 };
+      return { width: 120, height: 40 };
     case 'code':
       return { width: 200, height: 96 };
     case 'group':

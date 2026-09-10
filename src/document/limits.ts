@@ -38,7 +38,9 @@ export const DEFAULTS = {
   codeWidth: 380,
   codeHeight: 180,
   noteWidth: 200,
-  noteHeight: 108,
+  /** Two body lines with the tag-less padding (`noteLayout` in `nodes/describe.ts`): compact
+   *  enough to read as a remark, with room for the second line before it starts growing. */
+  noteHeight: 56,
   textWidth: 200,
   textHeight: 36,
   /** A Junction is a routing/convergence point, not a component — kept compact enough to read

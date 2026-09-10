@@ -2,8 +2,18 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { Handle, NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { maxSizeFor, minSizeFor } from '../document/factory';
 import { explainNodeTier, lensNodeTier, type ExplainTier } from '../document/flow';
+import { normalizeNoteText } from '../document/noteText';
 import type { DraftNode } from '../document/types';
-import { CODE_LAYOUT, describeContext, describeNode, naturalCodeSize } from '../nodes/describe';
+import {
+  CODE_LAYOUT,
+  NOTE_ACCENTS,
+  NOTE_AUTO_MAX_HEIGHT,
+  describeContext,
+  describeNode,
+  naturalCodeSize,
+  naturalNoteHeight,
+  noteLayout,
+} from '../nodes/describe';
 import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
@@ -64,8 +74,18 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
 
   const [editing, setEditing] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  /**
+   * A note grows as it is typed into. The grown height lives here, not in the store, until the
+   * edit commits: writing the document on every keystroke would autosave and re-project the whole
+   * canvas per character for a box only this component can see change. It is grow-only and capped
+   * (`NOTE_AUTO_MAX_HEIGHT`), and the commit persists it in the same undo step as the text.
+   * Handles and incoming connectors follow at commit rather than per keystroke.
+   */
+  const [liveHeight, setLiveHeight] = useState<number | null>(null);
   const [resizing, setResizing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const isCode = node?.type === 'code';
+  const isNote = node?.type === 'note';
   const copiedTimeout = useRef<number | null>(null);
   useEffect(
     () => () => {
@@ -95,10 +115,35 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     const el = editorRef.current;
     if (!el) return;
     el.focus();
-    el.select();
+    if (isNote || isCode) {
+      // Multi-line content is appended to far more often than replaced, and select-all on a
+      // paragraph means the next keystroke wipes it. A single-line label is the opposite case.
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    } else {
+      el.select();
+    }
+    // A note whose text already overflows its box (sized down by hand, or grown past what a
+    // narrower width can hold) opens tall enough to show all of it — see `liveHeight`.
+    if (isNote && node) {
+      const grown = grownNoteHeight(node, el, node.height);
+      // oxlint-disable-next-line set-state-in-effect -- measuring the just-mounted textarea, see comment above.
+      if (grown !== null) setLiveHeight(grown);
+    }
+    // Only the transition into editing matters; the node's own fields are read once, at that moment.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
   const stopEditing = useCallback(() => setEditing(false), []);
+
+  // `liveHeight` is kept until the committed document has caught up with it, so the box never
+  // dips back to its old height for the frame between the commit and React Flow re-projecting.
+  useEffect(() => {
+    if (liveHeight !== null && !editing && node && node.height >= liveHeight) {
+      // oxlint-disable-next-line set-state-in-effect -- clearing a stale override once the store agrees.
+      setLiveHeight(null);
+    }
+  }, [liveHeight, editing, node]);
 
   /**
    * React Flow updates `width`/`height` on this node live, once per frame,
@@ -109,7 +154,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
    * whole drag and jump on release.
    */
   const effectiveWidth = Math.round(width ?? node?.width ?? 0);
-  const effectiveHeight = Math.round(height ?? node?.height ?? 0);
+  const effectiveHeight = Math.round(liveHeight ?? height ?? node?.height ?? 0);
   const liveNode: DraftNode | null = !node
     ? null
     : effectiveWidth === node.width && effectiveHeight === node.height
@@ -129,12 +174,16 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
    */
   // `liveNode` only changes identity when width/height actually change (see
   // the ternary above); that *is* the memoization the linter can't see through.
+  // While a note is being edited its body belongs to the textarea alone: drawing the committed
+  // text underneath as well would show two copies wherever the two wrap differently by a word.
+  const editingNote = editing && isNote;
   const shapes = useMemo(() => {
     if (!liveNode) return [];
     beginClipScope(liveNode.id);
-    return emitDisplayList(describeNode(liveNode, describeContext(theme, preset)));
+    const described = editingNote ? { ...liveNode, text: '' } : liveNode;
+    return emitDisplayList(describeNode(described, describeContext(theme, preset)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
-  }, [liveNode, theme, preset]);
+  }, [liveNode, theme, preset, editingNote]);
 
   // Doesn't depend on `node`, so — like `shapes` above — this is computed and its effect run
   // unconditionally, ahead of the `!node` early return below.
@@ -157,8 +206,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
 
   if (!node) return null;
 
-  const isCode = node.type === 'code';
-
   const beginEditing = () => {
     if (readOnly) return;
     setEditing(true);
@@ -175,9 +222,24 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         const patch = needed > node.height ? { code: value, height: needed } : { code: value };
         updateNodeById(node.id, patch, 'Edit code');
       }
+    } else if (isNote) {
+      const text = normalizeNoteText(value);
+      // Grow-only, like a code card: the box always ends up tall enough for what was typed, and
+      // a box the user made bigger on purpose is never taken back. The live (DOM-measured)
+      // height is folded in so the store never lands below what is already on screen.
+      const needed = Math.max(naturalNoteHeight(node, text, describeContext(theme)), liveHeight ?? 0);
+      const height = needed > node.height ? needed : undefined;
+      if (text !== (node.text ?? '') || height !== undefined) {
+        updateNodeText(node.id, text, height === undefined ? undefined : { height });
+      }
     } else if (value !== (node.text ?? '')) {
       updateNodeText(node.id, value);
     }
+  };
+
+  const growToFit = (el: HTMLTextAreaElement) => {
+    const grown = grownNoteHeight(node, el, effectiveHeight);
+    if (grown !== null) setLiveHeight(grown);
   };
 
   const min = minSizeFor(node.type);
@@ -282,30 +344,50 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         {shapes}
       </SvgSurface>
 
+      {isNote && !editing && !readOnly && !(node.text ?? '').trim() && (
+        <div className="dc-note-placeholder" style={placeholderStyle(node)}>
+          Add a note…
+        </div>
+      )}
+
       {editing && (
+        // `nodrag`: React Flow's drag filter is class-based, so without it a mouse-drag to select
+        // text moves the node instead. `nowheel`: same for scrolling a long editor, which would
+        // otherwise pan the canvas.
         <textarea
           ref={editorRef}
-          className={isCode ? 'dc-node-editor dc-node-editor-code' : 'dc-node-editor'}
+          className={`dc-node-editor nodrag nowheel${isCode ? ' dc-node-editor-code' : ''}${isNote ? ' dc-node-editor-note' : ''}`}
           defaultValue={isCode ? (node.code ?? '') : (node.text ?? '')}
+          placeholder={isNote ? 'Add a note…' : undefined}
           spellCheck={false}
-          style={editorStyle(node.type, isCode)}
+          style={editorStyle(node, effectiveHeight >= NOTE_AUTO_MAX_HEIGHT)}
+          onInput={isNote ? (event) => growToFit(event.currentTarget) : undefined}
           onBlur={(event) => {
             commit(event.currentTarget.value);
             stopEditing();
           }}
           onKeyDown={(event) => {
+            // First, always: the window-level shortcut handler is guarded by `isEditableTarget`,
+            // but React Flow's own key bindings (Shift = box selection) are not guarded for a
+            // modifier pressed inside an input.
             event.stopPropagation();
             if (event.key === 'Escape') {
               event.preventDefault();
+              // A note keeps what was typed — losing a paragraph of meeting notes to a reflexive
+              // Escape is the worse failure. A label reverts, the convention for a rename field.
+              if (isNote) commit(event.currentTarget.value);
               stopEditing();
               return;
             }
-            // Plain Enter commits a label; code cards need it for new lines.
-            if (event.key === 'Enter' && !event.shiftKey && !isCode) {
-              event.preventDefault();
-              commit(event.currentTarget.value);
-              stopEditing();
-            }
+            if (event.key !== 'Enter') return;
+            // Enter is a newline in every multi-line editor (code, note); a note commits on
+            // Cmd/Ctrl+Enter, Escape, or clicking away. A label commits on plain Enter and takes
+            // Shift+Enter for a rare second line.
+            if (isCode) return;
+            if (isNote ? !(event.metaKey || event.ctrlKey) : event.shiftKey) return;
+            event.preventDefault();
+            commit(event.currentTarget.value);
+            stopEditing();
           }}
         />
       )}
@@ -349,11 +431,36 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
 });
 
 /**
+ * The height a note needs for the text currently in its editor, measured from the textarea
+ * itself (`scrollHeight` is the browser's own wrap, which is what the user is looking at), or
+ * `null` when the box is already tall enough. Grow-only and capped; the one-pixel slack keeps a
+ * fractional top inset (the tagged kinds) from rounding into a phantom pixel of growth.
+ */
+function grownNoteHeight(node: DraftNode, el: HTMLTextAreaElement, current: number): number | null {
+  const geo = noteLayout(node);
+  const needed = Math.ceil(geo.top + el.scrollHeight + geo.bottom);
+  if (needed <= current + 1) return null;
+  return Math.min(NOTE_AUTO_MAX_HEIGHT, needed);
+}
+
+/** Chrome, not appearance: the hint sits where the first line of text will, and is never exported. */
+function placeholderStyle(node: DraftNode): React.CSSProperties {
+  const geo = noteLayout(node);
+  return {
+    top: geo.top,
+    left: geo.left,
+    right: geo.right,
+    font: cssFont(geo.font),
+    lineHeight: `${geo.lineHeight}px`,
+  };
+}
+
+/**
  * The editor overlays the text it replaces, matching its font and metrics so
  * that committing an edit does not make the text visibly jump.
  */
-function editorStyle(type: string, isCode: boolean): React.CSSProperties {
-  if (isCode) {
+function editorStyle(node: DraftNode, atGrowthCap: boolean): React.CSSProperties {
+  if (node.type === 'code') {
     return {
       font: cssFont(FONTS.code),
       lineHeight: `${FONTS.code.size * LINE_HEIGHTS.code}px`,
@@ -364,18 +471,26 @@ function editorStyle(type: string, isCode: boolean): React.CSSProperties {
       textAlign: 'left',
     };
   }
-  if (type === 'note') {
+  if (node.type === 'note') {
+    const geo = noteLayout(node);
+    const accent = node.accent ?? NOTE_ACCENTS[node.noteKind ?? 'note'];
     return {
-      font: cssFont(FONTS.noteBody),
-      lineHeight: `${FONTS.noteBody.size * LINE_HEIGHTS.body}px`,
-      top: 26,
-      left: 13,
-      right: 10,
-      bottom: 6,
+      font: cssFont(geo.font),
+      lineHeight: `${geo.lineHeight}px`,
+      top: geo.top,
+      left: geo.left,
+      right: geo.right,
+      bottom: geo.bottom,
       textAlign: 'left',
+      // The note's own fill (the same token `describe.ts` paints with), so entering edit mode
+      // changes nothing but the caret.
+      background: `var(--dc-accent-${accent}-fill)`,
+      // Hidden until the box stops growing: a scrollbar would narrow the wrap width and reflow
+      // the text the moment it appeared.
+      overflowY: atGrowthCap ? 'auto' : 'hidden',
     };
   }
-  if (type === 'text') {
+  if (node.type === 'text') {
     return {
       font: cssFont(FONTS.freeText),
       lineHeight: `${FONTS.freeText.size * LINE_HEIGHTS.body}px`,

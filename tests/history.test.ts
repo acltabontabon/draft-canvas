@@ -1,3 +1,4 @@
+import { DEFAULTS } from '../src/document/limits';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
 import { __resetClipboardSync, __resetInteraction, useEditorStore } from '../src/store/editorStore';
@@ -263,13 +264,13 @@ describe('undo and redo', () => {
   });
 
   it('copies and pastes across the clipboard, placed around a given target center', () => {
-    // Default note size is 200x108, so a note at (0,0) has fragment center
-    // (100,54); a target of (160,114) reproduces a (60,60) top-left, same as
-    // the old fixed-offset behavior, but now because it's viewport-aware.
+    // A note at (0,0) has its fragment center at half its default size; a target that far past
+    // (60,60) reproduces a (60,60) top-left, same as the old fixed-offset behavior, but now
+    // because it's viewport-aware.
     const node = store.getState().addNode({ type: 'note', x: 0, y: 0, text: 'Copy me' });
     store.getState().setSelection({ nodes: [node.id], edges: [] });
     store.getState().copySelection();
-    store.getState().paste({ x: 160, y: 114 });
+    store.getState().paste({ x: 60 + DEFAULTS.noteWidth / 2, y: 60 + DEFAULTS.noteHeight / 2 });
 
     const doc = store.getState().document;
     expect(doc.nodes).toHaveLength(2);

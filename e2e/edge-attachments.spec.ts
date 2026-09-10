@@ -27,6 +27,9 @@ async function newCanvas(page: Page, title: string) {
 async function create(page: Page, tool: string, at: { x: number; y: number }) {
   await page.getByRole('button', { name: tool, exact: true }).click();
   await page.locator('.react-flow__pane').click({ position: at });
+  // A new Note opens ready to type into; Escape commits (empty) and leaves it selected, so the
+  // rest of a test sees the same plain, selected node it would for any other tool.
+  if (tool === 'Note') await page.keyboard.press('Escape');
 }
 
 /** Drags from a node's right-hand handle onto another node. */

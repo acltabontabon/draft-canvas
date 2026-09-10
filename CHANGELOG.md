@@ -6,6 +6,23 @@ All notable changes to Draft Canvas are documented here.
 
 ### Changed
 
+- Notes are now plain multiline text that behaves like it: Enter starts a new line, clicking
+  away, Escape, or Cmd/Ctrl+Enter finishes the note, and a new Note (`N`, the toolbar, the
+  palette, or the double-click picker) opens ready to type into. An empty note shows a quiet
+  "Add a note…" hint that is never saved or exported. Opening an existing note puts the caret at
+  the end instead of selecting everything.
+- A note grows taller as you type, up to a sensible cap, and never shrinks on its own — a note
+  you resized by hand keeps that size. Long words wrap; indentation at the start of a line (a
+  nested bullet) is drawn as typed. Pasted Windows line endings and tabs are tidied on commit.
+- Plain notes are quieter: no "NOTE" tag above the text and no drop shadow, so a remark sits
+  beside a service instead of competing with it. Question, Warning and Decision keep their tags.
+  Entering edit mode no longer changes the note's background or shifts its text.
+- Inside any node's text editor, a mouse drag now selects text (it used to move the node), and
+  scrolling a long editor scrolls it instead of zooming the canvas. A box being typed into stays
+  fully legible while a flow is selected or Focus is on.
+- A Queue's right-click menu offers "Edit text" like every other node (double-click and Enter
+  already did).
+
 - Flows now live in one place. The toolbar's "Flows" button (or `F`) toggles the Flows panel,
   which replaces the old dropdown, "Manage flows…", and the separate flow-edit mode. Click a
   flow to make it the active one, click "Diagram" to step back out; Present, Rename and Delete

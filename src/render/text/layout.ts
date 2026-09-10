@@ -69,7 +69,9 @@ export function layoutText(text: string, options: LayoutOptions): TextLayout {
   let truncated = false;
 
   const atLimit = () => lines.length >= maxLines;
-  const paragraphs = text.split('\n');
+  // CR and CRLF break lines too: import validation deliberately keeps `\r` (it is legitimate in
+  // code), and a stray one at the end of a line would otherwise be measured and drawn as a glyph.
+  const paragraphs = text.split(/\r\n|\r|\n/);
 
   outer: for (let index = 0; index < paragraphs.length; index += 1) {
     const paragraph = paragraphs[index]!;
@@ -88,8 +90,11 @@ export function layoutText(text: string, options: LayoutOptions): TextLayout {
 
     let current = '';
     for (const piece of segments(paragraph)) {
-      // Leading whitespace on a fresh line is dropped rather than indenting it.
-      let pending = current === '' ? piece.trimStart() : piece;
+      // Leading whitespace on a wrapped continuation line is dropped rather than indenting it;
+      // at the start of a paragraph it is the author's own indentation (a nested bullet in a
+      // note) and is kept.
+      const continuation = current === '' && lines.length > linesBefore;
+      let pending = continuation ? piece.trimStart() : piece;
       if (pending === '') continue;
 
       if (measurer.width((current + pending).trimEnd(), font) <= maxWidth) {

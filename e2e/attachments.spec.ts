@@ -15,6 +15,9 @@ async function newCanvas(page: Page, title: string) {
 async function create(page: Page, tool: string, at: { x: number; y: number }) {
   await page.getByRole('button', { name: tool, exact: true }).click();
   await page.locator('.react-flow__pane').click({ position: at });
+  // A new Note opens ready to type into; Escape commits (empty) and leaves it selected, so the
+  // rest of a test sees the same plain, selected node it would for any other tool.
+  if (tool === 'Note') await page.keyboard.press('Escape');
 }
 
 /** Drags a node by its center to a new center point, holding partway through. */
@@ -289,7 +292,9 @@ test.describe('attachments', () => {
     const serviceBox = (await service.boundingBox())!;
     const serviceCenter = { x: serviceBox.x + serviceBox.width / 2, y: serviceBox.y + serviceBox.height / 2 };
 
-    const release = await dragNodeCenterTo(page, note, serviceCenter);
+    // Dwell over the centre rather than relying on instant-arm overlap: a fresh note is a compact
+    // two-line box now, and the first mouse step of a drag is what starts it rather than moving it.
+    const release = await dragNodeCenterTo(page, note, serviceCenter, { holdMs: 400 });
     await release();
 
     // Attached to the Service, not reparented into the boundary.

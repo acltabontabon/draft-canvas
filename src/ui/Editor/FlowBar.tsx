@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { displayNameFor } from '../../document/factory';
+import { isEditableTarget } from '../../lib/isEditableTarget';
 import { nodeIndex } from '../../store/selectors';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -24,10 +25,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
       // No editable surface is actually reachable while presenting today, but every other
       // shortcut listener in the app guards against one the same way (`EditorScreen.tsx`) — kept
       // consistent here as defense-in-depth for whatever's added next.
-      const target = event.target as HTMLElement | null;
-      if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) {
-        return;
-      }
+      if (isEditableTarget(event.target)) return;
       if (playback.picking) {
         if (event.key === 'Escape') {
           playback.stop();

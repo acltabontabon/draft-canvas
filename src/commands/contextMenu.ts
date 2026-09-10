@@ -77,12 +77,8 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
   // `run()` returns a `CommandStage` (a picker), which the stage-command rule excludes.
   const outgoing = ctx.editor.document.edges.filter((edge) => edge.source === node.id);
   const lastGroup = outgoing.length === 1 ? ['spotlight', 'flow-start-here'] : ['spotlight'];
-  // A Queue's name is permanently fixed to its kind caption (`DraftNodeView.tsx` blocks entering
-  // edit mode for it) — `edit-text` would be a dead row on a menu built fresh, so it's simply never
-  // included here, rather than reproducing the palette's own identical pre-existing gap.
-  const editTextGroup = node.type === 'queue' ? [] : ['edit-text'];
   return grouped([
-    pick(commands, editTextGroup),
+    pick(commands, ['edit-text']),
     pick(commands, ['attach-note', 'attach-code']),
     pick(commands, ['add-consumer', 'add-dead-letter-queue', 'remove-dead-letter-queue']),
     pick(commands, ['duplicate', 'copy', 'cut']),

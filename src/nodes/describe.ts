@@ -15,7 +15,7 @@ import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
 import { accentOf, type Theme } from '../render/theme/tokens';
-import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
+import { FONTS, LINE_HEIGHTS, type FontSpec } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../ui/personality/usePersonality';
@@ -46,6 +46,16 @@ const CODE_HEADER_HEIGHT = 26;
 const CODE_PADDING_X = 12;
 const CODE_PADDING_Y = 8;
 const NOTE_BAR_WIDTH = 3;
+/** Vertical inset of a note's content from its top and bottom edge. */
+const NOTE_PADDING_TOP = 10;
+const NOTE_PADDING_BOTTOM = 8;
+/**
+ * Where a note stops growing on its own as its text gets longer (see `naturalNoteHeight`). Past
+ * this the box stays put and the text is truncated with an ellipsis in read mode — a note that
+ * kept growing with every line would push the architecture around it off the screen, which is
+ * exactly backwards for an annotation. The user can always drag it taller by hand.
+ */
+export const NOTE_AUTO_MAX_HEIGHT = 320;
 
 /** Notes are colour-coded by intent — the whole point of having four kinds. Exported so an edge
  *  attachment (`EdgeAttachmentReveal` in `DraftEdgeView.tsx`) can match a note's own look exactly
@@ -1864,15 +1874,82 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
 
 /* ----------------------------------------------------------------- notes -- */
 
+/**
+ * The geometry a note's body text is laid out in — used by `note()` to draw it and by the
+ * canvas's inline editor to overlay a textarea on exactly the same rectangle, so the text does not
+ * shift by a pixel between reading and editing. One source for both is what keeps them in step.
+ */
+export interface NoteLayout {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  font: FontSpec;
+  lineHeight: number;
+  /** A plain note is the quiet default — tint, bar and body, nothing else. Question, Warning and
+   *  Decision keep their uppercase tag because the word itself is the point. */
+  tagShown: boolean;
+  tagHeight: number;
+}
+
+export function noteLayout(node: Pick<DraftNode, 'noteKind'>): NoteLayout {
+  const tagShown = (node.noteKind ?? 'note') !== 'note';
+  const tagHeight = FONTS.presetTag.size * LINE_HEIGHTS.label;
+  return {
+    left: NOTE_BAR_WIDTH + 10,
+    top: tagShown ? NOTE_PADDING_TOP + tagHeight + 5 : NOTE_PADDING_TOP,
+    right: 10,
+    bottom: NOTE_PADDING_BOTTOM,
+    font: FONTS.noteBody,
+    lineHeight: FONTS.noteBody.size * LINE_HEIGHTS.body,
+    tagShown,
+    tagHeight,
+  };
+}
+
+/** How many whole body lines fit in a note of this height. The half-pixel slack absorbs the
+ *  floating-point drift of `lines × lineHeight` so a note sized by `naturalNoteHeight` always
+ *  shows exactly the lines it was sized for, never one fewer. */
+function noteMaxLines(height: number, geo: NoteLayout): number {
+  return Math.max(1, Math.floor((height - geo.top - geo.bottom + 0.5) / geo.lineHeight));
+}
+
+/**
+ * The height a note needs to show all of `text` at `node.width` — at least one line, at most
+ * `NOTE_AUTO_MAX_HEIGHT`. The canvas grows a note to this on commit and never shrinks it: a box
+ * the user sized by hand stays that way as long as its text still fits, the same rule code cards
+ * already follow. (A fresh note starts at `DEFAULTS.noteHeight`, not here.)
+ */
+export function naturalNoteHeight(
+  node: Pick<DraftNode, 'noteKind' | 'width'>,
+  text: string,
+  ctx: Pick<DescribeContext, 'measurer'>,
+): number {
+  const geo = noteLayout(node);
+  const lines = text.trim()
+    ? layoutText(text, {
+        font: geo.font,
+        maxWidth: Math.max(16, node.width - geo.left - geo.right),
+        lineHeight: geo.lineHeight,
+        measurer: ctx.measurer,
+      }).lines.length
+    : 1;
+  const needed = Math.ceil(geo.top + lines * geo.lineHeight + geo.bottom);
+  return Math.min(NOTE_AUTO_MAX_HEIGHT, needed);
+}
+
 function note(node: DraftNode, ctx: DescribeContext): Shape[] {
   const kind = node.noteKind ?? 'note';
   const palette = accentOf(ctx.theme, node.accent ?? NOTE_ACCENTS[kind]);
+  const geo = noteLayout(node);
   const shapes: Shape[] = [
+    // No drop shadow, deliberately: a note is an annotation sitting flat on the canvas, and the
+    // shadow is what says "architecture element" on a service or a data store.
     outlineShape(
       node.id,
       ctx,
       { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 6 },
-      { fill: palette.fill, stroke: { color: palette.line, width: 1 }, shadow: true },
+      { fill: palette.fill, stroke: { color: palette.line, width: 1 } },
     ),
     // A colour bar rather than a sticky-note skeuomorph.
     {
@@ -1884,41 +1961,40 @@ function note(node: DraftNode, ctx: DescribeContext): Shape[] {
     },
   ];
 
-  const left = NOTE_BAR_WIDTH + 10;
-  const tagLayout = layoutText(NOTE_LABELS[kind], {
-    font: FONTS.presetTag,
-    maxWidth: node.width,
-    lineHeight: FONTS.presetTag.size * LINE_HEIGHTS.label,
-    maxLines: 1,
-    measurer: ctx.measurer,
-  });
-  shapes.push({
-    t: 'text',
-    x: left,
-    y: 8,
-    layout: tagLayout,
-    font: FONTS.presetTag,
-    fill: palette.chip,
-    align: 'start',
-  });
-
-  const body = node.text ?? '';
-  if (body.trim()) {
-    const top = 8 + tagLayout.height + 5;
-    const lineHeight = FONTS.noteBody.size * LINE_HEIGHTS.body;
-    const layout = layoutText(body, {
-      font: FONTS.noteBody,
-      maxWidth: Math.max(16, node.width - left - 10),
-      lineHeight,
-      maxLines: Math.max(1, Math.floor((node.height - top - 6) / lineHeight)),
+  if (geo.tagShown) {
+    const tagLayout = layoutText(NOTE_LABELS[kind], {
+      font: FONTS.presetTag,
+      maxWidth: node.width,
+      lineHeight: geo.tagHeight,
+      maxLines: 1,
       measurer: ctx.measurer,
     });
     shapes.push({
       t: 'text',
-      x: left,
-      y: top,
+      x: geo.left,
+      y: NOTE_PADDING_TOP,
+      layout: tagLayout,
+      font: FONTS.presetTag,
+      fill: palette.chip,
+      align: 'start',
+    });
+  }
+
+  const body = node.text ?? '';
+  if (body.trim()) {
+    const layout = layoutText(body, {
+      font: geo.font,
+      maxWidth: Math.max(16, node.width - geo.left - geo.right),
+      lineHeight: geo.lineHeight,
+      maxLines: noteMaxLines(node.height, geo),
+      measurer: ctx.measurer,
+    });
+    shapes.push({
+      t: 'text',
+      x: geo.left,
+      y: geo.top,
       layout,
-      font: FONTS.noteBody,
+      font: geo.font,
       fill: ctx.theme.text,
       align: 'start',
     });

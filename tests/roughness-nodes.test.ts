@@ -203,12 +203,19 @@ describe('Intentional Roughness — Draft and Sketch differ by technique, not ju
 });
 
 describe('Intentional Roughness — shadow survives the switch to a jittered path outline', () => {
-  it('a shape with a drop shadow keeps it once its outline becomes a path (service/note/code)', () => {
-    for (const type of ['service', 'note', 'code'] as const) {
+  it('a shape with a drop shadow keeps it once its outline becomes a path (service/code)', () => {
+    for (const type of ['service', 'code'] as const) {
       const node = createNode({ type, id: 'shadow1', x: 0, y: 0, width: 176, height: 96, text: 'X' });
       const outline = outlineShapes(node, sketch)[0]!;
       expect(outline.t).toBe('path');
       expect((outline as { shadow?: boolean }).shadow).toBe(true);
+    }
+  });
+
+  it('a note has no shadow at any preset — an annotation sits flat, only architecture is raised', () => {
+    for (const preset of [clean, draft, sketch]) {
+      const node = createNode({ type: 'note', id: 'flat1', x: 0, y: 0, width: 176, height: 96, text: 'X' });
+      expect((outlineShapes(node, preset)[0] as { shadow?: boolean }).shadow).toBeUndefined();
     }
   });
 

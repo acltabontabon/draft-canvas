@@ -99,6 +99,11 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         code,
       });
       arm(null);
+      // A note exists to be typed into, so it opens ready for that: N (or the toolbar, the
+      // palette, the double-click picker) and then just type. Nothing else auto-edits — a
+      // service arrives already named, and the letter shortcut for the next shape must keep
+      // working the moment one lands.
+      if (node.type === 'note') useUiStore.getState().requestEdit(node.id);
       return node;
     },
     [arm, store, theme],
@@ -132,6 +137,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
           : undefined,
       });
       store.getState().addNodesWithEdges([created], [edge], 'Connect to new node');
+      if (created.type === 'note') useUiStore.getState().requestEdit(created.id);
       setQuickConnect(null);
     },
     [createAt, quickConnect, setQuickConnect, store],

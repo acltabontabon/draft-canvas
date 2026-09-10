@@ -200,10 +200,10 @@ describe('contextMenuCommandsFor — a regular node', () => {
     expect(ids).not.toContain('attach-code');
   });
 
-  it('omits Edit text for a Queue (a verified no-op there today)', () => {
+  it('offers Edit text for a Queue, which can be named like any other node', () => {
     const queue = useEditorStore.getState().addNode({ type: 'queue', x: 0, y: 0 });
     const ids = nodeMenu(queue.id).filter((e) => e.type === 'command').map((e) => e.command.id);
-    expect(ids).not.toContain('edit-text');
+    expect(ids).toContain('edit-text');
   });
 
   it('a plain Queue gets Add Consumer and Add DLQ grouped right after Add Note/Add Code', () => {
@@ -211,6 +211,8 @@ describe('contextMenuCommandsFor — a regular node', () => {
     const entries = nodeMenu(queue.id);
     const types = entries.map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
     expect(types).toEqual([
+      'edit-text',
+      'sep',
       'attach-note',
       'attach-code',
       'sep',
