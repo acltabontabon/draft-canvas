@@ -959,6 +959,7 @@
 
 .dc-edge-inspector-caption,
 .dc-edge-inspector-flows {
+  max-width: 180px;
   padding: 3px 8px;
   border: 1px solid transparent;
   border-radius: 999px;
