@@ -84,10 +84,10 @@ test.describe('Note', () => {
   }) => {
     await newCanvas(page, 'Note escape');
     await newNote(page, { x: 400, y: 300 });
-    await page.keyboard.type('Owned by Payments');
+    await page.keyboard.type('Payments');
     await page.keyboard.press('Escape');
     await expect(page.locator(EDITOR)).toHaveCount(0);
-    expect(await renderedLines(page)).toEqual(['Owned by Payments']);
+    expect(await renderedLines(page)).toEqual(['Payments']);
     await expect(page.locator('.dc-note-placeholder')).toHaveCount(0);
 
     await page.locator(NOTE).dblclick();
@@ -96,7 +96,7 @@ test.describe('Note', () => {
     await page.keyboard.type(' (temp)');
     await page.keyboard.press('ControlOrMeta+Enter');
     await expect(page.locator(EDITOR)).toHaveCount(0);
-    expect(await renderedLines(page)).toEqual(['Owned by Payments (temp)']);
+    expect(await renderedLines(page)).toEqual(['Payments (temp)']);
 
     await page.locator(NOTE).dblclick();
     await page.keyboard.press('ControlOrMeta+a');
