@@ -1,14 +1,26 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { createDocument, createEdge, createNode } from '../src/document/factory';
-import { createFlow } from '../src/document/flow';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DraftDocument } from '../src/document/types';
-import { useEditorStore } from '../src/store/editorStore';
-import { useUiStore } from '../src/store/uiStore';
-import { ExportDialog } from '../src/ui/Editor/ExportDialog';
-import { PersonalityProvider } from '../src/ui/personality/PersonalityProvider';
-import { ThemeProvider } from '../src/ui/theme/ThemeProvider';
+
+// Node's own experimental `globalThis.localStorage` shadows jsdom's in this environment — the
+// same in-memory fake `tests/personality-preference.test.tsx` uses stands in for
+// `lib/preferences.ts`, so a format choice made in one test can't leak into the next via the
+// real global.
+const prefs = new Map<string, string>();
+vi.mock('../src/lib/preferences', () => ({
+  readPreference: (key: string) => prefs.get(key) ?? null,
+  writePreference: (key: string, value: string) => void prefs.set(key, value),
+  removePreference: (key: string) => void prefs.delete(key),
+}));
+
+const { createDocument, createEdge, createNode } = await import('../src/document/factory');
+const { createFlow } = await import('../src/document/flow');
+const { useEditorStore } = await import('../src/store/editorStore');
+const { useUiStore } = await import('../src/store/uiStore');
+const { ExportDialog } = await import('../src/ui/Editor/ExportDialog');
+const { PersonalityProvider } = await import('../src/ui/personality/PersonalityProvider');
+const { ThemeProvider } = await import('../src/ui/theme/ThemeProvider');
 
 function withFlow(): DraftDocument {
   const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
@@ -34,6 +46,7 @@ function renderDialog() {
 }
 
 beforeEach(() => {
+  prefs.clear();
   useUiStore.setState({ exportOpen: true, exportSelectionRequested: false });
 });
 
