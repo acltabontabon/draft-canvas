@@ -10,9 +10,9 @@ import { author, version } from '../package.json';
  */
 export const PRODUCT = {
   name: 'Draft Canvas',
+  /** The first-run home screen's one big line. */
+  motto: 'Draw it so everyone gets it.',
   tagline: 'For meetings that suddenly need a diagram.',
-  /** The home screen's second line — the tagline's attitude, one notch quieter. */
-  aside: 'Sketch the system before someone asks if you can draw that.',
   /** The About panel's one supporting sentence — what it enables, not what it contains. */
   pitch: 'Sketch architecture, trace flows, explain systems, and get back to the conversation.',
   author: author.name,

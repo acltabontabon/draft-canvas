@@ -7,7 +7,15 @@ import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import { PERSONALITY_PRESETS, usePersonality, type PersonalityPreset } from '../personality/usePersonality';
 import { PersonalityPreview } from '../personality/PersonalityPreview';
-import { useThemeValue } from '../theme/useTheme';
+import { useTheme, type ThemePreference } from '../theme/useTheme';
+
+const THEME_PREFERENCES: readonly ThemePreference[] = ['system', 'light', 'dark'];
+
+const THEME_LABELS: Record<ThemePreference, string> = {
+  system: 'Match system',
+  light: 'Light',
+  dark: 'Dark',
+};
 
 const FIT_LABELS: Record<BackgroundFit, string> = {
   cover: 'Cover',
@@ -44,7 +52,7 @@ export function CanvasSettingsDialog() {
   const document = useEditorStore((state) => state.document);
   const updateSettings = useEditorStore((state) => state.updateSettings);
   const { preset, setPreset } = usePersonality();
-  const theme = useThemeValue();
+  const { theme, preference: themePreference, setPreference: setThemePreference } = useTheme();
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
@@ -170,6 +178,28 @@ export function CanvasSettingsDialog() {
               </label>
             </>
           )}
+        </section>
+
+        <section>
+          <h3>Appearance</h3>
+          <p className="dc-muted">
+            Match system follows your device's light or dark setting, even while Draft Canvas is open.
+          </p>
+          <label className="dc-field dc-field-inline">
+            <span>Theme</span>
+            <select
+              className="dc-select"
+              aria-label="Theme"
+              value={themePreference}
+              onChange={(event) => setThemePreference(event.target.value as ThemePreference)}
+            >
+              {THEME_PREFERENCES.map((option) => (
+                <option key={option} value={option}>
+                  {THEME_LABELS[option]}
+                </option>
+              ))}
+            </select>
+          </label>
         </section>
 
         <section>

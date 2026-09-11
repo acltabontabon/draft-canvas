@@ -1,18 +1,19 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * The home screen as a product surface: the empty workspace's starters, the
- * per-row topology fingerprint, search that says how many matched, and the
- * local-first line. Everything
- * here is checked against a fresh browser context, so each test starts from
- * a genuinely empty library.
+ * The home screen as a product surface: first run's blank canvas and starters, the per-row
+ * topology fingerprint, search that says how many matched, and the local-first line. Everything
+ * here is checked against a fresh browser context, so each test starts from a genuinely empty
+ * library.
  */
 
 test.describe('Home screen', () => {
-  test('an empty workspace offers the starters, and one seeds a canvas that is initial state', async ({ page }) => {
+  test('a first run offers the starters, and one seeds a canvas that is initial state', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Recently edited' })).toBeVisible();
-    await expect(page.getByText('Nothing here yet.')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Starters' })).toBeVisible();
+    // Nothing a first run has nothing to fill: no empty list, no search, no sidebar.
+    await expect(page.getByRole('heading', { name: 'Recently edited' })).toHaveCount(0);
+    await expect(page.getByPlaceholder('Search diagrams…')).toHaveCount(0);
     await expect(page.locator('.dc-library-sidebar')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Start from Hexagonal' }).click();
@@ -53,6 +54,28 @@ test.describe('Home screen', () => {
     await page.getByRole('button', { name: 'Clear search' }).click();
     await expect(search).toHaveValue('');
     await expect(page.locator('.dc-library-item', { hasText: 'Monolith' })).toBeVisible();
+  });
+
+  test('first run is keyboard-first: Enter starts blank, arrows and Enter start a starter', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'New canvas' })).toBeEnabled();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    await expect(page.locator('.dc-node')).toHaveCount(0);
+
+    // Back on first run only because that blank canvas is still the one thing in the library —
+    // delete it to get there again.
+    await page.getByTitle('Back to your diagrams').click();
+    await page.getByRole('button', { name: /^Delete Untitled/ }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+
+    const sheet = page.getByRole('button', { name: 'New canvas' });
+    await sheet.focus();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('button', { name: 'Start from Modular Monolith' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByLabel('Diagram title')).toHaveValue('Modular Monolith');
   });
 
   test('the local-first line opens to the honest detail, and the toolbar fits a narrow screen', async ({ page }) => {

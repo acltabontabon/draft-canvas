@@ -265,7 +265,8 @@ test.describe('Draft Canvas', () => {
 
     await page.getByRole('button', { name: /^Delete Payment Flow/ }).click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
-    await expect(page.getByText('Nothing here yet.')).toBeVisible();
+    // The last canvas gone is a first run again: the blank canvas and the starters, no empty list.
+    await expect(page.getByRole('group', { name: 'Starters' })).toBeVisible();
 
     await page.setInputFiles('input[type="file"]', projectPath);
     await expect(page.locator('.dc-editor')).toBeVisible();

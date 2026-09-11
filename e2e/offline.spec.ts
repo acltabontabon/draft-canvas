@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test';
 test.describe('offline availability', () => {
   test('a diagram survives an offline reload', async ({ page, context }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Recently edited' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New canvas' })).toBeVisible();
 
     // Let the Service Worker finish precaching the shell before going offline
     // — the same thing a real first visit waits through, just made explicit.

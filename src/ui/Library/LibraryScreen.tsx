@@ -5,24 +5,26 @@ import type { DraftSummary } from '../../document/types';
 import type { NormalizeResult } from '../../document/validate';
 import { isEditableTarget } from '../../lib/isEditableTarget';
 import { PRODUCT } from '../../product';
-import { applicableReleases, hasUnreadRelease } from '../../releases/productReleases';
-import { ARCHITECTURE_STARTERS, STARTER_CATEGORIES } from '../../starters';
+import { ARCHITECTURE_STARTERS } from '../../starters';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Modal } from '../common/Modal';
-import { useTheme } from '../theme/useTheme';
+import { FirstRunHome } from './FirstRunHome';
 import { Fingerprint } from './Fingerprint';
+import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
 import { ProjectSidebar } from './ProjectSidebar';
+import { StarterShelf } from './StarterShelf';
 import { thoughtForDay } from './draftThoughts';
 import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
 
 /**
  * The landing screen: what is stored in this browser, optionally grouped
- * into Projects.
+ * into Projects — or, when nothing is stored at all, the first-run screen
+ * (`FirstRunHome`), which has a different job and so a different layout.
  *
  * Deliberately still not a file manager. One flat, optional grouping — no
  * nested folders, no required setup before creating a canvas — plus local
@@ -36,10 +38,6 @@ import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
  */
 export function LibraryScreen({ session }: { session: DocumentSession }) {
   const notify = useUiStore((state) => state.notify);
-  const setAboutOpen = useUiStore((state) => state.setAboutOpen);
-  const updateReady = useUiStore((state) => state.updateReady);
-  const lastSeenProductRelease = useUiStore((state) => state.lastSeenProductRelease);
-  const hasUnreadNotes = hasUnreadRelease(lastSeenProductRelease, applicableReleases(PRODUCT.version));
   const searchQuery = useUiStore((state) => state.librarySearchQuery);
   const setSearchQuery = useUiStore((state) => state.setLibrarySearchQuery);
   const sort = useUiStore((state) => state.librarySort);
@@ -48,7 +46,6 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   const setView = useUiStore((state) => state.setLibraryView);
   const moveMenuOpenFor = useUiStore((state) => state.moveMenuOpenFor);
   const setMoveMenuOpenFor = useUiStore((state) => state.setMoveMenuOpenFor);
-  const { name: themeName, toggle: toggleTheme } = useTheme();
   const fileInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<DraftSummary | null>(null);
@@ -71,6 +68,8 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
+      // First run has no search box — leave the key alone rather than swallow it.
+      if (!searchInput.current) return;
       if (isEditableTarget(event.target)) return;
       if (document.querySelector('[role="dialog"]')) return;
       event.preventDefault();
@@ -85,10 +84,11 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   const searching = searchQuery.trim().length > 0;
   const canvases = visibleCanvases(session.library, session.projects, view, searchQuery, sort);
   const heading = headingFor(view, session.projects, searching);
-  const empty = session.ready && session.library.length === 0;
+  // Nothing stored at all: not an empty library but a first run, which gets its own screen.
+  const firstRun = session.library.length === 0 && session.projects.length === 0;
   // A nav with nothing to navigate: no canvases and no projects means the
   // sidebar would be three views of the same empty list.
-  const showSidebar = session.library.length > 0 || session.projects.length > 0;
+  const showSidebar = !firstRun;
 
   const finishImport = async (result: NormalizeResult) => {
     if (!result.ok) {
@@ -112,52 +112,62 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     await finishImport(await readProjectFile(file));
   };
 
+  const fileInputElement = (
+    <input
+      ref={fileInput}
+      type="file"
+      accept=".draftcanvas,.json,application/json,.dcenc"
+      hidden
+      onChange={(event) => {
+        void onImport(event.target.files?.[0]);
+        event.target.value = '';
+      }}
+    />
+  );
+
+  const secureImport = securePendingFile && (
+    <SecureImportPrompt
+      file={securePendingFile}
+      onCancel={() => setSecurePendingFile(null)}
+      onSubmit={async (passphrase) => {
+        const file = securePendingFile;
+        setSecurePendingFile(null);
+        await finishImport(await readSecureProjectFile(file, passphrase));
+      }}
+    />
+  );
+
+  // Until storage answers, nothing is known about which home this is — show the name and wait,
+  // rather than flashing the library at someone about to see first-run (or the reverse).
+  if (!session.ready) {
+    return (
+      <div className="dc-library">
+        <div className="dc-library-inner">
+          <header className="dc-library-header">
+            <LibraryBrand />
+          </header>
+          <p className="dc-muted dc-library-empty">Opening local storage…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (firstRun) {
+    return (
+      <>
+        <FirstRunHome session={session} onImport={() => fileInput.current?.click()} />
+        {fileInputElement}
+        {secureImport}
+      </>
+    );
+  }
+
   return (
     <div className="dc-library">
       <div className="dc-library-inner">
         <header className="dc-library-header">
-        <div className="dc-brand">
-            <h1>{PRODUCT.name}</h1>
-            <span className="dc-badge-anchor">
-              <button
-                type="button"
-                className="dc-brand-about"
-                onClick={() => setAboutOpen(true)}
-                aria-label={
-                  updateReady
-                    ? 'About Draft Canvas — update ready'
-                    : hasUnreadNotes
-                      ? "About Draft Canvas — what's new"
-                      : 'About Draft Canvas'
-                }
-                title={
-                  updateReady
-                    ? 'About Draft Canvas — update ready'
-                    : hasUnreadNotes
-                      ? "About Draft Canvas — what's new"
-                      : 'About Draft Canvas'
-                }
-              >
-                <Icon name="info" size={14} />
-              </button>
-              {updateReady ? (
-                <span className="dc-update-dot" aria-hidden="true" />
-              ) : (
-                hasUnreadNotes && <span className="dc-new-dot" aria-hidden="true" />
-              )}
-            </span>
-            <button
-              type="button"
-              className="dc-brand-about"
-              onClick={toggleTheme}
-              aria-label={themeName === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-              title={themeName === 'dark' ? 'Light theme' : 'Dark theme'}
-            >
-              <Icon name={themeName === 'dark' ? 'sun' : 'moon'} size={14} />
-            </button>
-          </div>
+          <LibraryBrand />
           <p className="dc-lede">{PRODUCT.tagline}</p>
-          <p className="dc-lede-aside">{PRODUCT.aside}</p>
         </header>
 
         <div className="dc-library-toolbar">
@@ -174,35 +184,16 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
             {!searching && <kbd aria-hidden="true">/</kbd>}
           </label>
           <div className="dc-library-actions">
-            <Button
-              variant="quiet"
-              icon="upload"
-              onClick={() => fileInput.current?.click()}
-              disabled={!session.ready}
-            >
+            <Button variant="quiet" icon="upload" onClick={() => fileInput.current?.click()}>
               Import
             </Button>
-            <Button
-              variant="solid"
-              icon="plus"
-              onClick={() => void session.newDocument()}
-              disabled={!session.ready}
-            >
+            <Button variant="solid" icon="plus" onClick={() => void session.newDocument()}>
               New canvas
             </Button>
           </div>
         </div>
 
-        <input
-          ref={fileInput}
-          type="file"
-          accept=".draftcanvas,.json,application/json,.dcenc"
-          hidden
-          onChange={(event) => {
-            void onImport(event.target.files?.[0]);
-            event.target.value = '';
-          }}
-        />
+        {fileInputElement}
 
         <div className="dc-library-body">
           {showSidebar && (
@@ -231,42 +222,20 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
               )}
             </div>
 
-            {!session.ready && <p className="dc-muted dc-library-empty">Opening local storage…</p>}
-
-            {empty && (
+            {/* Projects, but not one canvas yet: the library stays (the projects are real), and
+                the starters sit in the empty list, where the first canvas is going to go. */}
+            {session.library.length === 0 && (
               <div className="dc-library-empty dc-library-welcome">
                 <p>Nothing here yet.</p>
-                <p className="dc-muted">Start blank, or with an architecture Draft Canvas already knows.</p>
-                <div className="dc-library-starters" role="group" aria-label="Starters">
-                  {STARTER_CATEGORIES.map((category) => (
-                    <div key={category.id} className="dc-library-starter-row" role="group" aria-label={category.label}>
-                      <span className="dc-library-starter-label" aria-hidden="true">
-                        {category.label}
-                      </span>
-                      <span className="dc-library-starter-buttons">
-                        {ARCHITECTURE_STARTERS.filter((starter) => starter.category === category.id).map((starter) => (
-                          <button
-                            key={starter.id}
-                            type="button"
-                            className="dc-library-starter"
-                            aria-label={`Start from ${starter.name}`}
-                            title={starter.description}
-                            onClick={() => void session.newDocument(undefined, starter.id)}
-                          >
-                            {starter.name}
-                          </button>
-                        ))}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <p className="dc-muted">
-                  Or import a <code>.draftcanvas</code> file you exported earlier.
-                </p>
+                <p className="dc-muted">Start blank, or cheat a little.</p>
+                <StarterShelf
+                  starters={ARCHITECTURE_STARTERS}
+                  onStart={(id) => void session.newDocument(undefined, id)}
+                />
               </div>
             )}
 
-            {session.ready && session.library.length > 0 && canvases.length === 0 && (
+            {session.library.length > 0 && canvases.length === 0 && (
               <div className="dc-library-empty">
                 {searching ? (
                   <>
@@ -348,15 +317,13 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
           </section>
         </div>
 
-        {session.ready && (
-          <footer className="dc-library-foot">
-            <p className="dc-thought">
-              <Icon name="pencil" size={13} />
-              <span>{thoughtForDay()}</span>
-            </p>
-            <LocalNote durable={session.durable} repository={session.repository} />
-          </footer>
-        )}
+        <footer className="dc-library-foot">
+          <p className="dc-thought">
+            <Icon name="pencil" size={13} />
+            <span>{thoughtForDay()}</span>
+          </p>
+          <LocalNote durable={session.durable} repository={session.repository} />
+        </footer>
       </div>
 
       {confirmDelete && (
@@ -402,17 +369,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
         />
       )}
 
-      {securePendingFile && (
-        <SecureImportPrompt
-          file={securePendingFile}
-          onCancel={() => setSecurePendingFile(null)}
-          onSubmit={async (passphrase) => {
-            const file = securePendingFile;
-            setSecurePendingFile(null);
-            await finishImport(await readSecureProjectFile(file, passphrase));
-          }}
-        />
-      )}
+      {secureImport}
     </div>
   );
 }

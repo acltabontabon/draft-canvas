@@ -168,30 +168,55 @@ kbd {
 
 .dc-library {
   min-height: 100%;
-  padding: 8vh 24px 64px;
+  padding: clamp(32px, 6.5vh, 88px) 0 64px;
   overflow-y: auto;
 }
 
+/* The same container as first run (`.dc-home-inner`), so the brand keeps its place when the
+   first canvas turns one into the other. */
 .dc-library-inner {
-  max-width: 880px;
+  max-width: 1240px;
   margin: 0 auto;
+  padding: 0 clamp(20px, 4vw, 48px);
 }
 
 .dc-library-header {
   margin-bottom: 28px;
 }
 
-.dc-library-header h1 {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-}
-
+/* The one row every state of the home screen shares — see `LibraryBrand.tsx`. */
 .dc-brand {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+
+.dc-brand h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.dc-brand-mark {
+  flex-shrink: 0;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dc-brand-mark-lead,
+.dc-brand-mark-edge {
+  stroke: var(--dc-selection);
+}
+
+.dc-brand-mark-edge {
+  stroke-width: 1.6;
+}
+
+.dc-brand-mark-follow {
+  stroke: var(--dc-text-faint);
 }
 
 .dc-brand-about {
@@ -213,13 +238,7 @@ kbd {
 
 .dc-lede {
   margin: 6px 0 0;
-  color: var(--dc-text);
-  font-size: 15px;
-}
-
-.dc-lede-aside {
-  margin: 3px 0 0;
-  color: var(--dc-text-faint);
+  color: var(--dc-text-muted);
   font-size: 13.5px;
 }
 
@@ -679,67 +698,863 @@ kbd {
   margin-top: 6px;
 }
 
+/* ------------------------------------------------------------ first run -- */
+
 /*
- * The empty workspace's starter row: the same bare-text buttons the empty
- * canvas uses, and for the same reason — an architecture is a click away,
- * but a row of cards here would turn the first screen into a template
- * gallery, which is the opposite of the point.
+ * An empty library is not an empty list: it is the first screen anyone sees, laid out as the
+ * smallest diagram that explains itself — a blank canvas, a connector, every starter. See
+ * `FirstRunHome.tsx`. Canvas vocabulary only: dot grid, selection handles, an arrowed fan-out.
+ * No cards, no hero art, nothing that isn't also a thing you can click.
  */
-/* Label above its starters, the same shape the empty canvas uses (`dc-empty-starters`), left-
- * aligned rather than centred because everything around it in this panel is. The cap is what keeps
- * nine names from running out into one long line. */
-.dc-library-starters {
+.dc-home {
+  /* The editor's grid dot, one step louder: here it has to read as "canvas" on its own. */
+  --dc-home-dot: color-mix(in srgb, var(--dc-text-faint) 42%, transparent);
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 16px;
-  margin: 14px 0 18px;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--dc-canvas);
 }
 
-.dc-library-starter-row {
+.dc-home-inner {
+  width: 100%;
+  max-width: 1240px;
+  /* Centred in whatever height there is, biased a little high — the eye starts above centre. */
+  margin: auto;
+  padding: clamp(32px, 6.5vh, 88px) clamp(20px, 4vw, 48px) clamp(32px, 7vh, 104px);
+}
+
+.dc-home-motto {
+  margin: clamp(22px, 4.5vh, 44px) 0 0;
+  color: var(--dc-text);
+  font-size: clamp(32px, 2.9vw + 8px, 52px);
+  font-weight: 650;
+  letter-spacing: -0.032em;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+/* The setup, one step quieter; the punchline, on its own line, is what the eye lands on. */
+.dc-home-motto-setup {
+  color: var(--dc-text-muted);
+}
+
+.dc-home-motto-punch {
+  display: block;
+}
+
+.dc-home-tagline {
+  margin: 14px 0 0;
+  color: var(--dc-text-muted);
+  font-size: 16px;
+}
+
+.dc-home-stage {
+  --gutter: 160px;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(240px, 360px) var(--gutter) minmax(0, 1fr);
+  margin-top: clamp(32px, 6vh, 60px);
+}
+
+.dc-home-start {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 7px;
+  gap: 12px;
+  min-width: 0;
 }
 
-/* Same organisational-not-content treatment as the empty canvas's own labels — see
- * `dc-empty-starter-label` in `canvas.css` for what each value is doing. No `text-indent` here:
- * these are left-aligned, so the tracking's trailing space falls off the right-hand end where
- * nothing is trying to line up against it. */
-.dc-library-starter-label {
-  color: var(--dc-text-faint);
-  font-size: 9.5px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.82;
-}
+/* ---- the blank canvas --------------------------------------------------- */
 
-.dc-library-starter-buttons {
+.dc-sheet {
+  --x: 50%;
+  --y: 50%;
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 auto;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  max-width: 520px;
+  justify-content: center;
+  min-height: 260px;
+  max-height: 380px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  cursor: pointer;
+  /* Invisible normally; forced-colours mode paints it, so focus never vanishes there. */
+  outline: 2px solid transparent;
+  outline-offset: 4px;
 }
 
-.dc-library-starter {
-  padding: 3px 9px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-sm);
+.dc-sheet:focus-visible {
+  outline-color: transparent;
+}
+
+/* The canvas's own dot grid — same colour the editor draws its background in — fading out
+   toward the edges, so the sheet has an area without having a border. */
+.dc-sheet::before,
+.dc-sheet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(circle, var(--dc-home-dot) 1.2px, transparent 1.6px);
+  background-position: center;
+  background-size: 16px 16px;
+  -webkit-mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 35%, transparent 100%);
+  mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 35%, transparent 100%);
+  pointer-events: none;
+}
+
+.dc-sheet::before {
+  opacity: 1;
+}
+
+/* The spotlight: the same grid in the selection colour, revealed only around the pointer. */
+.dc-sheet::after {
+  background-image: radial-gradient(circle, var(--dc-selection) 1.2px, transparent 1.6px);
+  -webkit-mask-image: radial-gradient(circle 110px at var(--x) var(--y), rgba(0, 0, 0, 0.7), transparent);
+  mask-image: radial-gradient(circle 110px at var(--x) var(--y), rgba(0, 0, 0, 0.7), transparent);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+@media (hover: hover) {
+  .dc-sheet:hover::after {
+    opacity: 1;
+  }
+}
+
+.dc-sheet:focus-visible::after {
+  opacity: 0.55;
+}
+
+/* Crop marks, not a box: where the page is, not a frame around it. */
+.dc-sheet-crops span {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 0 solid var(--dc-border-strong);
+  transition:
+    border-color 120ms ease,
+    transform 180ms var(--dc-ease-out);
+}
+
+.dc-sheet-crops [data-at='nw'] {
+  top: 0;
+  left: 0;
+  border-top-width: 1.5px;
+  border-left-width: 1.5px;
+}
+
+.dc-sheet-crops [data-at='ne'] {
+  top: 0;
+  right: 0;
+  border-top-width: 1.5px;
+  border-right-width: 1.5px;
+}
+
+.dc-sheet-crops [data-at='se'] {
+  right: 0;
+  bottom: 0;
+  border-right-width: 1.5px;
+  border-bottom-width: 1.5px;
+}
+
+.dc-sheet-crops [data-at='sw'] {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 1.5px;
+  border-left-width: 1.5px;
+}
+
+.dc-sheet:hover .dc-sheet-crops span {
+  border-color: var(--dc-selection);
+}
+
+.dc-sheet:hover .dc-sheet-crops [data-at='nw'] {
+  transform: translate(-3px, -3px);
+}
+
+.dc-sheet:hover .dc-sheet-crops [data-at='ne'] {
+  transform: translate(3px, -3px);
+}
+
+.dc-sheet:hover .dc-sheet-crops [data-at='se'] {
+  transform: translate(3px, 3px);
+}
+
+.dc-sheet:hover .dc-sheet-crops [data-at='sw'] {
+  transform: translate(-3px, 3px);
+}
+
+/* Keyboard focus is selection, drawn the way the editor draws it. */
+.dc-sheet:focus-visible .dc-sheet-crops span {
+  opacity: 0;
+}
+
+.dc-sheet-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 42px;
+  padding: 0 10px 0 15px;
+  border-radius: 10px;
+  background: var(--dc-selection);
+  color: var(--dc-canvas);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 10px 28px -14px var(--dc-selection);
+  transition:
+    transform 80ms ease,
+    filter 120ms ease,
+    box-shadow 180ms ease;
+}
+
+.dc-sheet:hover .dc-sheet-pill {
+  filter: brightness(1.06);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 14px 36px -14px var(--dc-selection);
+}
+
+.dc-sheet:active .dc-sheet-pill {
+  transform: translateY(1px);
+  filter: brightness(0.98);
+}
+
+.dc-sheet-pill kbd {
+  min-width: 0;
+  margin-left: 3px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--dc-canvas) 16%, transparent);
+  color: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  transition: opacity 120ms ease;
+}
+
+/* ↵ sits on what Enter will start: the sheet while nothing on the page has focus (or it does),
+   never while focus is somewhere Enter means something else. */
+.dc-home:focus-within .dc-sheet:not(:focus-visible) .dc-sheet-pill kbd {
+  opacity: 0;
+}
+
+.dc-home-import {
+  align-self: flex-start;
+  height: 30px;
+  /* Icon on the sheet's edge, not the button's padding. */
+  margin-left: -8px;
+  color: var(--dc-text-muted);
+}
+
+.dc-home-import-ext {
+  font-family: var(--dc-mono);
+  font-size: 11.5px;
+}
+
+/* ---- selection chrome (shared by the sheet and the starters) ------------ */
+
+.dc-chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dc-chrome::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--dc-selection);
+  border-radius: 2px;
+  opacity: 0;
+}
+
+.dc-chrome-corner,
+.dc-chrome-anchor {
+  position: absolute;
+  border: 1.5px solid var(--dc-selection);
+  background: var(--dc-canvas);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 90ms ease;
+}
+
+.dc-chrome-corner {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+
+.dc-chrome-anchor {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.dc-chrome [data-at='nw'] {
+  top: 0;
+  left: 0;
+}
+
+.dc-chrome [data-at='ne'] {
+  top: 0;
+  left: 100%;
+}
+
+.dc-chrome [data-at='se'] {
+  top: 100%;
+  left: 100%;
+}
+
+.dc-chrome [data-at='sw'] {
+  top: 100%;
+  left: 0;
+}
+
+.dc-chrome [data-at='n'] {
+  top: 0;
+  left: 50%;
+}
+
+.dc-chrome [data-at='e'] {
+  top: 50%;
+  left: 100%;
+}
+
+.dc-chrome [data-at='s'] {
+  top: 100%;
+  left: 50%;
+}
+
+.dc-chrome [data-at='w'] {
+  top: 50%;
+  left: 0;
+}
+
+/* Hover a node on the canvas and its connection handles appear; select it and the whole frame
+   does. Same here. */
+@media (hover: hover) {
+  :is(.dc-sheet, .dc-starter):hover .dc-chrome-anchor {
+    opacity: 1;
+  }
+}
+
+:is(.dc-sheet, .dc-starter):focus-visible :is(.dc-chrome-corner, .dc-chrome-anchor),
+:is(.dc-sheet, .dc-starter):focus-visible .dc-chrome::before {
+  opacity: 1;
+}
+
+/* ---- the connector ------------------------------------------------------ */
+
+.dc-home-wire {
+  position: relative;
+  pointer-events: none;
+}
+
+.dc-wire {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  fill: none;
+  stroke: var(--dc-edge);
+  stroke-width: 1.25;
+}
+
+.dc-wire-arrow {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dc-wire-junction {
+  fill: var(--dc-edge);
+  stroke: none;
+}
+
+.dc-wire-source {
+  fill: var(--dc-canvas);
+  stroke-width: 1.5;
+}
+
+/* An edge label, the way the canvas draws one: no box, just a halo of canvas behind the words. */
+.dc-wire-caption {
+  position: absolute;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--dc-canvas);
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+}
+
+/* ---- the starters ------------------------------------------------------- */
+
+.dc-home-starters {
+  min-width: 0;
+}
+
+.dc-home-cheat {
+  display: none;
+}
+
+.dc-shelf-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.dc-shelf-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--dc-text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 18px;
+  text-transform: uppercase;
+}
+
+.dc-shelf-count {
+  color: var(--dc-text-muted);
+  font-family: var(--dc-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+  opacity: 0.8;
+}
+
+.dc-shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
+  gap: 10px 14px;
+  margin-top: 8px;
+}
+
+.dc-starter {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 0 4px;
+  border: 0;
+  border-radius: 3px;
   background: none;
   color: var(--dc-text-muted);
   font: inherit;
-  font-size: 12.5px;
+  text-align: left;
   cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+  outline: 2px solid transparent;
 }
 
-.dc-library-starter:hover {
-  border-color: var(--dc-border-strong);
-  background: var(--dc-surface);
+.dc-starter:focus-visible {
+  outline-color: transparent;
+}
+
+.dc-starter-swatch {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 144px;
+  height: 84px;
+}
+
+.dc-starter-swatch::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(circle, var(--dc-home-dot) 0.9px, transparent 1.3px);
+  background-position: center;
+  background-size: 12px 12px;
+  -webkit-mask-image: radial-gradient(ellipse 60% 60% at var(--cx, 50%) 50%, #000 20%, transparent 100%);
+  mask-image: radial-gradient(ellipse 60% 60% at var(--cx, 50%) 50%, #000 20%, transparent 100%);
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+
+/* The frame hugs the drawing, not the tile — selecting a starter looks like selecting the
+   diagram it will become. (The glyph sits 4px down in the 84px swatch.) */
+.dc-starter-swatch .dc-chrome {
+  inset: auto;
+  top: calc(var(--by, 0px) + 4px - 9px);
+  left: calc(var(--bx, 0px) - 9px);
+  width: calc(var(--bw, 144px) + 18px);
+  height: calc(var(--bh, 76px) + 18px);
+}
+
+.dc-starter:hover .dc-starter-swatch::before,
+.dc-starter:focus-visible .dc-starter-swatch::before {
+  opacity: 1;
+}
+
+.dc-starter-glyph {
+  width: 144px;
+  height: 76px;
+  overflow: visible;
+  color: var(--dc-text-muted);
+  transition: color 120ms ease;
+}
+
+.dc-starter:hover .dc-starter-glyph,
+.dc-starter:focus-visible .dc-starter-glyph {
+  color: var(--dc-selection);
+}
+
+.dc-starter-edge-line,
+.dc-starter-edge-arrow {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.6;
+}
+
+.dc-starter-edge-pulse {
+  fill: none;
+  stroke: var(--dc-text);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-dasharray: 0.2 2;
+  stroke-dashoffset: 0.2;
+  opacity: 0;
+}
+
+/* A request travelling through the system, once, in the order the system reads. */
+.dc-starter:hover .dc-starter-edge-pulse,
+.dc-starter:focus-visible .dc-starter-edge-pulse {
+  animation: dc-starter-pulse 420ms var(--dc-ease-out) calc(var(--d, 0) * 70ms) 1 both;
+}
+
+@keyframes dc-starter-pulse {
+  0% {
+    stroke-dashoffset: 0.2;
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -1;
+    opacity: 0;
+  }
+}
+
+.dc-starter-name {
+  min-width: 0;
+  padding: 0 2px;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 120ms ease;
+}
+
+.dc-starter:hover .dc-starter-name,
+.dc-starter:focus-visible .dc-starter-name {
   color: var(--dc-text);
+}
+
+
+.dc-shelf-readout {
+  margin: 20px 0 0;
+  min-height: 20px;
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-shelf-readout[data-idle] {
+  font-family: var(--dc-mono);
+  font-size: 11.5px;
+}
+
+.dc-shelf-readout-name {
+  color: var(--dc-text);
+  font-weight: 550;
+}
+
+.dc-shelf-readout-sep {
+  margin: 0 8px;
+}
+
+.dc-shelf-readout-key {
+  min-width: 0;
+  margin-left: 10px;
+  padding: 0 5px;
+  color: var(--dc-text-muted);
+  font-size: 10.5px;
+  line-height: 16px;
+}
+
+/* No pointer, no arrow keys likely: the idle hint would be advice nobody can take. */
+@media (hover: none) {
+  .dc-shelf-readout[data-idle] {
+    visibility: hidden;
+  }
+}
+
+.dc-library-welcome .dc-shelf {
+  margin-top: 20px;
+}
+
+/* ---- the foot ----------------------------------------------------------- */
+
+.dc-home-status {
+  flex-shrink: 0;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-home-status-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 8px clamp(20px, 4vw, 48px);
+}
+
+.dc-home-status .dc-local,
+.dc-home-warn .dc-local {
+  align-items: flex-start;
+  max-width: none;
+}
+
+.dc-home-status .dc-local-toggle,
+.dc-home-warn .dc-local-toggle {
+  margin-left: -4px;
+  text-align: left;
+}
+
+/* Quiet, but still readable: the faint token is under 4.5:1 at this size. */
+.dc-home-status .dc-local-toggle,
+.dc-home-status .dc-local-more {
+  color: var(--dc-text-muted);
+}
+
+.dc-home-warn {
+  margin-top: 32px;
+}
+
+/* ---- arrival ------------------------------------------------------------ */
+
+@keyframes dc-home-rise {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dc-home-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dc-home-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.dc-home-head,
+.dc-home-start,
+.dc-home .dc-shelf-label,
+.dc-home .dc-starter,
+.dc-home .dc-shelf-readout {
+  animation: dc-home-rise 260ms var(--dc-ease-out) both;
+}
+
+.dc-home-start {
+  animation-delay: 60ms;
+}
+
+.dc-home .dc-shelf-label {
+  animation-delay: 200ms;
+}
+
+.dc-home .dc-starter {
+  animation-delay: calc(220ms + var(--i, 0) * 16ms);
+}
+
+.dc-home .dc-shelf-readout {
+  animation-delay: 420ms;
+}
+
+.dc-wire-trunk,
+.dc-wire-spine,
+.dc-wire-branch path:first-child {
+  stroke-dasharray: 1;
+  animation: dc-home-draw 260ms var(--dc-ease-out) both;
+}
+
+.dc-wire-trunk {
+  animation-delay: 160ms;
+}
+
+.dc-wire-spine {
+  animation-delay: 340ms;
+}
+
+.dc-wire-branch path:first-child {
+  animation-delay: 460ms;
+}
+
+.dc-wire-arrow,
+.dc-wire-junction,
+.dc-wire-caption {
+  animation: dc-home-fade 200ms ease both;
+}
+
+.dc-wire-junction {
+  animation-delay: 320ms;
+}
+
+.dc-wire-caption {
+  animation-delay: 240ms;
+}
+
+.dc-wire-arrow {
+  animation-delay: 580ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-home *,
+  .dc-home *::before,
+  .dc-home *::after {
+    animation: none !important;
+  }
+
+  .dc-sheet::after {
+    display: none;
+  }
+
+  .dc-sheet:hover .dc-sheet-crops span {
+    transform: none;
+  }
+}
+
+/* ---- narrower ----------------------------------------------------------- */
+
+/* A laptop screen: the same page with the air taken out, so the whole diagram — and the line
+   under it — fits without a scroll. */
+@media (min-width: 1080px) and (max-height: 880px) {
+  .dc-home-inner {
+    padding-top: 28px;
+    padding-bottom: 28px;
+  }
+
+  .dc-home-motto {
+    margin-top: 20px;
+    font-size: clamp(32px, 2.6vw + 8px, 46px);
+  }
+
+  .dc-home-tagline {
+    margin-top: 10px;
+  }
+
+  .dc-home-stage {
+    margin-top: 30px;
+  }
+
+  .dc-shelf-categories {
+    gap: 16px;
+  }
+
+  .dc-shelf-grid {
+    row-gap: 6px;
+  }
+
+  .dc-starter-swatch {
+    height: 78px;
+  }
+
+  .dc-shelf-readout {
+    margin-top: 12px;
+  }
+}
+
+/* A very wide screen gets a little more of everything, not a stretched version of the same. */
+@media (min-width: 1800px) {
+  .dc-home-inner,
+  .dc-home-status-inner {
+    max-width: 1380px;
+  }
+
+  .dc-home-stage {
+    --gutter: 184px;
+    grid-template-columns: minmax(240px, 400px) var(--gutter) minmax(0, 1fr);
+  }
+
+  .dc-sheet {
+    max-height: 420px;
+  }
+}
+
+/* Without a keyboard, ↵ is advice nobody can take. */
+@media (hover: none) and (pointer: coarse) {
+  .dc-sheet-pill kbd {
+    display: none;
+  }
+}
+
+/* The connector needs a gutter to run through; below this there isn't one worth drawing, so
+   the page stacks and the caption becomes the heading it was standing in for. */
+@media (max-width: 1079px) {
+  .dc-home-stage {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 36px;
+  }
+
+  .dc-home-wire {
+    display: none;
+  }
+
+  .dc-home-cheat {
+    display: block;
+    margin: 0 0 16px;
+    color: var(--dc-text-muted);
+    font-size: 15px;
+  }
+
+  .dc-sheet {
+    flex: none;
+    height: clamp(168px, 24vh, 220px);
+    min-height: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .dc-shelf-grid {
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+    gap: 6px 12px;
+  }
+
+  .dc-home-tagline {
+    font-size: 15px;
+  }
 }
 
 /* ------------------------------------------------------- library foot -- */
@@ -851,7 +1666,7 @@ kbd {
  */
 @media (max-width: 720px) {
   .dc-library {
-    padding: 32px 18px 48px;
+    padding: 32px 0 48px;
   }
 
   .dc-library-search kbd {

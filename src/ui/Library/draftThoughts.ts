@@ -17,7 +17,7 @@ export const DRAFT_THOUGHTS: readonly string[] = [
   'Point a Service at a Database and the arrow reads “writes” before you type a word.',
   'Ports live inside the core. The arrow out of one reads “implemented by”.',
   'A flow tells the same diagram one step at a time.',
-  `${MOD_SYMBOL}K knows five architectures by name. Try “hexagonal”.`,
+  `${MOD_SYMBOL}K knows every starter by name. Try “hexagonal” on any canvas.`,
   'Export is SVG, PNG, or GIF. Nothing renders on a server.',
   'A boundary around three services is a statement. Name it.',
   'An External System is a box you don’t own. Draft Canvas draws it that way.',

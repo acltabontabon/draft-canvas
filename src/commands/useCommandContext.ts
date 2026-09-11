@@ -27,7 +27,8 @@ export function useCommandContext({ createAt, createAtPointer, playback }: UseCo
   // new identity every time and would re-render forever.
   const viewWidth = useStore((state) => state.width);
   const viewHeight = useStore((state) => state.height);
-  const { toggle: toggleTheme } = useTheme();
+  const { toggle: toggleTheme, preference: themePreference, setPreference: setThemePreference } = useTheme();
+  const pinnedTheme = themePreference !== 'system';
 
   return useCallback(
     (): CommandContext => {
@@ -48,14 +49,17 @@ export function useCommandContext({ createAt, createAtPointer, playback }: UseCo
         createAt,
         createAtPointer,
         toggleTheme,
+        ...(pinnedTheme ? { followSystemTheme: () => setThemePreference('system') } : {}),
       };
     },
     [
       createAt,
       createAtPointer,
       fitView,
+      pinnedTheme,
       playback,
       screenToFlowPosition,
+      setThemePreference,
       setViewport,
       toggleTheme,
       viewHeight,

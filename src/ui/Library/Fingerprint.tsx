@@ -1,12 +1,11 @@
 import { memo } from 'react';
 import { isLibraryShape } from '../../document/shape';
-import type { LibraryShape, ShapeKind } from '../../document/types';
+import type { LibraryShape } from '../../document/types';
+import { layoutShape, type ShapeBox } from './shapeLayout';
 
 const WIDTH = 56;
 const HEIGHT = 32;
 const PAD = 2;
-/** Nothing smaller than this is a mark; it is a smudge. */
-const MIN_MARK = 3;
 
 /**
  * A canvas's topology at thumbnail size — the thing that lets someone tell
@@ -43,17 +42,7 @@ export const Fingerprint = memo(function Fingerprint({ shape }: { shape: Library
 });
 
 function Glyphs({ shape }: { shape: LibraryShape }) {
-  const scale = Math.min((WIDTH - 2 * PAD) / Math.max(shape.w, 1), (HEIGHT - 2 * PAD) / Math.max(shape.h, 1));
-  const ox = PAD + (WIDTH - 2 * PAD - shape.w * scale) / 2;
-  const oy = PAD + (HEIGHT - 2 * PAD - shape.h * scale) / 2;
-  const boxes = shape.nodes.map(([kind, x, y, w, h]) => {
-    const width = Math.max(MIN_MARK, w * scale);
-    const height = Math.max(MIN_MARK, h * scale);
-    // Grow around the centre when clamped, so a tiny node stays where it was.
-    const left = ox + x * scale - (width - w * scale) / 2;
-    const top = oy + y * scale - (height - h * scale) / 2;
-    return { kind, x: left, y: top, w: width, h: height, cx: left + width / 2, cy: top + height / 2 };
-  });
+  const boxes = layoutShape(shape, WIDTH, HEIGHT, PAD);
 
   return (
     <>
@@ -70,7 +59,7 @@ function Glyphs({ shape }: { shape: LibraryShape }) {
   );
 }
 
-function Mark({ kind, x, y, w, h, cx, cy }: { kind: ShapeKind; x: number; y: number; w: number; h: number; cx: number; cy: number }) {
+export function Mark({ kind, x, y, w, h, cx, cy }: ShapeBox) {
   switch (kind) {
     case 'boundary':
       return <rect className="dc-fingerprint-boundary" x={x} y={y} width={w} height={h} rx={1.5} />;

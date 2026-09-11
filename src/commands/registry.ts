@@ -354,6 +354,15 @@ function viewCommands(ctx: CommandContext): Command[] {
     keywords: ['theme', 'dark', 'light', 'appearance'],
     run: (inner) => inner.toggleTheme(),
   });
+  if (ctx.followSystemTheme) {
+    commands.push({
+      id: 'theme-system',
+      title: 'Match system theme',
+      group: 'view',
+      keywords: ['theme', 'dark', 'light', 'appearance', 'os', 'auto'],
+      run: (inner) => inner.followSystemTheme?.(),
+    });
+  }
   return commands;
 }
 
@@ -429,7 +438,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       id: 'settings',
       title: 'Canvas settings…',
       group: 'canvas',
-      keywords: ['background', 'personality', 'roughness', 'sketch', 'appearance', 'image'],
+      keywords: ['background', 'personality', 'roughness', 'sketch', 'appearance', 'image', 'theme'],
       run: (inner) => inner.ui.setSettingsOpen(true),
     },
     {

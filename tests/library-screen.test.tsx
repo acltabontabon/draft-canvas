@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEdge, createNode } from '../src/document/factory';
@@ -64,14 +64,18 @@ beforeEach(() => {
   });
 });
 
-describe('LibraryScreen — an empty workspace', () => {
-  it('offers the five starters, keeps the heading, and hides the nav there is nothing to navigate', () => {
+describe('LibraryScreen — first run', () => {
+  it('offers every starter and none of the library a first run has nothing to fill', () => {
     const session = stubSession();
-    render(<LibraryScreen session={session} />);
+    const { container } = render(<LibraryScreen session={session} />);
 
-    expect(screen.getByRole('heading', { name: 'Recently edited' })).toBeInTheDocument();
-    expect(screen.getByText('Nothing here yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Recently edited' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Nothing here yet.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('searchbox', { name: 'Search diagrams' })).not.toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Diagram views' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'About Draft Canvas' })).toBeInTheDocument();
+    // Still exactly one file input, whatever state the screen is in.
+    expect(container.querySelectorAll('input[type="file"]')).toHaveLength(1);
     const starters = within(screen.getByRole('group', { name: 'Starters' })).getAllByRole('button');
     expect(starters.map((button) => button.getAttribute('aria-label'))).toEqual([
       'Start from Monolith',
@@ -100,12 +104,65 @@ describe('LibraryScreen — an empty workspace', () => {
     render(<LibraryScreen session={stubSession()} />);
     expect(screen.getAllByRole('button', { name: /new canvas/i })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /import/i })).toHaveLength(1);
+    // Only the starters live inside the starter group — nothing else may join it.
+    expect(within(screen.getByRole('group', { name: 'Starters' })).getAllByRole('button')).toHaveLength(10);
   });
 
-  it('still shows the nav when a project exists without canvases', () => {
+  it('starts a blank canvas on Enter when nothing on the page has focus', async () => {
+    const session = stubSession();
+    render(<LibraryScreen session={session} />);
+
+    await userEvent.keyboard('{Enter}');
+    expect(session.newDocument).toHaveBeenCalledTimes(1);
+    expect(session.newDocument).toHaveBeenCalledWith();
+  });
+
+  it('ignores a held Enter, a modified one, and one aimed at something that has focus', () => {
+    const session = stubSession();
+    render(<LibraryScreen session={session} />);
+
+    fireEvent.keyDown(document.body, { key: 'Enter', repeat: true });
+    fireEvent.keyDown(document.body, { key: 'Enter', metaKey: true });
+    fireEvent.keyDown(screen.getByRole('button', { name: 'About Draft Canvas' }), { key: 'Enter' });
+    expect(session.newDocument).not.toHaveBeenCalled();
+  });
+
+  it('walks from the blank canvas into the starters and back with the arrow keys', async () => {
+    render(<LibraryScreen session={stubSession()} />);
+    const sheet = screen.getByRole('button', { name: 'New canvas' });
+
+    sheet.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('button', { name: 'Start from Monolith' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('button', { name: 'Start from Modular Monolith' })).toHaveFocus();
+    await userEvent.keyboard('{End}');
+    expect(screen.getByRole('button', { name: 'Start from Transactional Outbox' })).toHaveFocus();
+    await userEvent.keyboard('{Home}{ArrowLeft}');
+    expect(sheet).toHaveFocus();
+  });
+
+  it('names what a starter is to a screen reader without a tooltip', () => {
+    render(<LibraryScreen session={stubSession()} />);
+    const hexagonal = screen.getByRole('button', { name: 'Start from Hexagonal' });
+    expect(hexagonal).not.toHaveAttribute('title');
+    expect(hexagonal).toHaveAccessibleDescription(/inbound\/outbound ports/);
+  });
+
+  it('draws each starter from its own topology', () => {
+    const { container } = render(<LibraryScreen session={stubSession()} />);
+    const tiles = container.querySelectorAll('.dc-starter');
+    expect(tiles).toHaveLength(10);
+    for (const tile of tiles) {
+      expect(tile.querySelector('svg.dc-starter-glyph .dc-starter-edge-line')).not.toBeNull();
+    }
+  });
+
+  it('keeps the library when a project exists without canvases', () => {
     render(<LibraryScreen session={stubSession({ projects: [project] })} />);
     expect(screen.getByRole('navigation', { name: 'Diagram views' })).toBeInTheDocument();
     expect(screen.getByText('Nothing here yet.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start from Hexagonal' })).toBeInTheDocument();
   });
 });
 

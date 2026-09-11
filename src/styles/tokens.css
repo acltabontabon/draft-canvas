@@ -1,10 +1,10 @@
 /*
  * Colour tokens are written onto :root at runtime by ThemeProvider, from the
- * same TypeScript definitions the SVG exporter reads. The values here are the
- * dark palette repeated as a static fallback, so the first paint before React
- * mounts is not a white flash.
+ * same TypeScript definitions the SVG exporter reads. The values here repeat
+ * both palettes as a static fallback that follows `prefers-color-scheme`, so
+ * the first paint before React mounts already matches the OS.
  *
- * Everything else — spacing, radii, typography — lives only here.
+ * Everything else — spacing, radii, typography, easing — lives only here.
  */
 :root {
   --dc-canvas: #0f1115;
@@ -38,6 +38,9 @@
 
   --dc-shadow-panel: 0 8px 30px -8px var(--dc-shadow), 0 1px 2px rgba(0, 0, 0, 0.2);
 
+  /* Decelerating, never springy: things arrive and settle, nothing bounces. */
+  --dc-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
   color-scheme: dark;
 }
 
@@ -45,6 +48,33 @@
   color-scheme: light;
   --dc-danger: #c2455f;
   --dc-shadow-panel: 0 8px 28px -10px rgba(19, 24, 32, 0.22), 0 1px 2px rgba(19, 24, 32, 0.08);
+}
+
+/* Before ThemeProvider has stamped `data-theme` (and after, unless someone
+   pinned dark): the light palette for a light OS. The inline variables
+   ThemeProvider writes win over these once React is up. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --dc-canvas: #fbfbfc;
+    --dc-grid: #dfe3e8;
+    --dc-surface: #ffffff;
+    --dc-surface-raised: #ffffff;
+    --dc-border: #dde1e7;
+    --dc-border-strong: #b9c0ca;
+    --dc-text: #1a1d23;
+    --dc-text-muted: #59606d;
+    --dc-text-faint: #868e9b;
+    --dc-selection: #0f8f84;
+    --dc-selection-soft: rgba(15, 143, 132, 0.12);
+    --dc-edge: #7c8492;
+    --dc-edge-label-bg: #ffffff;
+    --dc-code-bg: #f7f8fa;
+    --dc-code-border: #e2e6eb;
+    --dc-shadow: rgba(19, 24, 32, 0.1);
+    --dc-danger: #c2455f;
+    --dc-shadow-panel: 0 8px 28px -10px rgba(19, 24, 32, 0.22), 0 1px 2px rgba(19, 24, 32, 0.08);
+    color-scheme: light;
+  }
 }
 
 * {

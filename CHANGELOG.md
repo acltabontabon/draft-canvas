@@ -6,6 +6,14 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
+- A new first screen. An empty Draft Canvas now opens on a blank canvas and every starter it
+  knows, each drawn as its own tiny topology — hover one and a request runs through it. Press
+  Enter to start blank, or use the arrow keys to pick a starter. Search and the empty "Recently
+  edited" list appear once there is something to search or list.
+- Draft Canvas now follows your system's light or dark appearance, and switches with it while
+  open. Pinning a theme from the toolbar or ⌘K still works, and Canvas Settings (or ⌘K's "Match
+  system theme") hands it back to the system. The light/dark button on the home screen is gone.
+
 - Text now has a small, opinionated set of roles — Body, Label, Heading, Title, and Technical (a
   monospace treatment for endpoints, event names, and other identifiers) — plus Bold, Italic, and
   left/center/right alignment. Switch roles from the popover or ⌘K's "Text role…", and toggle
