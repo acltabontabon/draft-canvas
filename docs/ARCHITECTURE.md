@@ -35,6 +35,7 @@ src/
   edges/        routing.ts · describe.ts · bundles.ts
   canvas/       Canvas · DraftNodeView · DraftEdgeView · projection · snapping · presets
   continuation/ Intent Continuation — rules · context · engine · materialize (see below)
+  sequence/     Flow → SequenceModel · Mermaid/PlantUML adapters · SVG layout (see below)
   presentation/ useFlowPlayback
   learning/     contextual hints and the opt-in "Learn Draft Canvas" mode
   store/        editorStore · uiStore · selectors · useDocumentSession
@@ -232,6 +233,47 @@ brand-new flow never greys out the whole diagram. Likewise `flowIsPlayable` (`do
 gates Present everywhere: the panel's ▶, the picker, and the palette never offer an empty flow.
 Connector replacements keep a flow's story intact — inserting a worker on `A → B` rewrites that
 step into `A → W`, `W → B` (`spliceEdgeInFlows`) rather than losing the beat.
+
+## Sequence Diagram
+
+`src/sequence/` derives a temporal reading of a Flow — participants and ordered messages — without
+duplicating it: the Flow stays the only source of truth, and a `SequenceModel` (`types.ts`) is
+recomputed fresh from the live document every time the dialog (`ui/Editor/SequenceDiagramDialog.tsx`)
+is open. Nothing here is persisted, and nothing here is undo-tracked (opening the dialog, switching
+which flow it shows, or changing the export format are all plain `uiStore`/local-state changes,
+exactly like `selectedFlowId` itself).
+
+The pipeline is one direction, each stage a pure, independently testable function:
+
+```
+DraftFlow  ->  buildSequenceModel (build.ts)  ->  SequenceModel
+                                                        |
+                        +-------------------+----------+----------+
+                        v                   v                     v
+                  toMermaid (mermaid.ts)  toPlantUml (plantuml.ts)  computeSequenceLayout (layout.ts)
+```
+
+`build.ts` walks `flow.steps` via `presentation/useFlowPlayback.ts`'s own `resolveFlowStep` (the
+existing "interpret a step" primitive — not reimplemented here), then `flatten.ts` collapses any
+Junction crossing into a single message (see "Junctions are semantics-transparent" in
+`docs/SEMANTICS.md`) and `label.ts` resolves each message's text through the same "richest
+available label" priority every connector caption already uses
+(`document/edgeSemantics.ts`'s `relationshipCaptionLabel`), with one added fallback tier for a
+pairing that has no explicit `semantic` at all. A request only ever gets a paired response message
+when the underlying `DraftEdge.hasResponse` is explicitly `true` — never inferred from a call
+merely looking synchronous, the same rule `useFlowPlayback`'s own two-phase request/response pulse
+already follows.
+
+`mermaid.ts`/`plantuml.ts` are independent string builders over the same `SequenceModel` — neither
+is derived from the other. The live preview (`ui/Editor/SequenceDiagramSvg.tsx`) is a small,
+hand-drawn SVG built from `layout.ts`'s pure geometry, reusing this app's own theme tokens and text
+measurement rather than a third-party rendering library: no new runtime dependency, no bundle-size
+or lazy-loading cost, and no risk of a third-party parser's failure mode reaching the canvas.
+
+Naming note: this is unrelated to `DraftSettings.showSequence` (the numbered step badges a flow's
+connectors can show on the canvas) — an older, internal-only concept from before Flows existed (see
+`docs/SCHEMA.md`'s v1→v2 migration). "Sequence Diagram" was chosen specifically to avoid
+overloading that word for a new, user-facing feature.
 
 ## Starters
 

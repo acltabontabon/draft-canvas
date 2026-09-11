@@ -136,6 +136,27 @@ through one resolves by looking at what actually feeds it — `Service → Junct
 infers `writes`. If a Junction has no clear single category on one side, it resolves to
 `'junction'` itself, and the connector falls back to the full, unrestricted vocabulary.
 
+The Sequence Diagram (`src/sequence/`, see `docs/ARCHITECTURE.md`) applies the same principle one
+level up: a Junction is never a lifeline. `resolveJunctionEndpoint` (`connectorSemantics.ts`) is
+`resolveTransparentCategory`'s node-identity sibling — same "walk the whole graph, not just the
+current selection" traversal, but resolving to an actual node rather than a category, since a
+sequence message needs a real participant to point at, not just a category label. A `Service A →
+Junction → Service B` path flattens to one message between A and B; only when the Junction's side
+is genuinely ambiguous (two different real nodes feeding it) or dangling (nothing feeding it) does
+the Junction itself stand in as the participant — the same "no opinion beats a wrong one" instinct
+as an unlisted matrix pairing, applied to identity instead of category.
+
+## Sequence Diagram interaction kinds
+
+A third, small vocabulary — derived, not stored on the document — buckets every Sequence Diagram
+message into exactly one of `sync`, `async`, or `response` (`src/sequence/label.ts`'s
+`InteractionKind`): the synthesized reply to a `hasResponse` edge is always `response`; a request
+edge is `async` when its `semantic` is one of the inherently asynchronous relations (`publishes`,
+`consumes`, `deliversTo`, `fansOut`, `deadLetters`), or its `kind` is `'event'`/`'async'`, or its
+own `async` flag is set; everything else is `sync`. This reads the two existing, independent
+vocabularies (`EdgeSemantic`, `ConnectorKind`) plus `hasResponse` — it adds no new field to
+`DraftEdge` and no new inference rule to the capability matrix.
+
 ## Intent Continuation rules
 
 The next moves Draft Canvas will sketch for a selected node (see

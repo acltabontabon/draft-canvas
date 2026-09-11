@@ -20,6 +20,9 @@ All notable changes to Draft Canvas are documented here.
   has a consumer offers a dead-letter queue here.
 - With Learn mode on, a suggestion explains itself in one sentence ("This queue has no consumer.").
 - Canvas Settings has an Intent Continuation switch, and ⌘K can turn it on or off.
+- A flow can now be viewed as a Sequence Diagram — its own connectors, laid out as participants
+  and ordered messages over time, with sync, async, publish/consume, and request/response read
+  straight from what you've already drawn. Copy the result as Mermaid or PlantUML in one click.
 
 ### Fixed
 

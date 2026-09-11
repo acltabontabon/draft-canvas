@@ -485,11 +485,22 @@ export function defaultsToResponse(source: NodeCategory, target: NodeCategory): 
  */
 export type EdgeEndpointRole = 'source' | 'target';
 
-/** The bits of a `DraftDocument` `resolveTransparentCategory`/`inferredJunctionSemantic` need —
- *  a `DraftDocument` itself, or any other `{ nodes, edges }` shape, satisfies this structurally. */
-interface GraphLike {
+/** The bits of a `DraftDocument` `resolveTransparentCategory`/`inferredJunctionSemantic`/
+ *  `resolveJunctionEndpoint` need — a `DraftDocument` itself, or any other `{ nodes, edges }`
+ *  shape, satisfies this structurally. Exported so callers outside this module (the Sequence
+ *  Diagram transform) can type a document/graph value they pass to `resolveJunctionEndpoint`. */
+export interface GraphLike {
   nodes: readonly DraftNode[];
   edges: readonly DraftEdge[];
+}
+
+/** Every node id directly feeding (`role: 'source'`) or fed by (`role: 'target'`) `nodeId`, via a
+ *  single edge hop — the one piece of graph-walking both `resolveTransparentCategory` (category-
+ *  level) and `resolveJunctionEndpoint` (node-identity-level) share. */
+function junctionNeighborIds(graph: GraphLike, nodeId: string, role: EdgeEndpointRole): string[] {
+  return role === 'source'
+    ? graph.edges.filter((e) => e.target === nodeId).map((e) => e.source)
+    : graph.edges.filter((e) => e.source === nodeId).map((e) => e.target);
 }
 
 /**
@@ -516,16 +527,50 @@ export function resolveTransparentCategory(
   const own = categoryOf(node);
   if (own !== 'junction' || visited.has(nodeId)) return own;
   visited.add(nodeId);
-  const neighborIds =
-    role === 'source'
-      ? graph.edges.filter((e) => e.target === nodeId).map((e) => e.source)
-      : graph.edges.filter((e) => e.source === nodeId).map((e) => e.target);
   const resolved = new Set<NodeCategory>();
-  for (const id of neighborIds) {
+  for (const id of junctionNeighborIds(graph, nodeId, role)) {
     const category = resolveTransparentCategory(graph, id, role, visited);
     if (category !== 'junction') resolved.add(category);
   }
   return resolved.size === 1 ? [...resolved][0]! : 'junction';
+}
+
+/**
+ * Node-identity-level sibling of `resolveTransparentCategory`, for callers that need the actual
+ * node a Junction chain resolves to, not just its category — the Sequence Diagram transform,
+ * which cannot render a Junction as a lifeline and needs to know exactly *which* real node stands
+ * in for it. Deliberately a separate function rather than a shared implementation:
+ * `resolveTransparentCategory` correctly treats two different concrete nodes of the same category
+ * (e.g. two distinct Services) as unambiguous, because category is all a capability lookup needs;
+ * an identity-level caller cannot make that same call; two different concrete nodes are a genuine
+ * ambiguity it must surface, not collapse. `'resolved'`: exactly one concrete non-Junction node is
+ * reachable on `role`'s side, walking the whole graph and recursing through further Junctions.
+ * `'unresolved'`: nothing is connected on that side (a dangling Junction). `'ambiguous'`: more than
+ * one distinct concrete node is reachable (a genuine fan-in/out from different origins). Both
+ * `'unresolved'` and `'ambiguous'` report the Junction's own `nodeId` back, so a caller can fall
+ * back to treating the Junction itself as the participant.
+ */
+export type JunctionEndpointResolution =
+  | { status: 'resolved'; nodeId: string }
+  | { status: 'unresolved' | 'ambiguous'; nodeId: string };
+
+export function resolveJunctionEndpoint(
+  graph: GraphLike,
+  nodeId: string,
+  role: EdgeEndpointRole,
+  visited: Set<string> = new Set(),
+): JunctionEndpointResolution {
+  const node = graph.nodes.find((n) => n.id === nodeId);
+  if (!node) return { status: 'unresolved', nodeId };
+  if (categoryOf(node) !== 'junction' || visited.has(nodeId)) return { status: 'resolved', nodeId };
+  visited.add(nodeId);
+  const resolvedIds = new Set<string>();
+  for (const id of junctionNeighborIds(graph, nodeId, role)) {
+    const result = resolveJunctionEndpoint(graph, id, role, visited);
+    if (result.status === 'resolved') resolvedIds.add(result.nodeId);
+  }
+  if (resolvedIds.size === 1) return { status: 'resolved', nodeId: [...resolvedIds][0]! };
+  return { status: resolvedIds.size === 0 ? 'unresolved' : 'ambiguous', nodeId };
 }
 
 /**
