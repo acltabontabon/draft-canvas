@@ -11,6 +11,10 @@ test-results
 .playwright
 *.tsbuildinfo
 
+# Disposable benchmark run output (benchmark/baseline.json and
+# benchmark/memory-chart.svg are committed on purpose — see docs/performance.md)
+benchmark/results/
+
 # Env / secrets
 .env
 .env.*

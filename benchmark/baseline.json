@@ -1,0 +1,61 @@
+{
+  "meta": {
+    "benchmarkVersion": 1,
+    "draftCanvasVersion": "0.8.0",
+    "commit": "68e608b7d498b1c75faa0f1d3acc2caf19619a1d",
+    "branch": "main",
+    "timestamp": "2026-09-11T21:49:35.019Z",
+    "iterations": 3,
+    "warmupIterations": 1,
+    "runtimeSeconds": 9.206,
+    "environment": {
+      "os": "darwin",
+      "osVersion": "25.6.0",
+      "arch": "arm64",
+      "cpuModel": "Apple M2 Pro",
+      "cpuCount": 10,
+      "totalMemoryMiB": 16384,
+      "browser": "chromium",
+      "browserVersion": "151.0.7922.34",
+      "nodeVersion": "v26.7.0"
+    }
+  },
+  "workloads": [
+    {
+      "name": "typical",
+      "nodeCount": 90,
+      "edgeCount": 79,
+      "diagramLoad": {
+        "medianMs": 160,
+        "minMs": 153,
+        "maxMs": 178,
+        "samples": 3
+      },
+      "jsHeapUsedMiB": 15.366405487060547,
+      "drag": {
+        "medianMs": 363,
+        "minMs": 361,
+        "maxMs": 373,
+        "samples": 3
+      }
+    },
+    {
+      "name": "large",
+      "nodeCount": 225,
+      "edgeCount": 192,
+      "diagramLoad": {
+        "medianMs": 611,
+        "minMs": 587,
+        "maxMs": 677,
+        "samples": 3
+      },
+      "jsHeapUsedMiB": 28.922046661376953,
+      "drag": {
+        "medianMs": 476,
+        "minMs": 410,
+        "maxMs": 652,
+        "samples": 3
+      }
+    }
+  ]
+}

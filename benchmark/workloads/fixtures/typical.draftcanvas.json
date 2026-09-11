@@ -1,0 +1,2871 @@
+{
+  "format": "draft-canvas",
+  "version": 10,
+  "metadata": {
+    "id": "d_mtopmxpb0hod",
+    "title": "Benchmark — Detailed architecture",
+    "createdAt": 1789163346408,
+    "updatedAt": 1789163346408
+  },
+  "nodes": [
+    {
+      "id": "n_9kyvrscrr2rn",
+      "type": "actor",
+      "x": 512,
+      "y": 0,
+      "width": 120,
+      "height": 92,
+      "z": 0,
+      "text": "Client",
+      "textOrigin": "explicit",
+      "actorKind": "human"
+    },
+    {
+      "id": "n_nsdfg3yun6ed",
+      "type": "service",
+      "x": 484,
+      "y": 196,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "API Gateway",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "gateway",
+      "attachments": [
+        {
+          "id": "a_cczfzbzhsay8",
+          "type": "note",
+          "text": "Routing, auth, rate limits, TLS. The only public entry point.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "n_zj6o8d46ar9z",
+      "type": "group",
+      "x": 0,
+      "y": 408,
+      "width": 248,
+      "height": 304,
+      "z": -1,
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "n_tqjnaxz0wip2",
+      "type": "service",
+      "x": 36,
+      "y": 448,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Accounts",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "parentId": "n_zj6o8d46ar9z"
+    },
+    {
+      "id": "n_qgnutrzixsgt",
+      "type": "database",
+      "x": 50,
+      "y": 588,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Accounts DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "parentId": "n_zj6o8d46ar9z"
+    },
+    {
+      "id": "n_9casu23eujm2",
+      "type": "group",
+      "x": 448,
+      "y": 408,
+      "width": 248,
+      "height": 304,
+      "z": -1,
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "n_ldx8i0odgmjx",
+      "type": "service",
+      "x": 484,
+      "y": 448,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Orders",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "parentId": "n_9casu23eujm2"
+    },
+    {
+      "id": "n_kzx1pwbmi3uw",
+      "type": "database",
+      "x": 498,
+      "y": 588,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Orders DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "attachments": [
+        {
+          "id": "a_bptxjb6135tv",
+          "type": "note",
+          "text": "Private to Orders. Other services never read it directly.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ],
+      "parentId": "n_9casu23eujm2"
+    },
+    {
+      "id": "n_xmpx9peyre8o",
+      "type": "group",
+      "x": 896,
+      "y": 408,
+      "width": 248,
+      "height": 304,
+      "z": -1,
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "n_lqh9wee2sh1e",
+      "type": "service",
+      "x": 932,
+      "y": 448,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Payments",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "parentId": "n_xmpx9peyre8o"
+    },
+    {
+      "id": "n_x5vpyjci9b8i",
+      "type": "database",
+      "x": 946,
+      "y": 588,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Payments DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "parentId": "n_xmpx9peyre8o"
+    },
+    {
+      "id": "n_rr8ou9kwiha4",
+      "type": "queue",
+      "x": 726,
+      "y": 816,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Order Events",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "n_yxfjnyem2mbj",
+      "type": "service",
+      "x": 2056,
+      "y": 0,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Producer Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "n_598xcus7y0nj",
+      "type": "queue",
+      "x": 2074,
+      "y": 172,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Domain Events",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "n_iiuxvvir4x0s",
+      "type": "queue",
+      "x": 1850,
+      "y": 348,
+      "width": 140,
+      "height": 48,
+      "z": 0,
+      "text": "",
+      "textOrigin": "auto",
+      "queueKind": "queue"
+    },
+    {
+      "id": "n_k9big8rbao0y",
+      "type": "service",
+      "x": 1832,
+      "y": 468,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Projection Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "n_s13be2ir45hh",
+      "type": "queue",
+      "x": 2074,
+      "y": 348,
+      "width": 140,
+      "height": 48,
+      "z": 0,
+      "text": "",
+      "textOrigin": "auto",
+      "queueKind": "queue"
+    },
+    {
+      "id": "n_3k4yvj4igsq7",
+      "type": "service",
+      "x": 2056,
+      "y": 468,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Processing Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "n_5vmzljp30sqd",
+      "type": "queue",
+      "x": 2298,
+      "y": 348,
+      "width": 140,
+      "height": 48,
+      "z": 0,
+      "text": "",
+      "textOrigin": "auto",
+      "queueKind": "queue"
+    },
+    {
+      "id": "n_h62mhz4xmi8r",
+      "type": "service",
+      "x": 2280,
+      "y": 468,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Integration Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "n_gqkqon9dtsbe",
+      "type": "database",
+      "x": 1846,
+      "y": 608,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Read Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "n_x0n21tcpixvd",
+      "type": "service",
+      "x": 2280,
+      "y": 608,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "External System",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "external"
+    },
+    {
+      "id": "n_8u7gjsxr95cg",
+      "type": "queue",
+      "x": 2542,
+      "y": 348,
+      "width": 140,
+      "height": 48,
+      "z": 0,
+      "text": "",
+      "textOrigin": "auto",
+      "queueKind": "queue",
+      "deliveryRole": "dead-letter"
+    },
+    {
+      "id": "n_6ldrg0xe278s",
+      "type": "actor",
+      "x": 4012,
+      "y": 0,
+      "width": 120,
+      "height": 92,
+      "z": 0,
+      "text": "Client",
+      "textOrigin": "explicit",
+      "actorKind": "human"
+    },
+    {
+      "id": "n_m241ea755o0q",
+      "type": "group",
+      "x": 3664,
+      "y": 196,
+      "width": 248,
+      "height": 454,
+      "z": -1,
+      "text": "Command",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "n_g2zme1z11lmo",
+      "type": "text",
+      "x": 3676,
+      "y": 226,
+      "width": 176,
+      "height": 24,
+      "z": 0,
+      "text": "Expresses intent",
+      "textOrigin": "explicit",
+      "annotation": true,
+      "parentId": "n_m241ea755o0q"
+    },
+    {
+      "id": "n_3bfddjs9ehqx",
+      "type": "service",
+      "x": 3700,
+      "y": 258,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Command API",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "attachments": [
+        {
+          "id": "a_6hwsh3ky50yu",
+          "type": "code",
+          "text": "PlaceOrder",
+          "language": "json",
+          "code": "{\n  \"type\": \"PlaceOrder\",\n  \"customerId\": \"cus_1182\",\n  \"lines\": [{ \"sku\": \"A-100\", \"qty\": 2 }]\n}",
+          "width": 380,
+          "height": 180
+        }
+      ],
+      "parentId": "n_m241ea755o0q"
+    },
+    {
+      "id": "n_l9ilgjjj1zot",
+      "type": "component",
+      "x": 3712,
+      "y": 398,
+      "width": 152,
+      "height": 56,
+      "z": 0,
+      "text": "Write Model",
+      "textOrigin": "explicit",
+      "componentKind": "generic",
+      "parentId": "n_m241ea755o0q"
+    },
+    {
+      "id": "n_977qwokbf7jv",
+      "type": "database",
+      "x": 3714,
+      "y": 526,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Write Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "parentId": "n_m241ea755o0q"
+    },
+    {
+      "id": "n_wbhf2c6qo4ia",
+      "type": "queue",
+      "x": 4002,
+      "y": 409,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Domain Events",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "n_yvat616k8e0w",
+      "type": "service",
+      "x": 3984,
+      "y": 536,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Projection Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "n_ldl6wu6ts9hm",
+      "type": "text",
+      "x": 4010,
+      "y": 622,
+      "width": 124,
+      "height": 24,
+      "z": 0,
+      "text": "Eventually consistent",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "n_x2q6buu3h3pr",
+      "type": "group",
+      "x": 4232,
+      "y": 196,
+      "width": 248,
+      "height": 454,
+      "z": -1,
+      "text": "Query",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "n_7q0xfx2qif50",
+      "type": "text",
+      "x": 4244,
+      "y": 226,
+      "width": 176,
+      "height": 24,
+      "z": 0,
+      "text": "Never mutates state",
+      "textOrigin": "explicit",
+      "annotation": true,
+      "parentId": "n_x2q6buu3h3pr"
+    },
+    {
+      "id": "n_bjupow8vznq1",
+      "type": "service",
+      "x": 4268,
+      "y": 258,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Query API",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "parentId": "n_x2q6buu3h3pr"
+    },
+    {
+      "id": "n_8abn2t338cpf",
+      "type": "database",
+      "x": 4282,
+      "y": 526,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Read Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "attachments": [
+        {
+          "id": "a_146jzl7ow8wq",
+          "type": "note",
+          "text": "Shaped for the questions asked of it — a projection, not the write model. May share a physical database: CQRS separates models, not necessarily databases.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ],
+      "parentId": "n_x2q6buu3h3pr"
+    },
+    {
+      "id": "n_7mplmaf3oky8",
+      "type": "service",
+      "x": 0,
+      "y": 1336,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "REST API",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "n_udf33xqvniq3",
+      "type": "service",
+      "x": 0,
+      "y": 1496,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Message Consumer",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "n_ljqeh0oecm78",
+      "type": "group",
+      "x": 248,
+      "y": 1304,
+      "width": 660,
+      "height": 292,
+      "z": -1,
+      "text": "Application Core",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "n_imepx8jl50hy",
+      "type": "text",
+      "x": 260,
+      "y": 1334,
+      "width": 176,
+      "height": 24,
+      "z": 0,
+      "text": "Dependencies point inward",
+      "textOrigin": "explicit",
+      "annotation": true,
+      "parentId": "n_ljqeh0oecm78"
+    },
+    {
+      "id": "n_03zwlo8q235x",
+      "type": "component",
+      "x": 284,
+      "y": 1428,
+      "width": 120,
+      "height": 44,
+      "z": 0,
+      "text": "Inbound",
+      "textOrigin": "explicit",
+      "componentKind": "port",
+      "parentId": "n_ljqeh0oecm78"
+    },
+    {
+      "id": "n_bizzgsx8jhk6",
+      "type": "component",
+      "x": 492,
+      "y": 1418,
+      "width": 172,
+      "height": 64,
+      "z": 0,
+      "text": "Use Cases",
+      "textOrigin": "explicit",
+      "componentKind": "generic",
+      "parentId": "n_ljqeh0oecm78"
+    },
+    {
+      "id": "n_wpmzxwu1ct6q",
+      "type": "component",
+      "x": 508,
+      "y": 1510,
+      "width": 140,
+      "height": 50,
+      "z": 0,
+      "text": "Domain Model",
+      "textOrigin": "explicit",
+      "componentKind": "generic",
+      "parentId": "n_ljqeh0oecm78"
+    },
+    {
+      "id": "n_7gelmoajcyj2",
+      "type": "component",
+      "x": 752,
+      "y": 1348,
+      "width": 120,
+      "height": 44,
+      "z": 0,
+      "text": "Persistence",
+      "textOrigin": "explicit",
+      "componentKind": "port",
+      "parentId": "n_ljqeh0oecm78"
+    },
+    {
+      "id": "n_bvxefhy5e0vo",
+      "type": "component",
+      "x": 752,
+      "y": 1508,
+      "width": 120,
+      "height": 44,
+      "z": 0,
+      "text": "Integration",
+      "textOrigin": "explicit",
+      "componentKind": "port",
+      "parentId": "n_ljqeh0oecm78"
+    },
+    {
+      "id": "n_6vpm5gg6gnj1",
+      "type": "component",
+      "x": 980,
+      "y": 1342,
+      "width": 172,
+      "height": 56,
+      "z": 0,
+      "text": "Persistence Adapter",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "n_cuhl44a1kpta",
+      "type": "component",
+      "x": 980,
+      "y": 1502,
+      "width": 172,
+      "height": 56,
+      "z": 0,
+      "text": "Integration Adapter",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "n_7bcvqekt12it",
+      "type": "database",
+      "x": 1224,
+      "y": 1326,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Database",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "n_qshytc8a54ho",
+      "type": "service",
+      "x": 1224,
+      "y": 1496,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "External System",
+      "textOrigin": "auto",
+      "accent": "teal",
+      "serviceKind": "external"
+    },
+    {
+      "id": "n_7ecza0ixf8a4",
+      "type": "service",
+      "x": 1832,
+      "y": 1366,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Order Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "n_avjxz33zfsst",
+      "type": "group",
+      "x": 2112,
+      "y": 1304,
+      "width": 248,
+      "height": 166,
+      "z": -1,
+      "text": "Coordinator",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "n_fa8w4o9q0wq7",
+      "type": "text",
+      "x": 2124,
+      "y": 1334,
+      "width": 224,
+      "height": 24,
+      "z": 0,
+      "text": "Drives the workflow, owns its state",
+      "textOrigin": "explicit",
+      "annotation": true,
+      "parentId": "n_avjxz33zfsst"
+    },
+    {
+      "id": "n_p2tzbg4md1od",
+      "type": "service",
+      "x": 2148,
+      "y": 1366,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Saga Orchestrator",
+      "textOrigin": "explicit",
+      "accent": "violet",
+      "serviceKind": "generic",
+      "attachments": [
+        {
+          "id": "a_r0bqzwscp6a3",
+          "type": "note",
+          "text": "Owns the saga’s state and the order of steps. Each service commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ],
+      "parentId": "n_avjxz33zfsst"
+    },
+    {
+      "id": "n_w9cxds82cnq3",
+      "type": "service",
+      "x": 1876,
+      "y": 1630,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Payment Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "n_oav5mlnomq4k",
+      "type": "database",
+      "x": 1890,
+      "y": 1770,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Payment DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "n_dkoue3gx2sfg",
+      "type": "service",
+      "x": 2148,
+      "y": 1630,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Inventory Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "n_s9upelfz6k4b",
+      "type": "database",
+      "x": 2162,
+      "y": 1770,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Inventory DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "n_cyepxgs4lvh0",
+      "type": "service",
+      "x": 2420,
+      "y": 1630,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Fulfillment Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "n_q0nbni52surz",
+      "type": "database",
+      "x": 2434,
+      "y": 1770,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Fulfillment DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "n_thk5rrazfygu",
+      "type": "actor",
+      "x": 4176,
+      "y": 1304,
+      "width": 120,
+      "height": 92,
+      "z": 0,
+      "text": "Client",
+      "textOrigin": "explicit",
+      "actorKind": "human"
+    },
+    {
+      "id": "n_cbzsc8i7i10u",
+      "type": "service",
+      "x": 4148,
+      "y": 1500,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "API Gateway",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "gateway",
+      "attachments": [
+        {
+          "id": "a_8292zmorrrca",
+          "type": "note",
+          "text": "Routing, auth, rate limits, TLS. The only public entry point.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "n_al2di2z7o03d",
+      "type": "group",
+      "x": 3664,
+      "y": 1712,
+      "width": 248,
+      "height": 304,
+      "z": -1,
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "n_wcra9fc81xay",
+      "type": "service",
+      "x": 3700,
+      "y": 1752,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Accounts",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "parentId": "n_al2di2z7o03d"
+    },
+    {
+      "id": "n_m8kdm3iia9x8",
+      "type": "database",
+      "x": 3714,
+      "y": 1892,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Accounts DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "parentId": "n_al2di2z7o03d"
+    },
+    {
+      "id": "n_hvhcg61qwiil",
+      "type": "group",
+      "x": 4112,
+      "y": 1712,
+      "width": 248,
+      "height": 304,
+      "z": -1,
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "n_hu0pubeum03s",
+      "type": "service",
+      "x": 4148,
+      "y": 1752,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Orders",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "parentId": "n_hvhcg61qwiil"
+    },
+    {
+      "id": "n_1n6h26qu0cwi",
+      "type": "database",
+      "x": 4162,
+      "y": 1892,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Orders DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "attachments": [
+        {
+          "id": "a_aehnohw8onvq",
+          "type": "note",
+          "text": "Private to Orders. Other services never read it directly.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ],
+      "parentId": "n_hvhcg61qwiil"
+    },
+    {
+      "id": "n_jg6nok7ozuxr",
+      "type": "group",
+      "x": 4560,
+      "y": 1712,
+      "width": 248,
+      "height": 304,
+      "z": -1,
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "n_cv3hy3p00asp",
+      "type": "service",
+      "x": 4596,
+      "y": 1752,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Payments",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "parentId": "n_jg6nok7ozuxr"
+    },
+    {
+      "id": "n_arkmvj2puxmm",
+      "type": "database",
+      "x": 4610,
+      "y": 1892,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Payments DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "parentId": "n_jg6nok7ozuxr"
+    },
+    {
+      "id": "n_787y5j4xwioi",
+      "type": "queue",
+      "x": 4390,
+      "y": 2120,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Order Events",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "n_df8jsrvgrybl",
+      "type": "service",
+      "x": 224,
+      "y": 2608,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Producer Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "n_jl6tcr74zzu8",
+      "type": "queue",
+      "x": 242,
+      "y": 2780,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Domain Events",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "n_ovcpfapldlpe",
+      "type": "queue",
+      "x": 18,
+      "y": 2956,
+      "width": 140,
+      "height": 48,
+      "z": 0,
+      "text": "",
+      "textOrigin": "auto",
+      "queueKind": "queue"
+    },
+    {
+      "id": "n_1r67t0b4tuny",
+      "type": "service",
+      "x": 0,
+      "y": 3076,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Projection Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "n_s5qb6r4ozcz6",
+      "type": "queue",
+      "x": 242,
+      "y": 2956,
+      "width": 140,
+      "height": 48,
+      "z": 0,
+      "text": "",
+      "textOrigin": "auto",
+      "queueKind": "queue"
+    },
+    {
+      "id": "n_g8es5jecsi4m",
+      "type": "service",
+      "x": 224,
+      "y": 3076,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Processing Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "n_gk2uza9i5aj1",
+      "type": "queue",
+      "x": 466,
+      "y": 2956,
+      "width": 140,
+      "height": 48,
+      "z": 0,
+      "text": "",
+      "textOrigin": "auto",
+      "queueKind": "queue"
+    },
+    {
+      "id": "n_o242ak5vevic",
+      "type": "service",
+      "x": 448,
+      "y": 3076,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Integration Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "n_lwzfyjie6fwq",
+      "type": "database",
+      "x": 14,
+      "y": 3216,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Read Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "n_bec8facp6zer",
+      "type": "service",
+      "x": 448,
+      "y": 3216,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "External System",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "external"
+    },
+    {
+      "id": "n_fqa8aotfryqq",
+      "type": "queue",
+      "x": 710,
+      "y": 2956,
+      "width": 140,
+      "height": 48,
+      "z": 0,
+      "text": "",
+      "textOrigin": "auto",
+      "queueKind": "queue",
+      "deliveryRole": "dead-letter"
+    },
+    {
+      "id": "n_dc5qqgi5mpif",
+      "type": "service",
+      "x": 1832,
+      "y": 2670,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Order Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "n_92bhqrbfapfv",
+      "type": "group",
+      "x": 2112,
+      "y": 2608,
+      "width": 248,
+      "height": 166,
+      "z": -1,
+      "text": "Coordinator",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "n_nwdsxla2zv8c",
+      "type": "text",
+      "x": 2124,
+      "y": 2638,
+      "width": 224,
+      "height": 24,
+      "z": 0,
+      "text": "Drives the workflow, owns its state",
+      "textOrigin": "explicit",
+      "annotation": true,
+      "parentId": "n_92bhqrbfapfv"
+    },
+    {
+      "id": "n_ic1gv03bf1lb",
+      "type": "service",
+      "x": 2148,
+      "y": 2670,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Saga Orchestrator",
+      "textOrigin": "explicit",
+      "accent": "violet",
+      "serviceKind": "generic",
+      "attachments": [
+        {
+          "id": "a_1cw0b1xmbpcr",
+          "type": "note",
+          "text": "Owns the saga’s state and the order of steps. Each service commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ],
+      "parentId": "n_92bhqrbfapfv"
+    },
+    {
+      "id": "n_95q29miax5l0",
+      "type": "service",
+      "x": 1876,
+      "y": 2934,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Payment Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "n_hs0pnnfa8ebd",
+      "type": "database",
+      "x": 1890,
+      "y": 3074,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Payment DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "n_5nt4pqaxgszs",
+      "type": "service",
+      "x": 2148,
+      "y": 2934,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Inventory Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "n_3pleimcavocj",
+      "type": "database",
+      "x": 2162,
+      "y": 3074,
+      "width": 148,
+      "height": 88,
+      "z": 0,
+      "text": "Inventory DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_xkkvv48g1fa9",
+      "source": "n_9kyvrscrr2rn",
+      "target": "n_nsdfg3yun6ed",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_amwco6scoj99",
+      "source": "n_nsdfg3yun6ed",
+      "target": "n_tqjnaxz0wip2",
+      "directed": true,
+      "routing": "smoothstep",
+      "condition": "/accounts/*",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "routes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_fp6ggr78d3cr",
+      "source": "n_nsdfg3yun6ed",
+      "target": "n_ldx8i0odgmjx",
+      "directed": true,
+      "routing": "smoothstep",
+      "condition": "/orders/*",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "routes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_yw6z0zeat3qw",
+      "source": "n_nsdfg3yun6ed",
+      "target": "n_lqh9wee2sh1e",
+      "directed": true,
+      "routing": "smoothstep",
+      "condition": "/payments/*",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "routes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_iw1eu2rmpzc0",
+      "source": "n_tqjnaxz0wip2",
+      "target": "n_qgnutrzixsgt",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_w9kdendg4dbj",
+      "source": "n_ldx8i0odgmjx",
+      "target": "n_kzx1pwbmi3uw",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_jjwdbur10u7i",
+      "source": "n_lqh9wee2sh1e",
+      "target": "n_x5vpyjci9b8i",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_u35mdeb6eqlz",
+      "source": "n_ldx8i0odgmjx",
+      "target": "n_rr8ou9kwiha4",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.15
+      },
+      "kind": "event",
+      "semantic": "publishes",
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "a_aybo5gcab0ei",
+          "type": "note",
+          "text": "OrderPlaced — emitted after the Orders DB commit, never before.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "e_f9k3q9s39ast",
+      "source": "n_rr8ou9kwiha4",
+      "target": "n_lqh9wee2sh1e",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.65
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "deliversTo",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_942sqb0rs5hj",
+      "source": "n_rr8ou9kwiha4",
+      "target": "n_yxfjnyem2mbj",
+      "directed": true,
+      "routing": "smoothstep",
+      "kind": "event",
+      "semantic": "deliversTo",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_44moh82qz7mu",
+      "source": "n_yxfjnyem2mbj",
+      "target": "n_598xcus7y0nj",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "publishes OrderCreated",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "publishes",
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "a_16ln76uv5nxt",
+          "type": "code",
+          "text": "OrderCreated",
+          "language": "json",
+          "code": "{\n  \"id\": \"evt_8f3a1c2d\",\n  \"type\": \"OrderCreated\",\n  \"time\": \"2026-09-10T08:15Z\",\n  \"data\": {\n    \"orderId\": \"ord_4821\"\n  }\n}",
+          "width": 380,
+          "height": 180
+        }
+      ]
+    },
+    {
+      "id": "e_mrk85qnc37am",
+      "source": "n_598xcus7y0nj",
+      "target": "n_iiuxvvir4x0s",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "fansOut",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_kshnyrf07dz8",
+      "source": "n_598xcus7y0nj",
+      "target": "n_s13be2ir45hh",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "fansOut",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_lfcy9gbiprip",
+      "source": "n_598xcus7y0nj",
+      "target": "n_5vmzljp30sqd",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "fansOut",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_xq3vhwlg5u2c",
+      "source": "n_iiuxvvir4x0s",
+      "target": "n_k9big8rbao0y",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "consumes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_lpvbh7nchwid",
+      "source": "n_s13be2ir45hh",
+      "target": "n_3k4yvj4igsq7",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "consumes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_ozyxc59ty8su",
+      "source": "n_5vmzljp30sqd",
+      "target": "n_h62mhz4xmi8r",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "consumes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_dlorn5fij05h",
+      "source": "n_k9big8rbao0y",
+      "target": "n_gqkqon9dtsbe",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_c9a6lar3nal4",
+      "source": "n_h62mhz4xmi8r",
+      "target": "n_x0n21tcpixvd",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_img92aman7so",
+      "source": "n_5vmzljp30sqd",
+      "target": "n_8u7gjsxr95cg",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "kind": "failure",
+      "semantic": "deadLetters",
+      "semanticsOrigin": "inferred",
+      "async": true,
+      "deliveryAttempts": 3,
+      "attachments": [
+        {
+          "id": "a_y2sl59gpuo6l",
+          "type": "note",
+          "text": "Poison messages park here for inspection and redrive. Alert on depth.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "e_jw6tiq5tluua",
+      "source": "n_gqkqon9dtsbe",
+      "target": "n_3bfddjs9ehqx",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_shn90kpajhhc",
+      "source": "n_6ldrg0xe278s",
+      "target": "n_3bfddjs9ehqx",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "command",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_5wlg1zvqssc3",
+      "source": "n_3bfddjs9ehqx",
+      "target": "n_l9ilgjjj1zot",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "executes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "command",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_4s6thn872u7o",
+      "source": "n_l9ilgjjj1zot",
+      "target": "n_977qwokbf7jv",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_hjbmcvcrbk1o",
+      "source": "n_l9ilgjjj1zot",
+      "target": "n_wbhf2c6qo4ia",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "publishes",
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "a_7n8dy8oeciea",
+          "type": "note",
+          "text": "OrderPlaced — a fact, published after the write store commits.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "e_26jjbrwgpswv",
+      "source": "n_wbhf2c6qo4ia",
+      "target": "n_yvat616k8e0w",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "deliversTo",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_rta1wzmuevfb",
+      "source": "n_yvat616k8e0w",
+      "target": "n_8abn2t338cpf",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "projects",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_go5fbvm5t0r4",
+      "source": "n_6ldrg0xe278s",
+      "target": "n_bjupow8vznq1",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "query",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_6j2b478937yp",
+      "source": "n_bjupow8vznq1",
+      "target": "n_8abn2t338cpf",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "reads",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_nfaoz8v79ifg",
+      "source": "n_8abn2t338cpf",
+      "target": "n_7mplmaf3oky8",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_ht11hd8llcvi",
+      "source": "n_7mplmaf3oky8",
+      "target": "n_03zwlo8q235x",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_xzuxbuwl3h4d",
+      "source": "n_udf33xqvniq3",
+      "target": "n_03zwlo8q235x",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_gg4hohd3gg4i",
+      "source": "n_03zwlo8q235x",
+      "target": "n_bizzgsx8jhk6",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "implementedBy",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_lnrdp0agzob9",
+      "source": "n_bizzgsx8jhk6",
+      "target": "n_wpmzxwu1ct6q",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "uses",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_bfabl1sk6zxp",
+      "source": "n_bizzgsx8jhk6",
+      "target": "n_7gelmoajcyj2",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "uses",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_pcqnnntk8hs7",
+      "source": "n_bizzgsx8jhk6",
+      "target": "n_bvxefhy5e0vo",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "uses",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_ivv7323huo0a",
+      "source": "n_7gelmoajcyj2",
+      "target": "n_6vpm5gg6gnj1",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "implementedBy",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_lvs665qmabbl",
+      "source": "n_bvxefhy5e0vo",
+      "target": "n_cuhl44a1kpta",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "implementedBy",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_es7go1sc4uh1",
+      "source": "n_6vpm5gg6gnj1",
+      "target": "n_7bcvqekt12it",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_m8ln5oq6mbx4",
+      "source": "n_cuhl44a1kpta",
+      "target": "n_qshytc8a54ho",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_xhzj2ryqf6tn",
+      "source": "n_7bcvqekt12it",
+      "target": "n_7ecza0ixf8a4",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_sdp2o17dukba",
+      "source": "n_7ecza0ixf8a4",
+      "target": "n_p2tzbg4md1od",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Start saga",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "command",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_g53an1s8gbyu",
+      "source": "n_p2tzbg4md1od",
+      "target": "n_w9cxds82cnq3",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Reserve payment",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "command",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_k6w3xxy7skvd",
+      "source": "n_p2tzbg4md1od",
+      "target": "n_dkoue3gx2sfg",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Reserve inventory",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "command",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_756wkfw9jfer",
+      "source": "n_p2tzbg4md1od",
+      "target": "n_cyepxgs4lvh0",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Schedule fulfillment",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "command",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_xp7laj013rgv",
+      "source": "n_w9cxds82cnq3",
+      "target": "n_oav5mlnomq4k",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_569sf9hvipdy",
+      "source": "n_dkoue3gx2sfg",
+      "target": "n_s9upelfz6k4b",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_5p9xp8n1gj0k",
+      "source": "n_cyepxgs4lvh0",
+      "target": "n_q0nbni52surz",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_1h8r7t832v2g",
+      "source": "n_p2tzbg4md1od",
+      "target": "n_dkoue3gx2sfg",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Release inventory",
+      "accent": "rose",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.75
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.25
+      },
+      "semantic": "compensates",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_zx3wcnywii4v",
+      "source": "n_p2tzbg4md1od",
+      "target": "n_w9cxds82cnq3",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Release payment",
+      "accent": "rose",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.75
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.25
+      },
+      "semantic": "compensates",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_kuslefd7wj5y",
+      "source": "n_q0nbni52surz",
+      "target": "n_cbzsc8i7i10u",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_6z0n52aawzsa",
+      "source": "n_thk5rrazfygu",
+      "target": "n_cbzsc8i7i10u",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_qmauc3vcg4sk",
+      "source": "n_cbzsc8i7i10u",
+      "target": "n_wcra9fc81xay",
+      "directed": true,
+      "routing": "smoothstep",
+      "condition": "/accounts/*",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "routes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_416avpk3lp1u",
+      "source": "n_cbzsc8i7i10u",
+      "target": "n_hu0pubeum03s",
+      "directed": true,
+      "routing": "smoothstep",
+      "condition": "/orders/*",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "routes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_vawkjh6z1yu6",
+      "source": "n_cbzsc8i7i10u",
+      "target": "n_cv3hy3p00asp",
+      "directed": true,
+      "routing": "smoothstep",
+      "condition": "/payments/*",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "routes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_v6w3l8nt60xu",
+      "source": "n_wcra9fc81xay",
+      "target": "n_m8kdm3iia9x8",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_8817azb5on9c",
+      "source": "n_hu0pubeum03s",
+      "target": "n_1n6h26qu0cwi",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_k32ud92udepz",
+      "source": "n_cv3hy3p00asp",
+      "target": "n_arkmvj2puxmm",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_ud7bct6nj434",
+      "source": "n_hu0pubeum03s",
+      "target": "n_787y5j4xwioi",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.15
+      },
+      "kind": "event",
+      "semantic": "publishes",
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "a_vmnk7c1f6zbz",
+          "type": "note",
+          "text": "OrderPlaced — emitted after the Orders DB commit, never before.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "e_l979a0xi3bu8",
+      "source": "n_787y5j4xwioi",
+      "target": "n_cv3hy3p00asp",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.65
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "deliversTo",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_t6805a9rcfqb",
+      "source": "n_787y5j4xwioi",
+      "target": "n_df8jsrvgrybl",
+      "directed": true,
+      "routing": "smoothstep",
+      "kind": "event",
+      "semantic": "deliversTo",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_zrx25fxjaoh6",
+      "source": "n_df8jsrvgrybl",
+      "target": "n_jl6tcr74zzu8",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "publishes OrderCreated",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "publishes",
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "a_w3jav8txnnws",
+          "type": "code",
+          "text": "OrderCreated",
+          "language": "json",
+          "code": "{\n  \"id\": \"evt_8f3a1c2d\",\n  \"type\": \"OrderCreated\",\n  \"time\": \"2026-09-10T08:15Z\",\n  \"data\": {\n    \"orderId\": \"ord_4821\"\n  }\n}",
+          "width": 380,
+          "height": 180
+        }
+      ]
+    },
+    {
+      "id": "e_ul4m6vh7nsj3",
+      "source": "n_jl6tcr74zzu8",
+      "target": "n_ovcpfapldlpe",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "fansOut",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_63e4pykq1k9t",
+      "source": "n_jl6tcr74zzu8",
+      "target": "n_s5qb6r4ozcz6",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "fansOut",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_b6x9oqug1bie",
+      "source": "n_jl6tcr74zzu8",
+      "target": "n_gk2uza9i5aj1",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "fansOut",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_yh7reotxghfo",
+      "source": "n_ovcpfapldlpe",
+      "target": "n_1r67t0b4tuny",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "consumes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_3lmkju3w37pu",
+      "source": "n_s5qb6r4ozcz6",
+      "target": "n_g8es5jecsi4m",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "consumes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_thma3uzn2b2s",
+      "source": "n_gk2uza9i5aj1",
+      "target": "n_o242ak5vevic",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "consumes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_p5ez91pdfttq",
+      "source": "n_1r67t0b4tuny",
+      "target": "n_lwzfyjie6fwq",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_b5fcqmych8ga",
+      "source": "n_o242ak5vevic",
+      "target": "n_bec8facp6zer",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_520gw4selhta",
+      "source": "n_gk2uza9i5aj1",
+      "target": "n_fqa8aotfryqq",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "kind": "failure",
+      "semantic": "deadLetters",
+      "semanticsOrigin": "inferred",
+      "async": true,
+      "deliveryAttempts": 3,
+      "attachments": [
+        {
+          "id": "a_8x6r8pyfbqbo",
+          "type": "note",
+          "text": "Poison messages park here for inspection and redrive. Alert on depth.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "e_3z2epbb6pubo",
+      "source": "n_lwzfyjie6fwq",
+      "target": "n_dc5qqgi5mpif",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_pteksgbjp9k2",
+      "source": "n_dc5qqgi5mpif",
+      "target": "n_ic1gv03bf1lb",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Start saga",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "command",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_zo6d2ac3wu0o",
+      "source": "n_ic1gv03bf1lb",
+      "target": "n_95q29miax5l0",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Reserve payment",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "command",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_1l8wpu40vfp7",
+      "source": "n_ic1gv03bf1lb",
+      "target": "n_5nt4pqaxgszs",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Reserve inventory",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "command",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_99qdvh1fi5do",
+      "source": "n_95q29miax5l0",
+      "target": "n_hs0pnnfa8ebd",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_r9swsvtoyv11",
+      "source": "n_5nt4pqaxgszs",
+      "target": "n_3pleimcavocj",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_lgjoyw0a0vwv",
+      "source": "n_ic1gv03bf1lb",
+      "target": "n_5nt4pqaxgszs",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Release inventory",
+      "accent": "rose",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.75
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.25
+      },
+      "semantic": "compensates",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_8wdj1e2lvlzd",
+      "source": "n_ic1gv03bf1lb",
+      "target": "n_95q29miax5l0",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Release payment",
+      "accent": "rose",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.75
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.25
+      },
+      "semantic": "compensates",
+      "semanticsOrigin": "explicit"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "f_swdo9d42ve5w",
+      "title": "Submit command",
+      "steps": [
+        {
+          "id": "fs_y0qks7jxiyn3",
+          "edgeId": "e_shn90kpajhhc",
+          "caption": "The client states what it wants"
+        },
+        {
+          "id": "fs_y7y7u27ogvii",
+          "edgeId": "e_5wlg1zvqssc3"
+        },
+        {
+          "id": "fs_qg8zct2jhp1v",
+          "edgeId": "e_4s6thn872u7o",
+          "caption": "Current state, in the write model’s shape"
+        },
+        {
+          "id": "fs_z1jptcs36g6b",
+          "edgeId": "e_hjbmcvcrbk1o",
+          "caption": "A fact leaves the command side"
+        },
+        {
+          "id": "fs_4axlmj3f9khf",
+          "edgeId": "e_26jjbrwgpswv"
+        },
+        {
+          "id": "fs_8sc5axr9bta2",
+          "edgeId": "e_rta1wzmuevfb",
+          "caption": "The read model catches up — eventually"
+        }
+      ],
+      "accent": "amber"
+    },
+    {
+      "id": "f_4lcgeuly7eg1",
+      "title": "Read projection",
+      "steps": [
+        {
+          "id": "fs_ecj0ogb174gc",
+          "edgeId": "e_go5fbvm5t0r4",
+          "caption": "The client asks a question"
+        },
+        {
+          "id": "fs_lala2f53a42e",
+          "edgeId": "e_6j2b478937yp",
+          "caption": "Answered from the read model — nothing changes"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "f_7j4efnjh6xml",
+      "title": "Happy path",
+      "steps": [
+        {
+          "id": "fs_qny6e36o95gs",
+          "edgeId": "e_sdp2o17dukba"
+        },
+        {
+          "id": "fs_yirdtubxkcrt",
+          "edgeId": "e_g53an1s8gbyu"
+        },
+        {
+          "id": "fs_qqgkcshnz8bd",
+          "edgeId": "e_xp7laj013rgv",
+          "caption": "Local transaction commits"
+        },
+        {
+          "id": "fs_akuuqvrmt9ya",
+          "edgeId": "e_k6w3xxy7skvd"
+        },
+        {
+          "id": "fs_qfdv77gg2qj4",
+          "edgeId": "e_569sf9hvipdy",
+          "caption": "Local transaction commits"
+        },
+        {
+          "id": "fs_3nte7g7n7o82",
+          "edgeId": "e_756wkfw9jfer"
+        },
+        {
+          "id": "fs_z3wm5yqni3zx",
+          "edgeId": "e_5p9xp8n1gj0k",
+          "caption": "Local transaction commits — saga complete"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "f_hz079o7f7g4n",
+      "title": "Compensation",
+      "steps": [
+        {
+          "id": "fs_sn3cu0dn15ba",
+          "edgeId": "e_g53an1s8gbyu",
+          "caption": "Succeeded"
+        },
+        {
+          "id": "fs_7p43mp8em71t",
+          "edgeId": "e_xp7laj013rgv",
+          "caption": "Committed locally — nothing outside can roll it back"
+        },
+        {
+          "id": "fs_fiy1dxrn29x2",
+          "edgeId": "e_k6w3xxy7skvd",
+          "caption": "Succeeded, and committed locally too"
+        },
+        {
+          "id": "fs_3f06ocjuzope",
+          "edgeId": "e_756wkfw9jfer",
+          "caption": "Fails"
+        },
+        {
+          "id": "fs_peekdktl4q99",
+          "edgeId": "e_1h8r7t832v2g",
+          "caption": "Undo the last committed step first — a new local transaction"
+        },
+        {
+          "id": "fs_gbutmoz7thdx",
+          "edgeId": "e_zx3wcnywii4v",
+          "caption": "Then the one before it"
+        }
+      ],
+      "accent": "rose"
+    },
+    {
+      "id": "f_4gba3n2c6em7",
+      "title": "Happy path",
+      "steps": [
+        {
+          "id": "fs_5f214jjucyfh",
+          "edgeId": "e_pteksgbjp9k2"
+        },
+        {
+          "id": "fs_jzwfxqrcsj64",
+          "edgeId": "e_zo6d2ac3wu0o"
+        },
+        {
+          "id": "fs_c22f3yd5cbjz",
+          "edgeId": "e_99qdvh1fi5do",
+          "caption": "Local transaction commits"
+        },
+        {
+          "id": "fs_z2tfwcfhawia",
+          "edgeId": "e_1l8wpu40vfp7"
+        },
+        {
+          "id": "fs_pzgxoup03drw",
+          "edgeId": "e_r9swsvtoyv11",
+          "caption": "Local transaction commits"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "f_bl79dj850f9h",
+      "title": "Compensation",
+      "steps": [
+        {
+          "id": "fs_ugorbeqq7zmg",
+          "edgeId": "e_zo6d2ac3wu0o",
+          "caption": "Succeeded"
+        },
+        {
+          "id": "fs_5ukxsonqows5",
+          "edgeId": "e_99qdvh1fi5do",
+          "caption": "Committed locally — nothing outside can roll it back"
+        },
+        {
+          "id": "fs_v0uubv8wysii",
+          "edgeId": "e_1l8wpu40vfp7",
+          "caption": "Succeeded, and committed locally too"
+        },
+        {
+          "id": "fs_d4meryxwja6c",
+          "edgeId": "e_lgjoyw0a0vwv",
+          "caption": "Undo the last committed step first — a new local transaction"
+        },
+        {
+          "id": "fs_xplrjvdnmanq",
+          "edgeId": "e_8wdj1e2lvlzd",
+          "caption": "Then the one before it"
+        }
+      ],
+      "accent": "rose"
+    }
+  ]
+}

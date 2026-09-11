@@ -51,7 +51,27 @@ for anything you want to keep.
 - [Diagram semantics](docs/SEMANTICS.md) — what it understands about your diagrams
 - [Schema and versioning](docs/SCHEMA.md) — the `.draftcanvas` format and its migration contract
 - [Privacy](docs/PRIVACY.md) — what's stored where
+- [Performance](docs/performance.md) — the benchmark, what it measures, and how to run it
 - [Contributing](CONTRIBUTING.md) — how to run it locally
+
+<!-- performance:start -->
+## Performance
+
+Draft Canvas includes a reproducible Chromium benchmark using a representative architecture diagram.
+
+| Scenario | Elements | Load | JS Heap | Drag |
+|---|---|---|---|---|
+| Typical | 90 nodes / 79 connections | 151 ms | 15 MiB | 366 ms |
+| Large | 225 nodes / 192 connections | 502 ms | 29 MiB | 385 ms |
+
+Benchmarks run against the production build in Chromium using deterministic architecture diagrams. Results are representative measurements from the reference machine below, not guarantees for every device.
+
+Measured on: Apple M2 Pro, darwin 25.6.0, Chromium 151.0.7922.34, Draft Canvas 0.8.0.
+
+![JS heap vs. diagram size](benchmark/memory-chart.svg)
+
+Details and reproduction steps: [`docs/performance.md`](docs/performance.md).
+<!-- performance:end -->
 
 ## Contributing
 
