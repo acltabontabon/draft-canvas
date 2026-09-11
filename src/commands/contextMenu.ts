@@ -80,7 +80,7 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
   return grouped([
     pick(commands, ['edit-text']),
     pick(commands, ['attach-note', 'attach-code']),
-    pick(commands, ['add-consumer', 'add-dead-letter-queue', 'remove-dead-letter-queue']),
+    pick(commands, ['add-consumer', 'add-dead-letter-queue', 'remove-dead-letter-queue', 'add-subscriber']),
     pick(commands, ['duplicate', 'copy', 'cut']),
     pick(commands, ['bring-to-front', 'bring-forward', 'send-backward', 'send-to-back']),
     pick(commands, lastGroup),

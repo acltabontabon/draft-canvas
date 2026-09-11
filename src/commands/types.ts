@@ -88,6 +88,10 @@ export interface CommandOption {
 
 export interface Command extends CommandOption {
   group: CommandGroup;
+  /** Promotes this into the selected element's primary popover (`ElementInspectorPopover`), not
+   *  just the palette/context menu — reserved for the 1-3 highest-value, shape-native actions a
+   *  kind has (e.g. a Queue's Add Consumer/Add DLQ). See `primaryCommandsFor` in `registry.ts`. */
+  primary?: boolean;
 }
 
 export function isStage(value: unknown): value is CommandStage {

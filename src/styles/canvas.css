@@ -1101,6 +1101,15 @@
   font-size: 12px;
 }
 
+/* Shape-native quick actions (Add Consumer, Add DLQ, …) read as this element's own row, separated
+   from the generic colour/kind/Focus/Delete row that always follows it — same separator convention
+   `.dc-element-inspector-panel` uses below. Only present at all when the selected kind actually has
+   a primary action (`ElementInspectorPopover`), so a Service/Data Store/Junction's popover is
+   unchanged. */
+.dc-element-inspector-quickrow + .dc-element-inspector-row {
+  border-top: 1px solid var(--dc-border);
+}
+
 .dc-element-inspector-panel {
   display: flex;
   flex-wrap: wrap;

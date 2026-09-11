@@ -679,6 +679,99 @@ function continuationCommandFor(ctx: CommandContext, node: DraftNode): Command |
   };
 }
 
+/** A Queue-family node's own shape-native quick actions — Add Consumer, Add DLQ/Remove DLQ, and
+ *  (for a Topic) Add Subscriber — computed once here and reused by both the full `nodeCommands`
+ *  list and `primaryCommandsFor`'s fast path for the primary popover, so there is exactly one
+ *  place that decides what a queue/topic/stream node can do; neither surface can drift from the
+ *  other. Caller must already know `node.type === 'queue'`. */
+function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
+  const commands: Command[] = [];
+  const category = categoryOf(node);
+  // Consuming from it is universally valid for a plain Queue, a Stream (`categoryOf` already
+  // folds `queueKind: 'stream'` in) or a DLQ (a re-drive worker reads a dead-letter queue like
+  // any other) but not for a Topic: a fan-out subscriber is a different relationship, offered
+  // below instead.
+  if (category === 'queue' || category === 'deadLetter') {
+    commands.push({
+      id: 'add-consumer',
+      title: 'Add Consumer',
+      group: 'selection',
+      keywords: ['worker', 'subscriber', 'consume'],
+      primary: true,
+      run: (inner) => inner.editor.addConsumer(node.id),
+    });
+  }
+  // A DLQ belongs only to a plain Queue — deliberately the literal `queueKind === 'queue'`, not
+  // `categoryOf`, since a Stream's own dead-letter destination is typically a separate topic
+  // managed by a consumer/framework, not a queue-shaped DLQ (and a Topic's failure handling
+  // belongs to a subscription/consumer path Draft Canvas doesn't model yet) — and never on a
+  // node that is itself already a generated DLQ.
+  if (node.queueKind === 'queue' && node.deliveryRole !== 'dead-letter') {
+    const hasDlq = ctx.editor.document.edges.some((edge) => edge.source === node.id && edge.semantic === 'deadLetters');
+    commands.push(
+      hasDlq
+        ? {
+            id: 'remove-dead-letter-queue',
+            title: 'Remove DLQ',
+            group: 'selection',
+            keywords: ['dlq', 'dead letter', 'failure', 'reliability'],
+            primary: true,
+            run: (inner) => inner.editor.removeDeadLetterQueue(node.id),
+          }
+        : {
+            id: 'add-dead-letter-queue',
+            title: 'Add DLQ',
+            group: 'selection',
+            keywords: ['dlq', 'dead letter', 'failure', 'reliability'],
+            primary: true,
+            run: (inner) => inner.editor.addDeadLetterQueue(node.id),
+          },
+    );
+  }
+  // A Topic's own fan-out companion. Repeatable — a topic fanning out to several queues is
+  // normal — so there's no "Remove Subscriber" counterpart; the created queue deletes like any
+  // other node.
+  if (category === 'topic') {
+    commands.push({
+      id: 'add-subscriber',
+      title: 'Add Subscriber',
+      group: 'selection',
+      keywords: ['queue', 'fan out', 'subscribe'],
+      primary: true,
+      run: (inner) => inner.editor.addSubscriber(node.id),
+    });
+  }
+  return commands;
+}
+
+/** A Boundary's own structural action — reused by both `nodeCommands` (single-node selection) and
+ *  `primaryCommandsFor`. Multi-selection's own "Ungroup" (`multiCommands`) is a separate command
+ *  object, since it acts over the whole selection rather than one specific node. */
+function boundaryUngroupCommand(): Command {
+  return {
+    id: 'ungroup',
+    title: 'Ungroup',
+    group: 'selection',
+    keywords: ['dissolve boundary', 'remove group'],
+    shortcut: `${MOD_SYMBOL} Shift G`,
+    primary: true,
+    run: (inner) => inner.editor.ungroupSelection(),
+  };
+}
+
+/** The 0-3 shape-native actions worth surfacing in the primary popover for a single selected
+ *  node — the same commands `nodeCommands` would include (same ids, same `run`), just computed
+ *  directly instead of building the full palette/context-menu list (continuation suggestions,
+ *  `connectToStage`, attachments, z-order, …) only to filter it down. Cheap enough to call on
+ *  every render; callers should still memoize on the node fields that can change the result
+ *  (`type`, `queueKind`, `deliveryRole`, and whether a `deadLetters` edge exists) rather than on
+ *  node position, so dragging a node doesn't recompute this every animation frame. */
+export function primaryCommandsFor(ctx: CommandContext, node: DraftNode): Command[] {
+  if (node.type === 'queue') return queueQuickCommands(ctx, node);
+  if (node.type === 'group') return [boundaryUngroupCommand()];
+  return [];
+}
+
 export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
   const commands: Command[] = [];
   const isBoundary = node.type === 'group';
@@ -738,45 +831,7 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
     );
   }
   if (node.type === 'queue') {
-    // Consuming from it is universally valid for a plain Queue, a Stream (`categoryOf` already
-    // folds `queueKind: 'stream'` in) or a DLQ (a re-drive worker reads a dead-letter queue like
-    // any other) but not for a Topic: a fan-out subscriber is a different relationship, not
-    // offered here.
-    const category = categoryOf(node);
-    if (category === 'queue' || category === 'deadLetter') {
-      commands.push({
-        id: 'add-consumer',
-        title: 'Add Consumer',
-        group: 'selection',
-        keywords: ['worker', 'subscriber', 'consume'],
-        run: (inner) => inner.editor.addConsumer(node.id),
-      });
-    }
-    // A DLQ belongs only to a plain Queue — deliberately the literal `queueKind === 'queue'`, not
-    // `categoryOf`, since a Stream's own dead-letter destination is typically a separate topic
-    // managed by a consumer/framework, not a queue-shaped DLQ (and a Topic's failure handling
-    // belongs to a subscription/consumer path Draft Canvas doesn't model yet) — and never on a
-    // node that is itself already a generated DLQ.
-    if (node.queueKind === 'queue' && node.deliveryRole !== 'dead-letter') {
-      const hasDlq = ctx.editor.document.edges.some((edge) => edge.source === node.id && edge.semantic === 'deadLetters');
-      commands.push(
-        hasDlq
-          ? {
-              id: 'remove-dead-letter-queue',
-              title: 'Remove DLQ',
-              group: 'selection',
-              keywords: ['dlq', 'dead letter', 'failure', 'reliability'],
-              run: (inner) => inner.editor.removeDeadLetterQueue(node.id),
-            }
-          : {
-              id: 'add-dead-letter-queue',
-              title: 'Add DLQ',
-              group: 'selection',
-              keywords: ['dlq', 'dead letter', 'failure', 'reliability'],
-              run: (inner) => inner.editor.addDeadLetterQueue(node.id),
-            },
-      );
-    }
+    commands.push(...queueQuickCommands(ctx, node));
   }
   commands.push(
     {
@@ -819,14 +874,7 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
         },
       });
     }
-    commands.push({
-      id: 'ungroup',
-      title: 'Ungroup',
-      group: 'selection',
-      keywords: ['dissolve boundary', 'remove group'],
-      shortcut: `${MOD_SYMBOL} Shift G`,
-      run: (inner) => inner.editor.ungroupSelection(),
-    });
+    commands.push(boundaryUngroupCommand());
   }
   commands.push(deleteCommand('Delete'));
   return commands;

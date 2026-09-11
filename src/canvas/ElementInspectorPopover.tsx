@@ -1,5 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ViewportPortal, useInternalNode, useReactFlow } from '@xyflow/react';
+import { primaryCommandsFor } from '../commands/registry';
+import type { CommandContext } from '../commands/types';
 import {
   ACCENTS,
   BOUNDARY_PRESETS,
@@ -57,6 +59,17 @@ const BOUNDARY_OPTIONS: InspectorSelectOption[] = BOUNDARY_PRESETS.map((preset) 
   label: BOUNDARY_PRESET_OPTION_LABELS[preset],
 }));
 
+/** A slightly longer tooltip than the button's own visible label, for the quick-actions row —
+ *  keyed by command id, same ids `primaryCommandsFor` (`commands/registry.ts`) returns. Falls back
+ *  to the command's own title for anything not listed here. */
+const QUICK_ACTION_HINTS: Record<string, string> = {
+  'add-consumer': 'Add a service that consumes from this queue',
+  'add-dead-letter-queue': 'Add a dead-letter queue for messages that fail delivery',
+  'remove-dead-letter-queue': 'Remove this queue’s dead-letter queue',
+  'add-subscriber': 'Add a queue subscriber that fans out from this topic',
+  ungroup: 'Dissolve this boundary, keeping its contents',
+};
+
 /** Must match this component's own `dc-element-inspector-*` CSS animation duration. */
 const POPOVER_EXIT_MS = 120;
 
@@ -90,7 +103,7 @@ const RIGHT_CLEARANCE_WITH_FLOW_PANEL = 312;
  * off-screen even right at a corner. It only changes placement when the current one genuinely
  * stops fitting, so it doesn't flip mid-drag or mid-resize.
  */
-export function ElementInspectorPopover() {
+export function ElementInspectorPopover({ buildCommandContext }: { buildCommandContext: () => CommandContext }) {
   const document = useEditorStore((state) => state.document);
   const selection = useEditorStore((state) => state.selection);
   const mode = useEditorStore((state) => state.mode);
@@ -328,6 +341,7 @@ export function ElementInspectorPopover() {
             menuAvoidRect={menuAvoidRect}
             theme={theme}
             store={store}
+            buildCommandContext={buildCommandContext}
           />
         </div>
       </div>
@@ -343,6 +357,7 @@ function ElementInspectorRow({
   menuAvoidRect,
   theme,
   store,
+  buildCommandContext,
 }: {
   node: DraftNode;
   paletteOpen: boolean;
@@ -351,8 +366,29 @@ function ElementInspectorRow({
   menuAvoidRect: { top: number; bottom: number };
   theme: ReturnType<typeof useThemeValue>;
   store: typeof useEditorStore;
+  buildCommandContext: () => CommandContext;
 }) {
   const currentAccentChip = node.accent !== undefined ? theme.accents[node.accent].chip : undefined;
+
+  // Only a plain Queue can ever have a DLQ toggle, and the scan is skipped for every other kind —
+  // cheap enough to run every render, but there's no reason to pay even that for a Service/Topic/
+  // Junction/etc. selection.
+  const hasDlqEdge =
+    node.type === 'queue' && node.queueKind === 'queue' && node.deliveryRole !== 'dead-letter'
+      ? store.getState().document.edges.some((edge) => edge.source === node.id && edge.semantic === 'deadLetters')
+      : false;
+
+  // The 0-3 shape-native quick actions for this node — memoized on the specific fields that can
+  // change the result, never on `node` itself or `document` wholesale. `node` gets a new identity
+  // every animation frame while it's being dragged or resized (this popover tracks live position
+  // via `useInternalNode`), and recomputing/rebuilding this list on every one of those frames is
+  // exactly the wasted work to avoid; none of `type`/`queueKind`/`deliveryRole`/`hasDlqEdge` change
+  // just because the node moved.
+  const primaryCommands = useMemo(
+    () => primaryCommandsFor(buildCommandContext(), node),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [node.id, node.type, node.queueKind, node.deliveryRole, hasDlqEdge],
+  );
 
   const typeControl = ((): {
     options: InspectorSelectOption[];
@@ -441,6 +477,20 @@ function ElementInspectorRow({
 
   return (
     <>
+      {primaryCommands.length > 0 && (
+        <div className="dc-element-inspector-row dc-element-inspector-quickrow">
+          {primaryCommands.map((command) => (
+            <Button
+              key={command.id}
+              variant="quiet"
+              title={QUICK_ACTION_HINTS[command.id] ?? command.title}
+              onClick={() => command.run(buildCommandContext())}
+            >
+              {command.title}
+            </Button>
+          ))}
+        </div>
+      )}
       <div className="dc-element-inspector-row">
         <button
           type="button"
@@ -461,11 +511,6 @@ function ElementInspectorRow({
             avoidRect={menuAvoidRect}
             layout={typeControl.layout}
           />
-        )}
-        {node.type === 'group' && (
-          <Button variant="quiet" onClick={() => store.getState().ungroupSelection()}>
-            Ungroup
-          </Button>
         )}
         <Button
           variant="quiet"

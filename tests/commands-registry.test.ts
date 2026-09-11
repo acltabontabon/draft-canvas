@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { commandsFor } from '../src/commands/registry';
+import { commandsFor, primaryCommandsFor } from '../src/commands/registry';
 import { rank } from '../src/commands/fuzzy';
 import { STARTER_IDS } from '../src/starters';
 import type { CommandContext } from '../src/commands/types';
@@ -405,6 +405,102 @@ describe('commandsFor — Queue reliability commands (Add Consumer / Add DLQ)', 
     const ctx = stubContext();
     commandsFor(ctx).find((command) => command.id === 'add-dead-letter-queue')!.run(ctx);
     expect(useEditorStore.getState().document.nodes).toHaveLength(2);
+  });
+
+  it('a Topic offers Add Subscriber, a plain Queue and a Stream do not', () => {
+    const topic = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'topic', x: 0, y: 0 });
+    select(topic.id);
+    expect(ids(stubContext())).toContain('add-subscriber');
+
+    const q = useEditorStore.getState().addNode({ type: 'queue', x: 0, y: 0 });
+    select(q.id);
+    expect(ids(stubContext())).not.toContain('add-subscriber');
+
+    const stream = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'stream', x: 0, y: 0 });
+    select(stream.id);
+    expect(ids(stubContext())).not.toContain('add-subscriber');
+  });
+
+  it('running "Add Subscriber" creates a fanned-out Queue in one undo step', () => {
+    const topic = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'topic', x: 0, y: 0 });
+    select(topic.id);
+    const ctx = stubContext();
+    commandsFor(ctx).find((command) => command.id === 'add-subscriber')!.run(ctx);
+    const state = useEditorStore.getState();
+    expect(state.document.nodes).toHaveLength(2);
+    const subscriber = state.document.nodes.find((n) => n.id !== topic.id)!;
+    expect(subscriber.type).toBe('queue');
+    expect(state.document.edges).toMatchObject([{ source: topic.id, target: subscriber.id, semantic: 'fansOut' }]);
+    expect(state.selection.nodes).toEqual([subscriber.id]);
+    state.undo();
+    expect(useEditorStore.getState().document.nodes).toHaveLength(1);
+    expect(useEditorStore.getState().document.edges).toHaveLength(0);
+  });
+
+  it('Add Subscriber is repeatable — a topic can fan out to several queues', () => {
+    const topic = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'topic', x: 0, y: 0 });
+    select(topic.id);
+    const ctx = stubContext();
+    commandsFor(ctx).find((command) => command.id === 'add-subscriber')!.run(ctx);
+    select(topic.id);
+    commandsFor(ctx).find((command) => command.id === 'add-subscriber')!.run(ctx);
+    const state = useEditorStore.getState();
+    expect(state.document.nodes).toHaveLength(3);
+    expect(state.document.edges).toHaveLength(2);
+  });
+});
+
+/**
+ * The primary popover's quick-actions row (`ElementInspectorPopover`) sources its 0-3 shape-native
+ * buttons from `primaryCommandsFor` — the same commands (same ids/`run`) `nodeCommands` would
+ * include, computed directly rather than filtered from the full palette/context-menu list. These
+ * tests pin exactly which kinds get a primary row today and that it stays declarative (no shape
+ * gets more than the handful of actions the audit called out).
+ */
+describe('primaryCommandsFor — primary popover quick actions', () => {
+  beforeEach(reset);
+
+  const primaryIds = (node: { id: string }) =>
+    primaryCommandsFor(stubContext(), useEditorStore.getState().document.nodes.find((n) => n.id === node.id)!).map(
+      (command) => command.id,
+    );
+
+  it('a plain Queue with no DLQ offers Add Consumer + Add DLQ', () => {
+    const q = useEditorStore.getState().addNode({ type: 'queue', x: 0, y: 0 });
+    expect(primaryIds(q)).toEqual(['add-consumer', 'add-dead-letter-queue']);
+  });
+
+  it('a Queue that already has a DLQ offers Add Consumer + Remove DLQ', () => {
+    const state = useEditorStore.getState();
+    const q = state.addNode({ type: 'queue', x: 0, y: 0 });
+    state.addDeadLetterQueue(q.id);
+    expect(primaryIds(q)).toEqual(['add-consumer', 'remove-dead-letter-queue']);
+  });
+
+  it('a Topic offers only Add Subscriber', () => {
+    const topic = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'topic', x: 0, y: 0 });
+    expect(primaryIds(topic)).toEqual(['add-subscriber']);
+  });
+
+  it('a Stream offers only Add Consumer', () => {
+    const stream = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'stream', x: 0, y: 0 });
+    expect(primaryIds(stream)).toEqual(['add-consumer']);
+  });
+
+  it('a Group offers only Ungroup', () => {
+    const group = useEditorStore.getState().addNode({ type: 'group', x: 0, y: 0, width: 400, height: 300 });
+    expect(primaryIds(group)).toEqual(['ungroup']);
+  });
+
+  it('kinds with no dedicated shape-native command offer nothing — a graceful empty row', () => {
+    const state = useEditorStore.getState();
+    const service = state.addNode({ type: 'service', x: 0, y: 0 });
+    const database = state.addNode({ type: 'database', x: 0, y: 0 });
+    const junction = state.addNode({ type: 'ellipse', x: 0, y: 0 });
+    const actor = state.addNode({ type: 'actor', x: 0, y: 0 });
+    for (const node of [service, database, junction, actor]) {
+      expect(primaryIds(node)).toEqual([]);
+    }
   });
 });
 

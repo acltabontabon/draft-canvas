@@ -326,7 +326,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         )}
         {!presenting && <AttachmentPopover />}
         {!presenting && <EdgeInspectorPopover />}
-        {!presenting && <ElementInspectorPopover />}
+        {!presenting && <ElementInspectorPopover buildCommandContext={buildCommandContext} />}
         <EmptyState onInsertStarter={insertStarter} />
         {!presenting && <ContinuationAnnouncer />}
         {!presenting && <Inspector />}

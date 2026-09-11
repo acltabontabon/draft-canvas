@@ -265,6 +265,11 @@ export interface EditorStore {
    *  `deliversTo` for a topic — though this is never offered for a topic; see
    *  `commands/registry.ts`). */
   addConsumer: (sourceId: string) => void;
+  /** "Add Subscriber" — a Topic's own fan-out companion: creates a Queue connected with the
+   *  matrix's `topic>queue` relation (`fansOut`). Repeatable, unlike the DLQ toggle — a topic
+   *  fanning out to several queues is normal, so this never becomes "Remove Subscriber"; the
+   *  created queue deletes like any other node. A no-op if the node isn't a Topic. */
+  addSubscriber: (topicId: string) => void;
   /** Sets a `deadLetters` edge's delivery-attempts count, clamped to a sane range. */
   setEdgeDeliveryAttempts: (id: string, attempts: number) => void;
   updateEdgeLabel: (id: string, label: string) => void;
@@ -951,6 +956,33 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
     state.apply('Add Consumer', (doc) => addEdges(addNodes(doc, [worker]), [edge]), {
       selection: { nodes: [worker.id], edges: [] },
+    });
+  },
+
+  addSubscriber(topicId) {
+    const state = get();
+    const source = state.document.nodes.find((n) => n.id === topicId);
+    if (!source || categoryOf(source) !== 'topic') return;
+
+    const size = defaultSizeFor('queue');
+    // Same matrix row a hand-drawn Topic → Queue connector would read (`topic>queue`: fansOut) —
+    // not restated here, and stays `inferred` so re-pointing it later re-reads it the same way.
+    const queueCategory = categoryOf({ type: 'queue', queueKind: 'queue' });
+    const capability = capabilityFor(categoryOf(source), queueCategory);
+    const caption = capability?.defaultRelation ? SEMANTIC_DEFAULTS[capability.defaultRelation].label : undefined;
+    const { x, y } = placeNear(state.document, source, size, gapForCaption(caption));
+    const queue = createNode({ type: 'queue', queueKind: 'queue', x, y, z: source.z });
+    const edge = createEdge({
+      source: source.id,
+      target: queue.id,
+      semantic: capability?.defaultRelation,
+      kind: capability?.defaultBehavior,
+      async: capability?.defaultAsync,
+      semanticsOrigin: capability?.defaultRelation ? 'inferred' : undefined,
+      ...horizontalAnchorsFor(source, queue),
+    });
+    state.apply('Add Subscriber', (doc) => addEdges(addNodes(doc, [queue]), [edge]), {
+      selection: { nodes: [queue.id], edges: [] },
     });
   },
 
