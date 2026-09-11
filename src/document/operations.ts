@@ -667,6 +667,34 @@ function rectsOverlap(a: Bounds, b: Bounds): boolean {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
+/** Whether `inner` fits entirely within `outer` — a companion that fits inside its host's own
+ *  boundary stays there rather than implying it left. Shared by placement (which boundary-contained
+ *  candidates to prefer) and by whoever assigns the resulting node's `parentId`. */
+export function containsRect(
+  outer: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>,
+  inner: Bounds,
+): boolean {
+  return (
+    inner.x >= outer.x &&
+    inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y + inner.height <= outer.y + outer.height
+  );
+}
+
+/** Which of the two "primary" companion candidates — directly right, or directly below — a search
+ *  should try first. The rest of the fixed candidate list stays in its existing order regardless. */
+export type CompanionDirection = 'right' | 'below';
+
+export interface PlaceNearOptions {
+  /** Try this primary direction's candidate first (default `'right'`, today's only behaviour). */
+  direction?: CompanionDirection;
+  /** When given, candidates that land fully inside this boundary are tried before ones that
+   *  don't — a companion prefers to stay inside its host's boundary when there is room, without
+   *  ever being forced there (a boundary is still never an obstacle; see `tryPlaceNear`). */
+  parent?: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>;
+}
+
 /**
  * A small, bounded search for where a generated companion node should land near `host` — never
  * stacked on top of an unrelated node it happens to fall on. Tries a short, fixed list of
@@ -674,7 +702,8 @@ function rectsOverlap(a: Bounds, b: Bounds): boolean {
  * whose rect doesn't overlap any existing node, or `undefined` when every candidate collides (a
  * genuinely crowded corner of the diagram). A boundary (`group`) is never treated as an obstacle —
  * landing inside one is normal, not a collision, the same rule node-drag-to-attach detection
- * already applies for the same reason. This is deliberately not a general free-space solver.
+ * already applies for the same reason. This is deliberately not a general free-space solver: the
+ * candidate list is fixed and ordered, so the same inputs always resolve to the same choice.
  *
  * `placeNear` is the forgiving wrapper every *committed* companion uses; this is for a caller that
  * would rather show nothing than something on top of the user's content — a preview.
@@ -684,39 +713,57 @@ export function tryPlaceNear(
   host: Pick<DraftNode, 'id' | 'x' | 'y' | 'width' | 'height'>,
   size: { width: number; height: number },
   gap: number = COMPANION_GAP,
+  options: PlaceNearOptions = {},
 ): { x: number; y: number } | undefined {
   const obstacles = doc.nodes.filter((n) => n.id !== host.id && n.type !== 'group');
-  const chosen = companionCandidates(host, size, gap).find((rect) => !obstacles.some((n) => rectsOverlap(rect, n)));
+  const candidates = orderCandidates(companionCandidates(host, size, gap, options.direction), options.parent);
+  const chosen = candidates.find((rect) => !obstacles.some((n) => rectsOverlap(rect, n)));
   if (!chosen) return undefined;
   return clampCompanion(chosen, host, size);
 }
 
 /**
- * `tryPlaceNear`, but if every candidate collides it falls back to the first (plain right-of-host)
- * candidate anyway, same as `detachFromNode` always has, just having tried a few smarter positions
- * first.
+ * `tryPlaceNear`, but if every candidate collides it falls back to the first candidate for the
+ * requested direction anyway, same as `detachFromNode` always has, just having tried a few smarter
+ * positions first.
  */
 export function placeNear(
   doc: DraftDocument,
   host: Pick<DraftNode, 'id' | 'x' | 'y' | 'width' | 'height'>,
   size: { width: number; height: number },
   gap: number = COMPANION_GAP,
+  options: PlaceNearOptions = {},
 ): { x: number; y: number } {
-  return tryPlaceNear(doc, host, size, gap) ?? clampCompanion(companionCandidates(host, size, gap)[0]!, host, size);
+  return (
+    tryPlaceNear(doc, host, size, gap, options) ??
+    clampCompanion(companionCandidates(host, size, gap, options.direction)[0]!, host, size)
+  );
+}
+
+/** Boundary-contained candidates first (their relative order otherwise preserved), then the rest —
+ *  a no-op when `parent` is absent or nothing fits inside it. */
+function orderCandidates(candidates: Bounds[], parent?: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>): Bounds[] {
+  if (!parent) return candidates;
+  const inside = candidates.filter((c) => containsRect(parent, c));
+  if (inside.length === 0) return candidates;
+  const outside = candidates.filter((c) => !containsRect(parent, c));
+  return [...inside, ...outside];
 }
 
 function companionCandidates(
   host: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>,
   size: { width: number; height: number },
   gap: number,
+  direction: CompanionDirection = 'right',
 ): Bounds[] {
-  return [
-    { x: host.x + host.width + gap, y: host.y, ...size },
-    { x: host.x, y: host.y + host.height + COMPANION_GAP, ...size },
-    { x: host.x + host.width + gap, y: host.y + host.height + COMPANION_GAP, ...size },
-    { x: host.x + host.width + gap, y: host.y - size.height - COMPANION_GAP, ...size },
-    { x: host.x, y: host.y + host.height + COMPANION_GAP * 2 + size.height, ...size },
-  ];
+  const right = { x: host.x + host.width + gap, y: host.y, ...size };
+  const below = { x: host.x, y: host.y + host.height + COMPANION_GAP, ...size };
+  const belowRight = { x: host.x + host.width + gap, y: host.y + host.height + COMPANION_GAP, ...size };
+  const aboveRight = { x: host.x + host.width + gap, y: host.y - size.height - COMPANION_GAP, ...size };
+  const furtherBelow = { x: host.x, y: host.y + host.height + COMPANION_GAP * 2 + size.height, ...size };
+  return direction === 'below'
+    ? [below, right, belowRight, aboveRight, furtherBelow]
+    : [right, below, belowRight, aboveRight, furtherBelow];
 }
 
 function clampCompanion(

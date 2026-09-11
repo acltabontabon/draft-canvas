@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { dashForEdge, markerVariantForEdge } from '../edges/kindStyle';
-import { captionAnchor, rectOf, routeBetween } from '../edges/routing';
+import { captionAnchor, rectOf, routeBetween, type Rect } from '../edges/routing';
 import { describeContext, describeNode } from '../nodes/describe';
 import { markerRef } from '../render/svg/markers';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
@@ -45,11 +45,27 @@ function GhostBody({ offer, anchor, learn }: { offer: ContinuationOffer; anchor:
 
   const accept = () => useEditorStore.getState().acceptContinuation(offer);
 
+  // One subscription and one `rectOf` pass for the whole ghost, shared by every `GhostEdge` below,
+  // instead of each edge independently subscribing to the full node array and re-deriving rects —
+  // the dominant cost behind unrelated document edits re-rendering every ghost edge. Includes the
+  // offer's *other* fragment nodes too (not just the real document's), so a multi-node fragment's
+  // ghost edges see the same obstacles the real edges will see once accepted — today's single-node
+  // fragments make this a no-op, but it means preview and accepted routing can never drift apart
+  // simply because one fragment node doesn't exist in the document yet and the other now does.
+  const nodes = useEditorStore((state) => state.document.nodes);
+  const obstacleRects = useMemo(
+    () => [
+      ...nodes.filter((n) => n.type !== 'group').map((n) => ({ id: n.id, rect: rectOf(n) })),
+      ...offer.nodes.map((n) => ({ id: n.id, rect: rectOf(n) })),
+    ],
+    [nodes, offer.nodes],
+  );
+
   return (
     <div className="dc-ghost" data-trigger={offer.trigger} aria-hidden={showPill ? undefined : 'true'}>
       <svg className="dc-ghost-edges" width={1} height={1} aria-hidden="true" focusable="false">
         {offer.edges.map((edge) => (
-          <GhostEdge key={edge.id} edge={edge} offer={offer} anchor={anchor} />
+          <GhostEdge key={edge.id} edge={edge} offer={offer} anchor={anchor} obstacleRects={obstacleRects} />
         ))}
       </svg>
       {offer.nodes.map((node) => (
@@ -91,27 +107,44 @@ function GhostNode({
     return emitDisplayList(describeNode(node, describeContext(theme, preset)));
   }, [node, theme, preset]);
   return (
+    // Position lives on this outer element alone, so it can glide smoothly (`transition:
+    // transform`) when a same-identity offer's placement shifts. The mount-in scale/fade
+    // `animation` below lives on `.dc-ghost-node-body` instead of here for the same reason
+    // `dc-attachment-card-in` already does elsewhere in this file's stylesheet: a CSS animation
+    // replaces the whole `transform` property for its duration, so animating scale on the same
+    // element that positions itself via `transform: translate(...)` would clobber that position
+    // for the animation's length.
     <div
       className="dc-ghost-node"
       data-type={node.type}
       style={{ transform: `translate(${node.x}px, ${node.y}px)`, width: node.width, height: node.height }}
-      onClick={onClick}
     >
-      <SvgSurface className="dc-ghost-surface" width={node.width} height={node.height}>
-        {shapes}
-      </SvgSurface>
+      <div className="dc-ghost-node-body" onClick={onClick}>
+        <SvgSurface className="dc-ghost-surface" width={node.width} height={node.height}>
+          {shapes}
+        </SvgSurface>
+      </div>
     </div>
   );
 }
 
-function GhostEdge({ edge, offer, anchor }: { edge: DraftEdge; offer: ContinuationOffer; anchor: DraftNode }) {
+function GhostEdge({
+  edge,
+  offer,
+  anchor,
+  obstacleRects,
+}: {
+  edge: DraftEdge;
+  offer: ContinuationOffer;
+  anchor: DraftNode;
+  obstacleRects: { id: string; rect: Rect }[];
+}) {
   const theme = useThemeValue();
-  const nodes = useEditorStore((state) => state.document.nodes);
   const byId = new Map<string, DraftNode>([[anchor.id, anchor], ...offer.nodes.map((n) => [n.id, n] as const)]);
   const source = byId.get(edge.source);
   const target = byId.get(edge.target);
   if (!source || !target) return null;
-  const obstacles = nodes.filter((n) => n.id !== source.id && n.id !== target.id && n.type !== 'group').map(rectOf);
+  const obstacles = obstacleRects.filter((n) => n.id !== source.id && n.id !== target.id).map((n) => n.rect);
   const route = routeBetween(rectOf(source), rectOf(target), edge.routing, {
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
     obstacles,

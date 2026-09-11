@@ -152,8 +152,19 @@ connector dropped on empty canvas opens.
 | `topic-fan-out-worker` | secondary | Worker | Subscribers can also receive directly from the topic. |
 | `queue-consumer` | primary | Worker | This queue has no consumer. |
 | `queue-dead-letter` | secondary | Dead-letter queue | This queue has a consumer but no dead-letter path. |
+| `stream-dead-letter` | secondary | Dead-letter topic | This stream has a consumer but no dead-letter path. |
 | `gateway-route` | primary | Service | This gateway doesn't route to anything yet. |
+| `scheduler-trigger-service` | primary | Service | This scheduler doesn't trigger anything yet. |
+| `scheduler-trigger-worker` | secondary | Worker | A scheduled job is usually a Worker. |
+| `object-storage-fan-out-queue` | primary | Queue | Uploads here have nowhere to notify yet. |
+| `object-storage-fan-out-topic` | secondary | Topic | Multiple subscribers can watch this bucket through a topic instead. |
+| `port-implementation-component` | primary | Component | This port isn't implemented by anything yet. |
+| `port-implementation-service` | secondary | Service | A port can also be implemented by a whole service. |
+| `worker-indexes` | secondary | Search Index | This worker doesn't index anything yet. |
 <!-- continuation-rules:end -->
 
-Deliberately no rule starts from a plain Service, an Actor or a Data Store: each has too many valid
-next moves for any one of them to be *the* move, and no suggestion beats a weak one.
+Deliberately no rule starts from a plain Service, an Actor, a Data Store, a Cache, a File System, a
+Search Index or a bare (non-Port) Component: each has too many valid next moves for any one of them
+to be *the* move, and no suggestion beats a weak one. Adding a rule for one category is never
+license to assume a neighboring one is now covered too — see `tests/continuation.test.ts`'s broad
+silence sweep.

@@ -2083,15 +2083,23 @@
   opacity: 0.55;
 }
 
+/* Position only — see the component-side comment for why the mount-in animation and opacity live
+   on `.dc-ghost-node-body` (a child) instead of here. */
 .dc-ghost-node {
   position: absolute;
   left: 0;
   top: 0;
+}
+
+.dc-ghost-node-body {
+  position: relative;
+  width: 100%;
+  height: 100%;
   opacity: 0.42;
   transition: opacity 120ms ease;
 }
 
-.dc-ghost-node::after {
+.dc-ghost-node-body::after {
   content: '';
   position: absolute;
   inset: -4px;
@@ -2100,7 +2108,7 @@
   pointer-events: none;
 }
 
-.dc-ghost-node[data-type='ellipse']::after {
+.dc-ghost-node[data-type='ellipse'] .dc-ghost-node-body::after {
   border-radius: 50%;
 }
 
@@ -2111,13 +2119,22 @@
 }
 
 /* A selection-driven ghost is itself the click target; a drop-menu preview is the menu's. */
-.dc-ghost[data-trigger='select'] .dc-ghost-node {
+.dc-ghost[data-trigger='select'] .dc-ghost-node-body {
   pointer-events: all;
   cursor: pointer;
 }
 
-.dc-ghost[data-trigger='select'] .dc-ghost-node:hover {
+.dc-ghost[data-trigger='select'] .dc-ghost-node-body:hover {
   opacity: 0.6;
+}
+
+/* A same-identity offer's placement shifting (an obstacle moved, the anchor resized) glides
+   rather than snapping or replaying the mount-in animation below — safe only because ids (and
+   therefore React keys) now stay stable across such a recompute; see `uiStore.ts`'s `sameOffer`. */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-ghost-node {
+    transition: transform 140ms ease;
+  }
 }
 
 .dc-ghost-pill {
@@ -2180,7 +2197,7 @@
 /* The settle: a just-accepted node fades up from ghost opacity to real. Under reduced motion the
    ghost is simply replaced by the node, which is already the right end state. */
 @media (prefers-reduced-motion: no-preference) {
-  .dc-ghost-node,
+  .dc-ghost-node-body,
   .dc-ghost-pill {
     animation: dc-attachment-card-in 120ms ease;
   }

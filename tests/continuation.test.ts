@@ -10,6 +10,7 @@ import {
   dismissalKey,
   materialize,
   neighborhoodOf,
+  resolvedNeighborCategory,
   RULES,
   type ContinuationRule,
   type ContinuationTrigger,
@@ -17,6 +18,7 @@ import {
 import { capabilityFor, categoryOf, inferRelationship } from '../src/document/connectorSemantics';
 import { createDocument, createEdge, createNode, defaultSizeFor } from '../src/document/factory';
 import { addEdges, addNodes, placeNear } from '../src/document/operations';
+import { rectOf, routeBetween } from '../src/edges/routing';
 import type { CreateNodeInput } from '../src/document/factory';
 import type { DraftDocument, DraftNode } from '../src/document/types';
 
@@ -46,7 +48,11 @@ const stream = (id: string): Spec => ({ id, type: 'queue', queueKind: 'stream' }
 const dlq = (id: string): Spec => ({ id, type: 'queue', queueKind: 'queue', deliveryRole: 'dead-letter' });
 const worker = (id: string): Spec => ({ id, type: 'service', serviceKind: 'worker' });
 const gateway = (id: string): Spec => ({ id, type: 'service', serviceKind: 'gateway' });
+const scheduler = (id: string): Spec => ({ id, type: 'service', serviceKind: 'scheduler' });
 const database = (id: string): Spec => ({ id, type: 'database' });
+const objectStorage = (id: string): Spec => ({ id, type: 'database', databaseKind: 'object-storage' });
+const searchIndex = (id: string): Spec => ({ id, type: 'database', databaseKind: 'search-index' });
+const port = (id: string): Spec => ({ id, type: 'component', componentKind: 'port' });
 const actor = (id: string): Spec => ({ id, type: 'actor' });
 
 const ids = (doc: DraftDocument, anchor: string, trigger: ContinuationTrigger, dismissed?: ReadonlySet<string>) =>
@@ -129,8 +135,18 @@ const CASES: Case[] = [
     drop: ['queue-consumer'],
   },
   {
-    name: 'Stream with inbound and no consumer — consumer yes, DLQ never',
+    name: 'Stream with a consumer and no dead-letter path — another Worker and a Dead-letter topic, both on drop',
     doc: graph([service('s'), stream('st'), worker('w')], [['s', 'st'], ['st', 'w']]),
+    anchor: 'st',
+    select: [],
+    drop: ['queue-consumer', 'stream-dead-letter'],
+  },
+  {
+    name: 'Stream with a consumer and a dead-letter topic already — nothing left to add',
+    doc: graph(
+      [service('s'), stream('st'), worker('w'), { id: 'd', type: 'queue', queueKind: 'topic', deliveryRole: 'dead-letter' }],
+      [['s', 'st'], ['st', 'w'], ['st', 'd']],
+    ),
     anchor: 'st',
     select: [],
     drop: ['queue-consumer'],
@@ -184,6 +200,62 @@ const CASES: Case[] = [
     select: [],
     drop: [],
   },
+  {
+    name: 'Scheduler with nothing triggered yet',
+    doc: graph([scheduler('t')], []),
+    anchor: 't',
+    select: ['scheduler-trigger-service'],
+    drop: ['scheduler-trigger-service', 'scheduler-trigger-worker'],
+  },
+  {
+    name: 'Scheduler already triggering something — silent on select, still offered on an explicit drop',
+    doc: graph([scheduler('t'), service('s')], [['t', 's']]),
+    anchor: 't',
+    select: [],
+    drop: ['scheduler-trigger-service', 'scheduler-trigger-worker'],
+  },
+  {
+    name: 'Object Storage with an upload and nowhere for it to notify',
+    doc: graph([service('p'), objectStorage('t')], [['p', 't']]),
+    anchor: 't',
+    select: ['object-storage-fan-out-queue'],
+    drop: ['object-storage-fan-out-queue', 'object-storage-fan-out-topic'],
+  },
+  {
+    name: 'Object Storage with no inbound evidence — silent on select, still offered on an explicit drop',
+    doc: graph([objectStorage('t')], []),
+    anchor: 't',
+    select: [],
+    drop: ['object-storage-fan-out-queue', 'object-storage-fan-out-topic'],
+  },
+  {
+    name: 'Port depended on and not implemented by anything',
+    doc: graph([service('p'), port('t')], [['p', 't']]),
+    anchor: 't',
+    select: ['port-implementation-component'],
+    drop: ['port-implementation-component', 'port-implementation-service'],
+  },
+  {
+    name: 'Port with no inbound evidence — silent on select, still offered on an explicit drop',
+    doc: graph([port('t')], []),
+    anchor: 't',
+    select: [],
+    drop: ['port-implementation-component', 'port-implementation-service'],
+  },
+  {
+    name: 'Search Index anchor — no rule starts from it',
+    doc: graph([service('s'), searchIndex('idx')], [['s', 'idx']]),
+    anchor: 'idx',
+    select: [],
+    drop: [],
+  },
+  {
+    name: 'Cache anchor — no rule starts from it either',
+    doc: graph([{ id: 'c', type: 'database', databaseKind: 'cache' }, service('s')], [['s', 'c']]),
+    anchor: 'c',
+    select: [],
+    drop: [],
+  },
 ];
 
 describe('continuationsFor — rule tables', () => {
@@ -209,8 +281,47 @@ describe('continuationsFor — rule tables', () => {
     }
   });
 
+  it('a broad silence sweep: every category with no rule at all stays silent on both select and drop', () => {
+    // Every category NOT among a rule's `sourceCategories` (topic, queue, gateway, scheduler,
+    // objectStorage, port, worker) — not merely lacking evidence, but with no rule that could ever
+    // fire for it regardless of graph shape. This is the negative-space check the rest of this
+    // file's positive cases don't cover on their own: adding a rule for one category must never be
+    // mistaken for having covered a neighboring one.
+    const bareCategoryDocs: Record<string, DraftDocument> = {
+      'plain service': graph([service('t')], []),
+      'external service': graph([{ id: 't', type: 'service', serviceKind: 'external' }], []),
+      actor: graph([actor('t')], []),
+      'generic component': graph([{ id: 't', type: 'component' }], []),
+      'plain database': graph([database('t')], []),
+      cache: graph([{ id: 't', type: 'database', databaseKind: 'cache' }], []),
+      'file system': graph([{ id: 't', type: 'database', databaseKind: 'file-system' }], []),
+      'search index': graph([searchIndex('t')], []),
+    };
+    for (const [label, doc] of Object.entries(bareCategoryDocs)) {
+      expect(ids(doc, 't', 'select'), `${label} (select)`).toEqual([]);
+      expect(ids(doc, 't', 'drop'), `${label} (drop)`).toEqual([]);
+    }
+  });
+
   it('returns nothing for an unknown anchor', () => {
     expect(ids(graph([topic('t')], []), 'nope', 'drop')).toEqual([]);
+  });
+
+  it('a Junction sitting in a chain resolves through it and misfires no current rule', () => {
+    // Actor -> Junction -> Service
+    const doc = graph([actor('u'), { id: 'j', type: 'ellipse' }, service('s')], [['u', 'j'], ['j', 's']]);
+
+    const fedByJunction = neighborhoodOf(doc, 's')!.in.find((e) => e.other.id === 'j')!;
+    expect(resolvedNeighborCategory(doc, fedByJunction, 'in')).toBe('actor');
+
+    const feedsJunction = neighborhoodOf(doc, 'u')!.out.find((e) => e.other.id === 'j')!;
+    expect(resolvedNeighborCategory(doc, feedsJunction, 'out')).toBe('service');
+
+    // A Junction never anchors a continuation, and sitting between two other nodes changes neither
+    // of their own category nor their own incident-edge shape — no existing rule reacts to it.
+    expect(ids(doc, 'u', 'select')).toEqual([]);
+    expect(ids(doc, 's', 'select')).toEqual([]);
+    expect(ids(doc, 'j', 'select')).toEqual([]);
   });
 
   it('is deterministic: the same inputs give the same ordered result every time', () => {
@@ -274,7 +385,15 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
       'topic-fan-out-worker': graph([service('p'), topic('t')], [['p', 't']]),
       'queue-consumer': graph([service('p'), queue('t')], [['p', 't']]),
       'queue-dead-letter': graph([service('p'), queue('t'), worker('w')], [['p', 't'], ['t', 'w']]),
+      'stream-dead-letter': graph([service('p'), stream('t'), worker('w')], [['p', 't'], ['t', 'w']]),
       'gateway-route': graph([actor('p'), gateway('t')], [['p', 't']]),
+      'scheduler-trigger-service': graph([scheduler('t')], []),
+      'scheduler-trigger-worker': graph([scheduler('t')], []),
+      'object-storage-fan-out-queue': graph([service('p'), objectStorage('t')], [['p', 't']]),
+      'object-storage-fan-out-topic': graph([service('p'), objectStorage('t')], [['p', 't']]),
+      'port-implementation-component': graph([service('p'), port('t')], [['p', 't']]),
+      'port-implementation-service': graph([service('p'), port('t')], [['p', 't']]),
+      'worker-indexes': graph([service('p'), worker('t')], [['p', 't']]),
     };
     for (const rule of RULES) {
       const doc = anchors[rule.id];
@@ -412,7 +531,7 @@ describe('materialize', () => {
     expect(materialize(doc, offer!, { at: { x: 900, y: 900 } })).toBeDefined();
   });
 
-  it('inherits the anchor\'s boundary only when the companion fits inside it', () => {
+  it('inherits the anchor\'s boundary when the companion fits inside it — trying another direction first if that\'s what it takes — and leaves it unparented only when nothing fits', () => {
     const roomy = createNode({ id: 'b', type: 'group', x: 0, y: 0, width: 800, height: 300 });
     const topicIn = createNode({ id: 't', type: 'queue', queueKind: 'topic', x: 40, y: 100, parentId: 'b' });
     const pub = createNode({ id: 'p', type: 'service', x: -400, y: 100 });
@@ -421,14 +540,73 @@ describe('materialize', () => {
     const [offer] = continuationsFor(doc, 't', 'select');
     expect(materialize(doc, offer!)!.nodes[0]!.parentId).toBe('b');
 
-    const tight: DraftDocument = { ...doc, nodes: doc.nodes.map((n) => (n.id === 'b' ? { ...n, width: 200 } : n)) };
-    expect(materialize(tight, offer!)!.nodes[0]!.parentId).toBeUndefined();
+    // Too narrow for the preferred (rightward) candidate to fit inside the boundary, but there is
+    // still room below it — placement prefers staying inside the boundary over its usual direction.
+    const narrow: DraftDocument = { ...doc, nodes: doc.nodes.map((n) => (n.id === 'b' ? { ...n, width: 200 } : n)) };
+    const belowInB = materialize(narrow, offer!)!.nodes[0]!;
+    expect(belowInB.parentId).toBe('b');
+    expect(belowInB.y).toBeGreaterThan(topicIn.y);
+
+    // Genuinely no room in any of the five candidate directions — stays unparented rather than
+    // being forced somewhere inside, exactly as it would with no boundary involved at all.
+    const cramped: DraftDocument = {
+      ...doc,
+      nodes: doc.nodes.map((n) => (n.id === 'b' ? { ...n, width: 200, height: 150 } : n)),
+    };
+    expect(materialize(cramped, offer!)!.nodes[0]!.parentId).toBeUndefined();
+  });
+
+  it('continues in whichever direction the diagram is already flowing at the anchor, not always rightward', () => {
+    const pubAbove = createNode({ id: 'p', type: 'service', x: 0, y: -300 });
+    const t = createNode({ id: 't', type: 'queue', queueKind: 'topic', x: 0, y: 0 });
+    let doc = addNodes(createDocument('Vertical flow'), [pubAbove, t]);
+    doc = addEdges(doc, [createEdge({ source: 'p', target: 't', ...inferRelationship(pubAbove, t) })]);
+    const [offer] = continuationsFor(doc, 't', 'select');
+    const node = materialize(doc, offer!)!.nodes[0]!;
+    // A publisher directly above continues downward, not off to the side.
+    expect(node.y).toBeGreaterThan(t.y);
+    expect(node.x).toBe(t.x);
   });
 
   it('mints fresh ids on every call so an accepted offer never collides with a re-offer', () => {
     const doc = graph([service('pub'), topic('t')], [['pub', 't']]);
     const [offer] = continuationsFor(doc, 't', 'select');
     expect(materialize(doc, offer!)!.nodes[0]!.id).not.toBe(materialize(doc, offer!)!.nodes[0]!.id);
+  });
+
+  it('materializing the same offer against the same document twice picks the same position and anchors', () => {
+    const doc = graph([service('pub'), topic('t')], [['pub', 't']]);
+    const [offer] = continuationsFor(doc, 't', 'select');
+    const a = materialize(doc, offer!)!;
+    const b = materialize(doc, offer!)!;
+    expect({ x: b.nodes[0]!.x, y: b.nodes[0]!.y }).toEqual({ x: a.nodes[0]!.x, y: a.nodes[0]!.y });
+    expect(b.edges[0]!.sourceAnchor).toEqual(a.edges[0]!.sourceAnchor);
+    expect(b.edges[0]!.targetAnchor).toEqual(a.edges[0]!.targetAnchor);
+  });
+
+  it('a materialized edge\'s pinned anchors reproduce exactly the route it previewed, once accepted', () => {
+    const doc = graph([service('pub'), topic('t')], [['pub', 't']]);
+    const [offer] = continuationsFor(doc, 't', 'select');
+    const m = materialize(doc, offer!)!;
+    const anchor = doc.nodes.find((n) => n.id === 't')!;
+
+    // What the ghost would have drawn, before anything is real.
+    const previewRoute = routeBetween(rectOf(anchor), rectOf(m.nodes[0]!), m.edges[0]!.routing, {
+      anchors: { source: m.edges[0]!.sourceAnchor, target: m.edges[0]!.targetAnchor },
+      obstacles: [],
+    });
+
+    // What the same anchors resolve to once the node and edge are committed to the document.
+    const accepted = addEdges(addNodes(doc, m.nodes), m.edges);
+    const realAnchor = accepted.nodes.find((n) => n.id === 't')!;
+    const realNode = accepted.nodes.find((n) => n.id === m.nodes[0]!.id)!;
+    const realEdge = accepted.edges.find((e) => e.id === m.edges[0]!.id)!;
+    const acceptedRoute = routeBetween(rectOf(realAnchor), rectOf(realNode), realEdge.routing, {
+      anchors: { source: realEdge.sourceAnchor, target: realEdge.targetAnchor },
+      obstacles: [],
+    });
+
+    expect(acceptedRoute.d).toBe(previewRoute.d);
   });
 });
 
@@ -500,13 +678,51 @@ describe('editorStore.acceptContinuation', () => {
 describe('uiStore continuation state', () => {
   beforeEach(() => resetStores(graph([service('pub'), topic('t')], [['pub', 't']])));
 
-  it('keeps the same offer object when an equal offer is set again', () => {
+  it('keeps the same node/edge ids when an equal offer is set again', () => {
     const a = selectOffer('t');
     useUiStore.getState().setContinuation(a);
     const b = selectOffer('t');
+    // materialize mints a fresh random id every call — this is the raw material of the flicker bug.
     expect(b.nodes[0]!.id).not.toBe(a.nodes[0]!.id);
     useUiStore.getState().setContinuation(b);
-    expect(useUiStore.getState().continuation).toBe(a);
+    const current = useUiStore.getState().continuation!;
+    expect(current.nodes[0]!.id).toBe(a.nodes[0]!.id);
+    expect(current.edges[0]!.id).toBe(a.edges[0]!.id);
+    expect(current.primaryNodeId).toBe(a.primaryNodeId);
+  });
+
+  it('re-keys a same-identity offer onto the ids already held even when its geometry moved, and remaps edge endpoints to match', () => {
+    const a = selectOffer('t');
+    useUiStore.getState().setContinuation(a);
+    // A same-identity recompute that landed somewhere new (e.g. an obstacle moved) — simulated
+    // directly rather than via a real placement change, so this test isolates `reidentify` itself.
+    const b: ContinuationOffer = {
+      ...a,
+      nodes: [{ ...a.nodes[0]!, id: 'fresh-node-id', x: a.nodes[0]!.x + 40, y: a.nodes[0]!.y + 40 }],
+      edges: [{ ...a.edges[0]!, id: 'fresh-edge-id', target: 'fresh-node-id' }],
+      primaryNodeId: 'fresh-node-id',
+    };
+    useUiStore.getState().setContinuation(b);
+    const current = useUiStore.getState().continuation!;
+    // Ids stay the ones the ghost already rendered with — no React remount.
+    expect(current.nodes[0]!.id).toBe(a.nodes[0]!.id);
+    expect(current.edges[0]!.id).toBe(a.edges[0]!.id);
+    expect(current.primaryNodeId).toBe(a.primaryNodeId);
+    // The edge's endpoint is remapped along with the node it points at, not left dangling on the
+    // fresh id `materialize` minted.
+    expect(current.edges[0]!.target).toBe(a.nodes[0]!.id);
+    // But the actual content — the reason this offer exists — did update.
+    expect(current.nodes[0]!.x).toBe(a.nodes[0]!.x + 40);
+    expect(current.nodes[0]!.y).toBe(a.nodes[0]!.y + 40);
+  });
+
+  it('replaces the offer entirely (fresh ids and all) when the new one is a genuinely different suggestion', () => {
+    useUiStore.getState().setContinuation(selectOffer('t'));
+    const queueOffer = useUiStore.getState().continuation!;
+    useEditorStore.getState().acceptContinuation(queueOffer);
+    const workerOffer = selectOffer(queueOffer.primaryNodeId);
+    useUiStore.getState().setContinuation(workerOffer);
+    expect(useUiStore.getState().continuation).toBe(workerOffer);
   });
 
   it('dismiss records the offer against its neighborhood and clears it without touching the document', () => {
@@ -575,6 +791,38 @@ describe('commands: Add <label> (suggested)', () => {
     useUiStore.getState().setContinuationsEnabled(true);
     const pub = useEditorStore.getState().document.nodes.find((n) => n.id === 'pub')!;
     expect(nodeCommands(ctx(), pub).some((c) => c.id === 'accept-continuation')).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Performance — a proxy for the full profiling pass this repo's tooling  */
+/* can't automate: not a tight benchmark, just a guard against an          */
+/* accidental full-document scan creeping back in.                          */
+/* ------------------------------------------------------------------ */
+
+describe('performance — local neighborhoods, not full-graph scans', () => {
+  it('stays fast on a large diagram unrelated to the anchor', () => {
+    const nodeSpecs: Spec[] = [];
+    const edges: Array<[string, string]> = [];
+    for (let i = 0; i < 150; i++) {
+      nodeSpecs.push(service(`s${i}`));
+      if (i > 0) edges.push([`s${i - 1}`, `s${i}`]);
+    }
+    // A genuine continuation target, unrelated to the other 150 nodes except by sharing a document.
+    nodeSpecs.push(topic('t'));
+    edges.push(['s149', 't']);
+    const doc = graph(nodeSpecs, edges);
+
+    const start = performance.now();
+    for (let i = 0; i < 50; i++) {
+      const [offer] = continuationsFor(doc, 't', 'select');
+      materialize(doc, offer!);
+    }
+    const elapsed = performance.now() - start;
+    // Generous ceiling to absorb CI variance — the point is "milliseconds for 50 runs against a
+    // 150-node document," not a tight benchmark. A real regression (an accidental full-document
+    // scan somewhere in the pipeline) would blow past this by orders of magnitude, not a fraction.
+    expect(elapsed).toBeLessThan(500);
   });
 });
 

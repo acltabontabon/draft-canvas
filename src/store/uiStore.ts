@@ -265,8 +265,9 @@ export interface UiStore {
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
   setLearnModeActive: (active: boolean) => void;
-  /** Identity-preserving: an offer equal in rule, anchor, neighborhood, trigger and position keeps
-   *  the object (and ids) already held, so unrelated document changes never re-mint a ghost. */
+  /** Identity-preserving: an offer equal in trigger, rule, anchor and neighborhood keeps the node
+   *  and edge ids already held (re-keying the fresh geometry onto them), so unrelated document
+   *  changes never re-mint a ghost's React keys. */
   setContinuation: (offer: ContinuationOffer | null) => void;
   /** Waves the current offer away for as long as its anchor's neighborhood stays the same. */
   dismissContinuation: () => void;
@@ -385,7 +386,13 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
   setLearnModeActive: (learnModeActive) => set({ learnModeActive }),
   setContinuation: (next) =>
-    set((state) => (sameOffer(state.continuation, next) ? state : { continuation: next })),
+    set((state) => {
+      const previous = state.continuation;
+      if (previous === next) return state;
+      if (!sameOffer(previous, next)) return { continuation: next };
+      if (!previous || !next) return { continuation: next };
+      return { continuation: reidentify(previous, next) };
+    }),
   dismissContinuation: () =>
     set((state) => {
       const offer = state.continuation;
@@ -412,20 +419,45 @@ export const useUiStore = create<UiStore>((set, get) => ({
   },
 }));
 
+/**
+ * Whether two offers are *the same suggestion* — same trigger, same rule, same anchor, same
+ * neighborhood. That quadruple is already a deterministic fingerprint of "what this offer is"
+ * (see `continuation/context.ts`'s `neighborhoodKey`), so it alone decides identity. Position is
+ * deliberately excluded: a fresh `materialize()` can legitimately place the same logical offer a
+ * few pixels differently as unrelated nodes move, and treating that as a *different* offer was the
+ * flicker — a new object, with new random node/edge ids from `materialize`, remounted the ghost's
+ * whole DOM subtree and replayed its mount-in animation on every unrelated edit.
+ */
 function sameOffer(a: ContinuationOffer | null, b: ContinuationOffer | null): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
-  const pa = a.nodes[0];
-  const pb = b.nodes[0];
   return (
     a.trigger === b.trigger &&
     a.ruleId === b.ruleId &&
     a.anchorId === b.anchorId &&
-    a.neighborhoodKey === b.neighborhoodKey &&
-    pa?.x === pb?.x &&
-    pa?.y === pb?.y &&
-    pa?.parentId === pb?.parentId
+    a.neighborhoodKey === b.neighborhoodKey
   );
+}
+
+/**
+ * Re-keys a freshly materialized offer onto the ids of the offer it is replacing. `materialize()`
+ * mints fresh node/edge ids on every call, so without this, every recompute of the *same* offer
+ * (per `sameOffer`) would still hand the ghost a brand-new key set. Fragment order is deterministic
+ * for a given rule, so pairing by index is safe. Falls back to `next` unmerged if the shapes ever
+ * disagree — should not happen for equal `neighborhoodKey`s, but a rule's fragment must never be
+ * able to crash the store.
+ */
+function reidentify(previous: ContinuationOffer, next: ContinuationOffer): ContinuationOffer {
+  if (previous.nodes.length !== next.nodes.length || previous.edges.length !== next.edges.length) return next;
+  const idMap = new Map(next.nodes.map((node, i) => [node.id, previous.nodes[i]!.id]));
+  const nodes = next.nodes.map((node, i) => ({ ...node, id: previous.nodes[i]!.id }));
+  const edges = next.edges.map((edge, i) => ({
+    ...edge,
+    id: previous.edges[i]!.id,
+    source: idMap.get(edge.source) ?? edge.source,
+    target: idMap.get(edge.target) ?? edge.target,
+  }));
+  return { ...next, nodes, edges, primaryNodeId: nodes[0]!.id };
 }
 
 /**

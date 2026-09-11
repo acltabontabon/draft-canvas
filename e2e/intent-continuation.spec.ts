@@ -92,6 +92,50 @@ test.describe('Intent Continuation', () => {
     await expect(page.locator('.dc-edge')).toHaveCount(2);
   });
 
+  test('resizing the anchor keeps it selected and the ghost reappears with the same suggestion', async ({ page }) => {
+    await newCanvas(page, 'Continuation resize');
+    await publisherAndTopic(page);
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+
+    // A real interaction gesture on the anchor itself (distinct from a plain document write) —
+    // the ghost is expected to hide for the duration (see `interactionActive`) and must reappear,
+    // correctly, once the gesture settles, rather than getting orphaned or stuck hidden.
+    const handle = (await page.locator('.dc-resize-handle').nth(3).boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + 30, handle.y + 20, { steps: 8 });
+    await page.mouse.up();
+
+    // Still the same one node selected (the resize did not steal or drop selection) and the same
+    // suggestion is showing, not a stale or broken one.
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
+    await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');
+    await expect(page.locator('.dc-ghost-edges text')).toHaveText('fans out');
+
+    // And it is functionally intact, not just visually present.
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.dc-node')).toHaveCount(3);
+    await expect(captions(page)).toContainText(['publishes', 'fans out']);
+  });
+
+  test("the ghost node's mount-in animation lives on its inner body, never on the positioned outer element", async ({ page }) => {
+    // A CSS animation replaces the whole `transform` property for its duration — if the mount-in
+    // scale/fade animation and the positioning `transform: translate(...)` ever landed on the same
+    // element, the ghost would render at the canvas origin for the animation's length instead of
+    // next to its anchor. Checked structurally (which element the animation is actually on) rather
+    // than by racing the 120ms window, which would be flaky either way this could fail.
+    await newCanvas(page, 'Continuation mount position');
+    await publisherAndTopic(page);
+    const ghostNode = page.locator('.dc-ghost-node');
+    await expect(ghostNode).toHaveCount(1);
+    const { outerAnimation, bodyAnimation } = await ghostNode.evaluate((el) => ({
+      outerAnimation: getComputedStyle(el).animationName,
+      bodyAnimation: getComputedStyle(el.querySelector('.dc-ghost-node-body')!).animationName,
+    }));
+    expect(outerAnimation).toBe('none');
+    expect(bodyAnimation).toBe('dc-attachment-card-in');
+  });
+
   test('clicking the ghost accepts it too', async ({ page }) => {
     await newCanvas(page, 'Continuation click');
     await publisherAndTopic(page);
@@ -154,17 +198,45 @@ test.describe('Intent Continuation', () => {
     await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');
     await expect(page.locator('.dc-ghost-edges text')).toHaveText('fans out');
 
-    // Arrows move the highlight and the ghost follows.
+    // Arrows move the highlight and the ghost follows — sampled immediately, not just eventually,
+    // so a one-frame drop to zero candidates between two valid rows would actually be caught.
     await page.keyboard.press('ArrowDown');
+    expect(await page.evaluate(() => document.querySelectorAll('.dc-ghost-node').length)).toBeGreaterThan(0);
     await expect(rows.nth(1)).toHaveAttribute('data-highlighted', 'true');
     await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'service');
     await expect(page.locator('.dc-ghost-edges text')).toHaveText('delivers to');
 
     await page.keyboard.press('ArrowUp');
+    expect(await page.evaluate(() => document.querySelectorAll('.dc-ghost-node').length)).toBeGreaterThan(0);
     await page.keyboard.press('Enter');
     await expect(menu).toBeHidden();
     await expect(page.locator('.dc-node')).toHaveCount(3);
     await expect(captions(page)).toContainText(['publishes', 'fans out']);
+  });
+
+  test('the ghost scales with the diagram at a different zoom level and stays functional', async ({ page }) => {
+    await newCanvas(page, 'Continuation zoom');
+    await publisherAndTopic(page);
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+
+    const topicBox = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    const ghostBoxBefore = (await page.locator('.dc-ghost-node').boundingBox())!;
+    const ratioBefore = ghostBoxBefore.width / topicBox.width;
+
+    const zoomOut = page.getByRole('button', { name: 'Zoom out' });
+    for (let i = 0; i < 6; i++) await zoomOut.click();
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+
+    const topicBoxAfter = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    const ghostBoxAfter = (await page.locator('.dc-ghost-node').boundingBox())!;
+    // A real node and its ghost scale together — the ghost is drawn in the same flow-space
+    // viewport, not a separate screen-space overlay that would drift out of proportion.
+    expect(topicBoxAfter.width).toBeLessThan(topicBox.width);
+    expect(Math.abs(ghostBoxAfter.width / topicBoxAfter.width - ratioBefore)).toBeLessThan(0.05);
+
+    // Still a real, clickable, functioning affordance at the new zoom level.
+    await page.locator('.dc-ghost-pill').click();
+    await expect(page.locator('.dc-node')).toHaveCount(3);
   });
 
   test('dismissing the drop picker leaves no preview behind', async ({ page }) => {
