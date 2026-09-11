@@ -6,6 +6,8 @@ import type {
   NoteKind,
   QueueKind,
   ServiceKind,
+  TextAlign,
+  TextRole,
 } from '../document/types';
 import type { DisplayList, Shape, Stroke } from '../render/displayList';
 import { tokenizeCode } from '../render/code/highlight';
@@ -2079,16 +2081,88 @@ function note(node: DraftNode, ctx: DescribeContext): Shape[] {
 }
 
 /**
- * `annotation` swaps in the same quiet, chip-less treatment a connector's inferred relationship
- * caption already gets (`FONTS.connectorCaption`, `theme.textFaint`) — reusing an existing "this is
- * the quietest text in the app" convention rather than inventing a new size/colour. Every other
- * Label stays exactly as it was: byte-identical output for a node that never sets the flag.
+ * `textRole`'s base look, one `FontSpec` per role — the only place a role maps to a concrete
+ * size/weight/stack. `body`/`label` are `FONTS.freeText`/`FONTS.connectorCaption` verbatim (not new
+ * specs) so a node that never sets `textRole` — every node saved before this field existed —
+ * renders byte-identical to before.
  */
+const FONTS_BY_TEXT_ROLE: Record<TextRole, FontSpec> = {
+  body: FONTS.freeText,
+  label: FONTS.connectorCaption,
+  heading: FONTS.freeTextHeading,
+  title: FONTS.freeTextTitle,
+  technical: FONTS.freeTextTechnical,
+};
+
+/**
+ * A Text node's effective semantic role: an explicit `textRole` always wins; otherwise the legacy
+ * `annotation` flag (still the only thing `src/starters/catalog.ts` ever sets) maps to `'label'`,
+ * its one existing look. Absent of both is `'body'`. Shared by the renderer, the inline editor's
+ * own CSS (`DraftNodeView.tsx`'s `editorStyle`), and the popover's role picker, so the three can
+ * never disagree about what a node currently is.
+ */
+export function effectiveTextRole(node: Pick<DraftNode, 'textRole' | 'annotation'>): TextRole {
+  return node.textRole ?? (node.annotation ? 'label' : 'body');
+}
+
+const TEXT_ALIGN_ANCHOR: Record<TextAlign, 'start' | 'middle' | 'end'> = {
+  left: 'start',
+  center: 'middle',
+  right: 'end',
+};
+
+/**
+ * The concrete `FontSpec` a Text node renders/measures/edits with: its role's base font, with
+ * `textBold` forcing the heaviest weight and `textItalic` adding the style — independent toggles,
+ * combinable with any role. Shared by `freeText` (the SVG renderer), `naturalTextHeight` (auto-grow
+ * measurement), and `DraftNodeView.tsx`'s `editorStyle` (the live textarea overlay), so all three
+ * can never disagree about what a styled Text node looks like. Byte-identical to the role's own
+ * `FontSpec` object — not just equal, the same reference — whenever neither toggle is set, so a
+ * node saved before these fields existed never picks up a stray `italic: false` key.
+ */
+export function fontForTextNode(
+  node: Pick<DraftNode, 'textRole' | 'annotation' | 'textBold' | 'textItalic'>,
+): FontSpec {
+  const baseFont = FONTS_BY_TEXT_ROLE[effectiveTextRole(node)];
+  return node.textBold || node.textItalic
+    ? {
+        ...baseFont,
+        weight: node.textBold ? 700 : baseFont.weight,
+        ...(node.textItalic ? { italic: true as const } : {}),
+      }
+    : baseFont;
+}
+
+/**
+ * Blank text used to render nothing at all — an empty Text node was a real, selectable, saved
+ * document entry with zero shapes, i.e. permanently invisible the moment it was deselected. A
+ * quiet dashed outline instead means there is never an invisible canvas object: it flows through
+ * this same display-list pipeline, so it's visible whether selected, exported, or dimmed by
+ * Focus/Presentation, with no special-casing anywhere else. Deliberately a plain rect, not run
+ * through `outlineShape`'s personality jitter — an "this is empty" affordance should read as quiet
+ * chrome, not hand-drawn noise, in every personality mode.
+ */
+function emptyTextPlaceholder(node: DraftNode, ctx: DescribeContext): Shape[] {
+  if (node.width < 2 || node.height < 2) return [];
+  return [
+    {
+      t: 'rect',
+      x: 0.5,
+      y: 0.5,
+      w: node.width - 1,
+      h: node.height - 1,
+      r: 4,
+      stroke: { color: ctx.theme.border, width: 1, dash: [4, 4] },
+    },
+  ];
+}
+
 function freeText(node: DraftNode, ctx: DescribeContext): Shape[] {
   const body = node.text ?? '';
-  if (!body.trim()) return [];
+  if (!body.trim()) return emptyTextPlaceholder(node, ctx);
+  const role = effectiveTextRole(node);
+  const font = fontForTextNode(node);
   const palette = accentOf(ctx.theme, node.accent);
-  const font = node.annotation ? FONTS.connectorCaption : FONTS.freeText;
   const lineHeight = font.size * LINE_HEIGHTS.body;
   const layout = layoutText(body, {
     font,
@@ -2097,22 +2171,54 @@ function freeText(node: DraftNode, ctx: DescribeContext): Shape[] {
     maxLines: Math.max(1, Math.floor(node.height / lineHeight)),
     measurer: ctx.measurer,
   });
-  const fill = node.annotation
+  const fill = role === 'label'
     ? ctx.theme.textFaint
     : node.accent && node.accent !== 'neutral'
       ? palette.chip
       : ctx.theme.text;
+  const align = TEXT_ALIGN_ANCHOR[node.textAlign ?? 'left'];
+  const x = align === 'middle' ? node.width / 2 : align === 'end' ? node.width : 0;
   return [
     {
       t: 'text',
-      x: 0,
+      x,
       y: 0,
       layout,
       font,
       fill,
-      align: 'start',
+      align,
     },
   ];
+}
+
+/** Where a Text node stops growing on its own as its text gets longer — same idea as
+ *  `NOTE_AUTO_MAX_HEIGHT`, independent constant since Text has no header/padding chrome eating
+ *  into it. */
+export const TEXT_AUTO_MAX_HEIGHT = 400;
+
+/**
+ * The height a Text node needs to show all of `text` at its current width, role and emphasis — at
+ * least one line, at most `TEXT_AUTO_MAX_HEIGHT`. Mirrors `naturalNoteHeight`'s grow-only contract:
+ * the canvas grows a Text box to this on commit and never shrinks it. Role/bold matter here, not
+ * just width, because a heavier or larger font wraps at a different point than the body default.
+ */
+export function naturalTextHeight(
+  node: Pick<DraftNode, 'width' | 'textRole' | 'annotation' | 'textBold' | 'textItalic'>,
+  text: string,
+  ctx: Pick<DescribeContext, 'measurer'>,
+): number {
+  const font = fontForTextNode(node);
+  const lineHeight = font.size * LINE_HEIGHTS.body;
+  const lines = text.trim()
+    ? layoutText(text, {
+        font,
+        maxWidth: Math.max(16, node.width),
+        lineHeight,
+        measurer: ctx.measurer,
+      }).lines.length
+    : 1;
+  const needed = Math.ceil(lines * lineHeight);
+  return Math.min(TEXT_AUTO_MAX_HEIGHT, needed);
 }
 
 /** A boundary is explicitly meant to feel stronger than an ordinary node — "someone drawing a

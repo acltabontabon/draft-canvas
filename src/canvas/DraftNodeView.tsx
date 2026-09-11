@@ -9,10 +9,13 @@ import {
   CODE_LAYOUT,
   NOTE_ACCENTS,
   NOTE_AUTO_MAX_HEIGHT,
+  TEXT_AUTO_MAX_HEIGHT,
   describeContext,
   describeNode,
+  fontForTextNode,
   naturalCodeSize,
   naturalNoteHeight,
+  naturalTextHeight,
   noteLayout,
 } from '../nodes/describe';
 import { HANDLE_ANCHORS } from '../edges/routing';
@@ -89,6 +92,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const [copied, setCopied] = useState(false);
   const isCode = node?.type === 'code';
   const isNote = node?.type === 'note';
+  const isText = node?.type === 'text';
   const copiedTimeout = useRef<number | null>(null);
   useEffect(
     () => () => {
@@ -118,9 +122,13 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     const el = editorRef.current;
     if (!el) return;
     el.focus();
-    if (isNote || isCode) {
-      // Multi-line content is appended to far more often than replaced, and select-all on a
-      // paragraph means the next keystroke wipes it. A single-line label is the opposite case.
+    // Multi-line content is appended to far more often than replaced, and select-all on a
+    // paragraph means the next keystroke wipes it. A single-line label is the opposite case —
+    // still the common one for Text (a short heading or identifier), so only a Text node that
+    // already has a second line gets the append-friendly treatment; a fresh or single-line one
+    // keeps the quick "retype the whole thing" convenience of select-all.
+    const alreadyMultiline = isText && (node?.text ?? '').includes('\n');
+    if (isNote || isCode || alreadyMultiline) {
       const end = el.value.length;
       el.setSelectionRange(end, end);
     } else {
@@ -128,8 +136,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     }
     // A note whose text already overflows its box (sized down by hand, or grown past what a
     // narrower width can hold) opens tall enough to show all of it — see `liveHeight`.
-    if (isNote && node) {
-      const grown = grownNoteHeight(node, el, node.height);
+    if ((isNote || isText) && node) {
+      const grown = isText ? grownTextHeight(el, node.height) : grownNoteHeight(node, el, node.height);
       // oxlint-disable-next-line set-state-in-effect -- measuring the just-mounted textarea, see comment above.
       if (grown !== null) setLiveHeight(grown);
     }
@@ -237,13 +245,26 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       if (text !== (node.text ?? '') || height !== undefined) {
         updateNodeText(node.id, text, height === undefined ? undefined : { height });
       }
+    } else if (isText) {
+      // Same grow-only contract as a note's box, above: never shrinks what's already on screen.
+      const needed = Math.max(naturalTextHeight(node, value, describeContext(theme)), liveHeight ?? 0);
+      const height = needed > node.height ? needed : undefined;
+      if (value !== (node.text ?? '') || height !== undefined) {
+        updateNodeText(node.id, value, height === undefined ? undefined : { height });
+      }
+      // Runs on every exit from editing, not just when something changed: a Text node that never
+      // received a real commit (`textOrigin` still `'auto'`) and ends up empty here is removed
+      // outright — the fix for a Text element that would otherwise become a permanently invisible,
+      // selectable ghost the instant it's deselected. A node whose content was typed and later
+      // deliberately cleared (`textOrigin: 'explicit'`) is left alone; see `finishTextEdit`.
+      useEditorStore.getState().finishTextEdit(node.id, value);
     } else if (value !== (node.text ?? '')) {
       updateNodeText(node.id, value);
     }
   };
 
   const growToFit = (el: HTMLTextAreaElement) => {
-    const grown = grownNoteHeight(node, el, effectiveHeight);
+    const grown = isText ? grownTextHeight(el, effectiveHeight) : grownNoteHeight(node, el, effectiveHeight);
     if (grown !== null) setLiveHeight(grown);
   };
 
@@ -364,10 +385,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           ref={editorRef}
           className={`dc-node-editor nodrag nowheel${isCode ? ' dc-node-editor-code' : ''}${isNote ? ' dc-node-editor-note' : ''}`}
           defaultValue={isCode ? (node.code ?? '') : (node.text ?? '')}
-          placeholder={isNote ? 'Add a note…' : undefined}
+          placeholder={isNote ? 'Add a note…' : isText ? 'Type something…' : undefined}
           spellCheck={false}
           style={editorStyle(node, effectiveHeight >= NOTE_AUTO_MAX_HEIGHT)}
-          onInput={isNote ? (event) => growToFit(event.currentTarget) : undefined}
+          onInput={isNote || isText ? (event) => growToFit(event.currentTarget) : undefined}
           onBlur={(event) => {
             commit(event.currentTarget.value);
             stopEditing();
@@ -382,15 +403,35 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
               // A note keeps what was typed — losing a paragraph of meeting notes to a reflexive
               // Escape is the worse failure. A label reverts, the convention for a rename field.
               if (isNote) commit(event.currentTarget.value);
+              // Escape never commits for Text, so `finishTextEdit` is checked against the node's
+              // already-committed text, not the discarded textarea value — a never-typed-into
+              // Text node Escaped out of still gets cleaned up; real content Escape reverted away
+              // from never does, since it's still sitting on the node untouched.
+              if (isText) useEditorStore.getState().finishTextEdit(node.id, node.text ?? '');
               stopEditing();
               return;
             }
+            // Bold/italic are whole-node toggles, not a rich-text selection format, so they apply
+            // without touching editing state or the caret — the same reason there is no inline
+            // formatting model to route a text selection through.
+            if (isText && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'b') {
+              event.preventDefault();
+              useEditorStore.getState().updateNodeById(node.id, { textBold: !node.textBold }, 'Toggle bold');
+              return;
+            }
+            if (isText && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'i') {
+              event.preventDefault();
+              useEditorStore.getState().updateNodeById(node.id, { textItalic: !node.textItalic }, 'Toggle italic');
+              return;
+            }
             if (event.key !== 'Enter') return;
-            // Enter is a newline in every multi-line editor (code, note); a note commits on
-            // Cmd/Ctrl+Enter, Escape, or clicking away. A label commits on plain Enter and takes
-            // Shift+Enter for a rare second line.
+            // Enter is a newline in every multi-line editor (code, note, text) — multiline is
+            // first-class for Text, not a rare Shift+Enter escape hatch, so it gets the same
+            // Cmd/Ctrl+Enter-commits convention Note already uses. A node/service/etc. label is
+            // still single-line by convention: it commits on plain Enter and takes Shift+Enter for
+            // a rare second line.
             if (isCode) return;
-            if (isNote ? !(event.metaKey || event.ctrlKey) : event.shiftKey) return;
+            if (isNote || isText ? !(event.metaKey || event.ctrlKey) : event.shiftKey) return;
             event.preventDefault();
             commit(event.currentTarget.value);
             stopEditing();
@@ -456,6 +497,15 @@ function grownNoteHeight(node: DraftNode, el: HTMLTextAreaElement, current: numb
   return Math.min(NOTE_AUTO_MAX_HEIGHT, needed);
 }
 
+/** Same idea as `grownNoteHeight`, without a note's padding geometry — a Text editor sits at
+ *  `inset: 0` (see `editorStyle`), so the textarea's own `scrollHeight` already is the needed box
+ *  height. */
+function grownTextHeight(el: HTMLTextAreaElement, current: number): number | null {
+  const needed = Math.ceil(el.scrollHeight);
+  if (needed <= current + 1) return null;
+  return Math.min(TEXT_AUTO_MAX_HEIGHT, needed);
+}
+
 /** Chrome, not appearance: the hint sits where the first line of text will, and is never exported. */
 function placeholderStyle(node: DraftNode): React.CSSProperties {
   const geo = noteLayout(node);
@@ -504,11 +554,15 @@ function editorStyle(node: DraftNode, atGrowthCap: boolean): React.CSSProperties
     };
   }
   if (node.type === 'text') {
+    // Same role/bold/italic resolution `freeText` renders with (`fontForTextNode`), so committing
+    // an edit never makes the text visibly jump — and the same `textAlign` value CSS and the SVG
+    // shape's `text-anchor` mapping (`TEXT_ALIGN_ANCHOR` in `describe.ts`) both key off.
+    const font = fontForTextNode(node);
     return {
-      font: cssFont(FONTS.freeText),
-      lineHeight: `${FONTS.freeText.size * LINE_HEIGHTS.body}px`,
+      font: cssFont(font),
+      lineHeight: `${font.size * LINE_HEIGHTS.body}px`,
       inset: 0,
-      textAlign: 'left',
+      textAlign: node.textAlign ?? 'left',
     };
   }
   return {

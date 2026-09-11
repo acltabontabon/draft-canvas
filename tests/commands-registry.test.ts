@@ -170,6 +170,43 @@ describe('commandsFor — contextual (8.2)', () => {
     expect(list).not.toContain('group');
   });
 
+  it('a selected Text node gets a staged "Text role…" command and Bold/Italic toggles', () => {
+    const node = useEditorStore.getState().addNode({ type: 'text', x: 0, y: 0, text: 'order-service' });
+    useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+    const list = ids(stubContext());
+    expect(list).toEqual(expect.arrayContaining(['text-role', 'text-toggle-bold', 'text-toggle-italic']));
+
+    const ctx = stubContext();
+    const stage = stageOf(ctx, 'text-role');
+    expect(stage.prompt).toBe('Text role');
+    expect(stage.options.map((o) => o.title)).toEqual(['Body', 'Label', 'Heading', 'Title', 'Technical']);
+    expect(stage.options.find((o) => o.title === 'Body')!.hint).toBe('Current');
+    expect(stage.options.find((o) => o.title === 'Heading')!.hint).toBeUndefined();
+
+    stage.options.find((o) => o.title === 'Heading')!.run(ctx);
+    expect(useEditorStore.getState().document.nodes[0]!.textRole).toBe('heading');
+
+    const bold = commandsFor(ctx).find((c) => c.id === 'text-toggle-bold')!;
+    expect(bold.title).toBe('Bold');
+    bold.run(ctx);
+    expect(useEditorStore.getState().document.nodes[0]!.textBold).toBe(true);
+    const boldAgain = commandsFor(stubContext()).find((c) => c.id === 'text-toggle-bold')!;
+    expect(boldAgain.title).toBe('Remove bold');
+    boldAgain.run(stubContext());
+    expect(useEditorStore.getState().document.nodes[0]!.textBold).toBe(false);
+
+    const italic = commandsFor(stubContext()).find((c) => c.id === 'text-toggle-italic')!;
+    italic.run(stubContext());
+    expect(useEditorStore.getState().document.nodes[0]!.textItalic).toBe(true);
+  });
+
+  it('a non-Text node never gets the text-only commands', () => {
+    const node = useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+    const list = ids(stubContext());
+    expect(list).not.toEqual(expect.arrayContaining(['text-role', 'text-toggle-bold', 'text-toggle-italic']));
+  });
+
   it('Connect to… lists every other node, never the source or a boundary, then create-and-connect options', () => {
     const state = useEditorStore.getState();
     const api = state.addNode({ type: 'service', x: 0, y: 0, text: 'API' });

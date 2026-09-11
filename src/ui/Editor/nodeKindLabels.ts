@@ -6,6 +6,7 @@ import type {
   NoteKind,
   QueueKind,
   ServiceKind,
+  TextRole,
 } from '../../document/types';
 
 /**
@@ -68,4 +69,14 @@ export const COMPONENT_KIND_OPTION_LABELS: Record<ComponentKind, string> = {
   module: 'Module',
   adapter: 'Adapter',
   port: 'Port',
+};
+
+/** Also reused by `commands/registry.ts`'s staged "Text role…" command, so the popover's dropdown
+ *  and ⌘K/right-click never show two different names for the same role. */
+export const TEXT_ROLE_OPTION_LABELS: Record<TextRole, string> = {
+  body: 'Body',
+  label: 'Label',
+  heading: 'Heading',
+  title: 'Title',
+  technical: 'Technical',
 };

@@ -519,6 +519,54 @@ describe('importing untrusted files', () => {
     expect(result.document.nodes.find((n) => n.id === 'g3')!.boundaryPreset).toBe('domain');
   });
 
+  it('an old document with no text-role fields loads with no repairs and no fields fabricated', () => {
+    const result = parse({
+      ...base,
+      nodes: [{ id: 't1', type: 'text', x: 0, y: 0, width: 120, height: 30, text: 'API' }],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.repairs).toEqual([]);
+    const node = result.document.nodes[0]!;
+    expect(node.textRole).toBeUndefined();
+    expect(node.textAlign).toBeUndefined();
+    expect(node.textBold).toBeUndefined();
+    expect(node.textItalic).toBeUndefined();
+  });
+
+  it('keeps a valid textRole/textAlign and coerces an unknown one away rather than rejecting the node', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 't1', type: 'text', x: 0, y: 0, textRole: 'heading', textAlign: 'center', textBold: true, textItalic: true },
+        { id: 't2', type: 'text', x: 0, y: 0, textRole: 'shouty', textAlign: 'diagonal' },
+      ],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byId = (id: string) => result.document.nodes.find((n) => n.id === id)!;
+    expect(byId('t1')).toMatchObject({ textRole: 'heading', textAlign: 'center', textBold: true, textItalic: true });
+    expect(byId('t2').textRole).toBeUndefined();
+    expect(byId('t2').textAlign).toBeUndefined();
+  });
+
+  it('textRole/textAlign/textBold/textItalic only ever apply to text nodes', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 's1', type: 'service', x: 0, y: 0, textRole: 'title', textBold: true },
+      ],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const node = result.document.nodes[0]!;
+    expect(node.textRole).toBeUndefined();
+    expect(node.textBold).toBeUndefined();
+  });
+
   it('treats hostile payloads as content, never as code', () => {
     const result = parse({
       ...base,

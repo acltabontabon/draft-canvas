@@ -7,6 +7,8 @@ import {
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
   NOTE_KINDS,
+  TEXT_ALIGNS,
+  TEXT_ROLES,
   type ActorKind,
   type BoundaryPreset,
   type CodeLanguage,
@@ -16,14 +18,18 @@ import {
   type NoteKind,
   type QueueKind,
   type ServiceKind,
+  type TextAlign,
+  type TextRole,
 } from '../document/types';
+import { MOD_SYMBOL } from '../lib/platform';
+import { effectiveTextRole } from '../nodes/describe';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
-import { BOUNDARY_PRESET_OPTION_LABELS, NOTE_LABELS } from '../ui/Editor/nodeKindLabels';
+import { BOUNDARY_PRESET_OPTION_LABELS, NOTE_LABELS, TEXT_ROLE_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
 import { ACTOR_ICON_OPTIONS } from './actorOptions';
 import { COMPONENT_ICON_OPTIONS } from './componentOptions';
 import { DATABASE_ICON_OPTIONS } from './dataStoreOptions';
@@ -59,6 +65,15 @@ const BOUNDARY_OPTIONS: InspectorSelectOption[] = BOUNDARY_PRESETS.map((preset) 
   value: preset,
   label: BOUNDARY_PRESET_OPTION_LABELS[preset],
 }));
+const TEXT_ROLE_OPTIONS: InspectorSelectOption[] = TEXT_ROLES.map((role) => ({
+  value: role,
+  label: TEXT_ROLE_OPTION_LABELS[role],
+}));
+const ALIGN_ICONS: Record<TextAlign, 'alignLeft' | 'alignCenter' | 'alignRight'> = {
+  left: 'alignLeft',
+  center: 'alignCenter',
+  right: 'alignRight',
+};
 
 /** A slightly longer tooltip than the button's own visible label, for the quick-actions row —
  *  keyed by command id, same ids `primaryCommandsFor` (`commands/registry.ts`) returns. Falls back
@@ -130,7 +145,10 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   const [mounted, setMounted] = useState(open);
   const [closing, setClosing] = useState(false);
   const hideTimer = useRef<number | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  // One slot, not two independent booleans — a colour palette and a typography panel open from
+  // the same row and would otherwise be able to stack under each other; this makes them mutually
+  // exclusive for free and keeps the reset/Escape/click-away plumbing below written once.
+  const [openPanel, setOpenPanel] = useState<'color' | 'typography' | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<Placement>('above');
   usePopoverKeyboard(panelRef);
@@ -170,9 +188,9 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
     lastInternalRef.current = internal;
   }
 
-  // Selecting a *different* element while the colour palette is open must close it.
+  // Selecting a *different* element while the colour palette/typography panel is open must close it.
   useEffect(() => {
-    setPaletteOpen(false);
+    setOpenPanel(null);
   }, [nodeId]);
 
   useEffect(() => {
@@ -185,7 +203,7 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
       setMounted(true);
       return;
     }
-    setPaletteOpen(false);
+    setOpenPanel(null);
     if (!mounted) return;
     setClosing(true);
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -207,17 +225,17 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Escape closes the open colour palette first, without touching the selection. Click-away
-  // closes it the same way, but never deselects.
+  // Escape closes the open colour palette/typography panel first, without touching the selection.
+  // Click-away closes it the same way, but never deselects.
   useEffect(() => {
-    if (!paletteOpen) return;
+    if (!openPanel) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
-      setPaletteOpen(false);
+      setOpenPanel(null);
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (panelRef.current && !panelRef.current.contains(event.target as Node)) setPaletteOpen(false);
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) setOpenPanel(null);
     };
     window.addEventListener('keydown', onKeyDown, true);
     const id = window.setTimeout(() => window.addEventListener('pointerdown', onPointerDown), 0);
@@ -226,7 +244,7 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };
-  }, [paletteOpen]);
+  }, [openPanel]);
 
   // All of the following must stay above any conditional `return` — React Hooks (the `useEffect`
   // below) can never be called conditionally — so `rect`/`anchors` are null-safe rather than
@@ -342,8 +360,8 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
           {hintId && <HintStrip id={hintId} learned={hintLearned} />}
           <ElementInspectorRow
             node={displayNode}
-            paletteOpen={paletteOpen}
-            setPaletteOpen={setPaletteOpen}
+            openPanel={openPanel}
+            setOpenPanel={setOpenPanel}
             menuDirection={menuDirection}
             menuAvoidRect={menuAvoidRect}
             theme={theme}
@@ -358,8 +376,8 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
 
 function ElementInspectorRow({
   node,
-  paletteOpen,
-  setPaletteOpen,
+  openPanel,
+  setOpenPanel,
   menuDirection,
   menuAvoidRect,
   theme,
@@ -367,8 +385,8 @@ function ElementInspectorRow({
   buildCommandContext,
 }: {
   node: DraftNode;
-  paletteOpen: boolean;
-  setPaletteOpen: (open: boolean) => void;
+  openPanel: 'color' | 'typography' | null;
+  setOpenPanel: (panel: 'color' | 'typography' | null) => void;
   menuDirection: 'up' | 'down';
   menuAvoidRect: { top: number; bottom: number };
   theme: ReturnType<typeof useThemeValue>;
@@ -477,6 +495,14 @@ function ElementInspectorRow({
           onChange: (value) =>
             store.getState().updateNodeById(node.id, { componentKind: value as ComponentKind }, 'Change component type'),
         };
+      case 'text':
+        return {
+          options: TEXT_ROLE_OPTIONS,
+          value: effectiveTextRole(node),
+          ariaLabel: 'Text role',
+          onChange: (value) =>
+            store.getState().updateNodeById(node.id, { textRole: value as TextRole }, 'Change text role'),
+        };
       default:
         return null;
     }
@@ -509,8 +535,19 @@ function ElementInspectorRow({
           aria-label="Element colour"
           title="Change colour"
           style={currentAccentChip ? { background: currentAccentChip } : undefined}
-          onClick={() => setPaletteOpen(!paletteOpen)}
+          onClick={() => setOpenPanel(openPanel === 'color' ? null : 'color')}
         />
+        {node.type === 'text' && (
+          <Button
+            variant="quiet"
+            active={openPanel === 'typography'}
+            aria-label="Text style"
+            title="Bold, italic, alignment"
+            onClick={() => setOpenPanel(openPanel === 'typography' ? null : 'typography')}
+          >
+            Aa
+          </Button>
+        )}
         {typeControl && (
           <InspectorSelect
             ariaLabel={typeControl.ariaLabel}
@@ -540,7 +577,7 @@ function ElementInspectorRow({
         />
       </div>
 
-      {paletteOpen && (
+      {openPanel === 'color' && (
         <div className="dc-popover-panel dc-element-inspector-panel dc-swatches">
           {ACCENTS.map((accent) => (
             <button
@@ -552,10 +589,56 @@ function ElementInspectorRow({
               style={{ background: theme.accents[accent].chip }}
               onClick={() => {
                 store.getState().updateNodeById(node.id, { accent }, 'Recolour');
-                setPaletteOpen(false);
+                setOpenPanel(null);
               }}
             />
           ))}
+        </div>
+      )}
+
+      {openPanel === 'typography' && node.type === 'text' && (
+        <div className="dc-popover-panel dc-element-inspector-panel dc-typography-panel">
+          <div className="dc-emphasis-group">
+            <Button
+              variant="quiet"
+              active={node.textBold}
+              aria-pressed={Boolean(node.textBold)}
+              aria-label="Bold"
+              title={`Bold (${node.textBold ? 'on' : 'off'}, ${MOD_SYMBOL}B)`}
+              style={{ fontWeight: 700 }}
+              onClick={() => store.getState().updateNodeById(node.id, { textBold: !node.textBold }, 'Toggle bold')}
+            >
+              B
+            </Button>
+            <Button
+              variant="quiet"
+              active={node.textItalic}
+              aria-pressed={Boolean(node.textItalic)}
+              aria-label="Italic"
+              title={`Italic (${node.textItalic ? 'on' : 'off'}, ${MOD_SYMBOL}I)`}
+              style={{ fontStyle: 'italic' }}
+              onClick={() =>
+                store.getState().updateNodeById(node.id, { textItalic: !node.textItalic }, 'Toggle italic')
+              }
+            >
+              I
+            </Button>
+          </div>
+          <span className="dc-popover-divider" aria-hidden="true" />
+          <div className="dc-align-group" role="group" aria-label="Text alignment">
+            {TEXT_ALIGNS.map((align) => (
+              <Button
+                key={align}
+                icon={ALIGN_ICONS[align]}
+                variant="quiet"
+                active={(node.textAlign ?? 'left') === align}
+                aria-pressed={(node.textAlign ?? 'left') === align}
+                aria-label={`Align ${align}`}
+                title={`Align ${align}`}
+                onClick={() => store.getState().updateNodeById(node.id, { textAlign: align }, 'Change alignment')}
+              />
+            ))}
+          </div>
         </div>
       )}
     </>

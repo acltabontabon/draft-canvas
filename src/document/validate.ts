@@ -33,6 +33,8 @@ import {
   ROUTE_MODES,
   SERVICE_KINDS,
   SIDES,
+  TEXT_ALIGNS,
+  TEXT_ROLES,
   type Accent,
   type ActorKind,
   type AttachableType,
@@ -58,6 +60,8 @@ import {
   type QueueKind,
   type RouteMode,
   type ServiceKind,
+  type TextAlign,
+  type TextRole,
 } from './types';
 
 export type NormalizeResult =
@@ -327,6 +331,14 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     }
     if (type === 'text' && candidate.annotation === true) {
       node.annotation = true;
+    }
+    if (type === 'text') {
+      const textRole = oneOfOptional<TextRole>(candidate.textRole, TEXT_ROLES);
+      if (textRole !== undefined) node.textRole = textRole;
+      const textAlign = oneOfOptional<TextAlign>(candidate.textAlign, TEXT_ALIGNS);
+      if (textAlign !== undefined) node.textAlign = textAlign;
+      if (candidate.textBold === true) node.textBold = true;
+      if (candidate.textItalic === true) node.textItalic = true;
     }
 
     const rawAttachments = Array.isArray(candidate.attachments) ? candidate.attachments : [];

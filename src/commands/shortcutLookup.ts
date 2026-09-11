@@ -22,6 +22,7 @@ const NODE_A: DraftNode = { id: 'shortcut-fixture-a', type: 'service', x: 0, y: 
 const NODE_B: DraftNode = { id: 'shortcut-fixture-b', type: 'service', x: 300, y: 0, width: 176, height: 68, z: 0 };
 const NODE_C: DraftNode = { id: 'shortcut-fixture-c', type: 'service', x: 600, y: 0, width: 176, height: 68, z: 0 };
 const NODE_GROUP: DraftNode = { id: 'shortcut-fixture-group', type: 'group', x: 0, y: 200, width: 400, height: 200, z: 0 };
+const NODE_TEXT: DraftNode = { id: 'shortcut-fixture-text', type: 'text', x: 0, y: 400, width: 200, height: 36, z: 0 };
 const EDGE_A: DraftEdge = {
   id: 'shortcut-fixture-edge',
   source: NODE_A.id,
@@ -32,7 +33,7 @@ const EDGE_A: DraftEdge = {
 };
 
 const FIXTURE_DOCUMENT = {
-  nodes: [NODE_A, NODE_B, NODE_C, NODE_GROUP],
+  nodes: [NODE_A, NODE_B, NODE_C, NODE_GROUP, NODE_TEXT],
   edges: [EDGE_A],
   flows: [],
 };
@@ -127,6 +128,11 @@ function buildCatalog(): ReadonlyMap<string, ShortcutEntry> {
 
   const nodeCtx = buildFixtureContext({ nodes: [NODE_A.id], edges: [] });
   record(map, nodeCommands(nodeCtx, NODE_A));
+
+  // Text-only commands (Bold/Italic/Text role…) only appear for `type: 'text'` — a second
+  // single-node pass, otherwise identical, is what makes this catalog actually reach them.
+  const textCtx = buildFixtureContext({ nodes: [NODE_TEXT.id], edges: [] });
+  record(map, nodeCommands(textCtx, NODE_TEXT));
 
   const edgeCtx = buildFixtureContext({ nodes: [], edges: [EDGE_A.id] });
   record(map, edgeCommands(edgeCtx, EDGE_A));

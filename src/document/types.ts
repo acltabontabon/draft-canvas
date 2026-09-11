@@ -38,6 +38,18 @@ export type DraftNodeType = (typeof NODE_TYPES)[number];
 export const NOTE_KINDS = ['note', 'question', 'warning', 'decision'] as const;
 export type NoteKind = (typeof NOTE_KINDS)[number];
 
+/**
+ * A Text node's semantic hierarchy — "this is a Heading," not "21px semibold." The renderer
+ * (`nodes/describe.ts`) owns what each role actually looks like; the document only ever stores
+ * intent. `'label'` is the same quiet, chip-less treatment `annotation` has always meant — see
+ * `DraftNode.textRole`'s own doc comment for how the two reconcile.
+ */
+export const TEXT_ROLES = ['body', 'label', 'heading', 'title', 'technical'] as const;
+export type TextRole = (typeof TEXT_ROLES)[number];
+
+export const TEXT_ALIGNS = ['left', 'center', 'right'] as const;
+export type TextAlign = (typeof TEXT_ALIGNS)[number];
+
 export const CODE_LANGUAGES = [
   'plaintext',
   'java',
@@ -312,8 +324,23 @@ export interface DraftNode {
    * naming the crossing point of a boundary) rather than genuine content someone is meant to read
    * at normal weight — smaller, muted text, still zero-semantics, still no box. Absent/`false` is
    * the Label primitive's one existing look, unchanged; this never affects any other node type.
+   * Superseded by `textRole` going forward (see below) but kept exactly as-is: every starter in
+   * `src/starters/catalog.ts` still sets this, not `textRole`, and must keep rendering unchanged.
    */
   annotation?: boolean;
+  /**
+   * `text` nodes only. The semantic hierarchy a Text element communicates — see `TextRole`. Absent
+   * falls back to `annotation ? 'label' : 'body'` (`nodes/describe.ts`'s `effectiveTextRole`), so
+   * every node saved before this field existed, `annotation` included, renders exactly as it did.
+   * An explicit `textRole` always wins over a legacy `annotation` flag if a node somehow has both.
+   */
+  textRole?: TextRole;
+  /** `text` nodes only. Absent is `'left'`, today's one existing alignment. */
+  textAlign?: TextAlign;
+  /** `text` nodes only. Independent of `textRole` — combines with any role, including `technical`. */
+  textBold?: boolean;
+  /** `text` nodes only. See `textBold`. */
+  textItalic?: boolean;
 }
 
 export interface EdgeDetails {

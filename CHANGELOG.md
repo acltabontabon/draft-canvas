@@ -6,6 +6,13 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
+- Text now has a small, opinionated set of roles — Body, Label, Heading, Title, and Technical (a
+  monospace treatment for endpoints, event names, and other identifiers) — plus Bold, Italic, and
+  left/center/right alignment. Switch roles from the popover or ⌘K's "Text role…", and toggle
+  Bold/Italic with Cmd/Ctrl+B and Cmd/Ctrl+I, even mid-edit. Text is multiline by default now —
+  Enter starts a new line, Cmd/Ctrl+Enter commits — and a Text box grows to fit what you type. An
+  abandoned empty Text element is cleaned up automatically instead of lingering as an invisible
+  object on the canvas — content you deliberately clear stays as a quiet placeholder instead.
 - Two new shape kinds: a Service can be a **Backend for Frontend** (BFF, for adapters that tailor
   a backend to specific frontends — connectors say *calls*, not *routes*, to distinguish from a
   Gateway), and a Data Store can be a **Table** — a flat card with a header band for a logical

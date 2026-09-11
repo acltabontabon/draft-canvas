@@ -9,12 +9,15 @@ import { boundsOf, descendantsOf } from '../document/operations';
 import {
   CONNECTOR_KINDS,
   EDGE_SEMANTICS,
+  TEXT_ROLES,
   type AttachableType,
   type ConnectorKind,
   type DraftEdge,
   type DraftNode,
 } from '../document/types';
+import { TEXT_ROLE_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
 import { requestClipboardRead } from '../lib/clipboardPermission';
+import { effectiveTextRole } from '../nodes/describe';
 import { continuationsFor, materialize } from '../continuation';
 import { MOD_SYMBOL } from '../lib/platform';
 import { ownsData } from '../store/editorStore';
@@ -836,6 +839,44 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
     shortcut: 'Enter',
     run: (inner) => inner.ui.requestEdit(node.id),
   });
+  if (node.type === 'text') {
+    const currentRole = effectiveTextRole(node);
+    commands.push(
+      {
+        id: 'text-role',
+        title: 'Text role…',
+        group: 'selection',
+        keywords: ['body', 'label', 'heading', 'title', 'technical', 'style', 'hierarchy'],
+        hint: TEXT_ROLE_OPTION_LABELS[currentRole],
+        run: () => ({
+          prompt: 'Text role',
+          options: TEXT_ROLES.map((role) => ({
+            id: `text-role:${role}`,
+            title: TEXT_ROLE_OPTION_LABELS[role],
+            hint: role === currentRole ? 'Current' : undefined,
+            run: (inner: CommandContext) =>
+              inner.editor.updateNodeById(node.id, { textRole: role }, 'Change text role'),
+          })),
+        }),
+      },
+      {
+        id: 'text-toggle-bold',
+        title: node.textBold ? 'Remove bold' : 'Bold',
+        group: 'selection',
+        keywords: ['emphasis', 'weight', 'strong'],
+        shortcut: `${MOD_SYMBOL} B`,
+        run: (inner) => inner.editor.updateNodeById(node.id, { textBold: !node.textBold }, 'Toggle bold'),
+      },
+      {
+        id: 'text-toggle-italic',
+        title: node.textItalic ? 'Remove italic' : 'Italic',
+        group: 'selection',
+        keywords: ['emphasis', 'oblique', 'slant'],
+        shortcut: `${MOD_SYMBOL} I`,
+        run: (inner) => inner.editor.updateNodeById(node.id, { textItalic: !node.textItalic }, 'Toggle italic'),
+      },
+    );
+  }
   const outgoing = ctx.editor.document.edges.filter((edge) => edge.source === node.id);
   if (outgoing.length > 0) {
     commands.push({

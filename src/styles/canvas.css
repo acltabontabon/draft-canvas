@@ -1129,6 +1129,23 @@
   padding: 8px;
 }
 
+/* Text's Bold/Italic/Alignment panel — same compact control scale the row above it already uses,
+   so opening the panel doesn't suddenly introduce a second, larger button size. */
+.dc-typography-panel .dc-button {
+  height: var(--dc-popover-control);
+  width: var(--dc-popover-control);
+  padding: 0;
+  border-radius: var(--dc-radius-sm);
+  font-size: var(--dc-popover-font);
+  justify-content: center;
+}
+
+.dc-emphasis-group,
+.dc-align-group {
+  display: flex;
+  gap: 2px;
+}
+
 /* The popover never focuses itself, so a ring only appears once the user Tabs in — and then every
    control shows the same one. */
 .dc-popover :focus-visible {

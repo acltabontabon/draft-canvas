@@ -101,6 +101,8 @@ export const SECTIONS: Section[] = [
       { keys: ['Tab'], label: 'Accept the suggested next element, when one is showing' },
       { commandId: 'group' },
       { commandId: 'ungroup' },
+      { commandId: 'text-toggle-bold', label: 'Bold (selected Text)' },
+      { commandId: 'text-toggle-italic', label: 'Italic (selected Text)' },
     ],
   },
   {

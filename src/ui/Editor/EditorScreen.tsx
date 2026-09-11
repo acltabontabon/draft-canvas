@@ -123,8 +123,10 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       // opts *in* the keyboard/command-driven creation paths (the double-click type picker and the
       // armed-tool click stay mouse gestures, never pass it): a keyboard user who just made
       // something should be able to start typing immediately, the same "create, then name" flow a
-      // note already gets.
-      if (node.type === 'note' || autoEdit) useUiStore.getState().requestEdit(node.id);
+      // note already gets. Text gets the same treatment as Note, for the same reason: it has no
+      // default label (`defaultTextFor('text')` is `''`), so it exists to be typed into too —
+      // unlike Service/Actor/etc., which arrive pre-named and don't need this.
+      if (node.type === 'note' || node.type === 'text' || autoEdit) useUiStore.getState().requestEdit(node.id);
       return node;
     },
     [arm, store, theme],
@@ -636,6 +638,25 @@ function useKeyboard({
             event.preventDefault();
             void zoomOut();
             return;
+          case 'b':
+          case 'i': {
+            // A whole-node toggle, not per-character formatting — only meaningful for exactly one
+            // selected Text node. The same toggle also works mid-typing, wired separately in
+            // `DraftNodeView.tsx`'s own textarea `onKeyDown` (this handler never fires there, since
+            // `isEditableTarget` already returned above).
+            const only =
+              state.selection.nodes.length === 1 && state.selection.edges.length === 0
+                ? state.document.nodes.find((n) => n.id === state.selection.nodes[0])
+                : undefined;
+            if (only?.type !== 'text') return;
+            event.preventDefault();
+            if (event.key.toLowerCase() === 'b') {
+              state.updateNodeById(only.id, { textBold: !only.textBold }, 'Toggle bold');
+            } else {
+              state.updateNodeById(only.id, { textItalic: !only.textItalic }, 'Toggle italic');
+            }
+            return;
+          }
           default:
             return;
         }

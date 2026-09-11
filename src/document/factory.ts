@@ -23,6 +23,8 @@ import {
   type QueueKind,
   type RouteMode,
   type ServiceKind,
+  type TextAlign,
+  type TextRole,
 } from './types';
 
 export function defaultSizeFor(type: DraftNodeType): { width: number; height: number } {
@@ -222,6 +224,10 @@ export interface CreateNodeInput {
   id?: string;
   deliveryRole?: DeliveryRole;
   annotation?: boolean;
+  textRole?: TextRole;
+  textAlign?: TextAlign;
+  textBold?: boolean;
+  textItalic?: boolean;
 }
 
 export function createNode(input: CreateNodeInput): DraftNode {
@@ -262,6 +268,12 @@ export function createNode(input: CreateNodeInput): DraftNode {
   if (input.type === 'component') node.componentKind = input.componentKind ?? 'generic';
   if (input.deliveryRole) node.deliveryRole = input.deliveryRole;
   if (input.type === 'text' && input.annotation) node.annotation = true;
+  if (input.type === 'text') {
+    if (input.textRole) node.textRole = input.textRole;
+    if (input.textAlign) node.textAlign = input.textAlign;
+    if (input.textBold) node.textBold = true;
+    if (input.textItalic) node.textItalic = true;
+  }
   return node;
 }
 

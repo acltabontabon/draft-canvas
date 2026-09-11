@@ -15,7 +15,7 @@ import {
 } from '../document/factory';
 import { gapForCaption, horizontalAnchorsFor, type MaterializedContinuation } from '../continuation';
 import { getMeasurer } from '../render/text/measure';
-import { naturalNoteHeight } from '../nodes/describe';
+import { naturalNoteHeight, naturalTextHeight } from '../nodes/describe';
 import {
   addEdges,
   addNodes,
@@ -258,6 +258,16 @@ export interface EditorStore {
   updateNodeById: (id: string, patch: Partial<Omit<DraftNode, 'id'>>, label?: string) => void;
   /** `height` lets a note commit its grown-to-fit box in the same undo step as the text. */
   updateNodeText: (id: string, text: string, options?: { height?: number }) => void;
+  /**
+   * Call at every exit from editing a `text` node, with the resulting text — the just-committed
+   * value on blur/Enter, or the node's own already-committed `text` on an Escape-revert (which
+   * never commits). Deletes the node, as its own undo step, only when it's empty *and* has never
+   * received a real commit (`textOrigin` still `'auto'`) — the fix for an abandoned, never-typed
+   * Text element that would otherwise sit on the canvas invisible forever. A node whose content was
+   * typed and later deliberately cleared (`textOrigin: 'explicit'`) is left alone. No-op for every
+   * other node type, and for a `text` node that isn't actually empty.
+   */
+  finishTextEdit: (id: string, resultingText: string) => void;
   updateEdgeById: (id: string, patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>, label?: string) => void;
   /** Dragging an existing connector's endpoint to a new node/side. */
   reconnectEdge: (
@@ -810,6 +820,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
       if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
       if (before?.type === 'note' && 'noteKind' in patch) next = growNoteToFit(next, id);
+      if (before?.type === 'text' && ('textRole' in patch || 'textBold' in patch || 'textItalic' in patch)) {
+        next = growTextToFit(next, id);
+      }
       const changesKind = KIND_FIELDS.some((field) => field in patch);
       return changesKind ? reinferIncidentEdges(next, id) : next;
     });
@@ -839,6 +852,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       },
       { coalesceKey: `text:${id}` },
     );
+  },
+
+  finishTextEdit(id, resultingText) {
+    if (resultingText.trim()) return;
+    const node = get().document.nodes.find((n) => n.id === id);
+    if (!node || node.type !== 'text' || node.textOrigin !== 'auto') return;
+    get().apply('Delete empty text', (doc) => removeElements(doc, [id]), { selection: EMPTY_SELECTION });
   },
 
   updateEdgeById(id, patch, label = 'Change connection') {
@@ -1717,5 +1737,16 @@ function growNoteToFit(doc: DraftDocument, id: string): DraftDocument {
   const node = doc.nodes.find((n) => n.id === id);
   if (!node || node.type !== 'note') return doc;
   const needed = naturalNoteHeight(node, node.text ?? '', { measurer: getMeasurer() });
+  return needed > node.height ? updateNode(doc, id, { height: needed }) : doc;
+}
+
+/** Same idea as `growNoteToFit`: a role/bold/italic change can make the same text wrap onto more
+ *  lines (a bigger font, a heavier — hence wider — weight), so the box has to be re-checked, not
+ *  just the text re-rendered inside whatever height it already had. Grow-only, never shrinks a box
+ *  sized by hand. */
+function growTextToFit(doc: DraftDocument, id: string): DraftDocument {
+  const node = doc.nodes.find((n) => n.id === id);
+  if (!node || node.type !== 'text') return doc;
+  const needed = naturalTextHeight(node, node.text ?? '', { measurer: getMeasurer() });
   return needed > node.height ? updateNode(doc, id, { height: needed }) : doc;
 }
