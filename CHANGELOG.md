@@ -6,124 +6,41 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
-- A new first screen. An empty Draft Canvas now opens on a blank canvas and every starter it
-  knows, each drawn as its own tiny topology — hover one and a request runs through it. Press
-  Enter to start blank, or use the arrow keys to pick a starter. Search and the empty "Recently
-  edited" list appear once there is something to search or list.
-- Draft Canvas now follows your system's light or dark appearance, and switches with it while
-  open. Pinning a theme from the toolbar or ⌘K still works, and Canvas Settings (or ⌘K's "Match
-  system theme") hands it back to the system. The light/dark button on the home screen is gone.
-
-- Text now has a small, opinionated set of roles — Body, Label, Heading, Title, and Technical (a
-  monospace treatment for endpoints, event names, and other identifiers) — plus Bold, Italic, and
-  left/center/right alignment. Switch roles from the popover or ⌘K's "Text role…", and toggle
-  Bold/Italic with Cmd/Ctrl+B and Cmd/Ctrl+I, even mid-edit. Text is multiline by default now —
-  Enter starts a new line, Cmd/Ctrl+Enter commits — and a Text box grows to fit what you type. An
-  abandoned empty Text element is cleaned up automatically instead of lingering as an invisible
-  object on the canvas — content you deliberately clear stays as a quiet placeholder instead.
-- Two new shape kinds: a Service can be a **Backend for Frontend** (BFF, for adapters that tailor
-  a backend to specific frontends — connectors say *calls*, not *routes*, to distinguish from a
-  Gateway), and a Data Store can be a **Table** — a flat card with a header band for a logical
-  table inside a database, so two tables in one boundary read as a single store.
-- A **Projects** relationship for write-model projections — when a service projects data into a
-  read store, separate from the authoritative *Writes*.
-- A Service's popover offers **Connect Data Store** (add a new store it writes to), and a
-  Gateway's offers **Route to Service** (add a new routed target) — one-click continuations like
-  Add Consumer and Add DLQ.
-- Intent Continuation: Draft Canvas sketches the obvious next move. Select a topic with a
-  publisher and a translucent queue appears beside it, already connected; press Tab (or click it)
-  and it becomes real. A queue without a consumer suggests a worker; a gateway with nothing routed
-  suggests a service. Escape dismisses the suggestion until the node's connections change. Every
-  suggestion follows the same relationship rules as hand-drawn connectors — it is not AI, and
-  nothing leaves your device. With Learn mode on, each suggestion explains itself in one sentence.
-  Canvas Settings has an Intent Continuation switch, and ⌘K can turn it on or off.
-- Dropping a connector on empty canvas now leads with what fits: the picker lists suggestions
-  first, highlights the best one, and shows a live preview where you let go — arrow keys move
-  through every option, Enter or Tab takes it. A queue that already has a consumer offers a
-  dead-letter queue as a suggestion.
-- A connector between two services (or a service and an external system) can be marked
-  **Compensates** — undoing an earlier transaction when a later step fails. It sits in the
-  relationship picker beside *Command* and names itself in the Sequence Diagram.
-- Export now includes a **Sequence Diagram** source file — every flow, aggregated into one
-  coherent Mermaid or PlantUML diagram (each flow its own named group, never blindly merged),
-  with participants, sync/async/response messages, and notes/questions/code read straight from
-  what you've already drawn. Downloads a plain `.sequence.mmd`/`.sequence.puml` file — bring your
-  own Mermaid/PlantUML renderer. "Copy source" and "Copy as Markdown" are also available.
-- Four new starters, all with ready-made flows you can select to dim everything else or step
-  through:
-  - Under **Architectures**: **Backend for Frontend** (a web and mobile experience, each with its
-    own BFF adapter over shared services) and **CQRS** (command side and query side, bridged only
-    by an event).
-  - Under **Patterns**: **Saga – Orchestration** (one coordinator issuing commands to services
-    that each commit locally, with an explicit compensating action) and **Saga – Choreography**
-    (three services chained by the events they publish, each with its own store, no coordinator —
-    a failure is an event too, so a stock rejection triggers a refund). Also **Transactional
-    Outbox** (a service writes its data and outbox record in one transaction; a separate
-    publisher delivers the event afterwards).
-- The canvas can be navigated without a mouse. With an element selected, Option/Alt+Arrow
-  selects the nearest one in that direction; Option/Alt+Shift+Right or +Left follows an outgoing
-  or incoming connection, cycling through more if there are several. Tab now reaches the canvas
-  as a single stop instead of visiting every node individually. A keyboard-focused selection shows
-  a subtly brighter ring than a mouse-selected one.
-- Every element created from the keyboard or ⌘K now opens ready to type a name immediately, and
-  lands sensibly placed even when created several in a row with no mouse movement, instead of
-  stacking on top of each other.
-- The Keyboard Shortcuts sheet (`?`) is now searchable, organized by what you're doing (Essentials,
-  Navigation, Canvas, Diagramming, Flows & Presentation), and generated from the same definition
-  the command palette and context menu use — it can no longer fall out of sync with what's
-  actually bound.
-- The element and connector popovers can be driven from the keyboard: arrow keys move between
-  controls, Home/End jump to the ends.
-- About now has a permanent "What's New" — a version row you can open into the current release's
-  own curated notes, a quiet row of the 3 releases before it, and a "View release history" index
-  of everything further back, grouped by year once there's more than one. Selecting an older
-  release shows its own notes, not an ever-growing accordion. An existing installation that's
-  upgraded past a release with notes gets a small, subtle marker on the homepage and toolbar's
-  About button until it's opened; a fresh install never sees one just because history exists.
+- Interactive home screen with starter previews.
+- Auto-follow system theme.
+- Text: roles, Bold/Italic, alignment, multiline.
+- BFF and Table shapes.
+- Projects relationship.
+- Quick actions: Connect Data Store, Route to Service.
+- Intent Continuation (smart suggestions).
+- Quick Connect picker with previews.
+- Compensates relationship.
+- Sequence Diagram export.
+- Five new starters (BFF, CQRS, Sagas, Outbox).
+- Keyboard navigation (Alt+Arrow, Alt+Shift+Arrow).
+- Keyboard-created elements ready to name.
+- Searchable Keyboard Shortcuts sheet.
+- Keyboard-driven popovers.
+- Release history in About.
 
 ### Fixed
 
-- An element created from the Quick Connect picker now gets the same inferred relationship its
-  connector would have had if you'd drawn it by hand.
-
-- A connector from a person to a service can now be marked as a `query`, not just a `command`.
-- Escape now always exits presentation mode, including when no flow is currently playing — it
-  previously only worked while a flow was actively stepping through.
-- Closing the command palette or a dialog (Keyboard Shortcuts, Export, Canvas Settings, About) now
-  returns keyboard focus to whatever you had focused before opening it, instead of losing it.
-  Those dialogs also trap Tab within themselves while open, and the shortcuts sheet and command
-  palette both focus their own search field the instant they open.
-- Opening the Flows panel with `F` now focuses it immediately — the first flow, or "New flow" on a
-  diagram that doesn't have one yet — instead of leaving keyboard focus wherever it already was.
-- Fit to view (Shift+1) and opening the Keyboard Shortcuts sheet (`?`) now work on non-US keyboard
-  layouts where Shift+1 or Shift+/ don't produce the exact `!`/`?` characters.
-- Escape while editing a note or code attachment now discards the edit, matching every other
-  inline text field in the app — it previously committed instead, the one place Escape meant
-  "keep" rather than "cancel."
+- Quick Connect infers correct relationships.
+- Person-to-Service `query` support.
+- Escape exits presentation mode.
+- Focus returns after closing dialogs.
+- F focuses Flows panel.
+- Non-US keyboard layouts work.
+- Escape in notes discards changes.
 
 ### Changed
 
-- Connectors into a Queue, Topic or Stream now land on the tube itself. A level line from a
-  service to a topic meets the glyph's centre, and the three connection points on a tube's left
-  and right sides sit on the tube, where the connector will actually go. Before, the midpoint sat
-  on the gap between the tube and its caption.
-- Connector captions and labels no longer sit on the line. A label is placed against the run it
-  actually lies on — above a horizontal run, beside a vertical one — so a stepped fan's labels no
-  longer read as struck through, and a label never straddles a bend or arrowhead. Labels carry a
-  faint canvas-toned mask, on screen and in exported SVG.
-- A connector that is meant to be level or plumb but lands a fraction of a pixel off is now drawn
-  as one straight line instead of a stepped path with two hairline bends.
-- The element and connector popovers share one visual system: one shell, one control height, one
-  type size, a small caret pointing at what they belong to, and an entrance that grows from it.
-  Shape-native continuations (Add Consumer, Add Subscriber, Add Data Store, …) lead with a plus
-  in their own row; Delete only turns red when pointed at.
-- Two connectors between the same pair of elements are only nudged apart when they would actually
-  draw on top of each other. Connectors that leave or land on different anchor points keep their
-  own clean routes — a fan-out member no longer drops out of its bundle because of a sibling that
-  never overlapped it.
-- ⌘K groups starters under **Architectures** and **Patterns** instead of one long list.
-- The starter list on a blank canvas and in an empty library is grouped by category and kept to a
-  tidy width, instead of running the full length of the screen.
+- Connector anchors on tubes.
+- Connector labels positioned clearly.
+- Single-line near-straight connectors.
+- Unified popover design.
+- Smart connector nudging.
+- Grouped starter categories.
 
 ## [0.8.0] - 2026-09-10
 
