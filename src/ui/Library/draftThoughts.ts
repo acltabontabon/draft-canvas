@@ -14,12 +14,19 @@ export const DRAFT_THOUGHTS: readonly string[] = [
   'Drop a junction when your arrows start looking like spaghetti.',
   'Queues can have DLQs. Draft Canvas knows that.',
   'Connect a Service to a Topic and the arrow already reads “publishes”.',
+  'Point a Service at a Database and the arrow reads “writes” before you type a word.',
   'Ports live inside the core. The arrow out of one reads “implemented by”.',
   'A flow tells the same diagram one step at a time.',
   `${MOD_SYMBOL}K knows five architectures by name. Try “hexagonal”.`,
   'Export is SVG, PNG, or GIF. Nothing renders on a server.',
   'A boundary around three services is a statement. Name it.',
   'An External System is a box you don’t own. Draft Canvas draws it that way.',
+  'A Backend for Frontend calls its services. A Gateway routes to them — different jobs.',
+  'A saga’s compensation is a new transaction, not a rollback. Draft Canvas draws it so.',
+  'Twelve connection points on every shape, three to a side. Pick one, or let routing decide.',
+  'Turn a flow into a Sequence Diagram, then copy it out as Mermaid or PlantUML.',
+  'Export a diagram encrypted. Only your password opens it again.',
+  'A choreographed saga has no orchestrator. Draft Canvas won’t draw you one.',
 ];
 
 /**
