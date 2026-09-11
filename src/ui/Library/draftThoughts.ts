@@ -14,7 +14,6 @@ export const DRAFT_THOUGHTS: readonly string[] = [
   'Drop a junction when your arrows start looking like spaghetti.',
   'Queues can have DLQs. Draft Canvas knows that.',
   'Connect a Service to a Topic and the arrow already reads “publishes”.',
-  'Point a Service at a Database and the arrow reads “writes” before you type a word.',
   'Ports live inside the core. The arrow out of one reads “implemented by”.',
   'A flow tells the same diagram one step at a time.',
   `${MOD_SYMBOL}K knows five architectures by name. Try “hexagonal”.`,
