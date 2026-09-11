@@ -445,7 +445,14 @@ test.describe('Draft Canvas', () => {
     await newCanvas(page, 'Quick start');
     await expect(page.getByText('Double-click anywhere to start.')).toBeVisible();
 
-    await page.locator(CANVAS).dblclick({ position: { x: 500, y: 320 } });
+    // Click a fixed offset above the empty-state's own starter list, derived from its real
+    // bounding box rather than a guessed pixel — that list is centred and grows as new starters
+    // ship, so a hardcoded y here goes stale (and stayed marginal even before it did: it once sat
+    // less than a pixel above the list before a starter's height nudged it under).
+    const paneBox = (await page.locator(CANVAS).boundingBox())!;
+    const startersBox = await page.locator('.dc-empty-starters').boundingBox();
+    const y = startersBox ? Math.max(24, startersBox.y - paneBox.y - 40) : 320;
+    await page.locator(CANVAS).dblclick({ position: { x: 500, y } });
     await expect(page.locator('.dc-node')).toHaveCount(0);
     const menu = page.getByRole('menu', { name: 'Add element' });
     await expect(menu).toBeVisible();
