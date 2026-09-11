@@ -1,515 +1,298 @@
 # Architecture
 
-Draft Canvas is a single-page React application with no backend. This is the load-bearing map:
-what lives where, and the handful of rules that fail silently if broken.
+> **The one-sentence version:** a serializable document model with a pure renderer bolted to it —
+> everything else is a view.
 
-## Layers
-
-```
-ui/                UI and editor chrome
-  ↓
-canvas/            interaction: selection, dragging, snapping, connecting
-  ↓
-document/          the document model — pure, serializable, framework-free
-  ↓
-storage/           IndexedDB persistence and autosave
-export/            .draftcanvas, SVG, PNG and GIF
-```
-
-Dependencies point one way. `document/` imports neither React nor React Flow, which is what lets
-the file format outlive any decision made above it.
-
-```
-src/
-  document/     types · factory · operations · flow · edgeSemantics · connectorSemantics · validate
-                · migrate · limits
-  storage/      DraftRepository · IndexedDbRepository · MemoryRepository · autosave
-  history/      HistoryStack
-  render/       the shared renderer (see below)
-    text/       fonts · measure · layout
-    code/       highlight · theme
-    svg/        element · emit · markers · document
-    png/        rasterize
-    theme/      tokens
-  nodes/        describe.ts — every node's appearance, as pure functions
-  edges/        routing.ts · describe.ts · bundles.ts
-  canvas/       Canvas · DraftNodeView · DraftEdgeView · projection · snapping · presets
-  continuation/ Intent Continuation — rules · context · engine · materialize (see below)
-  sequence/     Flow → SequenceModel · Mermaid/PlantUML adapters · SVG layout (see below)
-  presentation/ useFlowPlayback
-  learning/     contextual hints and the opt-in "Learn Draft Canvas" mode
-  store/        editorStore · uiStore · selectors · useDocumentSession
-  ui/           Library · Editor · common · theme · personality (Intentional Roughness presets)
-```
-
-## The idea that shapes everything: one renderer
-
-The canvas and the file exporter do not draw things twice. `nodes/describe.ts` turns a node into a
-**display list** (pure); `render/svg/emit.ts` turns that into an SVG element tree;
-`render/svg/element.ts` serializes it. The canvas paints that string, the exporter writes it to a
-file — an export is pixel-identical to the screen. Interactive chrome (handles, resize frames,
-selection rings, inline editors) lives in React/CSS so it can never appear in an exported image.
-Node visuals go through `dangerouslySetInnerHTML` with markup from our own escaping serializer —
-`tests/code-card.test.tsx` proves a `<script>` in a label stays inert text. Text wraps in exactly
-one place, `render/text/layout.ts`; nothing else may wrap.
-
-### Edges are the one exception to "one renderer"
-
-`edges/describe.ts` (SVG export) and `canvas/DraftEdgeView.tsx` (on-screen) are two independent
-implementations of the same connector — nothing enforces that a visual addition to one is mirrored
-in the other. **If you add a new visual to a connector, add it in both places.**
-
-## Canvas boundary
-
-The zustand store (`store/editorStore.ts`) owns the `DraftDocument`. React Flow is a controlled
-view of it — `canvas/projection.ts` derives its arrays during render and preserves object identity
-for unchanged nodes.
-
-**The document is not written during a drag.** Positions stream to the rendered nodes for
-smoothness; the document updates only when the gesture ends, so one drag is one undo entry.
-
-`edges/routing.ts` is the only module that calls React Flow's path helpers, so an exported
-connector traces exactly the path on screen. Two invariants worth knowing:
-
-- **A persisted anchor (`EdgeAnchor` in `document/types.ts`) is never silently moved to a
-  different side** by routing, no matter how the nodes move — only an explicit reconnect changes
-  it.
-- **Smart Routing's shared trunk (`edges/bundles.ts`) is derived presentation state** — never a
-  node, never persisted, never in history or validation. Five bundled connectors are still five
-  rows in `DraftDocument.edges`. It's stored hub-relative rather than as an absolute coordinate,
-  since the document isn't written during a drag and an absolute trunk would lag the branches.
-- **Two connectors between the same pair are lane-siblings only if they would coincide.** `laneIndex`
-  nudges parallel connectors apart, but once every connector of a pair carries anchors at both
-  ends it partitions the pair by where each one touches each node — a saga orchestrator's
-  "reserve" (bottom) and "release" (left side) to one service are two clean routes, not two nudged
-  ones, and the first stays eligible for its fan-out spine. Any anchorless connector in the pair
-  falls the whole pair back to one nudged group, since where `chooseSides` will place it isn't
-  known until render.
-
-#### Relationship model
-
-`document/connectorSemantics.ts`'s `MATRIX`, keyed by `sourceCategory>targetCategory`, is the
-single source of truth every UI surface reads from: the interaction picker, the default
-relation/behavior on a fresh or re-pointed connector, and the subtle warning marker for an unusual
-pairing. Deliberately sparse — an undocumented pairing keeps full, unrestricted freedom; every rule
-here narrows or nudges, never blocks. See [`docs/SEMANTICS.md`](SEMANTICS.md) for the actual rules.
-
-## Semantic vocabulary
-
-The product principle every new primitive, kind, and semantic gets measured against: **Draft
-Canvas models architectural roles and relationships, not implementation technologies.** Describe
-what something does and how it relates, not which vendor, framework, library, or runtime implements
-it — Component/Adapter/Datastore/Queue, never Spring Controller/Kafka Consumer/PostgreSQL/AWS
-Lambda. A technology name is a *label* a user types onto an existing primitive ("Datastore" with
-text "Orders DB" and, if wanted, a second line "PostgreSQL"), never a reason to add a new one. The
-test before adding anything: *if every technology in this architecture were replaced, would the
-concept still make sense?* Component, Adapter, Interface, Datastore, Queue — yes. Kafka, Spring
-Boot, PostgreSQL, AWS Lambda — no.
-
-A second, narrower rule guards the vocabulary against a subtler failure than adding too much:
-**never reuse a semantic element solely because its visual rendering is convenient.** Hexagonal's
-starter once put "Inbound Port"/"Outbound Port" text on a connector's `condition` field — a
-Condition means an `if`/`when` a branch applies, and a port designation isn't one; it happened to
-render as a small bordered chip, which was the only reason it got picked. Visual similarity is not
-semantic equivalence, and a wrong-but-convenient choice here doesn't just look odd — every future
-capability that reads the document model (validation, quick actions, smarter auto-layout, exports)
-inherits whatever the model actually says, not what a screenshot suggested it meant.
-
-**Component** (`document/types.ts`'s `component`/`ComponentKind`) is this principle's first real
-addition: a logical architectural building block *inside* a larger deployment or boundary — a
-domain module, a use-case layer, a ports-and-adapters adapter — with none of Service's deployment,
-network-boundary, or process-boundary implications. Kept deliberately small: `generic` (no kind
-caption, same "unspecified" convention Service's own default kind follows), `module`, `adapter`,
-and `port` — never a kind for what a label already says ("Repository," "Controller," "Use Case" are
-text a user types onto a Component, not a fifth kind to add). Its rendering (`nodes/describe.ts`'s
-`component()`) gives each kind its own small, one-sided departure from a shared plain body — Module
-a tab stepping up from the top edge, Adapter a notch cut into both vertical edges, Port a dashed
-outline with its tag centred under the name — the same "one restrained
-mark per kind" discipline Service's own kinds follow, just quieter throughout: no cap band ever, a
-thinner shared stroke, `neutral` accent by default, and — per an explicit later pass — a noticeably
-smaller default footprint than Service's own (`document/limits.ts`'s `componentWidth`/
-`componentHeight`, ~13%/~18% under `nodeWidth`/`nodeHeight`). The size and weight differences are
-what make Component read as *contained within* something else at a glance, before any label is
-read (Adapter's notch is deliberately cut into *both* vertical edges, not one — see
-`nodes/describe.ts`'s `componentAdapter` for why a single-sided notch baked in a "always faces
-right" assumption a bidirectional primitive can't make); the kind-picker's miniature previews
-(`canvas/componentOptions.tsx`) show these silhouettes
-directly rather than a hand-drawn icon, via the same `ShapePreview` → `describeNode` pipeline
-Service's own kind picker already uses — nothing to keep in sync by hand. For the capability
-matrix, Component resolves to `service` (see `connectorSemantics.ts`'s `resolved()`) purely for
-relationship *vocabulary* — the same "reads/writes/calls" verbs a Service uses — while `categoryOf`
-keeps it as its own, permanent category, never silently folded away: see
-[`docs/SEMANTICS.md`](SEMANTICS.md#node-categories).
-
-**Label/Text** (`type: 'text'`, "Label with no box" in the palette) already existed and already had
-every piece of generic node machinery this needed (move, resize, edit, duplicate, copy/paste,
-undo/redo, theme/personality rendering) — what this pass formalized was the one guarantee that
-makes it safe to use as a zone annotation next to opinionated primitives: it is `generic` in
-`categoryOf`, so it can never become a real endpoint in the capability matrix no matter what it
-sits near or is connected to, and it is never a substitute for an edge's own `semantic`/`label` — an
-annotation like "Driving Adapters" and a relationship caption like "calls" are different concepts
-that happen to both be text.
-
-**Port** (`componentKind: 'port'`) is the Component kind that isn't a thing doing work but a
-*contract*: the interface an application core, a plugin host, or a module defines, and something
-else implements or calls — Hexagonal's inbound/outbound ports, a Component's provided/required
-interfaces, a plugin boundary. An earlier pass had deferred it, guessing the eventual shape would be
-an attachment on a boundary's edge; what actually made it clean was noticing that a port is a
-Component in every structural sense (inside a boundary, never deployable, moved/resized/edited
-like one) and only differs in *what it relates to*. So it is a kind, with the one thing no other
-Component kind has: its own `categoryOf` category and its own capability-matrix rows
-(`connectorSemantics.ts` — a port is called or used, and `implementedBy`; it never folds to
-`service`, so it can't be wired to storage without a nudge). Every connector keeps its runtime
-direction; the word on the connector *leaving* a port is what carries dependency inversion — see
-[`docs/SEMANTICS.md`](SEMANTICS.md#node-categories). What this replaced in the Hexagonal starter
-were two floating "Inbound ports"/"Outbound ports" labels that belonged to nothing, and before
-them an edge `label` naming the crossing that hid the connector's own relationship — and, as ever,
-`condition` is never a stand-in for either.
-
-## History
-
-Snapshot-based, with structural sharing — every operation in `document/operations.ts` returns a
-new document reusing untouched nodes. `beginInteraction`/`endInteraction` bracket a gesture into
-one entry; entries sharing a `coalesceKey` merge, so typing a name is one undo. Viewport changes
-persist but are never recorded.
-
-Side effects must never run inside a React state updater — React invokes updaters twice in
-development, which recorded every drag twice and made undo appear broken.
-
-## Persistence
-
-Two IndexedDB stores. `documents` holds summaries; `bodies` holds the documents, so the library
-lists titles and timestamps without deserializing a single canvas. Autosave (`storage/autosave.ts`)
-debounces at 700 ms with a 4 s ceiling and flushes on `visibilitychange`/`pagehide` — never
-`beforeunload`, which disables the back/forward cache.
-
-A summary also carries the canvas's *fingerprint* (`LibraryShape`, computed by
-`document/shape.ts` on every save): each architectural node's kind and box, scaled to a
-1000-unit frame, plus which of them connect. It is the one body-derived thing in the plaintext
-store, and it is there so the home screen can draw a thumbnail per row without decrypting
-anything. The line it holds is *silhouettes, never words*: no label, note, code, or connector
-text is ever summarised, and anything that would need those belongs in `bodies`.
-`IndexedDbRepository.backfillSummaries()` fills the field in once, at startup, for rows an older
-build wrote — the same fire-and-forget posture as the encryption sweep, and it writes only the
-`documents` store.
-
-### The `src/crypto/` boundary
-
-`bodies` rows are encrypted at rest with AES-256-GCM. `src/crypto/` is the only place that touches
-`crypto.subtle`, and `storage/IndexedDbRepository.ts` is the only caller of it — nothing else in
-the app knows a document is ever anything but plain JSON.
-
-- `keyStore.ts` gets-or-creates a single, profile-wide, **non-extractable** `CryptoKey` in its own
-  IndexedDB store (separate from `bodies`, so neither can take the other down).
-- `documentCipher.ts` encrypts before every `put` and decrypts after every `get`. A GCM
-  authentication failure (tampered ciphertext, wrong key) never overwrites the still-encrypted
-  row — a decrypt failure must not look like an invitation to re-save over the only copy.
-- `passphraseExport.ts` is a second, independent use of `crypto.subtle` for the `.dcenc` export
-  format — it shares no key material with the profile's local storage key.
-
-Failures degrade rather than destroy: IndexedDB unavailable falls back to an in-memory repository
-and the UI says so plainly; a corrupt record is repaired through the same validator as an imported
-file.
-
-## Flows and presentation
-
-A `DraftFlow` narrates connectors that already exist — it never duplicates a node or an edge, only
-orders references to them (`document/flow.ts`). A step usually references one connector, but can
-also spotlight extra nodes/edges or pin its own viewport (a "frame" step). This is deliberately
-distinct from **Focus Mode** (`store/editorStore.ts`'s `FocusState`) — Focus is an arbitrary,
-unordered highlight available any time in edit mode; a frame step is an ordered member of one
-specific Flow, visible only during that Flow's playback.
-
-Multiple Flows can share early steps and diverge later, since a step only ever references a
-connector that already exists — nothing is copied. A reply is just another connector, not a
-distinct concept.
-
-There is one surface for flows: the Flows panel (`ui/Editor/FlowPanel.tsx`), toggled by the
-toolbar's "Flows" button or `F`. Its rows are the flows; clicking one makes it the **active flow**
-(`editorStore.selectedFlowId`) — the panel highlights it, the toolbar reads "Flows · Checkout",
-its step badges show on the canvas, and a selected connector's chip offers "Add to Checkout" as a
-one-click append. "Diagram" is a real first row for leaving that context. Names are edited in
-place, and every "new flow" entry point (the panel, the palette, a connector's chip, "Start flow
-here") creates the flow *and* opens its name field via the one-shot
-`uiStore.flowRenameRequestId`, so naming is part of creating.
-
-Selecting a flow also turns on the **lens** — members lit, the rest dimmed — but only once it has
-something to show: `lensFlow` (`store/editorStore.ts`) is the single rule every canvas element
-and fit-to-view consult, and it is `undefined` during playback/Focus and for an empty flow, so a
-brand-new flow never greys out the whole diagram. Likewise `flowIsPlayable` (`document/flow.ts`)
-gates Present everywhere: the panel's ▶, the picker, and the palette never offer an empty flow.
-Connector replacements keep a flow's story intact — inserting a worker on `A → B` rewrites that
-step into `A → W`, `W → B` (`spliceEdgeInFlows`) rather than losing the beat.
-
-## Sequence Diagram export
-
-`src/sequence/` turns the whole document's Flows into a coherent Mermaid or PlantUML sequence
-diagram — a derived **export format**, reached from the Export dialog (`ExportDialog.tsx`), not a
-Draft Canvas editing/viewing mode. There is no in-app preview and no Mermaid/PlantUML rendering
-dependency: Draft Canvas's responsibility ends at producing correct, readable, deterministic
-source text. Rendering that text is the job of whatever tool the user already reaches for
-(Mermaid Live Editor, a PlantUML renderer, an IDE plugin, GitHub/GitLab, a docs pipeline).
-
-The pipeline is one direction, each stage a pure, independently testable function:
-
-```
-DraftDocument (every playable Flow)  ->  buildSequenceModel (build.ts)  ->  SequenceModel
-                                                                                  |
-                                                              +-------------------+-------------------+
-                                                              v                                       v
-                                                        toMermaid (mermaid.ts)                 toPlantUml (plantuml.ts)
-                                                              |                                       |
-                                                              v                                       v
-                                                         <name>.sequence.mmd                   <name>.sequence.puml
-```
-
-`buildSequenceModel(doc)` aggregates *every playable Flow* into one model — "1 Flow = 1 diagram" is
-deliberately not the shape: a Saga's "Happy Path" and "Compensation" Flows export as one coherent
-`payment-saga.sequence.mmd`, not two separate files. Each Flow becomes its own `SequenceGroup`
-(rendered as `rect … end` + a synthesized title Note in Mermaid, a native `group … end` in
-PlantUML) — never blindly concatenated. Participants get a stable internal id (never emitted) plus
-a human-readable, collision-safe `alias` (`alias.ts`) that IS emitted, and are deduplicated across
-every Flow by resolved node identity, in pure first-appearance order (`doc.flows` array order is
-the user's own lever for "who's introduced first" — see `build.ts`'s own reasoning for why this
-beats any kind-based heuristic). A connector whose `semantic` is purely structural (`dependsOn`,
-`implementedBy` — see `structural.ts`) never becomes a message: it describes a static architectural
-fact, not something that happens at a point in time.
-
-`build.ts` walks each flow's `steps` via `presentation/useFlowPlayback.ts`'s own `resolveFlowStep`
-(the existing "interpret a step" primitive — not reimplemented here), then `flatten.ts` collapses
-any Junction crossing into a single message (see "Junctions are semantics-transparent" in
-`docs/SEMANTICS.md`) and `label.ts` resolves each message's text through the same "richest
-available label" priority every connector caption already uses
-(`document/edgeSemantics.ts`'s `relationshipCaptionLabel`), with one added fallback tier for a
-pairing that has no explicit `semantic` at all. A request only ever gets a paired response message
-when the underlying `DraftEdge.hasResponse` is explicitly `true` — never inferred from a call
-merely looking synchronous, the same rule `useFlowPlayback`'s own two-phase request/response pulse
-already follows. A Note, Question, Warning, Decision, or Code node/attachment contextually
-associated with an exported message becomes a `SequenceNote` annotation — never a fake message,
-never a fake participant — rendered as a native `Note over …`/`note over … end note`.
-
-`mermaid.ts`/`plantuml.ts` are independent string builders over the same `SequenceModel` — neither
-is derived from the other, and neither re-derives semantics of its own; both consume exactly what
-`build.ts` decided. `src/export/sequence.ts` downloads the result as a plain text file
-(`downloadText`) — there is no rendered image export from this feature.
-
-Naming note: this is unrelated to `DraftSettings.showSequence` (the numbered step badges a flow's
-connectors can show on the canvas) — an older, internal-only concept from before Flows existed (see
-`docs/SCHEMA.md`'s v1→v2 migration). "Sequence Diagram" was chosen specifically to avoid
-overloading that word for a new, user-facing feature.
-
-## Starters
-
-`src/starters/` holds ten authored opening compositions and the function that turns one into
-document elements. *Starter* is the umbrella; each is one architectural idea at one scope, and the
-catalog's `category` splits them for discovery only: **Architectures** answer "how are the major
-parts of this system organized?" (Monolith, Modular Monolith, Microservices, Event-Driven,
-Hexagonal, Backend for Frontend, CQRS — the last two are strictly patterns, but they shape a
-system's structure enough to sit here), **Patterns** answer "how do I solve this recurring design
-problem?" (Saga – Orchestration, Saga – Choreography, Transactional Outbox). A pattern starter is drawn at the scope of
-the problem it solves, never padded to resemble an architecture, and nothing implies the starters
-are alternatives — a real system is Event-Driven *with* CQRS *and* an outbox. It is a *starter*,
-not a template: everything it creates is an ordinary `DraftNode`/`DraftEdge`/`DraftFlow`, and
-nothing anywhere records that a node came from one. That is the whole design — there is no starter
-object to keep consistent, no mode to leave, and no second way to edit what it made.
-
-The module imports only `document/`, and is not part of the `.draftcanvas` format. Three rules
-carry the weight:
-
-- **Composition is authored, layout is not solved.** There is no auto-layout library here, and for
-  ten diagrams whose structure is known in advance that is the right answer: a solver produces
-  something defensible, and a starter has to produce something *composed*. `catalog.ts` is literal
-  coordinates; `compose.ts` is a handful of spacing constants, not an engine.
-- **Relationships come from the matrix, never from the catalog.** `build.ts` runs every connector
-  through `inferRelationship` and stamps `semanticsOrigin: 'inferred'`, the same way
-  `insertWorkerOnEdge` and `addConsumer` do. A starter cannot state a relationship the rest of the
-  app would disagree with, and changing a node's kind afterwards re-derives its connectors. A
-  `StarterEdgeSpec` may still set an explicit `label` (Hexagonal's `Use Cases` → `Domain Model`/
-  `Persistence Adapter`/`Integration Adapter` all read `uses`, since Component resolves through
-  `service`'s matrix rows and `calls` is genuinely the wrong word for a plain internal dependency)
-  — that overrides only what's displayed; the underlying `semantic`/`kind` are exactly as derived
-  and re-inference-eligible as any other starter connector. Never `condition`: a Condition means a
-  condition, and a relationship word isn't one — see "Semantic vocabulary" below. An earlier
-  revision of Hexagonal used this same `label` to name the ports themselves ("Inbound Port"/
-  "Outbound Port"); a later pass removed that, since it hid each connector's actual relationship
-  behind a position in the architecture and rode the app's more prominent, bordered-chip caption
-  style while doing it — the opposite of the "quiet annotation" it was meant to be. A spec may also
-  author facts that aren't relationships at all: a queue's `deliveryRole` (Event-Driven's DLQ), an
-  edge's `deliveryAttempts` (its "after 3 attempts" caption), click-to-reveal `attachments` on a
-  node or a connector (an example event payload, an operational note), and a `condition` only where
-  a branch genuinely has one (Microservices' gateway routes carry their route rules; the saga's
-  compensation runs "if inventory fails") — the connector's own `semantic`/`kind`/`async` are still
-  exactly what the matrix says. The one sanctioned nudge is `StarterEdgeSpec.semantic`: a relation
-  the matrix *already offers* for the pairing, picked over its default and stamped
-  `semanticsOrigin: 'explicit'` exactly as the inspector would (CQRS's query API `reads` its store
-  rather than `service>database`'s default `writes`). `build.ts` ignores anything the matrix
-  doesn't list, so the rule holds.
-- **A starter may ship flows.** `ArchitectureStarter.flows` names connectors by their
-  starter-local `key` and builds ordinary `DraftFlow`s alongside the nodes and edges — inserted in
-  the same undo entry (`addNodesWithEdges` takes them), saved in the same document. It is how a
-  starter carries a second reading of one diagram without a second diagram: a saga's happy path
-  and its compensation, CQRS's write path and read path.
-- **A starter reaches for the primitive that's actually true, not the one that's already drawn and
-  looks fine.** Hexagonal's Use Cases/Domain Model/Persistence Adapter/Integration Adapter are
-  `component`, not `service` — none of them is independently deployable, and rendering them as
-  Service purely because Service already existed and looked plausible was exactly the "convenient
-  shape, wrong meaning" mistake "Semantic vocabulary" (below) exists to rule out.
-- **Nothing here sets appearance.** No colour, no font, no personality — only `accent`, which is an
-  enum the theme resolves. Every starter is therefore correct in both themes and all three
-  Intentional Roughness presets without knowing they exist.
-
-Insertion is `editorStore`'s `insertStarter`: `freeOriginFor` (one pass over the nodes, treating
-boundaries as obstacles, unlike `placeNear`) picks a spot clear of existing content, and a single
-`addNodesWithEdges` makes the whole architecture one undo entry.
-
-## Intent Continuation
-
-`src/continuation/` is the deterministic "next move": given one node and its one-hop surroundings,
-which technically valid, architecturally useful additions is Draft Canvas confident enough to
-sketch in place? A Topic with a publisher and no delivery path gets a ghost Queue; a Queue with
-inbound and no consumer gets a ghost Worker; a Gateway with nothing routed gets a Service. Tab or a
-click on the ghost adds it as one undo step; Escape waves it away for that node until its
-connections change; drawing anything yourself simply makes it stale. Silence is the default — a
-Service, an Actor, a Data Store, a finished shape offer nothing. Not AI: no network, no telemetry,
-no adaptation, and the same document, selection and dismissals always produce the same answer.
-
-The layering is the point:
-
-- **Validity is the matrix, never a rule.** `engine.ts` resolves every connector a rule proposes
-  through `capabilityFor` and drops the candidate unless the pairing has a default relation and no
-  `unusual`/`questionable` status. A rule says *when it applies* and *what it adds*; it cannot
-  surface a pairing `connectorSemantics.ts` would not infer, and follows the matrix if that changes.
-- **Ranking is declaration order.** `rules.ts` is a static array in two tiers: `primary` ("the
-  thing you were about to draw" — may appear unprompted, on selection) and `secondary` ("a
-  defensible companion" — only once the user shows intent, by dropping a connector on empty
-  canvas). No scores, no weights; a weaker idea is not a rule.
-- **Suppression is generic.** An equivalent relationship already leaving the node (compared on
-  semantic, so a hand-drawn `Queue → Service` counts as the consumer a `Queue → Worker` rule would
-  add), a dismissal pinned to the node's exact neighborhood fingerprint, and the tier gate all live
-  in the engine, not in rules.
-- **Preview is the result.** `materialize.ts` turns an offer into real, positioned nodes and
-  connectors — `placeNear` for placement, `inferRelationship` for semantics, the same helpers
-  `addConsumer`/`addDeadLetterQueue` use — once. The ghost draws those objects; accepting commits
-  those objects through `addNodesWithEdges`. Nothing is computed twice, so they cannot drift. If
-  there is no clear place to put it, there is no preview.
-- **Presentation knows nothing about topics.** The offer lives in `uiStore.continuation`
-  (ephemeral, never in history or the document). `canvas/ContinuationGhost.tsx` draws it inside
-  the viewport portal with the real `describeNode` and routing pipelines at reduced opacity; the
-  Quick Connect picker (`canvas/quickConnectItems.ts`) lists the same offers first and previews
-  whichever row is highlighted. Both accept through one store action.
-
-Two moments produce an offer. *Select* — a single node, nothing else happening — is the quiet one,
-where only a `primary` rule may speak and `canvas/useContinuation.ts` re-evaluates only when a
-document write, the selected node, a dismissal or a mode gate changes, never on pointer movement.
-*Drop* — a connector released on empty canvas — is explicit, so every rule that applies is offered,
-ordered, with the picker's standing presets after them; a ghost dismissed earlier is still listed
-there, since Escape meant "not unprompted", not "never". Each rule carries one authored `reason`
-sentence; Learn mode shows it under the ghost's pill, and `docs/SEMANTICS.md` lists them.
-
-## Command surface
-
-`src/commands/registry.ts`'s `commandsFor(ctx)` is a pure function from the current
-selection/mode/document to the commands that make sense right now — re-derived on every keystroke,
-never registered ahead of time or kept in a store. Every command's `run` is one call into an
-existing `editorStore`/`uiStore` action, so the palette introduces no second way to mutate the
-document. The right-click context menu (`commands/contextMenu.ts`) is a second surface over the
-identical command functions, filtered to a small per-target subset and excluding any command that
-returns a `CommandStage` (a follow-up picker, e.g. "Connect to…") — it's deliberately flat, no
-flyouts. The empty canvas's starter row (`ui/Editor/EmptyState.tsx`) is a third
-surface over the same commands, for the same reason: two entry points that build their own
-behaviour would eventually disagree about one of them.
-
-One trap worth knowing: `CommandContext.editor` holds live *actions* but a *snapshot* of state, so
-a command that creates something cannot then look it up in `ctx.editor.document` — that document
-predates its own mutation. Such a command works from what the store action returned; see
-`focusBounds` in `commands/search.ts`.
-
-## Keyboard model
-
-One handler, one focus model, one source of truth for shortcut strings — the goal was a coherent
-keyboard grammar, not a pile of independently-added bindings.
-
-**Dispatch.** `useKeyboard` (private, inline in `ui/Editor/EditorScreen.tsx`) is still the one
-place a key is actually bound to an action — that didn't change. What changed is what backs each
-binding: every shortcut that also has a palette/context-menu presence carries its display string
-on the matching `Command.shortcut` field in `commands/registry.ts`, read through
-`commands/shortcutLookup.ts` rather than typed a second time anywhere else (see "Shortcuts modal"
-below). A handful of continuous gestures (Space-to-pan, arrow-key nudge, drag-to-connect) aren't
-commands at all — a single key doesn't name a drag — and stay hand-documented as prose.
-
-**Canvas focus.** `.dc-canvas` (`canvas/Canvas.tsx`) is the diagram's one real Tab stop —
-`nodesFocusable`/`edgesFocusable` are both `false` on `<ReactFlow>`, so individual nodes/edges
-carry no native `tabIndex` of their own (previously every node *was* independently tabbable,
-React Flow's own default, which doesn't scale past a handful of elements and ran its own
-Enter/Space/Escape/arrow handling uncoordinated with `useKeyboard`'s). Selection *is* the
-keyboard-focus indicator once you're on the canvas — a virtual-focus model, the same one
-`canvas/ContextMenu.tsx`/`InspectorSelect.tsx` already used for their own row highlighting — real
-DOM focus never leaves `.dc-canvas` itself. `:focus-visible` on that one element (browsers already
-distinguish keyboard-origin focus from a mouse click on a plain `tabIndex` element) is what drives
-the extra glow `canvas.css` adds around a keyboard-navigated selection, with no extra store state.
-
-**Navigation.** `canvas/spatialNav.ts` is a small pure module (direction/distance/alignment
-scoring, no DOM/store dependency, its own unit tests) behind two capabilities layered onto the
-existing arrow-key nudge without changing it: Alt+Arrow moves the selection to the nearest element
-in that direction; Alt+Shift+Left/Right walks the graph along outgoing/incoming connections,
-cycling through a fixed anchor's siblings on repeated presses in the *same* direction, but
-starting a fresh walk from wherever you are the moment the direction changes (`EditorScreen.tsx`
-keeps this small bit of cycle state in a ref — not in `spatialNav.ts`, which stays stateless).
-
-**Shortcuts modal.** `ui/Editor/ShortcutSheet.tsx`'s `SECTIONS` array is hand-curated (which rows
-exist, how they're grouped, their prose) but never hand-types a key string for anything that is a
-real `Command` — a `CommandRow` names a command id and resolves its chip and, absent an override,
-its description through `shortcutLookup.ts`. That module can't call `commandsFor` once and get
-"everything" back, since command presence is state-dependent (`undo` only exists once there's
-history, `paste` only once the clipboard is non-empty) — it builds one small, never-rendered
-document and calls the registry's builder functions a handful of times with different selections,
-each pass chosen to surface one more conditionally-visible group, merged by id. `tests/shortcut-
-catalog.test.ts` cross-checks the result against `SECTIONS` in both directions: a command with a
-shortcut and no matching row fails the test, and so does a row naming an id with no resolvable
-shortcut — the two cannot drift apart silently again.
-
-## Untrusted input
-
-`document/validate.ts` is the only door into the document model, used for both imported files and
-records read back from IndexedDB. Its policy is **repair, don't reject**: a diagram with three
-broken edges opens with the other ninety-seven intact, and says what it dropped. It enforces hard
-caps (see `document/limits.ts`), clamps coordinates, strips control characters, renames duplicate
-ids, and detaches cyclic groups. Colour is an enum, not a string, so no user-supplied value ever
-reaches an SVG `fill`.
-
-## Schema evolution
-
-`document/types.ts` is the source of truth for the document shape — every field on
-`DraftDocument`, `DraftNode`, `DraftEdge`, and `DraftFlow` is defined there.
-
-`document/migrate.ts` is the only place a version number is read. Adding a format version means
-bumping `CURRENT_VERSION` and adding one function there, taking a version-`n` object and returning
-a version-`n+1` one. An older file opens through the migration chain; a newer one is refused with a
-message naming both versions, rather than being silently mangled.
-
-## Testing
-
-| Layer | Where |
+| Looking for | Go to |
 | --- | --- |
-| Document model, operations, flows | `tests/document.test.ts`, `tests/flow.test.ts` |
-| Relationship model, semantic/kind inference and re-inference | `tests/connector-semantics.test.ts`, `tests/edge-semantics.test.ts`, `tests/edge-kinds.test.ts` |
-| Round trip and file format | `tests/serialization.test.ts` |
-| Hostile and malformed imports | `tests/import-validation.test.ts` |
-| Undo, redo, drag granularity, coalescing | `tests/history.test.ts` |
-| IndexedDB, autosave, failure modes | `tests/storage.test.ts` (`fake-indexeddb`) |
-| Text layout, highlighting, SVG export, escaping | `tests/rendering.test.ts` |
-| XSS through node content | `tests/code-card.test.tsx` |
-| The privacy claim | `tests/privacy.test.ts` |
-| 100 nodes / 180 edges | `tests/performance.test.ts` |
-| Intent Continuation rules, matrix guard, dismissal, materialization, accept/undo | `tests/continuation.test.ts`, `tests/quick-connect-items.test.ts`, `e2e/intent-continuation.spec.ts` |
-| The critical journey, in a browser | `e2e/critical-journey.spec.ts` |
+| Why it's built this way | this document |
+| What it understands about a diagram | [`SEMANTICS.md`](SEMANTICS.md) |
+| The file format and migrations | [`SCHEMA.md`](SCHEMA.md) |
+| "Never break this" | [`AGENTS.md`](../AGENTS.md) |
+| Threat model and keys | [`SECURITY.md`](../SECURITY.md) |
 
-The end-to-end test drives the real UI through the whole journey: build a diagram, connect and
-number it, undo, redo, reload, export all three formats, delete locally, import, and edit again.
+---
+
+## The problem
+
+Someone is in a meeting that suddenly needs a diagram. A few minutes, no appetite for a login
+screen, a rough architecture in their head.
+
+```
+speed          over   completeness
+opinion        over   configurability
+throwaway      but    exportable without disappointment
+```
+
+---
+
+## Principles
+
+| # | Principle | What it buys |
+| --- | --- | --- |
+| 1 | **The document is the product** | The code is one reader of it. A file drawn today outlives every framework decision above it. |
+| 2 | **Local-first is enforced, not promised** | A test fails on any network primitive in `src/`; the CSP makes cross-origin requests impossible. |
+| 3 | **One renderer** | Screen and export are the same drawing, not two that agree most of the time. |
+| 4 | **Model meaning, not technology** | Component, Adapter, Queue — never Kafka, Spring, Lambda. |
+| 5 | **Suggest, never block** | Rules narrow and propose. None forbids. |
+| 6 | **Derived beats stored** | Nothing recomputable earns a migration, a validator and an undo entry. |
+| 7 | **Deterministic, not clever** | Same document + selection → same answer. No model, no network, no adaptation. |
+| 8 | **Degrade, never destroy** | Worst case is a smaller diagram, never a lost one. |
+| 9 | **One surface per capability** | Palette, context menu and shortcut are three names for one store action. |
+
+Two of these carry their own test before they're allowed to be called true:
+
+- **#4's admission test** — *if every technology in this architecture were replaced, would the
+  concept still make sense?* Component, Adapter, Datastore, Queue: yes. Kafka, PostgreSQL, Lambda:
+  no. A technology name is a label a user types onto a primitive, never a reason to add one.
+- **#2's build test** — `tests/privacy.test.ts` greps the app's own source for `fetch`,
+  `XMLHttpRequest`, `WebSocket`, `sendBeacon`, `eval`. See [`PRIVACY.md`](PRIVACY.md).
+
+---
+
+## Shape of the system
+
+```mermaid
+flowchart TD
+    UI["ui/ — chrome, panels, dialogs"]
+    CANVAS["canvas/ — select · drag · snap · connect"]
+    STORE["store/ — editorStore · uiStore"]
+    RENDER["render/ · nodes/ · edges/<br/><i>appearance as pure functions</i>"]
+    DOC["document/ — the model<br/><i>pure · serializable · framework-free</i>"]
+
+    subgraph SIDE["hangs off the model"]
+        direction LR
+        STORAGE["storage/ · crypto/"]
+        EXPORT["export/"]
+    end
+
+    UI --> CANVAS
+    CANVAS --> STORE
+    CANVAS --> RENDER
+    STORE --> DOC
+    RENDER --> DOC
+    SIDE --> DOC
+
+    style DOC fill:#1f6feb,color:#fff,stroke:#1f6feb
+```
+
+**Every arrow points down toward `document/`, and `document/` points at nothing.** It imports
+neither React nor React Flow. That single rule is what makes the file format survivable.
+
+| Area | What lives there |
+| --- | --- |
+| `document/` | types · operations · flow · semantics · validate · migrate · limits |
+| `render/` | text layout · code highlighting · SVG emit · PNG rasterize · theme |
+| `nodes/`, `edges/` | appearance as pure functions; routing and bundling |
+| `canvas/` | the React Flow surface, projection, snapping, spatial nav |
+| `store/` | `editorStore` (the document) · `uiStore` (ephemeral UI) |
+| `storage/`, `crypto/` | persistence, autosave, encryption at rest |
+| `commands/` | one registry the palette, menu and shortcut sheet all read |
+| `starters/` `continuation/` `sequence/` `presentation/` `learning/` | capabilities derived from the model |
+
+Library and editor are two states of one screen (`src/App.tsx`, no router) — which is why the build
+can be served from any path.
+
+---
+
+## One renderer
+
+Principle #3, drawn:
+
+```mermaid
+flowchart LR
+    NODE["DraftNode"] --> DESC["describeNode()<br/><i>pure → display list</i>"]
+    DESC --> EMIT["SVG emit"]
+    EMIT --> SCREEN["🖥 canvas"]
+    EMIT --> FILE["📄 .svg / .png / .gif"]
+
+    CHROME["handles · resize frames<br/>selection rings · inline editors"] -.->|React + CSS only| SCREEN
+
+    style DESC fill:#1f6feb,color:#fff,stroke:#1f6feb
+```
+
+Interactive chrome lives in React/CSS *specifically* so it can never leak into an exported image.
+Text wraps in exactly one module; a second wrapper would agree most of the time, which is worse
+than not agreeing at all.
+
+> ⚠️ **Connectors are the exception.** On-screen and exported edges are two independent
+> implementations. Nothing enforces parity — a new badge, dash or chip must be added in **both**.
+
+---
+
+## The canvas boundary
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant RF as React Flow
+    participant S as editorStore
+    participant H as History
+
+    U->>RF: pointer down, drag…
+    RF-->>RF: positions stream locally (smooth)
+    Note over S,H: document untouched
+    U->>RF: pointer up
+    RF->>S: commit once
+    S->>H: 1 gesture = 1 undo entry
+```
+
+The store owns the document; React Flow is a *controlled view*, projected during render. The
+document never carries half-finished state.
+
+---
+
+## Core concepts
+
+### The document model
+
+Plain data. Closed enums. No functions. Every mutation in `document/operations.ts` is a pure
+function returning a new document that **reuses untouched nodes** — that structural sharing is what
+makes snapshot history affordable and "what changed?" answerable by identity.
+
+### Relationship model
+
+One capability matrix, keyed by the categories of the two endpoints, is the single source of truth
+for what a connection probably means.
+
+```mermaid
+flowchart LR
+    M["capability matrix<br/><i>sourceCategory › targetCategory</i>"]
+    M --> A[relation picker]
+    M --> B[default on a new edge]
+    M --> C[unusual-pairing nudge]
+    M --> D[starter composition]
+    M --> E[continuation engine]
+
+    style M fill:#1f6feb,color:#fff,stroke:#1f6feb
+```
+
+Deliberately **sparse** — an undocumented pairing keeps full freedom. The matrix being *one* thing
+is what makes the rest safe: a starter can't state a relationship the inspector would disagree
+with, and a suggestion can't propose a pairing the app wouldn't have inferred itself. Rules:
+[`SEMANTICS.md`](SEMANTICS.md).
+
+### Flows and presentation
+
+A flow **narrates connectors that already exist** — it orders *references*, never copies.
+
+```mermaid
+flowchart LR
+    subgraph D["one diagram — drawn once"]
+        API["API"] -->|a| ORD["Orders"]
+        ORD -->|b| PAY["Payments"]
+        ORD -->|c| REF["Refunds"]
+    end
+
+    F1["<b>Flow: happy path</b><br/>a → b"]
+    F2["<b>Flow: compensation</b><br/>a → c"]
+```
+
+So two flows share early steps and diverge later, and one diagram carries both stories. Playback,
+the lens, step badges, GIF export and sequence export are all readings of that same ordered list.
+
+### History
+
+Snapshot-based over the shared-structure model. A gesture brackets into one entry; entries in the
+same continuous edit merge, so typing a name is one undo. Viewport changes persist but are never
+recorded — moving the camera is not an edit.
+
+### Persistence and the crypto boundary
+
+```mermaid
+flowchart TD
+    APP["the app<br/><i>sees plain JSON, always</i>"]
+    REPO["IndexedDbRepository<br/><i>the only caller of crypto/</i>"]
+    CIPHER["crypto/ — the only caller of crypto.subtle"]
+    SUM[("documents<br/>titles · timestamps · silhouette")]
+    BOD[("bodies<br/>🔒 AES-256-GCM")]
+    KEY[("key store<br/>non-extractable")]
+
+    APP --> REPO
+    REPO --> SUM
+    REPO --> CIPHER --> BOD
+    CIPHER --> KEY
+
+    style CIPHER fill:#1f6feb,color:#fff,stroke:#1f6feb
+```
+
+The two-store split is what lets the library list itself without deserializing — or decrypting — a
+single canvas. The fingerprint drawn as a library thumbnail is **silhouettes, never words**.
+
+Failure posture: a failed decrypt never overwrites the only copy; no IndexedDB falls back to memory
+and says so plainly.
+
+### Untrusted input and schema evolution
+
+```mermaid
+flowchart LR
+    I1[file import] --> V
+    I2[".dcenc (decrypted)"] --> V
+    I3[clipboard paste] --> V
+    I4[IndexedDB read] --> V
+    V["migrate → validate<br/><b>repair, don't reject</b>"] --> DOC["live document"]
+
+    style V fill:#1f6feb,color:#fff,stroke:#1f6feb
+```
+
+One door, no second less-careful path. A diagram with three broken edges opens with the other
+ninety-seven intact and reports what it dropped. Enums whitelisted, coordinates clamped, ids
+de-duplicated, cycles detached — colour is an enum, so no user string ever reaches an SVG `fill`.
+
+Version numbers are read in exactly one place. A newer file is refused *by name*; an older one
+walks one function per transition. Contract: [`SCHEMA.md`](SCHEMA.md).
+
+### Derived capabilities
+
+Four features are best understood as **derivations of the model** — that framing is what keeps them
+from becoming separate systems.
+
+| Capability | Derives | The rule that keeps it honest |
+| --- | --- | --- |
+| **Starters** | opening compositions → ordinary nodes/edges/flows | Composition is authored; relationships come from the matrix; nothing sets appearance. No document records that a node came from one. |
+| **Intent Continuation** | one node + its neighbourhood → the next move | Validity is the matrix. Ranking is declaration order. The preview *is* the result, materialized once. Silence is the default. |
+| **Sequence export** | every playable flow → one Mermaid/PlantUML file | An export format, not a mode. Responsibility ends at correct, deterministic text. |
+| **Commands** | selection + mode + document → what makes sense now | Re-derived, never registered. Each one calls an existing store action. |
+
+### Keyboard model
+
+One handler, one focus model, one source of truth for shortcut strings. The canvas is **a single
+Tab stop**, not a few hundred — selection is the keyboard-focus indicator, a virtual-focus model
+that scales. Shortcut strings live on the commands themselves, and a test cross-checks the shortcut
+sheet against the registry in both directions.
+
+---
+
+## The two seams
+
+Both are knowing departures from the principles above, and both bite silently:
+
+| Seam | Failure mode |
+| --- | --- |
+| Two independent connector renderers | A visual added on-screen is missing from every export, and nobody notices for weeks. |
+| Side effects inside a React state updater | Dev mode runs updaters twice — this once recorded every drag twice and made undo look broken. |
+
+---
+
+## Testing posture
+
+Organized around guarantees, not modules: the model and its operations · round-tripping and
+migration · hostile imports · undo granularity · storage failure modes · text layout and SVG
+escaping · the privacy claim · performance at scale · and one browser run of the whole journey —
+build, connect, undo, reload, export, delete, import, edit.
+
+> **Anything this document calls a principle should have a test that fails when it stops being
+> true.**
+
+---
 
 ## Deliberately not built
 
-Authentication, accounts, cloud sync, collaboration, comments, AI generation, template galleries,
-and icon packs for any cloud provider. Each would be a reasonable product; none of them is this
-one. Kept out of the way rather than designed for: Mermaid import/export, image nodes, and PWA
-install.
+```
+accounts · cloud sync · collaboration · comments
+AI generation · template galleries · cloud-provider icon packs
+```
+
+Each would be a reasonable product; none of them is this one.
+
+Kept out of the way rather than designed for: Mermaid import, image nodes, PWA install.

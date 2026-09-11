@@ -4,7 +4,7 @@ Draft Canvas has no backend, so most of the usual questions ("is your API rate-l
 you rotate credentials") don't apply. What's left is the local encryption model, and this document
 is the honest account of what it does and doesn't do. See also [`docs/PRIVACY.md`](docs/PRIVACY.md)
 for what's stored and what leaves the machine (nothing), and
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#the-srccrypto-boundary) for the module boundary.
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#persistence-and-the-crypto-boundary) for the module boundary.
 
 ## Threat model
 

@@ -168,7 +168,7 @@ describes a real runtime interaction and is never excluded.
 ## Intent Continuation rules
 
 The next moves Draft Canvas will sketch for a selected node (see
-[`docs/ARCHITECTURE.md`'s Intent Continuation](ARCHITECTURE.md#intent-continuation)). Every
+[`docs/ARCHITECTURE.md`'s Intent Continuation](ARCHITECTURE.md#derived-capabilities)). Every
 connector a rule adds is inferred from the capability matrix above — a rule that proposed a pairing
 the matrix does not offer, or flags `unusual`, is dropped by the engine before it can show. Order
 is ranking. `primary` may appear unprompted on selection; `secondary` only in the picker a
