@@ -243,7 +243,8 @@ test.describe('attachments', () => {
     await card.getByRole('button', { name: 'Edit attached detail' }).click();
     const editor = card.locator('.dc-attachment-editor-code');
     await editor.fill('SELECT * FROM accounts;');
-    await page.keyboard.press('Escape');
+    // Outside click commits (Escape now discards — see the dedicated test for that).
+    await page.mouse.click(60, 60);
     await expect(card).toHaveCount(0);
 
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
@@ -274,6 +275,36 @@ test.describe('attachments', () => {
     const detachedBox = (await detached.boundingBox())!;
     expect(Math.abs(detachedBox.width - codeBoxBefore.width)).toBeLessThan(4);
     expect(Math.abs(detachedBox.height - codeBoxBefore.height)).toBeLessThan(4);
+  });
+
+  test('Escape while editing an attachment discards the edit, matching every other inline editor', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Escape discards an attachment edit');
+    await create(page, 'Service', { x: 350, y: 320 });
+    await create(page, 'Code', { x: 750, y: 320 });
+
+    const service = page.locator('.dc-node[data-type="service"]');
+    const code = page.locator('.dc-node[data-type="code"]');
+    const serviceBox = (await service.boundingBox())!;
+    const serviceCenter = { x: serviceBox.x + serviceBox.width / 2, y: serviceBox.y + serviceBox.height / 2 };
+
+    const release = await dragNodeCenterTo(page, code, serviceCenter);
+    await release();
+    await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
+
+    await page.locator('.dc-attachment-badge').click();
+    const chip = page.locator('.dc-attachment-chip');
+    await chip.click();
+    const card = page.locator('.dc-attachment-card');
+    await card.getByRole('button', { name: 'Edit attached detail' }).click();
+    await card.locator('.dc-attachment-editor-code').fill('this text must not survive');
+    await page.keyboard.press('Escape');
+    await expect(card).toHaveCount(0);
+
+    await page.locator('.dc-attachment-badge').click();
+    await chip.click();
+    await expect(card.locator('.dc-attachment-code')).not.toContainText('this text must not survive');
   });
 
   test('a concrete attach target wins over an enclosing boundary', async ({ page }) => {

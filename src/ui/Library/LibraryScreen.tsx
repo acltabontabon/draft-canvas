@@ -3,6 +3,7 @@ import { readProjectFile } from '../../export/project';
 import { looksLikeSecureExport, readSecureProjectFile } from '../../export/secureProject';
 import type { DraftSummary } from '../../document/types';
 import type { NormalizeResult } from '../../document/validate';
+import { isEditableTarget } from '../../lib/isEditableTarget';
 import { PRODUCT } from '../../product';
 import { ARCHITECTURE_STARTERS, STARTER_CATEGORIES } from '../../starters';
 import { useUiStore } from '../../store/uiStore';
@@ -67,8 +68,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target as HTMLElement | null;
-      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      if (isEditableTarget(event.target)) return;
       if (document.querySelector('[role="dialog"]')) return;
       event.preventDefault();
       searchInput.current?.focus();

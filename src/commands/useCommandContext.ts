@@ -9,7 +9,7 @@ import { useTheme } from '../ui/theme/useTheme';
 import type { CommandContext } from './types';
 
 export interface UseCommandContextParams {
-  createAt: (preset: Preset, position: { x: number; y: number }) => DraftNode;
+  createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode;
   createAtPointer: (preset: Preset) => DraftNode;
   playback: FlowPlaybackController;
 }

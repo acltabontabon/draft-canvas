@@ -361,6 +361,17 @@ test.describe('Draft Canvas', () => {
     await expect(page.locator('.dc-attach-affordance')).toHaveCount(0);
   });
 
+  test('Escape exits presentation mode even with no flow playing', async ({ page }) => {
+    await newCanvas(page, 'Escape leaves plain present mode');
+    await createNode(page, 'Service', { x: 400, y: 300 });
+
+    await page.getByTitle('Present (Cmd+Enter)').click();
+    await expect(page.locator('.dc-editor[data-mode="present"]')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-editor[data-mode="edit"]')).toBeVisible();
+  });
+
   test('creates elements from the keyboard and deletes them', async ({ page }) => {
     await newCanvas(page, 'Keyboard');
 
@@ -374,10 +385,15 @@ test.describe('Draft Canvas', () => {
     await page.locator(CANVAS).hover({ position: { x: 700, y: 300 } });
     await page.keyboard.press('c');
     await expect(page.locator('.dc-node[data-type="code"]')).toHaveCount(1);
+    // Every keyboard-created element opens ready to name, not just a Note.
+    await expect(page.locator('.dc-node-editor')).toBeFocused();
+    await page.keyboard.press('Escape');
 
     await page.locator(CANVAS).hover({ position: { x: 400, y: 520 } });
     await page.keyboard.press('s');
     await expect(page.locator('.dc-node[data-type="service"]')).toHaveCount(1);
+    await expect(page.locator('.dc-node-editor')).toBeFocused();
+    await page.keyboard.press('Escape');
 
     await page.keyboard.press('Meta+a');
     await page.keyboard.press('Backspace');
@@ -385,6 +401,44 @@ test.describe('Draft Canvas', () => {
 
     await page.keyboard.press('Meta+z');
     await expect(page.locator('.dc-node')).toHaveCount(3);
+  });
+
+  test('the canvas is one Tab stop, not one per node, and shows a focus ring only from real keyboard focus', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Canvas is one tab stop');
+    await createNode(page, 'Service', { x: 400, y: 300 });
+    await createNode(page, 'Data Store', { x: 700, y: 300 });
+
+    // Individual nodes are no longer native Tab stops — React Flow's own per-node keyboard
+    // handling is turned off (`nodesFocusable={false}`) in favor of `.dc-canvas` being the one
+    // Tab stop for the whole diagram.
+    const nodeTabIndex = await page
+      .locator('.dc-node')
+      .first()
+      .evaluate((el) => el.closest('.react-flow__node')?.getAttribute('tabindex'));
+    expect(nodeTabIndex).toBeNull();
+
+    // Selecting a node with the mouse must not show the keyboard-focus ring.
+    await page.locator('.dc-node').first().click();
+    const afterMouseClick = await page
+      .locator('.dc-node[data-selected="true"]')
+      .evaluate((el) => getComputedStyle(el, '::after').boxShadow);
+    expect(afterMouseClick).toBe('none');
+
+    // Tabbing onto the canvas does show it — a real, visible keyboard-focus signal, distinct from
+    // a plain mouse-selected look.
+    await page.evaluate(() => document.body.focus());
+    for (let i = 0; i < 60; i++) {
+      await page.keyboard.press('Tab');
+      if (await page.evaluate(() => document.activeElement?.classList.contains('dc-canvas'))) break;
+    }
+    await expect(page.locator('.dc-canvas')).toBeFocused();
+    await page.locator('.dc-node').first().click();
+    const afterKeyboardFocus = await page
+      .locator('.dc-node[data-selected="true"]')
+      .evaluate((el) => getComputedStyle(el, '::after').boxShadow);
+    expect(afterKeyboardFocus).not.toBe('none');
   });
 
   test('double-clicking empty canvas opens a type picker, and choosing a type creates it', async ({ page }) => {

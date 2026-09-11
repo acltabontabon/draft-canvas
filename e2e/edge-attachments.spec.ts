@@ -210,10 +210,11 @@ test.describe('connection-attached details', () => {
     await expect(page.getByRole('button', { name: 'Delete attached detail' })).toBeVisible();
 
     await textarea.fill('Mixed Case Value');
-    // Escape closes the card without ever blurring the textarea — this is the exact commit path
-    // that regressed once already (see `tests/edge-attachments.test.ts`'s history and the memory
-    // note on it): the value must be tracked live via `onChange`, not committed on blur.
-    await page.keyboard.press('Escape');
+    // Outside click closes the card without ever blurring the textarea — this is the exact commit
+    // path that regressed once already (see `tests/edge-attachments.test.ts`'s history and the
+    // memory note on it): the value must be tracked live via `onChange`, not committed on blur.
+    // (Escape now discards instead of committing — see the dedicated test for that.)
+    await page.locator('.react-flow__pane').click({ position: { x: 100, y: 500 } });
 
     await chip.click();
     const note = page.locator('.dc-attachment-note');
@@ -234,6 +235,20 @@ test.describe('connection-attached details', () => {
 
     await chip.click();
     await expect(page.locator('.dc-attachment-note')).toHaveText('kept via outside click');
+  });
+
+  test('Escape while editing discards the edit instead of committing it', async ({ page }) => {
+    await servicePublishingToTopic(page, 'Escape discards');
+    await create(page, 'Note', { x: 500, y: 500 });
+    await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
+
+    const chip = page.locator('.dc-attachment-chip');
+    const textarea = await openForEditing(page, chip);
+    await textarea.pressSequentially('this text must not survive');
+    await page.keyboard.press('Escape');
+
+    await chip.click();
+    await expect(page.locator('.dc-attachment-note')).not.toHaveText('this text must not survive');
   });
 
   test('Escape closes an open chip\'s card', async ({ page }) => {
@@ -295,7 +310,8 @@ test.describe('connection-attached details', () => {
     await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), await edgeMidpoint(page, 0, 1));
     const textarea = await openForEditing(page, chip);
     await textarea.fill('present me');
-    await page.keyboard.press('Escape');
+    // Outside click commits (Escape now discards — see the dedicated test for that).
+    await page.locator('.react-flow__pane').click({ position: { x: 100, y: 500 } });
 
     await page.getByRole('button', { name: 'Present (Cmd+Enter)' }).click();
     await expect(page.getByRole('button', { name: 'Exit presentation' })).toBeVisible();

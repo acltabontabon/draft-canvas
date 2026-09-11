@@ -1003,6 +1003,13 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
       data-focus={focusActive ? 'on' : undefined}
       data-lens={lensActive ? 'on' : undefined}
       onPointerDownCapture={onCanvasPointerDown}
+      // The one Tab stop for the whole diagram — individual nodes/edges are deliberately not
+      // real DOM tab stops (see `nodesFocusable`/`edgesFocusable` below); Tab reaches "the
+      // canvas" once, and Alt+Arrow/arrow-key navigation moves *selection* from there on,
+      // matching `ContextMenu.tsx`'s existing virtual-focus precedent rather than adding a
+      // second, competing kind of per-node DOM focus.
+      tabIndex={0}
+      aria-label="Diagram canvas"
     >
       <CanvasBackground
         settings={document.settings.background}
@@ -1047,6 +1054,18 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
         nodesDraggable={interactive}
         nodesConnectable={interactive}
         elementsSelectable={interactive}
+        // React Flow's own default per-node/edge keyboard handling (native `tabIndex`, and its own
+        // Enter/Space/Escape select-or-deselect plus arrow-key move) is turned off outright rather
+        // than coordinated with: left on, it ran independently of and after `EditorScreen.tsx`'s own
+        // keyboard handling for the exact same keys — a focused+selected node's arrow press could be
+        // double-handled (React Flow's own uncommitted move plus this app's committed, undo-tracked
+        // `nudgeSelection`), and Tab landing on an unselected node then Enter would select-then-open
+        // it as an uncoordinated two-hop side effect. It also made every node and edge its own Tab
+        // stop, which doesn't scale past a handful of elements. `.dc-canvas`'s own `tabIndex` above
+        // is the one Tab stop for the whole diagram now; `nudgeSelection` and the new spatial/
+        // relationship navigation are the only way arrow keys move anything.
+        nodesFocusable={false}
+        edgesFocusable={false}
         panOnScroll
         selectionOnDrag={interactive}
         // Button 1 (middle-mouse-drag) still pans; button 2 (right) is freed for the context menu —

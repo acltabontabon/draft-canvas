@@ -187,6 +187,34 @@ test.describe('Flows', () => {
     await expect(page.locator('.dc-toolbar')).toBeVisible();
   });
 
+  test('the F shortcut opens the panel with focus already inside it, ready to navigate', async ({ page }) => {
+    await newCanvas(page, 'Flow panel focus');
+    await buildArchitecture(page);
+    await addToFlow(page, 0);
+    await closeFlowPanel(page);
+
+    await page.keyboard.press('f');
+    const panel = page.locator('.dc-flow-panel');
+    await expect(panel).toBeVisible();
+    const active = await page.evaluate(() => {
+      const panel = document.querySelector('.dc-flow-panel');
+      return panel?.contains(document.activeElement) ?? false;
+    });
+    expect(active).toBe(true);
+
+    // No extra Tab needed — arrow keys already move between rows from here.
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('.dc-flow-item').first()).toBeFocused();
+  });
+
+  test('the F shortcut focuses "New flow" when there are no flows yet', async ({ page }) => {
+    await newCanvas(page, 'Flow panel focus — empty');
+    await page.keyboard.press('f');
+    const panel = page.locator('.dc-flow-panel');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.dc-flow-panel-empty').getByRole('button', { name: 'New flow' })).toBeFocused();
+  });
+
   test('renaming a flow from the Flow panel is a document edit that survives a reload', async ({ page }) => {
     await newCanvas(page, 'Rename persistence');
     await buildArchitecture(page);

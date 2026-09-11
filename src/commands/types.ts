@@ -57,8 +57,12 @@ export interface CommandContext {
     viewHeight: number;
   };
   playback: FlowPlaybackController;
-  /** `EditorScreen`'s own node factory, so a palette-created code card gets the same sample sizing. */
-  createAt: (preset: Preset, position: { x: number; y: number }) => DraftNode;
+  /** `EditorScreen`'s own node factory, so a palette-created code card gets the same sample
+   *  sizing. `autoEdit` (default `false`) opens the new node ready to type into immediately —
+   *  every call reachable only through the palette/commands is keyboard-driven, so pass `true`
+   *  unless the specific command has its own reason not to (matching `createAtPointer`'s own
+   *  default of always passing it). */
+  createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode;
   /** Under the pointer, or in the middle of the view — same placement the single-key shortcuts use. */
   createAtPointer: (preset: Preset) => DraftNode;
   toggleTheme: () => void;

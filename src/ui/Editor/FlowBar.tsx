@@ -26,27 +26,22 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
       // shortcut listener in the app guards against one the same way (`EditorScreen.tsx`) — kept
       // consistent here as defense-in-depth for whatever's added next.
       if (isEditableTarget(event.target)) return;
-      if (playback.picking) {
-        if (event.key === 'Escape') {
-          playback.stop();
-          if (mode === 'present') setMode('edit');
-        }
-        return;
-      }
+      // Escape is deliberately NOT handled here — `EditorScreen.tsx`'s own central Escape
+      // cascade already stops playback (and exits present mode) whenever `playback.active` is
+      // true, which covers `picking` too (a `flowId === null` sub-state of `active`, not a
+      // separate one). A second listener here used to race it; one owner is enough.
+      if (playback.picking) return;
       if (event.key === 'ArrowRight' || event.key === ' ') {
         event.preventDefault();
         playback.next();
       } else if (event.key === 'ArrowLeft') {
         event.preventDefault();
         playback.previous();
-      } else if (event.key === 'Escape') {
-        playback.stop();
-        if (mode === 'present') setMode('edit');
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [playback, mode, setMode]);
+  }, [playback]);
 
   // A presenter-revealed attachment (see `EdgeAttachmentChip`'s
   // `presentationReveal`) is scoped to the step it was revealed on — advancing

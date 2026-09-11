@@ -19,6 +19,7 @@ import type { FlowPlaybackController } from '../../presentation/useFlowPlayback'
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../common/Icon';
+import { useFocusReturn } from '../common/useFocusReturn';
 
 interface CommandPaletteProps {
   createAt: (preset: Preset, position: { x: number; y: number }) => DraftNode;
@@ -60,6 +61,10 @@ export function CommandPalette({ createAt, createAtPointer, playback }: CommandP
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const { retire: retireHint } = useHints();
   const buildContext = useCommandContext({ createAt, createAtPointer, playback });
+
+  // Whatever had focus (a toolbar button, the canvas) when ⌘K was pressed gets it back on close —
+  // shared with `Modal` so the two dialogs can't drift on this.
+  useFocusReturn(open);
 
   const [query, setQuery] = useState('');
   const [stage, setStage] = useState<CommandStage | null>(null);

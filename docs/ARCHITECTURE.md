@@ -401,6 +401,50 @@ a command that creates something cannot then look it up in `ctx.editor.document`
 predates its own mutation. Such a command works from what the store action returned; see
 `focusBounds` in `commands/search.ts`.
 
+## Keyboard model
+
+One handler, one focus model, one source of truth for shortcut strings — the goal was a coherent
+keyboard grammar, not a pile of independently-added bindings.
+
+**Dispatch.** `useKeyboard` (private, inline in `ui/Editor/EditorScreen.tsx`) is still the one
+place a key is actually bound to an action — that didn't change. What changed is what backs each
+binding: every shortcut that also has a palette/context-menu presence carries its display string
+on the matching `Command.shortcut` field in `commands/registry.ts`, read through
+`commands/shortcutLookup.ts` rather than typed a second time anywhere else (see "Shortcuts modal"
+below). A handful of continuous gestures (Space-to-pan, arrow-key nudge, drag-to-connect) aren't
+commands at all — a single key doesn't name a drag — and stay hand-documented as prose.
+
+**Canvas focus.** `.dc-canvas` (`canvas/Canvas.tsx`) is the diagram's one real Tab stop —
+`nodesFocusable`/`edgesFocusable` are both `false` on `<ReactFlow>`, so individual nodes/edges
+carry no native `tabIndex` of their own (previously every node *was* independently tabbable,
+React Flow's own default, which doesn't scale past a handful of elements and ran its own
+Enter/Space/Escape/arrow handling uncoordinated with `useKeyboard`'s). Selection *is* the
+keyboard-focus indicator once you're on the canvas — a virtual-focus model, the same one
+`canvas/ContextMenu.tsx`/`InspectorSelect.tsx` already used for their own row highlighting — real
+DOM focus never leaves `.dc-canvas` itself. `:focus-visible` on that one element (browsers already
+distinguish keyboard-origin focus from a mouse click on a plain `tabIndex` element) is what drives
+the extra glow `canvas.css` adds around a keyboard-navigated selection, with no extra store state.
+
+**Navigation.** `canvas/spatialNav.ts` is a small pure module (direction/distance/alignment
+scoring, no DOM/store dependency, its own unit tests) behind two capabilities layered onto the
+existing arrow-key nudge without changing it: Alt+Arrow moves the selection to the nearest element
+in that direction; Alt+Shift+Left/Right walks the graph along outgoing/incoming connections,
+cycling through a fixed anchor's siblings on repeated presses in the *same* direction, but
+starting a fresh walk from wherever you are the moment the direction changes (`EditorScreen.tsx`
+keeps this small bit of cycle state in a ref — not in `spatialNav.ts`, which stays stateless).
+
+**Shortcuts modal.** `ui/Editor/ShortcutSheet.tsx`'s `SECTIONS` array is hand-curated (which rows
+exist, how they're grouped, their prose) but never hand-types a key string for anything that is a
+real `Command` — a `CommandRow` names a command id and resolves its chip and, absent an override,
+its description through `shortcutLookup.ts`. That module can't call `commandsFor` once and get
+"everything" back, since command presence is state-dependent (`undo` only exists once there's
+history, `paste` only once the clipboard is non-empty) — it builds one small, never-rendered
+document and calls the registry's builder functions a handful of times with different selections,
+each pass chosen to surface one more conditionally-visible group, merged by id. `tests/shortcut-
+catalog.test.ts` cross-checks the result against `SECTIONS` in both directions: a command with a
+shortcut and no matching row fails the test, and so does a row naming an id with no resolvable
+shortcut — the two cannot drift apart silently again.
+
 ## Untrusted input
 
 `document/validate.ts` is the only door into the document model, used for both imported files and

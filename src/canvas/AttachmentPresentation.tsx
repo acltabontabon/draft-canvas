@@ -14,6 +14,40 @@ import { Icon } from '../ui/common/Icon';
 export const ATTACHMENT_CARD_EXIT_MS = 120;
 
 /**
+ * Module-level, not component state: `AttachmentChip` needs to tell "closed via Escape" (discard
+ * an in-progress edit) apart from "closed via an outside click or re-clicking the chip" (commit
+ * it) — but it cannot reliably observe that itself. The host popover (`AttachmentPopover.tsx`/
+ * `EdgeInspectorPopover.tsx`) has its *own* capture-phase Escape listener on `window`, mounted
+ * before any chip exists (a chip only renders once the popover is already open) — so on Escape,
+ * that ancestor's `setOpenAttachmentDetail(null)`/`setPresentationReveal(null)` call can win the
+ * race and, via Zustand's synchronous React binding, unmount the whole popover (every chip with
+ * it) before the browser's own event-dispatch loop ever reaches a chip's own conditionally-mounted
+ * listener for the same keydown — so it silently never fires, and no ref or state living inside
+ * the about-to-unmount component can catch it either. A listener registered once here, outside any
+ * component's lifecycle entirely, can't be raced out of existence by that unmount.
+ */
+let lastKeydownWasEscape = false;
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (event) => {
+    lastKeydownWasEscape = event.key === 'Escape';
+  }, true);
+  // An Escape press elsewhere in the app (e.g. leaving a just-created note's own auto-edit mode)
+  // must not be mistaken for the Escape that closes a *later*, unrelated attachment edit — any
+  // pointer interaction in between means whatever comes next was not caused by that stale Escape.
+  window.addEventListener('pointerdown', () => {
+    lastKeydownWasEscape = false;
+  }, true);
+}
+
+/** Reads and clears the flag above — one-shot, so it reflects only the keydown that (directly or
+ *  via the race described above) caused the transition currently being processed. */
+function wasLastKeydownEscape(): boolean {
+  const was = lastKeydownWasEscape;
+  lastKeydownWasEscape = false;
+  return was;
+}
+
+/**
  * Read-only, syntax-highlighted code — the same `tokenizeCode`/`colorForScope` primitives
  * `FlowBar.tsx`'s `DetailPanel` uses for a connection's legacy `details` field during playback,
  * reused here rather than duplicated. Not imported from there directly: `ui/Editor/FlowBar.tsx`
@@ -207,7 +241,10 @@ export function AttachmentChip({
   useEffect(() => {
     if (wasPinned.current && !pinned) {
       const pending = pendingValueRef.current;
-      if (pending !== null) {
+      // Consumed (and cleared) here regardless of outcome — see `wasLastKeydownEscape`'s own doc
+      // comment for why this can't be decided from inside this component at all.
+      const discard = wasLastKeydownEscape();
+      if (pending !== null && !discard) {
         const field = attachment.type === 'code' ? 'code' : 'text';
         const current = attachment.type === 'code' ? attachment.code ?? '' : attachment.text ?? '';
         if (pending !== current) actions.update(attachment.id, { [field]: pending });
@@ -243,6 +280,9 @@ export function AttachmentChip({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
+      // The actual discard-vs-commit decision for a live edit is made by the commit effect above,
+      // reading `wasLastKeydownEscape()` — see its doc comment for why this handler itself often
+      // loses the race to an ancestor popover's own Escape listener and never gets to decide it.
       if (pinned) setOpenAttachmentDetail(null);
       if (revealed) setPresentationReveal(null);
     };

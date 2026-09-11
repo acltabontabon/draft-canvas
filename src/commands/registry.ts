@@ -532,10 +532,16 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
     hint: 'Create and connect',
     run: (inner) => {
       const size = defaultSizeFor(preset.type);
-      const created = inner.createAt(preset, {
-        x: Math.round(source.x + source.width + NEW_NEIGHBOUR_GAP),
-        y: Math.round(source.y + source.height / 2 - size.height / 2),
-      });
+      const created = inner.createAt(
+        preset,
+        {
+          x: Math.round(source.x + source.width + NEW_NEIGHBOUR_GAP),
+          y: Math.round(source.y + source.height / 2 - size.height / 2),
+        },
+        // Only reachable via ⌘K/Shift+F10 on a selected node — never a mouse gesture — so this
+        // opens ready to name, same as every other keyboard-driven creation path.
+        true,
+      );
       inner.editor.connect(source.id, created.id);
       inner.editor.setSelection({ nodes: [created.id], edges: [] });
     },

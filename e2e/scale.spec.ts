@@ -74,6 +74,11 @@ test('stays workable with 100 nodes and 180 connections', async ({ page }) => {
   // Code cards are highlighted, not deferred or degraded at this size.
   await expect(page.locator('.dc-node[data-type="code"] tspan').first()).toBeVisible();
 
+  // The canvas stays one Tab stop regardless of how many nodes it holds — none of React Flow's
+  // own per-node tabindex attributes should exist at any scale (`nodesFocusable={false}`).
+  const focusableNodeCount = await page.locator('.react-flow__node[tabindex]').count();
+  expect(focusableNodeCount).toBe(0);
+
   const node = page.locator('.dc-node').first();
   const before = (await node.boundingBox())!;
 
@@ -109,4 +114,13 @@ test('stays workable with 100 nodes and 180 connections', async ({ page }) => {
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export SVG' }).click();
   expect((await download).suggestedFilename()).toBe('scale.svg');
+
+  // Alt+Arrow spatial navigation stays correct and responsive scanning all 100 nodes — last, so it
+  // doesn't disturb the selection/camera state the steps above depend on. n0 sits at column 0/row
+  // 0 of the grid `buildDocument` lays out, n1 immediately to its right. Re-fit first: the earlier
+  // pan step above leaves the camera wherever that drag ended, which may not still include n0.
+  await page.keyboard.press('Shift+1');
+  await page.locator('[data-id="n0"] .dc-node').click();
+  await page.keyboard.press('Alt+ArrowRight');
+  await expect(page.locator('[data-id="n1"] .dc-node[data-selected="true"]')).toHaveCount(1);
 });

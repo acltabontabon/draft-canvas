@@ -27,6 +27,29 @@ test.describe('command palette', () => {
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeHidden();
     await expect(page.locator('.dc-node')).toHaveCount(1);
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
+    // Palette-created elements open ready to name, the same as every other keyboard-driven path.
+    await expect(page.locator('.dc-node-editor')).toBeFocused();
+  });
+
+  test('creating several elements in a row from the keyboard, with no mouse movement, does not stack them on top of each other', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Palette create — no overlap');
+    for (const query of ['serv', 'data store', 'queue']) {
+      await openPalette(page);
+      await page.keyboard.type(query);
+      await page.keyboard.press('Enter');
+      await page.keyboard.press('Escape'); // dismiss the new node's auto-opened editor
+    }
+    await expect(page.locator('.dc-node')).toHaveCount(3);
+
+    const boxes = await page.locator('.dc-node').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
+    const overlaps = (a: DOMRect, b: DOMRect) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        expect(overlaps(boxes[i]!, boxes[j]!), `node ${i} and node ${j} should not overlap`).toBe(false);
+      }
+    }
   });
 
   test('Escape closes it and changes nothing', async ({ page }) => {
@@ -44,6 +67,16 @@ test.describe('command palette', () => {
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Search commands' })).toBeFocused();
   });
+
+  test('closing it returns focus to whatever opened it', async ({ page }) => {
+    await newCanvas(page, 'Palette focus return');
+    const trigger = page.getByRole('button', { name: 'Commands (Cmd+K)' });
+    await trigger.click();
+    await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Commands' })).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
 });
 
 test.describe('command palette — contextual', () => {
@@ -53,6 +86,10 @@ test.describe('command palette — contextual', () => {
     await page.keyboard.type('serv');
     await page.keyboard.press('Enter');
     await expect(page.locator('.dc-node')).toHaveCount(1);
+    // It opens ready to name — the editor owns the keyboard until dismissed, same as every other
+    // keyboard-created element; Escape leaves its default name and keeps it selected.
+    await expect(page.locator('.dc-node-editor')).toBeFocused();
+    await page.keyboard.press('Escape');
     // The new node stays selected, so the next palette is contextual to it.
     await openPalette(page);
     await page.keyboard.type('conn');
@@ -65,6 +102,9 @@ test.describe('command palette — contextual', () => {
 
     await expect(page.locator('.dc-node')).toHaveCount(2);
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+    // "Connect to… → New <type>" is reachable only via ⌘K/Shift+F10 on a node — never a mouse
+    // gesture — so it opens ready to name too.
+    await expect(page.locator('.dc-node-editor')).toBeFocused();
   });
 
   test('Escape inside a stage steps back instead of closing', async ({ page }) => {
@@ -72,6 +112,7 @@ test.describe('command palette — contextual', () => {
     await openPalette(page);
     await page.keyboard.type('serv');
     await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape'); // dismiss the new node's auto-opened editor
     await openPalette(page);
     await page.keyboard.type('conn');
     await page.keyboard.press('Enter');
@@ -90,7 +131,9 @@ test.describe('command palette — jump', () => {
     await openPalette(page);
     await page.keyboard.type('add data');
     await page.keyboard.press('Enter');
-    await page.keyboard.press('Escape'); // clear the selection the create left behind
+    await expect(page.locator('.dc-node-editor')).toBeFocused(); // opens ready to name
+    await page.keyboard.press('Escape'); // dismiss the auto-opened editor, keeping it selected
+    await page.keyboard.press('Escape'); // then clear the selection the create left behind
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(0);
 
     await openPalette(page);

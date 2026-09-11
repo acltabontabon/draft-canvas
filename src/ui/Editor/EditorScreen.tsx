@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { Canvas } from '../../canvas/Canvas';
@@ -6,6 +6,7 @@ import { ContextMenu } from '../../canvas/ContextMenu';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { presetForShortcut, type Preset } from '../../canvas/presets';
+import { nearestInDirection, nextRelationshipNeighbor, type Direction } from '../../canvas/spatialNav';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { offerFor, quickConnectItems, type QuickConnectItem } from '../../canvas/quickConnectItems';
 import { contextMenuCommandsFor } from '../../commands/contextMenu';
@@ -13,8 +14,9 @@ import { starterCommands } from '../../commands/registry';
 import type { Command } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
 import type { StarterId } from '../../starters';
+import { defaultSizeFor } from '../../document/factory';
 import { DEFAULTS } from '../../document/limits';
-import { boundsOf } from '../../document/operations';
+import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isEditableTarget } from '../../lib/isEditableTarget';
 import { logDiagnostic } from '../../lib/diagnostics';
@@ -44,7 +46,10 @@ import { ErrorBoundary } from '../common/ErrorBoundary';
 function focusIsOnCanvas(): boolean {
   const active = document.activeElement;
   if (!active || active === document.body) return true;
-  return active.closest('.react-flow, .dc-ghost') !== null;
+  // `.dc-canvas` (not `.react-flow`) is the check now that it — not any individual node/edge —
+  // is the canvas's one real Tab stop; `.react-flow` is always a descendant of it, so this still
+  // covers anything inside React Flow's own tree too, not just the wrapper itself.
+  return active.closest('.dc-canvas, .dc-ghost') !== null;
 }
 
 /** Sample content for a fresh code card, so it is never a blank grey box. */
@@ -94,7 +99,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   const [canvasInstanceKey, setCanvasInstanceKey] = useState(0);
 
   const createAt = useCallback(
-    (preset: Preset, position: { x: number; y: number }) => {
+    (preset: Preset, position: { x: number; y: number }, autoEdit = false) => {
       const code = preset.type === 'code' ? (CODE_SAMPLES[preset.language ?? ''] ?? '') : undefined;
       const size =
         preset.type === 'code' && code
@@ -114,11 +119,13 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
         code,
       });
       arm(null);
-      // A note exists to be typed into, so it opens ready for that: N (or the toolbar, the
-      // palette, the double-click picker) and then just type. Nothing else auto-edits — a
-      // service arrives already named, and the letter shortcut for the next shape must keep
-      // working the moment one lands.
-      if (node.type === 'note') useUiStore.getState().requestEdit(node.id);
+      // A note exists to be typed into, so it opens ready for that regardless of how it was
+      // created — a mouse-drawn service, by contrast, arrives already named, so `autoEdit` only
+      // opts *in* the keyboard/command-driven creation paths (the double-click type picker and the
+      // armed-tool click stay mouse gestures, never pass it): a keyboard user who just made
+      // something should be able to start typing immediately, the same "create, then name" flow a
+      // note already gets.
+      if (node.type === 'note' || autoEdit) useUiStore.getState().requestEdit(node.id);
       return node;
     },
     [arm, store, theme],
@@ -184,15 +191,32 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
     [createAt, quickConnect, setContinuation, setQuickConnect, store],
   );
 
-  /** Places a new element under the cursor, or in the middle of the view. */
+  /**
+   * Places a new element under the cursor, near the current selection, or in the middle of the
+   * view — in that order. The middle tier exists for a keyboard-only sequence with no mouse
+   * movement between creations (⌘K "Add X", "Add Y", "Add Z" with nothing in between to move
+   * `pointer`): without it, every one of those lands on the exact same viewport-center point and
+   * stacks perfectly on top of the last, since `pointer.known` never becomes true. Reusing
+   * `placeNear` — the same collision-avoiding companion search Intent Continuation and
+   * drag-to-attach's "detach" already use — means a keyboard-created run of elements fans out
+   * sensibly instead, the same way related elements already do everywhere else in the app.
+   */
   const createAtPointer = useCallback(
     (preset: Preset) => {
+      const state = store.getState();
+      const { nodes: selectedNodes } = state.selection;
+      const host = selectedNodes.length === 1 ? state.document.nodes.find((n) => n.id === selectedNodes[0]) : undefined;
       const position = pointer.known
         ? { x: pointer.x - 88, y: pointer.y - 34 }
-        : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-      return createAt(preset, position);
+        : host
+          ? placeNear(state.document, host, defaultSizeFor(preset.type))
+          : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      // Both of this function's own call sites (the bare-letter shortcut, the palette's "Add
+      // <type>") are keyboard/command-driven, never a mouse gesture — so unlike `createAt` itself,
+      // this one always opens the new element ready to name.
+      return createAt(preset, position, true);
     },
-    [createAt, screenToFlowPosition],
+    [createAt, screenToFlowPosition, store],
   );
 
   useKeyboard({ createAtPointer, playback });
@@ -406,7 +430,42 @@ function useKeyboard({
   const arm = useUiStore((state) => state.arm);
   const setFlowPanelOpen = useUiStore((state) => state.setFlowPanelOpen);
   const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
-  const { fitView, zoomIn, zoomOut, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
+  const { fitView, zoomIn, zoomOut, screenToFlowPosition, flowToScreenPosition, setCenter, getZoom } =
+    useReactFlow();
+
+  // Relationship-navigation (Alt+Shift+Left/Right) cycle state — which node the cycle started
+  // from, which direction it's cycling, and which of its neighbors was last landed on.
+  // Deliberately *not* re-derived from the live selection: once a press selects a neighbor, that
+  // neighbor *is* the selection, so the only way to tell "still mid-cycle from the original
+  // anchor" apart from "the user selected this node some other way" is to remember it here. A
+  // press whose live selection no longer matches `lastLanded` — or that switches direction, e.g.
+  // Right then Left — starts a brand-new cycle/walk from whatever is selected now: switching
+  // direction reads as "go back from here", not "keep exploring the original anchor's other
+  // siblings", so it must not silently keep the old anchor.
+  const relCycleAnchor = useRef<string | null>(null);
+  const relCycleDirection = useRef<'outgoing' | 'incoming' | null>(null);
+  const relCycleLastLanded = useRef<string | null>(null);
+
+  /** Selects `nodeId` and pans (never zooms) it into view if it isn't comfortably on screen — a
+   *  keyboard navigation that lands somewhere invisible would otherwise feel like it did nothing. */
+  const selectAndReveal = useCallback(
+    (nodeId: string) => {
+      const state = store.getState();
+      const target = state.document.nodes.find((n) => n.id === nodeId);
+      if (!target) return;
+      state.setSelection({ nodes: [nodeId], edges: [] });
+      const center = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+      const screen = flowToScreenPosition(center);
+      const margin = 96; // clear of the toolbar and edges, not flush against them
+      const onScreen =
+        screen.x > margin &&
+        screen.x < window.innerWidth - margin &&
+        screen.y > margin &&
+        screen.y < window.innerHeight - margin;
+      if (!onScreen) void setCenter(center.x, center.y, { zoom: getZoom(), duration: 200 });
+    },
+    [flowToScreenPosition, getZoom, setCenter, store],
+  );
 
   /**
    * The keyboard-only path into the context menu (Shift+F10 / the Menu key, standard desktop
@@ -584,6 +643,20 @@ function useKeyboard({
         }
       }
 
+      // Matched by `event.code` (the physical key) rather than `event.key` (the character a
+      // layout produces for Shift+Digit1/Shift+Slash) — on a layout where Shift+1 doesn't type
+      // '!', or Shift+/ doesn't type '?', matching the produced character would silently never
+      // fire. Pulled out of the switch below since `switch (event.key)` can't express this.
+      if (event.shiftKey && event.code === 'Digit1') {
+        event.preventDefault();
+        void fitView({ padding: 0.2, duration: 320, nodes: flowFitViewNodes(state) });
+        return;
+      }
+      if (event.shiftKey && event.code === 'Slash') {
+        setShortcutsOpen(true);
+        return;
+      }
+
       switch (event.key) {
         case 'Backspace':
         case 'Delete':
@@ -593,7 +666,10 @@ function useKeyboard({
         case 'Escape': {
           arm(null);
           if (state.focus.active) state.exitFocus();
-          else if (playback.active) playback.stop();
+          else if (playback.active) {
+            playback.stop();
+            if (state.mode === 'present') state.setMode('edit');
+          } else if (state.mode === 'present') state.setMode('edit');
           else state.setSelection({ nodes: [], edges: [] });
           return;
         }
@@ -611,9 +687,6 @@ function useKeyboard({
           state.acceptContinuation(offer);
           return;
         }
-        case '?':
-          setShortcutsOpen(true);
-          return;
         case 'ContextMenu':
           event.preventDefault();
           openContextMenuFromKeyboard();
@@ -630,27 +703,63 @@ function useKeyboard({
           event.preventDefault();
           setFlowPanelOpen(!useUiStore.getState().flowPanelOpen);
           return;
-        case '!':
-          // Shift+1 — the conventional fit-to-view chord.
-          event.preventDefault();
-          void fitView({ padding: 0.2, duration: 320, nodes: flowFitViewNodes(state) });
-          return;
-        case '+':
-        case '=':
-          void zoomIn();
-          return;
-        case '-':
-          void zoomOut();
-          return;
         case 'ArrowUp':
         case 'ArrowDown':
         case 'ArrowLeft':
         case 'ArrowRight': {
+          const direction: Direction =
+            event.key === 'ArrowLeft' ? 'left' : event.key === 'ArrowRight' ? 'right' : event.key === 'ArrowUp' ? 'up' : 'down';
+
+          if (event.altKey) {
+            if (!focusIsOnCanvas()) return;
+            event.preventDefault();
+
+            // Alt+Shift+Left/Right: relationship-aware navigation — cycle through the selected
+            // node's outgoing (Right) / incoming (Left) neighbors. Up/Down are left unbound here
+            // (no equally natural graph meaning); Alt+Up/Down still falls through to plain spatial
+            // navigation below.
+            if (event.shiftKey && (direction === 'left' || direction === 'right')) {
+              const { nodes: selected } = state.selection;
+              if (selected.length !== 1) return;
+              const selectedId = selected[0]!;
+              const relDirection = direction === 'right' ? 'outgoing' : 'incoming';
+              const continuingCycle =
+                relCycleAnchor.current !== null &&
+                relCycleDirection.current === relDirection &&
+                relCycleLastLanded.current === selectedId;
+              const anchorId = continuingCycle ? relCycleAnchor.current! : selectedId;
+              if (!continuingCycle) {
+                relCycleAnchor.current = anchorId;
+                relCycleDirection.current = relDirection;
+                relCycleLastLanded.current = null;
+              }
+              const next = nextRelationshipNeighbor(state.document, anchorId, relDirection, relCycleLastLanded.current);
+              if (!next) return;
+              relCycleLastLanded.current = next;
+              selectAndReveal(next);
+              return;
+            }
+
+            relCycleAnchor.current = null;
+            relCycleDirection.current = null;
+            relCycleLastLanded.current = null;
+            const { nodes: selected } = state.selection;
+            const originNode =
+              selected.length === 1 ? state.document.nodes.find((n) => n.id === selected[0]) : undefined;
+            const origin = originNode
+              ? { x: originNode.x + originNode.width / 2, y: originNode.y + originNode.height / 2 }
+              : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+            const next = nearestInDirection(state.document.nodes, origin, direction, originNode?.id);
+            if (!next) return;
+            selectAndReveal(next);
+            return;
+          }
+
           if (state.selection.nodes.length === 0) return;
           event.preventDefault();
           const magnitude = event.shiftKey ? 10 : 1;
-          const dx = event.key === 'ArrowLeft' ? -magnitude : event.key === 'ArrowRight' ? magnitude : 0;
-          const dy = event.key === 'ArrowUp' ? -magnitude : event.key === 'ArrowDown' ? magnitude : 0;
+          const dx = direction === 'left' ? -magnitude : direction === 'right' ? magnitude : 0;
+          const dy = direction === 'up' ? -magnitude : direction === 'down' ? magnitude : 0;
           state.nudgeSelection(dx, dy);
           return;
         }
@@ -696,6 +805,7 @@ function useKeyboard({
     playback,
     fitView,
     screenToFlowPosition,
+    selectAndReveal,
     setCommandPaletteOpen,
     setExportOpen,
     setFlowPanelOpen,

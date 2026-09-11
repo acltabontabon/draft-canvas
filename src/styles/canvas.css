@@ -15,6 +15,15 @@
   background: transparent;
 }
 
+/* A faint inset ring for when the canvas itself has real keyboard focus (Tab landed here) but
+ * nothing is selected yet — without it, that state would have no visible feedback at all. Once
+ * something *is* selected, the node/edge rules above already carry the stronger signal; this stays
+ * deliberately subtle so it never reads as competing with that. */
+.dc-canvas:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--dc-selection) 25%, transparent);
+}
+
 /* ------------------------------------------------------- 5.1 background -- */
 
 .dc-canvas-background {
@@ -69,6 +78,15 @@
 
 .dc-node[data-type='ellipse'][data-selected='true']::after {
   border-radius: 50%;
+}
+
+/* A keyboard-navigated selection reads as a plain selection plus a soft outer glow, shown only
+ * while `.dc-canvas` itself has real *keyboard* focus (`:focus-visible` already tells a Tab-driven
+ * focus apart from a mouse click on this plain, non-form `tabIndex` element — no extra JS state
+ * needed). One visual state (selection) carries the meaning; this is a subtle addition to it, not
+ * a second, competing "focused but not selected" look. */
+.dc-canvas:focus-visible .dc-node[data-selected='true']::after {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dc-selection) 35%, transparent);
 }
 
 .dc-node[data-type='text'] {
@@ -276,6 +294,12 @@
  */
 .dc-edge[data-selected='true'] .dc-edge-line {
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 60%, transparent));
+}
+
+/* Same keyboard-focus emphasis as a node's own rule above, same brighter/wider intensity the
+ * attach-target glow just below already establishes for "a distinct-but-related state". */
+.dc-canvas:focus-visible .dc-edge[data-selected='true'] .dc-edge-line {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--dc-selection) 85%, transparent));
 }
 
 /* A dragged note/code card is hovering this connector's own hit corridor — dropping now folds it

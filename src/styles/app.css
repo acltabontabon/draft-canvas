@@ -1852,9 +1852,34 @@ kbd {
 /* ------------------------------------------------------------ shortcuts -- */
 
 .dc-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.dc-shortcuts-search {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--dc-radius-sm);
+  border: 1px solid var(--dc-border);
+  background: var(--dc-surface-raised);
+  color: inherit;
+  font: inherit;
+}
+
+.dc-shortcuts-search:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-shortcuts-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px 32px;
+}
+
+.dc-shortcuts-empty {
+  grid-column: 1 / -1;
 }
 
 .dc-shortcuts section h3 {
@@ -1887,8 +1912,20 @@ kbd {
   flex-wrap: wrap;
 }
 
+/* A mouse-only gesture (no real key chip) — same slot as a `<kbd>` row but plain, muted text so it
+ * never reads as a keyboard chord. */
+.dc-shortcut-gesture {
+  color: var(--dc-text-muted);
+  font-style: italic;
+}
+
 .dc-shortcuts dd {
   margin: 0;
+}
+
+.dc-shortcuts-guidance {
+  padding-top: 4px;
+  border-top: 1px solid var(--dc-border);
 }
 
 /* ------------------------------------------------------------- settings -- */
@@ -2159,7 +2196,7 @@ kbd {
  * with the canvas for the little space there is.
  */
 @media (max-width: 720px) {
-  .dc-shortcuts {
+  .dc-shortcuts-grid {
     grid-template-columns: 1fr;
   }
 

@@ -23,6 +23,19 @@ All notable changes to Draft Canvas are documented here.
 - A flow can now be viewed as a Sequence Diagram — its own connectors, laid out as participants
   and ordered messages over time, with sync, async, publish/consume, and request/response read
   straight from what you've already drawn. Copy the result as Mermaid or PlantUML in one click.
+- The canvas can now be navigated without a mouse. With an element selected, Option/Alt+Arrow
+  selects the nearest one in that direction; Option/Alt+Shift+Right or +Left follows an outgoing
+  or incoming connection, cycling through more than one on repeated presses. Tab now reaches the
+  canvas as a single stop instead of visiting every node individually, and a keyboard-focused
+  selection shows a subtly brighter ring than a mouse-selected one.
+- Every element created from the keyboard or ⌘K — not just a Note — now opens ready to type a
+  name into immediately, and lands sensibly placed even when created several in a row with no
+  mouse movement in between, instead of stacking on top of the last one.
+- The Keyboard Shortcuts sheet (`?`) has been redesigned: it's now searchable, organized by what
+  you're doing (Essentials, Navigation, Canvas, Diagramming, Flows & Presentation), and every row
+  that corresponds to a real shortcut is generated from the same definition the command palette
+  and context menu already use — it can no longer silently fall out of sync with what's actually
+  bound.
 
 ### Fixed
 
@@ -41,6 +54,19 @@ All notable changes to Draft Canvas are documented here.
   or present it to step through — they're ordinary flows, so rename, reorder, or delete them like
   any other.
 - A connector from a person to a service can now be marked as a `query`, not just a `command`.
+- Escape now always exits presentation mode, including when no flow is currently playing — it
+  previously only worked while a flow was actively stepping through.
+- Closing the command palette or a dialog (Keyboard Shortcuts, Export, Canvas Settings, About) now
+  returns keyboard focus to whatever you had focused before opening it, instead of losing it.
+  Those dialogs also trap Tab within themselves while open, and the shortcuts sheet and command
+  palette both focus their own search field the instant they open.
+- Opening the Flows panel with `F` now focuses it immediately — the first flow, or "New flow" on a
+  diagram that doesn't have one yet — instead of leaving keyboard focus wherever it already was.
+- Fit to view (Shift+1) and opening the Keyboard Shortcuts sheet (`?`) now work on non-US keyboard
+  layouts where Shift+1 or Shift+/ don't produce the exact `!`/`?` characters.
+- Escape while editing a note or code attachment now discards the edit, matching every other
+  inline text field in the app — it previously committed instead, the one place Escape meant
+  "keep" rather than "cancel."
 
 ### Changed
 
