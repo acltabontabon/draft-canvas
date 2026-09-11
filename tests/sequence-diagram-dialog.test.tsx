@@ -1,12 +1,28 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument } from '../src/document/factory';
-import { SequenceDiagramDialog } from '../src/ui/Editor/SequenceDiagramDialog';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
 
+// Node's own experimental `globalThis.localStorage` shadows jsdom's in this environment — the
+// same in-memory fake `tests/commands-history.test.ts`/`tests/personality-preference.test.tsx`
+// use stands in for `lib/preferences.ts`, so the dialog's format toggle (the one thing here that
+// reads/writes a preference) is exercised without leaking into whichever test runs next.
+const prefs = new Map<string, string>();
+vi.mock('../src/lib/preferences', () => ({
+  readPreference: (key: string) => prefs.get(key) ?? null,
+  writePreference: (key: string, value: string) => {
+    if (value.length > 64) return;
+    prefs.set(key, value);
+  },
+  removePreference: (key: string) => void prefs.delete(key),
+}));
+
+const { SequenceDiagramDialog } = await import('../src/ui/Editor/SequenceDiagramDialog');
+
 function reset() {
   __resetInteraction();
+  prefs.clear();
   useEditorStore.setState({
     document: createDocument('Sequence dialog'),
     history: { past: [], future: [] },
