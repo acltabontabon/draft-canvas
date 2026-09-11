@@ -237,8 +237,11 @@ const MATRIX: Record<string, ConnectionCapability> = {
   'objectStorage>topic': capability(['publishes', 'event', 'dependsOn'], 'publishes', [], 'event'),
   'service>queue': capability(['publishes', 'command', 'event', 'dependsOn'], 'publishes', [], 'event'),
   'queue>service': capability(['consumes', 'deliversTo', 'event', 'dependsOn'], 'consumes', [], 'event'),
+  // `compensates` sits beside `command` because it *is* one — the saga's "release payment" is a
+  // new local transaction another service runs on request, not something done to it — but it names
+  // the one thing a plain command can't: that it exists to undo an earlier step that succeeded.
   'service>service': capability(
-    ['calls', 'http', 'grpc', 'command', 'query', 'event', 'dependsOn'],
+    ['calls', 'http', 'grpc', 'command', 'query', 'event', 'compensates', 'dependsOn'],
     'calls',
     CALL_BEHAVIORS,
   ),
@@ -273,7 +276,7 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // neither — the two halves of CQRS, read straight off the client's own connectors.
   'actor>service': capability(['calls', 'http', 'command', 'query'], 'calls', []),
   'service>external': capability(
-    ['calls', 'http', 'grpc', 'command', 'event', 'dependsOn'],
+    ['calls', 'http', 'grpc', 'command', 'event', 'compensates', 'dependsOn'],
     'calls',
     CALL_BEHAVIORS,
   ),

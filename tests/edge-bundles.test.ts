@@ -196,6 +196,30 @@ describe('routingPlan refuses to bundle where a trunk would not read as one', ()
     expect(plan.spineFor('e1')!.count).toBe(3);
   });
 
+  it('keeps a member bundled when its only parallel sibling touches different points', () => {
+    // A saga orchestrator's "reserve" (bottom → top, shared with its siblings)
+    // plus a "release" to the same service leaving the hub's left side: the
+    // two never overlap, so the reserve stays in the fan instead of being
+    // nudged out of it by a lane it never needed.
+    const { nodes, edges } = fanOut(3, {
+      sourceAnchor: { side: 'right', offset: 0.5 },
+      targetAnchor: { side: 'left', offset: 0.5 },
+    });
+    edges.push(
+      createEdge({
+        id: 'release',
+        source: 'hub',
+        target: 't0',
+        sourceAnchor: { side: 'top', offset: 0.5 },
+        targetAnchor: { side: 'left', offset: 0.25 },
+      }),
+    );
+    const plan = routingPlan(nodes, edges);
+    expect(plan.spineFor('e0')).toBeDefined();
+    expect(plan.spineFor('e0')!.count).toBe(3);
+    expect(plan.spineFor('release')).toBeUndefined();
+  });
+
   it('refuses a corridor it cannot cross without running through a node', () => {
     const { nodes, edges } = fanOut(4);
     // Parked squarely in the corridor, level with the hub: there is nowhere to

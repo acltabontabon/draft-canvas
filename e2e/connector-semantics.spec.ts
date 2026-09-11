@@ -142,6 +142,7 @@ test.describe('contextual connector toolbar', () => {
       'Routes',
       'Triggers',
       'Implemented by',
+      'Compensates',
     ]);
   });
 
@@ -335,6 +336,7 @@ test.describe('Junction connector', () => {
       'Routes',
       'Triggers',
       'Implemented by',
+      'Compensates',
     ]);
     await page.keyboard.press('Escape');
 

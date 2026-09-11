@@ -198,7 +198,7 @@ describe('capabilityFor — the capability matrix', () => {
   it('service → service: defaults to calls, exposes the full behaviour range minus event', () => {
     const cap = capabilityFor('service', 'service')!;
     expect(cap.defaultRelation).toBe('calls');
-    expect(cap.relations).toEqual(['calls', 'http', 'grpc', 'command', 'query', 'event', 'dependsOn']);
+    expect(cap.relations).toEqual(['calls', 'http', 'grpc', 'command', 'query', 'event', 'compensates', 'dependsOn']);
     expect(cap.behaviors).toEqual(['sync', 'async', 'callback', 'conditional', 'retry', 'failure', 'fallback']);
     expect(cap.behaviors).not.toContain('event');
   });
@@ -214,6 +214,7 @@ describe('capabilityFor — the capability matrix', () => {
     const cap = capabilityFor('service', 'external')!;
     expect(cap.defaultRelation).toBe('calls');
     expect(cap.relations).toContain('event');
+    expect(cap.relations).toContain('compensates');
     expect(cap.behaviors).toEqual(['sync', 'async', 'callback', 'conditional', 'retry', 'failure', 'fallback']);
   });
 

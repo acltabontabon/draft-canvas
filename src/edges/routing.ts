@@ -308,6 +308,24 @@ function pairKey(edge: DraftEdge): string {
   return edge.source < edge.target ? `${edge.source}|${edge.target}` : `${edge.target}|${edge.source}`;
 }
 
+/** The anchor this edge carries on `nodeId`'s end, whichever role that node plays. */
+function anchorOn(edge: DraftEdge, nodeId: string): EdgeAnchor | undefined {
+  return edge.source === nodeId ? edge.sourceAnchor : edge.targetAnchor;
+}
+
+const anchorSignature = (anchor: EdgeAnchor) => `${anchor.side}@${anchor.offset.toFixed(3)}`;
+
+/**
+ * Where on each node an edge actually touches, written per *node* rather than
+ * per role — so A→B leaving A's right side and B→A arriving on A's right side
+ * read as the same touch point on A, which is what makes the callback pair
+ * lane-siblings while two connectors that leave A from different sides are not.
+ * Only meaningful when both ends are anchored; see `laneIndex`.
+ */
+function touchKey(edge: DraftEdge, lowId: string, highId: string): string {
+  return `${anchorSignature(anchorOn(edge, lowId)!)}|${anchorSignature(anchorOn(edge, highId)!)}`;
+}
+
 /**
  * Every edge's parallel-lane slot, indexed once per `edges` array identity
  * and shared by every connector, on screen and in export. A component
@@ -317,21 +335,57 @@ function pairKey(edge: DraftEdge): string {
  * whenever any edge anywhere changes, and only a primitive read lets
  * zustand's default equality skip a re-render for edges whose own lane
  * didn't actually move. See `DraftEdgeView.tsx`.
+ *
+ * Two connectors are lane-siblings only when they would otherwise draw on
+ * top of each other. Sharing a node pair is necessary but not sufficient: a
+ * saga orchestrator's "reserve" (leaving its bottom) and its later "release"
+ * (leaving its left side) to the same service never coincide, and nudging
+ * both would only bend two clean routes for nothing — and, worse, disqualify
+ * the first from the fan-out spine its siblings share (`edges/bundles.ts`
+ * refuses a nudged member). So once every edge of a pair carries anchors at
+ * both ends, the pair is partitioned by where each edge touches each node
+ * (`touchKey`), and only edges with the same touch points fan out together.
+ * The moment any edge of the pair lacks an anchor, the whole pair falls back
+ * to one group: an anchorless end is placed by `chooseSides` at render time,
+ * so the index can't know whether it would coincide with an anchored sibling,
+ * and the safe answer is the nudge it always got.
+ *
+ * The accepted edge of this rule: two edges that share a hub anchor but land
+ * on different far anchors are separate lanes, so they overlap along the stem
+ * they genuinely share — the same picture a fan-out spine draws on purpose.
  */
 export function laneIndex(edges: readonly DraftEdge[]): Map<string, LaneAssignment> {
   const cached = laneIndexCache.get(edges);
   if (cached) return cached;
 
-  const groups = new Map<string, DraftEdge[]>();
+  const pairs = new Map<string, DraftEdge[]>();
   for (const edge of edges) {
     const key = pairKey(edge);
-    const group = groups.get(key);
+    const group = pairs.get(key);
     if (group) group.push(edge);
-    else groups.set(key, [edge]);
+    else pairs.set(key, [edge]);
+  }
+
+  const groups: DraftEdge[][] = [];
+  for (const pair of pairs.values()) {
+    if (pair.length === 1 || !pair.every((edge) => edge.sourceAnchor && edge.targetAnchor)) {
+      groups.push(pair);
+      continue;
+    }
+    const first = pair[0]!;
+    const [lowId, highId] = first.source < first.target ? [first.source, first.target] : [first.target, first.source];
+    const byTouch = new Map<string, DraftEdge[]>();
+    for (const edge of pair) {
+      const key = touchKey(edge, lowId, highId);
+      const group = byTouch.get(key);
+      if (group) group.push(edge);
+      else byTouch.set(key, [edge]);
+    }
+    groups.push(...byTouch.values());
   }
 
   const index = new Map<string, LaneAssignment>();
-  for (const group of groups.values()) {
+  for (const group of groups) {
     if (group.length === 1) {
       index.set(group[0]!.id, LONE_LANE);
       continue;

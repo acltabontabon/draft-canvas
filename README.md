@@ -14,9 +14,9 @@ An opinionated diagramming tool for devs to sketch fast when a meeting suddenly 
 **Draw** — Double-click to create shapes (text, notes, services, components, databases, queues,
 actors). Drag from an edge to connect; drop on empty canvas and the target node appears.
 
-**Start** — ⌘K, then "microservices", "modular monolith", "event driven", "hexagonal" or
-"monolith" drops in a composed starting diagram for that architecture — laid out, labelled, and
-ready to change. Ordinary shapes and connectors, so nothing is locked; one undo removes it all.
+**Start** — ⌘K, then "microservices", "modular monolith", "event driven", "hexagonal",
+"monolith", "backend for frontend", "cqrs", "saga" or "outbox" drops in a composed starting diagram
+for that architecture or pattern — laid out, labelled, and ready to change. Ordinary shapes and connectors, so nothing is locked; one undo removes it all.
 
 **Code** — Syntax-highlighted cards for Java, JSON, YAML, XML, SQL, shell, HTTP, log. Read-only,
 not an editor.

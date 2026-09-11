@@ -78,6 +78,13 @@ connector traces exactly the path on screen. Two invariants worth knowing:
   node, never persisted, never in history or validation. Five bundled connectors are still five
   rows in `DraftDocument.edges`. It's stored hub-relative rather than as an absolute coordinate,
   since the document isn't written during a drag and an absolute trunk would lag the branches.
+- **Two connectors between the same pair are lane-siblings only if they would coincide.** `laneIndex`
+  nudges parallel connectors apart, but once every connector of a pair carries anchors at both
+  ends it partitions the pair by where each one touches each node — a saga orchestrator's
+  "reserve" (bottom) and "release" (left side) to one service are two clean routes, not two nudged
+  ones, and the first stays eligible for its fan-out spine. Any anchorless connector in the pair
+  falls the whole pair back to one nudged group, since where `chooseSides` will place it isn't
+  known until render.
 
 #### Relationship model
 
@@ -294,7 +301,7 @@ The module imports only `document/`, and is not part of the `.draftcanvas` forma
 carry the weight:
 
 - **Composition is authored, layout is not solved.** There is no auto-layout library here, and for
-  five diagrams whose structure is known in advance that is the right answer: a solver produces
+  nine diagrams whose structure is known in advance that is the right answer: a solver produces
   something defensible, and a starter has to produce something *composed*. `catalog.ts` is literal
   coordinates; `compose.ts` is a handful of spacing constants, not an engine.
 - **Relationships come from the matrix, never from the catalog.** `build.ts` runs every connector

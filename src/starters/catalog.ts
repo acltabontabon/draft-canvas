@@ -1541,52 +1541,63 @@ const cqrs: ArchitectureStarter = {
  * - *This is not a distributed ACID transaction.* Each participant owns its own store and commits
  *   locally (`writes`, one per participant); nothing spans them. The orchestrator's note says what
  *   it does own: the saga's state and the order of steps — never each service's data.
- * - *Compensation is not rollback.* `Refund payment` is one more command to Payment, a new local
- *   transaction that semantically undoes an earlier one, drawn as its own connector with the
- *   condition under which it runs. Nothing here rewinds anything. The orchestrator's note says
- *   both halves of that in one breath; the refund connector itself carries no chip, so its label
- *   and condition stay legible on the arc.
+ * - *Compensation is not rollback.* `Release payment` is one more command to Payment — a new
+ *   local transaction that semantically undoes the reservation an earlier step made — and it is
+ *   the orchestrator that issues it, under the condition it runs on. Nothing here rewinds
+ *   anything, and nothing happens inside Payment on its own. The connector's relationship is
+ *   `compensates` (`service>service` offers it beside `command` for exactly this), so the popover,
+ *   the Sequence Diagram and a user's own saga all name the concept, not just this caption.
+ *   Reserve/release rather than capture/refund keeps the example free of payment-capture detail:
+ *   the forward step and its compensation are one reservation, made and then let go.
  * - *Not necessarily HTTP.* Every step is a `command` (`service>service` offers it, picked over
  *   the plain `calls` default): a command can travel as a request or as a message, and the
  *   orchestrator only needs a reply either way. The participants are generic Services for the same
- *   reason — nothing says they are HTTP APIs.
+ *   reason — nothing says they are HTTP APIs. No connector doubles into request/response: the
+ *   outcome each participant reports is told by the flows' captions, not by a second arrow.
  *
  * **What each element is.** `Order Service` (`api`) starts the saga; it is the one thing a client
  * talks to. `Saga Orchestrator` is a plain Service with the one accent no other element carries:
  * it is the coordinator, and its role reads from being the hub every step leaves from. (There is
  * no "orchestrator" kind, and one would serve only this starter — a choreographed saga has no
  * coordinator at all.) `Payment`, `Inventory`, `Fulfillment` are peers in one row, each over its
- * own store.
+ * own store. No saga state store: the note says the orchestrator owns that state, and a fourth
+ * database would read as one more participant.
  *
- * **Routing.** The three steps leave the orchestrator's bottom edge at three different points as
- * individually aimed straight rays (`routeMode: 'direct'`, `routing: 'straight'` — the technique
- * Hexagonal's ports use), never one bundle: each carries its own step name, and one collapsed
- * caption would erase the sequence. Read left to right, they are the order of the happy path. The
- * compensation is a second connector to Payment, leaving the orchestrator's left side and arriving
- * at Payment's left side as a bezier arc *outside* the columns — a visibly different path, so the
- * default canvas already says "this one is the exception" without dimming anything.
+ * **Routing.** The three steps are the plain shared-anchor fan every other starter's fan-out is
+ * (`down('orchestrator', …)`), so Smart Routing draws them as one stem, one trunk and three drops
+ * — the same tree the Microservices gateway is. Each drop keeps its own step name (a bundle only
+ * collapses the *relationship* caption, never a label), read left to right in the happy path's
+ * order; the *Happy path* flow numbers them when selected. The compensation is a second connector
+ * to Payment leaving the orchestrator's *left side* and landing on Payment's top edge beside the
+ * forward step: one orthogonal elbow that runs outside the fan, so the default canvas already says
+ * "this one is the exception" without a curve, a colour, or a chip. The two connectors to Payment
+ * touch different points, which is what keeps `laneIndex` from nudging either — and keeps the
+ * forward step inside the fan.
  *
  * **Flows.** *Happy path* walks every step and every local commit in execution order.
- * *Compensation* is three beats: reserve payment (succeeded), reserve inventory (fails), refund
- * payment — with everything else dimmed, the whole idea of the pattern is the only thing lit.
+ * *Compensation* is four beats: reserve payment (succeeded), its local commit (nothing outside
+ * can undo it), reserve inventory (fails), release payment — with everything else dimmed, the
+ * whole idea of the pattern is the only thing lit.
  */
-/** Wider than the shared `GUTTER`: three step captions sit side by side at the rays' midpoints. */
+/** Wider than the shared `GUTTER`: three step captions sit side by side on the drops. */
 const SAGA_GUTTER = 96;
 const SAGA_CX = (SERVICE.width * 3 + SAGA_GUTTER * 2) / 2;
 const SAGA_COLUMNS = columnsAt(SAGA_CX, 3, SERVICE.width, SAGA_GUTTER);
 const SAGA_ORDER_Y = 0;
 const SAGA_ORCHESTRATOR_Y = SAGA_ORDER_Y + SERVICE.height + BAND;
-/** Deeper than `BAND`: the three rays' captions all sit at the same height, and the outer rays
- *  need the extra run to read as aimed rather than splayed. */
-const SAGA_STEP_BAND = BAND + 24;
+/** Deeper than `BAND`: the fan's trunk sits past the corridor's midpoint (`edges/bundles.ts`),
+ *  and each drop below it needs room for its own step caption to sit clear of the trunk above and
+ *  the participant below. */
+const SAGA_STEP_BAND = BAND + 56;
 const SAGA_PARTICIPANT_Y = SAGA_ORCHESTRATOR_Y + SERVICE.height + SAGA_STEP_BAND;
 const SAGA_STORE_Y = SAGA_PARTICIPANT_Y + SERVICE.height + INNER_BAND;
 const SAGA_PARTICIPANTS = ['payment', 'inventory', 'fulfillment'] as const;
 const SAGA_PARTICIPANT_NAMES = ['Payment Service', 'Inventory Service', 'Fulfillment Service'] as const;
 const SAGA_STEP_NAMES = ['Reserve payment', 'Reserve inventory', 'Schedule fulfillment'] as const;
 const SAGA_STEP_KEYS = ['reserve-payment', 'reserve-inventory', 'schedule-fulfillment'] as const;
-/** Where each ray leaves the orchestrator's bottom edge — aimed, not fanned from one point. */
-const SAGA_RAY_OFFSETS = [0.25, 0.5, 0.75] as const;
+/** Where the compensation lands on Payment's top edge — beside the forward step's own centre
+ *  anchor, never on it. */
+const SAGA_COMPENSATION_IN: StarterEdgeSpec['targetAnchor'] = { side: 'top', offset: 0.25 };
 
 const sagaOrchestration: ArchitectureStarter = {
   id: 'saga-orchestration',
@@ -1624,7 +1635,7 @@ const sagaOrchestration: ArchitectureStarter = {
       attachments: [
         {
           type: 'note',
-          text: 'Owns the saga’s state and the order of steps. Each service owns its own data and commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.',
+          text: 'Owns the saga’s state and the order of steps. Each service commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.',
         },
       ],
     },
@@ -1656,38 +1667,21 @@ const sagaOrchestration: ArchitectureStarter = {
     ...SAGA_PARTICIPANTS.map(
       (key, index): StarterEdgeSpec => ({
         key: SAGA_STEP_KEYS[index],
-        from: 'orchestrator',
-        to: key,
-        sourceAnchor: { side: 'bottom', offset: SAGA_RAY_OFFSETS[index]! },
-        targetAnchor: TOP,
+        ...down('orchestrator', key),
         semantic: 'command',
         label: SAGA_STEP_NAMES[index],
-        routeMode: 'direct',
-        routing: 'straight',
-        ...(key === 'inventory'
-          ? {
-              attachments: [
-                {
-                  type: 'note' as const,
-                  text: 'Fails in this example — the orchestrator then compensates the steps that already succeeded.',
-                },
-              ],
-            }
-          : {}),
       }),
     ),
     ...SAGA_PARTICIPANTS.map((key) => ({ key: `commit-${key}`, ...down(key, `${key}-store`) })),
     {
-      key: 'refund',
+      key: 'release-payment',
       from: 'orchestrator',
       to: 'payment',
       sourceAnchor: LEFT,
-      targetAnchor: LEFT,
-      semantic: 'command',
-      label: 'Refund payment',
+      targetAnchor: SAGA_COMPENSATION_IN,
+      semantic: 'compensates',
+      label: 'Release payment',
       condition: 'if inventory fails',
-      routeMode: 'direct',
-      routing: 'bezier',
     },
   ],
   flows: [
@@ -1709,8 +1703,9 @@ const sagaOrchestration: ArchitectureStarter = {
       accent: 'rose',
       steps: [
         { edgeKey: 'reserve-payment', caption: 'Succeeded' },
+        { edgeKey: 'commit-payment', caption: 'Committed locally — nothing outside can roll it back' },
         { edgeKey: 'reserve-inventory', caption: 'Fails' },
-        { edgeKey: 'refund', caption: 'Undo the step that already succeeded' },
+        { edgeKey: 'release-payment', caption: 'A new local transaction that undoes the reservation' },
       ],
     },
   ],

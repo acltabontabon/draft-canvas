@@ -90,7 +90,7 @@ unrestricted connector.
 | Queue → Topic | dependsOn, event | *(none)* | **`status: 'unusual'`** — see below |
 | Queue → Dead-letter queue | deadLetters, dependsOn | deadLetters | `failure` behaviour and a dashed (`async`) line — the same edge "Add DLQ" generates; `deliveryAttempts` captions it "after N attempts" |
 | Topic → Dead-letter queue | dependsOn | *(none)* | **`status: 'unusual'`** — a topic never dead-letters; retries and a DLQ belong to each consumer's own queue |
-| Service → Service | calls, http, grpc, command, query, event, dependsOn | calls | the one pairing with a full sync/async/callback/conditional/retry/failure/fallback picker |
+| Service → Service | calls, http, grpc, command, query, event, compensates, dependsOn | calls | the one pairing with a full sync/async/callback/conditional/retry/failure/fallback picker |
 | Service → External | same as Service → Service | calls | `external` is a flavour of `service` for any pairing without its own row |
 | Component → Component | uses, dependsOn, calls | uses | an in-process dependency, never a network call; checked before the `service` fold |
 | Service → Port | calls, dependsOn | calls | |
@@ -120,7 +120,7 @@ the behaviour (`event` dots its own line) or to the user.
 - **`EdgeSemantic`** — what the connection *represents*: `http`, `grpc`, `event`, `command`,
   `query`, `reads`, `writes`, `publishes`, `consumes`, `calls`, `dependsOn`, `fansOut`,
   `deliversTo`, `ingests`, `replicates`, `cdc`, `syncs`, `deadLetters`, `invalidates`, `watches`,
-  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implementedBy`. A label convenience only —
+  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implementedBy`, `compensates`. A label convenience only —
   never changes the connector's colour.
 - **`ConnectorKind`** — how it *behaves*: `sync`, `async`, `event`, `callback`, `conditional`,
   `retry`, `failure`, `fallback`. Drives the solid/dashed line and small glyphs, not the caption.

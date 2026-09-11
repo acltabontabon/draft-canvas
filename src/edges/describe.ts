@@ -36,7 +36,7 @@ export interface EdgeDescribeContext {
   showSequence: boolean;
   /** This edge's 1-based position within the flow currently selected for overlay, if any. */
   stepIndex?: number;
-  /** This edge's parallel-lane slot — see `laneIndex` in `store/selectors.ts`. */
+  /** This edge's parallel-lane slot — see `laneIndex` in `edges/routing.ts`. */
   lane?: number;
   /**
    * The shared fan-out/fan-in trunk this connector travels along, if the

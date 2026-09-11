@@ -245,6 +245,54 @@ describe('laneIndex separates parallel edges between the same node pair', () => 
     const edges = [edgeWith('e1', 'a', 'b')];
     expect(laneIndex(edges)).toBe(laneIndex(edges));
   });
+
+  describe('anchored edges are siblings only when they actually touch the same points', () => {
+    const anchor = (side: 'top' | 'right' | 'bottom' | 'left', offset = 0.5) => ({ side, offset });
+
+    it('keeps a callback pair together when each end touches the same point on each node', () => {
+      const call = createEdge({ id: 'e1', source: 'a', target: 'b', sourceAnchor: anchor('right'), targetAnchor: anchor('left') });
+      const reply = createEdge({ id: 'e2', source: 'b', target: 'a', sourceAnchor: anchor('left'), targetAnchor: anchor('right') });
+      const lanes = laneIndex([call, reply]);
+      expect(lanes.get('e1')!.count).toBe(2);
+      expect(lanes.get('e2')!.count).toBe(2);
+      expect(lanes.get('e1')!.offset).not.toBe(lanes.get('e2')!.offset);
+    });
+
+    it('leaves two same-direction edges alone when they leave from different sides', () => {
+      // A saga orchestrator's "reserve" (bottom) and later "release" (left side) to one service.
+      const reserve = createEdge({ id: 'e1', source: 'a', target: 'b', sourceAnchor: anchor('bottom'), targetAnchor: anchor('top') });
+      const release = createEdge({ id: 'e2', source: 'a', target: 'b', sourceAnchor: anchor('left'), targetAnchor: anchor('top', 0.25) });
+      const lanes = laneIndex([reserve, release]);
+      expect(lanes.get('e1')).toEqual({ offset: 0, count: 1 });
+      expect(lanes.get('e2')).toEqual({ offset: 0, count: 1 });
+    });
+
+    it('splits by the far end too — same hub point, different landing points', () => {
+      const first = createEdge({ id: 'e1', source: 'a', target: 'b', sourceAnchor: anchor('bottom'), targetAnchor: anchor('top', 0.25) });
+      const second = createEdge({ id: 'e2', source: 'a', target: 'b', sourceAnchor: anchor('bottom'), targetAnchor: anchor('top', 0.75) });
+      const lanes = laneIndex([first, second]);
+      expect(lanes.get('e1')!.count).toBe(1);
+      expect(lanes.get('e2')!.count).toBe(1);
+    });
+
+    it('still nudges two anchored edges that touch identical points', () => {
+      const first = createEdge({ id: 'e1', source: 'a', target: 'b', sourceAnchor: anchor('bottom'), targetAnchor: anchor('top') });
+      const second = createEdge({ id: 'e2', source: 'a', target: 'b', sourceAnchor: anchor('bottom'), targetAnchor: anchor('top') });
+      const lanes = laneIndex([first, second]);
+      expect(lanes.get('e1')).toEqual({ offset: -0.5, count: 2 });
+      expect(lanes.get('e2')).toEqual({ offset: 0.5, count: 2 });
+    });
+
+    it('falls back to one group for the whole pair as soon as any edge lacks an anchor', () => {
+      // An anchorless end is placed by `chooseSides` at render time — it may well
+      // land exactly on the anchored sibling, so the safe answer is the nudge.
+      const anchored = createEdge({ id: 'e1', source: 'a', target: 'b', sourceAnchor: anchor('left'), targetAnchor: anchor('top') });
+      const loose = createEdge({ id: 'e2', source: 'a', target: 'b' });
+      const lanes = laneIndex([anchored, loose]);
+      expect(lanes.get('e1')!.count).toBe(2);
+      expect(lanes.get('e2')!.count).toBe(2);
+    });
+  });
 });
 
 describe('a lane offset nudges both endpoints without changing their side', () => {

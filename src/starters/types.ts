@@ -167,21 +167,19 @@ export interface StarterEdgeSpec {
   /**
    * `'direct'` opts this connector out of Smart Routing's fan-out/fan-in bundling
    * (`edges/bundles.ts`), so it always renders as its own independent line rather than sharing a
-   * trunk with sibling connectors off the same node/side. A starter reaches for this when several
-   * connectors leaving one hub are meant to read as distinct relationships rather than one
-   * collapsed-caption fan — Smart Routing's bundling is exactly right for a plain fan-out, but
-   * wrong for something like an inbound adapter dispatching into separate, independently-owned
-   * capabilities, where one shared trunk/caption would visually flatten them into a single
-   * relationship. Absent means the normal, bundle-eligible default every other starter connector
-   * already uses.
+   * trunk with sibling connectors off the same node/side. Absent — what every current starter
+   * connector uses — means the normal, bundle-eligible default. Reach for it only when a fan
+   * genuinely must not read as one relationship; note that a bundle never collapses a member's own
+   * `label` (only the relationship caption), so several differently-named steps leaving one hub
+   * still keep their names on their own branches without it. An earlier revision of the saga used
+   * this with `routing: 'straight'` to aim three separate rays, on the mistaken theory that a
+   * bundle would erase the step names; the fan was the better drawing.
    */
   routeMode?: RouteMode;
   /**
-   * Line style — `'smoothstep'` (the default every other starter connector uses), `'bezier'`, or
-   * `'straight'`. A starter reaches for `'straight'` when several `routeMode: 'direct'` connectors
-   * leave a shared hub at different anchor points and need to read as deliberate, individually
-   * aimed rays rather than each independently computing its own step/bend — a plain point-to-point
-   * line has no bend height to land inconsistently.
+   * Line style — `'smoothstep'` (the default every starter connector uses), `'bezier'`, or
+   * `'straight'`. Kept for a composition that needs a single point-to-point line; nothing in the
+   * catalog currently does, and Smart Routing only bundles the orthogonal default.
    */
   routing?: EdgeRouting;
   /**

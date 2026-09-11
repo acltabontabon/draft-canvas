@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { capabilityFor, categoryOf } from '../src/document/connectorSemantics';
-import { routeEdge, rectOf as rectOfNode } from '../src/edges/routing';
+import { laneIndex, routeEdge, rectOf as rectOfNode } from '../src/edges/routing';
+import { routingPlan } from '../src/edges/bundles';
 import type { DraftNode } from '../src/document/types';
 import { BOUNDARY_PAD, BOUNDARY_HEADER_CAPTION_ONLY, BOUNDARY_TITLE_SUBLINE_Y } from '../src/starters/compose';
 import { ARCHITECTURE_STARTERS, STARTER_IDS, starterById, starterSize } from '../src/starters';
@@ -706,13 +707,21 @@ describe('buildStarter', () => {
     const orchestrator = byText('Saga Orchestrator');
     // The one accent nobody else carries: the coordinator reads as the coordinator.
     expect(nodes.filter((node) => node.accent === orchestrator.accent)).toEqual([orchestrator]);
-    // Every step is a command from the orchestrator — transport-neutral, never a plain call.
-    const steps = edges.filter((edge) => edge.source === orchestrator.id);
-    expect(steps).toHaveLength(4);
+    // Every step is a command from the orchestrator — transport-neutral, never a plain call — and
+    // the compensation is the one connector that says what it is for.
+    const fromOrchestrator = edges.filter((edge) => edge.source === orchestrator.id);
+    expect(fromOrchestrator).toHaveLength(4);
+    const release = fromOrchestrator.find((edge) => edge.condition)!;
+    const steps = fromOrchestrator.filter((edge) => edge !== release);
+    expect(steps.map((edge) => edge.label)).toEqual(['Reserve payment', 'Reserve inventory', 'Schedule fulfillment']);
     for (const step of steps) {
       expect(step.semantic).toBe('command');
-      expect(step.label).toBeTruthy();
-      expect(step.routeMode).toBe('direct');
+      expect(step.semanticsOrigin).toBe('explicit');
+    }
+    for (const edge of fromOrchestrator) {
+      expect(edge.routeMode).toBeUndefined();
+      expect(edge.routing).toBe('smoothstep');
+      expect(edge.hasResponse).toBeUndefined();
     }
     // Each participant owns exactly its own store and commits locally — no cross-service write.
     for (const name of ['Payment', 'Inventory', 'Fulfillment']) {
@@ -723,26 +732,44 @@ describe('buildStarter', () => {
       expect(writes[0]!.source).toBe(service.id);
       expect(writes[0]!.semantic).toBe('writes');
     }
-    // Compensation is a second, conditioned command to the service whose step already succeeded.
-    const toPayment = steps.filter((edge) => edge.target === byText('Payment Service').id);
-    expect(toPayment).toHaveLength(2);
-    const refund = toPayment.find((edge) => edge.condition)!;
-    expect(refund.label).toBe('Refund payment');
-    expect(refund.routing).toBe('bezier');
-    expect(JSON.stringify(refund.sourceAnchor)).not.toBe(JSON.stringify(toPayment.find((e) => e !== refund)!.sourceAnchor));
-    // The three happy-path rays leave the orchestrator at three different points.
-    const rays = steps.filter((edge) => edge !== refund && edge.target !== byText('Saga Orchestrator').id);
-    expect(new Set(rays.map((edge) => edge.sourceAnchor?.offset)).size).toBe(3);
+    // Compensation is a second, conditioned connector to the service whose step already succeeded
+    // — its own relationship, leaving the orchestrator's side rather than its bottom, and landing
+    // beside (never on) the forward step's anchor.
+    const payment = byText('Payment Service');
+    expect(release.target).toBe(payment.id);
+    expect(release.semantic).toBe('compensates');
+    expect(release.label).toBe('Release payment');
+    expect(release.condition).toBe('if inventory fails');
+    expect(release.sourceAnchor).toEqual({ side: 'left', offset: 0.5 });
+    const reservePayment = steps.find((edge) => edge.target === payment.id)!;
+    expect(reservePayment.targetAnchor).toEqual({ side: 'top', offset: 0.5 });
+    expect(release.targetAnchor?.side).toBe('top');
+    expect(release.targetAnchor?.offset).not.toBe(reservePayment.targetAnchor?.offset);
+
+    // The three steps share one hub anchor, so Smart Routing draws them as one fan — and the
+    // compensation, touching different points, neither joins the fan nor nudges the step out of it.
+    for (const step of steps) expect(step.sourceAnchor).toEqual({ side: 'bottom', offset: 0.5 });
+    const plan = routingPlan(nodes, edges);
+    const spine = plan.spineFor(steps[0]!.id);
+    expect(spine).toBeDefined();
+    expect(spine!.count).toBe(3);
+    for (const step of steps) expect(plan.spineFor(step.id)).toBe(spine);
+    expect(plan.spineFor(release.id)).toBeUndefined();
+    expect(plan.spineFor(edges.find((edge) => edge.target === orchestrator.id)!.id)).toBeUndefined();
+    const lanes = laneIndex(edges);
+    expect(lanes.get(reservePayment.id)).toEqual({ offset: 0, count: 1 });
+    expect(lanes.get(release.id)).toEqual({ offset: 0, count: 1 });
 
     expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
       ['Happy path', 7],
-      ['Compensation', 3],
+      ['Compensation', 4],
     ]);
     const happy = flows[0]!.steps.map((step) => step.edgeId);
-    expect(happy).not.toContain(refund.id);
+    expect(happy).not.toContain(release.id);
     const compensation = flows[1]!.steps.map((step) => step.edgeId);
-    expect(compensation[2]).toBe(refund.id);
-    expect(compensation[1]).toBe(steps.find((edge) => edge.target === byText('Inventory Service').id)!.id);
+    const commitPayment = edges.find((edge) => edge.source === payment.id)!;
+    const reserveInventory = steps.find((edge) => edge.target === byText('Inventory Service').id)!;
+    expect(compensation).toEqual([reservePayment.id, commitPayment.id, reserveInventory.id, release.id]);
   });
 
   it('models the outbox as one atomic write of state and event, published later, consumed independently', () => {

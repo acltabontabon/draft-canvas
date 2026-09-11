@@ -65,6 +65,7 @@ const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   routes: 'Routes',
   triggers: 'Triggers',
   implementedBy: 'Implemented by',
+  compensates: 'Compensates',
 };
 
 const CONNECTOR_KIND_LABELS: Record<ConnectorKind, string> = {

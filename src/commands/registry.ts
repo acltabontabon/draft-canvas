@@ -932,7 +932,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       id: 'edge-semantic',
       title: 'Change relationship…',
       group: 'connector',
-      keywords: ['semantic', 'http', 'event', 'reads', 'writes', 'publishes', 'consumes', 'calls', 'implements', 'implemented by', 'meaning', 'type'],
+      keywords: ['semantic', 'http', 'event', 'reads', 'writes', 'publishes', 'consumes', 'calls', 'implements', 'implemented by', 'compensates', 'compensation', 'saga', 'meaning', 'type'],
       hint: semanticTitle,
       run: () => ({
         prompt: 'Relationship',

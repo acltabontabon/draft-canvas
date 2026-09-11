@@ -195,6 +195,10 @@ export const EDGE_SEMANTICS = [
   'routes',
   'triggers',
   'implementedBy',
+  /** A compensating action: a new local transaction that semantically undoes an earlier one
+   *  (a saga's "release payment" after "reserve payment"). A command in every other respect —
+   *  offered where `command` is, never a rollback of anything. */
+  'compensates',
 ] as const;
 export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];
 

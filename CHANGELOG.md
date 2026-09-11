@@ -6,6 +6,21 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
+- Four new starters. Under **Architectures**: **Backend for Frontend** (a web and a mobile
+  experience, each with its own tailored adapter over shared services) and **CQRS** (a command
+  side and a query side, bridged only by an event). Under **Patterns**: **Saga (Orchestration)**
+  (one coordinator issuing commands to services that each commit locally, with an explicit
+  compensating action) and **Transactional Outbox** (a service writes its data and its outbox
+  record in one transaction; a separate publisher delivers the event afterwards).
+- Starters can now come with ready-made flows. CQRS opens with *Submit command* and *Read
+  projection*; the saga with *Happy path* and *Compensation*; the outbox with *Service
+  transaction*, *Outbox publication*, and *Event consumption*. Select one to dim everything else,
+  or present it to step through — they're ordinary flows, so rename, reorder, or delete them like
+  any other.
+- A connector between two services (or a service and an external system) can now be marked
+  **Compensates** — a compensating action: a new local transaction that undoes an earlier one, the
+  way a saga releases a payment reservation after a later step fails. It sits beside *Command* in
+  the relationship picker and names itself in the Sequence Diagram.
 - Draft Canvas now sketches the obvious next move. Select a topic that has a publisher and a
   translucent queue appears beside it, already connected; press Tab (or click it) and it becomes
   real, in one undoable step — and the new queue, having no consumer yet, offers a worker in turn.
@@ -42,17 +57,6 @@ All notable changes to Draft Canvas are documented here.
 - An element created from the Quick Connect picker now gets the same inferred relationship its
   connector would have had if you'd drawn it by hand.
 
-- Four new starters. Under **Architectures**: **Backend for Frontend** (a web and a mobile
-  experience, each with its own tailored adapter over shared services) and **CQRS** (a command
-  side and a query side, bridged only by an event). Under **Patterns**: **Saga (Orchestration)**
-  (one coordinator issuing commands to services that each commit locally, with an explicit
-  compensating action) and **Transactional Outbox** (a service writes its data and its outbox
-  record in one transaction; a separate publisher delivers the event afterwards).
-- Starters can now come with ready-made flows. CQRS opens with *Submit command* and *Read
-  projection*; the saga with *Happy path* and *Compensation*; the outbox with *Service
-  transaction*, *Outbox publication*, and *Event consumption*. Select one to dim everything else,
-  or present it to step through — they're ordinary flows, so rename, reorder, or delete them like
-  any other.
 - A connector from a person to a service can now be marked as a `query`, not just a `command`.
 - Escape now always exits presentation mode, including when no flow is currently playing — it
   previously only worked while a flow was actively stepping through.
@@ -70,6 +74,16 @@ All notable changes to Draft Canvas are documented here.
 
 ### Changed
 
+- The **Saga (Orchestration)** starter is redrawn. The three steps leave the orchestrator as one
+  orthogonal fan, each drop carrying its own step name; the compensation is now *Release payment*
+  (the counterpart of *Reserve payment*), a **Compensates** connector that leaves the
+  orchestrator's side and lands beside the forward step, still conditioned *if inventory fails*.
+  Its *Compensation* flow gains the payment's local commit as a beat, so the reason a rollback
+  isn't possible is part of the story.
+- Two connectors between the same pair of elements are only nudged apart when they would actually
+  draw on top of each other. Connectors that leave or land on different anchor points keep their
+  own clean routes — and a fan-out member no longer drops out of its bundle because of a sibling
+  that never overlapped it.
 - ⌘K groups starters under **Architectures** and **Patterns** instead of one long list.
 - The starter list on a blank canvas and in an empty library is now grouped by category and kept
   to a tidy width, instead of running the full length of the screen.

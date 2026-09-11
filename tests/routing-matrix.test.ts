@@ -126,10 +126,11 @@ describe('routing matrix: callback pair (A→B and B→A) fan out together witho
     const call = store.getState().connect(a.id, b.id, 'right', 'left')!;
     const reply = store.getState().connect(b.id, a.id, 'bottom', 'top')!;
 
+    // The two never touch the same point on either node (right/left vs
+    // bottom/top), so neither is nudged — they already read as two lines.
     const lanesBefore = laneIndex(store.getState().document.edges);
-    expect(lanesBefore.get(call.id)!.count).toBe(2);
-    expect(lanesBefore.get(reply.id)!.count).toBe(2);
-    expect(lanesBefore.get(call.id)!.offset).not.toBe(lanesBefore.get(reply.id)!.offset);
+    expect(lanesBefore.get(call.id)).toEqual({ offset: 0, count: 1 });
+    expect(lanesBefore.get(reply.id)).toEqual({ offset: 0, count: 1 });
 
     store.getState().reconnectEdge(call.id, 'target', c.id, 'left');
 
