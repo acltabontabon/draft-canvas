@@ -149,9 +149,6 @@ export interface UiStore {
   presentationReveal: { edgeId: string; attachmentId: string } | null;
   /** Whether the Flows panel — the one surface for flows (`FlowPanel.tsx`) — is visible. */
   flowPanelOpen: boolean;
-  /** Whether the Sequence Diagram dialog (`SequenceDiagramDialog.tsx`) is open — a derived,
-   *  read-only lens over `editorStore.selectedFlowId`, never itself undo-tracked. */
-  sequenceDiagramOpen: boolean;
   /**
    * A flow id the panel should open in rename mode, with its title selected — set by every
    * "new flow" entry point so naming is part of creating, not a separate errand. One-shot, like
@@ -251,7 +248,6 @@ export interface UiStore {
   ) => void;
   setPresentationReveal: (target: { edgeId: string; attachmentId: string } | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
-  setSequenceDiagramOpen: (open: boolean) => void;
   requestFlowRename: (flowId: string | null) => void;
   setInteractionActive: (active: boolean) => void;
   requestEdit: (id: string | null) => void;
@@ -314,7 +310,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   openAttachmentDetail: null,
   presentationReveal: null,
   flowPanelOpen: false,
-  sequenceDiagramOpen: false,
   flowRenameRequestId: null,
   interactionActive: false,
   editRequestId: null,
@@ -364,7 +359,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
-  setSequenceDiagramOpen: (sequenceDiagramOpen) => set({ sequenceDiagramOpen }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
   setInteractionActive: (interactionActive) =>
     set((state) => (state.interactionActive === interactionActive ? state : { interactionActive })),

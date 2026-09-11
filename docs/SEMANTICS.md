@@ -157,6 +157,14 @@ own `async` flag is set; everything else is `sync`. This reads the two existing,
 vocabularies (`EdgeSemantic`, `ConnectorKind`) plus `hasResponse` — it adds no new field to
 `DraftEdge` and no new inference rule to the capability matrix.
 
+A connector's `semantic` can also be purely **structural** — a static architectural fact rather
+than something that happens at a point in time during a Flow. `src/sequence/structural.ts`'s
+`STRUCTURAL_SEMANTICS` (`dependsOn`, `implementedBy`) is checked before a Flow step's edge is ever
+turned into a message: a structural edge contributes no message at all (though its endpoints may
+still appear as participants via some *other*, behavioral edge). Deliberately small — every other
+`EdgeSemantic`, including `uses` (Component ↔ Component) and `compensates`/`projects` (Saga/CQRS),
+describes a real runtime interaction and is never excluded.
+
 ## Intent Continuation rules
 
 The next moves Draft Canvas will sketch for a selected node (see

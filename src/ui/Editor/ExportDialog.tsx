@@ -4,9 +4,15 @@ import {
   exportPngFile,
   exportProjectFile,
   exportSecureProjectFile,
+  exportSequenceMermaidFile,
+  exportSequencePlantUmlFile,
   exportSvgFile,
+  sequenceSourceFor,
   type GifSpeed,
+  type SequenceFormat,
 } from '../../export';
+import { flowIsPlayable } from '../../document/flow';
+import { readPreference, writePreference } from '../../lib/preferences';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { usePersonality } from '../personality/usePersonality';
@@ -15,10 +21,24 @@ import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import type { ThemeName } from '../../render/theme/tokens';
 
+const SEQUENCE_FORMAT_PREFERENCE = 'sequence-export-format';
+
+function readSequenceFormatPreference(): SequenceFormat {
+  return readPreference(SEQUENCE_FORMAT_PREFERENCE) === 'plantuml' ? 'plantuml' : 'mermaid';
+}
+
+const SEQUENCE_FORMAT_LABEL: Record<SequenceFormat, string> = { mermaid: 'Mermaid', plantuml: 'PlantUML' };
+
 /**
  * Export options are deliberately few: what you get, in which palette, and
  * whether the background is drawn. Anything more is a settings screen standing
  * between a diagram and a Slack message.
+ *
+ * Organized into three sections — Document, Image, Diagram Source — so growing the list of
+ * formats doesn't turn this into an endless flat list. Options that only apply to Image exports
+ * (Palette, Transparent background, Include canvas background, Selection only) live inside that
+ * section rather than as global controls above everything, since Document and Diagram Source
+ * exports ignore all four.
  */
 export function ExportDialog() {
   const open = useUiStore((state) => state.exportOpen);
@@ -39,6 +59,7 @@ export function ExportDialog() {
   const [gifFlowIdChoice, setGifFlowIdChoice] = useState<string | null>(null);
   const [gifSpeed, setGifSpeed] = useState<GifSpeed>('normal');
   const [gifLoop, setGifLoop] = useState(true);
+  const [sequenceFormat, setSequenceFormat] = useState<SequenceFormat>(readSequenceFormatPreference);
 
   // "Export selection…" from the command palette: the request simply reads as the checkbox
   // being on until the user touches it or closes the dialog — derived, not copied into state, so
@@ -75,6 +96,12 @@ export function ExportDialog() {
     preset,
   };
 
+  const playableFlowCount = document.flows.filter((flow) => flowIsPlayable(document, flow)).length;
+  const setSequenceFormatValue = (next: SequenceFormat) => {
+    setSequenceFormat(next);
+    writePreference(SEQUENCE_FORMAT_PREFERENCE, next);
+  };
+
   const run = async (task: () => void | Promise<void>, what: string) => {
     setBusy(true);
     try {
@@ -90,61 +117,20 @@ export function ExportDialog() {
     }
   };
 
+  const copySequenceSource = async (asMarkdown: boolean) => {
+    const source = sequenceSourceFor(document, sequenceFormat);
+    const text = asMarkdown ? `\`\`\`mermaid\n${source}\`\`\`\n` : source;
+    try {
+      await navigator.clipboard.writeText(text);
+      notify(asMarkdown ? 'Copied as Markdown' : `Copied as ${SEQUENCE_FORMAT_LABEL[sequenceFormat]}`, 'info');
+    } catch {
+      notify('Copy failed — check clipboard permissions.', 'error');
+    }
+  };
+
   return (
-    <Modal title="Export" width={520} onClose={close}>
-      <div className="dc-export-options">
-        <label className="dc-field dc-field-inline">
-          <span>Palette</span>
-          <select
-            className="dc-select"
-            value={paletteName}
-            onChange={(event) => setPaletteName(event.target.value as ThemeName)}
-          >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </label>
-
-        <label className="dc-check">
-          <input
-            type="checkbox"
-            checked={transparent}
-            onChange={(event) => setTransparent(event.target.checked)}
-          />
-          <span>Transparent background</span>
-        </label>
-
-        {hasBackground && (
-          <label className="dc-check">
-            <input
-              type="checkbox"
-              checked={includeBackground}
-              onChange={(event) => setIncludeBackground(event.target.checked)}
-            />
-            <span>Include canvas background</span>
-          </label>
-        )}
-
-        <label className="dc-check" data-disabled={selection.nodes.length === 0 ? 'true' : undefined}>
-          <input
-            type="checkbox"
-            checked={effectiveSelectionOnly}
-            disabled={selection.nodes.length === 0}
-            onChange={(event) => {
-              setSelectionOnly(event.target.checked);
-              requestExportSelection(false);
-            }}
-          />
-          <span>
-            Selection only
-            {selection.nodes.length > 0 && (
-              <span className="dc-muted"> ({selection.nodes.length} selected)</span>
-            )}
-          </span>
-        </label>
-      </div>
-
-      <div className="dc-export-actions">
+    <Modal title="Export" width={560} onClose={close}>
+      <ExportSection title="Document">
         <ExportChoice
           title="Editable document"
           detail="Anyone with this .draftcanvas file can read the diagram — plain, diffable JSON."
@@ -159,6 +145,61 @@ export function ExportDialog() {
           busy={busy}
           onClick={() => setSecurePromptOpen(true)}
         />
+      </ExportSection>
+
+      <ExportSection title="Image">
+        <div className="dc-export-options">
+          <label className="dc-field dc-field-inline">
+            <span>Palette</span>
+            <select
+              className="dc-select"
+              value={paletteName}
+              onChange={(event) => setPaletteName(event.target.value as ThemeName)}
+            >
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </label>
+
+          <label className="dc-check">
+            <input
+              type="checkbox"
+              checked={transparent}
+              onChange={(event) => setTransparent(event.target.checked)}
+            />
+            <span>Transparent background</span>
+          </label>
+
+          {hasBackground && (
+            <label className="dc-check">
+              <input
+                type="checkbox"
+                checked={includeBackground}
+                onChange={(event) => setIncludeBackground(event.target.checked)}
+              />
+              <span>Include canvas background</span>
+            </label>
+          )}
+
+          <label className="dc-check" data-disabled={selection.nodes.length === 0 ? 'true' : undefined}>
+            <input
+              type="checkbox"
+              checked={effectiveSelectionOnly}
+              disabled={selection.nodes.length === 0}
+              onChange={(event) => {
+                setSelectionOnly(event.target.checked);
+                requestExportSelection(false);
+              }}
+            />
+            <span>
+              Selection only
+              {selection.nodes.length > 0 && (
+                <span className="dc-muted"> ({selection.nodes.length} selected)</span>
+              )}
+            </span>
+          </label>
+        </div>
+
         <ExportChoice
           title="Vector image"
           detail="SVG with real text and shapes — renders in a README, scales cleanly."
@@ -227,7 +268,55 @@ export function ExportDialog() {
             </label>
           </ExportChoice>
         )}
-      </div>
+      </ExportSection>
+
+      <ExportSection title="Diagram Source" last>
+        <ExportChoice
+          title="Sequence Diagram"
+          detail={
+            playableFlowCount > 0
+              ? 'Mermaid or PlantUML source, built from your Flows — paste it into any diagram tool.'
+              : 'Add a Flow to export sequence diagram source.'
+          }
+          action={`Export ${SEQUENCE_FORMAT_LABEL[sequenceFormat]}`}
+          busy={busy}
+          disabled={playableFlowCount === 0}
+          onClick={() =>
+            void run(
+              () =>
+                sequenceFormat === 'mermaid'
+                  ? exportSequenceMermaidFile(document)
+                  : exportSequencePlantUmlFile(document),
+              'Sequence Diagram export',
+            )
+          }
+        >
+          <label className="dc-field dc-field-inline">
+            <span>Format</span>
+            <select
+              className="dc-select"
+              value={sequenceFormat}
+              disabled={playableFlowCount === 0}
+              onChange={(event) => setSequenceFormatValue(event.target.value as SequenceFormat)}
+            >
+              <option value="mermaid">Mermaid</option>
+              <option value="plantuml">PlantUML</option>
+            </select>
+          </label>
+          {playableFlowCount > 0 && (
+            <div className="dc-export-secondary-actions">
+              <Button variant="quiet" onClick={() => void copySequenceSource(false)}>
+                Copy source
+              </Button>
+              {sequenceFormat === 'mermaid' && (
+                <Button variant="quiet" onClick={() => void copySequenceSource(true)}>
+                  Copy as Markdown
+                </Button>
+              )}
+            </div>
+          )}
+        </ExportChoice>
+      </ExportSection>
 
       <p className="dc-muted dc-export-note">
         Exports are generated in this browser and downloaded straight to your machine.
@@ -323,11 +412,25 @@ function SecureExportPrompt({
   );
 }
 
+/** A labeled group of `ExportChoice` cards — plain text heading, never a `<details>` disclosure,
+ *  so the modal's existing focus-trap/Tab-wrap logic (`Modal.tsx`) needs no changes: every control
+ *  inside stays the same button/select/checkbox kind it already handles. `last` drops the section's
+ *  own bottom margin/divider, since the dialog's closing note follows immediately after. */
+function ExportSection({ title, last, children }: { title: string; last?: boolean; children: ReactNode }) {
+  return (
+    <section className={last ? 'dc-export-section dc-export-section-last' : 'dc-export-section'}>
+      <h3 className="dc-export-section-title">{title}</h3>
+      <div className="dc-export-actions">{children}</div>
+    </section>
+  );
+}
+
 function ExportChoice({
   title,
   detail,
   action,
   busy,
+  disabled,
   onClick,
   children,
 }: {
@@ -335,17 +438,18 @@ function ExportChoice({
   detail: string;
   action: string;
   busy: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children?: ReactNode;
 }) {
   return (
-    <div className="dc-export-choice">
+    <div className="dc-export-choice" data-disabled={disabled ? 'true' : undefined}>
       <div>
         <strong>{title}</strong>
         <p className="dc-muted">{detail}</p>
         {children && <div className="dc-export-choice-options">{children}</div>}
       </div>
-      <Button variant="solid" icon="export" disabled={busy} onClick={onClick}>
+      <Button variant="solid" icon="export" disabled={busy || disabled} onClick={onClick}>
         {action}
       </Button>
     </div>

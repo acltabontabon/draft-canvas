@@ -9,6 +9,7 @@ import { FILE_MIME, fileNameFor, serializeDocument } from './project';
 export * from './project';
 export * from './secureProject';
 export * from './gif';
+export * from './sequence';
 export { downloadBlob, downloadText } from './download';
 export { resolveExportBackground } from './background';
 

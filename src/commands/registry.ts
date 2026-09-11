@@ -260,24 +260,6 @@ function flowCommands(ctx: CommandContext): Command[] {
         ],
       }),
     });
-    commands.push({
-      id: 'sequence-diagram',
-      title: 'Sequence Diagram…',
-      group: 'flow',
-      keywords: ['mermaid', 'plantuml', 'uml', 'copy', 'export text', 'timeline'],
-      run: (inner) => ({
-        prompt: 'Sequence Diagram for',
-        options: inner.playback.flows.map((flow) => ({
-          id: `sequence-diagram:${flow.id}`,
-          title: flow.title,
-          hint: `${flow.steps.length} step${flow.steps.length === 1 ? '' : 's'}`,
-          run: (deep: CommandContext) => {
-            deep.editor.setSelectedFlowId(flow.id);
-            deep.ui.setSequenceDiagramOpen(true);
-          },
-        })),
-      }),
-    });
   } else {
     commands.push({
       id: 'present',
@@ -436,7 +418,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       id: 'export',
       title: 'Export…',
       group: 'canvas',
-      keywords: ['png', 'svg', 'gif', 'download', 'save', 'share', 'image'],
+      keywords: ['png', 'svg', 'gif', 'download', 'save', 'share', 'image', 'sequence diagram', 'mermaid', 'plantuml', 'uml'],
       shortcut: `${MOD_SYMBOL} E`,
       run: (inner) => inner.ui.setExportOpen(true),
     },

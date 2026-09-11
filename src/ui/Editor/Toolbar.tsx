@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { flowIsPlayable } from '../../document/flow';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { DEV_PRESETS, PRESETS, SELECT_TOOLTIP, tooltipContentFor, type Preset } from '../../canvas/presets';
@@ -42,13 +41,6 @@ export function Toolbar({
   const activeFlowTitle = useEditorStore((state) =>
     state.selectedFlowId ? state.document.flows.find((flow) => flow.id === state.selectedFlowId)?.title : undefined,
   );
-  const canShowSequenceDiagram = useEditorStore((state) => {
-    const flow = state.selectedFlowId
-      ? state.document.flows.find((candidate) => candidate.id === state.selectedFlowId)
-      : undefined;
-    return flow !== undefined && flowIsPlayable(state.document, flow);
-  });
-  const setSequenceDiagramOpen = useUiStore((state) => state.setSequenceDiagramOpen);
   const updateReady = useUiStore((state) => state.updateReady);
   const learnModeActive = useUiStore((state) => state.learnModeActive);
   const setLearnModeActive = useUiStore((state) => state.setLearnModeActive);
@@ -187,13 +179,6 @@ export function Toolbar({
           )}
         </Button>
         <Button icon="present" variant="ghost" onClick={onPresent} title="Present (Cmd+Enter)" />
-        <Button
-          icon="sequence"
-          variant="ghost"
-          disabled={!canShowSequenceDiagram}
-          onClick={() => setSequenceDiagramOpen(true)}
-          title="Sequence Diagram"
-        />
         <span className="dc-toolbar-divider" />
         <Button icon="export" variant="quiet" onClick={onExport} title="Export (Cmd+E)" />
         <Button

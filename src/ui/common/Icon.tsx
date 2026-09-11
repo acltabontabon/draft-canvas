@@ -24,7 +24,6 @@ const PATHS = {
   file: 'M6 3h8l4 4v14H6z M14 3v4h4',
   upload: 'M12 20V9 M8 13l4-4 4 4 M4 5h16',
   grid: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z',
-  sequence: 'M5 6h14 M5 12h14 M5 18h14',
   align: 'M4 4v16 M9 8h11 M9 16h7',
   more: 'M6 12h.01 M12 12h.01 M18 12h.01',
   check: 'M5 13l4 4L19 7',

@@ -29,9 +29,11 @@ All notable changes to Draft Canvas are documented here.
 - A connector between two services (or a service and an external system) can be marked
   **Compensates** — undoing an earlier transaction when a later step fails. It sits in the
   relationship picker beside *Command* and names itself in the Sequence Diagram.
-- A flow can now be viewed as a Sequence Diagram — its connectors laid out as participants and
-  ordered messages over time, with sync/async, publish/consume, and request/response read
-  straight from what you've already drawn. Copy the result as Mermaid or PlantUML in one click.
+- Export now includes a **Sequence Diagram** source file — every flow, aggregated into one
+  coherent Mermaid or PlantUML diagram (each flow its own named group, never blindly merged),
+  with participants, sync/async/response messages, and notes/questions/code read straight from
+  what you've already drawn. Downloads a plain `.sequence.mmd`/`.sequence.puml` file — bring your
+  own Mermaid/PlantUML renderer. "Copy source" and "Copy as Markdown" are also available.
 - Four new starters, all with ready-made flows you can select to dim everything else or step
   through:
   - Under **Architectures**: **Backend for Frontend** (a web and mobile experience, each with its

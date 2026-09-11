@@ -241,41 +241,57 @@ gates Present everywhere: the panel's ▶, the picker, and the palette never off
 Connector replacements keep a flow's story intact — inserting a worker on `A → B` rewrites that
 step into `A → W`, `W → B` (`spliceEdgeInFlows`) rather than losing the beat.
 
-## Sequence Diagram
+## Sequence Diagram export
 
-`src/sequence/` derives a temporal reading of a Flow — participants and ordered messages — without
-duplicating it: the Flow stays the only source of truth, and a `SequenceModel` (`types.ts`) is
-recomputed fresh from the live document every time the dialog (`ui/Editor/SequenceDiagramDialog.tsx`)
-is open. Nothing here is persisted, and nothing here is undo-tracked (opening the dialog, switching
-which flow it shows, or changing the export format are all plain `uiStore`/local-state changes,
-exactly like `selectedFlowId` itself).
+`src/sequence/` turns the whole document's Flows into a coherent Mermaid or PlantUML sequence
+diagram — a derived **export format**, reached from the Export dialog (`ExportDialog.tsx`), not a
+Draft Canvas editing/viewing mode. There is no in-app preview and no Mermaid/PlantUML rendering
+dependency: Draft Canvas's responsibility ends at producing correct, readable, deterministic
+source text. Rendering that text is the job of whatever tool the user already reaches for
+(Mermaid Live Editor, a PlantUML renderer, an IDE plugin, GitHub/GitLab, a docs pipeline).
 
 The pipeline is one direction, each stage a pure, independently testable function:
 
 ```
-DraftFlow  ->  buildSequenceModel (build.ts)  ->  SequenceModel
-                                                        |
-                        +-------------------+----------+----------+
-                        v                   v                     v
-                  toMermaid (mermaid.ts)  toPlantUml (plantuml.ts)  computeSequenceLayout (layout.ts)
+DraftDocument (every playable Flow)  ->  buildSequenceModel (build.ts)  ->  SequenceModel
+                                                                                  |
+                                                              +-------------------+-------------------+
+                                                              v                                       v
+                                                        toMermaid (mermaid.ts)                 toPlantUml (plantuml.ts)
+                                                              |                                       |
+                                                              v                                       v
+                                                         <name>.sequence.mmd                   <name>.sequence.puml
 ```
 
-`build.ts` walks `flow.steps` via `presentation/useFlowPlayback.ts`'s own `resolveFlowStep` (the
-existing "interpret a step" primitive — not reimplemented here), then `flatten.ts` collapses any
-Junction crossing into a single message (see "Junctions are semantics-transparent" in
+`buildSequenceModel(doc)` aggregates *every playable Flow* into one model — "1 Flow = 1 diagram" is
+deliberately not the shape: a Saga's "Happy Path" and "Compensation" Flows export as one coherent
+`payment-saga.sequence.mmd`, not two separate files. Each Flow becomes its own `SequenceGroup`
+(rendered as `rect … end` + a synthesized title Note in Mermaid, a native `group … end` in
+PlantUML) — never blindly concatenated. Participants get a stable internal id (never emitted) plus
+a human-readable, collision-safe `alias` (`alias.ts`) that IS emitted, and are deduplicated across
+every Flow by resolved node identity, in pure first-appearance order (`doc.flows` array order is
+the user's own lever for "who's introduced first" — see `build.ts`'s own reasoning for why this
+beats any kind-based heuristic). A connector whose `semantic` is purely structural (`dependsOn`,
+`implementedBy` — see `structural.ts`) never becomes a message: it describes a static architectural
+fact, not something that happens at a point in time.
+
+`build.ts` walks each flow's `steps` via `presentation/useFlowPlayback.ts`'s own `resolveFlowStep`
+(the existing "interpret a step" primitive — not reimplemented here), then `flatten.ts` collapses
+any Junction crossing into a single message (see "Junctions are semantics-transparent" in
 `docs/SEMANTICS.md`) and `label.ts` resolves each message's text through the same "richest
 available label" priority every connector caption already uses
 (`document/edgeSemantics.ts`'s `relationshipCaptionLabel`), with one added fallback tier for a
 pairing that has no explicit `semantic` at all. A request only ever gets a paired response message
 when the underlying `DraftEdge.hasResponse` is explicitly `true` — never inferred from a call
 merely looking synchronous, the same rule `useFlowPlayback`'s own two-phase request/response pulse
-already follows.
+already follows. A Note, Question, Warning, Decision, or Code node/attachment contextually
+associated with an exported message becomes a `SequenceNote` annotation — never a fake message,
+never a fake participant — rendered as a native `Note over …`/`note over … end note`.
 
 `mermaid.ts`/`plantuml.ts` are independent string builders over the same `SequenceModel` — neither
-is derived from the other. The live preview (`ui/Editor/SequenceDiagramSvg.tsx`) is a small,
-hand-drawn SVG built from `layout.ts`'s pure geometry, reusing this app's own theme tokens and text
-measurement rather than a third-party rendering library: no new runtime dependency, no bundle-size
-or lazy-loading cost, and no risk of a third-party parser's failure mode reaching the canvas.
+is derived from the other, and neither re-derives semantics of its own; both consume exactly what
+`build.ts` decided. `src/export/sequence.ts` downloads the result as a plain text file
+(`downloadText`) — there is no rendered image export from this feature.
 
 Naming note: this is unrelated to `DraftSettings.showSequence` (the numbered step badges a flow's
 connectors can show on the canvas) — an older, internal-only concept from before Flows existed (see

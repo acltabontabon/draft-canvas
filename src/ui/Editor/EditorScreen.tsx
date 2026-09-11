@@ -33,7 +33,6 @@ import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { CommandPalette } from './CommandPalette';
 import { ExportDialog } from './ExportDialog';
 import { Inspector } from './Inspector';
-import { SequenceDiagramDialog } from './SequenceDiagramDialog';
 import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
 import { Toolbar } from './Toolbar';
@@ -378,7 +377,6 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       <ShortcutSheet />
       <ExportDialog />
       <CanvasSettingsDialog />
-      <SequenceDiagramDialog />
       <ClipboardPermissionDialog />
       <CommandPalette createAt={createAt} createAtPointer={createAtPointer} playback={playback} />
 
