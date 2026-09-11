@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFocusReturn } from './useFocusReturn';
 import { Button } from './Button';
+import { Icon } from './Icon';
 
 interface ModalProps {
   title: string;
@@ -8,6 +9,14 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   width?: number;
+  /** Extra class on the panel root — for a caller that needs to restyle its own chrome (e.g. a quieter header) without changing what other `Modal` consumers get. */
+  className?: string;
+  /** Renders a small back control beside the title instead of navigating away — for a dialog with
+   *  its own internal views (see `AboutDialog.tsx`). Lives in the header, not the scrolling body,
+   *  so it stays reachable no matter how far the content has scrolled. Omitted everywhere else. */
+  onBack?: () => void;
+  /** Accessible label for the back control, e.g. "Back to About". Ignored without `onBack`. */
+  backLabel?: string;
 }
 
 /** Elements a Tab-trap should stop at — mirrors what a modal in this app actually contains
@@ -16,7 +25,7 @@ interface ModalProps {
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Modal({ title, onClose, children, footer, width = 460 }: ModalProps) {
+export function Modal({ title, onClose, children, footer, width = 460, className, onBack, backLabel }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
 
   // A `Modal` only ever exists while its caller is showing it — no separate `open` prop — so
@@ -66,7 +75,7 @@ export function Modal({ title, onClose, children, footer, width = 460 }: ModalPr
     <div className="dc-modal-backdrop" onPointerDown={onClose}>
       <div
         ref={panel}
-        className="dc-modal"
+        className={className ? `dc-modal ${className}` : 'dc-modal'}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -75,7 +84,14 @@ export function Modal({ title, onClose, children, footer, width = 460 }: ModalPr
         onPointerDown={(event) => event.stopPropagation()}
       >
         <header className="dc-modal-header">
-          <h2>{title}</h2>
+          <div className="dc-modal-header-title">
+            {onBack && (
+              <button type="button" className="dc-modal-back" onClick={onBack} aria-label={backLabel ?? 'Back'}>
+                <Icon name="back" size={13} />
+              </button>
+            )}
+            <h2>{title}</h2>
+          </div>
           <Button icon="close" variant="quiet" onClick={onClose} aria-label="Close" />
         </header>
         <div className="dc-modal-body">{children}</div>

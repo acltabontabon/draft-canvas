@@ -5,6 +5,7 @@ import type { DraftSummary } from '../../document/types';
 import type { NormalizeResult } from '../../document/validate';
 import { isEditableTarget } from '../../lib/isEditableTarget';
 import { PRODUCT } from '../../product';
+import { applicableReleases, hasUnreadRelease } from '../../releases/productReleases';
 import { ARCHITECTURE_STARTERS, STARTER_CATEGORIES } from '../../starters';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
@@ -37,6 +38,8 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   const notify = useUiStore((state) => state.notify);
   const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const updateReady = useUiStore((state) => state.updateReady);
+  const lastSeenProductRelease = useUiStore((state) => state.lastSeenProductRelease);
+  const hasUnreadNotes = hasUnreadRelease(lastSeenProductRelease, applicableReleases(PRODUCT.version));
   const searchQuery = useUiStore((state) => state.librarySearchQuery);
   const setSearchQuery = useUiStore((state) => state.setLibrarySearchQuery);
   const sort = useUiStore((state) => state.librarySort);
@@ -120,12 +123,28 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                 type="button"
                 className="dc-brand-about"
                 onClick={() => setAboutOpen(true)}
-                aria-label="About Draft Canvas"
-                title={updateReady ? 'About Draft Canvas — update ready' : 'About Draft Canvas'}
+                aria-label={
+                  updateReady
+                    ? 'About Draft Canvas — update ready'
+                    : hasUnreadNotes
+                      ? "About Draft Canvas — what's new"
+                      : 'About Draft Canvas'
+                }
+                title={
+                  updateReady
+                    ? 'About Draft Canvas — update ready'
+                    : hasUnreadNotes
+                      ? "About Draft Canvas — what's new"
+                      : 'About Draft Canvas'
+                }
               >
                 <Icon name="info" size={14} />
               </button>
-              {updateReady && <span className="dc-update-dot" aria-hidden="true" />}
+              {updateReady ? (
+                <span className="dc-update-dot" aria-hidden="true" />
+              ) : (
+                hasUnreadNotes && <span className="dc-new-dot" aria-hidden="true" />
+              )}
             </span>
             <button
               type="button"

@@ -4,6 +4,8 @@ import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { DEV_PRESETS, PRESETS, SELECT_TOOLTIP, tooltipContentFor, type Preset } from '../../canvas/presets';
 import { useIsNewFeature } from '../../learning/useNewFeature';
+import { PRODUCT } from '../../product';
+import { applicableReleases, hasUnreadRelease } from '../../releases/productReleases';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Tooltip } from '../common/Tooltip';
@@ -50,6 +52,8 @@ export function Toolbar({
   });
   const setSequenceDiagramOpen = useUiStore((state) => state.setSequenceDiagramOpen);
   const updateReady = useUiStore((state) => state.updateReady);
+  const lastSeenProductRelease = useUiStore((state) => state.lastSeenProductRelease);
+  const hasUnreadNotes = hasUnreadRelease(lastSeenProductRelease, applicableReleases(PRODUCT.version));
   const learnModeActive = useUiStore((state) => state.learnModeActive);
   const setLearnModeActive = useUiStore((state) => state.setLearnModeActive);
   const { isNew: learnModeIsNew, retire: retireLearnModeBadge } = useIsNewFeature('learn-mode');
@@ -226,9 +230,19 @@ export function Toolbar({
             icon="info"
             variant="quiet"
             onClick={() => setAboutOpen(true)}
-            title={updateReady ? 'About Draft Canvas — update ready' : 'About Draft Canvas'}
+            title={
+              updateReady
+                ? 'About Draft Canvas — update ready'
+                : hasUnreadNotes
+                  ? "About Draft Canvas — what's new"
+                  : 'About Draft Canvas'
+            }
           />
-          {updateReady && <span className="dc-update-dot" aria-hidden="true" />}
+          {updateReady ? (
+            <span className="dc-update-dot" aria-hidden="true" />
+          ) : (
+            hasUnreadNotes && <span className="dc-new-dot" aria-hidden="true" />
+          )}
         </span>
         <Button
           variant="quiet"
