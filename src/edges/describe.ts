@@ -300,9 +300,9 @@ export function describeEdge(
             w,
             h,
             r: 4,
-            fill: ctx.theme.edgeLabelBg,
-            stroke: { color: ctx.theme.border, width: 1 },
-            opacity: 0.8,
+            // The screen draws a canvas-toned mask, not a bordered chip — see `.dc-edge-label`.
+            fill: ctx.theme.canvas,
+            opacity: 0.82,
           },
           {
             t: 'text',
@@ -443,8 +443,10 @@ export function describeEdge(
       w,
       h,
       r: 4,
-      fill: ctx.theme.edgeLabelBg,
-      stroke: { color: ctx.theme.border, width: 1 },
+      // Mirrors `.dc-edge-label`: a translucent canvas-toned mask that erases the stroke under the
+      // text, not a bordered chip.
+      fill: ctx.theme.canvas,
+      opacity: 0.82,
     });
 
     if (hasStep) {

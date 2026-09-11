@@ -69,4 +69,5 @@ export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   triggers: { label: 'triggers' },
   implementedBy: { label: 'implemented by' },
   compensates: { label: 'compensates' },
+  projects: { label: 'projects' },
 };

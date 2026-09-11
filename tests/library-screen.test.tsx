@@ -81,7 +81,8 @@ describe('LibraryScreen — an empty workspace', () => {
       'Start from Hexagonal',
       'Start from Backend for Frontend',
       'Start from CQRS',
-      'Start from Saga (Orchestration)',
+      'Start from Saga – Orchestration',
+      'Start from Saga – Choreography',
       'Start from Transactional Outbox',
     ]);
   });

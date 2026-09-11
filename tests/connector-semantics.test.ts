@@ -48,6 +48,8 @@ describe('categoryOf', () => {
 
   it('reads Scheduler and Gateway as their own categories', () => {
     expect(categoryOf({ type: 'service', serviceKind: 'scheduler' })).toBe('scheduler');
+    // A BFF calls — it is a plain service to the matrix, never a routing gateway.
+    expect(categoryOf({ type: 'service', serviceKind: 'bff' })).toBe('service');
     expect(categoryOf({ type: 'service', serviceKind: 'gateway' })).toBe('gateway');
   });
 
@@ -62,6 +64,7 @@ describe('categoryOf', () => {
     expect(categoryOf({ type: 'database', databaseKind: 'file-system' })).toBe('fileSystem');
     expect(categoryOf({ type: 'database', databaseKind: 'object-storage' })).toBe('objectStorage');
     expect(categoryOf({ type: 'database', databaseKind: 'search-index' })).toBe('searchIndex');
+    expect(categoryOf({ type: 'database', databaseKind: 'table' })).toBe('database');
   });
 
   it('reads ellipse (Junction) as its own category, not generic', () => {
@@ -79,7 +82,7 @@ describe('capabilityFor — the capability matrix', () => {
   it('service → database: defaults to writes, offers writes/reads/query/dependsOn, behaviour is not a meaningful choice', () => {
     const cap = capabilityFor('service', 'database')!;
     expect(cap.defaultRelation).toBe('writes');
-    expect(cap.relations).toEqual(['writes', 'reads', 'query', 'dependsOn']);
+    expect(cap.relations).toEqual(['writes', 'reads', 'query', 'projects', 'dependsOn']);
     expect(cap.behaviors).toEqual([]);
     expect(cap.defaultBehavior).toBeUndefined();
   });

@@ -137,6 +137,7 @@ const SERVICE_KIND_NAMES: Record<ServiceKind, string> = {
   external: 'External System',
   scheduler: 'Scheduler',
   gateway: 'Gateway',
+  bff: 'BFF',
 };
 const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = {
   sql: 'SQL data store',
@@ -145,6 +146,7 @@ const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = {
   'file-system': 'File system storage',
   'object-storage': 'Object storage',
   'search-index': 'Search index',
+  table: 'Table',
 };
 const ACTOR_KIND_NAMES: Record<ActorKind, string> = { human: 'Human', system: 'System', device: 'Device' };
 /** Doubles as the fallback display name and the auto-generated label a fresh Component starts

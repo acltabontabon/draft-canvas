@@ -30,6 +30,7 @@ import { DATABASE_ICON_OPTIONS } from './dataStoreOptions';
 import { rectOfInternal } from './edgeGeometry';
 import { HintStrip } from './HintStrip';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
+import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { QUEUE_ICON_OPTIONS } from './queueOptions';
 import { SERVICE_ICON_OPTIONS } from './serviceOptions';
 import type { HintId } from '../learning/hints';
@@ -67,6 +68,8 @@ const QUICK_ACTION_HINTS: Record<string, string> = {
   'add-dead-letter-queue': 'Add a dead-letter queue for messages that fail delivery',
   'remove-dead-letter-queue': 'Remove this queue’s dead-letter queue',
   'add-subscriber': 'Add a queue subscriber that fans out from this topic',
+  'add-data-store': 'Add a data store this service writes to',
+  'add-routed-service': 'Add a service this gateway routes to',
   ungroup: 'Dissolve this boundary, keeping its contents',
 };
 
@@ -130,6 +133,7 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   const [paletteOpen, setPaletteOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<Placement>('above');
+  usePopoverKeyboard(panelRef);
 
   // Self-measured, not guessed: fit checks depend on the popover's own current width and height,
   // which change as sections open/close. Re-measures after every render — cheap (one
@@ -322,16 +326,19 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
     <ViewportPortal>
       <div
         ref={panelRef}
-        className="dc-element-inspector"
+        className="dc-popover dc-element-inspector"
         role="toolbar"
         aria-label="Element options"
         aria-hidden={closing || undefined}
         data-closing={closing ? 'true' : undefined}
         data-dragging={interactionActive ? 'true' : undefined}
+        data-placement={effectivePlacement}
         style={{ transform }}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <div className="dc-element-inspector-inner">
+        {/* The caret ties the popover to the element it belongs to — see `.dc-popover-caret`. */}
+        <span className="dc-popover-caret" aria-hidden="true" />
+        <div className="dc-popover-inner dc-element-inspector-inner">
           {hintId && <HintStrip id={hintId} learned={hintLearned} />}
           <ElementInspectorRow
             node={displayNode}
@@ -478,11 +485,14 @@ function ElementInspectorRow({
   return (
     <>
       {primaryCommands.length > 0 && (
-        <div className="dc-element-inspector-row dc-element-inspector-quickrow">
+        <div className="dc-popover-row dc-popover-primary dc-element-inspector-row dc-element-inspector-quickrow">
           {primaryCommands.map((command) => (
             <Button
               key={command.id}
               variant="quiet"
+              className="dc-popover-action"
+              // An "Add …" continuation leads with a plus glyph; a toggle-off or dissolve doesn't.
+              data-adds={command.id.startsWith('add-') ? 'true' : undefined}
               title={QUICK_ACTION_HINTS[command.id] ?? command.title}
               onClick={() => command.run(buildCommandContext())}
             >
@@ -491,7 +501,7 @@ function ElementInspectorRow({
           ))}
         </div>
       )}
-      <div className="dc-element-inspector-row">
+      <div className="dc-popover-row dc-popover-config dc-element-inspector-row">
         <button
           type="button"
           className="dc-inspector-color-swatch"
@@ -512,6 +522,7 @@ function ElementInspectorRow({
             layout={typeControl.layout}
           />
         )}
+        <span className="dc-popover-divider" aria-hidden="true" />
         <Button
           variant="quiet"
           title="Fade everything else, to focus on this while explaining (Esc to exit)"
@@ -522,6 +533,7 @@ function ElementInspectorRow({
         <Button
           icon="trash"
           variant="quiet"
+          className="dc-popover-delete"
           aria-label="Delete selection"
           title="Delete (Backspace)"
           onClick={() => store.getState().deleteSelection()}
@@ -529,7 +541,7 @@ function ElementInspectorRow({
       </div>
 
       {paletteOpen && (
-        <div className="dc-element-inspector-panel dc-swatches">
+        <div className="dc-popover-panel dc-element-inspector-panel dc-swatches">
           {ACCENTS.map((accent) => (
             <button
               key={accent}

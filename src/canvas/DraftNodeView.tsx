@@ -3,6 +3,7 @@ import { Handle, NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xy
 import { maxSizeFor, minSizeFor } from '../document/factory';
 import { explainNodeTier, lensNodeTier, type ExplainTier } from '../document/flow';
 import { normalizeNoteText } from '../document/noteText';
+import { anchorBandOf } from '../document/queueGeometry';
 import type { DraftNode } from '../document/types';
 import {
   CODE_LAYOUT,
@@ -162,6 +163,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     : effectiveWidth === node.width && effectiveHeight === node.height
       ? node
       : { ...node, width: effectiveWidth, height: effectiveHeight };
+  // Relative to the node box (y: 0) — the handles are positioned inside it.
+  const handleBand = liveNode ? anchorBandOf({ type: liveNode.type, y: 0, height: effectiveHeight }) : undefined;
 
   /**
    * React Flow passes a fresh `positionAbsoluteX`/`positionAbsoluteY` prop into
@@ -410,6 +413,11 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         A Junction (`ellipse`) is a compact routing point, not a component —
         it keeps only the one midpoint anchor per side (offset 0.5) so its
         handles don't visually overwhelm a shape this small.
+
+        A left/right handle sits on the node's anchor band (`anchorBandOf`: a
+        queue-family node's tube glyph, the whole side for everything else) in
+        pixels, so the dot the user sees is exactly where `edges/routing.ts`
+        will land the connector drawn from it.
       */}
       {(node.type === 'ellipse' ? HANDLE_ANCHORS.filter((anchor) => anchor.offset === 0.5) : HANDLE_ANCHORS).map(
         (anchor) => (
@@ -423,7 +431,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
             style={
               anchor.side === 'top' || anchor.side === 'bottom'
                 ? { left: `${anchor.offset * 100}%` }
-                : { top: `${anchor.offset * 100}%` }
+                : handleBand
+                  ? { top: `${handleBand.top + (handleBand.bottom - handleBand.top) * anchor.offset}px` }
+                  : { top: `${anchor.offset * 100}%` }
             }
             isConnectable={!readOnly}
           />

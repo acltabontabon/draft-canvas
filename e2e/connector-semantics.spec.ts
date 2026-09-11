@@ -88,7 +88,7 @@ test.describe('contextual connector toolbar', () => {
   });
 
   test('the Interaction type select is narrowed to what the pairing actually supports', async ({ page }) => {
-    // Service→Database's capability entry lists exactly `['writes', 'reads', 'query',
+    // Service→Database's capability entry lists exactly `['writes', 'reads', 'query', 'projects',
     // 'dependsOn']` (see `document/connectorSemantics.ts`'s `MATRIX`) — the picker reflects that
     // instead of the full, unfiltered `EDGE_SEMANTICS` vocabulary (HTTP, Event, Command, …, none
     // of which describe a database interaction).
@@ -100,7 +100,7 @@ test.describe('contextual connector toolbar', () => {
     const relation = inspectorSelect(page, 'Interaction type');
     await expect(relation).toHaveText('Writes');
     await relation.click();
-    await expect(page.getByRole('option')).toHaveText(['No type', 'Writes', 'Reads', 'Query', 'Depends on']);
+    await expect(page.getByRole('option')).toHaveText(['No type', 'Writes', 'Reads', 'Query', 'Projects', 'Depends on']);
   });
 
   test('the Interaction type select keeps the full vocabulary for an unclassified pairing', async ({ page }) => {
@@ -143,6 +143,7 @@ test.describe('contextual connector toolbar', () => {
       'Triggers',
       'Implemented by',
       'Compensates',
+      'Projects',
     ]);
   });
 
@@ -337,6 +338,7 @@ test.describe('Junction connector', () => {
       'Triggers',
       'Implemented by',
       'Compensates',
+      'Projects',
     ]);
     await page.keyboard.press('Escape');
 

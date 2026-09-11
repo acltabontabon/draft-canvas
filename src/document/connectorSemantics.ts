@@ -73,6 +73,8 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
           return 'scheduler';
         case 'gateway':
           return 'gateway';
+        // A BFF *calls* the services it composes — it is not a gateway that routes, so it takes
+        // the plain service rows rather than the gateway ones.
         default:
           return 'service';
       }
@@ -211,7 +213,9 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // query vocabulary as Generic, deliberately, rather than implementation-
   // specific verbs like "executes"/"scans" for a distinction the product
   // spec itself calls optional.
-  'service>database': capability(['writes', 'reads', 'query', 'dependsOn'], 'writes', []),
+  // `projects` sits beside `writes`: a projection materialising a read model is a write, but a
+  // derived one — CQRS/read-model diagrams need the two to read differently.
+  'service>database': capability(['writes', 'reads', 'query', 'projects', 'dependsOn'], 'writes', []),
   'database>service': capability(['reads', 'query', 'dependsOn'], 'reads', []),
   // Cache gets one verb a plain database connection structurally can't
   // express — invalidating a cached copy is a different architectural move

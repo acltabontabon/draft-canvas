@@ -102,7 +102,10 @@ export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
 
 /** Sub-kinds of the developer presets. Purely a labelling convenience — the
  *  base type's silhouette and accent always dominate; see `nodes/describe.ts`. */
-export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external', 'scheduler', 'gateway'] as const;
+/** `bff` — a Backend for Frontend: a backend owned by, and shaped for, one client experience. It
+ *  composes downstream services and is deliberately *not* a `gateway` (one shared front door that
+ *  routes); a BFF calls. Folds to the plain `service` category — see `connectorSemantics.ts`. */
+export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external', 'scheduler', 'gateway', 'bff'] as const;
 export type ServiceKind = (typeof SERVICE_KINDS)[number];
 
 export const DATABASE_KINDS = [
@@ -113,6 +116,10 @@ export const DATABASE_KINDS = [
   'file-system',
   'object-storage',
   'search-index',
+  /** A logical table/collection *inside* a database — the Transactional Outbox's outbox row, a
+   *  read model's projection table, a CDC source. Drawn as a flat table card, never a cylinder, so
+   *  two tables in one boundary read as one database, not two. Folds to `database`. */
+  'table',
 ] as const;
 export type DatabaseKind = (typeof DATABASE_KINDS)[number];
 
@@ -199,6 +206,10 @@ export const EDGE_SEMANTICS = [
    *  (a saga's "release payment" after "reserve payment"). A command in every other respect —
    *  offered where `command` is, never a rollback of anything. */
   'compensates',
+  /** Materialising a read model from events or from the write side — a projection's write into a
+   *  read store. Offered beside `writes` so the authoritative write and the derived one never read
+   *  the same. */
+  'projects',
 ] as const;
 export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];
 

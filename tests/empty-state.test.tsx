@@ -35,7 +35,7 @@ describe('EmptyState', () => {
     expect(architectures.map((b) => b.textContent)).toEqual(
       ARCHITECTURE_STARTERS.filter((s) => s.category === 'architecture').map((s) => s.name),
     );
-    expect(patterns.map((b) => b.textContent)).toEqual(['Saga (Orchestration)', 'Transactional Outbox']);
+    expect(patterns.map((b) => b.textContent)).toEqual(['Saga – Orchestration', 'Saga – Choreography', 'Transactional Outbox']);
   });
 
   it('inserts the starter it names', async () => {

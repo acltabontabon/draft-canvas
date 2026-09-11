@@ -284,13 +284,13 @@ overloading that word for a new, user-facing feature.
 
 ## Starters
 
-`src/starters/` holds nine authored opening compositions and the function that turns one into
+`src/starters/` holds ten authored opening compositions and the function that turns one into
 document elements. *Starter* is the umbrella; each is one architectural idea at one scope, and the
 catalog's `category` splits them for discovery only: **Architectures** answer "how are the major
 parts of this system organized?" (Monolith, Modular Monolith, Microservices, Event-Driven,
 Hexagonal, Backend for Frontend, CQRS — the last two are strictly patterns, but they shape a
 system's structure enough to sit here), **Patterns** answer "how do I solve this recurring design
-problem?" (Saga (Orchestration), Transactional Outbox). A pattern starter is drawn at the scope of
+problem?" (Saga – Orchestration, Saga – Choreography, Transactional Outbox). A pattern starter is drawn at the scope of
 the problem it solves, never padded to resemble an architecture, and nothing implies the starters
 are alternatives — a real system is Event-Driven *with* CQRS *and* an outbox. It is a *starter*,
 not a template: everything it creates is an ordinary `DraftNode`/`DraftEdge`/`DraftFlow`, and
@@ -301,7 +301,7 @@ The module imports only `document/`, and is not part of the `.draftcanvas` forma
 carry the weight:
 
 - **Composition is authored, layout is not solved.** There is no auto-layout library here, and for
-  nine diagrams whose structure is known in advance that is the right answer: a solver produces
+  ten diagrams whose structure is known in advance that is the right answer: a solver produces
   something defensible, and a starter has to produce something *composed*. `catalog.ts` is literal
   coordinates; `compose.ts` is a handful of spacing constants, not an engine.
 - **Relationships come from the matrix, never from the catalog.** `build.ts` runs every connector

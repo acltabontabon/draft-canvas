@@ -149,11 +149,12 @@ describe('commandsFor — contextual (8.2)', () => {
     const node = useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0, text: 'API' });
     useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
     const list = ids(stubContext());
-    expect(list.slice(0, 13)).toEqual([
+    expect(list.slice(0, 14)).toEqual([
       'connect-to',
       'edit-text',
       'attach-note',
       'attach-code',
+      'add-data-store',
       'spotlight',
       'duplicate',
       'copy',
@@ -492,13 +493,28 @@ describe('primaryCommandsFor — primary popover quick actions', () => {
     expect(primaryIds(group)).toEqual(['ungroup']);
   });
 
+  it('a Service that owns data offers Add Data Store; a Gateway offers Add Service; the rest offer nothing', () => {
+    const state = useEditorStore.getState();
+    for (const serviceKind of ['generic', 'api', 'worker', 'bff'] as const) {
+      const service = state.addNode({ type: 'service', serviceKind, x: 0, y: 0 });
+      expect(primaryIds(service)).toEqual(['add-data-store']);
+    }
+    const gateway = state.addNode({ type: 'service', serviceKind: 'gateway', x: 0, y: 0 });
+    expect(primaryIds(gateway)).toEqual(['add-routed-service']);
+    // An external system's storage isn't ours to draw; a scheduler fires jobs, it doesn't persist.
+    for (const serviceKind of ['external', 'scheduler'] as const) {
+      const service = state.addNode({ type: 'service', serviceKind, x: 0, y: 0 });
+      expect(primaryIds(service)).toEqual([]);
+    }
+  });
+
   it('kinds with no dedicated shape-native command offer nothing — a graceful empty row', () => {
     const state = useEditorStore.getState();
-    const service = state.addNode({ type: 'service', x: 0, y: 0 });
     const database = state.addNode({ type: 'database', x: 0, y: 0 });
     const junction = state.addNode({ type: 'ellipse', x: 0, y: 0 });
     const actor = state.addNode({ type: 'actor', x: 0, y: 0 });
-    for (const node of [service, database, junction, actor]) {
+    const note = state.addNode({ type: 'note', x: 0, y: 0 });
+    for (const node of [database, junction, actor, note]) {
       expect(primaryIds(node)).toEqual([]);
     }
   });
@@ -528,6 +544,7 @@ describe('architecture starters', () => {
     expect(groups.lastIndexOf('starter')).toBeLessThan(groups.indexOf('pattern'));
     expect(starters.filter((command) => command.group === 'pattern').map((command) => command.id)).toEqual([
       'starter-saga-orchestration',
+      'starter-saga-choreography',
       'starter-transactional-outbox',
     ]);
   });
@@ -557,13 +574,25 @@ describe('architecture starters', () => {
     ['cqrs', 'cqrs'],
     ['command query', 'cqrs'],
     ['read model', 'cqrs'],
-    ['saga', 'saga-orchestration'],
+    ['saga orchestration', 'saga-orchestration'],
+    ['orchestrator', 'saga-orchestration'],
     ['compensation', 'saga-orchestration'],
     ['distributed transaction', 'saga-orchestration'],
+    ['saga choreography', 'saga-choreography'],
+    ['choreography', 'saga-choreography'],
+    ['no orchestrator', 'saga-choreography'],
     ['outbox', 'transactional-outbox'],
     ['dual write', 'transactional-outbox'],
   ])('"%s" leads with the %s starter', (query, id) => {
     expect(top(query)).toBe(`starter-${id}`);
+  });
+
+  it('"saga" leads with the two saga starters, side by side', () => {
+    const ids = rank('saga', commandsFor(stubContext()))
+      .slice(0, 2)
+      .map((entry) => entry.entry.id)
+      .sort();
+    expect(ids).toEqual(['starter-saga-choreography', 'starter-saga-orchestration']);
   });
 
   it.each([
@@ -579,6 +608,17 @@ describe('architecture starters', () => {
     ['boundary', 'add-boundary'],
   ])('never takes "%s" away from %s', (query, id) => {
     expect(top(query)).toBe(id);
+  });
+
+  it('a selected service\'s own continuations never take "data store" or "service" away from creation', () => {
+    const state = useEditorStore.getState();
+    const gateway = state.addNode({ type: 'service', serviceKind: 'gateway', x: 0, y: 0 });
+    state.setSelection({ nodes: [gateway.id], edges: [] });
+    expect(top('service')).toBe('add-service');
+    const api = state.addNode({ type: 'service', serviceKind: 'api', x: 0, y: 300 });
+    state.setSelection({ nodes: [api.id], edges: [] });
+    expect(top('data store')).toBe('add-database');
+    expect(top('connect data store')).toBe('add-data-store');
   });
 
   it('inserts the architecture and moves the camera onto it', () => {

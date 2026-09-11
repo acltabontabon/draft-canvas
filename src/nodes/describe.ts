@@ -99,6 +99,7 @@ const SERVICE_KIND_LABELS: Partial<Record<ServiceKind, string>> = {
   external: 'EXTERNAL',
   scheduler: 'SCHEDULER',
   gateway: 'GATEWAY',
+  bff: 'BFF',
 };
 const DATABASE_KIND_LABELS: Partial<Record<DatabaseKind, string>> = {
   sql: 'SQL',
@@ -107,6 +108,7 @@ const DATABASE_KIND_LABELS: Partial<Record<DatabaseKind, string>> = {
   'file-system': 'FILE SYSTEM',
   'object-storage': 'OBJECT STORAGE',
   'search-index': 'SEARCH INDEX',
+  table: 'TABLE',
 };
 const QUEUE_KIND_LABELS: Record<QueueKind, string> = {
   queue: 'QUEUE',
@@ -477,9 +479,37 @@ function service(node: DraftNode, ctx: DescribeContext): Shape[] {
       return serviceScheduler(node, ctx);
     case 'gateway':
       return serviceGateway(node, ctx);
+    case 'bff':
+      return serviceBff(node, ctx);
     default:
       return serviceGeneric(node, ctx);
   }
+}
+
+/**
+ * BFF: Generic's card and cap, plus the kind tag — deliberately *not* Gateway's silhouette. A
+ * Backend for Frontend is one client's own adapter, not a shared front door, so it must never be
+ * mistaken for one at a glance; the tag says which it is and the plain card says "an ordinary
+ * service that happens to be owned by a frontend."
+ */
+function serviceBff(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const capHeight = 4;
+  return [
+    outlineShape(
+      node.id,
+      ctx,
+      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
+      { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
+    ),
+    {
+      t: 'group',
+      clip: { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
+      children: [{ t: 'rect', x: 0.75, y: 0.75, w: node.width - 1.5, h: capHeight, fill: palette.chip }],
+    },
+    ...centredLabel(node, ctx, { top: capHeight, bottom: tagRow(), color: palette.text }),
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.bff!, ctx.theme.textMuted),
+  ];
 }
 
 /** Generic: the family's neutral baseline — a rounded card with a coloured
@@ -1015,9 +1045,55 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
       return dataStoreObjectStorage(node, ctx);
     case 'search-index':
       return dataStoreSearchIndex(node, ctx);
+    case 'table':
+      return dataStoreTable(node, ctx);
     default:
       return dataStoreCylinder(node, ctx);
   }
+}
+
+/**
+ * Table: a flat card with a header band split into a few columns — a logical table (or
+ * collection) *inside* a database, not a database. Deliberately nothing like the cylinder: two
+ * tables placed in one boundary must read as two tables of one store, never as two physical
+ * stores in a distributed transaction. The name and the TABLE tag stack under the header band.
+ */
+function dataStoreTable(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
+  const w = node.width - 1.5;
+  const h = node.height - 1.5;
+  const x = 0.75;
+  const y = 0.75;
+  const r = 6;
+  const bandH = Math.min(11, h * 0.18);
+  const columns = 3;
+
+  const dividers = Array.from({ length: columns - 1 }, (_, i) => {
+    const cx = x + (w * (i + 1)) / columns;
+    return `M${cx},${y} L${cx},${y + bandH}`;
+  }).join(' ');
+
+  return [
+    outlineShape(
+      node.id,
+      ctx,
+      { x, y, w, h, r },
+      { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
+    ),
+    // Header band, clipped to the card's rounded top like a service's cap.
+    {
+      t: 'group',
+      clip: { x, y, w, h, r },
+      children: [{ t: 'rect', x, y, w, h: bandH, fill: palette.chip }],
+    },
+    { t: 'path', d: `M${x},${y + bandH} L${x + w},${y + bandH} ${dividers}`, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.55 },
+    ...centeredStackedCaption(node, ctx, {
+      top: bandH + 2,
+      bottom: 4,
+      kindLabel: DATABASE_KIND_LABELS.table!,
+      nameColor: palette.text,
+    }),
+  ];
 }
 
 function dataStoreCylinder(node: DraftNode, ctx: DescribeContext): Shape[] {
@@ -1435,7 +1511,7 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // subtext live below it, stacked, in the full-width space that leaves —
   // kept small enough that even a pre-existing (shorter) queue node has room
   // for both lines without them running into the tube.
-  // `document/queueGeometry.ts`'s `queueTubeCenterFraction` mirrors this `y`/`tubeH` arithmetic
+  // `document/queueGeometry.ts`'s `queueTubeSpan` mirrors this `y`/`tubeH` arithmetic
   // for anything placing a connector on the tube ahead of rendering — keep the two in step.
   const tubeH = Math.min(32, h * 0.5);
   // Capped at half the tube's own height, not just a width fraction — a cap

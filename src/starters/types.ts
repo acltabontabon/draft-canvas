@@ -37,6 +37,7 @@ export const STARTER_IDS = [
   'bff',
   'cqrs',
   'saga-orchestration',
+  'saga-choreography',
   'transactional-outbox',
 ] as const;
 
@@ -189,6 +190,14 @@ export interface StarterEdgeSpec {
    * still derived.
    */
   deliveryAttempts?: number;
+  /**
+   * An explicit connector colour — exactly what a user gets from the inspector's swatch. The one
+   * appearance choice a starter may make on a connector, and only for a connector that *is*
+   * different in kind from its neighbours: a saga's compensations against its forward steps. It is
+   * never used to decorate — an ordinary connector keeps its source node's colour like every
+   * hand-drawn one.
+   */
+  accent?: Accent;
   /**
    * Supporting detail folded into the connector as click-to-reveal chips (`DraftEdge.attachments`)
    * — an event's example payload on the connector that publishes it, an operational note on a

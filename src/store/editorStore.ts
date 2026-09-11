@@ -96,14 +96,17 @@ import type {
   DraftFlow,
   DraftNode,
   ConnectorKind,
+  DatabaseKind,
   DraftSettings,
   DraftViewport,
   EdgeSemantic,
+  QueueKind,
   RouteMode,
+  ServiceKind,
   Side,
 } from '../document/types';
 import { routingPlan } from '../edges/bundles';
-import { rectOf, trunkCoordinate } from '../edges/routing';
+import { anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
 import {
   EMPTY_HISTORY,
   EMPTY_SELECTION,
@@ -177,6 +180,24 @@ interface Interaction {
   label: string;
   document: DraftDocument;
   selection: Selection;
+}
+
+/** The kind of node an "Add <companion>" quick action creates — type plus its sub-kind. */
+export type CompanionSpec =
+  | { type: 'service'; serviceKind: ServiceKind }
+  | { type: 'database'; databaseKind: DatabaseKind }
+  | { type: 'queue'; queueKind: QueueKind };
+
+/**
+ * Which Service kinds own data of their own — the ones "Add Data Store" makes sense for. An
+ * external system's storage is not ours to draw; a scheduler fires jobs and a gateway routes —
+ * neither should be shown writing to a store of its own (`service>database`'s own `gateway` row
+ * calls that unusual). One list, so the popover and the store can't disagree.
+ */
+export function ownsData(node: Pick<DraftNode, 'type' | 'serviceKind'>): boolean {
+  if (node.type !== 'service') return false;
+  const kind = node.serviceKind ?? 'generic';
+  return kind === 'generic' || kind === 'api' || kind === 'worker' || kind === 'bff';
 }
 
 export interface EditorStore {
@@ -270,6 +291,21 @@ export interface EditorStore {
    *  fanning out to several queues is normal, so this never becomes "Remove Subscriber"; the
    *  created queue deletes like any other node. A no-op if the node isn't a Topic. */
   addSubscriber: (topicId: string) => void;
+  /** "Add Data Store" — a Service's own companion: a Data Store connected with the matrix's
+   *  `service>database` relation (`writes`). Repeatable; a no-op for a kind that doesn't own data
+   *  (an external system, a scheduler, a gateway — see `commands/registry.ts`). */
+  addDataStore: (serviceId: string) => void;
+  /** "Add Service" — a Gateway's own companion: a Service it `routes` to. A no-op for a
+   *  non-gateway. */
+  addRoutedService: (gatewayId: string) => void;
+  /**
+   * The one motion behind every "Add <companion>" quick action: a new node of `companion`'s kind
+   * placed beside `sourceId`, connected with whatever semantic/kind the capability matrix already
+   * resolves for the pairing — exactly what a hand-drawn connector between the two would read —
+   * as one undo entry that selects the companion. `addConsumer`/`addSubscriber`/`addDataStore`/
+   * `addRoutedService` are this with their kind filled in.
+   */
+  addCompanion: (sourceId: string, companion: CompanionSpec, label: string) => void;
   /** Sets a `deadLetters` edge's delivery-attempts count, clamped to a sane range. */
   setEdgeDeliveryAttempts: (id: string, attempts: number) => void;
   updateEdgeLabel: (id: string, label: string) => void;
@@ -929,61 +965,56 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Remove DLQ', (doc) => removeElements(doc, nodeIdsToRemove, [edge.id]));
   },
 
-  addConsumer(sourceId) {
+  addCompanion(sourceId, companion, label) {
     const state = get();
     const source = state.document.nodes.find((n) => n.id === sourceId);
     if (!source) return;
 
-    const size = defaultSizeFor('service');
-    // Same capability matrix every other connection reads — correctly differentiates a queue's
-    // competing-consumer `consumes` from a topic's fan-out `deliversTo` with no special-casing
-    // here (though a topic never reaches this action today — see `commands/registry.ts`). Resolved
-    // ahead of placement (category only needs the type/kind, not a real positioned node) so the
-    // caption it implies can size the gap between source and companion.
-    const workerCategory = categoryOf({ type: 'service', serviceKind: 'worker' });
-    const capability = capabilityFor(categoryOf(source), workerCategory);
+    const size = defaultSizeFor(companion.type);
+    // Same capability matrix every other connection reads — it correctly differentiates a queue's
+    // competing-consumer `consumes` from a topic's fan-out `deliversTo`, a service's `writes` from
+    // a gateway's `routes`, with no special-casing here. Resolved ahead of placement (category only
+    // needs the type/kind, not a real positioned node) so the caption it implies can size the gap
+    // between source and companion.
+    const capability = capabilityFor(categoryOf(source), categoryOf(companion));
     const caption = capability?.defaultRelation ? SEMANTIC_DEFAULTS[capability.defaultRelation].label : undefined;
     const { x, y } = placeNear(state.document, source, size, gapForCaption(caption));
-    const worker = createNode({ type: 'service', serviceKind: 'worker', x, y, z: source.z });
+    const node = createNode({ ...companion, x, y, z: source.z });
+    // Not restated here, and stays `inferred` so re-pointing it later re-reads it the same way.
     const edge = createEdge({
       source: source.id,
-      target: worker.id,
+      target: node.id,
       semantic: capability?.defaultRelation,
       kind: capability?.defaultBehavior,
       async: capability?.defaultAsync,
       semanticsOrigin: capability?.defaultRelation ? 'inferred' : undefined,
-      ...horizontalAnchorsFor(source, worker),
+      ...horizontalAnchorsFor(source, node),
     });
-    state.apply('Add Consumer', (doc) => addEdges(addNodes(doc, [worker]), [edge]), {
-      selection: { nodes: [worker.id], edges: [] },
+    state.apply(label, (doc) => addEdges(addNodes(doc, [node]), [edge]), {
+      selection: { nodes: [node.id], edges: [] },
     });
   },
 
-  addSubscriber(topicId) {
-    const state = get();
-    const source = state.document.nodes.find((n) => n.id === topicId);
-    if (!source || categoryOf(source) !== 'topic') return;
+  addConsumer(sourceId) {
+    get().addCompanion(sourceId, { type: 'service', serviceKind: 'worker' }, 'Add Consumer');
+  },
 
-    const size = defaultSizeFor('queue');
-    // Same matrix row a hand-drawn Topic → Queue connector would read (`topic>queue`: fansOut) —
-    // not restated here, and stays `inferred` so re-pointing it later re-reads it the same way.
-    const queueCategory = categoryOf({ type: 'queue', queueKind: 'queue' });
-    const capability = capabilityFor(categoryOf(source), queueCategory);
-    const caption = capability?.defaultRelation ? SEMANTIC_DEFAULTS[capability.defaultRelation].label : undefined;
-    const { x, y } = placeNear(state.document, source, size, gapForCaption(caption));
-    const queue = createNode({ type: 'queue', queueKind: 'queue', x, y, z: source.z });
-    const edge = createEdge({
-      source: source.id,
-      target: queue.id,
-      semantic: capability?.defaultRelation,
-      kind: capability?.defaultBehavior,
-      async: capability?.defaultAsync,
-      semanticsOrigin: capability?.defaultRelation ? 'inferred' : undefined,
-      ...horizontalAnchorsFor(source, queue),
-    });
-    state.apply('Add Subscriber', (doc) => addEdges(addNodes(doc, [queue]), [edge]), {
-      selection: { nodes: [queue.id], edges: [] },
-    });
+  addSubscriber(topicId) {
+    const source = get().document.nodes.find((n) => n.id === topicId);
+    if (!source || categoryOf(source) !== 'topic') return;
+    get().addCompanion(topicId, { type: 'queue', queueKind: 'queue' }, 'Add Subscriber');
+  },
+
+  addDataStore(serviceId) {
+    const source = get().document.nodes.find((n) => n.id === serviceId);
+    if (!source || !ownsData(source)) return;
+    get().addCompanion(serviceId, { type: 'database', databaseKind: 'generic' }, 'Add Data Store');
+  },
+
+  addRoutedService(gatewayId) {
+    const source = get().document.nodes.find((n) => n.id === gatewayId);
+    if (!source || categoryOf(source) !== 'gateway') return;
+    get().addCompanion(gatewayId, { type: 'service', serviceKind: 'api' }, 'Add Service');
   },
 
   setEdgeDeliveryAttempts(id, attempts) {
@@ -1079,7 +1110,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const anchor = spine.hub === 'source' ? members[0]!.sourceAnchor : members[0]!.targetAnchor;
     const offset = anchor?.offset ?? 0.5;
     const vertical = spine.hubSide === 'left' || spine.hubSide === 'right';
-    const cross = vertical ? hubRect.y + hubRect.height * offset : hubRect.x + hubRect.width * offset;
+    const stemPoint = anchorPoint(hubRect, spine.hubSide, offset);
+    const cross = vertical ? stemPoint.y : stemPoint.x;
     const size = defaultSizeFor('ellipse');
     const junction = createNode({
       type: 'ellipse',

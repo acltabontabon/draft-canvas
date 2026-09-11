@@ -347,17 +347,20 @@
   z-index: 4;
 }
 
-/* A lightweight halo over the canvas background rather than a bordered chip — legible where the
-   label crosses its own (or a neighbouring) connector without reading as a floating card. The
-   permanent border/background this replaces was the visual cue that a label is clickable/
-   editable; `:hover`/`:focus-within` below restore that cue as a soft tint instead. */
+/* A canvas-toned mask plus a lightweight halo rather than a bordered chip — the label sits *on*
+   the canvas and simply erases the stroke under its own text box, so it stays legible where it
+   crosses its own (or a neighbouring) connector without reading as a floating card. Translucent
+   so the dot grid still shows faintly through. The permanent border this replaces was the visual
+   cue that a label is clickable/editable; `:hover`/`:focus-within` below restore that cue as a
+   soft tint instead. */
 .dc-edge-label {
   position: absolute;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 4px;
+  padding: 2px 5px;
   border-radius: 4px;
+  background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
   color: var(--dc-text);
   font-size: 11.5px;
   font-weight: 500;
@@ -497,7 +500,9 @@
 
 .dc-edge-response-label {
   position: absolute;
-  padding: 1px 2px;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
   color: var(--dc-text-faint);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
@@ -934,12 +939,22 @@
 /* ------------------------------------------------------ edge inspector -- */
 
 /*
- * The contextual control for a single selected connector — anchored at its
- * own label point (see `EdgeInspectorPopover.tsx`) instead of docked at the
- * bottom of the screen. Same shell as `.dc-attachment-popover`, just sized
- * to a row of controls rather than a list of cards.
+ * The one shell every contextual popover shares — the single selected element's
+ * (`ElementInspectorPopover`, `.dc-element-inspector`) and the single selected connector's
+ * (`EdgeInspectorPopover`, `.dc-edge-inspector`). Anchored at the thing it edits instead of docked
+ * at the bottom of the screen, and a fast contextual editor rather than an inspector panel: one or
+ * two rows of compact controls, a caret that points at what they belong to, and a short entrance
+ * that grows *from* that caret. The two popovers keep their own class names for their own
+ * placement/state rules (and for tests), but nothing about the chrome is declared twice.
+ *
+ * Sizes are tokens here so the whole system stays coherent: `--dc-popover-control` is the height of
+ * every control in a row, `--dc-popover-field` of every control in an expanded panel.
  */
-.dc-edge-inspector {
+.dc-popover {
+  --dc-popover-control: 24px;
+  --dc-popover-field: 28px;
+  --dc-popover-font: 12px;
+  --dc-popover-caret: 8px;
   position: absolute;
   z-index: 7;
   display: flex;
@@ -947,20 +962,218 @@
   width: max-content;
   max-width: 320px;
   border: 1px solid var(--dc-border);
-  border-radius: 8px;
+  border-radius: var(--dc-radius);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
+  font-size: var(--dc-popover-font);
   pointer-events: all;
 }
 
-.dc-edge-inspector-inner {
+.dc-popover-inner {
   display: flex;
   flex-direction: column;
-  animation: dc-attachment-card-in 120ms ease;
+  animation: dc-popover-in 120ms ease;
+  transform-origin: 50% 100%;
 }
 
-.dc-edge-inspector[data-closing='true'] .dc-edge-inspector-inner {
-  animation: dc-attachment-card-out 120ms ease forwards;
+.dc-popover[data-placement='below'] .dc-popover-inner {
+  transform-origin: 50% 0;
+}
+
+.dc-popover[data-placement='right'] .dc-popover-inner {
+  transform-origin: 0 50%;
+}
+
+.dc-popover[data-placement='left'] .dc-popover-inner {
+  transform-origin: 100% 50%;
+}
+
+.dc-popover[data-closing='true'] .dc-popover-inner {
+  animation: dc-popover-out 120ms ease forwards;
+}
+
+/* While fading out, this is a ghost of the previous selection — never clickable, and hidden from
+   the accessibility tree so its controls can't collide with whatever now-current selection UI
+   (e.g. the bottom bar, for a multi-selection) mounted in the same instant. */
+.dc-popover[data-closing='true'] {
+  pointer-events: none;
+}
+
+/*
+ * The caret: a rotated square sharing the popover's border and surface, sitting on the edge that
+ * faces the selected element, so the popover visibly *belongs* to that element rather than
+ * floating near it. Positioned by `data-placement` (the side of the element the popover is on).
+ * It fades with the popover.
+ */
+.dc-popover-caret {
+  position: absolute;
+  z-index: 1;
+  width: var(--dc-popover-caret);
+  height: var(--dc-popover-caret);
+  border: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+  pointer-events: none;
+  animation: dc-popover-fade-in 120ms ease;
+}
+
+.dc-popover[data-closing='true'] .dc-popover-caret {
+  animation: dc-popover-fade-out 120ms ease forwards;
+}
+
+.dc-popover[data-placement='above'] .dc-popover-caret {
+  left: 50%;
+  bottom: calc(var(--dc-popover-caret) / -2 - 1px);
+  transform: translateX(-50%) rotate(45deg);
+  border-top-color: transparent;
+  border-left-color: transparent;
+}
+
+.dc-popover[data-placement='below'] .dc-popover-caret {
+  left: 50%;
+  top: calc(var(--dc-popover-caret) / -2 - 1px);
+  transform: translateX(-50%) rotate(45deg);
+  border-bottom-color: transparent;
+  border-right-color: transparent;
+}
+
+.dc-popover[data-placement='right'] .dc-popover-caret {
+  top: 50%;
+  left: calc(var(--dc-popover-caret) / -2 - 1px);
+  transform: translateY(-50%) rotate(45deg);
+  border-top-color: transparent;
+  border-right-color: transparent;
+}
+
+.dc-popover[data-placement='left'] .dc-popover-caret {
+  top: 50%;
+  right: calc(var(--dc-popover-caret) / -2 - 1px);
+  transform: translateY(-50%) rotate(45deg);
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+}
+
+/* A row of controls. The primary row (shape-native continuations — Add Consumer, Add DLQ, Add Data
+   Store, …) sits above the configuration row (colour · kind · Focus · Delete), separated by a rule,
+   so what the element can *become* reads apart from what it *is*. */
+.dc-popover-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+}
+
+.dc-popover-row + .dc-popover-row,
+.dc-popover-panel {
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-popover-row .dc-button {
+  height: var(--dc-popover-control);
+  padding: 0 8px;
+  border-radius: var(--dc-radius-sm);
+  font-size: var(--dc-popover-font);
+  transition:
+    background 90ms ease,
+    color 90ms ease;
+}
+
+.dc-popover-row .dc-button[data-icon-only='true'] {
+  width: var(--dc-popover-control);
+  padding: 0;
+  justify-content: center;
+}
+
+/* Primary actions read as actions: full text colour, a little more room, and — for an "Add …"
+   continuation — a leading plus so the row scans as "what can grow from here." */
+.dc-popover-primary .dc-popover-action {
+  color: var(--dc-text);
+  font-weight: 500;
+}
+
+.dc-popover-primary .dc-popover-action[data-adds='true']::before {
+  content: '+';
+  margin-right: 1px;
+  color: var(--dc-text-faint);
+  font-weight: 600;
+}
+
+.dc-popover-primary .dc-popover-action:hover::before,
+.dc-popover-primary .dc-popover-action:focus-visible::before {
+  color: var(--dc-selection);
+}
+
+/* A hairline between the element's configuration (colour, kind) and its view/lifecycle actions
+   (Focus, Delete). Vertical, inside the row — not a full-width rule, which would read as a
+   third row. */
+.dc-popover-divider {
+  width: 1px;
+  height: 14px;
+  margin: 0 3px;
+  background: var(--dc-border);
+  flex: none;
+}
+
+/* Delete is the one destructive control in the popover: quiet until pointed at, then unmistakably
+   danger-coloured — never a permanently red button that shouts from every selection. */
+.dc-popover-delete:hover:not(:disabled),
+.dc-popover-delete:focus-visible {
+  background: color-mix(in srgb, var(--dc-danger) 14%, transparent);
+  color: var(--dc-danger);
+}
+
+.dc-popover-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+}
+
+/* The popover never focuses itself, so a ring only appears once the user Tabs in — and then every
+   control shows the same one. */
+.dc-popover :focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+@keyframes dc-popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dc-popover-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes dc-popover-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dc-popover-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 /*
@@ -1003,22 +1216,16 @@
   color: var(--dc-text);
 }
 
-.dc-edge-inspector-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 6px;
-}
-
 .dc-edge-inspector-caption,
 .dc-edge-inspector-flows {
   max-width: 180px;
-  padding: 3px 8px;
+  height: var(--dc-popover-control);
+  padding: 0 9px;
   border: 1px solid transparent;
   border-radius: 999px;
   background: var(--dc-surface-raised);
   color: var(--dc-text);
-  font-size: 12px;
+  font-size: var(--dc-popover-font);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1039,23 +1246,15 @@
 .dc-edge-inspector-caption-input {
   min-width: 60px;
   max-width: 160px;
-  padding: 3px 8px;
+  height: var(--dc-popover-control);
+  padding: 0 9px;
   border: 1px solid var(--dc-selection);
   border-radius: 999px;
   background: var(--dc-surface-raised);
   color: var(--dc-text);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--dc-popover-font);
   outline: none;
-}
-
-/* The shared `.dc-button` is sized for the toolbar (28px tall) — sized down
-   here to match the two pills' own height, so "⋯" reads as part of the same
-   compact row instead of a taller control that wandered in from elsewhere. */
-.dc-edge-inspector-row .dc-button {
-  height: 22px;
-  padding: 0 7px;
-  font-size: 12px;
 }
 
 .dc-edge-inspector-panel {
@@ -1068,40 +1267,9 @@
 }
 
 /*
- * `ElementInspectorPopover`'s own box — same chrome as `.dc-edge-inspector` (surface, shadow,
- * radius, fade animation) but a separate class so the two popovers can never accidentally share
- * a styling regression.
+ * `ElementInspectorPopover`'s own rules — everything about its chrome comes from `.dc-popover`
+ * above; only the state this popover alone has (a frozen placement mid-gesture) lives here.
  */
-.dc-element-inspector {
-  position: absolute;
-  z-index: 7;
-  display: flex;
-  flex-direction: column;
-  width: max-content;
-  max-width: 320px;
-  border: 1px solid var(--dc-border);
-  border-radius: 8px;
-  background: var(--dc-surface);
-  box-shadow: var(--dc-shadow-panel);
-  pointer-events: all;
-}
-
-.dc-element-inspector-inner {
-  display: flex;
-  flex-direction: column;
-  animation: dc-attachment-card-in 120ms ease;
-}
-
-.dc-element-inspector[data-closing='true'] .dc-element-inspector-inner {
-  animation: dc-attachment-card-out 120ms ease forwards;
-}
-
-/* While fading out, this is a ghost of the previous selection — never clickable, and hidden from
-   the accessibility tree so its "Focus"/"⋯" controls can't collide with whatever now-current
-   selection UI (e.g. the bottom bar, for a multi-selection) mounted in the same instant. */
-.dc-element-inspector[data-closing='true'] {
-  pointer-events: none;
-}
 
 /* While the selected node is being dragged or resized, its rect updates every animation frame but
    `placement` itself is deliberately frozen (see the component's own comment on `interactionActive`)
@@ -1112,35 +1280,10 @@
   pointer-events: none;
 }
 
-.dc-element-inspector-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 6px;
-}
-
-.dc-element-inspector-row .dc-button {
-  height: 22px;
-  padding: 0 7px;
-  font-size: 12px;
-}
-
-/* Shape-native quick actions (Add Consumer, Add DLQ, …) read as this element's own row, separated
-   from the generic colour/kind/Focus/Delete row that always follows it — same separator convention
-   `.dc-element-inspector-panel` uses below. Only present at all when the selected kind actually has
-   a primary action (`ElementInspectorPopover`), so a Service/Data Store/Junction's popover is
-   unchanged. */
-.dc-element-inspector-quickrow + .dc-element-inspector-row {
-  border-top: 1px solid var(--dc-border);
-}
-
-.dc-element-inspector-panel {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 8px;
-  border-top: 1px solid var(--dc-border);
+/* The configuration row's kind picker takes the remaining width but never less than a readable
+   label; the swatch and the two actions keep their own size. */
+.dc-popover-config .dc-inspector-select {
+  min-width: 96px;
 }
 
 /*
@@ -1189,16 +1332,23 @@
  * control heights, not large form fields") instead of the mix of 22–32px
  * chrome the flat grid this replaced had accumulated across its controls. */
 .dc-inspector-control {
-  height: 32px;
+  height: var(--dc-popover-field, 28px);
   min-width: 0;
   flex: 1;
   padding: 0 8px;
   border: 1px solid var(--dc-border);
-  border-radius: 6px;
+  border-radius: var(--dc-radius-sm);
   background: var(--dc-surface-raised);
   color: var(--dc-text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--dc-popover-font, 12px);
+  transition:
+    border-color 90ms ease,
+    background 90ms ease;
+}
+
+.dc-inspector-control:hover {
+  border-color: var(--dc-border-strong);
 }
 
 .dc-inspector-control::placeholder {
@@ -1258,7 +1408,7 @@
   max-height: 220px;
   overflow-y: auto;
   border: 1px solid var(--dc-border);
-  border-radius: 8px;
+  border-radius: var(--dc-radius);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
   outline: none;
@@ -1285,9 +1435,9 @@
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  border-radius: 5px;
+  border-radius: var(--dc-radius-sm);
   color: var(--dc-text);
-  font-size: 12.5px;
+  font-size: var(--dc-popover-font, 12px);
   cursor: pointer;
 }
 
@@ -1428,15 +1578,15 @@
  * multi-select copy still uses under its own `.dc-kind-badge` name.
  */
 .dc-inspector-badge {
-  height: 32px;
+  height: var(--dc-popover-field, 28px);
   flex: 1;
   padding: 0 9px;
   border: 1px dashed var(--dc-border-strong);
-  border-radius: 6px;
+  border-radius: var(--dc-radius-sm);
   background: transparent;
   color: var(--dc-text-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--dc-popover-font, 12px);
   cursor: pointer;
 }
 
@@ -1493,13 +1643,22 @@
 /* Collapsed by default — the full palette (`.dc-swatches` below) only
  * appears once this is clicked, rather than permanently consuming a row. */
 .dc-inspector-color-swatch {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
+  margin: 0 2px;
   padding: 0;
   border: 1px solid var(--dc-border);
   border-radius: 50%;
   cursor: pointer;
+  transition:
+    transform 90ms ease,
+    border-color 90ms ease;
+}
+
+.dc-inspector-color-swatch:hover {
+  border-color: var(--dc-border-strong);
+  transform: scale(1.1);
 }
 
 .dc-inspector-color-swatch[data-auto='true'] {

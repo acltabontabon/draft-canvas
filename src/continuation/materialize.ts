@@ -2,8 +2,7 @@ import { capabilityFor, categoryOf, inferRelationship } from '../document/connec
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { createEdge, createNode, defaultSizeFor } from '../document/factory';
 import { addNodes, COMPANION_GAP, containsRect, tryPlaceNear, type CompanionDirection } from '../document/operations';
-import { queueTubeCenterFraction } from '../document/queueGeometry';
-import type { DraftDocument, DraftEdge, DraftNode, EdgeAnchor, Side } from '../document/types';
+import type { DraftDocument, DraftEdge, DraftNode, EdgeAnchor } from '../document/types';
 import { chooseSides, type Rect } from '../edges/routing';
 import { FONTS } from '../render/text/fonts';
 import { getMeasurer } from '../render/text/measure';
@@ -132,13 +131,6 @@ function preferredDirection(doc: DraftDocument, anchor: DraftNode): CompanionDir
   return vertical > horizontal ? 'below' : 'right';
 }
 
-/** The offset a queue-family node's connector should land at on `side` — the tube glyph's own
- *  visual centre on a left/right side (see `queueTubeCenterFraction`), the plain midpoint
- *  everywhere else, since the glyph's asymmetry is only vertical. */
-function queueOffset(node: Pick<DraftNode, 'height' | 'type'>, side: Side): number {
-  return node.type === 'queue' && (side === 'left' || side === 'right') ? queueTubeCenterFraction(node.height) : 0.5;
-}
-
 /**
  * The anchors a continuation's own connector should be pinned to — computed once, here, and
  * carried on the created edge so the ghost that previews it and the edge that results from
@@ -153,8 +145,8 @@ export function anchorsForPlacement(
 ): { sourceAnchor: EdgeAnchor; targetAnchor: EdgeAnchor } {
   const { source: sourceSide, target: targetSide } = chooseSides(toRect(source), toRect(target));
   return {
-    sourceAnchor: { side: sourceSide, offset: queueOffset(source, sourceSide) },
-    targetAnchor: { side: targetSide, offset: queueOffset(target, targetSide) },
+    sourceAnchor: { side: sourceSide, offset: 0.5 },
+    targetAnchor: { side: targetSide, offset: 0.5 },
   };
 }
 
@@ -172,8 +164,10 @@ export function horizontalAnchorsFor(
   const isHorizontal = target.y === source.y && target.x >= source.x + source.width;
   if (!isHorizontal) return {};
   return {
-    sourceAnchor: source.type === 'queue' ? { side: 'right', offset: queueTubeCenterFraction(source.height) } : undefined,
-    targetAnchor: target.type === 'queue' ? { side: 'left', offset: queueTubeCenterFraction(target.height) } : undefined,
+    // Pinning the side (not the offset) is all a queue-family end needs: routing itself lands a
+    // left/right anchor on the tube band (`anchorBandOf`), so the plain midpoint is the glyph's.
+    sourceAnchor: source.type === 'queue' ? { side: 'right', offset: 0.5 } : undefined,
+    targetAnchor: target.type === 'queue' ? { side: 'left', offset: 0.5 } : undefined,
   };
 }
 

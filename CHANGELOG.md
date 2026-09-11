@@ -6,51 +6,57 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
-- Four new starters. Under **Architectures**: **Backend for Frontend** (a web and a mobile
-  experience, each with its own tailored adapter over shared services) and **CQRS** (a command
-  side and a query side, bridged only by an event). Under **Patterns**: **Saga (Orchestration)**
-  (one coordinator issuing commands to services that each commit locally, with an explicit
-  compensating action) and **Transactional Outbox** (a service writes its data and its outbox
-  record in one transaction; a separate publisher delivers the event afterwards).
-- Starters can now come with ready-made flows. CQRS opens with *Submit command* and *Read
-  projection*; the saga with *Happy path* and *Compensation*; the outbox with *Service
-  transaction*, *Outbox publication*, and *Event consumption*. Select one to dim everything else,
-  or present it to step through — they're ordinary flows, so rename, reorder, or delete them like
-  any other.
-- A connector between two services (or a service and an external system) can now be marked
-  **Compensates** — a compensating action: a new local transaction that undoes an earlier one, the
-  way a saga releases a payment reservation after a later step fails. It sits beside *Command* in
-  the relationship picker and names itself in the Sequence Diagram.
-- Draft Canvas now sketches the obvious next move. Select a topic that has a publisher and a
-  translucent queue appears beside it, already connected; press Tab (or click it) and it becomes
-  real, in one undoable step — and the new queue, having no consumer yet, offers a worker in turn.
-  A queue with no consumer suggests a worker; a gateway with nothing routed suggests a service.
-  Nothing else is suggested: a service, a person, a data store or a finished shape stays quiet.
-  Escape waves a suggestion away for that node until its connections change, and drawing anything
-  yourself makes it step aside. Every suggestion comes from the same relationship rules your own
-  connectors follow — it is not AI, and nothing leaves your machine.
-- Dropping a connector on empty canvas now leads with what fits: the picker lists the suggestions
-  for that node first, highlights the best one, and shows a preview of the highlighted row where
-  you let go — arrow keys move through every option, Enter or Tab takes it. A queue that already
-  has a consumer offers a dead-letter queue here.
-- With Learn mode on, a suggestion explains itself in one sentence ("This queue has no consumer.").
-- Canvas Settings has an Intent Continuation switch, and ⌘K can turn it on or off.
-- A flow can now be viewed as a Sequence Diagram — its own connectors, laid out as participants
-  and ordered messages over time, with sync, async, publish/consume, and request/response read
+- Two new shape kinds: a Service can be a **Backend for Frontend** (BFF, for adapters that tailor
+  a backend to specific frontends — connectors say *calls*, not *routes*, to distinguish from a
+  Gateway), and a Data Store can be a **Table** — a flat card with a header band for a logical
+  table inside a database, so two tables in one boundary read as a single store.
+- A **Projects** relationship for write-model projections — when a service projects data into a
+  read store, separate from the authoritative *Writes*.
+- A Service's popover offers **Connect Data Store** (add a new store it writes to), and a
+  Gateway's offers **Route to Service** (add a new routed target) — one-click continuations like
+  Add Consumer and Add DLQ.
+- Intent Continuation: Draft Canvas sketches the obvious next move. Select a topic with a
+  publisher and a translucent queue appears beside it, already connected; press Tab (or click it)
+  and it becomes real. A queue without a consumer suggests a worker; a gateway with nothing routed
+  suggests a service. Escape dismisses the suggestion until the node's connections change. Every
+  suggestion follows the same relationship rules as hand-drawn connectors — it is not AI, and
+  nothing leaves your device. With Learn mode on, each suggestion explains itself in one sentence.
+  Canvas Settings has an Intent Continuation switch, and ⌘K can turn it on or off.
+- Dropping a connector on empty canvas now leads with what fits: the picker lists suggestions
+  first, highlights the best one, and shows a live preview where you let go — arrow keys move
+  through every option, Enter or Tab takes it. A queue that already has a consumer offers a
+  dead-letter queue as a suggestion.
+- A connector between two services (or a service and an external system) can be marked
+  **Compensates** — undoing an earlier transaction when a later step fails. It sits in the
+  relationship picker beside *Command* and names itself in the Sequence Diagram.
+- A flow can now be viewed as a Sequence Diagram — its connectors laid out as participants and
+  ordered messages over time, with sync/async, publish/consume, and request/response read
   straight from what you've already drawn. Copy the result as Mermaid or PlantUML in one click.
-- The canvas can now be navigated without a mouse. With an element selected, Option/Alt+Arrow
+- Four new starters, all with ready-made flows you can select to dim everything else or step
+  through:
+  - Under **Architectures**: **Backend for Frontend** (a web and mobile experience, each with its
+    own BFF adapter over shared services) and **CQRS** (command side and query side, bridged only
+    by an event).
+  - Under **Patterns**: **Saga – Orchestration** (one coordinator issuing commands to services
+    that each commit locally, with an explicit compensating action) and **Saga – Choreography**
+    (three services chained by the events they publish, each with its own store, no coordinator —
+    a failure is an event too, so a stock rejection triggers a refund). Also **Transactional
+    Outbox** (a service writes its data and outbox record in one transaction; a separate
+    publisher delivers the event afterwards).
+- The canvas can be navigated without a mouse. With an element selected, Option/Alt+Arrow
   selects the nearest one in that direction; Option/Alt+Shift+Right or +Left follows an outgoing
-  or incoming connection, cycling through more than one on repeated presses. Tab now reaches the
-  canvas as a single stop instead of visiting every node individually, and a keyboard-focused
-  selection shows a subtly brighter ring than a mouse-selected one.
-- Every element created from the keyboard or ⌘K — not just a Note — now opens ready to type a
-  name into immediately, and lands sensibly placed even when created several in a row with no
-  mouse movement in between, instead of stacking on top of the last one.
-- The Keyboard Shortcuts sheet (`?`) has been redesigned: it's now searchable, organized by what
-  you're doing (Essentials, Navigation, Canvas, Diagramming, Flows & Presentation), and every row
-  that corresponds to a real shortcut is generated from the same definition the command palette
-  and context menu already use — it can no longer silently fall out of sync with what's actually
-  bound.
+  or incoming connection, cycling through more if there are several. Tab now reaches the canvas
+  as a single stop instead of visiting every node individually. A keyboard-focused selection shows
+  a subtly brighter ring than a mouse-selected one.
+- Every element created from the keyboard or ⌘K now opens ready to type a name immediately, and
+  lands sensibly placed even when created several in a row with no mouse movement, instead of
+  stacking on top of each other.
+- The Keyboard Shortcuts sheet (`?`) is now searchable, organized by what you're doing (Essentials,
+  Navigation, Canvas, Diagramming, Flows & Presentation), and generated from the same definition
+  the command palette and context menu use — it can no longer fall out of sync with what's
+  actually bound.
+- The element and connector popovers can be driven from the keyboard: arrow keys move between
+  controls, Home/End jump to the ends.
 
 ### Fixed
 
@@ -74,19 +80,27 @@ All notable changes to Draft Canvas are documented here.
 
 ### Changed
 
-- The **Saga (Orchestration)** starter is redrawn. The three steps leave the orchestrator as one
-  orthogonal fan, each drop carrying its own step name; the compensation is now *Release payment*
-  (the counterpart of *Reserve payment*), a **Compensates** connector that leaves the
-  orchestrator's side and lands beside the forward step, still conditioned *if inventory fails*.
-  Its *Compensation* flow gains the payment's local commit as a beat, so the reason a rollback
-  isn't possible is part of the story.
+- Connectors into a Queue, Topic or Stream now land on the tube itself. A level line from a
+  service to a topic meets the glyph's centre, and the three connection points on a tube's left
+  and right sides sit on the tube, where the connector will actually go. Before, the midpoint sat
+  on the gap between the tube and its caption.
+- Connector captions and labels no longer sit on the line. A label is placed against the run it
+  actually lies on — above a horizontal run, beside a vertical one — so a stepped fan's labels no
+  longer read as struck through, and a label never straddles a bend or arrowhead. Labels carry a
+  faint canvas-toned mask, on screen and in exported SVG.
+- A connector that is meant to be level or plumb but lands a fraction of a pixel off is now drawn
+  as one straight line instead of a stepped path with two hairline bends.
+- The element and connector popovers share one visual system: one shell, one control height, one
+  type size, a small caret pointing at what they belong to, and an entrance that grows from it.
+  Shape-native continuations (Add Consumer, Add Subscriber, Add Data Store, …) lead with a plus
+  in their own row; Delete only turns red when pointed at.
 - Two connectors between the same pair of elements are only nudged apart when they would actually
   draw on top of each other. Connectors that leave or land on different anchor points keep their
-  own clean routes — and a fan-out member no longer drops out of its bundle because of a sibling
-  that never overlapped it.
+  own clean routes — a fan-out member no longer drops out of its bundle because of a sibling that
+  never overlapped it.
 - ⌘K groups starters under **Architectures** and **Patterns** instead of one long list.
-- The starter list on a blank canvas and in an empty library is now grouped by category and kept
-  to a tidy width, instead of running the full length of the screen.
+- The starter list on a blank canvas and in an empty library is grouped by category and kept to a
+  tidy width, instead of running the full length of the screen.
 
 ## [0.8.0] - 2026-09-10
 

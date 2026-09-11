@@ -36,6 +36,7 @@ import {
   type ScreenRect,
 } from './edgeGeometry';
 import { HintStrip } from './HintStrip';
+import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
@@ -66,6 +67,7 @@ const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   triggers: 'Triggers',
   implementedBy: 'Implemented by',
   compensates: 'Compensates',
+  projects: 'Projects',
 };
 
 const CONNECTOR_KIND_LABELS: Record<ConnectorKind, string> = {
@@ -134,6 +136,7 @@ export function EdgeInspectorPopover() {
   const hideTimer = useRef<number | null>(null);
   const [membershipOpen, setMembershipOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  usePopoverKeyboard(panelRef);
 
   // A real measurement, not a guess: which side to sit on (see the `flipBelow` calculation
   // below) depends on the popover's own height, and that varies a lot between the compact row
@@ -254,8 +257,9 @@ export function EdgeInspectorPopover() {
   const displayTarget = open ? targetInternal : lastTargetRef.current;
   if (!displayEdge || !displaySource || !displayTarget) return null;
 
-  const sourceRect = rectOfInternal(displaySource);
-  const targetRect = rectOfInternal(displayTarget);
+  const draftNodes = nodeIndex(document.nodes);
+  const sourceRect = rectOfInternal(displaySource, draftNodes.get(displayEdge.source)?.type);
+  const targetRect = rectOfInternal(displayTarget, draftNodes.get(displayEdge.target)?.type);
   if (!sourceRect || !targetRect) return null;
 
   // The third caller of `routeBetween`, alongside the live edge component and
@@ -310,8 +314,8 @@ export function EdgeInspectorPopover() {
   );
   const labelFlowX = screenToFlowPosition({ x: clampedScreenX, y: screenLabelPoint.y }).x;
 
-  const sourceDraftNode = nodeIndex(document.nodes).get(displayEdge.source);
-  const targetDraftNode = nodeIndex(document.nodes).get(displayEdge.target);
+  const sourceDraftNode = draftNodes.get(displayEdge.source);
+  const targetDraftNode = draftNodes.get(displayEdge.target);
 
   // Phase 7.1/7.2 — retires the moment any connector's semantics have been explicitly touched
   // (`semanticsOrigin: 'explicit'`, already stamped by `setEdgeSemantic`/`setEdgeHasResponse`/
@@ -336,10 +340,11 @@ export function EdgeInspectorPopover() {
     <ViewportPortal>
       <div
         ref={panelRef}
-        className="dc-edge-inspector"
+        className="dc-popover dc-edge-inspector"
         role="toolbar"
         aria-label="Connector options"
         data-closing={closing ? 'true' : undefined}
+        data-placement={flipBelow ? 'below' : 'above'}
         style={{
           transform: flipBelow
             ? `translate(-50%, 0) translate(${labelFlowX}px, ${route.labelY + POPOVER_GAP}px)`
@@ -347,7 +352,8 @@ export function EdgeInspectorPopover() {
         }}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <div className="dc-edge-inspector-inner">
+        <span className="dc-popover-caret" aria-hidden="true" />
+        <div className="dc-popover-inner dc-edge-inspector-inner">
           {hintId && <HintStrip id={hintId} learned={hintLearned} />}
           {/* Keyed on the edge id: the editor below is now always mounted (no more "⋯" to
               unmount it on collapse), so switching to a different connector must remount this
@@ -403,7 +409,7 @@ function EdgeInspectorRow({
 
   return (
     <>
-      <div className="dc-edge-inspector-row">
+      <div className="dc-popover-row dc-edge-inspector-row">
         {editingLabel ? (
           <input
             autoFocus

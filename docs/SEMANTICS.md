@@ -72,7 +72,7 @@ unrestricted connector.
 
 | Source → Target | Relations offered | Default | Notes |
 | --- | --- | --- | --- |
-| Service → Database | writes, reads, query, dependsOn | writes | |
+| Service → Database | writes, reads, query, projects, dependsOn | writes | `projects` is a derived write — a projection materialising a read model |
 | Database → Service | reads, query, dependsOn | reads | |
 | Service → Cache | writes, reads, invalidates, dependsOn | writes | `invalidates` is cache-only |
 | Cache → Service | reads, dependsOn | reads | |
@@ -120,7 +120,7 @@ the behaviour (`event` dots its own line) or to the user.
 - **`EdgeSemantic`** — what the connection *represents*: `http`, `grpc`, `event`, `command`,
   `query`, `reads`, `writes`, `publishes`, `consumes`, `calls`, `dependsOn`, `fansOut`,
   `deliversTo`, `ingests`, `replicates`, `cdc`, `syncs`, `deadLetters`, `invalidates`, `watches`,
-  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implementedBy`, `compensates`. A label convenience only —
+  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implementedBy`, `compensates`, `projects`. A label convenience only —
   never changes the connector's colour.
 - **`ConnectorKind`** — how it *behaves*: `sync`, `async`, `event`, `callback`, `conditional`,
   `retry`, `failure`, `fallback`. Drives the solid/dashed line and small glyphs, not the caption.

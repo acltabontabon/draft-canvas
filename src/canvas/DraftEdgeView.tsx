@@ -295,8 +295,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
   if (!edge || !sourceNode || !targetNode) return null;
 
-  const sourceRect = rectOfInternal(sourceNode);
-  const targetRect = rectOfInternal(targetNode);
+  const sourceRect = rectOfInternal(sourceNode, nodes.find((node) => node.id === edge.source)?.type);
+  const targetRect = rectOfInternal(targetNode, nodes.find((node) => node.id === edge.target)?.type);
   if (!sourceRect || !targetRect) return null;
 
   const obstacles = interactionActive

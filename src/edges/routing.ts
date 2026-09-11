@@ -7,6 +7,7 @@ import {
   type EdgeRouting,
   type Side,
 } from '../document/types';
+import { anchorBandOf } from '../document/queueGeometry';
 
 /**
  * Edge geometry.
@@ -35,6 +36,12 @@ export interface Rect {
   y: number;
   width: number;
   height: number;
+  /**
+   * The absolute y-range a LEFT/RIGHT anchor may occupy — a queue-family node's tube glyph (see
+   * `document/queueGeometry.ts`'s `anchorBandOf`). Absent means the whole side. Only anchor
+   * placement reads it: obstacle, overlap and selection geometry always use the full box.
+   */
+  anchorBand?: { top: number; bottom: number };
 }
 
 export interface Anchor {
@@ -44,7 +51,19 @@ export interface Anchor {
 }
 
 export function rectOf(node: DraftNode): Rect {
-  return { x: node.x, y: node.y, width: node.width, height: node.height };
+  const band = anchorBandOf(node);
+  // The key is only present when there is a band, so rects of ordinary nodes stay byte-identical
+  // to `{ x, y, width, height }` for equality-based tests and fixtures.
+  return band
+    ? { x: node.x, y: node.y, width: node.width, height: node.height, anchorBand: band }
+    : { x: node.x, y: node.y, width: node.width, height: node.height };
+}
+
+/** The vertical run a left/right anchor is distributed over — the band when the rect has one. */
+function verticalSpan(rect: Rect): { start: number; length: number } {
+  return rect.anchorBand
+    ? { start: rect.anchorBand.top, length: rect.anchorBand.bottom - rect.anchorBand.top }
+    : { start: rect.y, length: rect.height };
 }
 
 export function centerOf(rect: Rect): { x: number; y: number } {
@@ -65,10 +84,14 @@ export function anchorPoint(rect: Rect, side: Side, offset = 0.5): { x: number; 
       return { x: rect.x + rect.width * t, y: rect.y };
     case 'bottom':
       return { x: rect.x + rect.width * t, y: rect.y + rect.height };
-    case 'left':
-      return { x: rect.x, y: rect.y + rect.height * t };
-    case 'right':
-      return { x: rect.x + rect.width, y: rect.y + rect.height * t };
+    case 'left': {
+      const span = verticalSpan(rect);
+      return { x: rect.x, y: span.start + span.length * t };
+    }
+    case 'right': {
+      const span = verticalSpan(rect);
+      return { x: rect.x + rect.width, y: span.start + span.length * t };
+    }
   }
 }
 
@@ -117,10 +140,11 @@ export function anchorAt(rect: Rect, point: { x: number; y: number }): EdgeAncho
   const side = SIDES.reduce((nearest, candidate) =>
     distanceToSide[candidate] < distanceToSide[nearest] ? candidate : nearest,
   );
+  const span = verticalSpan(rect);
   const offset =
     side === 'top' || side === 'bottom'
       ? (point.x - rect.x) / rect.width
-      : (point.y - rect.y) / rect.height;
+      : (point.y - span.start) / span.length;
   return { side, offset: Math.min(1, Math.max(0, offset)) };
 }
 
@@ -291,6 +315,11 @@ export function arrowSeed(edgeId: string, spine: EdgeSpine | undefined): string 
  *  `DraftEdgeView.tsx` (transform-based) and `edges/describe.ts` (direct rect math) so the two
  *  renderers can't drift the way `CONDITION_OFFSET_Y` already has. */
 export const LABEL_LINE_GAP = 8;
+
+/** Endpoints closer than this across a level/plumb connector are treated as exactly level — see
+ *  `routeBetween`. Sub-pixel: never a visible move, only the difference between a straight line
+ *  and a stepped one. */
+const LEVEL_SNAP = 1;
 
 export interface LaneAssignment {
   /** This edge's signed slot within its parallel-edge group; `0` for a lone edge. */
@@ -595,7 +624,7 @@ const MIN_SPINE_BRANCH = 28;
  */
 function laneNudge(rect: Rect, side: Side, lane: number): { x: number; y: number } {
   if (!lane) return { x: 0, y: 0 };
-  const sideLength = isHorizontalSide(side) ? rect.height : rect.width;
+  const sideLength = isHorizontalSide(side) ? verticalSpan(rect).length : rect.width;
   const span = Math.sign(lane) * Math.min(Math.abs(lane) * LANE_SPACING, sideLength * 0.35);
   return isHorizontalSide(side) ? { x: 0, y: span } : { x: span, y: 0 };
 }
@@ -615,7 +644,8 @@ function clampToBoundary(
   side: Side,
 ): { x: number; y: number } {
   if (isHorizontalSide(side)) {
-    return { x: point.x, y: Math.max(rect.y, Math.min(rect.y + rect.height, point.y)) };
+    const span = verticalSpan(rect);
+    return { x: point.x, y: Math.max(span.start, Math.min(span.start + span.length, point.y)) };
   }
   return { x: Math.max(rect.x, Math.min(rect.x + rect.width, point.x)), y: point.y };
 }
@@ -908,6 +938,178 @@ export function labelSideFor(
   return collides ? 'bottom' : 'top';
 }
 
+/** How close to a bend (or to the arrowhead at either end) a label point may sit before it is
+ *  slid along its segment — a chip half over a corner reads as belonging to neither run. */
+export const LABEL_BEND_CLEARANCE = 14;
+
+interface PathVertex {
+  x: number;
+  y: number;
+  /** A real vertex of the path (`M`/`L` endpoints) rather than a sample taken along a curve. */
+  corner: boolean;
+}
+
+/**
+ * Flattens a path `d` into a polyline. Every path routing produces — React Flow's straight /
+ * bezier / smoothstep helpers and this module's own `roundedStepPath` — uses absolute `M`, `L`,
+ * `Q` and `C` only (with mixed space/comma separators), so this reads exactly those; anything
+ * else yields no vertices and the caller keeps its fallback. Curves are sampled at a few `t`
+ * values (never marked as corners) so the nearest-segment search sees their true direction.
+ */
+export function flattenPath(d: string): PathVertex[] {
+  const tokens = d.match(/[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/g);
+  if (!tokens) return [];
+  const out: PathVertex[] = [];
+  const push = (x: number, y: number, corner: boolean) => {
+    const last = out[out.length - 1];
+    if (last && Math.abs(last.x - x) < 0.01 && Math.abs(last.y - y) < 0.01) {
+      last.corner = last.corner || corner;
+      return;
+    }
+    out.push({ x, y, corner });
+  };
+  let i = 0;
+  let command = '';
+  const num = () => Number(tokens[i++]);
+  while (i < tokens.length) {
+    const token = tokens[i]!;
+    if (/[A-Za-z]/.test(token)) {
+      command = token.toUpperCase();
+      if (!'MLQC'.includes(command)) return [];
+      i += 1;
+      continue;
+    }
+    const from = out[out.length - 1];
+    switch (command) {
+      case 'M':
+      case 'L': {
+        push(num(), num(), true);
+        break;
+      }
+      case 'Q': {
+        const cx = num();
+        const cy = num();
+        const x = num();
+        const y = num();
+        if (from) {
+          for (const t of [0.25, 0.5, 0.75]) {
+            const mt = 1 - t;
+            push(mt * mt * from.x + 2 * mt * t * cx + t * t * x, mt * mt * from.y + 2 * mt * t * cy + t * t * y, false);
+          }
+        }
+        push(x, y, true);
+        break;
+      }
+      case 'C': {
+        const c1x = num();
+        const c1y = num();
+        const c2x = num();
+        const c2y = num();
+        const x = num();
+        const y = num();
+        if (from) {
+          for (let k = 1; k <= 7; k += 1) {
+            const t = k / 8;
+            const mt = 1 - t;
+            push(
+              mt * mt * mt * from.x + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * x,
+              mt * mt * mt * from.y + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * y,
+              false,
+            );
+          }
+        }
+        push(x, y, true);
+        break;
+      }
+      default:
+        return [];
+    }
+    if (Number.isNaN(out[out.length - 1]?.x)) return [];
+  }
+  return out;
+}
+
+/**
+ * Where a connector's label chip goes, decided from the path itself rather than from which
+ * sides the connector leaves and lands on.
+ *
+ * The routing helpers hand back a label point somewhere along the path — for a stepped fan
+ * (bottom → top with a horizontal run between) that point lies on the *horizontal* middle
+ * segment, and a chip offset "beside" a vertical connector would slide along that run and
+ * sit on the line, struck through. So: find the segment the point actually lies on, place
+ * the chip perpendicular to *that* segment (above a horizontal run, beside a vertical one),
+ * flip to the opposite side only if the chip would land inside the source or target node,
+ * and keep the point clear of the run's ends — a bend, or the arrowhead — by sliding it toward
+ * the middle of its segment.
+ *
+ * A near-diagonal segment (a bezier's centre) has no natural "beside", so the `fallback` side —
+ * `labelSideFor`'s pairing-based choice — keeps deciding there.
+ */
+export function placeLabel(
+  d: string,
+  point: { x: number; y: number },
+  sourceRect: Rect,
+  targetRect: Rect,
+  fallback: Side,
+): { x: number; y: number; side: Side } {
+  const vertices = flattenPath(d);
+  if (vertices.length < 2) return { ...point, side: fallback };
+
+  // Nearest segment by clamped projection.
+  let best = 0;
+  let bestDistance = Infinity;
+  let bestT = 0;
+  for (let i = 0; i < vertices.length - 1; i += 1) {
+    const a = vertices[i]!;
+    const b = vertices[i + 1]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSq = dx * dx + dy * dy;
+    const t = lengthSq === 0 ? 0 : Math.min(1, Math.max(0, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSq));
+    const px = a.x + dx * t;
+    const py = a.y + dy * t;
+    const distance = (point.x - px) ** 2 + (point.y - py) ** 2;
+    if (distance < bestDistance - 1e-6) {
+      bestDistance = distance;
+      best = i;
+      bestT = t;
+    }
+  }
+  const a = vertices[best]!;
+  const b = vertices[best + 1]!;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length = Math.hypot(dx, dy);
+  if (length === 0) return { ...point, side: fallback };
+
+  // Slide away from the segment's ends — only on a straight run between two real corners; a
+  // curve sample is neither a bend nor an arrowhead.
+  let along = bestT * length;
+  if (a.corner && b.corner) {
+    along =
+      length >= LABEL_BEND_CLEARANCE * 2
+        ? Math.min(length - LABEL_BEND_CLEARANCE, Math.max(LABEL_BEND_CLEARANCE, along))
+        : length / 2;
+  }
+  const x = a.x + (dx / length) * along;
+  const y = a.y + (dy / length) * along;
+
+  const nearDiagonal = Math.abs(Math.abs(dx) - Math.abs(dy)) < 0.3 * length;
+  const horizontalRun = nearDiagonal ? isVerticalSide(fallback) : Math.abs(dx) > Math.abs(dy);
+
+  const insideRect = (rect: Rect, px: number, py: number) =>
+    px > rect.x && px < rect.x + rect.width && py > rect.y && py < rect.y + rect.height;
+
+  if (horizontalRun) {
+    const above = { x, y: y - LABEL_LINE_GAP };
+    const collides = insideRect(sourceRect, above.x, above.y) || insideRect(targetRect, above.x, above.y);
+    return { x, y, side: collides ? 'bottom' : 'top' };
+  }
+  const beside = { x: x + LABEL_LINE_GAP, y };
+  const collides = insideRect(sourceRect, beside.x, beside.y) || insideRect(targetRect, beside.x, beside.y);
+  return { x, y, side: collides ? 'left' : 'right' };
+}
+
 /**
  * Routes between two node rectangles, honouring a persisted anchor for
  * whichever endpoint has one and falling back to `chooseSides`'s nearest-side
@@ -939,6 +1141,15 @@ export function routeBetween(
     targetRect,
     targetSide,
   );
+  // Two endpoints meant to be level (or plumb) but a sub-pixel apart — a tube band's centre at
+  // `.75` against a box centre on the integer grid — would otherwise get a stepped path with an
+  // invisible 0.25px jog and two hairline bends near the target. Snapping the target along its own
+  // side keeps it on the boundary and draws the one straight line the composition intended.
+  if (isHorizontalSide(sourceSide) && isHorizontalSide(targetSide) && sourceSide !== targetSide) {
+    if (Math.abs(from.y - to.y) < LEVEL_SNAP) to.y = from.y;
+  } else if (isVerticalSide(sourceSide) && isVerticalSide(targetSide) && sourceSide !== targetSide) {
+    if (Math.abs(from.x - to.x) < LEVEL_SNAP) to.x = from.x;
+  }
 
   const params = {
     sourceX: from.x,
@@ -1012,11 +1223,19 @@ export function routeBetween(
     }
   }
 
+  const label = placeLabel(
+    path,
+    { x: labelX, y: labelY },
+    sourceRect,
+    targetRect,
+    labelSideFor(sourceRect, targetRect, sourceSide, targetSide, { x: labelX, y: labelY }),
+  );
+
   return {
     d: path,
-    labelX,
-    labelY,
-    labelSide: labelSideFor(sourceRect, targetRect, sourceSide, targetSide, { x: labelX, y: labelY }),
+    labelX: label.x,
+    labelY: label.y,
+    labelSide: label.side,
     source: { ...from, side: sourceSide },
     target: { ...to, side: targetSide },
     branchStart,

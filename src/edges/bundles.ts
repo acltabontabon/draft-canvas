@@ -1,5 +1,5 @@
 import type { DraftEdge, DraftNode, Side } from '../document/types';
-import { type EdgeSpine, type Rect, laneIndex, rectOf, resolveSides } from './routing';
+import { type EdgeSpine, type Rect, anchorPoint, laneIndex, rectOf, resolveSides } from './routing';
 
 /**
  * Fan-out / fan-in edge bundling — the planning half of Smart Routing.
@@ -148,8 +148,11 @@ function hubOffset(candidate: Candidate, hub: 'source' | 'target'): number {
 function farCross(candidate: Candidate, hub: 'source' | 'target', verticalTrunk: boolean): number {
   const rect = hub === 'source' ? candidate.targetRect : candidate.sourceRect;
   const anchor = hub === 'source' ? candidate.edge.targetAnchor : candidate.edge.sourceAnchor;
-  const offset = anchor?.offset ?? 0.5;
-  return verticalTrunk ? rect.y + rect.height * offset : rect.x + rect.width * offset;
+  const side = hub === 'source' ? candidate.targetSide : candidate.sourceSide;
+  // Through `anchorPoint`, not hand arithmetic, so a queue-family far node's tap-off sits on its
+  // tube band exactly where `buildSpinePath` will terminate the branch.
+  const point = anchorPoint(rect, side, anchor?.offset ?? 0.5);
+  return verticalTrunk ? point.y : point.x;
 }
 
 /** The near face of a rect, along the direction the corridor runs in. */
@@ -425,9 +428,8 @@ function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): 
     // Every member leaves the hub from the same point — that's what the group
     // key guarantees — so the stem's own cross-axis coordinate is just that
     // shared anchor's.
-    const hubCross = verticalTrunk
-      ? hubRect.y + hubRect.height * hubOffset(free[0]!, group.hub)
-      : hubRect.x + hubRect.width * hubOffset(free[0]!, group.hub);
+    const hubPoint = anchorPoint(hubRect, group.hubSide, hubOffset(free[0]!, group.hub));
+    const hubCross = verticalTrunk ? hubPoint.y : hubPoint.x;
 
     // A member's own far node is where its branch terminates, not something to
     // route around; the hub likewise.

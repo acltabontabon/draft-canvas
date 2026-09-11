@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
-import { queueTubeCenterFraction } from '../src/document/queueGeometry';
+import { queueTubeSpan } from '../src/document/queueGeometry';
+import { routeEdge } from '../src/edges/routing';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 describe('addDeadLetterQueue() / removeDeadLetterQueue() — "Add DLQ"', () => {
@@ -44,22 +45,23 @@ describe('addDeadLetterQueue() / removeDeadLetterQueue() — "Add DLQ"', () => {
     expect(store.getState().selection).toEqual({ nodes: [dlq.id], edges: [] });
   });
 
-  it('anchors the connector on the tube glyph\'s own visual centre, not the node box centre', () => {
+  it('pins the sides only — routing itself lands the level connector on the tube glyph', () => {
     // A Queue's tube glyph sits in the upper portion of its box (the kind caption sits below it —
-    // see nodes/describe.ts's queue()), so the default 0.5 offset would land a connector at the
-    // boundary between the tube and its caption, not the tube's own middle.
+    // see nodes/describe.ts's queue()). The edge carries the plain midpoint offset; it is
+    // `edges/routing.ts` that distributes left/right anchors over the tube band, so the same edge
+    // stays correct if the node is later renamed (and grows) or resized.
     const queue = store.getState().addNode({ type: 'queue', x: 0, y: 0 });
     store.getState().addDeadLetterQueue(queue.id);
     const doc = store.getState().document;
     const dlq = doc.nodes.find((n) => n.deliveryRole === 'dead-letter')!;
     const edge = doc.edges[0]!;
-    const expectedFraction = queueTubeCenterFraction(48);
-    expect(expectedFraction).toBeLessThan(0.5);
-    expect(edge.sourceAnchor).toEqual({ side: 'right', offset: expectedFraction });
-    expect(edge.targetAnchor).toEqual({ side: 'left', offset: expectedFraction });
-    // Sanity: both endpoints share the same tube geometry (same default height), so the same
-    // fraction is correct on both ends of this edge.
-    expect(queue.height).toBe(dlq.height);
+    expect(edge.sourceAnchor).toEqual({ side: 'right', offset: 0.5 });
+    expect(edge.targetAnchor).toEqual({ side: 'left', offset: 0.5 });
+    const route = routeEdge(edge, new Map(doc.nodes.map((n) => [n.id, n])))!;
+    const span = queueTubeSpan(queue.height);
+    expect(route.source.y).toBeCloseTo(queue.y + (span.top + span.bottom) / 2, 5);
+    expect(route.target.y).toBeCloseTo(dlq.y + (span.top + span.bottom) / 2, 5);
+    expect(route.source.y).toBeLessThan(queue.y + queue.height / 2);
   });
 
   it('leaves anchors unset (default nearest-side) when placement fell back to a non-horizontal spot', () => {
@@ -267,11 +269,11 @@ describe('addConsumer() — "Add Consumer"', () => {
     expect(edge.semantic).toBe('consumes');
   });
 
-  it('anchors the Queue side on its tube centre, and leaves the Worker side untouched (not tube-shaped)', () => {
+  it('pins the Queue side (routing lands it on the tube), and leaves the Worker side untouched', () => {
     const queue = store.getState().addNode({ type: 'queue', x: 0, y: 0 });
     store.getState().addConsumer(queue.id);
     const edge = store.getState().document.edges[0]!;
-    expect(edge.sourceAnchor).toEqual({ side: 'right', offset: queueTubeCenterFraction(48) });
+    expect(edge.sourceAnchor).toEqual({ side: 'right', offset: 0.5 });
     expect(edge.targetAnchor).toBeUndefined();
   });
 
@@ -317,5 +319,58 @@ describe('setEdgeDeliveryAttempts()', () => {
 
     store.getState().setEdgeDeliveryAttempts(edge.id, 5);
     expect(store.getState().document.edges[0]!.deliveryAttempts).toBe(5);
+  });
+});
+
+describe('addDataStore() / addRoutedService() — the Service quick actions', () => {
+  const store = useEditorStore;
+
+  beforeEach(() => {
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Companions'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+    });
+  });
+
+  it('connects a Service to a new Data Store with "writes", inferred, in one undo step', () => {
+    const service = store.getState().addNode({ type: 'service', serviceKind: 'api', x: 0, y: 0 });
+    const before = store.getState().history.past.length;
+    store.getState().addDataStore(service.id);
+    const doc = store.getState().document;
+    const database = doc.nodes.find((n) => n.type === 'database')!;
+    expect(database).toBeDefined();
+    const edge = doc.edges[0]!;
+    expect(edge.source).toBe(service.id);
+    expect(edge.target).toBe(database.id);
+    expect(edge.semantic).toBe('writes');
+    expect(edge.semanticsOrigin).toBe('inferred');
+    expect(store.getState().selection).toEqual({ nodes: [database.id], edges: [] });
+    expect(store.getState().history.past.length).toBe(before + 1);
+  });
+
+  it('is a no-op for a kind that does not own data', () => {
+    for (const serviceKind of ['external', 'scheduler', 'gateway'] as const) {
+      const service = store.getState().addNode({ type: 'service', serviceKind, x: 0, y: 0 });
+      store.getState().addDataStore(service.id);
+    }
+    expect(store.getState().document.nodes.filter((n) => n.type === 'database')).toHaveLength(0);
+  });
+
+  it('connects a Gateway to a new API service with "routes", and refuses for a non-gateway', () => {
+    const gateway = store.getState().addNode({ type: 'service', serviceKind: 'gateway', x: 0, y: 0 });
+    store.getState().addRoutedService(gateway.id);
+    const doc = store.getState().document;
+    const target = doc.nodes.find((n) => n.id !== gateway.id)!;
+    expect(target.serviceKind).toBe('api');
+    expect(doc.edges[0]!.semantic).toBe('routes');
+
+    const plain = store.getState().addNode({ type: 'service', x: 0, y: 400 });
+    const count = store.getState().document.nodes.length;
+    store.getState().addRoutedService(plain.id);
+    expect(store.getState().document.nodes.length).toBe(count);
   });
 });

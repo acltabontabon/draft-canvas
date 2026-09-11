@@ -17,6 +17,7 @@ import {
 import { requestClipboardRead } from '../lib/clipboardPermission';
 import { continuationsFor, materialize } from '../continuation';
 import { MOD_SYMBOL } from '../lib/platform';
+import { ownsData } from '../store/editorStore';
 import { pointer } from '../store/uiStore';
 import { focusBounds, focusNodes } from './search';
 import { ARCHITECTURE_STARTERS } from '../starters';
@@ -768,6 +769,39 @@ function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
   return commands;
 }
 
+/** A Service's own shape-native quick actions — "Add Data Store" for a service kind that owns
+ *  data, "Add Service" (a routed target) for a Gateway — computed once here and reused by both
+ *  `nodeCommands` and `primaryCommandsFor`, the same single-source discipline as
+ *  `queueQuickCommands`. An External System, a Scheduler and a BFF's downstream are left alone:
+ *  the natural continuation for those isn't a companion this command could name honestly. */
+function serviceQuickCommands(node: DraftNode): Command[] {
+  const commands: Command[] = [];
+  if (ownsData(node)) {
+    commands.push({
+      // Titled for the relationship it draws, never "Add Data Store" — that is the creation
+      // command's own title, and an identical title would take the palette's "data store" query
+      // away from it whenever a service happens to be selected.
+      id: 'add-data-store',
+      title: 'Connect Data Store',
+      group: 'selection',
+      keywords: ['database', 'db', 'storage', 'writes', 'persist'],
+      primary: true,
+      run: (inner) => inner.editor.addDataStore(node.id),
+    });
+  }
+  if (categoryOf(node) === 'gateway') {
+    commands.push({
+      id: 'add-routed-service',
+      title: 'Route to Service',
+      group: 'selection',
+      keywords: ['route', 'routes', 'downstream', 'target'],
+      primary: true,
+      run: (inner) => inner.editor.addRoutedService(node.id),
+    });
+  }
+  return commands;
+}
+
 /** A Boundary's own structural action — reused by both `nodeCommands` (single-node selection) and
  *  `primaryCommandsFor`. Multi-selection's own "Ungroup" (`multiCommands`) is a separate command
  *  object, since it acts over the whole selection rather than one specific node. */
@@ -792,6 +826,7 @@ function boundaryUngroupCommand(): Command {
  *  node position, so dragging a node doesn't recompute this every animation frame. */
 export function primaryCommandsFor(ctx: CommandContext, node: DraftNode): Command[] {
   if (node.type === 'queue') return queueQuickCommands(ctx, node);
+  if (node.type === 'service') return serviceQuickCommands(node);
   if (node.type === 'group') return [boundaryUngroupCommand()];
   return [];
 }
@@ -856,6 +891,9 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
   }
   if (node.type === 'queue') {
     commands.push(...queueQuickCommands(ctx, node));
+  }
+  if (node.type === 'service') {
+    commands.push(...serviceQuickCommands(node));
   }
   commands.push(
     {
@@ -932,7 +970,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       id: 'edge-semantic',
       title: 'Change relationship…',
       group: 'connector',
-      keywords: ['semantic', 'http', 'event', 'reads', 'writes', 'publishes', 'consumes', 'calls', 'implements', 'implemented by', 'compensates', 'compensation', 'saga', 'meaning', 'type'],
+      keywords: ['semantic', 'http', 'event', 'reads', 'writes', 'publishes', 'consumes', 'calls', 'implements', 'implemented by', 'compensates', 'compensation', 'saga', 'projects', 'projection', 'read model', 'meaning', 'type'],
       hint: semanticTitle,
       run: () => ({
         prompt: 'Relationship',

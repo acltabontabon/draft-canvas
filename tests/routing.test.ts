@@ -7,9 +7,15 @@ import {
   labelLaneOffset,
   labelSideFor,
   laneIndex,
+  LABEL_BEND_CLEARANCE,
+  flattenPath,
+  placeLabel,
+  rectOf,
   routeBetween,
   routeEdge,
+  snappedAnchorForDrop,
 } from '../src/edges/routing';
+import { queueTubeSpan } from '../src/document/queueGeometry';
 import { describeEdge } from '../src/edges/describe';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes, moveNodes, updateNode } from '../src/document/operations';
@@ -93,54 +99,82 @@ describe('routeEdge threads an edge\'s own anchors through routeBetween', () => 
 });
 
 /**
- * The queue node's fanned-card-stack silhouette (`nodes/describe.ts`'s `queue()`)
- * draws three nested rects inside its own bounding box, but routing never reads
- * node type or sub-kind — it only ever sees `{x, y, width, height}` via `rectOf`.
- * These tests confirm that invariant holds end-to-end for a real queue node on
- * every side, and that topic/stream anchor identically to a plain queue.
+ * A queue-family node draws its tube glyph near the top of its box with the captions stacked below
+ * (`nodes/describe.ts`'s `queue()`), so routing anchors LEFT/RIGHT connectors on the tube band
+ * (`document/queueGeometry.ts`'s `anchorBandOf`) rather than the box's vertical midpoint — a level
+ * connector lands on the glyph, not on the gap between tube and caption. TOP/BOTTOM still use the
+ * box (the tube's top is the box top; a downward connector leaves below the captions).
  */
-describe('a queue/topic/stream node anchors on its true bounding box regardless of its stacked silhouette', () => {
+describe('a queue/topic/stream node anchors left/right connectors on its tube band', () => {
   function queueAt(id: string, queueKind: 'queue' | 'topic' | 'stream' = 'queue'): DraftNode {
     return createNode({ id, type: 'queue', x: 300, y: 300, width: 176, height: 68, queueKind });
   }
 
   const service = createNode({ id: 'svc', type: 'service', x: -300, y: -300, width: 100, height: 60 });
 
-  it.each(['top', 'right', 'bottom', 'left'] as const)(
-    'anchors a connector on the %s side of a queue node exactly on its rect edge',
-    (side) => {
-      const target = queueAt(`q-${side}`);
-      const edge = createEdge({
-        source: service.id,
-        target: target.id,
-        targetAnchor: { side, offset: 0.5 },
-      });
-      const nodes = new Map([
-        [service.id, service],
-        [target.id, target],
-      ]);
+  function routeTo(target: DraftNode, side: 'top' | 'right' | 'bottom' | 'left', offset = 0.5) {
+    const edge = createEdge({ source: service.id, target: target.id, targetAnchor: { side, offset } });
+    const nodes = new Map([
+      [service.id, service],
+      [target.id, target],
+    ]);
+    return routeEdge(edge, nodes)!;
+  }
 
-      const route = routeEdge(edge, nodes)!;
-      expect(route.target.side).toBe(side);
-      const rect = { x: target.x, y: target.y, width: target.width, height: target.height };
-      expect(route.target).toEqual({ ...anchorPoint(rect, side, 0.5), side });
-    },
-  );
+  it.each(['top', 'bottom'] as const)('anchors on the box edge for the %s side', (side) => {
+    const target = queueAt(`q-${side}`);
+    const route = routeTo(target, side);
+    const rect = { x: target.x, y: target.y, width: target.width, height: target.height };
+    expect(route.target).toEqual({ ...anchorPoint(rect, side, 0.5), side });
+  });
+
+  it.each(['left', 'right'] as const)('anchors on the tube centre for the %s side', (side) => {
+    const target = queueAt(`q-${side}`);
+    const route = routeTo(target, side);
+    const span = queueTubeSpan(target.height);
+    expect(route.target.y).toBeCloseTo(target.y + (span.top + span.bottom) / 2, 5);
+    expect(route.target.y).toBeLessThan(target.y + target.height / 2);
+    expect(route.target.x).toBe(side === 'left' ? target.x : target.x + target.width);
+  });
+
+  it('a service of the very same box still anchors on its box centre', () => {
+    const target = createNode({ id: 'svc-2', type: 'service', x: 300, y: 300, width: 176, height: 68 });
+    expect(routeTo(target, 'left').target.y).toBe(target.y + target.height / 2);
+  });
+
+  it('spreads the three left/right handle offsets over the tube, not the box', () => {
+    const target = queueAt('q-offsets');
+    const span = queueTubeSpan(target.height);
+    const ys = [0.25, 0.5, 0.75].map((offset) => routeTo(target, 'left', offset).target.y);
+    expect(ys[0]).toBeCloseTo(target.y + span.top + (span.bottom - span.top) * 0.25, 5);
+    expect(ys[2]).toBeCloseTo(target.y + span.top + (span.bottom - span.top) * 0.75, 5);
+    expect(ys[2]!).toBeLessThanOrEqual(target.y + span.bottom);
+  });
+
+  it('a lane nudge and its clamp keep the endpoint inside the tube band', () => {
+    const target = queueAt('q-lane');
+    const rect = rectOf(target);
+    const source = { x: -300, y: -300, width: 100, height: 60 };
+    const route = routeBetween(source, rect, 'smoothstep', {
+      anchors: { target: { side: 'left', offset: 0.9 } },
+      lane: 3,
+    });
+    expect(route.target.y).toBeLessThanOrEqual(rect.anchorBand!.bottom);
+    expect(route.target.y).toBeGreaterThanOrEqual(rect.anchorBand!.top);
+  });
+
+  it('a body drop near the top of the tube snaps to the upper handle, as drawn', () => {
+    const target = queueAt('q-drop');
+    const span = queueTubeSpan(target.height);
+    const snapped = snappedAnchorForDrop(rectOf(target), {
+      x: target.x + 2,
+      y: target.y + span.top + (span.bottom - span.top) * 0.2,
+    });
+    expect(snapped).toEqual({ side: 'left', offset: 0.25 });
+  });
 
   it('a topic and a stream node anchor identically to a plain queue node — sub-kind never affects geometry', () => {
-    const points = (['queue', 'topic', 'stream'] as const).map((queueKind) => {
-      const target = queueAt(`k-${queueKind}`, queueKind);
-      const edge = createEdge({
-        source: service.id,
-        target: target.id,
-        targetAnchor: { side: 'left', offset: 0.5 },
-      });
-      const nodes = new Map([
-        [service.id, service],
-        [target.id, target],
-      ]);
-      return routeEdge(edge, nodes)!.target;
-    });
+    const points = (['queue', 'topic', 'stream'] as const).map((queueKind) => routeTo(queueAt(`k-${queueKind}`, queueKind), 'left').target);
     expect(points[1]).toEqual(points[0]);
     expect(points[2]).toEqual(points[0]);
   });
@@ -724,5 +758,136 @@ describe('anchor offsets and lanes never move an endpoint off its node boundary'
       obstacles: [obstacle],
     });
     expect(route.source).toEqual({ x: 120, y: 40, side: 'right' });
+  });
+});
+
+/**
+ * A label is placed against the segment it actually sits on — not against the sides the
+ * connector leaves and lands on — so a stepped fan's chip never slides along its horizontal run.
+ */
+describe('placeLabel: segment-aware label placement', () => {
+  const client = { x: 200, y: 0, width: 120, height: 60 };
+  const api = { x: 0, y: 300, width: 120, height: 60 };
+
+  function chipStraddlesLine(routeLike: { labelX: number; labelY: number; labelSide: 'top' | 'right' | 'bottom' | 'left' }) {
+    // The chip is offset LABEL_LINE_GAP from the point on its side; on a horizontal run the line
+    // is at labelY, so a `left`/`right` chip (centred on labelY) straddles it.
+    return routeLike.labelSide === 'left' || routeLike.labelSide === 'right';
+  }
+
+  it('puts a stepped fan\'s label above (or below) its horizontal run — never beside it', () => {
+    const route = routeBetween(client, api, 'smoothstep', {
+      anchors: { source: { side: 'bottom', offset: 0.5 }, target: { side: 'top', offset: 0.5 } },
+    });
+    expect(['top', 'bottom']).toContain(route.labelSide);
+    expect(chipStraddlesLine(route)).toBe(false);
+    // The point still sits on the path's horizontal run, between the two verticals.
+    expect(route.labelY).toBeGreaterThan(client.y + client.height);
+    expect(route.labelY).toBeLessThan(api.y);
+    // The endpoint-side rule alone would have put it beside (struck through).
+    expect(labelSideFor(client, api, 'bottom', 'top', { x: route.labelX, y: route.labelY })).toBe('right');
+  });
+
+  it('keeps a vertical drop\'s label beside the line', () => {
+    const below = { x: 200, y: 300, width: 120, height: 60 };
+    const route = routeBetween(client, below, 'smoothstep', {
+      anchors: { source: { side: 'bottom', offset: 0.5 }, target: { side: 'top', offset: 0.5 } },
+    });
+    expect(route.labelSide).toBe('right');
+  });
+
+  it('keeps a level line\'s label above it', () => {
+    const right = { x: 500, y: 0, width: 120, height: 60 };
+    const route = routeBetween(client, right, 'smoothstep', {
+      anchors: { source: { side: 'right', offset: 0.5 }, target: { side: 'left', offset: 0.5 } },
+    });
+    expect(route.labelSide).toBe('top');
+  });
+
+  it('flips below a horizontal run when above would land inside an endpoint node', () => {
+    // The source box overhangs the run: the chip above the run would sit inside it.
+    const overhang = { x: 100, y: 300, width: 200, height: 100 };
+    const d = 'M 0,380 L 300,380';
+    expect(placeLabel(d, { x: 150, y: 380 }, overhang, { x: 400, y: 300, width: 10, height: 10 }, 'top').side).toBe('bottom');
+    // Without the overhang the default holds.
+    expect(placeLabel(d, { x: 150, y: 380 }, { x: -50, y: 370, width: 40, height: 20 }, { x: 400, y: 300, width: 10, height: 10 }, 'top').side).toBe('top');
+  });
+
+  it('slides a point that sits on a bend toward the middle of its run', () => {
+    const d = 'M 0,0 L 100,0 L 100,100';
+    const placed = placeLabel(d, { x: 100, y: 0 }, { x: -50, y: -50, width: 10, height: 10 }, { x: 200, y: 200, width: 10, height: 10 }, 'top');
+    // Nearest segment is either run; whichever it picked, the point is clear of the corner.
+    const distanceToCorner = Math.hypot(placed.x - 100, placed.y - 0);
+    expect(distanceToCorner).toBeGreaterThanOrEqual(LABEL_BEND_CLEARANCE - 1e-6);
+  });
+
+  it('centres on a run shorter than two clearances instead of overshooting', () => {
+    const d = 'M 0,0 L 20,0 L 20,100';
+    const placed = placeLabel(d, { x: 5, y: 0 }, { x: -50, y: -50, width: 10, height: 10 }, { x: 200, y: 200, width: 10, height: 10 }, 'top');
+    expect(placed.x).toBe(10);
+    expect(placed.y).toBe(0);
+  });
+
+  it('leaves a bezier\'s centre where it is — a curve sample is never slid', () => {
+    const route = routeBetween(client, api, 'bezier', {
+      anchors: { source: { side: 'bottom', offset: 0.5 }, target: { side: 'top', offset: 0.5 } },
+    });
+    // React Flow's bezier centre: halfway between the two endpoints.
+    expect(route.labelX).toBeCloseTo((client.x + client.width / 2 + api.x + api.width / 2) / 2, 5);
+    expect(route.labelY).toBeCloseTo((client.y + client.height + api.y) / 2, 5);
+    // Its centre tangent runs level (the control points sit at the same y), so the chip goes above.
+    expect(['top', 'bottom']).toContain(route.labelSide);
+  });
+
+  it('defers to the pairing rule on a near-diagonal run', () => {
+    const d = 'M 0,0 L 100,95';
+    const far = { x: 500, y: 500, width: 10, height: 10 };
+    expect(placeLabel(d, { x: 50, y: 47.5 }, { x: -50, y: -50, width: 10, height: 10 }, far, 'right').side).toBe('right');
+    expect(placeLabel(d, { x: 50, y: 47.5 }, { x: -50, y: -50, width: 10, height: 10 }, far, 'top').side).toBe('top');
+  });
+
+  it('parses every path vocabulary routing produces, and nothing else', () => {
+    expect(flattenPath('M 0,0L 300,100').map((v) => [v.x, v.y])).toEqual([
+      [0, 0],
+      [300, 100],
+    ]);
+    const bezier = flattenPath('M0,0 C50,0 50,100 100,100');
+    expect(bezier[0]).toEqual({ x: 0, y: 0, corner: true });
+    expect(bezier[bezier.length - 1]).toEqual({ x: 100, y: 100, corner: true });
+    expect(bezier.filter((v) => !v.corner).length).toBe(7);
+    const step = flattenPath('M0 0L 90,0Q 100,0 100,10L100 100');
+    expect(step.filter((v) => v.corner).map((v) => [v.x, v.y])).toEqual([
+      [0, 0],
+      [90, 0],
+      [100, 10],
+      [100, 100],
+    ]);
+    expect(flattenPath('M 0,0 A 5 5 0 0 1 10 10')).toEqual([]);
+    expect(placeLabel('M 5,5', { x: 5, y: 5 }, client, api, 'left')).toEqual({ x: 5, y: 5, side: 'left' });
+  });
+
+  it('a detour around an obstacle still labels perpendicular to the run it sits on', () => {
+    const left = { x: 0, y: 0, width: 100, height: 60 };
+    const right = { x: 500, y: 0, width: 100, height: 60 };
+    const blocker = { x: 250, y: -20, width: 80, height: 100 };
+    const route = routeBetween(left, right, 'smoothstep', {
+      anchors: { source: { side: 'right', offset: 0.5 }, target: { side: 'left', offset: 0.5 } },
+      obstacles: [blocker],
+    });
+    expect(route.d.includes('Q')).toBe(true);
+    const vertices = flattenPath(route.d);
+    // The chosen point lies on (within a pixel of) some segment, and the side is perpendicular to it.
+    const onSegment = vertices.some((a, i) => {
+      const b = vertices[i + 1];
+      if (!b) return false;
+      const horizontal = Math.abs(b.x - a.x) > Math.abs(b.y - a.y);
+      const withinX = route.labelX >= Math.min(a.x, b.x) - 1 && route.labelX <= Math.max(a.x, b.x) + 1;
+      const withinY = route.labelY >= Math.min(a.y, b.y) - 1 && route.labelY <= Math.max(a.y, b.y) + 1;
+      if (!withinX || !withinY) return false;
+      return horizontal
+        ? Math.abs(route.labelY - a.y) < 1 && (route.labelSide === 'top' || route.labelSide === 'bottom')
+        : Math.abs(route.labelX - a.x) < 1 && (route.labelSide === 'left' || route.labelSide === 'right');
+    });
+    expect(onSegment).toBe(true);
   });
 });

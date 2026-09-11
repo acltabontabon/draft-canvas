@@ -5,20 +5,28 @@
  * neither of these is itself a component.
  */
 import type { useInternalNode } from '@xyflow/react';
+import { anchorBandOf } from '../document/queueGeometry';
+import type { DraftNodeType } from '../document/types';
 import type { Rect } from '../edges/routing';
 
 export type InternalNode = NonNullable<ReturnType<typeof useInternalNode>>;
 
-export function rectOfInternal(node: InternalNode): Rect | null {
+/**
+ * `type` opts the rect into its node kind's anchor band (a queue-family node's tube) — routing
+ * callers pass it; popover-placement callers, which only want the box, leave it out.
+ */
+export function rectOfInternal(node: InternalNode, type?: DraftNodeType): Rect | null {
   const width = node.measured?.width ?? node.width;
   const height = node.measured?.height ?? node.height;
   if (width == null || height == null) return null;
-  return {
+  const rect: Rect = {
     x: node.internals.positionAbsolute.x,
     y: node.internals.positionAbsolute.y,
     width,
     height,
   };
+  const band = type ? anchorBandOf({ type, y: rect.y, height }) : undefined;
+  return band ? { ...rect, anchorBand: band } : rect;
 }
 
 /**

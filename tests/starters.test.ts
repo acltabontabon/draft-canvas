@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { capabilityFor, categoryOf } from '../src/document/connectorSemantics';
-import { laneIndex, routeEdge, rectOf as rectOfNode } from '../src/edges/routing';
+import { anchorPoint, laneIndex, routeEdge, rectOf as rectOfNode } from '../src/edges/routing';
 import { routingPlan } from '../src/edges/bundles';
 import type { DraftNode } from '../src/document/types';
 import { BOUNDARY_PAD, BOUNDARY_HEADER_CAPTION_ONLY, BOUNDARY_TITLE_SUBLINE_Y } from '../src/starters/compose';
@@ -37,13 +37,14 @@ const each = (name: string, run: (starter: ArchitectureStarter) => void) =>
   );
 
 describe('the starter catalog', () => {
-  it('exposes exactly the nine declared starters, each reachable by id, architectures before patterns', () => {
+  it('exposes exactly the ten declared starters, each reachable by id, architectures before patterns', () => {
     expect(ARCHITECTURE_STARTERS.map((starter) => starter.id)).toEqual([...STARTER_IDS]);
     for (const id of STARTER_IDS) expect(starterById(id)?.id).toBe(id);
     const categories = ARCHITECTURE_STARTERS.map((starter) => starter.category);
     expect(categories.lastIndexOf('architecture')).toBeLessThan(categories.indexOf('pattern'));
     expect(ARCHITECTURE_STARTERS.filter((s) => s.category === 'pattern').map((s) => s.id)).toEqual([
       'saga-orchestration',
+      'saga-choreography',
       'transactional-outbox',
     ]);
   });
@@ -620,30 +621,35 @@ describe('buildStarter', () => {
   it('models BFF as one tailored adapter per client experience over shared, independent domain services', () => {
     const { nodes, edges, flows } = buildStarter(starterById('bff')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
-    expect(nodes).toHaveLength(10);
+    expect(nodes).toHaveLength(13);
     expect(edges).toHaveLength(7);
     expect(flows).toEqual([]);
 
-    // Two BFFs, both gateways, each inside its own experience boundary with its own client — and
-    // no shared gateway anywhere: BFF ≠ API Gateway is the whole lesson.
-    const adapters = nodes.filter((node) => node.serviceKind === 'gateway');
+    // Two BFFs, both the `bff` kind (never `gateway`), each inside its own experience boundary
+    // with its own client — and no gateway anywhere: BFF ≠ API Gateway is the whole lesson.
+    expect(nodes.some((node) => node.serviceKind === 'gateway')).toBe(false);
+    const adapters = nodes.filter((node) => node.serviceKind === 'bff');
     expect(adapters.map((node) => node.text).sort()).toEqual(['Mobile BFF', 'Web BFF']);
     expect(new Set(adapters.map((node) => node.parentId)).size).toBe(2);
     for (const adapter of adapters) {
       const client = nodes.find((node) => node.type === 'actor' && node.parentId === adapter.parentId)!;
       expect(client.actorKind).toBe('device');
       expect(edges.filter((edge) => edge.source === client.id).map((edge) => edge.target)).toEqual([adapter.id]);
-      // Every connector leaving an adapter routes into the domain — never into another adapter.
+      // Every connector leaving an adapter *calls* into the domain — a BFF composes, it never
+      // routes — and never reaches another adapter.
       for (const edge of edges.filter((edge) => edge.source === adapter.id)) {
-        expect(edge.semantic).toBe('routes');
+        expect(edge.semantic).toBe('calls');
         expect(nodes.find((node) => node.id === edge.target)!.parentId).toBe(byText('Domain services').id);
       }
     }
     // Tailored, not uniform: the web experience uses one more capability than mobile does.
     expect(edges.filter((edge) => edge.source === byText('Web BFF').id)).toHaveLength(3);
     expect(edges.filter((edge) => edge.source === byText('Mobile BFF').id)).toHaveLength(2);
+    // Every boundary says who owns it — that ownership is why a BFF may be tailored.
+    const subtitles = nodes.filter((node) => node.type === 'text' && node.annotation).map((node) => node.text);
+    expect(subtitles).toEqual(['Owned by the web team', 'Shared, reused by every client', 'Owned by the mobile team']);
     // Shared domain services are independent of each other, and nothing here is asynchronous.
-    const domain = nodes.filter((node) => node.parentId === byText('Domain services').id);
+    const domain = nodes.filter((node) => node.parentId === byText('Domain services').id && node.type === 'service');
     expect(domain).toHaveLength(3);
     for (const edge of edges) {
       expect(domain.some((node) => node.id === edge.source)).toBe(false);
@@ -657,11 +663,13 @@ describe('buildStarter', () => {
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     const between = (from: string, to: string) =>
       edges.find((edge) => edge.source === byText(from).id && edge.target === byText(to).id)!;
-    expect(nodes).toHaveLength(12);
+    expect(nodes).toHaveLength(13);
     expect(edges).toHaveLength(8);
 
     // Commands express intent; queries never mutate — said by the relationship words themselves.
     expect(between('Client', 'Command API').semantic).toBe('command');
+    // Handling a command is *executing* it — not a second "command" caption in a row.
+    expect(between('Command API', 'Write Model').label).toBe('executes');
     expect(between('Client', 'Query API').semantic).toBe('query');
     expect(between('Query API', 'Read Store').semantic).toBe('reads');
     expect(between('Write Model', 'Write Store').semantic).toBe('writes');
@@ -678,10 +686,15 @@ describe('buildStarter', () => {
       expect(crosses).toBe(false);
       expect(sideOf(edge.source) === query && sideOf(edge.target) === command).toBe(false);
     }
-    expect(between('Projection Service', 'Read Store').semantic).toBe('writes');
+    // A projection's write is a derived one, and reads as such — never the authoritative `writes`.
+    expect(between('Projection Service', 'Read Store').semantic).toBe('projects');
+    expect(between('Projection Service', 'Read Store').semanticsOrigin).toBe('explicit');
     expect(byText('Projection Service').serviceKind).toBe('worker');
+    // The one honest cost of the pattern is on the canvas, under the bridge.
+    expect(byText('Eventually consistent').annotation).toBe(true);
+    expect(byText('Eventually consistent').parentId).toBeUndefined();
     // Nothing on the query side is written by the command side, and vice versa.
-    expect(edges.filter((edge) => edge.target === byText('Read Store').id).map((edge) => edge.semantic).sort()).toEqual(['reads', 'writes']);
+    expect(edges.filter((edge) => edge.target === byText('Read Store').id).map((edge) => edge.semantic).sort()).toEqual(['projects', 'reads']);
     expect(edges.filter((edge) => edge.target === byText('Write Store').id)).toHaveLength(1);
 
     // Two flows: the whole write story including the async tail, and the two-step read.
@@ -697,22 +710,33 @@ describe('buildStarter', () => {
     ]);
   });
 
-  it('models the saga as a coordinator issuing commands to services that each commit locally, plus one compensation', () => {
+  it('models the saga as a coordinator issuing commands to services that each commit locally, compensated in reverse', () => {
     const { nodes, edges, flows } = buildStarter(starterById('saga-orchestration')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
-    expect(nodes).toHaveLength(8);
-    expect(edges).toHaveLength(8);
-    expect(nodes.filter((node) => node.type === 'group')).toHaveLength(0);
+    expect(nodes).toHaveLength(10);
+    expect(edges).toHaveLength(9);
 
     const orchestrator = byText('Saga Orchestrator');
+    // The coordinator is the only thing inside the Coordinator boundary, whose subtitle is its job.
+    const coordinator = byText('Coordinator');
+    expect(coordinator.type).toBe('group');
+    expect(nodes.filter((node) => node.parentId === coordinator.id && node.type !== 'text')).toEqual([orchestrator]);
+    expect(nodes.find((node) => node.parentId === coordinator.id && node.type === 'text')!.text).toBe('Drives the workflow, owns its state');
     // The one accent nobody else carries: the coordinator reads as the coordinator.
-    expect(nodes.filter((node) => node.accent === orchestrator.accent)).toEqual([orchestrator]);
+    expect(nodes.filter((node) => node.type !== 'group' && node.accent === orchestrator.accent)).toEqual([orchestrator]);
     // Every step is a command from the orchestrator — transport-neutral, never a plain call — and
-    // the compensation is the one connector that says what it is for.
+    // the compensations are the connectors that say what they are for, coloured apart.
     const fromOrchestrator = edges.filter((edge) => edge.source === orchestrator.id);
-    expect(fromOrchestrator).toHaveLength(4);
-    const release = fromOrchestrator.find((edge) => edge.condition)!;
-    const steps = fromOrchestrator.filter((edge) => edge !== release);
+    expect(fromOrchestrator).toHaveLength(5);
+    const releases = fromOrchestrator.filter((edge) => edge.semantic === 'compensates');
+    expect(releases.map((edge) => edge.label)).toEqual(['Release inventory', 'Release payment']);
+    for (const edge of releases) expect(edge.accent).toBe('rose');
+    const release = releases.find((edge) => edge.target === byText('Payment Service').id)!;
+    const releaseInventory = releases.find((edge) => edge.target === byText('Inventory Service').id)!;
+    // When they fire is the flow's story — a condition chip would sit on the fan's trunk.
+    for (const edge of releases) expect(edge.condition).toBeUndefined();
+    const steps = fromOrchestrator.filter((edge) => !releases.includes(edge));
+    for (const step of steps) expect(step.accent).toBeUndefined();
     expect(steps.map((edge) => edge.label)).toEqual(['Reserve payment', 'Reserve inventory', 'Schedule fulfillment']);
     for (const step of steps) {
       expect(step.semantic).toBe('command');
@@ -732,19 +756,25 @@ describe('buildStarter', () => {
       expect(writes[0]!.source).toBe(service.id);
       expect(writes[0]!.semantic).toBe('writes');
     }
-    // Compensation is a second, conditioned connector to the service whose step already succeeded
-    // — its own relationship, leaving the orchestrator's side rather than its bottom, and landing
-    // beside (never on) the forward step's anchor.
+    // Compensation is a second connector to a service whose step already succeeded — its own
+    // relationship, leaving the orchestrator's side rather than its bottom, and landing on the
+    // participant's side, never on the forward step's anchor.
     const payment = byText('Payment Service');
     expect(release.target).toBe(payment.id);
     expect(release.semantic).toBe('compensates');
     expect(release.label).toBe('Release payment');
-    expect(release.condition).toBe('if inventory fails');
-    expect(release.sourceAnchor).toEqual({ side: 'left', offset: 0.5 });
+    expect(release.sourceAnchor).toEqual({ side: 'left', offset: 0.75 });
+    expect(releaseInventory.sourceAnchor).toEqual({ side: 'right', offset: 0.75 });
     const reservePayment = steps.find((edge) => edge.target === payment.id)!;
     expect(reservePayment.targetAnchor).toEqual({ side: 'top', offset: 0.5 });
-    expect(release.targetAnchor?.side).toBe('top');
-    expect(release.targetAnchor?.offset).not.toBe(reservePayment.targetAnchor?.offset);
+    expect(release.targetAnchor).toEqual({ side: 'right', offset: 0.25 });
+    expect(releaseInventory.targetAnchor).toEqual({ side: 'right', offset: 0.25 });
+    // The order service starts the saga from beside the coordinator, with a level line.
+    const start = edges.find((edge) => edge.target === orchestrator.id)!;
+    expect(start.source).toBe(byText('Order Service').id);
+    expect(start.label).toBe('Start saga');
+    expect(start.sourceAnchor?.side).toBe('right');
+    expect(start.targetAnchor?.side).toBe('left');
 
     // The three steps share one hub anchor, so Smart Routing draws them as one fan — and the
     // compensation, touching different points, neither joins the fan nor nudges the step out of it.
@@ -755,21 +785,84 @@ describe('buildStarter', () => {
     expect(spine!.count).toBe(3);
     for (const step of steps) expect(plan.spineFor(step.id)).toBe(spine);
     expect(plan.spineFor(release.id)).toBeUndefined();
-    expect(plan.spineFor(edges.find((edge) => edge.target === orchestrator.id)!.id)).toBeUndefined();
+    expect(plan.spineFor(releaseInventory.id)).toBeUndefined();
+    expect(plan.spineFor(start.id)).toBeUndefined();
     const lanes = laneIndex(edges);
     expect(lanes.get(reservePayment.id)).toEqual({ offset: 0, count: 1 });
     expect(lanes.get(release.id)).toEqual({ offset: 0, count: 1 });
+    expect(lanes.get(releaseInventory.id)).toEqual({ offset: 0, count: 1 });
+
+    // Compensation replays the forward steps up to the failure, then undoes them in reverse.
+    expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
+      ['Happy path', 7],
+      ['Compensation', 6],
+    ]);
+    const happy = flows[0]!.steps.map((step) => step.edgeId);
+    expect(happy).not.toContain(release.id);
+    expect(happy).not.toContain(releaseInventory.id);
+    const compensation = flows[1]!.steps.map((step) => step.edgeId);
+    const commitPayment = edges.find((edge) => edge.source === payment.id)!;
+    const reserveInventory = steps.find((edge) => edge.target === byText('Inventory Service').id)!;
+    const scheduleFulfillment = steps.find((edge) => edge.target === byText('Fulfillment Service').id)!;
+    expect(compensation).toEqual([
+      reservePayment.id,
+      commitPayment.id,
+      reserveInventory.id,
+      scheduleFulfillment.id,
+      releaseInventory.id,
+      release.id,
+    ]);
+  });
+
+  it('models the choreographed saga as an event chain with no coordinator, compensated by another event', () => {
+    const { nodes, edges, flows } = buildStarter(starterById('saga-choreography')!, { x: 0, y: 0 });
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    const between = (from: string, to: string) =>
+      edges.find((edge) => edge.source === byText(from).id && edge.target === byText(to).id)!;
+    expect(nodes).toHaveLength(10);
+    expect(edges).toHaveLength(9);
+
+    // No coordinator of any kind: no boundary, no orchestrator, no service that commands another.
+    expect(nodes.filter((node) => node.type === 'group')).toHaveLength(0);
+    expect(nodes.some((node) => node.type !== 'text' && /orchestrat|coordinat/i.test(node.text ?? ''))).toBe(false);
+    expect(edges.some((edge) => edge.semantic === 'command' || edge.semantic === 'calls')).toBe(false);
+    expect(nodes.find((node) => node.type === 'text')!.text).toMatch(/No central coordinator/);
+
+    // The forward chain: publish → deliver → publish → deliver, through topics named for facts.
+    expect(between('Order Service', 'Order Placed').semantic).toBe('publishes');
+    expect(between('Order Placed', 'Payment Service').semantic).toBe('deliversTo');
+    expect(between('Payment Service', 'Payment Taken').semantic).toBe('publishes');
+    expect(between('Payment Taken', 'Inventory Service').semantic).toBe('deliversTo');
+    for (const topic of ['Order Placed', 'Payment Taken', 'Stock Rejected']) expect(byText(topic).queueKind).toBe('topic');
+    // Every event hop is an event (dashed, asynchronous) — that is what makes the process emergent.
+    for (const edge of edges.filter((edge) => edge.semantic !== 'writes')) expect(edge.kind).toBe('event');
+    // Each participant owns exactly its own store and commits locally.
+    for (const name of ['Order', 'Payment', 'Inventory']) {
+      const writes = edges.filter((edge) => edge.target === byText(`${name} DB`).id);
+      expect(writes).toHaveLength(1);
+      expect(writes[0]!.source).toBe(byText(`${name} Service`).id);
+      expect(writes[0]!.semantic).toBe('writes');
+    }
+    // Compensation is event-driven too: a failure event, and a reaction that is a new local action.
+    const reject = between('Inventory Service', 'Stock Rejected');
+    const refund = between('Stock Rejected', 'Payment Service');
+    expect(reject.semantic).toBe('publishes');
+    expect(refund.semantic).toBe('deliversTo');
+    expect(refund.label).toBe('Refund payment');
+    expect(reject.accent).toBe('rose');
+    expect(refund.accent).toBe('rose');
+    expect(byText('Stock Rejected').attachments?.[0]?.text).toMatch(/Payment Refunded/);
 
     expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
       ['Happy path', 7],
       ['Compensation', 4],
     ]);
-    const happy = flows[0]!.steps.map((step) => step.edgeId);
-    expect(happy).not.toContain(release.id);
-    const compensation = flows[1]!.steps.map((step) => step.edgeId);
-    const commitPayment = edges.find((edge) => edge.source === payment.id)!;
-    const reserveInventory = steps.find((edge) => edge.target === byText('Inventory Service').id)!;
-    expect(compensation).toEqual([reservePayment.id, commitPayment.id, reserveInventory.id, release.id]);
+    expect(flows[1]!.steps.map((step) => step.edgeId)).toEqual([
+      between('Payment Taken', 'Inventory Service').id,
+      reject.id,
+      refund.id,
+      between('Payment Service', 'Payment DB').id,
+    ]);
   });
 
   it('models the outbox as one atomic write of state and event, published later, consumed independently', () => {
@@ -778,10 +871,13 @@ describe('buildStarter', () => {
     expect(nodes).toHaveLength(8);
     expect(edges).toHaveLength(5);
 
-    // The outbox is a table, not a queue, and it lives in the same transaction as the business row.
+    // The outbox is a table — not a queue, and not a second database — and it lives in the same
+    // transaction as the business row: two tables of one store, drawn as tables.
     const transaction = byText('One local transaction');
     expect(transaction.type).toBe('group');
     expect(byText('Outbox').type).toBe('database');
+    expect(byText('Outbox').databaseKind).toBe('table');
+    expect(byText('Business Data').databaseKind).toBe('table');
     expect(byText('Business Data').parentId).toBe(transaction.id);
     expect(byText('Outbox').parentId).toBe(transaction.id);
     // No dual write: the producer's only connectors land inside the transaction, from one point,
@@ -819,11 +915,12 @@ describe('buildStarter', () => {
       for (const edge of edges) {
         const source = byId.get(edge.source)!;
         const target = byId.get(edge.target)!;
-        const sourceX = source.x + source.width * (edge.sourceAnchor?.offset ?? 0.5);
-        const targetX = target.x + target.width * (edge.targetAnchor?.offset ?? 0.5);
         const sourceIsVertical = edge.sourceAnchor?.side === 'top' || edge.sourceAnchor?.side === 'bottom';
         const targetIsVertical = edge.targetAnchor?.side === 'top' || edge.targetAnchor?.side === 'bottom';
-        if (!sourceIsVertical || !targetIsVertical || Math.abs(sourceX - targetX) > 0.5) continue;
+        if (!sourceIsVertical || !targetIsVertical) continue;
+        const sourceX = anchorPoint(rectOfNode(source), edge.sourceAnchor!.side, edge.sourceAnchor!.offset).x;
+        const targetX = anchorPoint(rectOfNode(target), edge.targetAnchor!.side, edge.targetAnchor!.offset).x;
+        if (Math.abs(sourceX - targetX) > 0.5) continue;
 
         const obstacles = nodes
           .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
@@ -848,11 +945,13 @@ describe('buildStarter', () => {
       for (const edge of edges) {
         const source = byId.get(edge.source)!;
         const target = byId.get(edge.target)!;
-        const sourceY = source.y + source.height * (edge.sourceAnchor?.offset ?? 0.5);
-        const targetY = target.y + target.height * (edge.targetAnchor?.offset ?? 0.5);
         const sourceIsHorizontal = edge.sourceAnchor?.side === 'left' || edge.sourceAnchor?.side === 'right';
         const targetIsHorizontal = edge.targetAnchor?.side === 'left' || edge.targetAnchor?.side === 'right';
-        if (!sourceIsHorizontal || !targetIsHorizontal || Math.abs(sourceY - targetY) > 0.5) continue;
+        if (!sourceIsHorizontal || !targetIsHorizontal) continue;
+        // Through `anchorPoint`, so "level" means what routing means (a queue's tube band included).
+        const sourceY = anchorPoint(rectOfNode(source), edge.sourceAnchor!.side, edge.sourceAnchor!.offset).y;
+        const targetY = anchorPoint(rectOfNode(target), edge.targetAnchor!.side, edge.targetAnchor!.offset).y;
+        if (Math.abs(sourceY - targetY) > 0.5) continue;
 
         const obstacles = nodes
           .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
