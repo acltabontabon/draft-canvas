@@ -1,7 +1,7 @@
 import type { TimingSample } from '../types';
 
 /** Nearest-rank median on a sorted copy of `values`. With only 3-5 samples per run, a percentile
- *  beyond the median would be false statistical precision — see `docs/performance.md`. */
+ *  beyond the median would be false statistical precision — see `docs/PERFORMANCE.md`. */
 export function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const rank = Math.ceil(0.5 * sorted.length);

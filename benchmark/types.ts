@@ -2,7 +2,7 @@
  * Minimal result schema for the browser performance benchmark harness — answers exactly three
  * questions: how fast does a realistic diagram load, how much memory does it use, does dragging a
  * node still feel responsive. No percentiles, no frame/long-task instrumentation, no scaling
- * sweep, no environment-compatibility gating — see `docs/performance.md` for the full rationale.
+ * sweep, no environment-compatibility gating — see `docs/PERFORMANCE.md` for the full rationale.
  */
 
 export const BENCHMARK_SCHEMA_VERSION = 1;

@@ -51,26 +51,26 @@ for anything you want to keep.
 - [Diagram semantics](docs/SEMANTICS.md) — what it understands about your diagrams
 - [Schema and versioning](docs/SCHEMA.md) — the `.draftcanvas` format and its migration contract
 - [Privacy](docs/PRIVACY.md) — what's stored where
-- [Performance](docs/performance.md) — the benchmark, what it measures, and how to run it
+- [Performance](docs/PERFORMANCE.md) — the benchmark, what it measures, and how to run it
 - [Contributing](CONTRIBUTING.md) — how to run it locally
 
 <!-- performance:start -->
 ## Performance
 
-Draft Canvas includes a reproducible Chromium benchmark using a representative architecture diagram.
+On a typical architecture diagram (~90 nodes — services, databases, queues, boundaries), Draft Canvas loads in about 151 ms and settles at about 15 MiB of memory; dragging a node takes about 366 ms. A larger, more detailed diagram (~225 nodes) loads in about 502 ms and uses about 29 MiB.
 
-| Scenario | Elements | Load | JS Heap | Drag |
+| Diagram | Size | Load time | Memory (JS heap) | Dragging a node |
 |---|---|---|---|---|
 | Typical | 90 nodes / 79 connections | 151 ms | 15 MiB | 366 ms |
 | Large | 225 nodes / 192 connections | 502 ms | 29 MiB | 385 ms |
 
-Benchmarks run against the production build in Chromium using deterministic architecture diagrams. Results are representative measurements from the reference machine below, not guarantees for every device.
+Measured against the production build in Chromium, on real architecture diagrams (not synthetic shapes) built from Draft Canvas's own starter catalog. These are reference-machine numbers, not a guarantee for every device.
 
-Measured on: Apple M2 Pro, darwin 25.6.0, Chromium 151.0.7922.34, Draft Canvas 0.8.0.
+Measured on: Apple M2 Pro, macOS 25.6.0, Chromium 151.0.7922.34, Draft Canvas 0.8.0.
 
 ![JS heap vs. diagram size](benchmark/memory-chart.svg)
 
-Details and reproduction steps: [`docs/performance.md`](docs/performance.md).
+Full methodology, limitations, and how to reproduce this: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 <!-- performance:end -->
 
 ## Contributing

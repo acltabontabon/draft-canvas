@@ -23,12 +23,53 @@ function capitalize(name: string): string {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
+/** Rounds to the nearest whole unit — README numbers don't need decimal precision. */
+function ms(value: number): string {
+  return `${Math.round(value)} ms`;
+}
+function mib(value: number): string {
+  return `${Math.round(value)} MiB`;
+}
+
+/** `os.platform()`'s raw values ('darwin', 'linux', 'win32') are correct but not what a reader
+ *  expects in a README's "measured on" line. */
+function friendlyOsName(platform: string): string {
+  switch (platform) {
+    case 'darwin':
+      return 'macOS';
+    case 'win32':
+      return 'Windows';
+    case 'linux':
+      return 'Linux';
+    default:
+      return platform;
+  }
+}
+
+/**
+ * A plain-language lead-in grounded in the actual measured numbers — never a hardcoded qualitative
+ * claim ("stays fast!") that could go stale the moment a real regression lands. If a future
+ * regression makes a workload slow, this sentence reports that plainly; it doesn't have an opinion
+ * baked in ahead of the numbers.
+ */
+function buildSummary(result: BenchmarkResult): string {
+  const typical = result.workloads.find((w) => w.name === 'typical') ?? result.workloads[0];
+  const large = result.workloads.find((w) => w.name === 'large') ?? result.workloads[1];
+  if (!typical) return '';
+
+  const typicalSentence = `On a typical architecture diagram (~${typical.nodeCount} nodes — services, databases, queues, boundaries), Draft Canvas loads in about ${ms(typical.diagramLoad.medianMs)} and settles at about ${mib(typical.jsHeapUsedMiB)} of memory; dragging a node takes about ${ms(typical.drag.medianMs)}.`;
+  const largeSentence = large
+    ? ` A larger, more detailed diagram (~${large.nodeCount} nodes) loads in about ${ms(large.diagramLoad.medianMs)} and uses about ${mib(large.jsHeapUsedMiB)}.`
+    : '';
+  return typicalSentence + largeSentence;
+}
+
 function buildBlock(result: BenchmarkResult): string {
   const env = result.meta.environment;
   const rows = result.workloads
     .map((w) => {
-      const elements = `${w.nodeCount} nodes / ${w.edgeCount} connections`;
-      return `| ${capitalize(w.name)} | ${elements} | ${Math.round(w.diagramLoad.medianMs)} ms | ${Math.round(w.jsHeapUsedMiB)} MiB | ${Math.round(w.drag.medianMs)} ms |`;
+      const size = `${w.nodeCount} nodes / ${w.edgeCount} connections`;
+      return `| ${capitalize(w.name)} | ${size} | ${ms(w.diagramLoad.medianMs)} | ${mib(w.jsHeapUsedMiB)} | ${ms(w.drag.medianMs)} |`;
     })
     .join('\n');
 
@@ -40,17 +81,17 @@ function buildBlock(result: BenchmarkResult): string {
     START_MARKER,
     '## Performance',
     '',
-    'Draft Canvas includes a reproducible Chromium benchmark using a representative architecture diagram.',
+    buildSummary(result),
     '',
-    '| Scenario | Elements | Load | JS Heap | Drag |',
+    '| Diagram | Size | Load time | Memory (JS heap) | Dragging a node |',
     '|---|---|---|---|---|',
     rows,
     '',
-    'Benchmarks run against the production build in Chromium using deterministic architecture diagrams. Results are representative measurements from the reference machine below, not guarantees for every device.',
+    "Measured against the production build in Chromium, on real architecture diagrams (not synthetic shapes) built from Draft Canvas's own starter catalog. These are reference-machine numbers, not a guarantee for every device.",
     '',
-    `Measured on: ${env.cpuModel}, ${env.os} ${env.osVersion}, Chromium ${env.browserVersion}, Draft Canvas ${result.meta.draftCanvasVersion}.${chartLine}`,
+    `Measured on: ${env.cpuModel}, ${friendlyOsName(env.os)} ${env.osVersion}, Chromium ${env.browserVersion}, Draft Canvas ${result.meta.draftCanvasVersion}.${chartLine}`,
     '',
-    'Details and reproduction steps: [`docs/performance.md`](docs/performance.md).',
+    'Full methodology, limitations, and how to reproduce this: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).',
     END_MARKER,
   ].join('\n');
 }
