@@ -6,41 +6,40 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
-- Interactive home screen with starter previews.
-- Auto-follow system theme.
-- Text: roles, Bold/Italic, alignment, multiline.
-- BFF and Table shapes.
-- Projects relationship.
-- Quick actions: Connect Data Store, Route to Service.
-- Intent Continuation (smart suggestions).
-- Quick Connect picker with previews.
-- Compensates relationship.
-- Sequence Diagram export.
-- Five new starters (BFF, CQRS, Sagas, Outbox).
-- Keyboard navigation (Alt+Arrow, Alt+Shift+Arrow).
-- Keyboard-created elements ready to name.
-- Searchable Keyboard Shortcuts sheet.
-- Keyboard-driven popovers.
-- Release history in About.
+- Home screen redesigned with interactive starter previews—hover or arrow-key to explore.
+- Auto-follow system light/dark theme (pin a theme to override).
+- Text formatting: semantic roles (Body, Label, Heading, Title, Technical), Bold/Italic, alignment, and multiline editing (Enter for newline, Cmd+Enter to commit).
+- Two new shapes: **Backend for Frontend** (BFF) for frontend-specific adapters, and **Table** for logical tables inside a store.
+- **Projects** semantic relationship for write-model projections.
+- One-click continuations: "Connect Data Store" on Services, "Route to Service" on Gateways.
+- **Intent Continuation**: smart suggestions appear as you draw (queues beside topics, workers beside queues, services beside routes). Press Tab to accept or Escape to dismiss.
+- **Quick Connect picker**: drop a connector on empty canvas to get ranked suggestions with live preview. Supports dead-letter queue suggestions.
+- **Compensates** relationship for saga compensation flows.
+- **Sequence Diagram export** to Mermaid or PlantUML, with flows, participants, messages, and attached notes.
+- Five new starters with pre-built flows: Backend for Frontend, CQRS, Saga Orchestration, Saga Choreography, Transactional Outbox.
+- Full keyboard navigation: Alt+Arrow to select neighbors, Alt+Shift+Arrow to follow connections. Elements created from keyboard open ready to name.
+- Searchable Keyboard Shortcuts sheet organized by task.
+- Keyboard-driven popovers (arrow keys navigate, Home/End jump).
+- Release history in About with curated notes per version.
 
 ### Fixed
 
-- Quick Connect infers correct relationships.
-- Person-to-Service `query` support.
-- Escape exits presentation mode.
-- Focus returns after closing dialogs.
-- F focuses Flows panel.
-- Non-US keyboard layouts work.
-- Escape in notes discards changes.
+- Quick Connect now infers the correct relationship type.
+- Person-to-Service connectors support `query` relationship.
+- Escape reliably exits presentation mode.
+- Dialogs return focus to the previously focused element.
+- F key now focuses the Flows panel immediately.
+- Non-US keyboard layouts work with Shift+1 and Shift+/.
+- Escape in note/code editing discards changes instead of committing.
 
 ### Changed
 
-- Connector anchors on tubes.
-- Connector labels positioned clearly.
-- Single-line near-straight connectors.
-- Unified popover design.
-- Smart connector nudging.
-- Grouped starter categories.
+- Connector anchors on Queues/Topics/Streams sit on the tube itself.
+- Connector labels positioned clearly relative to their route, never straddling bends.
+- Near-straight connectors render as single lines instead of stepped paths.
+- Unified visual design across element and connector popovers.
+- Connector nudging only happens when routes actually overlap.
+- Starter grouping and layout improved in ⌘K and home screen.
 
 ## [0.8.0] - 2026-09-10
 
