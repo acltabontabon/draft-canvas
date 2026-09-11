@@ -13,8 +13,8 @@ export const PRODUCT = {
   tagline: 'For meetings that suddenly need a diagram.',
   /** The home screen's second line — the tagline's attitude, one notch quieter. */
   aside: 'Sketch the system before someone asks if you can draw that.',
-  description: 'Sketch systems, flows, code, and ideas without breaking the conversation.',
-  privacy: 'Local-first. Nothing you draw leaves your device.',
+  /** The About panel's one supporting sentence — what it enables, not what it contains. */
+  pitch: 'Sketch architecture, trace flows, explain systems, and get back to the conversation.',
   author: author.name,
   version,
   links: {

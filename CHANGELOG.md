@@ -59,6 +59,12 @@ All notable changes to Draft Canvas are documented here.
   actually bound.
 - The element and connector popovers can be driven from the keyboard: arrow keys move between
   controls, Home/End jump to the ends.
+- About now has a permanent "What's New" — a version row you can open into the current release's
+  own curated notes, a quiet row of the 3 releases before it, and a "View release history" index
+  of everything further back, grouped by year once there's more than one. Selecting an older
+  release shows its own notes, not an ever-growing accordion. An existing installation that's
+  upgraded past a release with notes gets a small, subtle marker on the homepage and toolbar's
+  About button until it's opened; a fresh install never sees one just because history exists.
 
 ### Fixed
 

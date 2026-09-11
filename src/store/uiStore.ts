@@ -3,6 +3,8 @@ import type { Preset } from '../canvas/presets';
 import { dismissalKey, type ContinuationTrigger, type DismissalKey, type MaterializedContinuation } from '../continuation';
 import type { Side } from '../document/types';
 import { readPreference, writePreference } from '../lib/preferences';
+import { PRODUCT } from '../product';
+import { markLastSeenRelease, readLastSeenRelease } from '../releases/productReleases';
 
 export type Toast = { id: number; message: string; tone: 'info' | 'error' };
 
@@ -80,6 +82,7 @@ function initialContinuationsEnabled(): boolean {
     return true;
   }
 }
+
 
 export interface UiStore {
   /** The preset a canvas click will place, or null for plain selection. */
@@ -176,6 +179,9 @@ export interface UiStore {
    *  and is waiting to be activated (Phase 6.2/6.3) — see `serviceWorker.ts`
    *  and `AboutDialog.tsx`'s update-ready state. */
   updateReady: boolean;
+  /** The version whose About → What's New notes this device has acknowledged — see
+   *  `releases/productReleases.ts`'s `readLastSeenRelease`/`markLastSeenRelease`. */
+  lastSeenProductRelease: string;
   /** Phase 8 — whether the ⌘K command palette is showing. See `CommandPalette.tsx`. */
   commandPaletteOpen: boolean;
   /**
@@ -261,6 +267,11 @@ export interface UiStore {
   /** Reloads onto the downloaded update. A no-op until `registerActivateUpdate`
    *  has run (e.g. unsupported browser, or no update staged). */
   activateUpdate: () => void;
+  /** Records that this device has now seen every currently-applicable release's notes —
+   *  called only when About → What's New is actually opened, never just from having the app
+   *  open (unlike `learning/useNewFeature.ts`'s similar-looking but deliberately different
+   *  `last-seen-version`, which re-stamps on every mount). */
+  markProductReleaseSeen: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
@@ -314,6 +325,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   interactionActive: false,
   editRequestId: null,
   updateReady: false,
+  lastSeenProductRelease: readLastSeenRelease(),
   commandPaletteOpen: false,
   exportSelectionRequested: false,
   jumpFlashId: null,
@@ -380,6 +392,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
     activateFn = activate;
   },
   activateUpdate: () => activateFn?.(),
+  markProductReleaseSeen: () => {
+    markLastSeenRelease();
+    set({ lastSeenProductRelease: PRODUCT.version });
+  },
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
   requestExportSelection: (exportSelectionRequested) => set({ exportSelectionRequested }),
   setJumpFlashId: (jumpFlashId) =>

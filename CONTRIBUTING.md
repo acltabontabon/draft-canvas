@@ -87,6 +87,30 @@ Concretely:
 - Don't add a feature — semantic or otherwise — merely because another diagramming tool has it.
   Draft Canvas is deliberately not draw.io, Lucidchart, or a UML/BPMN tool.
 
+## Release workflow
+
+Two different documents record a release, for two different readers:
+
+- **`CHANGELOG.md`** is the engineering-oriented historical record — every notable change, in
+  detail, for every version. Keep adding to it as you normally would.
+- **`src/releases/productReleases.ts`** is curated, user-facing "What's New" copy — the small set
+  of things worth telling someone using the app, in plain language, not a mirror of the changelog.
+  Not every changelog entry earns a highlight; a release of internal fixes can reasonably have no
+  entry there at all.
+
+When preparing a release:
+
+1. Keep `CHANGELOG.md`'s `[Unreleased]` section current as you go, like always.
+2. Before cutting the release, look at what's accumulated in `[Unreleased]` and write a small
+   `ProductRelease` entry for it in `productReleases.ts` — 4-8 highlights, each a short title and
+   one sentence, in the app's own voice (see the existing entries for tone). Skip anything not
+   worth a user's attention.
+3. It's fine to write that entry — even for the *next* version — before the release itself ships:
+   `applicableReleases` (in that same file) only ever shows a release once the running app version
+   actually reaches it, so a prepared entry can't be shown early or presented as installed.
+4. Bump the version through the normal release process, then ship. Once `package.json`'s version
+   reaches what you wrote, About → What's New picks it up on its own — no other wiring needed.
+
 ## Keeping Draft Canvas fast and simple
 
 The whole product bets on staying lightweight. A dependency, a setting, or a new concept all cost

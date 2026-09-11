@@ -1654,6 +1654,7 @@ kbd {
 }
 
 .dc-modal {
+  max-width: calc(100vw - 48px);
   max-height: 84vh;
   display: flex;
   flex-direction: column;
@@ -1661,6 +1662,14 @@ kbd {
   border-radius: var(--dc-radius-lg);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-modal {
+    transition:
+      width 160ms ease,
+      max-height 160ms ease;
+  }
 }
 
 .dc-modal-header {
@@ -1671,10 +1680,67 @@ kbd {
   border-bottom: 1px solid var(--dc-border);
 }
 
+.dc-modal-header-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .dc-modal-header h2 {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
+}
+
+/* Sits in the stable header, not the scrolling body — reachable no matter how far a long
+   release list has scrolled, and never duplicated in the content below it. */
+.dc-modal-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  margin-left: -3px;
+  border: none;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-faint);
+  cursor: pointer;
+  transition:
+    color 90ms ease,
+    background-color 90ms ease;
+}
+
+.dc-modal-back:hover,
+.dc-modal-back:focus-visible {
+  color: var(--dc-selection);
+  background: var(--dc-surface-raised);
+}
+
+.dc-modal-back:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+/* The About dialog's own title chrome: the eyebrow steps back so the content's own heading (the
+   product name, or a release version) is the actual focal point — the dialog's a11y name still
+   tracks it via `aria-label`, unaffected. Shared by every view this dialog can show. */
+.dc-modal-about .dc-modal-header {
+  padding: 10px 12px 8px 16px;
+}
+
+.dc-modal-about .dc-modal-header h2 {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dc-text-faint);
+}
+
+/* What's New / Release History / Release Detail read better with more horizontal room than the
+   compact identity card About is — a proper document measure instead of a tall, narrow list. */
+.dc-modal-wide {
+  max-height: min(720px, calc(100vh - 64px));
 }
 
 .dc-modal-body {
@@ -1972,7 +2038,7 @@ kbd {
 
 .dc-about-name {
   margin: 0;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 650;
   letter-spacing: -0.01em;
 }
@@ -1984,49 +2050,280 @@ kbd {
   color: var(--dc-text);
 }
 
-.dc-about .dc-about-desc {
-  margin: 5px 0 0;
+.dc-about .dc-about-sub {
+  margin: 6px 0 0;
   font-size: 12.5px;
   line-height: 1.5;
-}
-
-.dc-about .dc-about-privacy {
-  margin: 5px 0 0;
-  font-size: 12px;
-}
-
-.dc-about-tags {
-  display: flex;
-  align-items: center;
-  margin-top: 12px;
-  font-size: 11.5px;
-}
-
-.dc-about-tags code {
-  padding: 1px 6px;
-  border: 1px solid var(--dc-border);
-  border-radius: 4px;
-  background: var(--dc-code-bg);
   color: var(--dc-text-muted);
-  font-size: 11px;
 }
 
-/* A downloaded update (Phase 6.3) is a plain button styled like the other
-   tags, so it never reads as a nag — just a fact you can act on. */
-.dc-about-update {
-  padding: 1px 6px;
-  border: 1px solid var(--dc-selection);
-  border-radius: 4px;
-  background: var(--dc-selection-soft);
-  color: var(--dc-selection);
+/* Version metadata on the left, exactly one contextual action on the right — an update to
+   install takes the slot when there is one; What's New otherwise. Never both at once. */
+.dc-about-version-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+/* Quiet metadata, not a badge — no border, no background, just faint monospace. */
+.dc-about-version {
+  font-family: var(--dc-mono);
   font-size: 11px;
-  font-family: inherit;
+  letter-spacing: 0.01em;
+  color: var(--dc-text-faint);
+}
+
+.dc-about-version-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-family: var(--dc-mono);
+  font-size: 11px;
+  color: var(--dc-text-faint);
   cursor: pointer;
+  transition: color 90ms ease;
 }
 
-.dc-about-update:hover {
+.dc-about-version-action:hover,
+.dc-about-version-action:focus-visible {
+  color: var(--dc-selection);
+}
+
+.dc-about-version-action:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+  border-radius: var(--dc-radius-sm);
+}
+
+/* A downloaded update stays underlined so it still reads as actionable once it loses any
+   pill/border treatment — and takes visual priority over What's New while it's live. */
+.dc-about-version-action--update {
+  color: var(--dc-selection);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.dc-about-version-action--update:hover,
+.dc-about-version-action--update:focus-visible {
+  color: var(--dc-text);
+}
+
+/* Not color alone: a small dot shape plus visually-hidden "— new" text on the action itself. */
+.dc-release-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
   background: var(--dc-selection);
-  color: var(--dc-surface);
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------- what's new -- */
+
+/* A short entrance for whichever view just became visible — About, What's New, Release
+   History, or a release's own detail. Every internal navigation remounts this element, so the
+   animation replays consistently without any transition-group bookkeeping. */
+.dc-view-enter {
+  animation: dc-view-enter-fade 140ms ease;
+}
+
+@keyframes dc-view-enter-fade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-view-enter {
+    animation: none;
+  }
+}
+
+.dc-about-section-title {
+  margin: 22px 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dc-text-faint);
+}
+
+.dc-whats-new-version-heading {
+  margin: 0;
+  font-family: var(--dc-mono);
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--dc-text);
+}
+
+.dc-whats-new-date-full {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  color: var(--dc-text-faint);
+}
+
+.dc-whats-new-summary {
+  margin: 12px 0 0;
+  max-width: 54ch;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--dc-text-muted);
+}
+
+.dc-whats-new-highlights {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 20px 0 0;
+  padding: 0;
+  max-width: 54ch;
+  list-style: none;
+}
+
+.dc-whats-new-highlights strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--dc-text);
+}
+
+.dc-whats-new-highlights p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--dc-text-muted);
+}
+
+.dc-whats-new-highlight-compact {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--dc-text-muted);
+}
+
+/* The quick, 3-row taste of history at the foot of What's New — full detail lives one click
+   away, never inline here. */
+.dc-whats-new-recent {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-whats-new-history-link {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--dc-text-faint);
+  cursor: pointer;
+  transition: color 90ms ease;
+}
+
+.dc-whats-new-history-link:hover,
+.dc-whats-new-history-link:focus-visible {
+  color: var(--dc-selection);
+}
+
+.dc-whats-new-history-link:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+  border-radius: var(--dc-radius-sm);
+}
+
+/* --------------------------------------------------------- release history -- */
+
+.dc-history-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dc-text-muted);
+}
+
+.dc-history-group {
+  margin-top: 20px;
+}
+
+.dc-history-group:first-of-type {
+  margin-top: 16px;
+}
+
+/* Dense metadata rows, not cards — a version and a date, nothing else. Only the selected
+   release's own body ever renders (see `DetailView`), so this scales to hundreds of releases
+   with plain rendering: no accordion, no per-row content to mount. */
+.dc-release-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.dc-release-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 7px 6px;
+  margin: 0 -6px;
+  border: none;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  font: inherit;
+  font-family: var(--dc-mono);
+  font-size: 12.5px;
+  color: var(--dc-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 90ms ease;
+}
+
+.dc-release-row:hover,
+.dc-release-row:focus-visible {
+  background: var(--dc-surface-raised);
+}
+
+.dc-release-row:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -1px;
+}
+
+.dc-release-row-version {
+  color: var(--dc-text-muted);
+}
+
+/* SemVer already says how significant a release is — a heavier weight for a true major/minor
+   bump is enough; no MAJOR/MINOR/PATCH badges. */
+.dc-release-row--major .dc-release-row-version {
+  font-weight: 650;
+  color: var(--dc-text);
+}
+
+.dc-release-row--minor .dc-release-row-version {
+  font-weight: 600;
+}
+
+.dc-release-row-current {
+  font-family: var(--dc-font);
+  font-weight: 500;
+  color: var(--dc-selection);
+}
+
+.dc-release-row-date {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--dc-text-faint);
 }
 
 /* The small discoverability marker on whatever button opens this dialog —
@@ -2051,12 +2348,14 @@ kbd {
 
 .dc-about-signature {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  row-gap: 8px;
   width: 100%;
-  margin-top: 14px;
-  padding-top: 12px;
+  margin-top: 22px;
+  padding-top: 14px;
   border-top: 1px solid var(--dc-border);
   font-size: 12.5px;
   color: var(--dc-text-muted);
@@ -2080,11 +2379,33 @@ kbd {
   padding: 5px;
   border-radius: var(--dc-radius-sm);
   color: var(--dc-text-faint);
+  transition:
+    color 90ms ease,
+    background-color 90ms ease,
+    transform 90ms ease;
 }
 
 .dc-about-link:hover {
   color: var(--dc-selection);
   background: var(--dc-surface-raised);
+  transform: translateY(-1px);
+}
+
+.dc-about-link:focus-visible {
+  color: var(--dc-selection);
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-about-link {
+    transition:
+      color 90ms ease,
+      background-color 90ms ease;
+  }
+  .dc-about-link:hover {
+    transform: none;
+  }
 }
 
 /* ------------------------------------------------------------- support -- */
@@ -2094,14 +2415,22 @@ kbd {
 .dc-about-support {
   display: block;
   width: 100%;
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: 12px;
   color: var(--dc-text-faint);
   text-decoration: none;
+  transition: color 90ms ease;
 }
 
-.dc-about-support:hover {
+.dc-about-support:hover,
+.dc-about-support:focus-visible {
   color: var(--dc-selection);
+}
+
+.dc-about-support:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+  border-radius: var(--dc-radius-sm);
 }
 
 /* --------------------------------------------------------- error boundary -- */
