@@ -5,7 +5,6 @@ import type { DraftSummary } from '../../document/types';
 import type { NormalizeResult } from '../../document/validate';
 import { isEditableTarget } from '../../lib/isEditableTarget';
 import { PRODUCT } from '../../product';
-import { ARCHITECTURE_STARTERS } from '../../starters';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
@@ -18,6 +17,8 @@ import { LocalNote } from './LocalNote';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
 import { ProjectSidebar } from './ProjectSidebar';
 import { StarterShelf } from './StarterShelf';
+import { useStarters } from './useStarters';
+import type { StarterId } from '../../starters/types';
 import { thoughtForDay } from './draftThoughts';
 import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
 
@@ -234,10 +235,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
               <div className="dc-library-empty dc-library-welcome">
                 <p>Nothing here yet.</p>
                 <p className="dc-muted">Start blank, or cheat a little.</p>
-                <StarterShelf
-                  starters={ARCHITECTURE_STARTERS}
-                  onStart={(id) => void session.newDocument(undefined, id)}
-                />
+                <LibraryStarterShelf onStart={(id) => void session.newDocument(undefined, id)} />
               </div>
             )}
 
@@ -538,4 +536,14 @@ function relativeTime(at: number): string {
     if (absolute >= ms) return formatter.format(Math.round(delta / ms), unit);
   }
   return 'just now';
+}
+
+/** Only an empty list shows starters, so only an empty list waits for the catalog. */
+function LibraryStarterShelf({ onStart }: { onStart: (id: StarterId) => void }) {
+  const starters = useStarters();
+  return starters ? (
+    <StarterShelf starters={starters.ARCHITECTURE_STARTERS} onStart={onStart} />
+  ) : (
+    <div className="dc-shelf-pending" aria-hidden="true" />
+  );
 }

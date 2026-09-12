@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import { DARK, themeFor, type Theme, type ThemeName } from '../../render/theme/tokens';
+import { DARK, type Theme, type ThemeName } from '../../render/theme/tokens';
 
 export interface ThemeContextValue {
   /** The palette on screen. Always whatever the OS is set to — there is no override. */
@@ -21,4 +21,3 @@ export function useThemeValue(): Theme {
   return useContext(ThemeContext).theme;
 }
 
-export { themeFor };

@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent, type Ref } from 'react';
-import { STARTER_CATEGORIES, type ArchitectureStarter, type StarterId } from '../../starters';
+import { STARTER_CATEGORIES, type ArchitectureStarter, type StarterId } from '../../starters/types';
 import { StarterTile } from './StarterTile';
 
 const IDLE_READOUT = '←→ browse · ↵ start';

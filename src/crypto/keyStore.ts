@@ -37,6 +37,10 @@ function openKeyDb(): Promise<IDBPDatabase<KeyDb>> {
     upgrade(database) {
       database.createObjectStore(KEY_STORE);
     },
+  }).catch((error: unknown) => {
+    // A cached rejection would fail every later save and load until reload.
+    dbPromise = null;
+    throw error;
   });
   return dbPromise;
 }
@@ -50,7 +54,12 @@ let cachedKey: Promise<CryptoKey> | null = null;
  * than this module's own state).
  */
 export function getOrCreateMasterKey(): Promise<CryptoKey> {
-  cachedKey ??= loadOrGenerateMasterKey();
+  // Only a success is worth caching: one transient key-database error must not
+  // poison every save and load for the rest of the session.
+  cachedKey ??= loadOrGenerateMasterKey().catch((error: unknown) => {
+    cachedKey = null;
+    throw error;
+  });
   return cachedKey;
 }
 

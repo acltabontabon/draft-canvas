@@ -92,10 +92,6 @@ export interface UiStore {
   aboutOpen: boolean;
   /** Canvas Settings — background image and personality preset (Phase 5). */
   settingsOpen: boolean;
-  /** Bumped whenever the background image blob is replaced, so `CanvasBackground`
-   *  knows to reload it even when `enabled` itself didn't change (e.g. "Replace image…"
-   *  while already enabled) — see `CanvasSettingsDialog.tsx`/`CanvasBackground.tsx`. */
-  backgroundImageVersion: number;
   toasts: Toast[];
   quickConnect: QuickConnectState | null;
   contextMenu: ContextMenuState | null;
@@ -241,7 +237,6 @@ export interface UiStore {
   setExportOpen: (open: boolean) => void;
   setAboutOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
-  bumpBackgroundImageVersion: () => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
   setContextMenu: (state: ContextMenuState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
@@ -309,7 +304,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   exportOpen: false,
   aboutOpen: false,
   settingsOpen: false,
-  backgroundImageVersion: 0,
   toasts: [],
   quickConnect: null,
   contextMenu: null,
@@ -345,7 +339,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setExportOpen: (exportOpen) => set({ exportOpen }),
   setAboutOpen: (aboutOpen) => set({ aboutOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
-  bumpBackgroundImageVersion: () => set((state) => ({ backgroundImageVersion: state.backgroundImageVersion + 1 })),
   setQuickConnect: (quickConnect) => set({ quickConnect }),
   setContextMenu: (contextMenu) => set({ contextMenu }),
   setAttachArmedTarget: (attachArmedTarget) =>

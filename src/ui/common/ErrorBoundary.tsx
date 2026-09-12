@@ -7,8 +7,6 @@ export interface ErrorBoundaryAction {
 }
 
 interface ErrorBoundaryProps {
-  /** Diagnostics-only tag, never shown to the user. */
-  scope: string;
   message: string;
   actions: ErrorBoundaryAction[];
   onError?: (error: Error, componentStack: string) => void;

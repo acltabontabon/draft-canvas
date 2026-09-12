@@ -33,6 +33,12 @@ test.describe('offline availability', () => {
     await expect(page.getByRole('heading', { name: 'Recently edited' })).toBeVisible();
     await expect(page.locator('.dc-library-item', { hasText: 'Offline Test' })).toBeVisible();
 
+    // The editor and Export are separate chunks, fetched on demand — both must come from the cache.
+    await page.locator('.dc-library-item', { hasText: 'Offline Test' }).click();
+    await expect(page.getByLabel('Diagram title')).toHaveValue('Offline Test');
+    await page.keyboard.press('ControlOrMeta+e');
+    await expect(page.getByRole('dialog', { name: /export/i })).toBeVisible();
+
     await context.setOffline(false);
   });
 });

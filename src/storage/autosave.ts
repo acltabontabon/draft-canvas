@@ -41,6 +41,8 @@ export class Autosave {
 
   private pending: DraftDocument | null = null;
   private inFlight = false;
+  private current: Promise<void> | null = null;
+  private lastFailed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private savingIndicator: ReturnType<typeof setTimeout> | null = null;
   private savedHold: ReturnType<typeof setTimeout> | null = null;
@@ -69,17 +71,33 @@ export class Autosave {
     this.timer = setTimeout(() => void this.flush(), delay);
   }
 
-  /** Writes immediately. Used on page hide and before switching documents. */
-  async flush(): Promise<void> {
+  /**
+   * Writes immediately. Used on page hide and before switching documents.
+   * Resolves once the newest scheduled version is on disk — waiting out a write
+   * already in flight rather than returning early and leaving the latest edits
+   * queued behind it. Resolves `false` when that version could not be written.
+   */
+  async flush(): Promise<boolean> {
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    if (this.disposed) return;
-    // Never run two writes at once; the newer document is picked up on return.
-    if (this.inFlight || !this.pending) return;
+    // Never run two writes at once: wait for the current one, then write whatever
+    // arrived meanwhile.
+    while (this.current) await this.current;
+    if (this.disposed) return this.pending === null;
+    if (!this.pending) return !this.lastFailed;
+    this.current = this.write();
+    try {
+      await this.current;
+    } finally {
+      this.current = null;
+    }
+    return !this.lastFailed;
+  }
 
-    const document = this.pending;
+  private async write(): Promise<void> {
+    const document = this.pending!;
     this.pending = null;
     this.inFlight = true;
     this.firstDirtyAt = 0;
@@ -90,6 +108,7 @@ export class Autosave {
 
     try {
       await this.repository.save(document);
+      this.lastFailed = false;
       this.clearSavingIndicator();
       this.emit({ status: 'saved', lastSavedAt: Date.now() });
       if (this.savedHold) clearTimeout(this.savedHold);
@@ -97,6 +116,11 @@ export class Autosave {
         if (this.state.status === 'saved') this.emit({ status: 'idle', lastSavedAt: Date.now() });
       }, HOLD_SAVED_MS);
     } catch (error) {
+      this.lastFailed = true;
+      // Keep the unwritten version queued (unless a newer one already replaced it) so
+      // the next edit or an explicit flush retries it — not retried on a timer here,
+      // since a full disk would only fail again in a tight loop.
+      this.pending ??= document;
       this.clearSavingIndicator();
       // The in-memory document is untouched, so the user can still export it.
       this.emit({
@@ -109,7 +133,9 @@ export class Autosave {
       console.error('[draft-canvas] Autosave failed.', error);
     } finally {
       this.inFlight = false;
-      if (this.pending) this.timer = setTimeout(() => void this.flush(), 0);
+      if (this.pending && !this.lastFailed && !this.disposed) {
+        this.timer = setTimeout(() => void this.flush(), 0);
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 import { libraryShapeOf } from '../../document/shape';
 import type { LibraryShape } from '../../document/types';
-import { buildStarter, type ArchitectureStarter, type StarterId } from '../../starters';
+import { buildStarter } from '../../starters/build';
+import type { ArchitectureStarter, StarterId } from '../../starters/types';
 import { layoutShape, type ShapeBox } from './shapeLayout';
 
 /** Deeper than this and a pulse through the topology stops reading as one gesture. */

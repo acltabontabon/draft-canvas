@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ViewportPortal, useInternalNode, useReactFlow } from '@xyflow/react';
+import { createPortal } from 'react-dom';
+import { useInternalNode, useReactFlow } from '@xyflow/react';
+import { useCanvasOverlay } from './useCanvasOverlay';
 import { useEditorStore } from '../store/editorStore';
 import { selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
@@ -38,7 +40,8 @@ export function AttachmentPopover() {
   const mode = useEditorStore((state) => state.mode);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
-  const { flowToScreenPosition, screenToFlowPosition } = useReactFlow();
+  const { flowToScreenPosition } = useReactFlow();
+  const overlay = useCanvasOverlay();
   const rightClearance = flowPanelOpen ? RIGHT_CLEARANCE_WITH_FLOW_PANEL : LEFT_CLEARANCE;
 
   // Presenting never opens this popover at all — see the matching comment on the badge itself in
@@ -198,7 +201,7 @@ export function AttachmentPopover() {
     measuredSize,
     clearances,
     flowToScreenPosition,
-    screenToFlowPosition,
+    overlay.screenToOverlay,
   );
   // A dropdown/card should open away from the node, mirroring whichever side the popover itself
   // placed on — 'left'/'right' placement has no above/below relationship to the node at all, so
@@ -206,8 +209,8 @@ export function AttachmentPopover() {
   // `menuDirection` default in the same situation.
   const cardSide: 'above' | 'below' = effectivePlacement === 'above' ? 'above' : 'below';
 
-  return (
-    <ViewportPortal>
+  if (!overlay.target) return null;
+  return createPortal(
       <div
         ref={panelRef}
         className="dc-attachment-popover"
@@ -230,7 +233,7 @@ export function AttachmentPopover() {
             actions={attachmentActions}
           />
         </div>
-      </div>
-    </ViewportPortal>
+      </div>,
+    overlay.target,
   );
 }

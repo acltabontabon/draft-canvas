@@ -30,6 +30,7 @@ import {
   distributeNodes,
   extractFragment,
   freeOriginFor,
+  hasAttachmentRoom,
   moveNodes,
   pasteFragment,
   placeNear,
@@ -54,7 +55,8 @@ import {
   type AlignEdge,
   type Clipboard,
 } from '../document/operations';
-import { buildStarter, starterById, starterSize, type StarterId } from '../starters';
+import { buildStarter, starterSize } from '../starters/build';
+import type { ArchitectureStarter } from '../starters/types';
 import {
   addFlow,
   createFlow as createFlowEntity,
@@ -218,6 +220,14 @@ export interface EditorStore {
   selectedFlowId: string | null;
   /** Bumped on every document write; autosave watches this rather than deep-diffing. */
   revision: number;
+  /**
+   * Where the camera actually is, once the user has panned or zoomed since the document was set —
+   * `null` until then. Kept out of `document` on purpose: every scroll gesture writing a new
+   * document re-rendered everything subscribed to it, stamped `updatedAt` (reordering the
+   * Library), and counted as an edit. It is folded back in only where the document leaves the
+   * editor — autosave and export — via `documentWithLiveViewport`.
+   */
+  liveViewport: DraftViewport | null;
 
   /* Document access */
   setDocument: (document: DraftDocument, options?: { resetHistory?: boolean }) => void;
@@ -239,7 +249,7 @@ export interface EditorStore {
    * cannot find them in its own `CommandContext`, whose document predates this call. See
    * `src/starters/`.
    */
-  insertStarter: (starterId: StarterId) => DraftNode[];
+  insertStarter: (starter: ArchitectureStarter) => DraftNode[];
   /**
    * Accepts an Intent Continuation offer (see `src/continuation/`): the previewed nodes and
    * connectors become real in one undoable step, the offer's primary node is selected (so the
@@ -609,6 +619,20 @@ function reconcileSessionState(
   return patch;
 }
 
+/** Focus pruned to what still exists after an edit — deleting the focused elements must not
+ *  leave Focus on with nothing lit and the whole canvas dimmed. Only the focus half of
+ *  `reconcileSessionState`: an edit that removes the selected flow already clears it itself. */
+function focusThatSurvives(document: DraftDocument, state: Pick<EditorStore, 'selectedFlowId' | 'focus'>) {
+  if (!state.focus.active) return {};
+  const { focus } = reconcileSessionState(document, { selectedFlowId: null, focus: state.focus });
+  return focus ? { focus } : {};
+}
+
+/** The document as it should be saved or exported: `document` with the camera where it really is. */
+export function documentWithLiveViewport(state: Pick<EditorStore, 'document' | 'liveViewport'>): DraftDocument {
+  return state.liveViewport ? { ...state.document, viewport: state.liveViewport } : state.document;
+}
+
 /**
  * The flow currently acting as the canvas lens (members lit, everything else dimmed), or
  * `undefined` when there is none. The single source of truth for "is a lens on" — the canvas
@@ -647,6 +671,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   focus: { active: false, nodeIds: [], edgeIds: [] },
   selectedFlowId: null,
   revision: 0,
+  liveViewport: null,
 
   setDocument(document, options) {
     interaction = null;
@@ -667,6 +692,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // than showing none until the user picks.
       selectedFlowId: document.flows.length === 1 ? document.flows[0]!.id : null,
       revision: state.revision + 1,
+      liveViewport: null,
     }));
   },
 
@@ -683,6 +709,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         document: next,
         selection: options?.selection ?? s.selection,
         revision: s.revision + 1,
+        ...focusThatSurvives(next, s),
       }));
       return;
     }
@@ -692,6 +719,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       document: next,
       selection: selectionAfter,
       revision: s.revision + 1,
+      ...focusThatSurvives(next, s),
       history: pushEntry(s.history, {
         label,
         before,
@@ -762,9 +790,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     ui.setSettleNodeId(offer.primaryNodeId);
   },
 
-  insertStarter(starterId) {
-    const starter = starterById(starterId);
-    if (!starter) return [];
+  insertStarter(starter) {
     const state = get();
     // Everything a starter needs is decided before a single node exists: where it can land
     // (`freeOriginFor`, one pass over the document) and what it contains (`buildStarter`, pure).
@@ -879,9 +905,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   reconnectEdge(id, endpoint, newNodeId, newSide, newOffset = 0.5) {
-    get().apply('Reconnect', (doc) =>
-      reinferIfEligible(reconnectEdgeOp(doc, id, endpoint, newNodeId, newSide, newOffset), id),
-    );
+    get().apply('Reconnect', (doc) => {
+      const reconnected = reconnectEdgeOp(doc, id, endpoint, newNodeId, newSide, newOffset);
+      // A refused reconnect (onto the other endpoint, or a vanished node) must stay a no-op:
+      // re-inference always rebuilds the edges array, which would record a dead undo step.
+      return reconnected === doc ? doc : reinferIfEligible(reconnected, id);
+    });
   },
 
   insertWorkerOnEdge(edgeId) {
@@ -1194,9 +1223,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     // One entry, exactly like `insertWorkerOnEdge` — undo restores the bundle
     // in a single step rather than unpicking six separate edits.
+    // Each member's flow steps are spliced onto its new path — through the shared trunk and
+    // then its own leg, in travel order — before the member goes, same as `insertWorkerOnEdge`;
+    // `removeElements` alone would prune those steps and the flow would silently lose beats.
     state.apply(
       'Convert to junction',
-      (doc) => addEdges(addNodes(removeElements(doc, [], memberIds), [junction]), [shared, ...legs]),
+      (doc) => {
+        let next = addEdges(addNodes(doc, [junction]), [shared, ...legs]);
+        members.forEach((member: DraftEdge, index: number) => {
+          const leg = legs[index]!.id;
+          next = spliceEdgeInFlows(next, member.id, spine.hub === 'source' ? [shared.id, leg] : [leg, shared.id]);
+        });
+        return removeElements(next, [], memberIds);
+      },
       { selection: { nodes: [junction.id], edges: [] } },
     );
   },
@@ -1359,8 +1398,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   groupSelection() {
     const state = get();
-    const members = state.document.nodes.filter((n) => state.selection.nodes.includes(n.id));
+    const selected = new Set(state.selection.nodes);
+    const byId = new Map(state.document.nodes.map((n) => [n.id, n] as const));
+    // Only the outermost selected nodes move into the new boundary. A marquee that also caught
+    // a selected boundary's own children must not pull them out of it and leave it empty.
+    const hasSelectedAncestor = (node: DraftNode) => {
+      for (let p = node.parentId ? byId.get(node.parentId) : undefined; p; p = p.parentId ? byId.get(p.parentId) : undefined) {
+        if (selected.has(p.id)) return true;
+      }
+      return false;
+    };
+    const members = state.document.nodes.filter((n) => selected.has(n.id) && !hasSelectedAncestor(n));
     if (members.length < 2) return;
+    // Grouping inside an existing boundary keeps the new one nested there, so dragging or
+    // deleting that outer boundary still carries everything it held.
+    const sharedParent = members.every((n) => n.parentId === members[0]!.parentId) ? members[0]!.parentId : undefined;
 
     const padding = 28;
     const minX = Math.min(...members.map((n) => n.x)) - padding;
@@ -1375,13 +1427,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       y: minY,
       width: maxX - minX,
       height: maxY - minY,
-      z: minZ - 1,
+      // Boundaries stack among themselves by z (see `projection.ts`), so a nested one must sit
+      // above the boundary it lives in or it would render — and hit-test — underneath it.
+      z: sharedParent ? Math.max(minZ - 1, (byId.get(sharedParent)?.z ?? 0) + 1) : minZ - 1,
       text: 'Boundary',
+      ...(sharedParent ? { parentId: sharedParent } : {}),
     });
 
     state.apply(
       'Group',
-      (doc) => setParent(addNodes(doc, [boundary]), state.selection.nodes, boundary.id),
+      (doc) => setParent(addNodes(doc, [boundary]), members.map((n) => n.id), boundary.id),
       { selection: { nodes: [boundary.id], edges: [] } },
     );
   },
@@ -1393,14 +1448,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
     if (boundaries.length === 0) return;
     const boundaryIds = new Set(boundaries.map((b) => b.id));
-    const children = state.document.nodes
-      .filter((n) => n.parentId && boundaryIds.has(n.parentId))
-      .map((n) => n.id);
+    const byId = new Map(state.document.nodes.map((n) => [n.id, n] as const));
+    // Children move up to the nearest ancestor that survives the ungroup — not to the top
+    // level, which would also pull them out of any boundary the ungrouped one sat inside.
+    const survivingParentOf = (id: string | undefined): string | undefined => {
+      let current = id;
+      while (current && boundaryIds.has(current)) current = byId.get(current)?.parentId;
+      return current;
+    };
+    const children = state.document.nodes.filter((n) => n.parentId && boundaryIds.has(n.parentId));
 
     state.apply(
       'Ungroup',
       (doc) => {
-        const detached = setParent(doc, children, undefined);
+        let detached = doc;
+        for (const child of children) detached = setParent(detached, [child.id], survivingParentOf(child.parentId));
         // Remove only the boundary; `removeElements` would take the contents too — but that also
         // means skipping its flow cleanup, so a boundary spotlit by a flow step is pruned here.
         return pruneFlowSteps(
@@ -1409,7 +1471,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           boundaryIds,
         );
       },
-      { selection: { nodes: children, edges: [] } },
+      { selection: { nodes: children.map((child) => child.id), edges: [] } },
     );
   },
 
@@ -1420,7 +1482,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   attachExistingNode(nodeId, hostId) {
     const state = get();
     const node = state.document.nodes.find((n) => n.id === nodeId);
-    if (!node) return;
+    const host = state.document.nodes.find((n) => n.id === hostId);
+    // The node is deleted in the same step, so anything the attachment can't carry is refused
+    // up front: a full host, or a card with attachments of its own.
+    if (!node || !host || !hasAttachmentRoom(host, 'node') || node.attachments?.length) return;
     // Callers only invoke this for a node whose type is already attachable
     // (checked against ATTACHABLE_TYPES before the drag is even armed).
     const attachment = createAttachment({
@@ -1468,7 +1533,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   attachExistingNodeToEdge(nodeId, edgeId) {
     const state = get();
     const node = state.document.nodes.find((n) => n.id === nodeId);
-    if (!node) return;
+    const edge = state.document.edges.find((e) => e.id === edgeId);
+    if (!node || !edge || !hasAttachmentRoom(edge, 'edge') || node.attachments?.length) return;
     // Callers only invoke this for a note/code node — checked before the drag is even armed.
     const attachment = createAttachment({
       type: node.type as AttachableType,
@@ -1617,13 +1683,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   persistViewport(viewport) {
-    // The viewport is saved but is not an editorial action, so it stays out of
-    // the undo stack — nobody wants Ctrl+Z to undo a scroll.
-    get().apply('Viewport', (doc) => setViewport(doc, viewport), { transient: true });
+    // Saved, but not an edit: no undo step (nobody wants ⌘Z to undo a scroll), no new document,
+    // no `updatedAt`. See `liveViewport`.
+    const state = get();
+    const current = state.liveViewport ?? state.document.viewport;
+    const next = setViewport(state.document, viewport).viewport;
+    if (next.x === current.x && next.y === current.y && next.zoom === current.zoom) return;
+    set({ liveViewport: next });
   },
 
   undo() {
     const state = get();
+    // Mid-gesture (a drag or resize still held), swapping the document out from under it would
+    // fold the restored state into the gesture's own entry and clear the redo stack.
+    if (interaction) return;
     const { history, entry } = undoStack(state.history);
     if (!entry) return;
     set((s) => ({
@@ -1641,6 +1714,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   redo() {
     const state = get();
+    if (interaction) return;
     const { history, entry } = redoStack(state.history);
     if (!entry) return;
     set((s) => ({

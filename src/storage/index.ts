@@ -21,5 +21,4 @@ export function __setRepository(repository: DraftRepository | null): void {
   cached = repository ? Promise.resolve(repository) : null;
 }
 
-export { IndexedDbRepository, MemoryRepository };
 export * from './DraftRepository';

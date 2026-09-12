@@ -27,6 +27,7 @@ function stubRepository(overrides: Partial<DraftRepository> = {}): DraftReposito
     saveBackgroundImage: async () => {},
     loadBackgroundImage: async () => null,
     removeBackgroundImage: async () => {},
+    pruneBackgroundImages: async () => {},
     ...overrides,
   };
 }
@@ -120,6 +121,29 @@ describe('useDocumentSession — adoptDocument stale projectId repair', () => {
     });
 
     expect(saved[0]!.metadata.projectId).toBe('real-project');
+  });
+
+  it('imports a file whose id already exists here as a new canvas, never over the local one', async () => {
+    const local = createDocument('Local, newer');
+    const saved: DraftDocument[] = [];
+    const repository = stubRepository({
+      load: async (id) => (id === local.metadata.id ? local : null),
+      save: async (document) => {
+        saved.push(document);
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    const incoming = { ...local, metadata: { ...local.metadata, title: 'Old export' } };
+    await act(async () => {
+      await session().adoptDocument(incoming);
+    });
+
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.metadata.id).not.toBe(local.metadata.id);
+    expect(saved[0]!.metadata.title).toBe('Old export');
+    expect(useEditorStore.getState().document.metadata.id).toBe(saved[0]!.metadata.id);
   });
 });
 

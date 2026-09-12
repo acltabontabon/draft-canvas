@@ -24,7 +24,7 @@ import { useSettle } from './useContinuation';
 import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
 import { lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
 import { accentOf, type Theme } from '../render/theme/tokens';
-import { edgeIndex, selectNode } from '../store/selectors';
+import { selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
@@ -113,7 +113,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   useEffect(() => {
     if (!editRequested) return;
     useUiStore.getState().requestEdit(null);
-    // oxlint-disable-next-line set-state-in-effect -- one-shot external command, see comment above.
     if (mode !== 'present') setEditing(true);
   }, [editRequested, mode]);
 
@@ -138,7 +137,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     // narrower width can hold) opens tall enough to show all of it — see `liveHeight`.
     if ((isNote || isText) && node) {
       const grown = isText ? grownTextHeight(el, node.height) : grownNoteHeight(node, el, node.height);
-      // oxlint-disable-next-line set-state-in-effect -- measuring the just-mounted textarea, see comment above.
       if (grown !== null) setLiveHeight(grown);
     }
     // Only the transition into editing matters; the node's own fields are read once, at that moment.
@@ -151,7 +149,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // dips back to its old height for the frame between the commit and React Flow re-projecting.
   useEffect(() => {
     if (liveHeight !== null && !editing && node && node.height >= liveHeight) {
-      // oxlint-disable-next-line set-state-in-effect -- clearing a stale override once the store agrees.
       setLiveHeight(null);
     }
   }, [liveHeight, editing, node]);
@@ -173,6 +170,22 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       : { ...node, width: effectiveWidth, height: effectiveHeight };
   // Relative to the node box (y: 0) — the handles are positioned inside it.
   const handleBand = liveNode ? anchorBandOf({ type: liveNode.type, y: 0, height: effectiveHeight }) : undefined;
+  // React Flow's `Handle` is memoized, so each keeps its style object until the band itself moves —
+  // twelve fresh objects per node render would re-render every handle every time.
+  const bandTop = handleBand?.top;
+  const bandBottom = handleBand?.bottom;
+  const handleStyles = useMemo(
+    () =>
+      new Map(
+        HANDLE_ANCHORS.map((anchor) => [
+          anchor.id,
+          anchor.side === 'top' || anchor.side === 'bottom' || bandTop === undefined || bandBottom === undefined
+            ? STATIC_HANDLE_STYLES.get(anchor.id)!
+            : { top: `${bandTop + (bandBottom - bandTop) * anchor.offset}px` },
+        ]),
+      ),
+    [bandTop, bandBottom],
+  );
 
   /**
    * React Flow passes a fresh `positionAbsoluteX`/`positionAbsoluteY` prop into
@@ -216,6 +229,15 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       setResizing(false);
     }
   }, [readOnly, resizing]);
+  // Same bracket, closed from the other direction: the node itself unmounting mid-resize (deleted
+  // by a key press, or by undo in another path) also skips `onResizeEnd`.
+  useEffect(() => {
+    if (!resizing) return;
+    return () => {
+      useEditorStore.getState().endInteraction();
+      useUiStore.getState().setInteractionActive(false);
+    };
+  }, [resizing]);
 
   if (!node) return null;
 
@@ -469,13 +491,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
             position={anchor.position}
             className="dc-handle"
             data-armed={armedAnchorKey === `${anchor.side}:${anchor.offset}` ? 'true' : undefined}
-            style={
-              anchor.side === 'top' || anchor.side === 'bottom'
-                ? { left: `${anchor.offset * 100}%` }
-                : handleBand
-                  ? { top: `${handleBand.top + (handleBand.bottom - handleBand.top) * anchor.offset}px` }
-                  : { top: `${anchor.offset * 100}%` }
-            }
+            style={handleStyles.get(anchor.id)}
             isConnectable={!readOnly}
           />
         ),
@@ -577,14 +593,14 @@ function editorStyle(node: DraftNode, atGrowthCap: boolean): React.CSSProperties
 function explainTierFor(state: EditorStore, id: string): ExplainTier {
   if (!state.flowPlayback.active || !state.flowPlayback.flowId) return 'hidden';
   const flow = state.document.flows.find((f) => f.id === state.flowPlayback.flowId);
-  return explainNodeTier(flow, edgeIndex(state.document.edges).values(), id, state.flowPlayback.step);
+  return explainNodeTier(flow, state.document.edges, id, state.flowPlayback.step);
 }
 
 /** Whether this node belongs to the selected (not presented) flow's lens —
  *  suppressed whenever Presentation or Focus already own the dimming. */
 function lensMemberFor(state: EditorStore, id: string): boolean {
   const flow = lensFlow(state);
-  return flow ? lensNodeTier(flow, edgeIndex(state.document.edges).values(), id) === 'member' : false;
+  return flow ? lensNodeTier(flow, state.document.edges, id) === 'member' : false;
 }
 
 /** A member node's ring colour while lensed, if its flow has one set — mirrors the accent tint
@@ -593,8 +609,16 @@ function lensMemberFor(state: EditorStore, id: string): boolean {
 function lensAccentFor(state: EditorStore, theme: Theme, id: string): string | undefined {
   const flow = lensFlow(state);
   if (!flow?.accent) return undefined;
-  const isMember = lensNodeTier(flow, edgeIndex(state.document.edges).values(), id) === 'member';
+  const isMember = lensNodeTier(flow, state.document.edges, id) === 'member';
   return isMember ? accentOf(theme, flow.accent).chip : undefined;
 }
+
+/** Handle positions that never depend on the node's own geometry, built once for every node. */
+const STATIC_HANDLE_STYLES: ReadonlyMap<string, CSSProperties> = new Map(
+  HANDLE_ANCHORS.map((anchor) => [
+    anchor.id,
+    anchor.side === 'top' || anchor.side === 'bottom' ? { left: `${anchor.offset * 100}%` } : { top: `${anchor.offset * 100}%` },
+  ]),
+);
 
 export type { DraftNodeData };

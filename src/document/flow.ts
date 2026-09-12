@@ -37,7 +37,7 @@ const DEFAULT_FLOW_TITLE = 'Untitled flow';
 /**
  * The default title for a flow created without one: `Untitled flow`, then `Untitled flow 2`, …
  * — the first not already taken. A run of identically-named "Untitled flow"s is indistinguishable
- * in every picker (switcher, palette, connector chip), and since a new flow is meant to be renamed
+ * in every picker (Flows panel, palette, connector chip), and since a new flow is meant to be renamed
  * in the same motion as creating it, the number only ever matters for the ones a user abandons.
  */
 export function nextFlowTitle(doc: DraftDocument): string {
@@ -58,14 +58,77 @@ export function nextFlowTitle(doc: DraftDocument): string {
  */
 export function flowHasMembers(doc: DraftDocument, flow: DraftFlow): boolean {
   if (flow.steps.length === 0) return false;
+  // Asked by every node and edge selector on every store update while a flow is selected, so the
+  // answer is cached against the exact (steps, edges, nodes) arrays it was computed from.
+  const byEdges = memoLevel(hasMembersCache, flow.steps, () => new WeakMap<readonly DraftEdge[], WeakMap<readonly unknown[], boolean>>());
+  const byNodes = memoLevel(byEdges, doc.edges, () => new WeakMap<readonly unknown[], boolean>());
+  const cached = byNodes.get(doc.nodes);
+  if (cached !== undefined) return cached;
   const edgeIds = new Set(doc.edges.map((edge) => edge.id));
   const nodeIds = new Set(doc.nodes.map((node) => node.id));
-  return flow.steps.some(
+  const result = flow.steps.some(
     (step) =>
       (step.edgeId !== undefined && edgeIds.has(step.edgeId)) ||
       step.extraEdgeIds?.some((id) => edgeIds.has(id)) ||
       step.extraNodeIds?.some((id) => nodeIds.has(id)),
   );
+  byNodes.set(doc.nodes, result);
+  return result;
+}
+
+const hasMembersCache = new WeakMap<
+  readonly DraftFlowStep[],
+  WeakMap<readonly DraftEdge[], WeakMap<readonly unknown[], boolean>>
+>();
+
+function memoLevel<K extends object, V>(cache: WeakMap<K, V>, key: K, create: () => V): V {
+  let value = cache.get(key);
+  if (value === undefined) cache.set(key, (value = create()));
+  return value;
+}
+
+/** First 1-based step position of every connector a flow's steps reference — see `stepIndexOf`. */
+const edgeStepCache = new WeakMap<readonly DraftFlowStep[], Map<string, number>>();
+
+function edgeStepsOf(steps: readonly DraftFlowStep[]): Map<string, number> {
+  return memoLevel(edgeStepCache, steps, () => {
+    const positions = new Map<string, number>();
+    steps.forEach((step, index) => {
+      if (step.edgeId !== undefined && !positions.has(step.edgeId)) positions.set(step.edgeId, index + 1);
+      for (const id of step.extraEdgeIds ?? []) if (!positions.has(id)) positions.set(id, index + 1);
+    });
+    return positions;
+  });
+}
+
+/**
+ * Every step position that lights each node up — as an endpoint of a member connector, or by name
+ * in a frame step's `extraNodeIds`. Built once per (steps, edges) pair so each node's tier is a
+ * lookup instead of a scan over every edge.
+ */
+const nodeStepCache = new WeakMap<readonly DraftFlowStep[], WeakMap<readonly DraftEdge[], Map<string, number[]>>>();
+
+function nodeStepsOf(steps: readonly DraftFlowStep[], edges: readonly DraftEdge[]): Map<string, number[]> {
+  const byEdges = memoLevel(nodeStepCache, steps, () => new WeakMap<readonly DraftEdge[], Map<string, number[]>>());
+  return memoLevel(byEdges, edges, () => {
+    const positions = new Map<string, number[]>();
+    const add = (nodeId: string, position: number) => {
+      const list = positions.get(nodeId);
+      if (list) list.push(position);
+      else positions.set(nodeId, [position]);
+    };
+    const edgeSteps = edgeStepsOf(steps);
+    for (const edge of edges) {
+      const position = edgeSteps.get(edge.id);
+      if (position === undefined) continue;
+      add(edge.source, position);
+      if (edge.target !== edge.source) add(edge.target, position);
+    }
+    steps.forEach((step, index) => {
+      for (const id of step.extraNodeIds ?? []) add(id, index + 1);
+    });
+    return positions;
+  });
 }
 
 /** Whether presenting the flow would show at least one step — `flowHasMembers`, or a step that
@@ -84,23 +147,7 @@ export function flowIsPlayable(doc: DraftDocument, flow: DraftFlow): boolean {
  */
 export function stepIndexOf(flow: DraftFlow | undefined, edgeId: string): number | undefined {
   if (!flow) return undefined;
-  const index = flow.steps.findIndex(
-    (step) => step.edgeId === edgeId || step.extraEdgeIds?.includes(edgeId),
-  );
-  return index === -1 ? undefined : index + 1;
-}
-
-/** Every 1-based position where a node appears in a flow's steps via
- *  `extraNodeIds` — plural, unlike `stepIndexOf`, because a node reasonably
- *  recurs across several "frame" steps (e.g. a client present in most of a
- *  walkthrough), where a single edge belonging to more than one step of the
- *  same flow is not a case the data model anticipates. */
-function frameStepPositions(flow: DraftFlow, nodeId: string): number[] {
-  const positions: number[] = [];
-  flow.steps.forEach((step, index) => {
-    if (step.extraNodeIds?.includes(nodeId)) positions.push(index + 1);
-  });
-  return positions;
+  return edgeStepsOf(flow.steps).get(edgeId);
 }
 
 /**
@@ -126,19 +173,13 @@ export function explainEdgeTier(position: number | undefined, step: number): Exp
  */
 export function explainNodeTier(
   flow: DraftFlow | undefined,
-  edges: Iterable<DraftEdge>,
+  edges: readonly DraftEdge[],
   nodeId: string,
   step: number,
 ): ExplainTier {
   if (!flow) return 'hidden';
   let best: ExplainTier = 'hidden';
-  for (const edge of edges) {
-    if (edge.source !== nodeId && edge.target !== nodeId) continue;
-    const tier = explainEdgeTier(stepIndexOf(flow, edge.id), step);
-    if (tier === 'active') return 'active';
-    if (tier === 'shown') best = 'shown';
-  }
-  for (const position of frameStepPositions(flow, nodeId)) {
+  for (const position of nodeStepsOf(flow.steps, edges).get(nodeId) ?? []) {
     const tier = explainEdgeTier(position, step);
     if (tier === 'active') return 'active';
     if (tier === 'shown') best = 'shown';
@@ -165,13 +206,9 @@ export function lensEdgeTier(flow: DraftFlow | undefined, edgeId: string): LensT
 
 /** A node's lens tier: `'member'` if it touches a member edge, or is spotlit
  *  by a "frame" step's `extraNodeIds`, for the given flow. */
-export function lensNodeTier(flow: DraftFlow | undefined, edges: Iterable<DraftEdge>, nodeId: string): LensTier {
+export function lensNodeTier(flow: DraftFlow | undefined, edges: readonly DraftEdge[], nodeId: string): LensTier {
   if (!flow) return 'dimmed';
-  for (const edge of edges) {
-    if (edge.source !== nodeId && edge.target !== nodeId) continue;
-    if (lensEdgeTier(flow, edge.id) === 'member') return 'member';
-  }
-  return frameStepPositions(flow, nodeId).length > 0 ? 'member' : 'dimmed';
+  return nodeStepsOf(flow.steps, edges).has(nodeId) ? 'member' : 'dimmed';
 }
 
 /** Ids of every node the flow lens marks 'member' for the given flow — used to scope
@@ -407,11 +444,16 @@ export function spliceEdgeInFlows(
   const flows = doc.flows.map((flow) => {
     if (stepIndexOf(flow, edgeId) === undefined) return flow;
     const steps: DraftFlowStep[] = [];
+    // Budgeted against the whole flow, not the steps written so far — the originals still
+    // to come would otherwise push a near-full flow past the cap, and the next load's
+    // validation would silently trim its last step.
+    let budget = Math.max(0, LIMITS.maxStepsPerFlow - flow.steps.length);
     for (const step of flow.steps) {
       if (step.edgeId === edgeId) {
         steps.push({ ...step, edgeId: first });
         for (const id of rest) {
-          if (steps.length >= LIMITS.maxStepsPerFlow) break;
+          if (budget <= 0) break;
+          budget -= 1;
           steps.push({ id: createId('fs'), edgeId: id });
         }
         continue;
@@ -436,8 +478,8 @@ export function spliceEdgeInFlows(
  * Repairs (rather than always dropping) a step referencing a deleted
  * connector or node: a dangling primary `edgeId` is cleared, and dangling
  * ids are filtered out of `extraEdgeIds`/`extraNodeIds` — the step survives
- * if anything is still left for it to show. A step with nothing left at all
- * is the only one actually removed.
+ * if anything is still left for it to show, a pinned `viewport` included. A
+ * step with nothing left at all is the only one actually removed.
  */
 export function pruneFlowSteps(
   doc: DraftDocument,
@@ -468,7 +510,9 @@ export function pruneFlowSteps(
       if (extraNodeIds && extraNodeIds.length > 0) next.extraNodeIds = extraNodeIds;
       else delete next.extraNodeIds;
 
-      if (!next.edgeId && !next.extraEdgeIds?.length && !next.extraNodeIds?.length) continue;
+      // A pinned view is still something to show (same rule as `validate.ts`), so the
+      // step — and its caption — survive losing every member.
+      if (!next.edgeId && !next.extraEdgeIds?.length && !next.extraNodeIds?.length && !next.viewport) continue;
       steps.push(next);
     }
     if (!flowChanged) return flow;

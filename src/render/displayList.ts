@@ -27,10 +27,6 @@ export interface Stroke {
   linecap?: 'butt' | 'round';
 }
 
-export interface Corner {
-  r: number;
-}
-
 export type TextAlign = 'start' | 'middle' | 'end';
 
 export interface RectShape {

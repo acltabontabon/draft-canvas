@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { BackgroundSettings } from '../document/types';
 import { blurRadiusFor } from '../render/backgroundAnchor';
 import { getRepository } from '../storage';
-import { useUiStore } from '../store/uiStore';
 
 interface CanvasBackgroundProps {
   settings: BackgroundSettings;
@@ -30,10 +29,6 @@ const BACKGROUND_SIZE_CSS: Record<BackgroundSettings['fit'], string> = {
  */
 export function CanvasBackground({ settings, documentId, extraDim = 0 }: CanvasBackgroundProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  // Bumped by `CanvasSettingsDialog` whenever the blob is replaced — `enabled`
-  // alone doesn't change on a "Replace image…" while already enabled, so
-  // something else has to signal that the stored bytes are stale.
-  const backgroundImageVersion = useUiStore((state) => state.backgroundImageVersion);
 
   useEffect(() => {
     if (!settings.enabled) {
@@ -44,7 +39,7 @@ export function CanvasBackground({ settings, documentId, extraDim = 0 }: CanvasB
     let cancelled = false;
     let objectUrl: string | null = null;
     void getRepository()
-      .then((repository) => repository.loadBackgroundImage(documentId))
+      .then((repository) => repository.loadBackgroundImage(documentId, settings.imageId))
       .then((row) => {
         if (cancelled || !row) return;
         objectUrl = URL.createObjectURL(row.blob);
@@ -57,7 +52,8 @@ export function CanvasBackground({ settings, documentId, extraDim = 0 }: CanvasB
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [settings.enabled, documentId, backgroundImageVersion]);
+  // A replaced image arrives under a new `imageId`, so that alone is what signals fresh bytes.
+  }, [settings.enabled, settings.imageId, documentId]);
 
   if (!settings.enabled || !imageUrl) return null;
 

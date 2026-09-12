@@ -24,6 +24,8 @@ export const SECURE_EXPORT_CRYPTO_VERSION = 1;
  * an older export — the file says what it was actually encrypted with.
  */
 export const PBKDF2_ITERATIONS = 600_000;
+/** Headroom for a future bump of `PBKDF2_ITERATIONS`, far below "hangs the tab". */
+const MAX_IMPORT_ITERATIONS = 10 * PBKDF2_ITERATIONS;
 const SALT_BYTES = 16;
 
 export interface SecureExportEnvelope {
@@ -107,10 +109,13 @@ function isSecureExportEnvelope(value: unknown): value is SecureExportEnvelope {
   return (
     v.format === SECURE_EXPORT_FORMAT &&
     typeof v.cryptoVersion === 'number' &&
-    typeof v.kdf === 'string' &&
+    v.kdf === 'PBKDF2' &&
     typeof v.iterations === 'number' &&
-    Number.isFinite(v.iterations) &&
+    Number.isInteger(v.iterations) &&
     v.iterations > 0 &&
+    // The count comes from the file itself: without a ceiling, a crafted
+    // `iterations: 1e12` pins the import in key derivation indefinitely.
+    v.iterations <= MAX_IMPORT_ITERATIONS &&
     typeof v.salt === 'string' &&
     typeof v.iv === 'string' &&
     typeof v.ciphertext === 'string'

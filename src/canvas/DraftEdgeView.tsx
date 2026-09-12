@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
+import { useShallow } from 'zustand/react/shallow';
 import type { DraftNode } from '../document/types';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
 import { explainEdgeTier, lensEdgeTier, stepIndexOf } from '../document/flow';
@@ -22,8 +23,9 @@ import {
   captionAnchor,
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
+import { layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
-import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
+import { attachmentRowBelowsSourceOrTarget, obstaclesForEdge, rectOfInternal } from './edgeGeometry';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
@@ -36,8 +38,17 @@ import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { FONTS, cssFont } from '../render/text/fonts';
+import { Lru } from '../lib/lru';
 
 const NO_OBSTACLES: readonly Rect[] = [];
+
+interface EdgeRoutes {
+  request: ReturnType<typeof routeBetween>;
+  response: ReturnType<typeof routeBetween> | null;
+}
+
+/** Routing is pure in its inputs, so results are shared by key across every connector. */
+const ROUTES = new Lru<string, EdgeRoutes>(2048);
 
 /** Minimum pointer movement, in screen pixels, before an endpoint gesture
  *  counts as a drag rather than a click — see `EdgeEndpointHandle`. */
@@ -173,14 +184,18 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // the plan, but every bundled connector's geometry has genuinely changed by
   // then anyway.
   const spine = useEditorStore((state) => routingPlan(state.document.nodes, state.document.edges).spineFor(id));
-  // Obstacle avoidance needs every other node's committed geometry, which no
-  // per-edge subscription can narrow down further — so this one re-renders
-  // whenever any node's position/size commits, not only its own endpoints.
-  // Skipping it entirely while a gesture is in flight (see `interactionActive`
-  // below) is what keeps that acceptable: the cost lands once per commit, not
-  // per pointer-move frame, matching "cheap during interaction, refine after."
-  const nodes = useEditorStore((state) => state.document.nodes);
+  // Obstacle avoidance only ever looks at nodes overlapping the box between this connector's own
+  // endpoints (see `obstaclesForEdge`), each as a rect that keeps its identity while its node is
+  // untouched — so under `useShallow` a commit elsewhere on the canvas re-renders nothing here.
+  // Skipped entirely while a gesture is in flight: cheap during interaction, refine after.
   const interactionActive = useUiStore((state) => state.interactionActive);
+  const obstacles = useEditorStore(
+    useShallow((state) =>
+      interactionActive || !edge ? NO_OBSTACLES : obstaclesForEdge(state.document.nodes, edge.source, edge.target),
+    ),
+  );
+  const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
+  const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
 
   const sourceNode = useInternalNode(edge?.source ?? '');
@@ -295,15 +310,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
   if (!edge || !sourceNode || !targetNode) return null;
 
-  const sourceRect = rectOfInternal(sourceNode, nodes.find((node) => node.id === edge.source)?.type);
-  const targetRect = rectOfInternal(targetNode, nodes.find((node) => node.id === edge.target)?.type);
+  const sourceRect = rectOfInternal(sourceNode, sourceType);
+  const targetRect = rectOfInternal(targetNode, targetType);
   if (!sourceRect || !targetRect) return null;
-
-  const obstacles = interactionActive
-    ? NO_OBSTACLES
-    : nodes
-        .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
-        .map(rectOf);
 
   // While an endpoint is being dragged, the path tracks the live pointer
   // position instead of the node it's still (until drop) actually attached
@@ -315,17 +324,48 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const effectiveSourceRect = dragOverride?.endpoint === 'source' ? pointRect(dragOverride.point) : sourceRect;
   const effectiveTargetRect = dragOverride?.endpoint === 'target' ? pointRect(dragOverride.point) : targetRect;
 
-  const route = routeBetween(effectiveSourceRect, effectiveTargetRect, edge.routing, {
-    anchors: {
-      source: dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor,
-      target: dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor,
-    },
-    lane: laneOffset,
+  // Every input the two routes read, as one key: a connector re-renders for selection, lens,
+  // playback, and hover far more often than its geometry actually moves.
+  const routeKey = JSON.stringify([
+    effectiveSourceRect,
+    effectiveTargetRect,
+    edge.routing,
+    edge.sourceAnchor,
+    edge.targetAnchor,
+    edge.hasResponse,
+    laneOffset,
+    dragOverride?.endpoint,
+    spine,
     obstacles,
-    // An endpoint being dragged is on its way out of this bundle — keeping it
-    // on the trunk would rubber-band it back to a group it is leaving.
-    spine: dragOverride ? undefined : spine,
-  });
+  ]);
+  const routes = ROUTES.getOrCreate(routeKey, computeRoutes);
+  function computeRoutes(): EdgeRoutes {
+    const request = routeBetween(effectiveSourceRect, effectiveTargetRect, edge!.routing, {
+      anchors: {
+        source: dragOverride?.endpoint === 'source' ? undefined : edge!.sourceAnchor,
+        target: dragOverride?.endpoint === 'target' ? undefined : edge!.targetAnchor,
+      },
+      lane: laneOffset,
+      obstacles,
+      // An endpoint being dragged is on its way out of this bundle — keeping it
+      // on the trunk would rubber-band it back to a group it is leaving.
+      spine: dragOverride ? undefined : spine,
+    });
+    // The reply half of a request/response connector — see `responseRoute` below.
+    const response = edge!.hasResponse
+      ? routeBetween(effectiveTargetRect, effectiveSourceRect, edge!.routing, {
+          anchors: {
+            source: dragOverride?.endpoint === 'target' ? undefined : edge!.targetAnchor,
+            target: dragOverride?.endpoint === 'source' ? undefined : edge!.sourceAnchor,
+          },
+          lane: responseLaneFor(laneOffset),
+          obstacles,
+          spine: dragOverride ? undefined : responseSpineFor(spine),
+        })
+      : null;
+    return { request, response };
+  }
+  const route = routes.request;
   // A label chip is far taller than the line's own lane nudge — extra
   // separation on top of it is what keeps parallel labels from stacking.
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, laneOffset);
@@ -334,6 +374,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const attachmentFlipBelow = attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect);
 
   const hasLabel = Boolean(edge.label);
+  const labelLayout = edge.label ? layoutEdgeLabel(edge.label) : null;
+  const responseLayout = edge.response ? layoutEdgeResponse(edge.response) : null;
   const hasStep = showSequence && typeof stepNumber === 'number';
   // The step being explained is the one thing that should stand out.
   // `style` renders as an inline attribute, which always wins over an
@@ -379,17 +421,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // *original source* node — that's what makes its `markerEnd` correctly point back at A; don't
   // "fix" the apparent reversal. See `responseLaneFor`'s own doc comment in `edges/routing.ts`.
   const responseLane = responseLaneFor(laneOffset);
-  const responseRoute = edge.hasResponse
-    ? routeBetween(effectiveTargetRect, effectiveSourceRect, edge.routing, {
-        anchors: {
-          source: dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor,
-          target: dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor,
-        },
-        lane: responseLane,
-        obstacles,
-        spine: dragOverride ? undefined : responseSpineFor(spine),
-      })
-    : null;
+  const responseRoute = routes.response;
   const responseDrawnPath = responseRoute
     ? roughenPath(responseRoute.d, `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow)
     : null;
@@ -628,7 +660,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               endpoint="source"
               x={route.source.x}
               y={route.source.y}
-              nodes={nodes}
+              oppositeNodeId={edge.target}
               onDrag={setDragOverride}
             />
             <EdgeEndpointHandle
@@ -636,7 +668,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               endpoint="target"
               x={route.target.x}
               y={route.target.y}
-              nodes={nodes}
+              oppositeNodeId={edge.source}
               onDrag={setDragOverride}
             />
           </>
@@ -679,7 +711,16 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                 }}
               />
             ) : (
-              edge.label
+              // The same lines the exporter draws (`layoutEdgeLabel`): wrapped at 220 units, two
+              // lines at most, then an ellipsis — with the whole label in the tooltip.
+              <span className="dc-edge-label-text" title={labelLayout?.truncated ? edge.label : undefined}>
+                {labelLayout?.lines.map((line, index) => (
+                  // oxlint-disable-next-line react/no-array-index-key -- lines of one string, never reordered.
+                  <span key={index} className="dc-edge-label-line">
+                    {line.text}
+                  </span>
+                ))}
+              </span>
             )}
           </div>
         )}
@@ -772,7 +813,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               transform: labelChipTransform(OPPOSITE_SIDE[route.labelSide], responseLabelX, responseLabelY),
             }}
           >
-            {edge.response}
+            <span className="dc-edge-label-line" title={responseLayout?.truncated ? edge.response : undefined}>
+              {responseLayout?.lines[0]?.text}
+            </span>
           </div>
         )}
 
@@ -812,17 +855,21 @@ function EdgeEndpointHandle({
   endpoint,
   x,
   y,
-  nodes,
+  oppositeNodeId,
   onDrag,
 }: {
   edgeId: string;
   endpoint: 'source' | 'target';
   x: number;
   y: number;
-  nodes: DraftNode[];
+  /** The other end's node — never a drop target, since `reconnectEdge` refuses a self-loop. */
+  oppositeNodeId: string;
   onDrag: (override: DragOverride | null) => void;
 }) {
   const { screenToFlowPosition } = useReactFlow();
+  // Only a selected connector mounts these handles, so this whole-array subscription is paid by
+  // at most two components — never by every connector on the canvas.
+  const nodes = useEditorStore((state) => state.document.nodes);
   const cancelled = useRef(false);
   const lastHover = useRef<string | null>(null);
   // A plain click always carries a pixel or two of pointer jitter between
@@ -841,7 +888,7 @@ function EdgeEndpointHandle({
     (point: { x: number; y: number }) => {
       let best: DraftNode | undefined;
       for (const node of nodes) {
-        if (node.type === 'group') continue;
+        if (node.type === 'group' || node.id === oppositeNodeId) continue;
         if (
           point.x < node.x ||
           point.x > node.x + node.width ||
@@ -854,7 +901,7 @@ function EdgeEndpointHandle({
       }
       return best;
     },
-    [nodes],
+    [nodes, oppositeNodeId],
   );
 
   const onKeyDownRef = useRef<(event: KeyboardEvent) => void>(undefined);

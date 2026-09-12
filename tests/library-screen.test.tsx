@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEdge, createNode } from '../src/document/factory';
 import { libraryShapeOf } from '../src/document/shape';
 import type { DraftSummary, Project } from '../src/document/types';
 import { useUiStore } from '../src/store/uiStore';
 import type { DocumentSession } from '../src/store/useDocumentSession';
 import { LibraryScreen } from '../src/ui/Library/LibraryScreen';
+import { loadStarters } from '../src/starters/load';
 
 /**
  * The home screen has to work in every shape a workspace can be in — brand
@@ -65,6 +66,17 @@ beforeEach(() => {
 });
 
 describe('LibraryScreen — first run', () => {
+  // The catalog is its own chunk (`starters/load`); loaded once up front, the way a warm cache
+  // hands it over, so each render below has its tiles on the first frame.
+  beforeAll(async () => {
+    await loadStarters();
+  });
+
+  it('shows the starters once the catalog arrives', async () => {
+    render(<LibraryScreen session={stubSession()} />);
+    expect(await screen.findByRole('button', { name: 'Start from Monolith' })).toBeInTheDocument();
+  });
+
   it('offers every starter and none of the library a first run has nothing to fill', () => {
     const session = stubSession();
     const { container } = render(<LibraryScreen session={session} />);

@@ -43,7 +43,6 @@ export function useIsNewFeature(id: string): { isNew: boolean; retire: () => voi
     writePreference(LAST_SEEN_KEY, PRODUCT.version);
     // Runs once per mount, deliberately: this is "what version did this device last have open
     // *before now*," not something that should chase `PRODUCT.version` again mid-session.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const feature = NEW_FEATURES.find((f) => f.id === id);

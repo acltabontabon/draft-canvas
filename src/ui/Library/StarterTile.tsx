@@ -1,5 +1,5 @@
 import { useId, type CSSProperties, type FocusEvent } from 'react';
-import type { ArchitectureStarter, StarterId } from '../../starters';
+import type { ArchitectureStarter, StarterId } from '../../starters/types';
 import { SelectionChrome } from './SelectionChrome';
 import { StarterGlyph } from './StarterGlyph';
 import { starterShape } from './starterShapes';

@@ -4,11 +4,12 @@ import { freeOriginFor, openingViewportFor } from '../document/operations';
 import { createId } from '../document/ids';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { logDiagnostic } from '../lib/diagnostics';
-import { buildStarter, starterById, starterSize, type StarterId } from '../starters';
+import type { StarterId } from '../starters';
+import { loadStarters } from '../starters/load';
 import { Autosave } from '../storage/autosave';
 import { getRepository, type DraftRepository } from '../storage';
 import { IndexedDbRepository } from '../storage/IndexedDbRepository';
-import { useEditorStore } from './editorStore';
+import { documentWithLiveViewport, useEditorStore } from './editorStore';
 import { useUiStore } from './uiStore';
 
 export interface DocumentSession {
@@ -128,9 +129,9 @@ export function useDocumentSession(): DocumentSession {
   useEffect(() => {
     if (!openId) return;
     return useEditorStore.subscribe((state, previous) => {
-      if (state.revision === previous.revision) return;
+      if (state.revision === previous.revision && state.liveViewport === previous.liveViewport) return;
       if (state.document.metadata.id !== openId) return;
-      autosave.current?.schedule(state.document);
+      autosave.current?.schedule(documentWithLiveViewport(state));
     });
   }, [openId]);
 
@@ -157,7 +158,13 @@ export function useDocumentSession(): DocumentSession {
   const openDocument = useCallback(
     async (id: string) => {
       if (!repository) return;
-      const loaded = await repository.load(id);
+      let loaded: DraftDocument | null;
+      try {
+        loaded = await repository.load(id);
+      } catch (error) {
+        logDiagnostic(error, { operation: 'open-document', documentId: id });
+        loaded = null;
+      }
       if (!loaded) {
         notify('That diagram could not be read from local storage.', 'error');
         await refreshLibrary();
@@ -185,25 +192,40 @@ export function useDocumentSession(): DocumentSession {
         delete metadata.projectId;
         document = { ...incoming, metadata };
       }
-      await repository.save(document);
-      useEditorStore.getState().setDocument(document);
-      setOpenId(document.metadata.id);
-      await refreshLibrary();
+      try {
+        // An imported file keeps the id it was exported with, so re-importing an
+        // older export of a canvas that still lives here would `put` straight
+        // over the newer local copy. Keep both instead: the import becomes a new
+        // canvas. An unreadable existing row counts as taken, never as free.
+        const taken = await repository.load(document.metadata.id).then(
+          (existing) => existing !== null,
+          () => true,
+        );
+        if (taken) document = cloneDocumentAsNew(document, document.metadata.title);
+        await repository.save(document);
+        useEditorStore.getState().setDocument(document);
+        setOpenId(document.metadata.id);
+        await refreshLibrary();
+      } catch (error) {
+        logDiagnostic(error, { operation: 'adopt-document', documentId: document.metadata.id });
+        notify('Could not save that diagram — local storage may be full or unavailable.', 'error');
+      }
     },
-    [projects, refreshLibrary, repository],
+    [notify, projects, refreshLibrary, repository],
   );
 
   const newDocument = useCallback(
     async (title?: string, starterId?: StarterId) => {
-      const starter = starterId ? starterById(starterId) : undefined;
+      const catalog = starterId ? await loadStarters() : undefined;
+      const starter = starterId ? catalog?.starterById(starterId) : undefined;
       let document = createDocument(title ?? starter?.name ?? 'Untitled canvas');
       if (starter) {
         // The starter is the canvas's initial state, not an edit: there is
         // nothing to undo, exactly as with an imported file. Same origin the
         // palette uses for an empty canvas, plus a viewport that shows it —
         // see `openingViewportFor` for why the editor won't do that itself.
-        const size = starterSize(starter);
-        const { nodes, edges, flows } = buildStarter(starter, freeOriginFor(document, size));
+        const size = catalog!.starterSize(starter);
+        const { nodes, edges, flows } = catalog!.buildStarter(starter, freeOriginFor(document, size));
         const screen =
           typeof window === 'undefined' ? null : { width: window.innerWidth, height: window.innerHeight };
         document = { ...document, nodes, edges, flows, ...(screen ? { viewport: openingViewportFor(size, screen) } : {}) };
@@ -214,10 +236,25 @@ export function useDocumentSession(): DocumentSession {
   );
 
   const closeDocument = useCallback(async () => {
-    await autosave.current?.flush();
+    const saved = (await autosave.current?.flush()) ?? true;
+    if (!saved) {
+      // Leaving now would drop the only copy of the unsaved edits — the editor
+      // still holds them, so stay there where Export can rescue them.
+      notify('Your latest changes could not be saved to this browser. Export the diagram to keep a copy.', 'error');
+      return;
+    }
+    // Replaced and removed backgrounds kept their images only so undo could bring them back. Undo
+    // history ends here, so everything but the image actually showing goes.
+    const closing = useEditorStore.getState().document;
+    if (repository && closing.metadata.id === openId) {
+      const { background } = closing.settings;
+      void repository.pruneBackgroundImages(closing.metadata.id, background.enabled ? background : null).catch((error: unknown) => {
+        logDiagnostic(error, { operation: 'remove-background-image', documentId: closing.metadata.id });
+      });
+    }
     setOpenId(null);
     await refreshLibrary();
-  }, [refreshLibrary]);
+  }, [notify, openId, refreshLibrary, repository]);
 
   const renameDocument = useCallback(
     async (id: string, title: string) => {
@@ -244,12 +281,15 @@ export function useDocumentSession(): DocumentSession {
         // A configured background is part of what the user set up for this
         // diagram — "Duplicate" should never silently drop it.
         if (source.settings.background.enabled) {
-          const image = await repository.loadBackgroundImage(id);
+          const { imageId } = source.settings.background;
+          const image = await repository.loadBackgroundImage(id, imageId);
           if (image) {
-            await repository.saveBackgroundImage(clone.metadata.id, image.blob, {
-              width: image.width,
-              height: image.height,
-            });
+            await repository.saveBackgroundImage(
+              clone.metadata.id,
+              image.blob,
+              { width: image.width, height: image.height },
+              imageId,
+            );
           }
         }
         await refreshLibrary();
@@ -286,11 +326,17 @@ export function useDocumentSession(): DocumentSession {
       if (!repository) return undefined;
       const now = Date.now();
       const project: Project = { id: createId('p'), name, createdAt: now, updatedAt: now };
-      await repository.saveProject(project);
-      await refreshProjects();
-      return project;
+      try {
+        await repository.saveProject(project);
+        await refreshProjects();
+        return project;
+      } catch (error) {
+        logDiagnostic(error, { operation: 'create-project' });
+        notify('Could not create that project — local storage may be full or unavailable.', 'error');
+        return undefined;
+      }
     },
-    [refreshProjects, repository],
+    [notify, refreshProjects, repository],
   );
 
   const renameProject = useCallback(
@@ -298,19 +344,31 @@ export function useDocumentSession(): DocumentSession {
       if (!repository) return;
       const existing = projects.find((project) => project.id === id);
       if (!existing) return;
-      await repository.saveProject({ ...existing, name, updatedAt: Date.now() });
-      await refreshProjects();
+      try {
+        await repository.saveProject({ ...existing, name, updatedAt: Date.now() });
+        await refreshProjects();
+      } catch (error) {
+        logDiagnostic(error, { operation: 'rename-project' });
+        notify('Could not rename that project — local storage may be full or unavailable.', 'error');
+      }
     },
-    [projects, refreshProjects, repository],
+    [notify, projects, refreshProjects, repository],
   );
 
   const deleteProject = useCallback(
     async (id: string) => {
       if (!repository) return;
-      await repository.deleteProject(id);
-      await Promise.all([refreshProjects(), refreshLibrary()]);
+      try {
+        await repository.deleteProject(id);
+      } catch (error) {
+        logDiagnostic(error, { operation: 'delete-project' });
+        notify('Could not delete that project — its canvases were left where they were.', 'error');
+      }
+      await Promise.all([refreshProjects(), refreshLibrary()]).catch((error: unknown) => {
+        logDiagnostic(error, { operation: 'delete-project-refresh' });
+      });
     },
-    [refreshLibrary, refreshProjects, repository],
+    [notify, refreshLibrary, refreshProjects, repository],
   );
 
   const moveDocumentToProject = useCallback(

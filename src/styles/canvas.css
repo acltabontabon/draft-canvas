@@ -368,15 +368,24 @@
   white-space: nowrap;
   pointer-events: all;
   cursor: text;
-  text-shadow:
-    0 0 3px var(--dc-canvas),
-    0 0 3px var(--dc-canvas),
-    0 0 3px var(--dc-canvas),
-    0 0 3px var(--dc-canvas);
+  /* One halo, not four stacked blurs: every label repaints it on each zoom step, and the
+     translucent chip behind the text already does most of the separating. */
+  text-shadow: 0 0 3px var(--dc-canvas);
   transition: background 120ms ease;
   /* Same Safari flicker note as `.dc-edge` above — `.dc-edge-label-input` (the actual editable
      text once double-clicked open) opts back in. */
   user-select: none;
+}
+
+/* The lines `layoutEdgeLabel` already broke — each kept exactly as laid out, never re-wrapped by
+   the browser, so the chip matches the exported label line for line. */
+.dc-edge-label-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.dc-edge-label-line {
+  white-space: pre;
 }
 
 .dc-edge-label:hover,
@@ -541,9 +550,18 @@
    the app (`nodes/describe.ts`'s `note`/`codeCard`) via `--dc-chip-*` custom properties set inline
    per chip in `DraftEdgeView.tsx` — a Note attachment reads as a note, a Code one as code, not as
    one generic box for every kind. */
+/* Chip and card side by side: the card is positioned from this slot, not from inside the chip. */
+.dc-attachment-slot {
+  position: relative;
+  display: flex;
+}
+
 .dc-attachment-chip {
   position: relative;
   display: flex;
+  margin: 0;
+  font-family: inherit;
+  line-height: inherit;
   align-items: center;
   gap: 5px;
   padding: 3px 9px 3px 7px;
@@ -567,10 +585,9 @@
   outline: none;
 }
 
-/* Suppressed while the chip's own card is showing (`data-open`) — the card is a DOM child of this
-   chip, so this scale would otherwise run alongside the card's own independent open/close fade,
-   two unsynchronized transforms on nested elements. See the matching comment in
-   `DraftEdgeView.tsx`. */
+/* Suppressed while the chip's own card is showing (`data-open`) — this scale would otherwise run
+   alongside the card's own independent open/close fade, two unsynchronized transforms right next
+   to each other. See the matching comment in `AttachmentPresentation.tsx`. */
 .dc-attachment-chip:hover:not([data-open]),
 .dc-attachment-chip:focus-visible:not([data-open]) {
   transform: scale(1.06);
@@ -608,10 +625,8 @@
   z-index: 1;
   pointer-events: all;
   cursor: default;
-  /* Reset the chip's own uppercase/letter-spacing styling — the card is a DOM child of the chip
-     (for simple CSS-relative positioning), not a visual extension of it, and its content (a
-     note's actual text, code, or an editing textarea) must keep the user's real casing. Only the
-     card header explicitly re-applies uppercase for itself, the same way the chip's label does. */
+  /* The card's content (a note's actual text, code, or an editing textarea) keeps the user's real
+     casing; only the card header re-applies uppercase for itself, the same way the chip's label does. */
   text-transform: none;
   letter-spacing: normal;
   font-weight: 400;
@@ -657,6 +672,10 @@
   .dc-attachment-card[data-closing='true'] .dc-attachment-card-inner,
   .dc-attachment-popover-inner,
   .dc-attachment-popover[data-closing='true'] .dc-attachment-popover-inner,
+  .dc-popover-inner,
+  .dc-popover[data-closing='true'] .dc-popover-inner,
+  .dc-popover-caret,
+  .dc-popover[data-closing='true'] .dc-popover-caret,
   .dc-tooltip {
     animation: none;
   }
@@ -758,6 +777,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .dc-attachment-card-actions {
@@ -919,10 +939,9 @@
    as the same feature. Purely a positioning + animation container now, not a visible panel. */
 .dc-attachment-popover {
   position: absolute;
+  top: 0;
+  left: 0;
   z-index: 7;
-  /* `.react-flow__viewport` (its portal ancestor) is `pointer-events: none`
-     so panning/marquee-select can reach through empty canvas — this panel is
-     interactive content, so it must opt back in explicitly. */
   pointer-events: all;
 }
 
@@ -974,7 +993,11 @@
   --dc-popover-field: 28px;
   --dc-popover-font: 12px;
   --dc-popover-caret: 8px;
+  /* Portaled into React Flow's root in screen space (see `useCanvasOverlay`) and placed purely by
+     its inline transform — so it keeps its size at every zoom and sits above every node. */
   position: absolute;
+  top: 0;
+  left: 0;
   z-index: 7;
   display: flex;
   flex-direction: column;

@@ -12,8 +12,8 @@
 
 export { neighborhoodOf, resolvedNeighborCategory } from './context';
 export { continuationsFor, dismissalKey } from './engine';
-export { gapForCaption, horizontalAnchorsFor, materialize, type MaterializeOptions } from './materialize';
-export { RULES, ruleById } from './rules';
+export { gapForCaption, horizontalAnchorsFor, materialize } from './materialize';
+export { RULES } from './rules';
 export type {
   Continuation,
   ContinuationRule,

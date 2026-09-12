@@ -10,8 +10,6 @@ export * from './project';
 export * from './secureProject';
 export * from './gif';
 export * from './sequence';
-export { downloadBlob, downloadText } from './download';
-export { resolveExportBackground } from './background';
 
 export function exportProjectFile(document: DraftDocument): void {
   downloadText(serializeDocument(document), fileNameFor(document.metadata.title), FILE_MIME);

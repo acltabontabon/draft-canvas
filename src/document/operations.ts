@@ -480,6 +480,12 @@ function withoutAttachmentsField(node: DraftNode): DraftNode {
   return rest;
 }
 
+/** Whether a node or connector can take one more attachment. */
+export function hasAttachmentRoom(host: { attachments?: readonly Attachment[] }, kind: 'node' | 'edge'): boolean {
+  const cap = kind === 'node' ? LIMITS.maxAttachmentsPerNode : LIMITS.maxAttachmentsPerEdge;
+  return (host.attachments?.length ?? 0) < cap;
+}
+
 /** Folds an attachment onto a host node. `insertIndex` defaults to the end. */
 export function attachToNode(
   doc: DraftDocument,
@@ -490,11 +496,11 @@ export function attachToNode(
   const host = doc.nodes.find((n) => n.id === hostId);
   if (!host) return doc;
   const existing = host.attachments ?? [];
+  // Full is a refusal, never a trim: slicing after the insert would silently push an existing
+  // attachment (or the new one) off the end.
+  if (existing.length >= LIMITS.maxAttachmentsPerNode) return doc;
   const capped = Math.max(0, Math.min(insertIndex ?? existing.length, existing.length));
-  const next = [...existing.slice(0, capped), attachment, ...existing.slice(capped)].slice(
-    0,
-    LIMITS.maxAttachmentsPerNode,
-  );
+  const next = [...existing.slice(0, capped), attachment, ...existing.slice(capped)];
   return withAttachments(doc, hostId, next);
 }
 
@@ -604,8 +610,8 @@ export function attachToEdge(doc: DraftDocument, edgeId: string, attachment: Att
   const edge = doc.edges.find((e) => e.id === edgeId);
   if (!edge) return doc;
   const existing = edge.attachments ?? [];
-  const next = [...existing, attachment].slice(0, LIMITS.maxAttachmentsPerEdge);
-  return withEdgeAttachments(doc, edgeId, next);
+  if (existing.length >= LIMITS.maxAttachmentsPerEdge) return doc;
+  return withEdgeAttachments(doc, edgeId, [...existing, attachment]);
 }
 
 export function updateEdgeAttachment(
@@ -955,7 +961,8 @@ export interface Bounds {
   height: number;
 }
 
-export function boundsOf(nodes: readonly DraftNode[]): Bounds | null {
+/** The union box of any rects — nodes, or the live drag rects `canvas/Canvas.tsx` snaps with. */
+export function boundsOf(nodes: readonly Bounds[]): Bounds | null {
   if (nodes.length === 0) return null;
   let minX = Infinity;
   let minY = Infinity;

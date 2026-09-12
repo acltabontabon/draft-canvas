@@ -15,7 +15,7 @@ describe('ErrorBoundary', () => {
 
   it('renders children normally when nothing throws', () => {
     const { getByText } = render(
-      <ErrorBoundary scope="test" message="Something went wrong." actions={[]}>
+      <ErrorBoundary message="Something went wrong." actions={[]}>
         <p>safe content</p>
       </ErrorBoundary>,
     );
@@ -25,7 +25,7 @@ describe('ErrorBoundary', () => {
   it('renders the fallback message and actions instead of the crashed child', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { getByText, queryByText } = render(
-      <ErrorBoundary scope="test" message="Something went wrong." actions={[{ label: 'Retry', onClick: () => {} }]}>
+      <ErrorBoundary message="Something went wrong." actions={[{ label: 'Retry', onClick: () => {} }]}>
         <Bomb />
       </ErrorBoundary>,
     );
@@ -38,7 +38,7 @@ describe('ErrorBoundary', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const onClick = vi.fn();
     const { getByText } = render(
-      <ErrorBoundary scope="test" message="Something went wrong." actions={[{ label: 'Reload', onClick }]}>
+      <ErrorBoundary message="Something went wrong." actions={[{ label: 'Reload', onClick }]}>
         <Bomb />
       </ErrorBoundary>,
     );
@@ -50,7 +50,7 @@ describe('ErrorBoundary', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const onError = vi.fn();
     render(
-      <ErrorBoundary scope="test" message="Something went wrong." actions={[]} onError={onError}>
+      <ErrorBoundary message="Something went wrong." actions={[]} onError={onError}>
         <Bomb />
       </ErrorBoundary>,
     );

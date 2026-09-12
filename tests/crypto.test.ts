@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
 import { encryptDocument, decryptDocument } from '../src/crypto/documentCipher';
 import { getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/keyStore';
 import { isEncryptedBody, isLegacyBody, migrateLegacyRecord } from '../src/crypto/migrateStorage';
+import * as migrateStorage from '../src/crypto/migrateStorage';
 import { CRYPTO_VERSION } from '../src/crypto/types';
 import { createDocument, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
@@ -205,6 +206,22 @@ describe('IndexedDbRepository.migrateLegacyRecords — the proactive sweep', () 
     expect(isEncryptedBody(raw)).toBe(true);
     const key = await getOrCreateMasterKey();
     expect(await decryptDocument(raw as EncryptedBody, key)).toEqual(untouched);
+  });
+
+  it('never overwrites a record that was saved while the sweep was encrypting it', async () => {
+    const repository = await IndexedDbRepository.open();
+    const stale = createDocument('Before edit');
+    await seedLegacyRow(stale);
+    const edited = { ...stale, metadata: { ...stale.metadata, title: 'After edit' } };
+    const spy = vi.spyOn(migrateStorage, 'migrateLegacyRecord').mockImplementationOnce(async (row, key) => {
+      await repository.save(edited);
+      return migrateLegacyRecord(row, key);
+    });
+
+    await repository.migrateLegacyRecords();
+    spy.mockRestore();
+
+    expect((await repository.load(stale.metadata.id))!.metadata.title).toBe('After edit');
   });
 
   it('leaves already-encrypted records untouched', async () => {

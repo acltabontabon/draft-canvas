@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -16,7 +16,7 @@ import {
   type OnSelectionChangeParams,
 } from '@xyflow/react';
 import { defaultTextFor } from '../document/factory';
-import { descendantsOf } from '../document/operations';
+import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
 import type { DraftDocument, Side } from '../document/types';
 import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
 import { isEditableTarget } from '../lib/isEditableTarget';
@@ -39,7 +39,7 @@ import {
   type DraftRfEdge,
   type DraftRfNode,
 } from './projection';
-import { boundsOfRects, computeSnap, sameGuides, type Guide } from './snapping';
+import { computeSnap, sameGuides, type Guide } from './snapping';
 import { ContinuationGhost } from './ContinuationGhost';
 import { useContinuation } from './useContinuation';
 
@@ -105,7 +105,7 @@ function snapChanges(
     });
   }
 
-  const bounds = boundsOfRects(rects);
+  const bounds = boundsOf(rects);
   if (!bounds) return { ...NO_SNAP, changes };
 
   const snap = computeSnap(bounds, statics);
@@ -222,6 +222,13 @@ function sweepDescendants(
   });
 }
 
+/** A host's name in the one-line "Attach to …" pill — a note can hold pages of text, and the pill
+ *  never wraps, so anything past a short name would run off across the canvas. */
+function truncateForAffordance(text: string): string {
+  const firstLine = text.split('\n', 1)[0]!.trim();
+  return firstLine.length > 40 ? `${firstLine.slice(0, 39)}…` : firstLine;
+}
+
 export interface CanvasProps {
   /** Called when an armed tool is placed at a point on the canvas (toolbar click, or double-click with a tool armed). */
   onCreateAt?: (position: { x: number; y: number }) => void;
@@ -250,7 +257,7 @@ export interface CanvasProps {
   ) => void;
 }
 
-export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: CanvasProps) {
+export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: CanvasProps) {
   const document = useEditorStore((state) => state.document);
   const selection = useEditorStore((state) => state.selection);
   const mode = useEditorStore((state) => state.mode);
@@ -261,6 +268,8 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
   // lens is on (never during Presentation/Focus, never for an empty flow).
   const lensActive = useEditorStore((state) => lensFlow(state) !== undefined);
   const theme = useThemeValue();
+  // A fresh object here would defeat React Flow's own memoized renderer on every drag frame.
+  const connectionLineStyle = useMemo(() => ({ stroke: theme.selection, strokeWidth: 1.8 }), [theme.selection]);
 
   const store = useEditorStore;
   const { screenToFlowPosition, flowToScreenPosition, getNodes } = useReactFlow();
@@ -421,9 +430,18 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
         // Leaving the existing armed state untouched here is what fixed a
         // real, reproducible failure to attach a dragged note/code card onto
         // a connector right at the very end of the gesture.
-        if (draggedDoc && livePosition) {
+        // A card that itself carries attachments can't become one — an attachment has no
+        // attachments of its own, so folding it in would silently drop them. It just moves.
+        if (draggedDoc?.attachments?.length) {
+          clearDwell();
+          useUiStore.getState().setAttachArmedTarget(null);
+          useUiStore.getState().setAttachArmedEdgeTarget(null);
+        } else if (draggedDoc && livePosition) {
           const liveRect: Rect = { ...livePosition, width: draggedDoc.width, height: draggedDoc.height };
-          const exclude = new Set([draggedDoc.id, ...descendantsOf(state.document, draggedDoc.id)]);
+          // Only a boundary has descendants, so only a boundary pays for walking them.
+          const exclude = new Set(
+            draggedDoc.type === 'group' ? [draggedDoc.id, ...descendantsOf(state.document, draggedDoc.id)] : [draggedDoc.id],
+          );
           const { overlapId, centerHitId } = evaluateAttachCandidates(
             liveRect,
             draggedDoc.type,
@@ -465,7 +483,8 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
             };
             const screenPoint = flowToScreenPosition(center);
             const edgeId = findEdgeDropCandidate(screenPoint.x, screenPoint.y, draggedDoc.id);
-            useUiStore.getState().setAttachArmedEdgeTarget(edgeId);
+            const edge = edgeId ? state.document.edges.find((e) => e.id === edgeId) : undefined;
+            useUiStore.getState().setAttachArmedEdgeTarget(edge && hasAttachmentRoom(edge, 'edge') ? edge.id : null);
           } else {
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(null);
@@ -1077,7 +1096,7 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
         multiSelectionKeyCode={['Meta', 'Shift', 'Control']}
         proOptions={PRO_OPTIONS}
         colorMode={theme.name}
-        connectionLineStyle={{ stroke: theme.selection, strokeWidth: 1.8 }}
+        connectionLineStyle={connectionLineStyle}
       >
         {grid !== 'none' && (
           <Background
@@ -1130,11 +1149,11 @@ export function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: Ca
               className="dc-attach-affordance"
               style={{ transform: `translate(${attachTarget.x}px, ${attachTarget.y - 30}px)` }}
             >
-              Attach to {attachTarget.text || defaultTextFor(attachTarget.type)}
+              Attach to {truncateForAffordance(attachTarget.text || defaultTextFor(attachTarget.type))}
             </div>
           )}
         </ViewportPortal>
       </ReactFlow>
     </div>
   );
-}
+});

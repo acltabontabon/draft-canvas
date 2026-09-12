@@ -266,7 +266,6 @@ export function CommandPalette({ createAt, createAtPointer, playback }: CommandP
           {stage && <span className="dc-palette-stage">{stage.prompt}</span>}
           <input
             ref={inputRef}
-            // oxlint-disable-next-line jsx-a11y/no-autofocus -- a palette exists to be typed into
             autoFocus
             type="text"
             value={query}

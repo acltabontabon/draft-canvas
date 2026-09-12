@@ -16,6 +16,38 @@ All notable changes to Draft Canvas are documented here.
   your undo history when nothing is actually selected.
 - The homepage's search, sort, and per-project counts recalculated more than they needed to, most
   noticeably once a minute from the "time ago" labels refreshing.
+- Importing a file of a diagram you still have locally now adds it as a new diagram instead of
+  replacing your newer local copy.
+- Dropping a note or code card onto a shape or connector that already has the most attachments it
+  can hold no longer deletes the card.
+- Converting a fan of connectors to a junction keeps their flow steps, and a flow step with a
+  pinned view survives deleting what it pointed at.
+- Keyboard shortcuts no longer act on the canvas behind an open dialog, and no longer edit the
+  diagram while presenting.
+- Grouping inside a boundary keeps the new group inside it, and ungrouping an inner boundary keeps
+  its contents in the outer one.
+- Panning or zooming no longer counts as an edit, so it doesn't move a diagram to the top of
+  Recently edited.
+- Leaving a diagram whose latest changes couldn't be saved now warns you instead of going back to
+  the homepage without them.
+- Removing or replacing a canvas background can be undone.
+- Deleting everything in Focus mode now leaves Focus mode instead of dimming the whole canvas.
+- Connector arrowheads no longer disappear while a coloured flow is selected or presented.
+- Long connector labels wrap onto two lines on the canvas, matching exports, instead of running
+  across the diagram on one line.
+- The "Reconnect source/target" commands no longer offer the connector's other end.
+
+### Changed
+
+- Connector, element, and attachment popovers stay the same readable size at every zoom level and
+  always sit above the shapes around them.
+- The app opens faster: the editor, Export, and the starter catalog load when you first need them.
+- Large diagrams stay smoother while editing: connectors only re-route when something near them
+  changes.
+- Flow rows in the Flows panel expand and collapse with the Right and Left arrow keys, and the
+  context menu closes on Tab.
+- Attachment cards work better with screen readers, and a connector's attachment chips only join
+  the Tab order once that connector is selected.
 
 ## [1.1.0] - 2026-09-13
 

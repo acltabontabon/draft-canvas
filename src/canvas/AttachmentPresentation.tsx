@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import type { Attachment } from '../document/types';
 import { NOTE_ACCENTS, NOTE_LABELS } from '../nodes/describe';
 import { LANGUAGE_LABELS, tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
 import { accentOf, type Theme } from '../render/theme/tokens';
+import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { useTheme, useThemeValue } from '../ui/theme/useTheme';
 import { Icon } from '../ui/common/Icon';
@@ -178,9 +179,9 @@ export function AttachmentChipRow({
  * Visible when `pinned || revealed` — a deliberate, purely per-attachment click reveal, not hover
  * and not selection: a card popping open just from resting the pointer nearby (or from every
  * attachment on the host showing at once just because the host itself got selected) read as noisy
- * on a diagram with several attachments. Each chip is independently keyboard-reachable
- * (`role="button" tabIndex={0}`, Enter/Space activates it) so dropping the old selection-reveals-
- * everything shortcut doesn't cost keyboard access. Pinning (`uiStore`'s `openAttachmentDetail`,
+ * on a diagram with several attachments. Each chip is a real button (Enter/Space activates it) —
+ * in the Tab order whenever it's relevant, see `edgeSelected` — so dropping the old
+ * selection-reveals-everything shortcut doesn't cost keyboard access. Pinning (`uiStore`'s `openAttachmentDetail`,
  * naming the host, its kind, and this specific attachment) is the only state that enables editing
  * — and even then, only once the pencil glyph is clicked (see `editing`, below); opening a card
  * first always shows it read-only, only when `editable` (i.e. not presenting) does the pencil
@@ -220,12 +221,21 @@ export function AttachmentChip({
       state.presentationReveal?.edgeId === hostId &&
       state.presentationReveal?.attachmentId === attachment.id,
   );
+  // A connector's chips sit out on the canvas, and the canvas is one Tab stop — so they join the Tab
+  // order only once they're relevant: their connector selected (keyboard users get there through
+  // the canvas's own navigation or ⌘K), their card open, or while presenting, when a chip is the
+  // only thing on the canvas to act on. A node's chips live inside its attachment popover, which is
+  // already the relevant context, so they always do.
+  const edgeSelected = useEditorStore(
+    (state) => hostKind === 'edge' && state.selection.edges.length === 1 && state.selection.edges[0] === hostId,
+  );
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
   const setPresentationReveal = useUiStore((state) => state.setPresentationReveal);
 
   // Spans the whole chip (icon, label, and — once open — the card itself),
   // not just the card: see the outside-pointerdown effect below for why.
   const chipRef = useRef<HTMLDivElement>(null);
+  const cardId = useId();
 
   // The textarea is uncontrolled (`defaultValue`) for smooth typing, but its live value must
   // survive whatever closes the card — Escape, a click anywhere outside, or the chip itself.
@@ -365,78 +375,58 @@ export function AttachmentChip({
     ['--dc-chip-accent']: look.accent,
   } as CSSProperties;
 
+  const chipName = pinned || revealed ? 'Close attached detail' : kind === 'code' ? 'View attached code' : 'View attached note';
+
   return (
-    <div
-      ref={chipRef}
-      className="dc-attachment-chip"
-      data-kind={kind}
-      // Suppresses the chip's own hover-pop while its card is showing — the card is a DOM child of
-      // this chip, so without this, the chip's `:hover` scale (which reverts the instant the
-      // pointer leaves, ~90ms) and the card's own open/close fade (a separate 120ms animation) run
-      // as two independent, unsynchronized transforms on nested elements — the chip visibly
-      // "un-pops" while the card is still lingering open, then the card fades out separately on its
-      // own schedule. Reads as one unexplained extra zoom. See
-      // `.dc-attachment-chip:hover:not([data-open])` in `canvas.css`.
-      data-open={cardMounted ? 'true' : undefined}
-      role="button"
-      tabIndex={0}
-      title={
-        pinned || revealed
-          ? 'Close attached detail'
-          : kind === 'code'
-            ? 'View attached code'
-            : 'View attached note'
-      }
-      // Set explicitly rather than left to default content-based computation: the card (with its
-      // own, possibly lengthy, note/code content) is a DOM child of this chip for simple
-      // CSS-relative positioning, and without this, that content would bleed into the chip's own
-      // accessible name whenever it's open.
-      aria-label={
-        pinned || revealed
-          ? 'Close attached detail'
-          : kind === 'code'
-            ? 'View attached code'
-            : 'View attached note'
-      }
-      style={chipVars}
-      onClick={(event) => {
-        // The card (edit/delete glyphs, textarea) is a DOM child of this chip, so a click anywhere
-        // inside it bubbles up here too — only clicks that did *not* originate inside the card
-        // should toggle pin. Checking the card specifically (not `target === currentTarget`)
-        // matters: a real click on the chip's own icon/label spans also has to work, and those
-        // are non-card descendants of this same div. Still stopping propagation either way: without
-        // it, a click on the edit/delete glyph kept bubbling past this handler's early return and
-        // selected the underlying host, popping its own selection popover open behind the card
-        // that was just opened to look at (or edit) one attachment.
-        if ((event.target as HTMLElement).closest('.dc-attachment-card')) {
+    // The slot, not the chip, is what the outside-pointerdown check above measures against and what
+    // the card is positioned from. The chip is a real button and the card its *sibling*: nested
+    // inside a button, the card's own buttons and textarea were presentational to assistive tech.
+    <div ref={chipRef} className="dc-attachment-slot" data-open={cardMounted ? 'true' : undefined}>
+      <button
+        type="button"
+        className="dc-attachment-chip"
+        data-kind={kind}
+        // Suppresses the chip's own hover-pop while its card is showing — without this, the chip's
+        // `:hover` scale (which reverts the instant the pointer leaves, ~90ms) and the card's own
+        // open/close fade (a separate 120ms animation) run as two unsynchronized transforms, and
+        // the chip visibly "un-pops" while the card is still lingering open. See
+        // `.dc-attachment-chip:hover:not([data-open])` in `canvas.css`.
+        data-open={cardMounted ? 'true' : undefined}
+        aria-expanded={visible}
+        tabIndex={hostKind === 'node' || !editable || visible || edgeSelected ? 0 : -1}
+        aria-controls={cardMounted ? cardId : undefined}
+        title={chipName}
+        aria-label={chipName}
+        style={chipVars}
+        onClick={(event) => {
+          // Without stopping here the click reaches the host and selects it, popping its own
+          // selection popover open behind the card that was just opened.
           event.stopPropagation();
-          return;
-        }
-        event.stopPropagation();
-        togglePin();
-      }}
-      onKeyDown={(event) => {
-        // Same reasoning as onClick above: without this guard, typing a space inside the card's
-        // own textarea bubbles up and re-triggers this handler, closing the card mid-edit and
-        // swallowing the keystroke — caught by an e2e test typing through a real space character.
-        if ((event.target as HTMLElement).closest('.dc-attachment-card')) return;
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        event.stopPropagation();
-        togglePin();
-      }}
-    >
-      <span className="dc-attachment-chip-icon" aria-hidden="true">
-        {kind === 'code' ? '{ }' : ''}
-      </span>
-      <span className="dc-attachment-chip-label">{look.label}</span>
+          togglePin();
+        }}
+        onKeyDown={(event) => {
+          // A button already clicks on Enter/Space; stopping the key keeps React Flow's own
+          // node/edge keyboard handling from also treating it as "select the host".
+          if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+        }}
+      >
+        <span className="dc-attachment-chip-icon" aria-hidden="true">
+          {kind === 'code' ? '{ }' : ''}
+        </span>
+        <span className="dc-attachment-chip-label">{look.label}</span>
+      </button>
 
       {cardMounted && (
         <div
+          id={cardId}
           className="dc-attachment-card"
+          role="group"
+          aria-label={`${look.label} attachment`}
           data-pinned={pinned ? 'true' : undefined}
           data-closing={cardClosing ? 'true' : undefined}
           onPointerDown={(event) => event.stopPropagation()}
+          // A click inside the card must not fall through to the host underneath and select it.
+          onClick={(event) => event.stopPropagation()}
         >
           {/* The reveal animation lives on this inner wrapper, not the positioned outer div —
               a CSS animation replaces the whole `transform` property for its duration, so

@@ -21,25 +21,8 @@ beforeEach(() => {
   store.clear();
 });
 
-/**
- * Phase 7.1/7.2 — a global device preference, mirroring `PersonalityProvider`'s own pattern: read
- * every catalog id on mount, persisted the moment a hint retires (dismissal or "learned").
- */
 describe('HintsProvider', () => {
-  it('has nothing retired by default', () => {
-    let latest: ReturnType<typeof useHints> | undefined;
-    render(
-      <HintsProvider>
-        <Probe onReady={(api) => (latest = api)} />
-      </HintsProvider>,
-    );
-    expect(latest!.isRetired('service-node')).toBe(false);
-    expect(latest!.isRetired('attachment-slot')).toBe(false);
-    expect(latest!.isRetired('connector-selected')).toBe(false);
-    expect(latest!.isRetired('connector-attachment-slot')).toBe(false);
-  });
-
-  it('reads a previously-retired hint on mount', () => {
+  it('has nothing dismissed by default, and ignores retirements persisted by older builds', () => {
     store.set('hint.connector-selected', '1');
     let latest: ReturnType<typeof useHints> | undefined;
     render(
@@ -47,37 +30,11 @@ describe('HintsProvider', () => {
         <Probe onReady={(api) => (latest = api)} />
       </HintsProvider>,
     );
-    expect(latest!.isRetired('connector-selected')).toBe(true);
-    expect(latest!.isRetired('service-node')).toBe(false);
-  });
-
-  it('persists and reflects a retirement via retire()', () => {
-    let latest: ReturnType<typeof useHints> | undefined;
-    render(
-      <HintsProvider>
-        <Probe onReady={(api) => (latest = api)} />
-      </HintsProvider>,
-    );
-    act(() => latest!.retire('service-node'));
-    expect(store.get('hint.service-node')).toBe('1');
-    expect(latest!.isRetired('service-node')).toBe(true);
-    // Retiring one hint never touches another.
-    expect(latest!.isRetired('attachment-slot')).toBe(false);
-  });
-
-  it('has nothing session-dismissed by default, even for a hint already retired in a past session', () => {
-    store.set('hint.connector-selected', '1');
-    let latest: ReturnType<typeof useHints> | undefined;
-    render(
-      <HintsProvider>
-        <Probe onReady={(api) => (latest = api)} />
-      </HintsProvider>,
-    );
-    // Session-dismissal is in-memory only — a prior session's retirement never seeds it.
     expect(latest!.isDismissedThisSession('connector-selected')).toBe(false);
+    expect(latest!.isDismissedThisSession('service-node')).toBe(false);
   });
 
-  it('marks a hint session-dismissed the moment it retires, without affecting other hints', () => {
+  it('dismisses a hint for the session the moment it retires, without persisting or touching others', () => {
     let latest: ReturnType<typeof useHints> | undefined;
     render(
       <HintsProvider>
@@ -87,5 +44,6 @@ describe('HintsProvider', () => {
     act(() => latest!.retire('attachment-slot'));
     expect(latest!.isDismissedThisSession('attachment-slot')).toBe(true);
     expect(latest!.isDismissedThisSession('service-node')).toBe(false);
+    expect(store.size).toBe(0);
   });
 });

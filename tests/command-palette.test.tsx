@@ -22,6 +22,7 @@ vi.mock('../src/lib/preferences', () => ({
 
 const { CommandPalette } = await import('../src/ui/Editor/CommandPalette');
 const { HintsProvider } = await import('../src/learning/HintsProvider');
+const { useHints } = await import('../src/learning/useHints');
 
 function reset() {
   __resetInteraction();
@@ -227,20 +228,26 @@ describe('CommandPalette', () => {
     expect(prefs.get('command-recent.0')).toBeUndefined();
   });
 
-  it('opening it once retires the "press ⌘K" hint (Phase 7.2)', () => {
+  it('opening it once retires the "press ⌘K" hint', () => {
     useUiStore.setState({ commandPaletteOpen: false });
     const playback = stubPlayback();
     const stubs = stubContext({ playback });
+    let hints: ReturnType<typeof useHints> | undefined;
+    function Probe({ onReady }: { onReady: (api: ReturnType<typeof useHints>) => void }) {
+      onReady(useHints());
+      return null;
+    }
     render(
       <ReactFlowProvider>
         <HintsProvider>
           <CommandPalette createAt={stubs.createAt} createAtPointer={stubs.createAtPointer} playback={playback} />
+          <Probe onReady={(api) => (hints = api)} />
         </HintsProvider>
       </ReactFlowProvider>,
     );
-    expect(prefs.get('hint.command-palette')).toBeUndefined();
+    expect(hints!.isDismissedThisSession('command-palette')).toBe(false);
     act(() => useUiStore.getState().setCommandPaletteOpen(true));
-    expect(prefs.get('hint.command-palette')).toBe('1');
+    expect(hints!.isDismissedThisSession('command-palette')).toBe(true);
   });
 
   it('shows "No matching commands." for a query nothing matches', () => {

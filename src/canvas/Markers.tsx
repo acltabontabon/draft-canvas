@@ -36,7 +36,10 @@ export const Markers = memo(function Markers() {
 
   const markup = useMemo(() => {
     const nodesById = new Map(nodes.map((node) => [node.id, node]));
-    const colors = new Set<string>([theme.edge, theme.selection]);
+    // Every accent chip too, not only colours some edge currently resolves to: a flow's accent is
+    // worn by its member connectors only while that flow is the lens or the presented step, and a
+    // `markerRef` to a colour with no marker here draws a directed connector with no arrowhead.
+    const colors = new Set<string>([theme.edge, theme.selection, ...Object.values(theme.accents).map((accent) => accent.chip)]);
     for (const edge of edges) {
       colors.add(resolveEdgeColor(edge, nodesById.get(edge.source), theme));
     }

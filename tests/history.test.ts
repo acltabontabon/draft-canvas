@@ -1,7 +1,7 @@
 import { DEFAULTS } from '../src/document/limits';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
-import { __resetClipboardSync, __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { __resetClipboardSync, __resetInteraction, documentWithLiveViewport, useEditorStore } from '../src/store/editorStore';
 
 const store = useEditorStore;
 
@@ -216,9 +216,14 @@ describe('undo and redo', () => {
 
   it('keeps the viewport out of the undo stack', () => {
     const before = store.getState().history.past.length;
+    const { document, revision } = store.getState();
     store.getState().persistViewport({ x: 100, y: 200, zoom: 1.5 });
-    expect(store.getState().document.viewport.zoom).toBe(1.5);
+    expect(documentWithLiveViewport(store.getState()).viewport.zoom).toBe(1.5);
     expect(store.getState().history.past).toHaveLength(before);
+    // Not an edit at all: same document (so no `updatedAt` bump and no re-render of its
+    // subscribers), same revision.
+    expect(store.getState().document).toBe(document);
+    expect(store.getState().revision).toBe(revision);
   });
 
   it('undoes and redoes connection creation and deletion', () => {

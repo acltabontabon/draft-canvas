@@ -36,21 +36,6 @@ interface Candidate {
   to: number;
 }
 
-export function boundsOfRects(rects: readonly Rect[]): Rect | null {
-  if (rects.length === 0) return null;
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const rect of rects) {
-    minX = Math.min(minX, rect.x);
-    minY = Math.min(minY, rect.y);
-    maxX = Math.max(maxX, rect.x + rect.width);
-    maxY = Math.max(maxY, rect.y + rect.height);
-  }
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-}
-
 /**
  * Finds the nearest alignment for the moving bounds against static neighbours.
  *

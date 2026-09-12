@@ -167,6 +167,26 @@ describe('importing untrusted files', () => {
     }
   });
 
+  it('keeps a parent link that only leads into a cycle, and drops one to a non-boundary', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 'c', type: 'group', x: 0, y: 0, parentId: 'a' },
+        { id: 'a', type: 'group', x: 0, y: 0, parentId: 'b' },
+        { id: 'b', type: 'group', x: 0, y: 0, parentId: 'a' },
+        { id: 'svc', type: 'service', x: 0, y: 0 },
+        { id: 'note', type: 'note', x: 0, y: 0, parentId: 'svc' },
+      ],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byId = new Map(result.document.nodes.map((node) => [node.id, node]));
+    expect(byId.get('c')!.parentId).toBe('a');
+    expect([byId.get('a')!.parentId, byId.get('b')!.parentId].filter(Boolean)).toHaveLength(1);
+    expect(byId.get('note')!.parentId).toBeUndefined();
+  });
+
   it('coerces an unknown node type rather than losing the content', () => {
     const result = parse({
       ...base,

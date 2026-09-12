@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ViewportPortal, useInternalNode, useReactFlow } from '@xyflow/react';
+import { createPortal } from 'react-dom';
+import { useInternalNode, useReactFlow } from '@xyflow/react';
+import { useCanvasOverlay } from './useCanvasOverlay';
 import { primaryCommandsFor } from '../commands/registry';
 import type { CommandContext } from '../commands/types';
 import {
@@ -130,7 +132,8 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   const interactionActive = useUiStore((state) => state.interactionActive);
   const store = useEditorStore;
   const theme = useThemeValue();
-  const { flowToScreenPosition, screenToFlowPosition } = useReactFlow();
+  const { flowToScreenPosition } = useReactFlow();
+  const overlay = useCanvasOverlay();
   const rightClearance = flowPanelOpen ? RIGHT_CLEARANCE_WITH_FLOW_PANEL : LEFT_CLEARANCE;
 
   const nodeId = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : null;
@@ -337,11 +340,11 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
     measuredSize,
     clearances,
     flowToScreenPosition,
-    screenToFlowPosition,
+    overlay.screenToOverlay,
   );
 
-  return (
-    <ViewportPortal>
+  if (!overlay.target) return null;
+  return createPortal(
       <div
         ref={panelRef}
         className="dc-popover dc-element-inspector"
@@ -369,8 +372,8 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
             buildCommandContext={buildCommandContext}
           />
         </div>
-      </div>
-    </ViewportPortal>
+      </div>,
+    overlay.target,
   );
 }
 

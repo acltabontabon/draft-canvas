@@ -50,7 +50,6 @@ describe('HintStrip dismissal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss hint' }));
 
     expect(screen.queryByText(HINT_COPY['attachment-slot'])).not.toBeInTheDocument();
-    expect(store.get('hint.attachment-slot')).toBe('1');
   });
 
   it('hides immediately after dismissal even while Learn Mode is active', () => {
@@ -65,7 +64,7 @@ describe('HintStrip dismissal', () => {
     expect(screen.queryByText(HINT_COPY['attachment-slot'])).not.toBeInTheDocument();
   });
 
-  it('resurfaces an already-retired hint under Learn Mode, but not otherwise', () => {
+  it('shows a hint only under Learn Mode, whatever an older build persisted about it', () => {
     store.set('hint.attachment-slot', '1');
 
     const { rerender } = render(

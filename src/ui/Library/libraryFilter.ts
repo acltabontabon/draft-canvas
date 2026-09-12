@@ -36,8 +36,13 @@ export function visibleCanvases(
 
   let base = library;
   if (!searching) {
-    if (view.kind === 'unorganized') base = base.filter((entry) => !entry.projectId);
-    else if (view.kind === 'project') base = base.filter((entry) => entry.projectId === view.projectId);
+    // A `projectId` naming a project that no longer exists (its delete could not
+    // reach every member, or another tab removed it) is Unorganized — otherwise
+    // that canvas would be listed nowhere but "All" and "Recent".
+    if (view.kind === 'unorganized') {
+      const known = new Set(projects.map((project) => project.id));
+      base = base.filter((entry) => !entry.projectId || !known.has(entry.projectId));
+    } else if (view.kind === 'project') base = base.filter((entry) => entry.projectId === view.projectId);
   } else {
     const matchingProjectIds = new Set(
       projects.filter((project) => project.name.toLowerCase().includes(query)).map((project) => project.id),

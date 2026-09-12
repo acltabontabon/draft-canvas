@@ -37,6 +37,12 @@ describe('visibleCanvases', () => {
     expect(result.map((entry) => entry.id)).toEqual(['d']);
   });
 
+  it('"unorganized" also lists canvases whose project no longer exists', () => {
+    const orphan = summary({ id: 'e', title: 'Orphan', projectId: 'deleted', updatedAt: 1 });
+    const result = visibleCanvases([...library, orphan], projects, { kind: 'unorganized' }, '', 'updatedAt');
+    expect(result.map((entry) => entry.id)).toEqual(['d', 'e']);
+  });
+
   it('"project" filters to that project\'s canvases only', () => {
     const result = visibleCanvases(library, projects, { kind: 'project', projectId: 'p1' }, '', 'updatedAt');
     expect(result.map((entry) => entry.id).sort()).toEqual(['a', 'b']);

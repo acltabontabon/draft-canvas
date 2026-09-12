@@ -16,7 +16,7 @@ import {
 } from '../../export';
 import { flowIsPlayable } from '../../document/flow';
 import { readPreference, writePreference } from '../../lib/preferences';
-import { useEditorStore } from '../../store/editorStore';
+import { documentWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { usePersonality } from '../personality/usePersonality';
 import { useTheme } from '../theme/useTheme';
@@ -236,7 +236,7 @@ export function ExportDialog() {
         ? {
             label: 'Export document',
             disabled: busy,
-            onClick: () => void run(() => exportProjectFile(document), 'Document export'),
+            onClick: () => void run(() => exportProjectFile(documentWithLiveViewport(useEditorStore.getState())), 'Document export'),
           }
         : { label: 'Export securely…', disabled: busy, onClick: () => setSecurePromptOpen(true) }
       : effectiveMode === 'image'
@@ -359,7 +359,7 @@ export function ExportDialog() {
           onCancel={() => setSecurePromptOpen(false)}
           onConfirm={(passphrase) =>
             void run(async () => {
-              await exportSecureProjectFile(document, passphrase);
+              await exportSecureProjectFile(documentWithLiveViewport(useEditorStore.getState()), passphrase);
               setSecurePromptOpen(false);
             }, 'Secure export')
           }

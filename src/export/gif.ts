@@ -5,7 +5,6 @@
  * step. Not a general media pipeline: GIF only, fixed frame size, and the
  * only knobs are speed and loop.
  */
-import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { findFlow } from '../document/flow';
 import type { DraftDocument, DraftViewport } from '../document/types';
 import { resolveFlowStep, resolveStepViewport, type FlowPlaybackStep } from '../presentation/useFlowPlayback';
@@ -151,6 +150,8 @@ export async function exportFlowGifFile(
   // Resolved once, not per-frame: every frame reuses the same data URI.
   const resolvedBackground = await resolveExportBackground(document, options.includeBackground !== false);
 
+  // Loaded only when a GIF is actually exported — the encoder is dead weight on every other load.
+  const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
   const gif = GIFEncoder();
   const repeat = options.loop === false ? -1 : 0;
 

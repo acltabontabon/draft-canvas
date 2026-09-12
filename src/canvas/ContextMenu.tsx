@@ -88,6 +88,20 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
           event.stopPropagation();
           onDismiss();
           return;
+        // Tab would move focus out while the menu stayed open over whatever it landed on — a menu
+        // is a transient choice, so leaving it by keyboard closes it, as a click-away does.
+        case 'Tab':
+          event.preventDefault();
+          event.stopPropagation();
+          onDismiss();
+          return;
+        case 'Home':
+        case 'End': {
+          event.preventDefault();
+          const edge = event.key === 'Home' ? itemIndices[0] : itemIndices[itemIndices.length - 1];
+          if (edge !== undefined) setHighlight(edge);
+          return;
+        }
         case 'ArrowDown': {
           event.preventDefault();
           const at = itemIndices.indexOf(highlightRef.current);

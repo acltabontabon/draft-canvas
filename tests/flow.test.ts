@@ -255,6 +255,18 @@ describe('flow.ts pure functions', () => {
     expect(goneToo.flows[0]!.steps).toEqual([]);
   });
 
+  it('keeps a step that loses every member but still has a pinned view (and its caption)', () => {
+    let doc = addFlow(createDocument('X'), createFlow({ title: 'A', id: 'f1' }));
+    doc = {
+      ...doc,
+      flows: [
+        { ...doc.flows[0]!, steps: [{ id: 's1', edgeId: 'e1', caption: 'Overview', viewport: { x: 1, y: 2, zoom: 1 } }] },
+      ],
+    };
+    const pruned = pruneFlowSteps(doc, new Set(['e1']));
+    expect(pruned.flows[0]!.steps).toEqual([{ id: 's1', caption: 'Overview', viewport: { x: 1, y: 2, zoom: 1 } }]);
+  });
+
   it('prunes dangling extraNodeIds via the removedNodeIds set, keeping the step if extraEdgeIds remain', () => {
     let doc = addFlow(createDocument('X'), createFlow({ title: 'A', id: 'f1' }));
     doc = { ...doc, edges: [{ id: 'e1' }] as never };
@@ -723,6 +735,14 @@ describe('flow hardening — empty flows, caps, and connector replacement', () =
     expect(next.flows[0]!.steps[0]!.id).toBe('s1');
     expect(next.flows[0]!.steps[2]!.extraEdgeIds).toEqual(['a', 'b', 'e9']);
     expect(spliceEdgeInFlows(doc, 'unrelated', ['a'])).toBe(doc);
+  });
+
+  it('spliceEdgeInFlows never pushes a full flow past the step cap', () => {
+    const flow = createFlow({ id: 'f1' });
+    flow.steps = Array.from({ length: LIMITS.maxStepsPerFlow }, (_, i) => ({ id: `s${i}`, edgeId: `e${i}` }));
+    const next = spliceEdgeInFlows({ ...createDocument('X'), flows: [flow] }, 'e0', ['a', 'b']);
+    expect(next.flows[0]!.steps).toHaveLength(LIMITS.maxStepsPerFlow);
+    expect(next.flows[0]!.steps.at(-1)!.edgeId).toBe(`e${LIMITS.maxStepsPerFlow - 1}`);
   });
 
   it('inserting a worker on a flow connector keeps the story: A → W, W → B where A → B was', () => {

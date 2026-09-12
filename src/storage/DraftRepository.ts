@@ -43,11 +43,15 @@ export interface DraftRepository {
     documentId: string,
     blob: Blob,
     dims: { width: number; height: number },
+    imageId?: string,
   ): Promise<void>;
   loadBackgroundImage(
     documentId: string,
+    imageId?: string,
   ): Promise<{ blob: Blob; width: number; height: number } | null>;
-  removeBackgroundImage(documentId: string): Promise<void>;
+  removeBackgroundImage(documentId: string, imageId?: string): Promise<void>;
+  /** Deletes every stored image of the document except `keepImageId`'s (none, when `null`). */
+  pruneBackgroundImages(documentId: string, keep: { imageId?: string } | null): Promise<void>;
 }
 
 export class StorageUnavailableError extends Error {
@@ -89,4 +93,17 @@ export function summarize(document: DraftDocument): DraftSummary {
     ...(document.metadata.projectId ? { projectId: document.metadata.projectId } : {}),
     ...(document.nodes.length > 0 ? { shape: libraryShapeOf(document.nodes, document.edges) } : {}),
   };
+}
+
+/**
+ * The storage key of a document's background image: the document id itself for the single image
+ * stored before `BackgroundSettings.imageId` existed, `<documentId>#<imageId>` for every one since.
+ */
+export function backgroundImageKey(documentId: string, imageId?: string): string {
+  return imageId ? `${documentId}#${imageId}` : documentId;
+}
+
+/** Whether `key` is one of `documentId`'s background image keys. */
+export function isBackgroundImageKeyOf(key: string, documentId: string): boolean {
+  return key === documentId || key.startsWith(`${documentId}#`);
 }

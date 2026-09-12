@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { getViewportForBounds, useReactFlow, useStore } from '@xyflow/react';
+import { useShallow } from 'zustand/react/shallow';
 import { findFlow, flowIsPlayable } from '../document/flow';
 import type { DraftEdge, DraftFlowStep, DraftFlow, DraftNode, DraftViewport } from '../document/types';
 import { nodeIndex } from '../store/selectors';
@@ -132,28 +133,40 @@ export function resolveStepViewport(
  * referencing a since-deleted connector simply drops out of `steps`.
  */
 export function useFlowPlayback(): FlowPlaybackController {
-  const document = useEditorStore((state) => state.document);
   const flowPlayback = useEditorStore((state) => state.flowPlayback);
   const setFlowPlayback = useEditorStore((state) => state.setFlowPlayback);
+  // Only what render needs, never the whole document: this hook lives in `EditorScreen`, and a
+  // whole-document subscription re-rendered the entire editor on every commit. Edges and nodes are
+  // only watched while a flow is actually being presented; everything else reads `getState()`.
+  const flow = useEditorStore((state) =>
+    flowPlayback.flowId ? (findFlow(state.document, flowPlayback.flowId) ?? null) : null,
+  );
+  const edges = useEditorStore((state) => (flow ? state.document.edges : NO_EDGES));
+  const nodes = useEditorStore((state) => (flow ? state.document.nodes : NO_NODES));
+  // Only flows that would actually show a step. The picker, the palette's "Present flow…"
+  // and `start()` all draw from this — an empty flow is never offered, so "Present" never
+  // silently does nothing. Compared element-wise, so it keeps its identity until a flow's
+  // playability (or the flow itself) actually changes.
+  const playableFlows = useEditorStore(
+    useShallow((state) => state.document.flows.filter((candidate) => flowIsPlayable(state.document, candidate))),
+  );
   const { setViewport, getViewport } = useReactFlow();
   // Selected separately: returning an object literal from a store selector
   // creates a new identity on every store change and re-renders forever.
   const viewWidth = useStore((state) => state.width);
   const viewHeight = useStore((state) => state.height);
 
-  const flow = flowPlayback.flowId ? (findFlow(document, flowPlayback.flowId) ?? null) : null;
-
   const steps = useMemo<FlowPlaybackStep[]>(() => {
     if (!flow) return [];
-    const edgesById = new Map(document.edges.map((e) => [e.id, e]));
-    const nodesById = new Map(document.nodes.map((n) => [n.id, n]));
+    const edgesById = new Map(edges.map((e) => [e.id, e]));
+    const nodesById = new Map(nodes.map((n) => [n.id, n]));
     const result: FlowPlaybackStep[] = [];
     flow.steps.forEach((stepEntry, index) => {
       const resolved = resolveFlowStep(stepEntry, index, result.length + 1, edgesById, nodesById);
       if (resolved) result.push(resolved);
     });
     return result;
-  }, [document.edges, document.nodes, flow]);
+  }, [edges, nodes, flow]);
 
   const current = steps.find((entry) => entry.step === flowPlayback.step) ?? null;
 
@@ -167,7 +180,8 @@ export function useFlowPlayback(): FlowPlaybackController {
         return;
       }
 
-      const bounds = stepFocusBounds(target, nodeIndex(document.nodes));
+      const byId = nodeIndex(useEditorStore.getState().document.nodes);
+      const bounds = stepFocusBounds(target, byId);
       if (!bounds) return;
 
       // Skip the animation when everything is already comfortably on screen.
@@ -178,11 +192,11 @@ export function useFlowPlayback(): FlowPlaybackController {
       // `fitBounds` has no maximum zoom, so a step between two adjacent nodes
       // would fill the screen with them. `resolveStepViewport` computes it
       // directly, which is the only way to cap it.
-      const next = resolveStepViewport(target, nodeIndex(document.nodes), viewWidth, viewHeight);
+      const next = resolveStepViewport(target, byId, viewWidth, viewHeight);
       if (!next) return;
       void setViewport(next, { duration: 380 });
     },
-    [document.nodes, getViewport, setViewport, viewHeight, viewWidth],
+    [getViewport, setViewport, viewHeight, viewWidth],
   );
 
   const goTo = useCallback(
@@ -195,16 +209,9 @@ export function useFlowPlayback(): FlowPlaybackController {
     [focusOn, setFlowPlayback, steps],
   );
 
-  // Only flows that would actually show a step. The picker, the palette's "Present flow…"
-  // and `start()` all draw from this — an empty flow is never offered, so "Present" never
-  // silently does nothing.
-  const playableFlows = useMemo(
-    () => document.flows.filter((candidate) => flowIsPlayable(document, candidate)),
-    [document],
-  );
-
   const pickFlow = useCallback(
     (flowId: string) => {
+      const { document } = useEditorStore.getState();
       const chosen = findFlow(document, flowId);
       if (!chosen || !flowIsPlayable(document, chosen)) return;
       setFlowPlayback({ active: true, flowId, step: 1 });
@@ -222,7 +229,7 @@ export function useFlowPlayback(): FlowPlaybackController {
         }
       }
     },
-    [document, focusOn, setFlowPlayback],
+    [focusOn, setFlowPlayback],
   );
 
   const start = useCallback(() => {
@@ -268,23 +275,31 @@ export function useFlowPlayback(): FlowPlaybackController {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- current intentionally excluded, see comment above.
   }, [flowPlayback.step, flowPlayback.flowId, flowPlayback.active, setFlowPlayback]);
 
-  return {
-    flows: playableFlows,
-    flow,
-    steps,
-    step: flowPlayback.step,
-    current,
-    active: flowPlayback.active,
-    picking: flowPlayback.active && flowPlayback.flowId === null,
-    canStart: playableFlows.length > 0,
-    start,
-    pickFlow,
-    stop,
-    next,
-    previous,
-    goTo,
-  };
+  // One stable object per actual change, so consumers keyed on it (`useKeyboard`'s window listener,
+  // `useCommandContext`, `FlowBar`) don't tear down and rebuild on unrelated renders.
+  return useMemo(
+    () => ({
+      flows: playableFlows,
+      flow,
+      steps,
+      step: flowPlayback.step,
+      current,
+      active: flowPlayback.active,
+      picking: flowPlayback.active && flowPlayback.flowId === null,
+      canStart: playableFlows.length > 0,
+      start,
+      pickFlow,
+      stop,
+      next,
+      previous,
+      goTo,
+    }),
+    [playableFlows, flow, steps, flowPlayback, current, start, pickFlow, stop, next, previous, goTo],
+  );
 }
+
+const NO_EDGES: readonly DraftEdge[] = [];
+const NO_NODES: readonly DraftNode[] = [];
 
 function isComfortablyVisible(
   bounds: Bounds,

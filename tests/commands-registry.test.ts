@@ -302,10 +302,11 @@ describe('commandsFor — contextual (8.2)', () => {
     kinds.options.find((o) => o.title === 'Retry')!.run(ctx);
     expect(useEditorStore.getState().document.edges[0]!.kind).toBe('retry');
 
-    // Reconnect never offers the endpoint the connector is already on.
+    // Reconnect never offers either endpoint the connector is already on — the other end
+    // would only make a self-loop, which `reconnectEdge` refuses.
     const targets = stageOf(ctx, 'edge-reconnect-target');
-    expect(targets.options.map((o) => o.title)).toEqual(['API', 'Q']);
-    targets.options[1]!.run(ctx);
+    expect(targets.options.map((o) => o.title)).toEqual(['Q']);
+    targets.options[0]!.run(ctx);
     expect(useEditorStore.getState().document.edges[0]!.target).toBe(other.id);
 
     commandsFor(ctx).find((c) => c.id === 'edge-reverse')!.run(ctx);

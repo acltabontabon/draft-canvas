@@ -1,4 +1,4 @@
-import { summarize, type DraftRepository } from './DraftRepository';
+import { backgroundImageKey, isBackgroundImageKeyOf, summarize, type DraftRepository } from './DraftRepository';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 
 /**
@@ -33,7 +33,9 @@ export class MemoryRepository implements DraftRepository {
 
   async remove(id: string): Promise<void> {
     this.documents.delete(id);
-    this.backgroundImages.delete(id);
+    for (const key of [...this.backgroundImages.keys()]) {
+      if (isBackgroundImageKeyOf(key, id)) this.backgroundImages.delete(key);
+    }
   }
 
   async rename(id: string, title: string): Promise<void> {
@@ -78,17 +80,26 @@ export class MemoryRepository implements DraftRepository {
     documentId: string,
     blob: Blob,
     dims: { width: number; height: number },
+    imageId?: string,
   ): Promise<void> {
-    this.backgroundImages.set(documentId, { blob, ...dims });
+    this.backgroundImages.set(backgroundImageKey(documentId, imageId), { blob, ...dims });
   }
 
   async loadBackgroundImage(
     documentId: string,
+    imageId?: string,
   ): Promise<{ blob: Blob; width: number; height: number } | null> {
-    return this.backgroundImages.get(documentId) ?? null;
+    return this.backgroundImages.get(backgroundImageKey(documentId, imageId)) ?? null;
   }
 
-  async removeBackgroundImage(documentId: string): Promise<void> {
-    this.backgroundImages.delete(documentId);
+  async removeBackgroundImage(documentId: string, imageId?: string): Promise<void> {
+    this.backgroundImages.delete(backgroundImageKey(documentId, imageId));
+  }
+
+  async pruneBackgroundImages(documentId: string, keep: { imageId?: string } | null): Promise<void> {
+    const kept = keep ? backgroundImageKey(documentId, keep.imageId) : null;
+    for (const key of [...this.backgroundImages.keys()]) {
+      if (isBackgroundImageKeyOf(key, documentId) && key !== kept) this.backgroundImages.delete(key);
+    }
   }
 }

@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { createDocument } from '../src/document/factory';
+import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { parseDocument } from '../src/document/validate';
 import { CURRENT_VERSION, DRAFT_FORMAT } from '../src/document/types';
 
@@ -36,7 +38,7 @@ describe('background settings normalization', () => {
       settings: {
         showSequence: true,
         grid: 'dots',
-        background: { enabled: true, fit: 'tile', dim: 0.2, blur: 0.5 },
+        background: { enabled: true, fit: 'tile', dim: 0.2, blur: 0.5, imageId: 'bg_1' },
       },
     });
     expect(result.ok).toBe(true);
@@ -46,6 +48,7 @@ describe('background settings normalization', () => {
       fit: 'tile',
       dim: 0.2,
       blur: 0.5,
+      imageId: 'bg_1',
     });
   });
 
@@ -72,5 +75,24 @@ describe('background settings normalization', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.document.settings.background.fit).toBe('cover');
+  });
+});
+
+describe('background image changes through the store', () => {
+  beforeEach(() => {
+    __resetInteraction();
+    useEditorStore.setState({ document: createDocument('Background'), history: { past: [], future: [] }, revision: 0 });
+  });
+
+  it('undoing a replace brings back the previous image, and undoing a remove brings it back on', () => {
+    const settings = () => useEditorStore.getState().document.settings.background;
+    useEditorStore.getState().updateSettings({ background: { ...settings(), enabled: true, imageId: 'bg_a' } });
+    useEditorStore.getState().updateSettings({ background: { ...settings(), enabled: true, imageId: 'bg_b' } });
+    useEditorStore.getState().updateSettings({ background: { ...settings(), enabled: false } });
+
+    useEditorStore.getState().undo();
+    expect(settings()).toMatchObject({ enabled: true, imageId: 'bg_b' });
+    useEditorStore.getState().undo();
+    expect(settings()).toMatchObject({ enabled: true, imageId: 'bg_a' });
   });
 });

@@ -22,7 +22,7 @@ export async function resolveExportBackground(
 ): Promise<ResolvedBackground | undefined> {
   if (!includeBackground || !document.settings.background.enabled) return undefined;
   const repository = await getRepository();
-  const row = await repository.loadBackgroundImage(document.metadata.id);
+  const row = await repository.loadBackgroundImage(document.metadata.id, document.settings.background.imageId);
   if (!row) return undefined;
 
   const dataUri = await blobToDataUri(row.blob);

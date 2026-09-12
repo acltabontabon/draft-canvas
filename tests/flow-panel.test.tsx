@@ -148,6 +148,18 @@ describe('FlowPanel', () => {
     expect(useUiStore.getState().flowPanelOpen).toBe(false);
   });
 
+  it('Right and Left expand and collapse a focused flow row', () => {
+    useEditorStore.getState().createFlow('Checkout');
+    mount();
+    const row = rowFor('Checkout');
+    act(() => row.focus());
+    expect(row.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.keyDown(row, { key: 'ArrowRight' });
+    expect(rowFor('Checkout').getAttribute('aria-expanded')).toBe('true');
+    fireEvent.keyDown(rowFor('Checkout'), { key: 'ArrowLeft' });
+    expect(rowFor('Checkout').getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('keys it consumes never reach the window, keys it does not still do', () => {
     useEditorStore.getState().createFlow('Checkout');
     mount();

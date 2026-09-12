@@ -1,4 +1,5 @@
-import { ATTACHABLE_TYPES, type DraftDocument, type DraftNodeType } from '../document/types';
+import { ATTACHABLE_TYPES, type DraftDocument, type DraftNode, type DraftNodeType } from '../document/types';
+import { hasAttachmentRoom } from '../document/operations';
 import type { Rect } from '../edges/routing';
 
 /** A drop must feel intentional — see the drag-to-attach wiring in `Canvas.tsx`. */
@@ -40,6 +41,25 @@ export interface AttachCandidates {
  * works whether a large card lands on a small node or a small note lands on
  * a large one.
  */
+// Evaluated on every pointer-move frame of a drag, while the committed `nodes` array stays the same
+// object until the drop — so the filtered, z-sorted list is built once per (nodes, exclusion) pair.
+const candidateCache = new WeakMap<readonly DraftNode[], Map<string, DraftNode[]>>();
+
+function attachCandidatesFor(nodes: readonly DraftNode[], excludeIds: ReadonlySet<string>): DraftNode[] {
+  let byExclusion = candidateCache.get(nodes);
+  if (!byExclusion) candidateCache.set(nodes, (byExclusion = new Map()));
+  const key = [...excludeIds].sort().join('|');
+  let candidates = byExclusion.get(key);
+  if (!candidates) {
+    // A full host never arms: dropping there could only refuse (or, worse, lose content).
+    candidates = nodes
+      .filter((node) => node.type !== 'group' && !excludeIds.has(node.id) && hasAttachmentRoom(node, 'node'))
+      .sort((a, b) => b.z - a.z);
+    byExclusion.set(key, candidates);
+  }
+  return candidates;
+}
+
 export function evaluateAttachCandidates(
   draggedRect: Rect,
   draggedType: DraftNodeType,
@@ -54,9 +74,7 @@ export function evaluateAttachCandidates(
   // sendToBack mutate only `z`, never reorder the array — so an unsorted scan can hit an occluded
   // node before the one actually rendered under the cursor. Matches the z-ordering `Canvas.tsx`'s
   // `onConnectEnd` and `DraftEdgeView`'s `findDropNode` already apply to their own hit-testing.
-  const candidates = doc.nodes
-    .filter((node) => node.type !== 'group' && !excludeIds.has(node.id))
-    .sort((a, b) => b.z - a.z);
+  const candidates = attachCandidatesFor(doc.nodes, excludeIds);
 
   let overlapId: string | null = null;
   let bestOverlap = 0;

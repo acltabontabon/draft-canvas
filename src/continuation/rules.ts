@@ -241,6 +241,3 @@ export const RULES: readonly ContinuationRule[] = [
   ...WORKER_INDEXES,
 ];
 
-export function ruleById(id: string): ContinuationRule | undefined {
-  return RULES.find((rule) => rule.id === id);
-}

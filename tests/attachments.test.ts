@@ -1,3 +1,4 @@
+import { LIMITS } from '../src/document/limits';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createAttachment, createDocument, createNode } from '../src/document/factory';
 import {
@@ -273,5 +274,19 @@ describe('attachments through the store', () => {
 
     store.getState().undo();
     expect(store.getState().document.nodes[0]!.attachments).toHaveLength(1);
+  });
+
+  it('dragging a card onto a full host refuses instead of deleting the card or trimming the host', () => {
+    const host = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    for (let i = 0; i < LIMITS.maxAttachmentsPerNode; i += 1) {
+      store.getState().attachToNode(host.id, createAttachment({ type: 'note', text: `#${i}` }));
+    }
+    const note = store.getState().addNode({ type: 'note', x: 400, y: 0, text: 'keep me' });
+    const before = store.getState().document;
+
+    store.getState().attachExistingNode(note.id, host.id);
+    store.getState().attachToNode(host.id, createAttachment({ type: 'note', text: 'overflow' }), 0);
+
+    expect(store.getState().document).toBe(before);
   });
 });

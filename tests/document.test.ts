@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { createAttachment, createDocument, createEdge, createNode, displayNameFor } from '../src/document/factory';
 import {
   addEdges,
@@ -248,6 +249,55 @@ describe('containment', () => {
     expect(stored.x).toBe(120);
     expect(stored.y).toBe(90);
     expect(stored.parentId).toBeUndefined();
+  });
+});
+
+describe('group / ungroup keep nesting intact', () => {
+  const store = useEditorStore;
+  beforeEach(() => {
+    __resetInteraction();
+    store.setState({
+      document: createDocument('Nesting'),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      revision: 0,
+    });
+  });
+
+  function outerWith(count: number) {
+    const outer = store.getState().addNode({ type: 'group', x: 0, y: 0, width: 1200, height: 800 });
+    const kids = Array.from({ length: count }, (_, i) => store.getState().addNode({ type: 'service', x: 100 + i * 300, y: 100 }));
+    store.getState().apply('Seed', (doc) => setParent(doc, kids.map((k) => k.id), outer.id));
+    return { outer, kids };
+  }
+  const nodeById = (id: string) => store.getState().document.nodes.find((n) => n.id === id)!;
+
+  it('grouping nodes inside a boundary nests the new boundary there', () => {
+    const { outer, kids } = outerWith(2);
+    store.getState().setSelection({ nodes: kids.map((k) => k.id), edges: [] });
+    store.getState().groupSelection();
+    const inner = store.getState().selection.nodes[0]!;
+    expect(nodeById(inner).parentId).toBe(outer.id);
+    expect(nodeById(inner).z).toBeGreaterThan(nodeById(outer.id).z);
+    expect(kids.every((k) => nodeById(k.id).parentId === inner)).toBe(true);
+    expect(new Set(descendantsOf(store.getState().document, outer.id))).toEqual(new Set([inner, ...kids.map((k) => k.id)]));
+  });
+
+  it('grouping a boundary together with its own children leaves those children where they are', () => {
+    const { outer, kids } = outerWith(2);
+    const loose = store.getState().addNode({ type: 'service', x: 1400, y: 100 });
+    store.getState().setSelection({ nodes: [outer.id, ...kids.map((k) => k.id), loose.id], edges: [] });
+    store.getState().groupSelection();
+    expect(kids.every((k) => nodeById(k.id).parentId === outer.id)).toBe(true);
+    expect(nodeById(outer.id).parentId).toBe(store.getState().selection.nodes[0]);
+  });
+
+  it('ungrouping an inner boundary hands its children to the outer one', () => {
+    const { outer, kids } = outerWith(2);
+    store.getState().setSelection({ nodes: kids.map((k) => k.id), edges: [] });
+    store.getState().groupSelection();
+    store.getState().ungroupSelection();
+    expect(kids.every((k) => nodeById(k.id).parentId === outer.id)).toBe(true);
   });
 });
 

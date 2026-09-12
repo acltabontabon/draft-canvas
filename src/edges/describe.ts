@@ -28,6 +28,7 @@ import {
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
+import { layoutEdgeLabel, layoutEdgeResponse } from './labelLayout';
 
 export interface EdgeDescribeContext {
   theme: Theme;
@@ -282,13 +283,7 @@ export function describeEdge(
         const responseLabelSide = OPPOSITE_SIDE[route.labelSide];
         const responseLabelX = responseRoute.labelX;
         const responseLabelY = responseRoute.labelY;
-        const responseLayout = layoutText(edge.response, {
-          font: FONTS.edgeLabel,
-          maxWidth: 220,
-          lineHeight: FONTS.edgeLabel.size * LINE_HEIGHTS.label,
-          maxLines: 1,
-          measurer: ctx.measurer,
-        });
+        const responseLayout = layoutEdgeResponse(edge.response, ctx.measurer);
         const w = responseLayout.width + LABEL_PADDING_X * 2;
         const h = responseLayout.height + LABEL_PADDING_Y * 2;
         const { left, top } = labelChipRect(responseLabelSide, responseLabelX, responseLabelY, w, h);
@@ -420,13 +415,7 @@ export function describeEdge(
   }
 
   if (edge.label) {
-    const layout = layoutText(edge.label, {
-      font: FONTS.edgeLabel,
-      maxWidth: 220,
-      lineHeight: FONTS.edgeLabel.size * LINE_HEIGHTS.label,
-      maxLines: 2,
-      measurer: ctx.measurer,
-    });
+    const layout = layoutEdgeLabel(edge.label, ctx.measurer);
 
     // A numbered connector carries its step inside the label chip. Drawing the
     // two separately puts them on top of each other on any short connector.

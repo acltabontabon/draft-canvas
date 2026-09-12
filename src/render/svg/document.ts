@@ -324,8 +324,8 @@ function paintOrder(a: DraftNode, b: DraftNode): number {
 }
 
 /**
- * Renders one node in isolation, in node-local coordinates. Used by the canvas
- * so that what is on screen comes out of exactly the same emitter as the export.
+ * Renders one node in isolation, in node-local coordinates — the same emitter the export uses,
+ * so tests can assert on a single node's output without building a whole document.
  */
 export function renderNodeSvgChildren(node: DraftNode, themeName: ThemeName): SvgEl[] {
   beginClipScope(node.id);

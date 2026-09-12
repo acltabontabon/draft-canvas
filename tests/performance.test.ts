@@ -12,6 +12,7 @@ import {
 } from '../src/document/operations';
 import { createFlow, explainEdgeTier, stepIndexOf } from '../src/document/flow';
 import { evaluateAttachCandidates, deepestBoundaryAt } from '../src/canvas/dragTargets';
+import { obstaclesForEdge } from '../src/canvas/edgeGeometry';
 import { isEdgeFocused } from '../src/store/editorStore';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { projectNodes, projectEdges } from '../src/canvas/projection';
@@ -268,6 +269,49 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
     // Generous, for the same reason as the other budgets here: this exists to
     // catch an accidental quadratic blowup, not to police milliseconds.
     expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  /**
+   * The canvas routes each connector against only the obstacles near it (`obstaclesForEdge`), so
+   * a commit re-renders the connectors around what moved rather than every one on the canvas.
+   * That is only sound if the scoped set draws exactly the path the full set draws — which the
+   * exporter still uses — and if an untouched connector's set keeps its identity across a commit.
+   */
+  it('scoped obstacles route identically to every node, and stay stable for far-away edits', () => {
+    const nodeMap = new Map(doc.nodes.map((node) => [node.id, node]));
+    const all = doc.nodes.filter((node) => node.type !== 'group');
+    const lanes = laneIndex(doc.edges);
+    for (const edge of doc.edges) {
+      const lane = lanes.get(edge.id)?.offset ?? 0;
+      for (const routing of ['smoothstep', 'straight', 'bezier'] as const) {
+        const scoped = routeEdge({ ...edge, routing }, nodeMap, { lane, obstacles: obstaclesForEdge(doc.nodes, edge.source, edge.target) });
+        const full = routeEdge({ ...edge, routing }, nodeMap, {
+          lane,
+          obstacles: all.filter((n) => n.id !== edge.source && n.id !== edge.target).map(rectOf),
+        });
+        expect(scoped).toEqual(full);
+      }
+    }
+
+    const before = new Map(doc.edges.map((edge) => [edge.id, obstaclesForEdge(doc.nodes, edge.source, edge.target)]));
+    const moved = doc.nodes.find((node) => node.type !== 'group')!;
+    const next = updateNode(doc, moved.id, { x: moved.x + 5 });
+    const movedRect = rectOf(moved);
+    let rerendered = 0;
+    for (const edge of doc.edges) {
+      const a = before.get(edge.id)!;
+      const b = obstaclesForEdge(next.nodes, edge.source, edge.target);
+      const shallowEqual = a.length === b.length && a.every((rect, i) => rect === b[i]);
+      if (!shallowEqual) rerendered += 1;
+      // Only a connector that touches, or had the moved node as an obstacle, may see a new set.
+      const involved =
+        edge.source === moved.id ||
+        edge.target === moved.id ||
+        a.some((rect) => rect.x === movedRect.x && rect.y === movedRect.y) ||
+        b.some((rect) => rect.x === movedRect.x + 5 && rect.y === movedRect.y);
+      if (!involved) expect(shallowEqual).toBe(true);
+    }
+    expect(rerendered).toBeLessThan(doc.edges.length / 2);
   });
 
   /**

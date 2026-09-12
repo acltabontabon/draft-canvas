@@ -22,12 +22,10 @@ export function HintStrip({ id, learned }: { id: HintId; learned: boolean }) {
   }, [learned, id, retire]);
 
   if (learned) return null;
-  // An explicit dismissal always wins immediately, even while Learn Mode is forcing already-
-  // retired hints back into view for a review pass — otherwise the X button looks broken.
+  // An explicit dismissal always wins immediately — otherwise the X button looks broken.
   if (isDismissedThisSession(id)) return null;
-  // Hints only ever surface while Learn Draft Canvas mode is on — no more automatic first-time
-  // teaching popups outside it. `isRetired` no longer gates visibility here: once Learn mode is
-  // on, a previously-retired hint is exactly what it's meant to resurface for review.
+  // Hints only ever surface while Learn Draft Canvas mode is on — no automatic first-time
+  // teaching popups outside it.
   if (!learnModeActive) return null;
 
   return (

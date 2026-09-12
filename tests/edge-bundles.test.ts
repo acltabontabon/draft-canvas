@@ -526,6 +526,23 @@ describe('taking manual control of a bundle', () => {
     expect(useEditorStore.getState().document.nodes).toEqual(before.nodes);
   });
 
+  it('keeps flow steps on converted members, re-routed through the Junction', () => {
+    const { edges } = bundleInStore();
+    const flowId = useEditorStore.getState().createFlow('Fan-out')!;
+    useEditorStore.getState().addEdgeToFlow(flowId, edges[0]!.id);
+    useEditorStore.getState().addEdgeToFlow(flowId, edges[1]!.id);
+
+    useEditorStore.getState().convertBundleToJunction(edges[0]!.id);
+    const doc = useEditorStore.getState().document;
+    const junction = doc.nodes.find((node) => node.type === 'ellipse')!;
+    const shared = doc.edges.find((edge) => edge.target === junction.id)!;
+    const steps = doc.flows[0]!.steps.map((step) => step.edgeId);
+    expect(steps).toHaveLength(4);
+    expect(steps[0]).toBe(shared.id);
+    expect(steps[2]).toBe(shared.id);
+    expect(steps.every((id) => doc.edges.some((edge) => edge.id === id))).toBe(true);
+  });
+
   it('does nothing for a connector that is not bundled', () => {
     reset();
     const state = useEditorStore.getState();

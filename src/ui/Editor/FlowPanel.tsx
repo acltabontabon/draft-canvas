@@ -3,7 +3,7 @@ import { displayNameFor } from '../../document/factory';
 import { flowIsPlayable } from '../../document/flow';
 import type { DraftFlow, DraftFlowStep } from '../../document/types';
 import { isEditableTarget } from '../../lib/isEditableTarget';
-import { useEditorStore } from '../../store/editorStore';
+import { documentWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
 import type { FlowPlaybackController } from '../../presentation/useFlowPlayback';
@@ -127,6 +127,14 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
         consume();
         setSelectedFlowId(flowId);
         return;
+      // The expand chevron is deliberately out of the Tab order, so its row answers for it — the
+      // same Right-opens / Left-closes a disclosure tree uses.
+      case 'ArrowRight':
+      case 'ArrowLeft':
+        if (!flow || target !== row) return;
+        consume();
+        setExpandedId(event.key === 'ArrowRight' ? flow.id : null);
+        return;
       case 'F2':
         if (!flow) return;
         consume();
@@ -195,6 +203,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                 data-flow-id={flow.id}
                 data-selected={selected ? 'true' : undefined}
                 aria-current={selected ? 'true' : undefined}
+                aria-expanded={expanded}
                 tabIndex={0}
               >
                 <div className="dc-flow-item-head" onClick={() => setSelectedFlowId(flow.id)}>
@@ -224,7 +233,8 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                       type="button"
                       className="dc-flow-title"
                       tabIndex={-1}
-                      title="Double-click to rename"
+                      // The title truncates, so the tooltip leads with the whole name.
+                      title={`${flow.title} — double-click to rename`}
                       onClick={(event) => {
                         event.stopPropagation();
                         setSelectedFlowId(flow.id);
@@ -388,7 +398,11 @@ function StepRow({
         <button
           type="button"
           className="dc-flow-step-label"
-          title={edge ? 'Select this connector' : undefined}
+          title={
+            edge
+              ? `${source ? displayNameFor(source) : 'Untitled'} → ${target ? displayNameFor(target) : 'Untitled'}${detail ? ` · ${detail}` : ''} — select this connector`
+              : detail
+          }
           onClick={() => (edge ? store.getState().setSelection({ nodes: [], edges: [edge.id] }) : undefined)}
         >
           {edge ? (
@@ -503,7 +517,7 @@ function StepRow({
             variant="quiet"
             aria-label="Save the current canvas view to this step"
             title="Present this step from exactly the current camera position"
-            onClick={() => store.getState().setFlowStepViewport(flow.id, step.id, store.getState().document.viewport)}
+            onClick={() => store.getState().setFlowStepViewport(flow.id, step.id, documentWithLiveViewport(store.getState()).viewport)}
           >
             {step.viewport ? 'Update pinned view' : 'Pin view'}
           </Button>

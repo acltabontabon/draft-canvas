@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ViewportPortal, useInternalNode, useReactFlow } from '@xyflow/react';
+import { createPortal } from 'react-dom';
+import { useInternalNode, useReactFlow } from '@xyflow/react';
+import { useCanvasOverlay } from './useCanvasOverlay';
 import {
   ACCENTS,
   CONNECTOR_KINDS,
@@ -118,7 +120,8 @@ export function EdgeInspectorPopover() {
   const mode = useEditorStore((state) => state.mode);
   const store = useEditorStore;
   const theme = useThemeValue();
-  const { flowToScreenPosition, screenToFlowPosition } = useReactFlow();
+  const { flowToScreenPosition } = useReactFlow();
+  const overlay = useCanvasOverlay();
 
   const edgeId = selection.nodes.length === 0 && selection.edges.length === 1 ? selection.edges[0] : null;
   const edge = edgeId ? edgeIndex(document.edges).get(edgeId) : undefined;
@@ -157,6 +160,9 @@ export function EdgeInspectorPopover() {
   // connector's label point can still sit close enough to its own source/target that even the
   // panel's *minimum* width reaches into one of them.
   const [measuredWidth, setMeasuredWidth] = useState(0);
+  // Observed rather than read during render: this popover re-renders on every pan frame now that it
+  // follows the viewport, and a layout read per frame for a value that only changes on a wrap is waste.
+  const toolbarHeight = useToolbarHeight(mounted);
   // Deliberately no dependency array — this must re-measure after every render (content height
   // can change for reasons with no single dependency to name: a new section appearing, a
   // multi-line label). The `height !== measuredHeight` guard is what keeps this from looping.
@@ -285,8 +291,7 @@ export function EdgeInspectorPopover() {
   // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
   // it — a static constant can't account for either. `TOOLBAR_CLEARANCE` stays as the fallback
   // for the (rare) frame where `.dc-toolbar` isn't in the DOM yet.
-  const measuredToolbarHeight = window.document.querySelector('.dc-toolbar')?.getBoundingClientRect().height;
-  const toolbarClearance = measuredToolbarHeight ? measuredToolbarHeight + 10 : TOOLBAR_CLEARANCE;
+  const toolbarClearance = toolbarHeight ? toolbarHeight + 10 : TOOLBAR_CLEARANCE;
   const notEnoughRoomAbove = screenLabelPoint.y - POPOVER_GAP - measuredHeight < toolbarClearance;
   const flipBelow =
     attachmentRowBelowsSourceOrTarget(route.labelX, route.labelY, sourceRect, targetRect) || notEnoughRoomAbove;
@@ -296,7 +301,7 @@ export function EdgeInspectorPopover() {
   // into a neighbour — exactly what happens on a short connector between two nearby nodes (the
   // label point itself sits in open canvas, but the panel is several times wider than the gap).
   // Computed in screen space, since that's what both the node rects and the panel's own measured
-  // size are naturally in, then converted back to the flow x the transform below already uses.
+  // size are naturally in, then mapped into the overlay the popover is positioned in.
   const toScreenRect = (rect: Rect): ScreenRect => {
     const topLeft = flowToScreenPosition({ x: rect.x, y: rect.y });
     const bottomRight = flowToScreenPosition({ x: rect.x + rect.width, y: rect.y + rect.height });
@@ -312,7 +317,7 @@ export function EdgeInspectorPopover() {
     popoverScreenBottom,
     [toScreenRect(sourceRect), toScreenRect(targetRect)],
   );
-  const labelFlowX = screenToFlowPosition({ x: clampedScreenX, y: screenLabelPoint.y }).x;
+  const labelAt = overlay.screenToOverlay({ x: clampedScreenX, y: screenLabelPoint.y });
 
   const sourceDraftNode = draftNodes.get(displayEdge.source);
   const targetDraftNode = draftNodes.get(displayEdge.target);
@@ -336,8 +341,8 @@ export function EdgeInspectorPopover() {
       : null;
   const hintLearned = hintId === 'connector-selected' ? hasExplicitSemantics : hasAnyAttachment;
 
-  return (
-    <ViewportPortal>
+  if (!overlay.target) return null;
+  return createPortal(
       <div
         ref={panelRef}
         className="dc-popover dc-edge-inspector"
@@ -347,8 +352,8 @@ export function EdgeInspectorPopover() {
         data-placement={flipBelow ? 'below' : 'above'}
         style={{
           transform: flipBelow
-            ? `translate(-50%, 0) translate(${labelFlowX}px, ${route.labelY + POPOVER_GAP}px)`
-            : `translate(-50%, -100%) translate(${labelFlowX}px, ${route.labelY - POPOVER_GAP}px)`,
+            ? `translate(-50%, 0) translate(${labelAt.x}px, ${labelAt.y + POPOVER_GAP}px)`
+            : `translate(-50%, -100%) translate(${labelAt.x}px, ${labelAt.y - POPOVER_GAP}px)`,
         }}
         onPointerDown={(event) => event.stopPropagation()}
       >
@@ -370,9 +375,26 @@ export function EdgeInspectorPopover() {
             store={store}
           />
         </div>
-      </div>
-    </ViewportPortal>
+      </div>,
+    overlay.target,
   );
+}
+
+/** The editor toolbar's height, kept current with a `ResizeObserver` while `active`. */
+function useToolbarHeight(active: boolean): number | undefined {
+  const [height, setHeight] = useState<number>();
+  useEffect(() => {
+    if (!active) return;
+    const toolbar = window.document.querySelector('.dc-toolbar');
+    if (!toolbar) return;
+    const measure = () => setHeight(Math.round(toolbar.getBoundingClientRect().height));
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(toolbar);
+    return () => observer.disconnect();
+  }, [active]);
+  return height;
 }
 
 function EdgeInspectorRow({
@@ -437,7 +459,8 @@ function EdgeInspectorRow({
             type="button"
             className="dc-edge-inspector-caption"
             data-empty={caption ? undefined : 'true'}
-            title="Rename connector"
+            // The chip truncates at 180px, so the tooltip carries the whole caption.
+            title={caption ? `${caption} — click to rename` : 'Rename connector'}
             onClick={() => setEditingLabel(true)}
           >
             {caption ?? emptyLabelText}
@@ -604,7 +627,7 @@ function inferSuccessResponse(label: string | undefined): string {
  * never persisted as two values: both fields commit back to the same single string field
  * (`edge.label`/`edge.response`) the rest of the app already reads. `key`-remounted by the
  * caller whenever that string changes from elsewhere (e.g. the "Guess" button, undo/redo) since
- * these inputs are intentionally uncontrolled — see `dc-input-response`'s own precedent.
+ * these inputs are intentionally uncontrolled.
  */
 function SplitTextEditor({
   value,
@@ -865,6 +888,7 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
               className="dc-inspector-toggle"
               data-active={edge.hasResponse ? 'true' : undefined}
               aria-pressed={Boolean(edge.hasResponse)}
+              aria-label="Response line"
               title="Draw a quieter reply line back to the caller"
               onClick={() => store.getState().setEdgeHasResponse(edge.id, !edge.hasResponse)}
             >

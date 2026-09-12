@@ -264,6 +264,31 @@ describe.each([
     expect(loaded!.blob.type).toBe('image/png');
   });
 
+  it('keeps each chosen image under its own id, and prunes all but the one showing', async () => {
+    const repository = await open();
+    const doc = documentWith('Replaced background');
+    await repository.save(doc);
+    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['legacy']), { width: 1, height: 1 });
+    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['first']), { width: 2, height: 2 }, 'bg_a');
+    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['second']), { width: 3, height: 3 }, 'bg_b');
+    const other = documentWith('Untouched');
+    await repository.saveBackgroundImage(other.metadata.id, new Blob(['other']), { width: 4, height: 4 });
+
+    // Undo of a replace reads the previous id — its bytes are still there.
+    expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_a'))!.width).toBe(2);
+    expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_b'))!.width).toBe(3);
+
+    await repository.pruneBackgroundImages(doc.metadata.id, { imageId: 'bg_b' });
+    expect(await repository.loadBackgroundImage(doc.metadata.id)).toBeNull();
+    expect(await repository.loadBackgroundImage(doc.metadata.id, 'bg_a')).toBeNull();
+    expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_b'))!.width).toBe(3);
+    expect((await repository.loadBackgroundImage(other.metadata.id))!.width).toBe(4);
+
+    await repository.remove(doc.metadata.id);
+    expect(await repository.loadBackgroundImage(doc.metadata.id, 'bg_b')).toBeNull();
+    expect((await repository.loadBackgroundImage(other.metadata.id))!.width).toBe(4);
+  });
+
   it('returns null when no background image is stored', async () => {
     const repository = await open();
     expect(await repository.loadBackgroundImage('no-such-document')).toBeNull();
@@ -411,6 +436,40 @@ describe('autosave', () => {
     await autosave.flush();
 
     expect((await repository.load(doc.metadata.id))!.metadata.title).toBe('Closing');
+    autosave.dispose();
+  });
+
+  it('a flush during an in-flight write waits for it and then writes the newer version', async () => {
+    const repository = new MemoryRepository();
+    let release: () => void = () => {};
+    const realSave = repository.save.bind(repository);
+    let calls = 0;
+    repository.save = async (doc) => {
+      calls += 1;
+      if (calls === 1) await new Promise<void>((resolve) => (release = resolve));
+      return realSave(doc);
+    };
+    const autosave = new Autosave({ repository, onStateChange: () => {}, debounceMs: 0 });
+    const first = documentWith('First');
+    autosave.schedule(first);
+    const firstFlush = autosave.flush();
+    await Promise.resolve();
+    autosave.schedule({ ...first, metadata: { ...first.metadata, title: 'Second' } });
+    const secondFlush = autosave.flush();
+    release();
+    expect(await secondFlush).toBe(true);
+    await firstFlush;
+    expect((await repository.load(first.metadata.id))!.metadata.title).toBe('Second');
+    autosave.dispose();
+  });
+
+  it('keeps a version that failed to write so a later flush reports it unsaved', async () => {
+    const repository = new FullRepository();
+    const autosave = new Autosave({ repository, onStateChange: () => {}, debounceMs: 0 });
+    autosave.schedule(documentWith('Too big'));
+    expect(await autosave.flush()).toBe(false);
+    expect(autosave.hasPendingWork).toBe(true);
+    expect(await autosave.flush()).toBe(false);
     autosave.dispose();
   });
 

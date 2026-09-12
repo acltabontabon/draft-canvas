@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
-import { Canvas } from '../../canvas/Canvas';
+import { Canvas, type CanvasProps } from '../../canvas/Canvas';
 import { ContextMenu } from '../../canvas/ContextMenu';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
@@ -31,7 +31,6 @@ import { FlowPanel } from './FlowPanel';
 import { FocusIndicator } from './FocusIndicator';
 import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { CommandPalette } from './CommandPalette';
-import { ExportDialog } from './ExportDialog';
 import { Inspector } from './Inspector';
 import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
@@ -39,6 +38,15 @@ import { Toolbar } from './Toolbar';
 import { Button } from '../common/Button';
 import { ClipboardPermissionDialog } from '../common/ClipboardPermissionDialog';
 import { ErrorBoundary } from '../common/ErrorBoundary';
+
+// Export (its panels, previews, and exporters) is a sizeable slice of the editor that most sessions
+// never open — fetched the first time it is, then kept mounted so its in-session choices survive.
+const ExportDialog = lazy(() => import('./ExportDialog').then((module) => ({ default: module.ExportDialog })));
+
+/** Whether a modal dialog (`Modal`'s `aria-modal` panel) is up — the editor's shortcuts stand down. */
+function modalIsOpen(): boolean {
+  return document.querySelector('[aria-modal="true"]') !== null;
+}
 
 /** Whether keyboard focus is on the canvas itself (or nowhere in particular) rather than on a
  *  control around it — the only place a bare Tab may mean "accept the suggestion". */
@@ -67,6 +75,9 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
   const arm = useUiStore((state) => state.arm);
   const setExportOpen = useUiStore((state) => state.setExportOpen);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
+  const exportOpen = useUiStore((state) => state.exportOpen);
+  const [exportMounted, setExportMounted] = useState(exportOpen);
+  if (exportOpen && !exportMounted) setExportMounted(true);
   const quickConnect = useUiStore((state) => state.quickConnect);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
   const reconnecting = useUiStore((state) => state.reconnectDragActive);
@@ -82,11 +93,13 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
     if (useUiStore.getState().continuation?.trigger === 'drop') setContinuation(null);
   }, [setQuickConnect, setContinuation]);
   const dismissContextMenu = useCallback(() => setContextMenu(null), [setContextMenu]);
-  // Reactive only so the menu's own contents stay correct if the world changes underneath it while
-  // it's open (e.g. an undo from elsewhere) — read live via `getState()` inside `buildContext`/
-  // `contextMenuCommandsFor` otherwise, same split `CommandPalette.tsx` uses.
-  const selection = useEditorStore((state) => state.selection);
-  const editorDocument = useEditorStore((state) => state.document);
+  // Reactive only so an open menu's own contents stay correct if the world changes underneath it
+  // (e.g. an undo from elsewhere) — read live via `getState()` inside `buildContext`/
+  // `contextMenuCommandsFor` otherwise, same split `CommandPalette.tsx` uses. Subscribed only while
+  // a menu is actually open: otherwise every commit would re-render the whole editor.
+  const menuOpen = quickConnect !== null || contextMenu !== null;
+  const selection = useEditorStore((state) => (menuOpen ? state.selection : null));
+  const editorDocument = useEditorStore((state) => (menuOpen ? state.document : null));
 
   const theme = useThemeValue();
   const playback = useFlowPlayback();
@@ -138,7 +151,7 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
    * document changes underneath it (same reasoning as `contextMenuEntries` below).
    */
   const quickConnectRows = useMemo(
-    () => (quickConnect ? quickConnectItems(editorDocument, quickConnect) : []),
+    () => (quickConnect && editorDocument ? quickConnectItems(editorDocument, quickConnect) : []),
     [quickConnect, editorDocument],
   );
 
@@ -274,6 +287,24 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
 
   const presenting = mode === 'present';
 
+  // Stable, so the memoized `Canvas` (and React Flow under it) skips renders the editor makes for
+  // its own chrome.
+  const onCanvasCreateAt = useCallback(
+    (position: { x: number; y: number }) => {
+      if (armed) createAt(armed, position);
+    },
+    [armed, createAt],
+  );
+  const onQuickConnectMenu = useCallback<NonNullable<CanvasProps['onQuickConnectMenu']>>(
+    (source, sourceSide, sourceOffset, flowPosition, screenPosition, center) =>
+      setQuickConnect({ source, sourceSide, sourceOffset, flowPosition, screenPosition, center }),
+    [setQuickConnect],
+  );
+  const onEmptyCanvasMenu = useCallback<NonNullable<CanvasProps['onEmptyCanvasMenu']>>(
+    (flowPosition, screenPosition) => setQuickConnect({ flowPosition, screenPosition }),
+    [setQuickConnect],
+  );
+
   return (
     <div
       className="dc-editor"
@@ -294,7 +325,6 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       <div className="dc-editor-canvas">
         <ErrorBoundary
           key={canvasInstanceKey}
-          scope="canvas"
           message="Something went wrong while rendering this canvas."
           actions={[
             { label: 'Reload canvas', onClick: () => setCanvasInstanceKey((k) => k + 1) },
@@ -311,20 +341,9 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
           }
         >
           <Canvas
-            onCreateAt={(position) => armed && createAt(armed, position)}
-            onQuickConnectMenu={(source, sourceSide, sourceOffset, flowPosition, screenPosition, center) =>
-              setQuickConnect({
-                source,
-                sourceSide,
-                sourceOffset,
-                flowPosition,
-                screenPosition,
-                center,
-              })
-            }
-            onEmptyCanvasMenu={(flowPosition, screenPosition) =>
-              setQuickConnect({ flowPosition, screenPosition })
-            }
+            onCreateAt={onCanvasCreateAt}
+            onQuickConnectMenu={onQuickConnectMenu}
+            onEmptyCanvasMenu={onEmptyCanvasMenu}
           />
         </ErrorBoundary>
         {quickConnect && (
@@ -372,7 +391,11 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
       {!presenting && <StatusBar durable={session.durable} />}
 
       <ShortcutSheet />
-      <ExportDialog />
+      {exportMounted && (
+        <Suspense fallback={null}>
+          <ExportDialog />
+        </Suspense>
+      )}
       <CanvasSettingsDialog />
       <ClipboardPermissionDialog />
       <CommandPalette createAt={createAt} createAtPointer={createAtPointer} playback={playback} />
@@ -524,6 +547,8 @@ function useKeyboard({
       if (isEditableTarget(event.target)) return;
       if (useUiStore.getState().commandPaletteOpen) return;
       if (useUiStore.getState().contextMenu) return;
+      // Nothing lands behind a dialog, and a presentation is read-only.
+      if (modalIsOpen() || store.getState().mode === 'present') return;
       event.preventDefault();
       // Best-effort adoption of whatever the OS clipboard actually handed us — foreign text, or
       // none at all (e.g. a blocked/failed clipboard write elsewhere), is not an error. `paste()`
@@ -570,12 +595,22 @@ function useKeyboard({
       // Escape/Arrows/Enter, but any other key (e.g. a shape shortcut) would otherwise fall
       // through to here and spawn a node behind an open menu.
       if (useUiStore.getState().contextMenu) return;
+      // A modal (Export, Settings, Shortcuts, About) focuses its own panel, which
+      // `isEditableTarget` doesn't count — without this, Backspace deleted the selection
+      // behind the dialog and letter keys dropped nodes under it. Its own Escape/Tab
+      // handling is untouched.
+      if (modalIsOpen()) return;
 
       const meta = event.metaKey || event.ctrlKey;
       const state = store.getState();
+      // Presenting is read-only: the canvas already refuses pointer edits and the palette
+      // offers present-only commands, so the keyboard must not be the one way to edit.
+      const presenting = state.mode === 'present';
 
       if (meta) {
-        switch (event.key.toLowerCase()) {
+        const key = event.key.toLowerCase();
+        if (presenting && ['z', 'y', 'x', 'd', 'a', 'g', 'b', 'i'].includes(key)) return;
+        switch (key) {
           case 'z':
             event.preventDefault();
             if (event.shiftKey) state.redo();
@@ -670,6 +705,8 @@ function useKeyboard({
         setShortcutsOpen(true);
         return;
       }
+
+      if (presenting && event.key !== 'Escape') return;
 
       switch (event.key) {
         case 'Backspace':

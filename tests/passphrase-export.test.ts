@@ -78,6 +78,14 @@ describe('encryptForExport / decryptFromExport', () => {
     expect(result.error).toContain('newer version');
   });
 
+  it('rejects an unbounded iteration count or unknown KDF instead of deriving forever', async () => {
+    const text = await encryptForExport(fixture(), 'a passphrase');
+    for (const patch of [{ iterations: 1e12 }, { iterations: 1.5 }, { kdf: 'scrypt' }]) {
+      const result = await decryptFromExport(JSON.stringify({ ...JSON.parse(text), ...patch }), 'a passphrase');
+      expect(result.ok).toBe(false);
+    }
+  });
+
   it('rejects tampered ciphertext rather than returning partial content', async () => {
     const text = await encryptForExport(fixture(), 'a passphrase');
     const envelope = JSON.parse(text);

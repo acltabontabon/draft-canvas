@@ -55,7 +55,7 @@ longer than 64 characters. No canvas content is written there, and a test
 
 ### In memory only
 
-The undo/redo history, the clipboard, the current selection, and Explain Mode state. None of it
+The undo/redo history, the clipboard, the current selection, and presentation state. None of it
 is persisted anywhere; closing the tab discards it.
 
 ## What leaves your machine

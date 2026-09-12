@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type PointerEvent, type RefObject } from 'react';
 import { PRODUCT } from '../../product';
-import { ARCHITECTURE_STARTERS, type StarterId } from '../../starters';
+import type { StarterId } from '../../starters';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
@@ -10,6 +10,7 @@ import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { SelectionChrome } from './SelectionChrome';
 import { StarterShelf } from './StarterShelf';
+import { useStarters } from './useStarters';
 
 /**
  * The home screen for a library with nothing in it — the first thing anyone sees, so it does one
@@ -31,6 +32,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
   const spotlight = useSpotlight(sheetRef);
 
   const startBlank = () => void session.newDocument();
+  const starters = useStarters();
   const startFrom = (id: StarterId) => void session.newDocument(undefined, id);
   const newDocument = useRef(session.newDocument);
   useEffect(() => {
@@ -108,12 +110,16 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
             <p className="dc-home-cheat" aria-hidden="true">
               Or cheat a little.
             </p>
-            <StarterShelf
-              starters={ARCHITECTURE_STARTERS}
-              onStart={startFrom}
-              onExitStart={() => sheetRef.current?.focus()}
-              shelfRef={shelfRef}
-            />
+            {starters ? (
+              <StarterShelf
+                starters={starters.ARCHITECTURE_STARTERS}
+                onStart={startFrom}
+                onExitStart={() => sheetRef.current?.focus()}
+                shelfRef={shelfRef}
+              />
+            ) : (
+              <div className="dc-shelf-pending" aria-hidden="true" />
+            )}
           </div>
         </div>
 

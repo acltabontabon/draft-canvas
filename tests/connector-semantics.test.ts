@@ -846,6 +846,19 @@ describe('reconnectEdge() — reclassifying an eligible connector when the topol
     });
   });
 
+  it('dropping an endpoint onto the other endpoint is a true no-op — no undo entry, no save', () => {
+    const serviceA = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const serviceB = store.getState().addNode({ type: 'service', x: 300, y: 0 });
+    const edge = store.getState().connect(serviceA.id, serviceB.id)!;
+    const { document, history, revision } = store.getState();
+
+    store.getState().reconnectEdge(edge.id, 'source', serviceB.id, 'left');
+
+    expect(store.getState().document).toBe(document);
+    expect(store.getState().history).toBe(history);
+    expect(store.getState().revision).toBe(revision);
+  });
+
   it('a Service A → Service B call becomes a Service → Database write when retargeted', () => {
     const serviceA = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const serviceB = store.getState().addNode({ type: 'service', x: 300, y: 0 });

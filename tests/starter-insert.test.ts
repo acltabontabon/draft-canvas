@@ -5,7 +5,7 @@ import { LIMITS } from '../src/document/limits';
 import { boundsOf, freeOriginFor, INSERT_GAP } from '../src/document/operations';
 import type { Bounds } from '../src/document/operations';
 import { parseDocument } from '../src/document/validate';
-import { ARCHITECTURE_STARTERS, starterSize } from '../src/starters';
+import { ARCHITECTURE_STARTERS, starterById, starterSize } from '../src/starters';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 /** Inserting a starter is the one action in the app that puts a whole diagram on the canvas at
@@ -34,7 +34,7 @@ describe('insertStarter', () => {
   it.each(ARCHITECTURE_STARTERS.map((s) => [s.name, s] as const))(
     'puts %s on an empty canvas and selects it',
     (_label, starter) => {
-      const created = store.getState().insertStarter(starter.id);
+      const created = store.getState().insertStarter(starter);
       const state = store.getState();
       expect(created).toHaveLength(starter.nodes.length);
       expect(state.document.nodes).toHaveLength(starter.nodes.length);
@@ -50,7 +50,7 @@ describe('insertStarter', () => {
   );
 
   it('is one undo step, and redo brings the whole architecture back', () => {
-    const created = store.getState().insertStarter('microservices');
+    const created = store.getState().insertStarter(starterById('microservices')!);
     expect(store.getState().history.past).toHaveLength(1);
 
     store.getState().undo();
@@ -68,15 +68,15 @@ describe('insertStarter', () => {
     const existing = store.getState().addNode({ type: 'note', x: 40, y: 40, text: 'mine' });
     const before = store.getState().document.nodes.map((node) => ({ ...node }));
 
-    store.getState().insertStarter('monolith');
+    store.getState().insertStarter(starterById('monolith')!);
 
     const after = store.getState().document.nodes.filter((node) => node.id === existing.id);
     expect(after).toEqual(before);
   });
 
   it('never drops a second starter on top of the first', () => {
-    const first = boundsOf(store.getState().insertStarter('microservices'))!;
-    const second = boundsOf(store.getState().insertStarter('microservices'))!;
+    const first = boundsOf(store.getState().insertStarter(starterById('microservices')!))!;
+    const second = boundsOf(store.getState().insertStarter(starterById('microservices')!))!;
     expect(intersects(first, second)).toBe(false);
     expect(second.x).toBeGreaterThanOrEqual(first.x + first.width + INSERT_GAP);
     // Both are still whole: nothing was merged, nothing reused an id.
@@ -86,8 +86,8 @@ describe('insertStarter', () => {
   });
 
   it('clears one starter at a time, newest first', () => {
-    store.getState().insertStarter('monolith');
-    store.getState().insertStarter('event-driven');
+    store.getState().insertStarter(starterById('monolith')!);
+    store.getState().insertStarter(starterById('event-driven')!);
     expect(store.getState().document.nodes).toHaveLength(18);
     store.getState().undo();
     expect(store.getState().document.nodes).toHaveLength(7);
@@ -98,7 +98,7 @@ describe('insertStarter', () => {
   it.each(ARCHITECTURE_STARTERS.filter((s) => s.flows?.length).map((s) => [s.name, s] as const))(
     'ships %s with its predefined flows, every step pointing at a live connector',
     (_label, starter) => {
-      store.getState().insertStarter(starter.id);
+      store.getState().insertStarter(starter);
       const doc = store.getState().document;
       expect(doc.flows.map((flow) => flow.title)).toEqual(starter.flows!.map((flow) => flow.title));
       const edgeIds = new Set(doc.edges.map((edge) => edge.id));
@@ -112,7 +112,7 @@ describe('insertStarter', () => {
   );
 
   it('takes the flows out with one undo and brings them back with one redo', () => {
-    store.getState().insertStarter('saga-orchestration');
+    store.getState().insertStarter(starterById('saga-orchestration')!);
     expect(store.getState().history.past).toHaveLength(1);
     const flows = store.getState().document.flows;
     expect(flows).toHaveLength(2);
@@ -126,8 +126,8 @@ describe('insertStarter', () => {
   });
 
   it('inserts the same starter twice with two independent sets of flows', () => {
-    store.getState().insertStarter('cqrs');
-    store.getState().insertStarter('cqrs');
+    store.getState().insertStarter(starterById('cqrs')!);
+    store.getState().insertStarter(starterById('cqrs')!);
     const doc = store.getState().document;
     expect(doc.flows).toHaveLength(4);
     expect(new Set(doc.flows.map((flow) => flow.id)).size).toBe(4);
@@ -141,20 +141,20 @@ describe('insertStarter', () => {
   it('leaves existing flows alone, and still inserts the diagram when the flow cap is already reached', () => {
     const mine = createFlow({ title: 'Mine' });
     store.setState((state) => ({ document: { ...state.document, flows: [mine] } }));
-    store.getState().insertStarter('transactional-outbox');
+    store.getState().insertStarter(starterById('transactional-outbox')!);
     expect(store.getState().document.flows[0]).toEqual(mine);
     expect(store.getState().document.flows).toHaveLength(4);
 
     reset();
     const full = Array.from({ length: LIMITS.maxFlows }, (_, i) => createFlow({ title: `Flow ${i}` }));
     store.setState((state) => ({ document: { ...state.document, flows: full } }));
-    const created = store.getState().insertStarter('transactional-outbox');
+    const created = store.getState().insertStarter(starterById('transactional-outbox')!);
     expect(created).toHaveLength(8);
     expect(store.getState().document.flows).toHaveLength(LIMITS.maxFlows);
   });
 
   it('keeps its flows through a save and reopen', () => {
-    store.getState().insertStarter('saga-orchestration');
+    store.getState().insertStarter(starterById('saga-orchestration')!);
     const before = store.getState().document;
     const result = parseDocument(JSON.stringify(before));
     expect(result.ok).toBe(true);
@@ -166,13 +166,6 @@ describe('insertStarter', () => {
     );
   });
 
-  it('does nothing at all for an id that is not in the catalog', () => {
-    // Only reachable from a hand-written call or a stale persisted command id, but "insert
-    // nothing" must never mean "insert an empty undo entry".
-    expect(store.getState().insertStarter('nope' as never)).toEqual([]);
-    expect(store.getState().document.nodes).toEqual([]);
-    expect(store.getState().history.past).toEqual([]);
-  });
 });
 
 describe('freeOriginFor', () => {
@@ -201,7 +194,7 @@ describe('freeOriginFor', () => {
   it('agrees with the size the starter actually builds to', () => {
     for (const starter of ARCHITECTURE_STARTERS) {
       reset();
-      const created = store.getState().insertStarter(starter.id);
+      const created = store.getState().insertStarter(starter);
       const bounds = boundsOf(created)!;
       expect({ width: bounds.width, height: bounds.height }).toEqual(starterSize(starter));
     }
@@ -212,7 +205,7 @@ describe('a starter after insertion is an ordinary diagram', () => {
   beforeEach(reset);
 
   it('can be edited, regrouped and deleted like anything else', () => {
-    const created = store.getState().insertStarter('microservices');
+    const created = store.getState().insertStarter(starterById('microservices')!);
     const service = created.find((node) => node.text === 'Orders')!;
 
     store.getState().updateNodeText(service.id, 'Fulfilment');
@@ -229,7 +222,7 @@ describe('a starter after insertion is an ordinary diagram', () => {
   });
 
   it('re-derives a connector when the node it points at changes kind', () => {
-    const created = store.getState().insertStarter('monolith');
+    const created = store.getState().insertStarter(starterById('monolith')!);
     const database = created.find((node) => node.type === 'database')!;
     store.getState().updateNodeById(database.id, { databaseKind: 'cache' });
     const edge = store.getState().document.edges.find((e) => e.target === database.id)!;
@@ -241,7 +234,7 @@ describe('a starter after insertion is an ordinary diagram', () => {
   it('keeps every starter within the document limits it will be validated against', () => {
     for (const starter of ARCHITECTURE_STARTERS) {
       reset();
-      store.getState().insertStarter(starter.id);
+      store.getState().insertStarter(starter);
       for (const node of store.getState().document.nodes) {
         expect(Number.isFinite(node.x) && Number.isFinite(node.y)).toBe(true);
         expect(node.width).toBeGreaterThanOrEqual(24);

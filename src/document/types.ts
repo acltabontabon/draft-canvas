@@ -550,6 +550,13 @@ export interface BackgroundSettings {
   dim: number;
   /** 0 (none) – 1 (maximum), mapped to a CSS/SVG blur radius at render time. */
   blur: number;
+  /**
+   * Which stored image this is. Each chosen image gets its own id, so replacing one is an ordinary
+   * settings change undo can step back through — the previous image's bytes are still there until
+   * the canvas closes. Absent on backgrounds set before this existed: those read the one image
+   * stored under the document's own id.
+   */
+  imageId?: string;
 }
 
 export interface DraftSettings {

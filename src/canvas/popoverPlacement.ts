@@ -9,6 +9,7 @@
  * same isolation `EdgeInspectorPopover.tsx`'s own clearance comment already establishes as house
  * style for this codebase.
  */
+import { clamp } from '../lib/math';
 
 export type Placement = 'above' | 'below' | 'right' | 'left';
 export const PLACEMENT_ORDER: Placement[] = ['above', 'below', 'right', 'left'];
@@ -38,8 +39,6 @@ export interface PlacementClearances {
   left: number;
   right: number;
 }
-
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 /** The four candidate anchor points on a flow-space rect's own boundary, one per placement. */
 export function anchorsForRect(rect: PlacementRect): Record<Placement, PlacementPoint> {
@@ -93,39 +92,39 @@ export function resolvePlacement(
 }
 
 /** The CSS `transform` string that positions the popover for a resolved placement, cross-axis
- *  clamped so it never clips off-screen even right at a viewport corner. */
+ *  clamped so it never clips off-screen even right at a viewport corner. The result is in the
+ *  popover container's own coordinates — `screenToContainer` maps a page point into them (see
+ *  `useCanvasOverlay`; identity for a popover already positioned against the page). The gap is
+ *  in screen pixels, like every clearance, so it never shrinks or grows with zoom. */
 export function placementTransform(
   placement: Placement,
   anchors: Record<Placement, PlacementPoint>,
   size: PlacementSize,
   clearances: PlacementClearances,
   flowToScreenPosition: (point: PlacementPoint) => PlacementPoint,
-  screenToFlowPosition: (point: PlacementPoint) => PlacementPoint,
+  screenToContainer: (point: PlacementPoint) => PlacementPoint,
 ): string {
+  const screenAnchor = flowToScreenPosition(anchors[placement]);
   if (placement === 'above' || placement === 'below') {
-    const anchor = anchors[placement];
-    const screenAnchor = flowToScreenPosition(anchor);
     const halfWidth = size.width / 2;
     const clampedScreenX = clamp(
       screenAnchor.x,
       clearances.left + halfWidth,
       window.innerWidth - clearances.right - halfWidth,
     );
-    const flowX = screenToFlowPosition({ x: clampedScreenX, y: screenAnchor.y }).x;
+    const at = screenToContainer({ x: clampedScreenX, y: screenAnchor.y });
     return placement === 'above'
-      ? `translate(-50%, -100%) translate(${flowX}px, ${anchor.y - clearances.gap}px)`
-      : `translate(-50%, 0) translate(${flowX}px, ${anchor.y + clearances.gap}px)`;
+      ? `translate(-50%, -100%) translate(${at.x}px, ${at.y - clearances.gap}px)`
+      : `translate(-50%, 0) translate(${at.x}px, ${at.y + clearances.gap}px)`;
   }
-  const anchor = anchors[placement];
-  const screenAnchor = flowToScreenPosition(anchor);
   const halfHeight = size.height / 2;
   const clampedScreenY = clamp(
     screenAnchor.y,
     clearances.top + halfHeight,
     window.innerHeight - clearances.bottom - halfHeight,
   );
-  const flowY = screenToFlowPosition({ x: screenAnchor.x, y: clampedScreenY }).y;
+  const at = screenToContainer({ x: screenAnchor.x, y: clampedScreenY });
   return placement === 'right'
-    ? `translate(0, -50%) translate(${anchor.x + clearances.gap}px, ${flowY}px)`
-    : `translate(-100%, -50%) translate(${anchor.x - clearances.gap}px, ${flowY}px)`;
+    ? `translate(0, -50%) translate(${at.x + clearances.gap}px, ${at.y}px)`
+    : `translate(-100%, -50%) translate(${at.x - clearances.gap}px, ${at.y}px)`;
 }

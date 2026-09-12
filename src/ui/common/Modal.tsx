@@ -35,7 +35,6 @@ export function Modal({ title, onClose, children, footer, width = 460, className
   // Mount-only: focusing the panel on every re-run of the keydown-listener effect below would
   // steal focus back from whatever's focused inside the modal (e.g. a slider or text field)
   // any time a caller passes a fresh `onClose` identity — which most do, on every render.
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     panel.current?.focus();
   }, []);

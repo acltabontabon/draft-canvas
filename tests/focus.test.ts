@@ -40,6 +40,33 @@ describe('focus mode', () => {
     expect(store.getState().focus.nodeIds).toEqual(['b']);
   });
 
+  it('drops deleted elements from focus, and leaves Focus when nothing focused is left', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 300, y: 0 });
+    store.getState().enterFocus([a.id, b.id], []);
+
+    store.getState().setSelection({ nodes: [a.id], edges: [] });
+    store.getState().deleteSelection();
+    expect(store.getState().focus).toEqual({ active: true, nodeIds: [b.id], edgeIds: [] });
+
+    store.getState().setSelection({ nodes: [b.id], edges: [] });
+    store.getState().deleteSelection();
+    expect(store.getState().focus.active).toBe(false);
+  });
+
+  it('ignores undo and redo while a drag or resize is still held', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    store.getState().beginInteraction('Move');
+    store.getState().updateNodeById(a.id, { x: 50 });
+    const past = store.getState().history.past.length;
+    store.getState().undo();
+    expect(store.getState().document.nodes[0]!.x).toBe(50);
+    store.getState().endInteraction();
+    expect(store.getState().history.past).toHaveLength(past + 1);
+    store.getState().undo();
+    expect(store.getState().document.nodes[0]!.x).toBe(0);
+  });
+
   it('does nothing when toggling while focus is not active', () => {
     store.getState().toggleFocusMember('a', 'node');
     expect(store.getState().focus).toEqual({ active: false, nodeIds: [], edgeIds: [] });

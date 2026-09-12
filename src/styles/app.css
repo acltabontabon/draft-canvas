@@ -1281,10 +1281,26 @@ kbd {
   .dc-shelf-readout[data-idle] {
     visibility: hidden;
   }
+
+  /* Hover-revealed row actions have no hover to reveal them on touch — they'd be invisible yet
+     still tappable. Shown outright instead. */
+  /* The panel prefix out-ranks the at-rest rules declared further down this file. */
+  .dc-sidebar-project-actions,
+  .dc-flow-panel .dc-flow-item-actions .dc-button,
+  .dc-flow-panel .dc-flow-step-actions .dc-button {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .dc-library-welcome .dc-shelf {
   margin-top: 20px;
+}
+
+/* Holds the shelf's place for the moment the starter catalog's chunk is arriving, so the page
+   doesn't jump when the tiles land. */
+.dc-shelf-pending {
+  min-height: 240px;
 }
 
 /* ---- the foot ----------------------------------------------------------- */
@@ -1697,6 +1713,13 @@ kbd {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+/* The editor's chunk arriving (see `App.tsx`) — the canvas ground, never a flash of the page's. Its
+   own class, not `.dc-editor`: nothing may mistake this placeholder for the mounted editor. */
+.dc-editor-loading {
+  height: 100%;
+  background: var(--dc-canvas);
 }
 
 .dc-editor-canvas {
@@ -2175,7 +2198,9 @@ kbd {
   width: 16px;
   height: 16px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  /* Relative to the text colour, so a pale swatch keeps a visible edge on the light theme's white
+     surface as well as the dark one's. */
+  border: 1px solid color-mix(in srgb, var(--dc-text) 16%, transparent);
   border-radius: 4px;
   cursor: pointer;
 }
@@ -2323,23 +2348,6 @@ kbd {
 }
 
 /* ----------------------------------------------------------------- flows -- */
-
-/* A small text field, reused wherever the Flow feature needs one — a
-   connector's condition, a flow's title. */
-.dc-input {
-  min-width: 0;
-  padding: 3px 7px;
-  border: 1px solid var(--dc-border);
-  border-radius: 4px;
-  background: var(--dc-surface-raised);
-  color: var(--dc-text);
-  font: inherit;
-  font-size: 12px;
-}
-
-.dc-input-response {
-  width: 130px;
-}
 
 .dc-flow-panel {
   position: absolute;

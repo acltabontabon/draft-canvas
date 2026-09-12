@@ -63,6 +63,7 @@ import {
   type TextAlign,
   type TextRole,
 } from './types';
+import { clamp } from '../lib/math';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
@@ -73,8 +74,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const finite = (value: unknown, fallback: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-
-const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
 /**
  * Control characters have no place in a label and confuse DOM and SVG alike.
@@ -383,25 +382,29 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     nodes.push(node);
   }
 
-  // Second pass: resolve parents, dropping dangling, self- and cyclic links.
+  // Second pass: resolve parents, dropping dangling, self-, non-boundary and cyclic links.
   let droppedParents = 0;
+  const byId = new Map(nodes.map((n) => [n.id, n]));
   for (const node of nodes) {
     if (!node.parentId) continue;
     const mapped = nodeIdRemap.get(node.parentId);
-    if (!mapped || mapped === node.id) {
+    // Only a boundary contains anything: delete cascades through `parentId`, so a note
+    // "inside" a service would vanish with it.
+    if (!mapped || mapped === node.id || byId.get(mapped)?.type !== 'group') {
       delete node.parentId;
       droppedParents += 1;
       continue;
     }
     node.parentId = mapped;
   }
-  const byId = new Map(nodes.map((n) => [n.id, n]));
+  // A link is only broken where the node itself sits on the cycle. A node whose chain merely
+  // leads into a cycle keeps its parent — the cycle is cut at one of its own members instead.
   for (const node of nodes) {
     if (!node.parentId) continue;
-    const visited = new Set<string>([node.id]);
+    const visited = new Set<string>();
     let cursor = byId.get(node.parentId);
-    while (cursor) {
-      if (visited.has(cursor.id)) {
+    while (cursor && !visited.has(cursor.id)) {
+      if (cursor.id === node.id) {
         delete node.parentId;
         droppedParents += 1;
         break;
@@ -719,6 +722,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
         fit: oneOf<BackgroundFit>(backgroundRaw.fit, BACKGROUND_FITS, 'cover'),
         dim: clamp(finite(backgroundRaw.dim, 0.55), 0, 1),
         blur: clamp(finite(backgroundRaw.blur, 0), 0, 1),
+        ...(safeId(backgroundRaw.imageId) ? { imageId: safeId(backgroundRaw.imageId)! } : {}),
       },
     },
     flows,

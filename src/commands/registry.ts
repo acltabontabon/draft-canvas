@@ -1069,7 +1069,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       keywords: ['move start', 'from', 'origin', 'retarget'],
       run: (inner) => ({
         prompt: 'Source',
-        options: nodeOptions(endpointCandidates(inner, [edge.source]), 'reconnect-source', (node, deep) =>
+        options: nodeOptions(endpointCandidates(inner, [edge.source, edge.target]), 'reconnect-source', (node, deep) =>
           deep.editor.reconnectEdge(edge.id, 'source', node.id, undefined),
         ),
       }),
@@ -1081,7 +1081,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       keywords: ['move end', 'to', 'destination', 'retarget'],
       run: (inner) => ({
         prompt: 'Target',
-        options: nodeOptions(endpointCandidates(inner, [edge.target]), 'reconnect-target', (node, deep) =>
+        options: nodeOptions(endpointCandidates(inner, [edge.source, edge.target]), 'reconnect-target', (node, deep) =>
           deep.editor.reconnectEdge(edge.id, 'target', node.id, undefined),
         ),
       }),
@@ -1292,7 +1292,7 @@ export function starterCommands(): Command[] {
     group: starter.category === 'pattern' ? 'pattern' : 'starter',
     keywords: starter.aliases,
     hint: starter.description,
-    run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter.id))),
+    run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter))),
   }));
 }
 

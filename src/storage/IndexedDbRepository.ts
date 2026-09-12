@@ -8,6 +8,7 @@ import type { EncryptedBody } from '../crypto/types';
 import {
   QuotaExceededError,
   StorageUnavailableError,
+  backgroundImageKey,
   isQuotaError,
   summarize,
   type DraftRepository,
@@ -305,6 +306,8 @@ export class IndexedDbRepository implements DraftRepository {
       tx.objectStore('documents').delete(id),
       tx.objectStore('bodies').delete(id),
       tx.objectStore('backgroundImages').delete(id),
+      // Every image the document ever had under `BackgroundSettings.imageId` (`<id>#<imageId>`).
+      tx.objectStore('backgroundImages').delete(IDBKeyRange.bound(`${id}#`, `${id}#\uffff`)),
       tx.done,
     ]);
   }
@@ -386,7 +389,14 @@ export class IndexedDbRepository implements DraftRepository {
     for (const row of legacy) {
       try {
         const encrypted = await migrateLegacyRecord(row, key);
-        await this.db.put('bodies', encrypted);
+        // `all` was read before any of this async work: if the diagram was opened and
+        // autosaved meanwhile, its row is already a newer encrypted body, and writing
+        // this stale plaintext snapshot's ciphertext over it would silently undo those
+        // edits. Every save encrypts, so "still legacy" means "still untouched".
+        const tx = this.db.transaction('bodies', 'readwrite');
+        const current = await tx.store.get(row.id);
+        if (current && isLegacyBody(current)) await tx.store.put(encrypted);
+        await tx.done;
         migrated += 1;
       } catch (error) {
         failed += 1;
@@ -400,10 +410,11 @@ export class IndexedDbRepository implements DraftRepository {
     documentId: string,
     blob: Blob,
     dims: { width: number; height: number },
+    imageId?: string,
   ): Promise<void> {
     try {
       await this.db.put('backgroundImages', {
-        id: documentId,
+        id: backgroundImageKey(documentId, imageId),
         blob,
         mimeType: blob.type,
         width: dims.width,
@@ -417,8 +428,9 @@ export class IndexedDbRepository implements DraftRepository {
 
   async loadBackgroundImage(
     documentId: string,
+    imageId?: string,
   ): Promise<{ blob: Blob; width: number; height: number } | null> {
-    const row = await this.db.get('backgroundImages', documentId);
+    const row = await this.db.get('backgroundImages', backgroundImageKey(documentId, imageId));
     if (!row) return null;
     // Some IndexedDB implementations don't round-trip a Blob's `type` through
     // structured clone — `mimeType` is stored alongside for exactly this case.
@@ -426,8 +438,18 @@ export class IndexedDbRepository implements DraftRepository {
     return { blob, width: row.width, height: row.height };
   }
 
-  async removeBackgroundImage(documentId: string): Promise<void> {
-    await this.db.delete('backgroundImages', documentId);
+  async removeBackgroundImage(documentId: string, imageId?: string): Promise<void> {
+    await this.db.delete('backgroundImages', backgroundImageKey(documentId, imageId));
+  }
+
+  async pruneBackgroundImages(documentId: string, keep: { imageId?: string } | null): Promise<void> {
+    const kept = keep ? backgroundImageKey(documentId, keep.imageId) : null;
+    const tx = this.db.transaction('backgroundImages', 'readwrite');
+    const keys = [
+      documentId,
+      ...(await tx.store.getAllKeys(IDBKeyRange.bound(`${documentId}#`, `${documentId}#\uffff`))),
+    ];
+    await Promise.all([...keys.filter((key) => key !== kept).map((key) => tx.store.delete(key)), tx.done]);
   }
 }
 

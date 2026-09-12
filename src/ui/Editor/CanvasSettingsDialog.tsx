@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { BACKGROUND_FITS, type BackgroundFit } from '../../document/types';
+import { createId } from '../../document/ids';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { getRepository } from '../../storage';
@@ -40,7 +41,6 @@ export function CanvasSettingsDialog() {
   const notify = useUiStore((state) => state.notify);
   const continuationsEnabled = useUiStore((state) => state.continuationsEnabled);
   const setContinuationsEnabled = useUiStore((state) => state.setContinuationsEnabled);
-  const bumpBackgroundImageVersion = useUiStore((state) => state.bumpBackgroundImageVersion);
   const document = useEditorStore((state) => state.document);
   const updateSettings = useEditorStore((state) => state.updateSettings);
   const { preset, setPreset } = usePersonality();
@@ -60,9 +60,11 @@ export function CanvasSettingsDialog() {
       const dims = { width: bitmap.width, height: bitmap.height };
       bitmap.close();
       const repository = await getRepository();
-      await repository.saveBackgroundImage(documentId, file, dims);
-      updateSettings({ background: { ...background, enabled: true } });
-      bumpBackgroundImageVersion();
+      // A fresh id per image, never an overwrite: choosing or replacing one is then a plain settings
+      // change, and ⌘Z steps back to the previous image, whose bytes are still stored.
+      const imageId = createId('bg');
+      await repository.saveBackgroundImage(documentId, file, dims, imageId);
+      updateSettings({ background: { ...background, enabled: true, imageId } });
     } catch {
       notify("Couldn't use that image — try a different file.", 'error');
     } finally {
@@ -70,16 +72,9 @@ export function CanvasSettingsDialog() {
     }
   };
 
-  const onRemove = async () => {
-    setBusy(true);
-    try {
-      const repository = await getRepository();
-      await repository.removeBackgroundImage(documentId);
-      updateSettings({ background: { ...background, enabled: false } });
-    } finally {
-      setBusy(false);
-    }
-  };
+  // Remove only switches the background off; stored images stay until the canvas is closed (see
+  // `useDocumentSession`'s `closeDocument`), so ⌘Z brings it straight back.
+  const onRemove = () => updateSettings({ background: { ...background, enabled: false } });
 
   return (
     <Modal title="Canvas settings" width={480} onClose={() => setOpen(false)}>
@@ -112,7 +107,7 @@ export function CanvasSettingsDialog() {
               {background.enabled ? 'Replace image…' : 'Choose image…'}
             </Button>
             {background.enabled && (
-              <Button variant="quiet" icon="trash" disabled={busy} onClick={() => void onRemove()}>
+              <Button variant="quiet" icon="trash" disabled={busy} onClick={onRemove}>
                 Remove
               </Button>
             )}

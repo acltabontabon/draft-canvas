@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { shortcutCatalog, shortcutFor } from '../src/commands/shortcutLookup';
-import { isCommandRow, SECTIONS } from '../src/ui/Editor/ShortcutSheet';
+import { isCommandRow, SECTIONS } from '../src/ui/Editor/shortcutSections';
 import { MOD_SYMBOL } from '../src/lib/platform';
 
 /**

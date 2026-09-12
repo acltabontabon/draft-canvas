@@ -1,3 +1,4 @@
+import { Lru } from '../../lib/lru';
 import { bowControlPoint } from './roughRect';
 import { jitter } from './seed';
 
@@ -40,8 +41,16 @@ function segmentEndpoint(segment: PathSegment): { x: number; y: number } {
  * touch at all — its single point is simultaneously "first" and "last") wobble for the first
  * time; `Q`/`C` segments are left to the `amplitude` pass alone, since they're already curved.
  */
+/** Pure in its inputs, and every connector re-renders far more often than its path changes (a
+ *  selection, a lens, a playback step) — so each wobble is computed once, not on every render. */
+const roughened = new Lru<string, string>(4096);
+
 export function roughenPath(d: string, seedId: string, amplitude: number, bow = 0): string {
   if (amplitude === 0 && bow === 0) return d;
+  return roughened.getOrCreate(`${amplitude}|${bow}|${seedId}|${d}`, () => roughenPathUncached(d, seedId, amplitude, bow));
+}
+
+function roughenPathUncached(d: string, seedId: string, amplitude: number, bow: number): string {
   const segments = parseSegments(d);
   if (segments.length === 0) return d;
 
