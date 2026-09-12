@@ -1894,6 +1894,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* Only the buttons opt back into pointer events (below) — the row itself stays click-through so
+   * the label, the gaps between names, and the space a shorter line leaves all still reach the
+   * canvas underneath instead of eating the click. */
   /*
    * The rhythm of the whole lower half, in one number each.
    *
@@ -1909,7 +1912,6 @@
   gap: 14px;
   /* Plus `.dc-empty`'s own 6px, so 30px of air above the divider against 18px below it. */
   margin-top: 24px;
-  pointer-events: auto;
 }
 
 /*
@@ -2014,6 +2016,7 @@
   font-size: 12px;
   cursor: pointer;
   transition: color 120ms ease, background-color 120ms ease;
+  pointer-events: auto;
 }
 
 /*

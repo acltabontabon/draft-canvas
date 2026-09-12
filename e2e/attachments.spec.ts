@@ -18,6 +18,14 @@ async function create(page: Page, tool: string, at: { x: number; y: number }) {
   // A new Note opens ready to type into; Escape commits (empty) and leaves it selected, so the
   // rest of a test sees the same plain, selected node it would for any other tool.
   if (tool === 'Note') await page.keyboard.press('Escape');
+  // A new Text node opens ready to type into, and an untyped one is deleted the instant it's
+  // deselected (`finishTextEdit`, so it never becomes an invisible ghost) — Escape included, since
+  // Escape never commits for Text. Typing something and committing with Cmd/Ctrl+Enter is the only
+  // way to leave a Text node on the canvas.
+  if (tool === 'Text') {
+    await page.keyboard.type('Text');
+    await page.keyboard.press('ControlOrMeta+Enter');
+  }
 }
 
 /** Drags a node by its center to a new center point, holding partway through. */

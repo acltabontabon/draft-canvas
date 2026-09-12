@@ -38,6 +38,14 @@ async function newCanvas(page: Page, title: string) {
 async function create(page: Page, tool: string, at: { x: number; y: number }) {
   await page.getByRole('button', { name: tool, exact: true }).click();
   await page.locator('.react-flow__pane').click({ position: at });
+  // A new Text node opens ready to type into, and an untyped one is deleted the instant it's
+  // deselected (`finishTextEdit`, so it never becomes an invisible ghost) — Escape included, since
+  // Escape never commits for Text. Typing something and committing with Cmd/Ctrl+Enter is the only
+  // way to leave a Text node on the canvas.
+  if (tool === 'Text') {
+    await page.keyboard.type('Text');
+    await page.keyboard.press('ControlOrMeta+Enter');
+  }
 }
 
 /** Drags from a node's right-hand handle onto another node. */
