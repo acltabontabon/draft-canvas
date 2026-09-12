@@ -1,23 +1,15 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type PointerEvent, type RefObject } from 'react';
+import { useEffect, useId, useRef, type PointerEvent, type RefObject } from 'react';
 import { PRODUCT } from '../../product';
 import { ARCHITECTURE_STARTERS, type StarterId } from '../../starters';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
+import { Wire } from '../common/Wire';
+import { useWireGeometry } from '../common/wireGeometry';
 import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { SelectionChrome } from './SelectionChrome';
 import { StarterShelf } from './StarterShelf';
-
-/** Where the wire's arrowheads stop short of a category label, and how far out the spine sits. */
-const TICK = 22;
-
-interface WireGeometry {
-  width: number;
-  height: number;
-  trunkY: number;
-  labelYs: number[];
-}
 
 /**
  * The home screen for a library with nothing in it — the first thing anyone sees, so it does one
@@ -35,7 +27,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
   const stageRef = useRef<HTMLDivElement>(null);
   const wireRef = useRef<HTMLDivElement>(null);
   const importHintId = useId();
-  const wire = useWireGeometry(stageRef, wireRef, sheetRef);
+  const wire = useWireGeometry(stageRef, wireRef, sheetRef, '.dc-shelf-label');
   const spotlight = useSpotlight(sheetRef);
 
   const startBlank = () => void session.newDocument();
@@ -109,7 +101,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
           </div>
 
           <div className="dc-home-wire" ref={wireRef} aria-hidden="true">
-            {wire && <Wire geometry={wire} />}
+            {wire && <Wire geometry={wire} caption="or cheat a little" />}
           </div>
 
           <div className="dc-home-starters">
@@ -149,100 +141,6 @@ function Motto({ text }: { text: string }) {
       {sentences.length > 0 && <span className="dc-home-motto-setup">{sentences.join(' ')} </span>}
       <span className="dc-home-motto-punch">{punchline}</span>
     </p>
-  );
-}
-
-/**
- * The connector from the blank canvas to the starters: a trunk out of the sheet's middle, a
- * spine down the shelf's left edge, one arrowed branch into each category label — the same
- * fan-out shape Smart Routing draws on the canvas. The only thing it needs from layout is where
- * those labels and the sheet's middle actually landed, so it measures them (one ResizeObserver,
- * nothing on scroll or pointer) rather than guessing: any category split, any catalog size.
- */
-function Wire({ geometry }: { geometry: WireGeometry }) {
-  const { width, height, trunkY, labelYs } = geometry;
-  const spineX = width - TICK;
-  const top = Math.min(trunkY, ...labelYs);
-  const bottom = Math.max(trunkY, ...labelYs);
-  const tipX = width - 5;
-  return (
-    <>
-      <svg className="dc-wire" width={width} height={height} viewBox={`0 0 ${width} ${height}`} focusable="false">
-        <path className="dc-wire-trunk" d={`M0 ${trunkY}H${spineX}`} pathLength={1} />
-        {bottom - top > 1 && <path className="dc-wire-spine" d={`M${spineX} ${top}V${bottom}`} pathLength={1} />}
-        {labelYs.map((y, i) => (
-          <g key={i} className="dc-wire-branch">
-            <path d={`M${spineX} ${y}H${tipX}`} pathLength={1} />
-            <path className="dc-wire-arrow" d={`M${tipX - 4} ${y - 3}L${tipX} ${y}L${tipX - 4} ${y + 3}`} />
-          </g>
-        ))}
-        <circle className="dc-wire-source" cx={3.5} cy={trunkY} r={3} />
-        <circle className="dc-wire-junction" cx={spineX} cy={trunkY} r={2.5} />
-      </svg>
-      <span className="dc-wire-caption" style={{ left: spineX / 2, top: trunkY }}>
-        or cheat a little
-      </span>
-    </>
-  );
-}
-
-function useWireGeometry(
-  stageRef: RefObject<HTMLDivElement | null>,
-  wireRef: RefObject<HTMLDivElement | null>,
-  sheetRef: RefObject<HTMLButtonElement | null>,
-): WireGeometry | null {
-  const [geometry, setGeometry] = useState<WireGeometry | null>(null);
-
-  useLayoutEffect(() => {
-    const stage = stageRef.current;
-    const wire = wireRef.current;
-    const sheet = sheetRef.current;
-    if (!stage || !wire || !sheet || typeof ResizeObserver === 'undefined') return;
-    // Layout offsets, not client rects: the arrival animation slides everything up a few pixels,
-    // and a wire measured mid-slide would point just below where each label comes to rest.
-    const middleOf = (element: HTMLElement) => topWithin(element, stage) + element.offsetHeight / 2;
-    const measure = () => {
-      const { clientWidth: width, clientHeight: height } = wire;
-      // Hidden below the wide breakpoint: nothing to draw, nothing to keep.
-      if (width === 0 || height === 0) {
-        setGeometry((current) => (current === null ? current : null));
-        return;
-      }
-      const top = topWithin(wire, stage);
-      const labels = [...stage.querySelectorAll<HTMLElement>('.dc-shelf-label')].map((label) =>
-        Math.round(middleOf(label) - top),
-      );
-      const next: WireGeometry = { width, height, trunkY: Math.round(middleOf(sheet) - top), labelYs: labels };
-      setGeometry((current) => (current && sameGeometry(current, next) ? current : next));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(stage);
-    observer.observe(sheet);
-    return () => observer.disconnect();
-  }, [sheetRef, stageRef, wireRef]);
-
-  return geometry;
-}
-
-/** `element`'s top edge within `ancestor`, by layout alone — transforms don't move it. */
-function topWithin(element: HTMLElement, ancestor: HTMLElement): number {
-  let top = 0;
-  let node: HTMLElement | null = element;
-  while (node && node !== ancestor) {
-    top += node.offsetTop;
-    node = node.offsetParent as HTMLElement | null;
-  }
-  return top;
-}
-
-function sameGeometry(a: WireGeometry, b: WireGeometry): boolean {
-  return (
-    a.width === b.width &&
-    a.height === b.height &&
-    a.trunkY === b.trunkY &&
-    a.labelYs.length === b.labelYs.length &&
-    a.labelYs.every((y, i) => y === b.labelYs[i])
   );
 }
 

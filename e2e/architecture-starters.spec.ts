@@ -84,12 +84,32 @@ test.describe('architecture starters', () => {
     page,
   }) => {
     await newCanvas(page, 'Starter empty state');
-    const starters = page.getByRole('group', { name: 'Starters' });
+    // Named exactly: the blank canvas's curated group and the full shelf inside "Browse all
+    // starters" are both groups of starters, and a substring match would find either.
+    const starters = page.getByRole('group', { name: 'Suggested starters', exact: true });
     await expect(starters).toBeVisible();
 
-    await starters.getByRole('button', { name: 'Event-Driven' }).click();
+    await starters.getByRole('button', { name: 'Start from Event-Driven', exact: true }).click();
     await expect(page.locator('.dc-node')).toHaveCount(11);
     await expect(starters).toBeHidden();
+  });
+
+  test('"Browse all starters" opens the full shelf, including what the canvas withholds', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Starter browser');
+    await expect(page.getByRole('group', { name: 'Suggested starters', exact: true })).toBeVisible();
+    // Hexagonal is deliberately not one of the four offered up front — this link is how it is found.
+    await expect(page.getByRole('button', { name: 'Start from Hexagonal' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Browse all starters' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('group', { name: 'Starters', exact: true })).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Start from Hexagonal', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('.dc-node').first()).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Suggested starters', exact: true })).toBeHidden();
   });
 
   test('a second starter lands clear of the first, and both survive a reload', async ({ page }) => {

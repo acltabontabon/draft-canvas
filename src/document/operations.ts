@@ -23,6 +23,23 @@ const clampCoord = (n: number) =>
     ? Math.max(-LIMITS.maxCoordinate, Math.min(LIMITS.maxCoordinate, Math.round(n)))
     : 0;
 
+/**
+ * Whether the canvas holds nothing at all — the one definition of "empty" the editor's empty
+ * state is allowed to use.
+ *
+ * Nodes alone are sufficient, which looks like a shortcut and isn't. A document's content is
+ * `nodes`, `edges` and `flows`; an edge cannot outlive its endpoints (`validate.ts` drops a
+ * dangling one on load, `removeElements` prunes it on delete), and a flow step only ever points
+ * at an edge — so a non-empty `edges` or `flows` implies a non-empty `nodes`. It is also what the
+ * status bar already calls the truth when it counts *elements*.
+ *
+ * Named rather than inlined so that if some future element is ever stored outside `nodes`, there
+ * is exactly one place that has to learn about it.
+ */
+export function isCanvasEmpty(doc: Pick<DraftDocument, 'nodes'>): boolean {
+  return doc.nodes.length === 0;
+}
+
 const clampSize = (n: number) =>
   Number.isFinite(n)
     ? Math.max(LIMITS.minNodeSize, Math.min(LIMITS.maxNodeSize, Math.round(n)))

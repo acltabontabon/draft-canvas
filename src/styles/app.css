@@ -1403,40 +1403,41 @@ kbd {
   animation-delay: 420ms;
 }
 
-.dc-wire-trunk,
-.dc-wire-spine,
-.dc-wire-branch path:first-child {
+/* Scoped: `Wire` is shared with the editor's empty canvas, which arrives on its own schedule. */
+.dc-home .dc-wire-trunk,
+.dc-home .dc-wire-spine,
+.dc-home .dc-wire-branch path:first-child {
   stroke-dasharray: 1;
   animation: dc-home-draw 260ms var(--dc-ease-out) both;
 }
 
-.dc-wire-trunk {
+.dc-home .dc-wire-trunk {
   animation-delay: 160ms;
 }
 
-.dc-wire-spine {
+.dc-home .dc-wire-spine {
   animation-delay: 340ms;
 }
 
-.dc-wire-branch path:first-child {
+.dc-home .dc-wire-branch path:first-child {
   animation-delay: 460ms;
 }
 
-.dc-wire-arrow,
-.dc-wire-junction,
-.dc-wire-caption {
+.dc-home .dc-wire-arrow,
+.dc-home .dc-wire-junction,
+.dc-home .dc-wire-caption {
   animation: dc-home-fade 200ms ease both;
 }
 
-.dc-wire-junction {
+.dc-home .dc-wire-junction {
   animation-delay: 320ms;
 }
 
-.dc-wire-caption {
+.dc-home .dc-wire-caption {
   animation-delay: 240ms;
 }
 
-.dc-wire-arrow {
+.dc-home .dc-wire-arrow {
   animation-delay: 580ms;
 }
 

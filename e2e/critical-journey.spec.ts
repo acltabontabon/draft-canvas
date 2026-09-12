@@ -266,7 +266,7 @@ test.describe('Draft Canvas', () => {
     await page.getByRole('button', { name: /^Delete Payment Flow/ }).click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
     // The last canvas gone is a first run again: the blank canvas and the starters, no empty list.
-    await expect(page.getByRole('group', { name: 'Starters' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Starters', exact: true })).toBeVisible();
 
     await page.setInputFiles('input[type="file"]', projectPath);
     await expect(page.locator('.dc-editor')).toBeVisible();
@@ -444,22 +444,21 @@ test.describe('Draft Canvas', () => {
 
   test('double-clicking empty canvas opens a type picker, and choosing a type creates it', async ({ page }) => {
     await newCanvas(page, 'Quick start');
-    await expect(page.getByText('Double-click anywhere to start.')).toBeVisible();
+    await expect(page.getByText('Start drawing.')).toBeVisible();
 
-    // Click a fixed offset above the empty-state's own starter list, derived from its real
-    // bounding box rather than a guessed pixel — that list is centred and grows as new starters
-    // ship, so a hardcoded y here goes stale (and stayed marginal even before it did: it once sat
-    // less than a pixel above the list before a starter's height nudged it under).
+    // Aim above the empty state's one interactive region, derived from its real bounding box
+    // rather than a guessed pixel — the composition moves with the viewport and the curated set,
+    // so a hardcoded y here goes stale.
     const paneBox = (await page.locator(CANVAS).boundingBox())!;
-    const startersBox = await page.locator('.dc-empty-starters').boundingBox();
-    const y = startersBox ? Math.max(24, startersBox.y - paneBox.y - 40) : 320;
-    await page.locator(CANVAS).dblclick({ position: { x: 500, y } });
+    const pickBox = await page.locator('.dc-empty-pick').boundingBox();
+    const y = pickBox ? Math.max(24, pickBox.y - paneBox.y - 40) : 320;
+    await page.locator(CANVAS).dblclick({ position: { x: 240, y } });
     await expect(page.locator('.dc-node')).toHaveCount(0);
     const menu = page.getByRole('menu', { name: 'Add element' });
     await expect(menu).toBeVisible();
 
     await menu.getByRole('menuitem', { name: 'Service' }).click();
     await expect(page.locator('.dc-node[data-type="service"]')).toHaveCount(1);
-    await expect(page.getByText('Double-click anywhere to start.')).toBeHidden();
+    await expect(page.getByText('Start drawing.')).toBeHidden();
   });
 });

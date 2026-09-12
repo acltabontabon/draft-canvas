@@ -1,8 +1,6 @@
-import { useId, useState, type CSSProperties, type KeyboardEvent, type Ref } from 'react';
+import { useState, type KeyboardEvent, type Ref } from 'react';
 import { STARTER_CATEGORIES, type ArchitectureStarter, type StarterId } from '../../starters';
-import { SelectionChrome } from './SelectionChrome';
-import { StarterGlyph } from './StarterGlyph';
-import { starterShape } from './starterShapes';
+import { StarterTile } from './StarterTile';
 
 const IDLE_READOUT = '←→ browse · ↵ start';
 
@@ -32,7 +30,6 @@ export function StarterShelf({
   onExitStart?: () => void;
   shelfRef?: Ref<HTMLDivElement>;
 }) {
-  const baseId = useId();
   // What the readout describes, and whether the keyboard put it there — only then is ↵ true.
   const [active, setActive] = useState<{ starter: ArchitectureStarter; focused: boolean } | null>(null);
   const categories = STARTER_CATEGORIES.map((category) => ({
@@ -65,46 +62,16 @@ export function StarterShelf({
               <span className="dc-shelf-count">{category.starters.length}</span>
             </span>
             <div className="dc-shelf-grid">
-              {category.starters.map((starter) => {
-                const descriptionId = `${baseId}-${starter.id}`;
-                const glyph = starterShape(starter);
-                return (
-                  <button
-                    key={starter.id}
-                    type="button"
-                    className="dc-starter"
-                    data-starter={starter.id}
-                    aria-label={`Start from ${starter.name}`}
-                    aria-describedby={descriptionId}
-                    style={{ '--i': indexOf.get(starter.id) ?? 0 } as CSSProperties}
-                    onClick={() => onStart(starter.id)}
-                    onPointerEnter={() => setActive({ starter, focused: false })}
-                    onFocus={(event) =>
-                      setActive({ starter, focused: isFocusVisible(event.currentTarget) })
-                    }
-                  >
-                    <span
-                      className="dc-starter-swatch"
-                      style={
-                        {
-                          '--cx': `${Math.round(glyph.centerX * 100)}%`,
-                          '--bx': `${glyph.bounds.x}px`,
-                          '--by': `${glyph.bounds.y}px`,
-                          '--bw': `${glyph.bounds.width}px`,
-                          '--bh': `${glyph.bounds.height}px`,
-                        } as CSSProperties
-                      }
-                    >
-                      <StarterGlyph starter={glyph} />
-                      <SelectionChrome />
-                    </span>
-                    <span className="dc-starter-name">{starter.name}</span>
-                    <span id={descriptionId} className="dc-sr-only">
-                      {starter.description}
-                    </span>
-                  </button>
-                );
-              })}
+              {category.starters.map((starter) => (
+                <StarterTile
+                  key={starter.id}
+                  starter={starter}
+                  index={indexOf.get(starter.id) ?? 0}
+                  onStart={onStart}
+                  onPointerEnter={() => setActive({ starter, focused: false })}
+                  onFocus={(event) => setActive({ starter, focused: isFocusVisible(event.currentTarget) })}
+                />
+              ))}
             </div>
           </div>
         ))}

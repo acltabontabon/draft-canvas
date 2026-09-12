@@ -32,3 +32,23 @@ const BY_ID = new Map<StarterId, ArchitectureStarter>(
 export function starterById(id: StarterId): ArchitectureStarter | undefined {
   return BY_ID.get(id);
 }
+
+/**
+ * The four the blank canvas offers as drawings; the rest are one click further, behind "Browse
+ * all starters". Curation is the whole point — a blank Draft Canvas that listed every starter
+ * would be a template picker, which is the opposite of what an empty canvas is for.
+ *
+ * Chosen for silhouette as much as for subject: a fan, a topic tree, a split and a chain read as
+ * four different shapes at 144×76, where four variations on one shape would read as noise.
+ */
+export const FEATURED_STARTER_IDS: readonly StarterId[] = [
+  'microservices',
+  'event-driven',
+  'cqrs',
+  'transactional-outbox',
+];
+
+/** `FEATURED_STARTER_IDS` resolved, in that order, skipping any id the catalog no longer has. */
+export const FEATURED_STARTERS: readonly ArchitectureStarter[] = FEATURED_STARTER_IDS.flatMap(
+  (id) => BY_ID.get(id) ?? [],
+);

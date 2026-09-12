@@ -1839,226 +1839,452 @@
 
 /* ---------------------------------------------------------- empty state -- */
 
+/*
+ * The blank canvas, composed rather than centred.
+ *
+ * The home screen draws a small sheet — crop marks, a patch of dot grid, a "New canvas" pill —
+ * and fans a connector off it to the starters. Clicking that sheet puts you inside it, so this
+ * screen is the same drawing at the scale of the whole pane: the crop marks move to the corners,
+ * the drawn dot grid gives way to the real one, and what is left is a start block, a connector
+ * captioned "or cheat a little", and four starters drawn as the topologies they will make.
+ *
+ * Everything here is a flex row of three: the instruction, a gutter wide enough for the connector
+ * and its caption, and the starters. Centring that row as one unit is what puts the headline left
+ * of the pane's middle and the starters right of it — the asymmetry is the composition's, not an
+ * offset someone typed in.
+ */
+
 .dc-empty {
   position: absolute;
   inset: 0;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  display: grid;
+  place-items: center;
   pointer-events: none;
   user-select: none;
 }
 
+/*
+ * The pane's own crop marks. A frame that never closes: four hairlines, no fifth edge, so the
+ * canvas still reads as unbounded while the screen reads as a sheet someone is about to draw on.
+ */
+.dc-empty-crops {
+  position: absolute;
+  inset: 0;
+}
+
+.dc-empty-crops span {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  opacity: 0.65;
+}
+
+.dc-empty-crops [data-at='nw'] {
+  top: 32px;
+  left: 32px;
+  border-top: 1px solid var(--dc-border-strong);
+  border-left: 1px solid var(--dc-border-strong);
+}
+
+.dc-empty-crops [data-at='ne'] {
+  top: 32px;
+  right: 32px;
+  border-top: 1px solid var(--dc-border-strong);
+  border-right: 1px solid var(--dc-border-strong);
+}
+
+.dc-empty-crops [data-at='se'] {
+  right: 32px;
+  bottom: 32px;
+  border-right: 1px solid var(--dc-border-strong);
+  border-bottom: 1px solid var(--dc-border-strong);
+}
+
+.dc-empty-crops [data-at='sw'] {
+  bottom: 32px;
+  left: 32px;
+  border-bottom: 1px solid var(--dc-border-strong);
+  border-left: 1px solid var(--dc-border-strong);
+}
+
+.dc-empty-stage {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0 32px;
+  /* Optically centred, not mathematically: the composition's weight sits low (names under
+     drawings), so lifting it off the true middle is what makes it look centred. */
+  margin-bottom: 5vh;
+}
+
+/* ---- the blank path ---- */
+
+.dc-empty-start {
+  flex: none;
+  /*
+   * Capped so the five legends break 3 + 2 — the three keys that draw something, then the two
+   * that open something. A wider cap fits four on the first line and orphans the fifth, and any
+   * slack past the longest line becomes dead space between the instruction and the connector.
+   */
+  max-width: 272px;
+}
+
 .dc-empty-title {
   margin: 0;
-  color: var(--dc-text-muted);
-  font-size: 16px;
-  font-weight: 550;
+  color: var(--dc-text);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.25;
 }
 
 .dc-empty-hint {
-  margin: 0;
-  color: var(--dc-text-faint);
+  margin: 7px 0 0;
+  color: var(--dc-text-muted);
   font-size: 13.5px;
+  line-height: 1.45;
 }
 
+/*
+ * Legends, not keys. The app's `kbd` is a raised cap, which is right in a menu and wrong on an
+ * empty canvas — at this size and weight a row of them reads as five small buttons. Flat, mono
+ * and outlined, they read as the annotation on a drawing instead.
+ */
 .dc-empty-keys {
-  margin: 14px 0 0;
-  color: var(--dc-text-faint);
-  font-size: 12px;
-}
-
-/*
- * The one interactive part of the empty canvas, so it opts back into pointer events the container
- * turned off. Kept as bare text buttons on purpose: a row of cards or thumbnails here would turn a
- * blank Draft Canvas into a template picker, which is the opposite of the point.
- */
-/*
- * Two columns: a category gutter, and the starters themselves.
- *
- * `auto` on the label column sizes it to "Architectures" (the longer word) and both rows share
- * that one track, so the labels land flush on one right edge and both button groups start flush
- * on the next — alignment a pair of independently-sized flex rows can't give you when their
- * labels are different lengths.
- *
- * The button column is *capped* rather than left to run. Seven architecture names on one line
- * stretched this hint into a bar nearly the width of the canvas — twice the shortcut row above it,
- * which is what made an empty canvas feel busy. Capped, they wrap into a block about as wide as
- * that row, so the whole empty state reads as one centred column of decreasing emphasis instead
- * of three short lines with a wide bar hanging off the bottom.
- */
-.dc-empty-starters {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  /* Only the buttons opt back into pointer events (below) — the row itself stays click-through so
-   * the label, the gaps between names, and the space a shorter line leaves all still reach the
-   * canvas underneath instead of eating the click. */
-  /*
-   * The rhythm of the whole lower half, in one number each.
-   *
-   * This is the gap between the two categories, and it is deliberately only a little more than the
-   * 6px between a label and its own starters: that ratio is what binds each label to the names
-   * under it while still letting the two groups read as one secondary launcher. Spaced evenly
-   * instead, the section falls apart into four disconnected horizontal bands — the divider, a
-   * label, some names, another label — which is exactly how it read before this pass.
-   *
-   * The one generous gap is the one above the divider, because that is the only boundary here that
-   * separates two different kinds of offer rather than two parts of the same one.
-   */
-  gap: 14px;
-  /* Plus `.dc-empty`'s own 6px, so 30px of air above the divider against 18px below it. */
-  margin-top: 24px;
-}
-
-/*
- * The one line between "here is how to draw" and "or open with one of these" — two different kinds
- * of offer, and the eye wants a cue that it has crossed from one to the other. It fades out at both
- * ends instead of stopping dead: a hard-edged rule reads as chrome, as a box someone has drawn on
- * the canvas, which is the one thing this layer must never look like.
- */
-.dc-empty-starters::before {
-  content: '';
-  width: 180px;
-  height: 1px;
-  margin-bottom: 4px;
-  /* A plateau, not a single peak: a plain transparent→colour→transparent ramp is at full strength
-   * for one pixel in the middle and reads as a smudge rather than a line. `border-strong` because
-   * plain `--dc-border` against the canvas is about four percent of contrast in the light theme —
-   * invisible, which is quieter than quiet. */
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--dc-border-strong) 30%,
-    var(--dc-border-strong) 70%,
-    transparent
-  );
-  opacity: 0.75;
-}
-
-/* Label above its starters, both centred — the whole empty state then hangs off one centre line,
- * which a label in a left gutter can't do: the gutter balances the block's *box* while leaving its
- * visual weight (the names) sitting off to the right of everything above it. */
-.dc-empty-starter-row {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-/*
- * A label here is organisation, not content: it says which shelf you are looking at and then gets
- * out of the way. Small, widely tracked and slightly transparent does that — enough to establish
- * the hierarchy, not enough to compete with the names underneath, which are the only thing on this
- * layer anyone actually came to read. The uppercase stays: at this size it is what makes a word
- * read as a category rather than as one more option.
- *
- * `text-indent` puts the tracking's trailing space back on the left. Letter-spacing adds it after
- * the final letter too, so a centred word without this sits half a space left of the axis
- * everything else on this layer is centred on — visible at 0.12em, and precisely the sort of
- * half-pixel wrongness that makes a composition feel accidental.
- */
-.dc-empty-starter-label {
-  color: var(--dc-text-faint);
-  font-size: 9.5px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-indent: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.82;
-}
-
-.dc-empty-starter-buttons {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 3px 4px;
-  /*
-   * Capped rather than left to run. Seven architecture names on one line stretched this hint into
-   * a bar nearly the width of the canvas — twice the shortcut row above it — which is what made an
-   * empty canvas feel busy. Capped, they wrap into a centred block about as wide as that row.
-   *
-   * The wrap is content-aware on purpose: names break where they happen to fill the line, and each
-   * line centres itself, which is lighter than forcing them into equal columns to make the rows
-   * symmetrical. `calc(100vw - 96px)` rather than a fraction of the viewport, so the same
-   * principle holds at any width — the block simply takes one more line on a narrow window, always
-   * with a real margin either side, and never depends on a hand-tuned position.
-   *
-   * 420 is a measure, not a break point: the seven architectures run 384px through four names and
-   * 466px through five, so any cap between them lets the line break itself after Event-Driven,
-   * with ~40px of slack on either side for whatever the platform's font metrics do to those
-   * numbers. Overshoot it and the wrap simply lands 5/2 or 3/4 — still a natural centred wrap,
-   * never a broken one. It also happens to leave the second line (277px) and the patterns line
-   * (278px) the same width, which is worth having and costs nothing.
-   */
-  max-width: min(420px, calc(100vw - 96px));
+  gap: 4px 14px;
+  margin: 20px 0 0;
+  color: var(--dc-text-faint);
+  font-size: 11.5px;
+  line-height: 22px;
 }
 
-/*
- * At rest a starter is a word on the canvas: no border, no fill, no chrome of any kind — the same
- * restraint the shortcut row above it keeps. The padding is the only part of it that isn't
- * typography, and it is invisible: it exists so the thing you can click is comfortably bigger than
- * the glyphs you are aiming at (about 30px tall, well past the 24px a pointer wants), not so the
- * word can wear a box.
- */
-.dc-empty-starter {
-  position: relative;
-  padding: 5px 9px;
-  border: 0;
-  border-radius: var(--dc-radius-sm);
+/* Each legend wraps as one piece — a key orphaned from its word is the fastest way to make a
+   careful row look accidental. */
+.dc-empty-key {
+  white-space: nowrap;
+}
+
+.dc-empty-keys kbd {
+  min-width: 0;
+  padding: 1px 5px;
+  border: 1px solid var(--dc-border);
+  border-bottom-width: 1px;
+  border-radius: 3px;
   background: none;
   color: var(--dc-text-muted);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  transition: color 120ms ease, background-color 120ms ease;
+  font-family: var(--dc-mono);
+  font-size: 10.5px;
+}
+
+.dc-empty-keys .dc-dot {
+  margin: 0 6px;
+}
+
+/* ---- the connector ---- */
+
+/*
+ * Wide enough that the trunk still reads on both sides of its caption. The caption is an edge
+ * label the way the canvas draws one — opaque, sitting on the line — so a short gutter doesn't
+ * produce a subtle connector, it produces no connector at all.
+ */
+.dc-empty-wire {
+  position: relative;
+  flex: none;
+  align-self: stretch;
+  width: 172px;
+}
+
+/* The wide-screen composition says this with a drawn connector; below that breakpoint there is no
+   gutter to draw one through, so the same beat is a caption on a short vertical stem. */
+.dc-empty-cheat {
+  display: none;
+}
+
+/* ---- the starters ---- */
+
+.dc-empty-pick {
+  flex: none;
   pointer-events: auto;
 }
 
-/*
- * The affordance, and the only moving part: a hairline that grows out of the centre of the word.
- * It is inset to the padding so it underlines the *word* rather than the hit area — a rule the
- * full width of the box would draw the box, which is the thing this treatment exists to avoid —
- * and it is the selection colour, so hovering a starter answers in the same voice as selecting
- * anything else on the canvas.
- */
-.dc-empty-starter::after {
-  content: '';
-  position: absolute;
-  inset-inline: 9px;
-  bottom: 3px;
-  height: 1px;
-  border-radius: 1px;
-  background: var(--dc-selection);
-  transform: scaleX(0);
-  transition: transform 140ms ease;
+.dc-empty-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.dc-empty-starter:hover,
-.dc-empty-starter:focus-visible {
-  /* One step up off the canvas — #ffffff on #fbfbfc in the light theme. Enough to confirm the
-   * pointer is on target, far too little to read as a button appearing. */
-  background: var(--dc-surface);
+.dc-empty-row {
+  display: flex;
+  gap: 16px;
+}
+
+/* A step, not a grid. Two rows flush left square up into a block and start reading as a panel;
+   indenting the second makes the pair a drawing, and gives the connector's two branches different
+   lengths — which is what a fan-out on the canvas actually looks like. */
+.dc-empty-row:nth-child(2) {
+  margin-left: 22px;
+}
+
+/*
+ * The one thing the home screen's tile does that this one must not: paint its own patch of dot
+ * grid. There is a real grid under this one — React Flow's, at a different pitch, panning and
+ * zooming — and two grids beating against each other is the whole reason these tiles would
+ * otherwise look stuck on top of the canvas rather than drawn on it.
+ */
+.dc-empty .dc-starter-swatch::before {
+  display: none;
+}
+
+.dc-empty-browse {
+  margin: 14px 0 0 2px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-faint);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.dc-empty-browse:hover {
   color: var(--dc-text);
 }
 
-.dc-empty-starter:hover::after,
-.dc-empty-starter:focus-visible::after {
-  transform: scaleX(1);
+.dc-empty-browse:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 3px;
 }
 
-.dc-empty-starter:focus-visible {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: 1px;
+/* The full shelf, given room to lay its categories out the way the home screen does. */
+.dc-modal-starters .dc-modal-body {
+  padding-top: 4px;
+}
+
+/* ---- arrival and exit -------------------------------------------------- */
+
+/*
+ * One pass, under 400ms end to end, in the order the composition reads: the instruction, then
+ * the connector drawing itself out of it, then the starters it arrives at. `data-intro` is set
+ * only for the canvas someone just opened — see `EmptyState.tsx`.
+ */
+
+@keyframes dc-empty-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes dc-empty-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dc-empty-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.dc-empty[data-intro='true'] .dc-empty-crops span {
+  animation: dc-empty-fade 200ms ease both;
+}
+
+.dc-empty[data-intro='true'] .dc-empty-title,
+.dc-empty[data-intro='true'] .dc-empty-hint,
+.dc-empty[data-intro='true'] .dc-empty-keys {
+  animation: dc-empty-rise 220ms var(--dc-ease-out) both;
+}
+
+.dc-empty[data-intro='true'] .dc-empty-hint {
+  animation-delay: 50ms;
+}
+
+.dc-empty[data-intro='true'] .dc-empty-keys {
+  animation-delay: 90ms;
+}
+
+.dc-empty[data-intro='true'] .dc-wire-trunk,
+.dc-empty[data-intro='true'] .dc-wire-spine,
+.dc-empty[data-intro='true'] .dc-wire-branch path:first-child {
+  stroke-dasharray: 1;
+  animation: dc-empty-draw 200ms var(--dc-ease-out) 100ms both;
+}
+
+.dc-empty[data-intro='true'] .dc-wire-source,
+.dc-empty[data-intro='true'] .dc-empty-cheat {
+  animation: dc-empty-fade 160ms ease 100ms both;
+}
+
+.dc-empty[data-intro='true'] .dc-wire-caption {
+  animation: dc-empty-fade 160ms ease 180ms both;
+}
+
+.dc-empty[data-intro='true'] .dc-wire-junction,
+.dc-empty[data-intro='true'] .dc-wire-arrow {
+  animation: dc-empty-fade 160ms ease 260ms both;
+}
+
+.dc-empty[data-intro='true'] .dc-starter {
+  animation: dc-empty-rise 220ms var(--dc-ease-out) calc(100ms + var(--i, 0) * 25ms) both;
+}
+
+.dc-empty[data-intro='true'] .dc-empty-browse {
+  animation: dc-empty-fade 200ms ease 250ms both;
+}
+
+/*
+ * Leaving. The fade is a courtesy; the pointer-events kill is not — it lands on the same render
+ * the canvas stops being empty, so a click aimed at freshly inserted content can never be caught
+ * by a tile that is still on screen. `.dc-empty-pick` is named explicitly because it is the one
+ * child that opts back in, and `pointer-events` would otherwise let it keep doing so.
+ */
+.dc-empty[data-leaving='true'] {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.dc-empty[data-leaving='true'],
+.dc-empty[data-leaving='true'] .dc-empty-pick {
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dc-empty-starter::after {
+  .dc-empty *,
+  .dc-empty *::before,
+  .dc-empty *::after {
+    animation: none !important;
+  }
+
+  .dc-empty[data-leaving='true'] {
     transition: none;
+  }
+}
+
+/* ---- responsive ------------------------------------------------------- */
+
+/*
+ * Below the wide breakpoint the same diagram rotates rather than reflowing: start block, a short
+ * stem captioned "or cheat a little", then the *same* 2×2 underneath. Flattening the starters into
+ * one row of four is the one thing that must not happen — lined up at that size they stop being a
+ * composition and start being a toolbar.
+ */
+@media (max-width: 1139px) {
+  .dc-empty-stage {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 3vh;
+  }
+
+  .dc-empty-start {
+    max-width: 272px;
+  }
+
+  .dc-empty-wire {
+    display: none;
+  }
+
+  .dc-empty-cheat {
+    display: block;
+    position: relative;
+    /* Room above for the source dot to sit clear of the legend row it leaves from. */
+    margin: 46px 0 40px;
+    color: var(--dc-text-muted);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  /* The stem, above and below the words — the horizontal connector stood on its end, with the
+     same source dot and arrowhead, so it is the same drawing rather than a decorative rule. */
+  .dc-empty-cheat::before,
+  .dc-empty-cheat::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    width: 1px;
+    height: 20px;
+    background: var(--dc-edge);
+    opacity: 0.55;
+  }
+
+  .dc-empty-cheat::before {
+    top: -26px;
+  }
+
+  .dc-empty-cheat::after {
+    bottom: -26px;
+  }
+
+  .dc-empty-cheat span::before,
+  .dc-empty-cheat span::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    border: 1.25px solid var(--dc-edge);
+  }
+
+  /* Where the connector leaves the instruction: hollow, the way the canvas draws a source. */
+  .dc-empty-cheat span::before {
+    top: -34px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--dc-canvas);
+    transform: translate(-50%, 0);
+  }
+
+  /* And where it arrives. */
+  .dc-empty-cheat span::after {
+    bottom: -32px;
+    width: 6px;
+    height: 6px;
+    border-top: 0;
+    border-left: 0;
+    border-radius: 1px;
+    transform: translate(-50%, 0) rotate(45deg);
+  }
+
+  .dc-empty-row:nth-child(2) {
+    margin-left: 0;
+  }
+
+  .dc-empty-pick {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+/* One pair is still a composition; four crammed into this width is not. */
+@media (max-width: 759px) {
+  .dc-empty-crops {
+    display: none;
+  }
+
+  .dc-empty-row:nth-child(2) {
+    display: none;
+  }
+}
+
+/* No room to draw anything without crowding the instruction it exists to support. */
+@media (max-width: 559px), (max-height: 559px) {
+  .dc-empty-rows,
+  .dc-empty-cheat {
+    display: none;
+  }
+
+  .dc-empty-browse {
+    margin-top: 22px;
   }
 }
 

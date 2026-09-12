@@ -7,6 +7,7 @@ All notable changes to Draft Canvas are documented here.
 ### Added
 
 - Home screen redesigned with interactive starter previews—hover or arrow-key to explore.
+- Blank canvas redesigned: four suggested starters drawn as miniature architectures, with "Browse all starters" for the rest.
 - Auto-follow system light/dark theme (pin a theme to override).
 - Text formatting: semantic roles (Body, Label, Heading, Title, Technical), Bold/Italic, alignment, and multiline editing (Enter for newline, Cmd+Enter to commit).
 - New shape: **Table** for logical tables inside a store.

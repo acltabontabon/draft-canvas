@@ -17,7 +17,21 @@ async function newCanvas(page: Page, title: string) {
   await field.blur();
 }
 
+/**
+ * The blank canvas's starter block is the one part of its empty state that takes clicks, so a node
+ * placed on a starter while the canvas is still empty opens that architecture instead of creating
+ * anything. Only the first creation in a test is ever exposed to it (the empty state goes the
+ * moment anything exists), and this asks the page what would actually receive the click rather
+ * than guessing from a rectangle — gaps between the drawings are fine, and so is the layer on its
+ * way out, which has already stopped taking pointer events.
+ */
 async function createNode(page: Page, tool: string, at: { x: number; y: number }) {
+  const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+  const blocked = await page.evaluate(
+    ([x, y]) => document.elementFromPoint(x, y)?.closest('.dc-empty')?.className ?? null,
+    [pane.x + at.x, pane.y + at.y],
+  );
+  expect(blocked, `(${at.x}, ${at.y}) lands on the blank canvas's empty state — move it clear`).toBeNull();
   await page.getByRole('button', { name: tool, exact: true }).click();
   await page.locator('.react-flow__pane').click({ position: at });
 }
@@ -48,16 +62,16 @@ async function selectedText(page: Page) {
 test.describe('spatial navigation (Alt+Arrow)', () => {
   test('moves the selection in each of the four directions', async ({ page }) => {
     await newCanvas(page, 'Spatial nav — four directions');
-    // A cross around a center node, spaced well apart so direction scoring is unambiguous. The
-    // center node's own creation point is kept clear of the empty canvas's starter row (roughly
-    // x:[430,850] y:[347,508] at this viewport size) — the only node here created while the
-    // canvas is still empty and that row is still showing.
-    await createNode(page, 'Service', { x: 700, y: 250 });
-    await labelNode(page, 0, 'Center');
-    await createNode(page, 'Service', { x: 1100, y: 400 });
-    await labelNode(page, 1, 'East');
+    // A cross around a center node, spaced well apart so direction scoring is unambiguous. West
+    // goes down first purely because it is the one arm that already sits clear of the blank
+    // canvas's starter block — creating it removes the empty state, and the rest of the cross
+    // (Center included) can then be placed wherever the geometry wants it.
     await createNode(page, 'Service', { x: 300, y: 400 });
-    await labelNode(page, 2, 'West');
+    await labelNode(page, 0, 'West');
+    await createNode(page, 'Service', { x: 700, y: 250 });
+    await labelNode(page, 1, 'Center');
+    await createNode(page, 'Service', { x: 1100, y: 400 });
+    await labelNode(page, 2, 'East');
     await createNode(page, 'Service', { x: 700, y: 600 });
     await labelNode(page, 3, 'South');
     await createNode(page, 'Service', { x: 700, y: 100 });
@@ -89,10 +103,9 @@ test.describe('spatial navigation (Alt+Arrow)', () => {
 
   test('with nothing selected, navigates from the viewport center', async ({ page }) => {
     await newCanvas(page, 'Spatial nav — no prior selection');
-    // Clearly right of true viewport center, and clear of the empty canvas's own starter row
-    // (see the four-directions test above for its bounding box) — this is the only node here,
-    // created while that row is still showing.
-    await createNode(page, 'Service', { x: 1000, y: 360 });
+    // Clearly right of true viewport center, and right of the blank canvas's starter block —
+    // this is the only node here, so it is created while that block is still showing.
+    await createNode(page, 'Service', { x: 1140, y: 300 });
     await labelNode(page, 0, 'Only');
 
     await page.mouse.click(50, 50); // clear selection
@@ -104,8 +117,9 @@ test.describe('spatial navigation (Alt+Arrow)', () => {
 
   test('is a no-op when nothing exists in that direction', async ({ page }) => {
     await newCanvas(page, 'Spatial nav — no target');
-    // Clear of the empty canvas's own starter row — see the four-directions test above.
-    await createNode(page, 'Service', { x: 700, y: 250 });
+    // Left of the blank canvas's starter block — the only node here, so it is created while that
+    // block is still showing.
+    await createNode(page, 'Service', { x: 300, y: 250 });
     await labelNode(page, 0, 'Alone');
 
     await page.locator('.dc-node').filter({ hasText: 'Alone' }).click();
