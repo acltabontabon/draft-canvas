@@ -41,8 +41,9 @@ test.describe('context menu — empty canvas', () => {
     for (const title of ['Add Text', 'Add Note', 'Add Code', 'Add Boundary', 'Add Service', 'Add Data Store', 'Add Queue', 'Add Actor', 'Add Junction']) {
       await expect(menuItem(page, title)).toBeVisible();
     }
-    // Nothing to select or paste yet — both correctly absent on a genuinely empty document.
-    await expect(menuItem(page, 'Paste')).toHaveCount(0);
+    // Paste is always offered (the OS clipboard is only checked once clicked); Select all is
+    // correctly absent — there's nothing to select on a genuinely empty document.
+    await expect(menuItem(page, 'Paste')).toBeVisible();
     await expect(menuItem(page, 'Select all')).toHaveCount(0);
 
     const viewportAfter = await page.locator('.react-flow__viewport').evaluate((el) => el.style.transform);
