@@ -37,6 +37,10 @@ describe('commandsFor — edit mode', () => {
     }
   });
 
+  it('offers Paste in the palette even with an empty in-app clipboard, since the OS clipboard may hold something', () => {
+    expect(ids(stubContext())).toContain('paste');
+  });
+
   it('an Add command creates the node and selects it, so the next command can act on it', () => {
     const ctx = stubContext();
     const add = commandsFor(ctx).find((command) => command.id === 'add-service')!;

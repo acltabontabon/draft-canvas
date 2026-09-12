@@ -122,12 +122,6 @@
   font-size: 13px;
 }
 
-.dc-field-inline {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .dc-field input {
   height: 32px;
   padding: 0 10px;
@@ -3010,9 +3004,8 @@ kbd {
   gap: 10px 22px;
 }
 
-/* A label tight against its own control — deliberately NOT `.dc-field-inline` (that class's
-   `space-between` suits a field alone on a settings row elsewhere, but stretched across a row
-   here it reproduces exactly the "label .......... control" gap this panel exists to avoid). */
+/* A label tight against its own control, spread across a row rather than stacked — unlike
+   `.dc-field`, which every other label+control pairing in the app uses. */
 .dc-export-field {
   display: inline-flex;
   align-items: center;
@@ -3426,10 +3419,6 @@ kbd {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
-}
-
-.dc-settings .dc-field-inline {
-  margin-top: 10px;
 }
 
 .dc-settings-personality {

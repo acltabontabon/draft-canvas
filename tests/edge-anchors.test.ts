@@ -28,6 +28,14 @@ describe('connector anchors', () => {
     });
   });
 
+  it('refuses to connect a stale node id instead of returning an edge that was never added', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    // No node with this id exists — e.g. a target the caller looked up before it was deleted.
+    const result = store.getState().connect(a.id, 'does-not-exist');
+    expect(result).toBeNull();
+    expect(store.getState().document.edges).toHaveLength(0);
+  });
+
   it('captures the side the connection was dragged from', () => {
     const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });

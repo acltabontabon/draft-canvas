@@ -53,10 +53,10 @@ function centeredOn(point: { x: number; y: number }): { x: number; y: number } {
 }
 
 function paneMenu(ctx: CommandContext, flowPosition: { x: number; y: number }): ContextMenuEntry[] {
-  const paste = pasteAtCommand(ctx, flowPosition);
+  const paste = pasteAtCommand(flowPosition);
   const addCommands = ALL_PRESETS.map((preset) => createCommandAt(preset, centeredOn(flowPosition)));
   const selectAll = pick(canvasCommands(ctx), ['select-all']);
-  return grouped([paste ? [paste] : [], addCommands, selectAll]);
+  return grouped([[paste], addCommands, selectAll]);
 }
 
 /** A Junction is a routing point, not a content holder — no Add Note/Add Code, and only the two

@@ -4,6 +4,8 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-13
+
 ### Added
 
 - Every starter now ships with pre-built flows: Monolith, Modular Monolith, Microservices,
@@ -24,6 +26,15 @@ All notable changes to Draft Canvas are documented here.
 
 - "Copy source" and "Copy as Markdown" from the sequence export — exporting the file is the one
   way out, and your own tooling takes it from there.
+
+### Fixed
+
+- A name or flow title containing certain character combinations could break out of its quoting in
+  exported Mermaid/PlantUML source. Both are escaped correctly now.
+- Dragging a note or code card onto overlapping shapes could attach it to the wrong one after using
+  "Bring to front"/"Send to back". It now attaches to whichever shape is actually on top.
+- "Paste" now always appears in the right-click menu and command palette, even when you copied
+  something outside Draft Canvas without copying inside it first.
 
 ## [1.0.0] - 2026-09-12
 

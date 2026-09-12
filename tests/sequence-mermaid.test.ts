@@ -106,6 +106,22 @@ describe('toMermaid', () => {
     expect(out).toContain('participant Gateway as "The \\"Gateway\\""');
   });
 
+  it('escapes a backslash before a quote without letting it swallow the closing quote', () => {
+    // Escaping `"` before `\` would turn a label ending `\"` into `\\"` — read as an escaped
+    // backslash followed by a bare, string-closing quote, which breaks out of the declaration.
+    const raw = 'C:\\Users\\"Bob"';
+    const m = model({
+      participants: [{ id: 'P1', alias: 'A', label: raw, category: 'service', kind: 'participant', sourceNodeId: 'a' }],
+    });
+    const line = toMermaid(m).split('\n').find((l) => l.includes('participant A as'))!;
+    const match = line.match(/^\s*participant A as "(.*)"$/);
+    expect(match).not.toBeNull();
+    // Decode the same way a real parser would — unescape `\"` before `\\` — and recover the
+    // original label. A wrong escape order corrupts this round-trip.
+    const decoded = match![1]!.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    expect(decoded).toBe(raw);
+  });
+
   it("wraps a flow's messages in a rect block with a synthesized title Note", () => {
     const m = model({
       participants: [

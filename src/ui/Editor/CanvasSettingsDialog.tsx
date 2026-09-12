@@ -120,7 +120,7 @@ export function CanvasSettingsDialog() {
 
           {background.enabled && (
             <>
-              <label className="dc-field dc-field-inline">
+              <label className="dc-field">
                 <span>Fit</span>
                 <select
                   className="dc-select"
@@ -139,7 +139,7 @@ export function CanvasSettingsDialog() {
                 </select>
               </label>
 
-              <label className="dc-field dc-field-inline">
+              <label className="dc-field">
                 <span>Dim</span>
                 <input
                   type="range"
@@ -154,7 +154,7 @@ export function CanvasSettingsDialog() {
                 />
               </label>
 
-              <label className="dc-field dc-field-inline">
+              <label className="dc-field">
                 <span>Blur</span>
                 <input
                   type="range"

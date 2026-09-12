@@ -5,13 +5,9 @@
 export const isMac =
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
-/** Long form, for the shortcuts sheet and tooltips: "Cmd" / "Ctrl". */
-export const MOD_LABEL = isMac ? 'Cmd' : 'Ctrl';
-
 /** Compact form, for inline `<kbd>` chips: "⌘" / "Ctrl". */
 export const MOD_SYMBOL = isMac ? '⌘' : 'Ctrl';
 
 /** Same split for the Option/Alt key — used by spatial/relationship canvas navigation, which
  *  binds to this key alone, never alongside `MOD_SYMBOL`. */
-export const ALT_LABEL = isMac ? 'Option' : 'Alt';
 export const ALT_SYMBOL = isMac ? '⌥' : 'Alt';

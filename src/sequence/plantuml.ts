@@ -32,9 +32,11 @@ function plantUmlKeyword(kind: ParticipantKind): string {
 
 /** PlantUML declares a participant as `<keyword> "<display name>" as <alias>` — the quoted name
  *  may contain any character except an unescaped double quote. Newlines are collapsed since a
- *  declaration is a single line. */
+ *  declaration is a single line. Backslashes are escaped before quotes: escaping in the other
+ *  order would let a label ending `\"` turn into `\\"` — an escaped backslash followed by a bare,
+ *  string-closing quote. */
 function sanitizeParticipantName(label: string): string {
-  return label.replace(/\r?\n/g, ' ').replace(/"/g, '\\"');
+  return label.replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 /** A PlantUML message's text runs to the end of the line, with no delimiter character of its own
@@ -42,6 +44,14 @@ function sanitizeParticipantName(label: string): string {
 function sanitizeMessageLabel(label: string): string {
   const clean = label.replace(/\r?\n/g, ' ').trim();
   return clean || 'Message';
+}
+
+/** A `group <label>` line is as unquoted and single-line as PlantUML gets — an embedded newline in
+ *  a Flow's title would otherwise close the line early and let the rest be read as new PlantUML
+ *  statements. */
+function sanitizeGroupLabel(label: string): string {
+  const clean = label.replace(/\r?\n/g, ' ').trim();
+  return clean || 'Group';
 }
 
 /** Portable, CSS-free prefixes — the source itself must carry the distinction, since a `.mmd`/
@@ -91,7 +101,7 @@ function renderElement(element: SequenceElement, depth: number, aliasOf: (id: st
     case 'note':
       return noteBlock(element.participantIds, element.text, element.noteKind, depth, aliasOf);
     case 'group': {
-      const lines = [`${pad}group ${element.label}`];
+      const lines = [`${pad}group ${sanitizeGroupLabel(element.label)}`];
       for (const child of element.children) lines.push(...renderElement(child, depth + 1, aliasOf));
       lines.push(`${pad}end`);
       return lines;

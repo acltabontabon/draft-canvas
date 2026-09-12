@@ -32,9 +32,11 @@ function mermaidKeyword(kind: ParticipantKind): 'actor' | 'participant' {
 
 /** Mermaid documents wrapping a participant's display name in quotes as the way to include
  *  otherwise-reserved characters (colons included) in an aliased declaration — used unconditionally
- *  here rather than only when "needed," so output is deterministic regardless of content. */
+ *  here rather than only when "needed," so output is deterministic regardless of content. Backslashes
+ *  are escaped before quotes: escaping in the other order would let a label ending `\"` turn into
+ *  `\\"` — an escaped backslash followed by a bare, string-closing quote. */
 function sanitizeParticipantName(label: string): string {
-  return label.replace(/\r?\n/g, ' ').replace(/"/g, '\\"');
+  return label.replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 /** A message's label runs to the end of its line with no quoting mechanism of its own; `:` is the

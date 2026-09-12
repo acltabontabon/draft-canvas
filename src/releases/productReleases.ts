@@ -21,6 +21,32 @@ export type { ProductRelease, ProductReleaseHighlight } from './types';
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.1.0',
+    date: '2026-09-13',
+    highlights: [
+      {
+        title: 'Pre-built flows for every starter',
+        description:
+          'All ten architecture starters now come with a ready-made flow to walk through, not just a diagram to look at.',
+      },
+      {
+        title: 'Export, rebuilt',
+        description:
+          'Choose Document, Image, Animated, or Source, set only what that format needs, and export with one button — with a live preview of exactly what you are about to get.',
+      },
+      {
+        title: 'Sequence export, tidied up',
+        description:
+          '.mmd and .puml file names instead of .sequence.*, and long notes now wrap onto several lines instead of stretching the diagram sideways.',
+      },
+      {
+        title: 'Paste and drag-to-attach, more reliable',
+        description:
+          'Paste now shows up in the right-click menu and command palette even when you copied from outside the app, and dragging a note onto overlapping shapes lands on the one actually on top.',
+      },
+    ],
+  },
+  {
     version: '1.0.0',
     date: '2026-09-12',
     summary:

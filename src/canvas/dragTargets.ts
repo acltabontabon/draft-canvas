@@ -50,7 +50,13 @@ export function evaluateAttachCandidates(
     return { overlapId: null, centerHitId: null };
   }
 
-  const candidates = doc.nodes.filter((node) => node.type !== 'group' && !excludeIds.has(node.id));
+  // Sorted topmost-first: `doc.nodes`' array order tracks insertion, not stacking — bringToFront/
+  // sendToBack mutate only `z`, never reorder the array — so an unsorted scan can hit an occluded
+  // node before the one actually rendered under the cursor. Matches the z-ordering `Canvas.tsx`'s
+  // `onConnectEnd` and `DraftEdgeView`'s `findDropNode` already apply to their own hit-testing.
+  const candidates = doc.nodes
+    .filter((node) => node.type !== 'group' && !excludeIds.has(node.id))
+    .sort((a, b) => b.z - a.z);
 
   let overlapId: string | null = null;
   let bestOverlap = 0;

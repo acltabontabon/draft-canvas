@@ -93,10 +93,11 @@ export function createCommandAt(preset: Preset, position: { x: number; y: number
 /** The context-menu "Paste" — same underlying command as `canvasCommands`' pointer-tracked one,
  *  just landing at an explicit document coordinate (the right-click point, captured when the menu
  *  opened) with `exact: true` so it never inherits the ⌘V stagger meant for repeated same-spot
- *  pastes. `null` when there's nothing to paste, so a caller can skip the menu row entirely instead
- *  of showing a dead one. */
-export function pasteAtCommand(ctx: CommandContext, position: { x: number; y: number }): Command | null {
-  if (ctx.editor.clipboard === null) return null;
+ *  pastes. Always offered: `ctx.editor.clipboard` only reflects a prior in-app copy/cut, not
+ *  content the OS clipboard actually holds — that's only known after `requestClipboardRead`
+ *  resolves, inside `run` — so gating the row on it here would hide Paste after a copy made
+ *  outside the app. `paste()` itself already no-ops harmlessly if nothing comes back. */
+export function pasteAtCommand(position: { x: number; y: number }): Command {
   return {
     id: 'paste',
     title: 'Paste',
@@ -393,22 +394,22 @@ export function canvasCommands(ctx: CommandContext): Command[] {
         }),
     });
   }
-  if (ctx.editor.clipboard !== null) {
-    commands.push({
-      id: 'paste',
-      title: 'Paste',
-      group: 'canvas',
-      keywords: ['clipboard'],
-      shortcut: `${MOD_SYMBOL} V`,
-      run: (inner) => {
-        void (async () => {
-          await requestClipboardRead(inner.editor, inner.ui);
-          const target = pointer.known ? { x: pointer.x, y: pointer.y } : undefined;
-          inner.editor.paste(target);
-        })();
-      },
-    });
-  }
+  // Always offered — see `pasteAtCommand`'s doc comment: `editor.clipboard` alone can't tell
+  // whether the OS clipboard actually holds something pasteable.
+  commands.push({
+    id: 'paste',
+    title: 'Paste',
+    group: 'canvas',
+    keywords: ['clipboard'],
+    shortcut: `${MOD_SYMBOL} V`,
+    run: (inner) => {
+      void (async () => {
+        await requestClipboardRead(inner.editor, inner.ui);
+        const target = pointer.known ? { x: pointer.x, y: pointer.y } : undefined;
+        inner.editor.paste(target);
+      })();
+    },
+  });
   commands.push(
     {
       id: 'export',

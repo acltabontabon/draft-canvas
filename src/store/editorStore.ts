@@ -785,8 +785,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // a Junction on either end resolves transparently rather than blocking inference outright.
     const sourceNode = state.document.nodes.find((n) => n.id === source);
     const targetNode = state.document.nodes.find((n) => n.id === target);
-    const relationship =
-      sourceNode && targetNode ? inferRelationshipThroughJunctions(state.document, sourceNode, targetNode) : undefined;
+    // Mirrors `addEdges`' own guard: a stale id (its node deleted since the caller looked it up —
+    // e.g. a context-menu "Connect to" target picked before an intervening delete) must not return
+    // a truthy edge that never actually gets persisted.
+    if (!sourceNode || !targetNode) return null;
+    const relationship = inferRelationshipThroughJunctions(state.document, sourceNode, targetNode);
     const edge = createEdge({
       source,
       target,

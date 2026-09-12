@@ -1,7 +1,7 @@
 {
   "name": "draft-canvas",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "A local-first canvas for developers to explain software visually.",
   "license": "Apache-2.0",
@@ -49,7 +49,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
-    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",

@@ -34,6 +34,7 @@ describe('contextMenuCommandsFor — empty canvas', () => {
   it('offers every shape preset, including Boundary, in ALL_PRESETS order', () => {
     const list = ids(pane(stubContext()));
     expect(list).toEqual([
+      'paste',
       'add-text',
       'add-note',
       'add-code',
@@ -47,8 +48,8 @@ describe('contextMenuCommandsFor — empty canvas', () => {
     ]);
   });
 
-  it('never includes Paste when the clipboard is empty', () => {
-    expect(ids(pane(stubContext()))).not.toContain('paste');
+  it('still offers Paste when the in-app clipboard is empty, since the OS clipboard may hold something', () => {
+    expect(ids(pane(stubContext()))).toContain('paste');
   });
 
   it('includes Paste, with the ⌘V shortcut hint, once something is copied', () => {
