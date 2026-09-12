@@ -4,6 +4,7 @@
  */
 import type { NoteKind } from '../document/types';
 import type { InteractionKind, ParticipantKind, SequenceElement, SequenceModel } from './types';
+import { wrapNoteLines } from './wrap';
 
 /** PlantUML's own conventions: `->` (solid, filled arrowhead) for a synchronous call, `-->`
  *  (dashed, filled arrowhead) for a reply, `->>` (solid, open/thin arrowhead — PlantUML's
@@ -53,10 +54,11 @@ const NOTE_PREFIX: Partial<Record<NoteKind, string>> = {
 
 /**
  * PlantUML's real multi-line note block, used for every annotation — one code path, never
- * switching on content length the way Mermaid has to. Each source line becomes its own line
- * inside the block, verbatim (only surrounding blank lines trimmed); the noteKind prefix, if any,
- * lands on the first content line. No colon-guarding needed — PlantUML's block form has no `:`
- * delimiter to protect, unlike a single-line Mermaid note.
+ * switching on content length the way Mermaid has to. The text is wrapped (`wrapNoteLines`) so a
+ * long sentence doesn't stretch the note box across the whole diagram, and each resulting line
+ * becomes its own line inside the block (surrounding blank lines trimmed); the noteKind prefix,
+ * if any, lands on the first content line. No colon-guarding needed — PlantUML's block form has
+ * no `:` delimiter to protect, unlike a single-line Mermaid note.
  */
 function noteBlock(
   participantIds: readonly string[],
@@ -67,7 +69,7 @@ function noteBlock(
 ): string[] {
   const pad = INDENT.repeat(depth);
   const anchor = participantIds.map(aliasOf).join(',');
-  const rawLines = text.split(/\r?\n/).map((l) => l.trim());
+  const rawLines = wrapNoteLines(text);
   while (rawLines.length > 0 && rawLines[0] === '') rawLines.shift();
   while (rawLines.length > 0 && rawLines[rawLines.length - 1] === '') rawLines.pop();
   const contentLines = rawLines.length > 0 ? rawLines : ['Note'];

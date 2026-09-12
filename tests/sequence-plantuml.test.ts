@@ -182,6 +182,23 @@ describe('toPlantUml', () => {
     expect(out).toContain('end note\n');
   });
 
+  it('wraps a long note instead of letting one sentence stretch the diagram sideways', () => {
+    const long =
+      'Compensation is event-driven too: Payment refunds and publishes Payment Refunded; Order reacts to that in turn.';
+    const m = model({
+      participants: [{ id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' }],
+      elements: [{ kind: 'note', order: 0, participantIds: ['P1'], text: long, sourceFlowId: 'f1' }],
+    });
+    const lines = toPlantUml(m).split('\n');
+    const start = lines.findIndex((line) => line.trim().startsWith('note over'));
+    const end = lines.findIndex((line) => line.trim() === 'end note');
+    const body = lines.slice(start + 1, end);
+
+    expect(body.length).toBeGreaterThan(1);
+    for (const line of body) expect(line.trim().length).toBeLessThanOrEqual(60);
+    expect(body.map((line) => line.trim()).join(' ')).toBe(long);
+  });
+
   it('preserves multiple lines of Code verbatim, one line per source line, no collapsing', () => {
     const m = model({
       participants: [{ id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' }],

@@ -4,6 +4,7 @@
  */
 import type { NoteKind } from '../document/types';
 import type { InteractionKind, ParticipantKind, SequenceElement, SequenceModel } from './types';
+import { wrapNoteLines } from './wrap';
 
 /** Mermaid's dedicated arrow forms for each message shape: `->>` (solid, filled arrowhead) for a
  *  synchronous call, `-->>` (dashed, filled arrowhead) for a reply, `-)` (solid, open arrowhead —
@@ -46,16 +47,16 @@ function sanitizeMessageLabel(label: string): string {
 
 /**
  * A note's text, collapsed to Mermaid's single line — this format has no real multi-line block
- * form, unlike PlantUML's `note over ... end note`. `&`/`<`/`>` are HTML-escaped first (so literal
- * code containing `<div>` or `&&` can't be misread by Mermaid's HTML-ish note renderer), each line
- * is then colon-guarded the same defensive way a message label already is (`:` is still Mermaid's
- * own note-text delimiter), and the lines are joined with a literal `<br/>` — Mermaid's own
- * documented line-break token inside note text, not a hack. Lossy for text containing a literal
- * colon or angle bracket — a deliberate safety-over-fidelity tradeoff.
+ * form, unlike PlantUML's `note over ... end note`. The text is wrapped first (`wrapNoteLines`,
+ * on the raw text, so entity escaping below can't skew the measured width), `&`/`<`/`>` are then
+ * HTML-escaped (so literal code containing `<div>` or `&&` can't be misread by Mermaid's HTML-ish
+ * note renderer), each line is colon-guarded the same defensive way a message label already is
+ * (`:` is still Mermaid's own note-text delimiter), and the lines are joined with a literal
+ * `<br/>` — Mermaid's own documented line-break token inside note text, not a hack. Lossy for text
+ * containing a literal colon or angle bracket — a deliberate safety-over-fidelity tradeoff.
  */
 function sanitizeNoteText(text: string): string {
-  const lines = text
-    .split(/\r?\n/)
+  const lines = wrapNoteLines(text)
     .map((line) => line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/:/g, '-').trim())
     .filter((line) => line.length > 0);
   return lines.join('<br/>') || 'Note';

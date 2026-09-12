@@ -188,6 +188,25 @@ describe('toMermaid', () => {
     expect(out).toContain('Note over A: Decision: Chose retry');
   });
 
+  it('wraps a long note into <br/>-separated lines instead of one very wide box', () => {
+    const long =
+      'Compensation is event-driven too: Payment refunds and publishes Payment Refunded; Order reacts to that in turn.';
+    const m = model({
+      participants: [{ id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' }],
+      elements: [{ kind: 'note', order: 0, participantIds: ['P1'], text: long, sourceFlowId: 'f1' }],
+    });
+    const note = toMermaid(m)
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.startsWith('Note over A:'))!;
+    const segments = note.replace('Note over A: ', '').split('<br/>');
+
+    expect(segments.length).toBeGreaterThan(1);
+    for (const segment of segments) expect(segment.length).toBeLessThanOrEqual(60);
+    // Colons are still guarded, so compare against the same substitution the emitter makes.
+    expect(segments.join(' ')).toBe(long.replace(/:/g, '-'));
+  });
+
   it('collapses a multi-line note (e.g. Code) into one line via <br/>, escaping HTML-sensitive characters', () => {
     const m = model({
       participants: [{ id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' }],

@@ -10,6 +10,21 @@ All notable changes to Draft Canvas are documented here.
   Event-Driven, Hexagonal, and Backend for Frontend join CQRS, both Sagas, and Transactional
   Outbox in offering a ready-made walkthrough of the diagram.
 
+### Changed
+
+- Export rebuilt around what you want out of it: choose Document, Image, Animated or Source, set
+  only what that format needs, and export with one button. Beside the settings sits the file you
+  are about to get — its name, its size, and for images a live preview that follows the palette,
+  transparency and "Selection only" as you change them.
+- Sequence diagram files are now named `.mmd` and `.puml`, dropping the `.sequence` in the middle.
+- Long notes in exported sequence source wrap onto several lines instead of stretching the diagram
+  sideways. Line breaks you typed yourself are kept as they are.
+
+### Removed
+
+- "Copy source" and "Copy as Markdown" from the sequence export — exporting the file is the one
+  way out, and your own tooling takes it from there.
+
 ## [1.0.0] - 2026-09-12
 
 The first stable release. Draft Canvas has understood shapes for a while; this is the release
