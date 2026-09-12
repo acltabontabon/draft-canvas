@@ -24,7 +24,7 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cat benchmark/results/summary.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: |
