@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PRODUCT } from '../src/product';
-import { applicableReleases } from '../src/releases/productReleases';
+import { applicableReleases, PRODUCT_RELEASES } from '../src/releases/productReleases';
 import { useUiStore } from '../src/store/uiStore';
 import { AboutDialog } from '../src/ui/common/AboutDialog';
 
@@ -33,13 +33,21 @@ describe('AboutDialog — What\'s New', () => {
     expect(screen.queryByRole('button', { name: /What's New/i })).not.toBeInTheDocument();
   });
 
-  it('opening What\'s New leads with the current release, not CHANGELOG.md, and never the future 1.0.0', async () => {
+  it('opening What\'s New leads with the current release, not CHANGELOG.md, and never a future one', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
     await user.click(screen.getByRole('button', { name: /What's New/i }));
 
     expect(screen.getByRole('heading', { name: `v${PRODUCT.version}` })).toBeInTheDocument();
-    expect(screen.queryByText('v1.0.0')).not.toBeInTheDocument();
+
+    // A release curated ahead of shipping must never surface. Asserted against the catalog
+    // itself rather than a hard-coded version, so this can't quietly expire the way pinning it
+    // to the then-unreleased 1.0.0 did.
+    const shown = applicableReleases(PRODUCT.version);
+    for (const release of PRODUCT_RELEASES) {
+      if (shown.some((r) => r.version === release.version)) continue;
+      expect(screen.queryByText(`v${release.version}`)).not.toBeInTheDocument();
+    }
   });
 
   it('moves focus to the current release heading when opening What\'s New', async () => {

@@ -4,6 +4,12 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-12
+
+The first stable release. Draft Canvas has understood shapes for a while; this is the release
+where it understands what you are about to draw — suggesting the next element, turning a flow into
+sequence-diagram source, and letting the whole canvas be driven from the keyboard.
+
 ### Added
 
 - Home screen redesigned with interactive starter previews—hover or arrow-key to explore.
@@ -620,7 +626,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v0.8.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.0.0...main
+[1.0.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.8.0...v1.0.0
 [0.8.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.5.0...v0.6.0

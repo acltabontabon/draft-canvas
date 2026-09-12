@@ -11,8 +11,12 @@ An opinionated diagramming tool for devs to sketch fast when a meeting suddenly 
 
 ## How it works
 
-**Draw** — Double-click to create shapes (text, notes, services, components, databases, queues,
-actors). Drag from an edge to connect; drop on empty canvas and the target node appears.
+**Draw** — Double-click to create shapes (text, notes, services, components, databases, tables,
+queues, actors). Drag from an edge to connect; drop on empty canvas and the target node appears.
+
+**Continue** — Draft Canvas sketches the obvious next move as you go: a queue beside a topic, a
+worker after a queue, a service on the far end of a route. Tab accepts it, Escape waves it off.
+It reads your diagram's shape, not a model — nothing leaves your device.
 
 **Start** — ⌘K, then "microservices", "modular monolith", "event driven", "hexagonal",
 "monolith", "backend for frontend", "cqrs", "saga" or "outbox" drops in a composed starting diagram
@@ -30,7 +34,12 @@ lit; everything else quiets. Arrow keys navigate.
 **Details** — Mark connectors async (dashed line). Add free-text condition chips. Attach notes or
 code snippets. Save automatically to the browser.
 
-**Export** — `.draftcanvas` (portable JSON), `.dcenc` (passphrase-protected), PNG, SVG, or GIF.
+**Keyboard** — Alt+Arrow moves between neighbouring elements, Alt+Shift+Arrow follows a
+connection. ⌘K runs any command; Shift+/ lists every shortcut.
+
+**Export** — `.draftcanvas` (portable JSON), `.dcenc` (passphrase-protected), PNG, SVG, or GIF —
+or turn a Flow into Mermaid or PlantUML sequence-diagram source when the sketch needs to become
+something more formal.
 
 ## Why local-first
 

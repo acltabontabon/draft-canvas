@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { PRODUCT } from '../src/product';
 import { useEditorStore } from '../src/store/editorStore';
 import type { DocumentSession } from '../src/store/useDocumentSession';
 import { useUiStore } from '../src/store/uiStore';
@@ -43,7 +45,6 @@ function renderToolbar() {
       title="Untitled canvas"
       onTitleChange={() => {}}
       onBack={() => {}}
-      onFit={() => {}}
       onPresent={() => {}}
       onExport={() => {}}
     />,
@@ -67,9 +68,31 @@ describe('unread release indicator', () => {
     expect(screen.getByRole('button', { name: /About Draft Canvas.*what's new/i })).toBeInTheDocument();
   });
 
-  it('toolbar About control reflects unread state via its accessible name', () => {
+  // About now lives behind the toolbar's More menu, so the state has to survive one level of
+  // folding: the collapsed trigger says something is waiting, and the row inside says what.
+  it('toolbar More trigger inherits the unread state of the About item it hides', () => {
     renderToolbar();
-    expect(screen.getByRole('button', { name: /About Draft Canvas.*what's new/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^More.*what's new/i })).toBeInTheDocument();
+  });
+
+  it('toolbar About control reflects unread state once the More menu is open', async () => {
+    const user = userEvent.setup();
+    renderToolbar();
+    await user.click(screen.getByRole('button', { name: /^More/ }));
+    expect(screen.getByRole('menuitem', { name: 'About Draft Canvas' })).toBeInTheDocument();
+    expect(screen.getByRole('menu', { name: 'More' })).toBeInTheDocument();
+  });
+
+  it('an update ready to install outranks unread notes on the toolbar trigger', () => {
+    useUiStore.setState({ updateReady: true });
+    renderToolbar();
+    expect(screen.getByRole('button', { name: /^More.*update ready/i })).toBeInTheDocument();
+  });
+
+  it('the toolbar trigger says nothing when there is nothing waiting', () => {
+    useUiStore.getState().markProductReleaseSeen();
+    renderToolbar();
+    expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument();
   });
 
   it('is not shown once the release has been acknowledged', () => {
@@ -89,7 +112,7 @@ describe('unread release indicator', () => {
     // Simulates a fresh install: the store's own initial resolution already treats "never
     // stored" as "nothing unread" — see `readLastSeenRelease` — so setting it to the running
     // app's own version reproduces that same starting state without touching real storage.
-    useUiStore.setState({ lastSeenProductRelease: '0.8.0' });
+    useUiStore.setState({ lastSeenProductRelease: PRODUCT.version });
     render(<LibraryScreen session={stubSession()} />);
     expect(screen.getByRole('button', { name: 'About Draft Canvas' })).toBeInTheDocument();
   });

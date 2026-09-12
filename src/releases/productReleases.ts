@@ -9,10 +9,10 @@ export type { ProductRelease, ProductReleaseHighlight } from './types';
  * Curated, user-facing release notes for the About → What's New view. Newest release goes first
  * by convention, but nothing downstream relies on that — `applicableReleases` always re-sorts.
  *
- * `1.0.0` is written ahead of that release actually shipping (see CONTRIBUTING.md's "Release
- * workflow"): curated now from CHANGELOG.md's `[Unreleased]` section, while the app itself is
- * still pre-1.0. It carries no `date`, and `applicableReleases` filters it out entirely until the
- * running app version genuinely reaches 1.0.0 — it cannot be shown as installed early.
+ * Entries may be written ahead of the release that carries them (see CONTRIBUTING.md's "Release
+ * workflow"), curated from CHANGELOG.md's `[Unreleased]` section. A prepared entry carries no
+ * `date`, and `applicableReleases` filters it out entirely until the running app version genuinely
+ * reaches it — it can never be shown as installed early.
  *
  * History only goes back to `0.1.0` ("the first production-ready release," per CHANGELOG.md) —
  * the `alpha`/`beta` milestones before it were never a real release anyone upgraded from, and a
@@ -22,7 +22,9 @@ export type { ProductRelease, ProductReleaseHighlight } from './types';
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
     version: '1.0.0',
-    summary: 'Diagrams that explain themselves, and a canvas you can drive without a mouse.',
+    date: '2026-09-12',
+    summary:
+      'The first stable release — diagrams that explain themselves, and a canvas you can drive without a mouse.',
     highlights: [
       {
         title: 'Flow → Sequence Diagram',
@@ -49,9 +51,14 @@ export const PRODUCT_RELEASES: ProductRelease[] = [
         description: 'A Data Store can hold named Tables.',
       },
       {
+        title: 'A toolbar that gets out of the way',
+        description:
+          'The creation tools sit in one centred rail, the canvas name reads as a title, and the settings you touch once a month moved behind a More menu.',
+      },
+      {
         title: 'Polish and reliability',
         description:
-          'Smarter connector routing and labels, one shared popover across every shape and connector, and dialogs that reliably hand keyboard focus back where you left it.',
+          'Light and dark now follow your system on their own, connector routing and labels got smarter, every shape and connector shares one popover, and dialogs reliably hand keyboard focus back where you left it.',
       },
     ],
   },
