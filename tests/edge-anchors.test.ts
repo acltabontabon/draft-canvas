@@ -419,6 +419,17 @@ describe('reconnectEdge', () => {
     expect(next.edges[0]!.source).toBe('a');
   });
 
+  it('is a no-op rather than creating a self-loop by moving an endpoint onto the other one', () => {
+    // Mirrors connect()'s own source === target guard — dragging an edge's target handle onto
+    // its own (untouched) source node, or vice versa, must never leave the edge pointing at the
+    // same node on both ends.
+    const doc = fixture();
+    const next = reconnectEdge(doc, 'e1', 'target', 'a', 'bottom');
+    expect(next).toBe(doc);
+    expect(next.edges[0]!.source).toBe('a');
+    expect(next.edges[0]!.target).toBe('b');
+  });
+
   it('is one undo step through the store', () => {
     __resetInteraction();
     useEditorStore.setState({

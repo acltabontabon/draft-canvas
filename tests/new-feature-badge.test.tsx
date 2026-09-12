@@ -23,8 +23,8 @@ beforeEach(() => {
 
 /**
  * Phase 7.3 — nothing looks "new" on a fresh install (no baseline to compare against); a
- * returning device whose last-seen version predates the catalog entry's `sinceVersion` (here,
- * always the current `PRODUCT.version` — see `newFeatures.ts`) sees the badge until it retires.
+ * returning device whose last-seen version predates the catalog entry's fixed `sinceVersion`
+ * (see `newFeatures.ts`) sees the badge until it retires.
  */
 describe('useIsNewFeature', () => {
   it('is never new on a brand-new install (no stored version at all)', () => {
@@ -42,6 +42,15 @@ describe('useIsNewFeature', () => {
 
   it('is not new for a device already on the current version', () => {
     store.set('last-seen-version', PRODUCT.version);
+    let latest: ReturnType<typeof useIsNewFeature> | undefined;
+    render(<Probe onReady={(api) => (latest = api)} />);
+    expect(latest!.isNew).toBe(false);
+  });
+
+  it('is not new for a device returning from a real past release, even a much older one', () => {
+    // Regression: sinceVersion must be a fixed historical string, not the live PRODUCT.version —
+    // otherwise every entry looks newer than any stored baseline on every single release.
+    store.set('last-seen-version', '1.0.0');
     let latest: ReturnType<typeof useIsNewFeature> | undefined;
     render(<Probe onReady={(api) => (latest = api)} />);
     expect(latest!.isNew).toBe(false);

@@ -155,6 +155,10 @@ export function reconnectEdge(
   let changed = false;
   const edges = doc.edges.map((edge) => {
     if (edge.id !== id) return edge;
+    // Mirrors `connect()`'s own source === target guard: moving one endpoint onto the other,
+    // untouched one would leave a self-loop routing/hit-testing never expects.
+    const otherEndpoint = endpoint === 'source' ? edge.target : edge.source;
+    if (newNodeId === otherEndpoint) return edge;
     changed = true;
     const next: DraftEdge =
       endpoint === 'source' ? { ...edge, source: newNodeId } : { ...edge, target: newNodeId };
@@ -339,31 +343,49 @@ export function pasteFragment(
 export function bringForward(doc: DraftDocument, ids: Iterable<string>): DraftDocument {
   const set = new Set(ids);
   const max = doc.nodes.reduce((m, n) => Math.max(m, n.z), 0);
-  return withNodes(
-    doc,
-    doc.nodes.map((n) => (set.has(n.id) ? { ...n, z: Math.min(max + 1, n.z + 1) } : n)),
-  );
+  let changed = false;
+  const nodes = doc.nodes.map((n) => {
+    if (!set.has(n.id)) return n;
+    changed = true;
+    return { ...n, z: Math.min(max + 1, n.z + 1) };
+  });
+  return changed ? withNodes(doc, nodes) : doc;
 }
 
 export function sendBackward(doc: DraftDocument, ids: Iterable<string>): DraftDocument {
   const set = new Set(ids);
   const min = doc.nodes.reduce((m, n) => Math.min(m, n.z), 0);
-  return withNodes(
-    doc,
-    doc.nodes.map((n) => (set.has(n.id) ? { ...n, z: Math.max(min - 1, n.z - 1) } : n)),
-  );
+  let changed = false;
+  const nodes = doc.nodes.map((n) => {
+    if (!set.has(n.id)) return n;
+    changed = true;
+    return { ...n, z: Math.max(min - 1, n.z - 1) };
+  });
+  return changed ? withNodes(doc, nodes) : doc;
 }
 
 export function bringToFront(doc: DraftDocument, ids: Iterable<string>): DraftDocument {
   const set = new Set(ids);
   const max = doc.nodes.reduce((m, n) => Math.max(m, n.z), 0);
-  return withNodes(doc, doc.nodes.map((n) => (set.has(n.id) ? { ...n, z: max + 1 } : n)));
+  let changed = false;
+  const nodes = doc.nodes.map((n) => {
+    if (!set.has(n.id)) return n;
+    changed = true;
+    return { ...n, z: max + 1 };
+  });
+  return changed ? withNodes(doc, nodes) : doc;
 }
 
 export function sendToBack(doc: DraftDocument, ids: Iterable<string>): DraftDocument {
   const set = new Set(ids);
   const min = doc.nodes.reduce((m, n) => Math.min(m, n.z), 0);
-  return withNodes(doc, doc.nodes.map((n) => (set.has(n.id) ? { ...n, z: min - 1 } : n)));
+  let changed = false;
+  const nodes = doc.nodes.map((n) => {
+    if (!set.has(n.id)) return n;
+    changed = true;
+    return { ...n, z: min - 1 };
+  });
+  return changed ? withNodes(doc, nodes) : doc;
 }
 
 /* -------------------------------------------------------------- alignment -- */
@@ -880,26 +902,27 @@ export function setParent(
   parentId: string | undefined,
 ): DraftDocument {
   const set = new Set(childIds);
-  return withNodes(
-    doc,
-    doc.nodes.map((node) => {
-      if (!set.has(node.id) || node.id === parentId) return node;
-      if (parentId === undefined) {
-        if (!node.parentId) return node;
-        const { parentId: _drop, ...rest } = node;
-        return rest;
-      }
-      if (node.parentId === parentId) return node;
-      // A node cannot be reparented under its own descendant — that would
-      // create a cycle `descendantsOf`'s own walk assumes can never exist.
-      // The one caller today (`Canvas.tsx`'s drag-drop) already excludes
-      // these targets before ever offering them as a drop candidate; the
-      // guard lives here too so correctness doesn't depend on every future
-      // caller remembering to pre-filter the same way.
-      if (descendantsOf(doc, node.id).includes(parentId)) return node;
-      return { ...node, parentId };
-    }),
-  );
+  let changed = false;
+  const nodes = doc.nodes.map((node) => {
+    if (!set.has(node.id) || node.id === parentId) return node;
+    if (parentId === undefined) {
+      if (!node.parentId) return node;
+      changed = true;
+      const { parentId: _drop, ...rest } = node;
+      return rest;
+    }
+    if (node.parentId === parentId) return node;
+    // A node cannot be reparented under its own descendant — that would
+    // create a cycle `descendantsOf`'s own walk assumes can never exist.
+    // The one caller today (`Canvas.tsx`'s drag-drop) already excludes
+    // these targets before ever offering them as a drop candidate; the
+    // guard lives here too so correctness doesn't depend on every future
+    // caller remembering to pre-filter the same way.
+    if (descendantsOf(doc, node.id).includes(parentId)) return node;
+    changed = true;
+    return { ...node, parentId };
+  });
+  return changed ? withNodes(doc, nodes) : doc;
 }
 
 /* ------------------------------------------------------------- document ---- */

@@ -8,8 +8,9 @@ import { AboutDialog } from '../src/ui/common/AboutDialog';
 
 /**
  * About → What's New → Release History → Release Detail: one modal, four internal views, never
- * a modal on a modal. `back` is a fixed hierarchy (Detail → History → What's New → About)
- * regardless of how a view was entered — these tests drive it the way a keyboard user would.
+ * a modal on a modal. `back` retraces the path actually taken to get there — Detail returns to
+ * whichever of What's New or Release History it was opened from, then History → What's New →
+ * About — these tests drive it the way a keyboard user would.
  */
 describe('AboutDialog — What\'s New', () => {
   beforeEach(() => {
@@ -113,16 +114,18 @@ describe('AboutDialog — What\'s New', () => {
     expect(screen.getByText(recent.highlights[0]!.title, { exact: false })).toBeInTheDocument();
   });
 
-  it('a release reached directly from What\'s New still backs up into Release History, not What\'s New', async () => {
+  it('a release reached directly from What\'s New backs up into What\'s New, not Release History', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
     await user.click(screen.getByRole('button', { name: /What's New/i }));
 
+    const latest = applicableReleases(PRODUCT.version)[0]!;
     const recent = applicableReleases(PRODUCT.version)[1]!;
     await user.click(screen.getByRole('button', { name: new RegExp(`v${recent.version.replace(/\./g, '\\.')}`) }));
-    await user.click(screen.getByRole('button', { name: 'Back to Release History' }));
+    await user.click(screen.getByRole('button', { name: "Back to What's New" }));
 
-    expect(screen.getByRole('button', { name: new RegExp(`v${recent.version.replace(/\./g, '\\.')}`) })).toBeInTheDocument();
+    // Back to the top-level What's New view for the CURRENT release, not the row just visited.
+    expect(screen.getByRole('heading', { name: `v${latest.version}` })).toBeInTheDocument();
   });
 
   it('"View release history" opens a dense index of every applicable release', async () => {

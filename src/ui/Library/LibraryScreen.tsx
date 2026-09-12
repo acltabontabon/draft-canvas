@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { readProjectFile } from '../../export/project';
 import { looksLikeSecureExport, readSecureProjectFile } from '../../export/secureProject';
 import type { DraftSummary } from '../../document/types';
@@ -82,7 +82,13 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   useRelativeTimeTick();
 
   const searching = searchQuery.trim().length > 0;
-  const canvases = visibleCanvases(session.library, session.projects, view, searchQuery, sort);
+  // Filtering and sorting the whole library is otherwise real work to redo every render —
+  // `useRelativeTimeTick` alone forces one every 60 seconds, with nothing about the library,
+  // search, or sort actually changing.
+  const canvases = useMemo(
+    () => visibleCanvases(session.library, session.projects, view, searchQuery, sort),
+    [session.library, session.projects, view, searchQuery, sort],
+  );
   const heading = headingFor(view, session.projects, searching);
   // Nothing stored at all: not an empty library but a first run, which gets its own screen.
   const firstRun = session.library.length === 0 && session.projects.length === 0;

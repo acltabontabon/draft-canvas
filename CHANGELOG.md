@@ -4,6 +4,19 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- The "New" indicator on Learn Mode and the Command Palette could reappear after every update,
+  even for features that have been around for a long time.
+- About → What's New → a release's detail view could send you back to Release History instead of
+  What's New, if that's not where you came from.
+- Reconnecting a connector's endpoint could be dropped onto its own other end, leaving it pointing
+  at the same shape on both sides.
+- Bring to Front, Send to Back, Send Forward, and Send Backward no longer add a wasted step to
+  your undo history when nothing is actually selected.
+- The homepage's search, sort, and per-project counts recalculated more than they needed to, most
+  noticeably once a minute from the "time ago" labels refreshing.
+
 ## [1.1.0] - 2026-09-13
 
 ### Added

@@ -183,7 +183,11 @@ function DetailView({ release, headingRef }: { release: ProductRelease | undefin
   );
 }
 
-type View = { kind: 'about' } | { kind: 'whats-new' } | { kind: 'history' } | { kind: 'detail'; version: string };
+type View =
+  | { kind: 'about' }
+  | { kind: 'whats-new' }
+  | { kind: 'history' }
+  | { kind: 'detail'; version: string; from: 'whats-new' | 'history' };
 
 export function AboutDialog() {
   const open = useUiStore((state) => state.aboutOpen);
@@ -222,7 +226,13 @@ export function AboutDialog() {
   const isWide = view.kind !== 'about';
   const modalTitle = view.kind === 'about' ? 'About' : view.kind === 'whats-new' ? "What's New" : 'Release History';
   const backLabel =
-    view.kind === 'whats-new' ? 'Back to About' : view.kind === 'history' ? "Back to What's New" : 'Back to Release History';
+    view.kind === 'whats-new'
+      ? 'Back to About'
+      : view.kind === 'history'
+        ? "Back to What's New"
+        : view.kind === 'detail' && view.from === 'history'
+          ? 'Back to Release History'
+          : "Back to What's New";
   const onBack =
     view.kind === 'about'
       ? undefined
@@ -230,7 +240,7 @@ export function AboutDialog() {
         ? () => setView({ kind: 'about' })
         : view.kind === 'history'
           ? () => setView({ kind: 'whats-new' })
-          : () => setView({ kind: 'history' });
+          : () => setView(view.from === 'history' ? { kind: 'history' } : { kind: 'whats-new' });
 
   return (
     <Modal
@@ -340,12 +350,12 @@ export function AboutDialog() {
           releases={releases}
           headingRef={headingRef}
           onOpenHistory={() => setView({ kind: 'history' })}
-          onOpenDetail={(version) => setView({ kind: 'detail', version })}
+          onOpenDetail={(version) => setView({ kind: 'detail', version, from: 'whats-new' })}
         />
       )}
 
       {view.kind === 'history' && (
-        <HistoryView releases={releases} headingRef={headingRef} onSelect={(version) => setView({ kind: 'detail', version })} />
+        <HistoryView releases={releases} headingRef={headingRef} onSelect={(version) => setView({ kind: 'detail', version, from: 'history' })} />
       )}
 
       {view.kind === 'detail' && (

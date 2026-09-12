@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { DraftSummary, Project } from '../../document/types';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import type { LibraryView } from './libraryFilter';
@@ -23,9 +23,17 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
   const [renaming, setRenaming] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
 
-  const unorganizedCount = library.filter((entry) => !entry.projectId).length;
-  const countFor = (projectId: string) =>
-    library.filter((entry) => entry.projectId === projectId).length;
+  // One pass over the library instead of one `.filter()` per project — the per-project counts a
+  // sidebar with dozens of projects would otherwise recompute in full, once each, on every render.
+  const { unorganizedCount, countByProject } = useMemo(() => {
+    let unorganized = 0;
+    const byProject = new Map<string, number>();
+    for (const entry of library) {
+      if (entry.projectId) byProject.set(entry.projectId, (byProject.get(entry.projectId) ?? 0) + 1);
+      else unorganized += 1;
+    }
+    return { unorganizedCount: unorganized, countByProject: byProject };
+  }, [library]);
   const projectsSorted = [...session.projects].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
@@ -70,7 +78,7 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
               onClick={() => onViewChange({ kind: 'project', projectId: project.id })}
             >
               <span className="dc-sidebar-project-name">{project.name}</span>
-              <span className="dc-muted dc-sidebar-count">{countFor(project.id)}</span>
+              <span className="dc-muted dc-sidebar-count">{countByProject.get(project.id) ?? 0}</span>
             </button>
             <div className="dc-sidebar-project-actions">
               <Button

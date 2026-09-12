@@ -1610,8 +1610,7 @@
  * A predetermined connector behaviour (see `capabilityFor` in
  * `document/connectorSemantics.ts`) — dashed border reads as "inferred, not a
  * fixed choice," and it's a real button: clicking it reveals the full picker
- * underneath, so nothing here is a dead end. Same idea `Inspector.tsx`'s
- * multi-select copy still uses under its own `.dc-kind-badge` name.
+ * underneath, so nothing here is a dead end.
  */
 .dc-inspector-badge {
   height: var(--dc-popover-field, 28px);

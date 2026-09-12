@@ -5,12 +5,16 @@ import {
   addNodes,
   alignNodes,
   boundsOf,
+  bringForward,
+  bringToFront,
   descendantsOf,
   distributeNodes,
   extractFragment,
   moveNodes,
   pasteFragment,
   removeElements,
+  sendBackward,
+  sendToBack,
   setParent,
   setTitle,
   updateNode,
@@ -221,6 +225,13 @@ describe('containment', () => {
     expect(storedInner.parentId).toBe(outer.id);
   });
 
+  it('setParent is a true no-op — same document reference — for an empty or non-matching id set', () => {
+    const boundary = createNode({ type: 'group', x: 0, y: 0, width: 400, height: 400 });
+    const doc = addNodes(createDocument(), [boundary]);
+    expect(setParent(doc, [], boundary.id)).toBe(doc);
+    expect(setParent(doc, ['does-not-exist'], boundary.id)).toBe(doc);
+  });
+
   it('leaves node coordinates untouched by parenting or unparenting', () => {
     const boundary = createNode({ type: 'group', x: 0, y: 0, width: 400, height: 400 });
     const child = createNode({ type: 'note', x: 120, y: 90 });
@@ -237,6 +248,19 @@ describe('containment', () => {
     expect(stored.x).toBe(120);
     expect(stored.y).toBe(90);
     expect(stored.parentId).toBeUndefined();
+  });
+});
+
+describe('z-order', () => {
+  it('bringForward/sendBackward/bringToFront/sendToBack are true no-ops — same document reference — for an empty or non-matching id set', () => {
+    const a = createNode({ type: 'service', x: 0, y: 0, z: 0 });
+    const b = createNode({ type: 'service', x: 200, y: 0, z: 1 });
+    const doc = addNodes(createDocument(), [a, b]);
+
+    for (const op of [bringForward, sendBackward, bringToFront, sendToBack]) {
+      expect(op(doc, [])).toBe(doc);
+      expect(op(doc, ['does-not-exist'])).toBe(doc);
+    }
   });
 });
 
