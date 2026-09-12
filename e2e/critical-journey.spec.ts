@@ -206,7 +206,7 @@ test.describe('Draft Canvas', () => {
 
     /* --- export ------------------------------------------------------------ */
 
-    await page.getByTitle(/^Export/).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Export' })).toBeVisible();
 
     const projectDownload = page.waitForEvent('download');
@@ -226,7 +226,7 @@ test.describe('Draft Canvas', () => {
 
     /* --- PNG and SVG -------------------------------------------------------- */
 
-    await page.getByTitle(/^Export/).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
     const pngDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export PNG' }).click();
     const png = await pngDownload;
@@ -236,7 +236,7 @@ test.describe('Draft Canvas', () => {
     expect(pngBytes.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     expect(pngBytes.byteLength).toBeGreaterThan(2000);
 
-    await page.getByTitle(/^Export/).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
     const svgDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export SVG' }).click();
     const svg = await svgDownload;
@@ -249,7 +249,7 @@ test.describe('Draft Canvas', () => {
 
     /* --- animated flow (GIF) ------------------------------------------------- */
 
-    await page.getByTitle(/^Export/).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
     const gifDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export GIF' }).click();
     const gif = await gifDownload;

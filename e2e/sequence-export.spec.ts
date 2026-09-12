@@ -129,7 +129,7 @@ async function importDocument(page: Page, doc: unknown, fileName: string) {
 }
 
 async function openExport(page: Page) {
-  await page.getByTitle(/^Export/).click();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Export' })).toBeVisible();
 }
 

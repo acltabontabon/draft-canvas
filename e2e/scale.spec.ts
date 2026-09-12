@@ -110,7 +110,7 @@ test('stays workable with 100 nodes and 180 connections', async ({ page }) => {
   await expect(page.locator('.dc-node')).toHaveCount(100);
 
   // And it still exports.
-  await page.getByTitle(/^Export/).click();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export SVG' }).click();
   expect((await download).suggestedFilename()).toBe('scale.svg');
