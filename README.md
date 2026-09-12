@@ -11,38 +11,6 @@ An opinionated diagramming tool for devs to sketch fast when a meeting suddenly 
 
 **[Try it →](https://acltabontabon.com/draft-canvas/)** Nothing you draw leaves your browser.
 
-## How it works
-
-**Draw** — Double-click to create shapes (text, notes, services, components, databases, tables,
-queues, actors). Drag from an edge to connect; drop on empty canvas and the target node appears.
-
-**Continue** — Draft Canvas sketches the obvious next move as you go: a queue beside a topic, a
-worker after a queue, a service on the far end of a route. Tab accepts it, Escape waves it off.
-It reads your diagram's shape, not a model — nothing leaves your device.
-
-**Start** — ⌘K, then "microservices", "modular monolith", "event driven", "hexagonal",
-"monolith", "backend for frontend", "cqrs", "saga" or "outbox" drops in a composed starting diagram
-for that architecture or pattern — laid out, labelled, and ready to change. Ordinary shapes and connectors, so nothing is locked; one undo removes it all.
-
-**Code** — Syntax-highlighted cards for Java, JSON, YAML, XML, SQL, shell, HTTP, log. Read-only,
-not an editor.
-
-**Flows** — Name an ordered path through connectors you've already drawn. Reuse the same diagram
-for multiple scenarios. Export any Flow as an animated GIF.
-
-**Present** — Step through a Flow, one connector at a time. Active connector and endpoints stay
-lit; everything else quiets. Arrow keys navigate.
-
-**Details** — Mark connectors async (dashed line). Add free-text condition chips. Attach notes or
-code snippets. Save automatically to the browser.
-
-**Keyboard** — Alt+Arrow moves between neighbouring elements, Alt+Shift+Arrow follows a
-connection. ⌘K runs any command; Shift+/ lists every shortcut.
-
-**Export** — `.draftcanvas` (portable JSON), `.dcenc` (passphrase-protected), PNG, SVG, or GIF —
-or turn a Flow into Mermaid or PlantUML sequence-diagram source when the sketch needs to become
-something more formal.
-
 ## Why local-first
 
 Your diagrams stay on your device. No account. No backend. No sync. After the first load it runs
@@ -60,15 +28,6 @@ See [docs/PRIVACY.md](docs/PRIVACY.md) for what's stored where.
 
 ⚠️ **Clearing your browser's site data deletes your diagrams.** Export a `.draftcanvas` file
 for anything you want to keep.
-
-## Docs
-
-- [Architecture](docs/ARCHITECTURE.md) — how it works and why
-- [Diagram semantics](docs/SEMANTICS.md) — what it understands about your diagrams
-- [Schema and versioning](docs/SCHEMA.md) — the `.draftcanvas` format and its migration contract
-- [Privacy](docs/PRIVACY.md) — what's stored where
-- [Performance](docs/PERFORMANCE.md) — the benchmark, what it measures, and how to run it
-- [Contributing](CONTRIBUTING.md) — how to run it locally
 
 <!-- performance:start -->
 ## Performance
@@ -88,8 +47,3 @@ Measured on: Apple M2 Pro, macOS 25.6.0, Chromium 151.0.7922.34, Draft Canvas 0.
 
 Full methodology, limitations, and how to reproduce this: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 <!-- performance:end -->
-
-## Contributing
-
-Bugs, features, and PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Follows a standard
-[Code of Conduct](CODE_OF_CONDUCT.md).
