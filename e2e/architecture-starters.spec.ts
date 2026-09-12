@@ -99,14 +99,15 @@ test.describe('architecture starters', () => {
   }) => {
     await newCanvas(page, 'Starter browser');
     await expect(page.getByRole('group', { name: 'Suggested starters', exact: true })).toBeVisible();
-    // Hexagonal is deliberately not one of the four offered up front — this link is how it is found.
-    await expect(page.getByRole('button', { name: 'Start from Hexagonal' })).toHaveCount(0);
+    // Transactional Outbox is deliberately not one of the four offered up front — this link is
+    // how it is found.
+    await expect(page.getByRole('button', { name: 'Start from Transactional Outbox' })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Browse all starters' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('group', { name: 'Starters', exact: true })).toBeVisible();
 
-    await dialog.getByRole('button', { name: 'Start from Hexagonal', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Start from Transactional Outbox', exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(page.locator('.dc-node').first()).toBeVisible();
     await expect(page.getByRole('group', { name: 'Suggested starters', exact: true })).toBeHidden();
