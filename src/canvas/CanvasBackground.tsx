@@ -32,7 +32,7 @@ export function CanvasBackground({ settings, documentId, extraDim = 0 }: CanvasB
 
   useEffect(() => {
     if (!settings.enabled) {
-      // oxlint-disable-next-line set-state-in-effect -- synchronizing with the IndexedDB-backed image below; this early exit just clears it.
+      // oxlint-disable-next-line react/set-state-in-effect -- synchronizing with the IndexedDB-backed image below; this early exit just clears it.
       setImageUrl(null);
       return;
     }

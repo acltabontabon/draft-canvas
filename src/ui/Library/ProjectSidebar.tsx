@@ -42,6 +42,7 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
         type="button"
         className="dc-sidebar-row"
         data-active={view.kind === 'recent' ? 'true' : undefined}
+        aria-current={view.kind === 'recent' ? 'page' : undefined}
         onClick={() => onViewChange({ kind: 'recent' })}
       >
         Recently edited
@@ -50,6 +51,7 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
         type="button"
         className="dc-sidebar-row"
         data-active={view.kind === 'all' ? 'true' : undefined}
+        aria-current={view.kind === 'all' ? 'page' : undefined}
         onClick={() => onViewChange({ kind: 'all' })}
       >
         All diagrams
@@ -58,6 +60,7 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
         type="button"
         className="dc-sidebar-row"
         data-active={view.kind === 'unorganized' ? 'true' : undefined}
+        aria-current={view.kind === 'unorganized' ? 'page' : undefined}
         onClick={() => onViewChange({ kind: 'unorganized' })}
       >
         <span>Unorganized</span>
@@ -75,6 +78,7 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
             <button
               type="button"
               className="dc-sidebar-row"
+              aria-current={view.kind === 'project' && view.projectId === project.id ? 'page' : undefined}
               onClick={() => onViewChange({ kind: 'project', projectId: project.id })}
             >
               <span className="dc-sidebar-project-name">{project.name}</span>

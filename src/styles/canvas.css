@@ -162,7 +162,8 @@
 }
 
 .dc-node:hover .dc-code-copy,
-.dc-node[data-selected='true'] .dc-code-copy {
+.dc-node[data-selected='true'] .dc-code-copy,
+.dc-code-copy:focus-visible {
   opacity: 1;
 }
 
@@ -993,7 +994,7 @@
   --dc-popover-field: 28px;
   --dc-popover-font: 12px;
   --dc-popover-caret: 8px;
-  /* Portaled into React Flow's root in screen space (see `useCanvasOverlay`) and placed purely by
+  /* Portaled into React Flow's root in screen space (see `useOverlayPosition`) and placed purely by
      its inline transform — so it keeps its size at every zoom and sits above every node. */
   position: absolute;
   top: 0;

@@ -88,7 +88,7 @@ export interface RankedEntry<T extends CommandOption> {
 /** A keyword hit is a good hit, but a title hit should win a tie. */
 const KEYWORD_PENALTY = 2;
 
-export function scoreEntry<T extends CommandOption>(query: string, entry: T): RankedEntry<T> | null {
+function scoreEntry<T extends CommandOption>(query: string, entry: T): RankedEntry<T> | null {
   const title = fuzzyMatch(query, entry.title);
   let best: RankedEntry<T> | null = title ? { entry, score: title.score, indices: title.indices } : null;
   for (const keyword of entry.keywords ?? []) {

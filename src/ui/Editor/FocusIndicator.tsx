@@ -1,4 +1,5 @@
 import { useEditorStore } from '../../store/editorStore';
+import { Button } from '../common/Button';
 
 /**
  * A small, temporary state indicator shown only while Focus Mode is active —
@@ -23,9 +24,7 @@ export function FocusIndicator() {
   return (
     <div className="dc-focus-indicator" role="status">
       <span>Focus{parts.length > 0 ? ` · ${parts.join(', ')}` : ''}</span>
-      <button type="button" aria-label="Exit focus" title="Exit focus (Esc)" onClick={exitFocus}>
-        ×
-      </button>
+      <Button icon="close" variant="quiet" aria-label="Exit focus" title="Exit focus (Esc)" onClick={exitFocus} />
     </div>
   );
 }

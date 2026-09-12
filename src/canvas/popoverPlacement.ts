@@ -12,7 +12,7 @@
 import { clamp } from '../lib/math';
 
 export type Placement = 'above' | 'below' | 'right' | 'left';
-export const PLACEMENT_ORDER: Placement[] = ['above', 'below', 'right', 'left'];
+const PLACEMENT_ORDER: Placement[] = ['above', 'below', 'right', 'left'];
 
 export interface PlacementRect {
   x: number;
@@ -51,7 +51,7 @@ export function anchorsForRect(rect: PlacementRect): Record<Placement, Placement
 }
 
 /** Does the popover, at `size`, fit on the given side of the anchor without breaching a clearance? */
-export function fitsPlacement(
+function fitsPlacement(
   candidate: Placement,
   anchors: Record<Placement, PlacementPoint>,
   flowToScreenPosition: (point: PlacementPoint) => PlacementPoint,
@@ -94,7 +94,7 @@ export function resolvePlacement(
 /** The CSS `transform` string that positions the popover for a resolved placement, cross-axis
  *  clamped so it never clips off-screen even right at a viewport corner. The result is in the
  *  popover container's own coordinates — `screenToContainer` maps a page point into them (see
- *  `useCanvasOverlay`; identity for a popover already positioned against the page). The gap is
+ *  `useOverlayPosition`; identity for a popover already positioned against the page). The gap is
  *  in screen pixels, like every clearance, so it never shrinks or grows with zoom. */
 export function placementTransform(
   placement: Placement,

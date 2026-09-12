@@ -20,11 +20,16 @@ interface ObstacleGrid {
 }
 
 const obstacleRects = new WeakMap<DraftNode, Rect>();
+/** Which node each cached obstacle rect stands for — see `withoutNodes`. */
+const obstacleNodeIds = new WeakMap<Rect, string>();
 const obstacleGrids = new WeakMap<readonly DraftNode[], ObstacleGrid>();
 
 function stableRectOf(node: DraftNode): Rect {
   let rect = obstacleRects.get(node);
-  if (!rect) obstacleRects.set(node, (rect = rectOf(node)));
+  if (!rect) {
+    obstacleRects.set(node, (rect = rectOf(node)));
+    obstacleNodeIds.set(rect, node.id);
+  }
   return rect;
 }
 
@@ -100,4 +105,15 @@ export function obstaclesForEdge(nodes: readonly DraftNode[], sourceId: string, 
       : [...found].sort((a, b) => grid.order.get(a)! - grid.order.get(b)!).map(stableRectOf);
   grid.results.set(key, result);
   return result;
+}
+
+/**
+ * `obstacles` (from `obstaclesForEdge`) minus the nodes in `excludedIds` — the nodes a gesture is
+ * moving right now, whose committed rects are stale until it ends. Returns `obstacles` itself when
+ * nothing is removed.
+ */
+export function withoutNodes(obstacles: readonly Rect[], excludedIds: ReadonlySet<string>): readonly Rect[] {
+  if (excludedIds.size === 0 || obstacles.length === 0) return obstacles;
+  const kept = obstacles.filter((rect) => !excludedIds.has(obstacleNodeIds.get(rect) ?? ''));
+  return kept.length === obstacles.length ? obstacles : kept.length === 0 ? NO_RECTS : kept;
 }

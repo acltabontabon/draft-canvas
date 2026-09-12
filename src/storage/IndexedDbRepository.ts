@@ -9,6 +9,7 @@ import {
   QuotaExceededError,
   StorageUnavailableError,
   backgroundImageKey,
+  isBackgroundImageKeyOf,
   isQuotaError,
   summarize,
   type DraftRepository,
@@ -333,29 +334,34 @@ export class IndexedDbRepository implements DraftRepository {
 
   /**
    * A metadata-only edit (rename, move to a project) is a decrypt → change → encrypt round trip,
-   * which can't sit inside one IndexedDB transaction. Instead the write commits only if the
-   * document's summary is still exactly as it was before the read — otherwise another tab saved
-   * in between, and the edit is redone against that newer content rather than overwriting it.
+   * which can't sit inside one IndexedDB transaction. Instead the write commits only if the body
+   * row is still the very one that was read — otherwise another tab saved in between, and the edit
+   * is redone against that newer content rather than overwriting it. The body, not the summary's
+   * `updatedAt`: a viewport-only autosave rewrites the body without touching `updatedAt`. Reads via
+   * `readBody`, not `load`, so an outdated row is migrated once, by this write, not twice.
    */
   private async updateMetadata(
     id: string,
     change: (metadata: DraftDocument['metadata']) => DraftDocument['metadata'],
   ): Promise<void> {
     for (let attempt = 0; attempt < METADATA_WRITE_ATTEMPTS; attempt += 1) {
-      const before = await this.db.get('documents', id);
-      const document = await this.load(id);
-      if (!before || !document) return;
+      const read = await this.readBody(id);
+      if (!read) return;
+      const { document } = read;
       const next = { ...document, metadata: change({ ...document.metadata, updatedAt: Date.now() }) };
       try {
         const encrypted = await encryptDocument(next, await getOrCreateMasterKey());
         const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
-        const current = await tx.objectStore('documents').get(id);
+        const [summary, current] = await Promise.all([
+          tx.objectStore('documents').get(id),
+          tx.objectStore('bodies').get(id),
+        ]);
         // Deleted meanwhile: nothing to rename, and writing would resurrect it.
-        if (!current) {
+        if (!summary || !current) {
           await tx.done;
           return;
         }
-        if (current.updatedAt === before.updatedAt) {
+        if (sameBody(current, read.row)) {
           await Promise.all([
             tx.objectStore('documents').put(summarize(next)),
             tx.objectStore('bodies').put(encrypted),
@@ -542,8 +548,7 @@ function sameBody(a: EncryptedBody | LegacyBody, b: EncryptedBody | LegacyBody):
 
 /**
  * The `<documentId>#<imageId>` keys belonging to exactly this document. A key range alone isn't
- * enough: an imported document may carry an id that itself contains `#` (`d_x#1`), whose images
- * sort inside `d_x`'s range — closing `d_x` must not delete them.
+ * enough: `d_x#1`'s images sort inside `d_x`'s range (see `isBackgroundImageKeyOf`).
  */
 async function ownedImageKeys(
   store: { getAllKeys(query: IDBKeyRange): Promise<IDBValidKey[]> },
@@ -551,6 +556,6 @@ async function ownedImageKeys(
 ): Promise<string[]> {
   const prefix = `${documentId}#`;
   const keys = await store.getAllKeys(IDBKeyRange.bound(prefix, `${prefix}\uffff`));
-  return keys.filter((key): key is string => typeof key === 'string' && !key.slice(prefix.length).includes('#'));
+  return keys.filter((key): key is string => typeof key === 'string' && isBackgroundImageKeyOf(key, documentId));
 }
 

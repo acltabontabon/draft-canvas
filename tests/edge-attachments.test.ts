@@ -248,6 +248,19 @@ describe('edge attachments through the store', () => {
     expect(store.getState().document.edges.find((e) => e.id === edge.id)!.attachments).toHaveLength(1);
   });
 
+  it('refuses to attach a note to its own connector instead of deleting it', () => {
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const note = store.getState().addNode({ type: 'note', x: 400, y: 0, text: 'context' });
+    const edge = store.getState().connect(service.id, note.id)!;
+    const historyLength = store.getState().history.past.length;
+
+    store.getState().attachExistingNodeToEdge(note.id, edge.id);
+    const doc = store.getState().document;
+    expect(doc.nodes.map((n) => n.id)).toContain(note.id);
+    expect(doc.edges.find((e) => e.id === edge.id)).toBeDefined();
+    expect(store.getState().history.past).toHaveLength(historyLength);
+  });
+
   it('attaching an existing (resized) node to an edge, then detaching it, round-trips its real size', () => {
     const edge = connectedEdge();
     const note = store.getState().addNode({ type: 'note', x: 800, y: 800, text: 'context' });

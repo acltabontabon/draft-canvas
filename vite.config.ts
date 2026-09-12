@@ -78,8 +78,14 @@ export default defineConfig({
       output: {
         // The canvas engine and the syntax highlighter are both large and
         // rarely change; splitting them keeps the app chunk small and cacheable.
+        // React gets its own chunk too: left unassigned it was folded into
+        // `xyflow` (its first big importer), which then had to be preloaded by
+        // the Library screen — where React Flow is never used. Its stylesheet
+        // is imported up front (so app.css can override it) and must not drag
+        // the JavaScript chunk along with it.
         manualChunks(id) {
-          if (id.includes('node_modules/@xyflow')) return 'xyflow';
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react';
+          if (id.includes('node_modules/@xyflow') && !id.endsWith('.css')) return 'xyflow';
           if (id.includes('node_modules/refractor')) return 'refractor';
           return undefined;
         },

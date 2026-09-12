@@ -50,7 +50,7 @@ function edgeLabel(edge: DraftEdge): string | undefined {
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Flashes one element, cancelling any flash still running from a previous jump. */
-export function flash(ctx: CommandContext, id: string) {
+function flash(ctx: CommandContext, id: string) {
   if (flashTimer) clearTimeout(flashTimer);
   ctx.ui.setJumpFlashId(id);
   flashTimer = setTimeout(() => {

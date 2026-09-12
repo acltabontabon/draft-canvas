@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUiStore } from '../src/store/uiStore';
 
 /**
@@ -29,5 +29,40 @@ describe('uiStore update-ready wiring', () => {
     useUiStore.getState().registerActivateUpdate(activate);
     useUiStore.getState().activateUpdate();
     expect(activate).toHaveBeenCalledOnce();
+  });
+});
+
+describe('uiStore toasts', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    for (const toast of useUiStore.getState().toasts) useUiStore.getState().dismiss(toast.id);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('holds a toast while paused and counts down again once resumed', () => {
+    useUiStore.getState().notify('Saved', 'info', { label: 'Undo', run: () => {} });
+    vi.advanceTimersByTime(2000);
+    useUiStore.getState().pauseToasts();
+    vi.advanceTimersByTime(60_000);
+    expect(useUiStore.getState().toasts).toHaveLength(1);
+
+    useUiStore.getState().resumeToasts();
+    vi.advanceTimersByTime(3900);
+    expect(useUiStore.getState().toasts).toHaveLength(1);
+    vi.advanceTimersByTime(200);
+    expect(useUiStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('never stays paused once the last toast is gone', () => {
+    useUiStore.getState().notify('First');
+    useUiStore.getState().pauseToasts();
+    useUiStore.getState().dismiss(useUiStore.getState().toasts[0]!.id);
+
+    useUiStore.getState().notify('Second');
+    vi.advanceTimersByTime(3600);
+    expect(useUiStore.getState().toasts).toHaveLength(0);
   });
 });

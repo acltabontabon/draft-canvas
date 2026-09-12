@@ -9,7 +9,7 @@
 
 /** Chosen to keep a note roughly as wide as a couple of participant boxes — wide enough to read as
  *  prose, narrow enough that a note never sets the width of the whole diagram. */
-export const NOTE_WRAP_WIDTH = 60;
+const NOTE_WRAP_WIDTH = 60;
 
 /**
  * Splits `text` into display lines no longer than `width` where it can. Words are never broken

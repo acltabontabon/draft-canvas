@@ -21,6 +21,42 @@ export type { ProductRelease, ProductReleaseHighlight } from './types';
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.2.0',
+    date: '2026-09-13',
+    highlights: [
+      {
+        title: 'Your work, kept safer',
+        description:
+          'Imports no longer replace a newer local copy, leaving a diagram that failed to save warns you first, and edits made in another tab are never overwritten.',
+      },
+      {
+        title: 'Undo, right where you deleted',
+        description:
+          'Deleting a flow now offers Undo in the confirmation itself, and notices wait while you hover over them.',
+      },
+      {
+        title: 'Faster to open, smoother to drag',
+        description:
+          'The homepage loads about half as much code, and connectors keep routing around shapes while you move something else.',
+      },
+      {
+        title: 'Popovers that stay readable',
+        description:
+          'Connector, element, and attachment popovers keep the same size at every zoom level and sit above the shapes around them.',
+      },
+      {
+        title: 'Cleaner sequence exports',
+        description:
+          'Mermaid and PlantUML source now survives labels and notes full of code — semicolons, hashes, angle brackets, and all.',
+      },
+      {
+        title: 'Easier to see and hear',
+        description:
+          'Stronger contrast for faint text, and screen readers now hear toggle states, open menus, dropdown values, and progress.',
+      },
+    ],
+  },
+  {
     version: '1.1.0',
     date: '2026-09-13',
     highlights: [

@@ -71,6 +71,22 @@ describe('toMermaid', () => {
     expect(toMermaid(m)).toContain('A->>B: Retry #35;2#59; then give up');
   });
 
+  it('escapes tag-shaped text in message labels and participant names so the renderer cannot strip it', () => {
+    const m = model({
+      participants: [
+        { id: 'P1', alias: 'A', label: 'Cache<Order>', category: 'service', kind: 'participant', sourceNodeId: 'a' },
+        { id: 'P2', alias: 'B', label: 'B', category: 'service', kind: 'participant', sourceNodeId: 'b' },
+      ],
+      elements: [
+        { kind: 'message', order: 0, from: 'P1', to: 'P2', label: 'Map<String, Order> & more', interaction: 'sync', sourceFlowId: 'f1', sourceEdgeIds: [], sourceStepIds: [] },
+      ],
+    });
+    const out = toMermaid(m);
+    expect(out).toContain('A->>B: Map#lt;String, Order#gt; #amp; more');
+    expect(out).toContain('"Cache#lt;Order#gt;"');
+    expect(out.replace(/-+>>|-+>|-+x|-+\)/g, '')).not.toMatch(/[<>&]/);
+  });
+
   it('guards a literal colon in a message label', () => {
     const m = model({
       participants: [

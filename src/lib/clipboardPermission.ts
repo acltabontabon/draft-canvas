@@ -4,7 +4,7 @@ import type { UiStore } from '../store/uiStore';
 
 const KEY = 'clipboard-permission';
 
-export function isClipboardReadAvailable(): boolean {
+function isClipboardReadAvailable(): boolean {
   return typeof navigator.clipboard?.readText === 'function';
 }
 

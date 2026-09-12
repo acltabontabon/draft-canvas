@@ -8,6 +8,7 @@ import {
   type Side,
 } from '../document/types';
 import { anchorBandOf } from '../document/queueGeometry';
+import { centerOf, clamp } from '../lib/math';
 
 /**
  * Edge geometry.
@@ -66,10 +67,6 @@ function verticalSpan(rect: Rect): { start: number; length: number } {
     : { start: rect.y, length: rect.height };
 }
 
-export function centerOf(rect: Rect): { x: number; y: number } {
-  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-}
-
 /**
  * Where a handle sits on a node. Shared by the live handles and the exporter.
  *
@@ -78,7 +75,7 @@ export function centerOf(rect: Rect): { x: number; y: number } {
  * no persisted anchor (or a caller that doesn't care) sees no change.
  */
 export function anchorPoint(rect: Rect, side: Side, offset = 0.5): { x: number; y: number } {
-  const t = Math.min(1, Math.max(0, offset));
+  const t = clamp(offset, 0, 1);
   switch (side) {
     case 'top':
       return { x: rect.x + rect.width * t, y: rect.y };
@@ -145,7 +142,7 @@ export function anchorAt(rect: Rect, point: { x: number; y: number }): EdgeAncho
     side === 'top' || side === 'bottom'
       ? (point.x - rect.x) / rect.width
       : (point.y - span.start) / span.length;
-  return { side, offset: Math.min(1, Math.max(0, offset)) };
+  return { side, offset: clamp(offset, 0, 1) };
 }
 
 /**
@@ -645,9 +642,9 @@ function clampToBoundary(
 ): { x: number; y: number } {
   if (isHorizontalSide(side)) {
     const span = verticalSpan(rect);
-    return { x: point.x, y: Math.max(span.start, Math.min(span.start + span.length, point.y)) };
+    return { x: point.x, y: clamp(point.y, span.start, span.start + span.length) };
   }
-  return { x: Math.max(rect.x, Math.min(rect.x + rect.width, point.x)), y: point.y };
+  return { x: clamp(point.x, rect.x, rect.x + rect.width), y: point.y };
 }
 
 /**

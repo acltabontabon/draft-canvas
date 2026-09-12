@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 export interface InspectorSelectOption {
   value: string;
@@ -63,6 +63,7 @@ export function InspectorSelect({
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const optionIdPrefix = useId();
 
   const selectedIndex = Math.max(
     0,
@@ -183,7 +184,9 @@ export function InspectorSelect({
         className="dc-inspector-control dc-inspector-select-button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={ariaLabel}
+        // The visible value is part of the name — an `aria-label` alone would replace it, and a
+        // screen reader would announce "Service type" without ever saying which one.
+        aria-label={current ? `${ariaLabel}: ${current.label}` : ariaLabel}
         onClick={() => setOpen((v) => !v)}
       >
         <span className="dc-inspector-select-value">{current?.label ?? ''}</span>
@@ -202,6 +205,9 @@ export function InspectorSelect({
           }}
           role="listbox"
           aria-label={ariaLabel}
+          // Focus stays on the list while arrow keys move the highlight; this is what tells
+          // assistive tech which option that is.
+          aria-activedescendant={`${optionIdPrefix}-${highlighted}`}
           tabIndex={-1}
           onKeyDown={(event) => {
             event.stopPropagation();
@@ -235,6 +241,7 @@ export function InspectorSelect({
           {options.map((option, index) => (
             <li
               key={option.value}
+              id={`${optionIdPrefix}-${index}`}
               role="option"
               aria-selected={index === selectedIndex}
               className="dc-inspector-select-option"

@@ -11,7 +11,8 @@
  */
 
 export { neighborhoodOf } from './context';
-export { continuationsFor, dismissalKey } from './engine';
+export { continuationsFor } from './engine';
+export { dismissalKey } from './dismissal';
 export { gapForCaption, horizontalAnchorsFor, materialize } from './materialize';
 export { RULES } from './rules';
 export type {

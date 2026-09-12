@@ -1,9 +1,10 @@
 import { ATTACHABLE_TYPES, type DraftDocument, type DraftNode, type DraftNodeType } from '../document/types';
+import { pointInBox } from '../lib/math';
 import { hasAttachmentRoom } from '../document/operations';
 import type { Rect } from '../edges/routing';
 
 /** A drop must feel intentional — see the drag-to-attach wiring in `Canvas.tsx`. */
-export const ATTACH_OVERLAP_RATIO = 0.65;
+const ATTACH_OVERLAP_RATIO = 0.65;
 export const ATTACH_DWELL_MS = 250;
 
 function rectArea(rect: Rect): number {
@@ -109,12 +110,7 @@ export function deepestBoundaryAt(
   let best: { id: string; area: number } | null = null;
   for (const node of doc.nodes) {
     if (node.type !== 'group' || excludeIds.has(node.id)) continue;
-    const inside =
-      point.x >= node.x &&
-      point.x <= node.x + node.width &&
-      point.y >= node.y &&
-      point.y <= node.y + node.height;
-    if (!inside) continue;
+    if (!pointInBox(point, node)) continue;
     const area = node.width * node.height;
     if (!best || area < best.area) best = { id: node.id, area };
   }

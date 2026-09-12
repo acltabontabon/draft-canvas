@@ -2,7 +2,7 @@
  * The one place that decides how a modifier chord is spelled. macOS users read "⌘K" / "Cmd K";
  * everyone else reads "Ctrl K" — a shortcut hint that names the wrong key is worse than none.
  */
-export const isMac =
+const isMac =
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 /** Compact form, for inline `<kbd>` chips: "⌘" / "Ctrl". */

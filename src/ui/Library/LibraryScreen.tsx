@@ -262,6 +262,12 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                     type="button"
                     className="dc-library-item"
                     title={entry.title.length > 40 ? entry.title : undefined}
+                    // How much of a title gets cut off depends on the viewport, not only its length:
+                    // a shorter one that still ellipsizes gets its tooltip the moment it's hovered.
+                    onPointerEnter={(event) => {
+                      const title = event.currentTarget.querySelector('.dc-library-item-title');
+                      if (title && title.scrollWidth > title.clientWidth) event.currentTarget.title = entry.title;
+                    }}
                     onClick={() => void session.openDocument(entry.id)}
                   >
                     <Fingerprint shape={entry.shape} />
@@ -298,6 +304,8 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                         icon="folder"
                         variant="quiet"
                         aria-label={`Move ${entry.title} to a project`}
+                        aria-haspopup="menu"
+                        aria-expanded={moveMenuOpenFor === entry.id}
                         onClick={() => setMoveMenuOpenFor(moveMenuOpenFor === entry.id ? null : entry.id)}
                       />
                       {moveMenuOpenFor === entry.id && (

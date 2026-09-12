@@ -328,7 +328,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           handleClassName="dc-resize-handle"
           onResizeStart={() => {
             useEditorStore.getState().beginInteraction('Resize');
-            useUiStore.getState().setInteractionActive(true);
+            useUiStore.getState().setInteractionActive(true, [node.id]);
             setResizing(true);
           }}
           onResizeEnd={() => {
@@ -365,6 +365,11 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         >
           {copied ? 'Copied' : 'Copy'}
         </button>
+      )}
+      {isCode && (
+        <span className="dc-sr-only" aria-live="polite">
+          {copied ? 'Code copied' : ''}
+        </span>
       )}
 
       {attachmentCount > 0 && (

@@ -6,7 +6,7 @@ import { MOD_SYMBOL } from '../lib/platform';
  * `EdgeInspectorPopover`) — never a second floating box competing with the first. See
  * `HintStrip.tsx` for how a hint actually renders and retires.
  */
-export const HINT_IDS = [
+const HINT_IDS = [
   'service-node',
   'attachment-slot',
   'connector-selected',

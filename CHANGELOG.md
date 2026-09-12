@@ -4,6 +4,13 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-13
+
+### Added
+
+- Deleting a flow shows an Undo button right in the confirmation, and notices stay on screen while
+  you hover over or tab into them.
+
 ### Fixed
 
 - The "New" indicator on Learn Mode and the Command Palette could reappear after every update,
@@ -58,6 +65,16 @@ All notable changes to Draft Canvas are documented here.
   actually seen the feature.
 - Library row actions are visible on touch screens, and a long element name in a flow step no
   longer pushes its remove button out of view.
+- A junction that fans out through another junction is no longer exported as a single message to
+  just one of its destinations in sequence diagrams.
+- Mermaid exports keep text like `Map<String, Order>` in message labels and participant names, and
+  PlantUML notes with a line starting `!` or `@`, or reading `end hnote`, no longer break the diagram.
+- Clicking away from an empty Text that was part of a duplicated or pasted selection removes only
+  that Text, not everything else that came with it.
+- Opening the context menu from the keyboard works again after a right-click menu was dismissed.
+- Animated GIF export no longer slows to a crawl when you switch to another browser tab.
+- Dropping a note or code card onto its own connector no longer deletes the card.
+- Renaming or moving a diagram no longer overwrites a pan or zoom saved in another tab.
 
 ### Changed
 
@@ -77,6 +94,15 @@ All notable changes to Draft Canvas are documented here.
 - Error notices and save failures are announced to screen readers, and search and title fields
   show a clearer focus ring.
 - Menus, popovers, and dialogs share one set of corner radii and layering.
+- Connectors keep routing around shapes while you drag something else, instead of all straightening
+  out until you let go.
+- The homepage loads about half as much code: the canvas engine now waits until you open a diagram.
+- Popovers follow panning and zooming without redrawing, and do no work at all while closed.
+- Faint text and the light theme's accent colour have more contrast.
+- Screen readers now hear whether a toggle is on, whether a menu or palette is open, the current
+  value of each dropdown, the homepage view you're on, and when code has been copied.
+- A code card's Copy button shows when you reach it with the keyboard, and Focus mode's close
+  button is easier to hit.
 
 ## [1.1.0] - 2026-09-13
 
@@ -732,7 +758,9 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.0.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.2.0...main
+[1.2.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.8.0...v1.0.0
 [0.8.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.6.0...v0.7.0

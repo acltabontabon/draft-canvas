@@ -26,7 +26,7 @@ import { routingPlan } from '../edges/bundles';
 import { layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
-import { obstaclesForEdge } from '../edges/obstacles';
+import { obstaclesForEdge, withoutNodes } from '../edges/obstacles';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
@@ -40,6 +40,7 @@ import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { FONTS, cssFont } from '../render/text/fonts';
 import { Lru } from '../lib/lru';
+import { pointInBox } from '../lib/math';
 
 const NO_OBSTACLES: readonly Rect[] = [];
 
@@ -202,13 +203,17 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Obstacle avoidance only ever looks at nodes overlapping the box between this connector's own
   // endpoints (see `obstaclesForEdge`), each as a rect that keeps its identity while its node is
   // untouched — so under `useShallow` a commit elsewhere on the canvas re-renders nothing here.
-  // Skipped entirely while a gesture is in flight: cheap during interaction, refine after.
-  const interactionActive = useUiStore((state) => state.interactionActive);
-  const obstacles = useEditorStore(
+  // While a gesture moves nodes, a connector attached to one skips avoidance until it commits (its
+  // route changes every frame anyway); every other connector keeps its detours, minus the moving
+  // nodes' own stale rects.
+  const movingNodeIds = useUiStore((state) => state.movingNodeIds);
+  const endpointMoving = edge !== undefined && (movingNodeIds.has(edge.source) || movingNodeIds.has(edge.target));
+  const nearbyObstacles = useEditorStore(
     useShallow((state) =>
-      interactionActive || !edge ? NO_OBSTACLES : obstaclesForEdge(state.document.nodes, edge.source, edge.target),
+      endpointMoving || !edge ? NO_OBSTACLES : obstaclesForEdge(state.document.nodes, edge.source, edge.target),
     ),
   );
+  const obstacles = useMemo(() => withoutNodes(nearbyObstacles, movingNodeIds), [nearbyObstacles, movingNodeIds]);
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
@@ -247,7 +252,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   useEffect(() => {
     if (!editRequested) return;
     useUiStore.getState().requestEdit(null);
-    // oxlint-disable-next-line set-state-in-effect -- one-shot external command, see comment above.
+    // oxlint-disable-next-line react/set-state-in-effect -- one-shot external command, see comment above.
     if (mode !== 'present') setEditing(true);
   }, [editRequested, mode]);
 
@@ -335,6 +340,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // to honour an anchor that's about to change anyway.
   const effectiveSourceRect = dragOverride?.endpoint === 'source' ? pointRect(dragOverride.point) : sourceRect;
   const effectiveTargetRect = dragOverride?.endpoint === 'target' ? pointRect(dragOverride.point) : targetRect;
+  // Same rule as a moving endpoint node: a pointer-tracked end reroutes every frame, refine on drop.
+  const routeObstacles = dragOverride ? NO_OBSTACLES : obstacles;
 
   // Every input the two routes read, as one key: a connector re-renders for selection, lens,
   // playback, and hover far more often than its geometry actually moves.
@@ -348,7 +355,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     laneOffset,
     dragOverride?.endpoint,
     spine,
-    obstacles,
+    routeObstacles,
   ]);
   const routes = ROUTES.getOrCreate(routeKey, computeRoutes);
   function computeRoutes(): EdgeRoutes {
@@ -358,7 +365,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         target: dragOverride?.endpoint === 'target' ? undefined : edge!.targetAnchor,
       },
       lane: laneOffset,
-      obstacles,
+      obstacles: routeObstacles,
       // An endpoint being dragged is on its way out of this bundle — keeping it
       // on the trunk would rubber-band it back to a group it is leaving.
       spine: dragOverride ? undefined : spine,
@@ -371,7 +378,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             target: dragOverride?.endpoint === 'source' ? undefined : edge!.sourceAnchor,
           },
           lane: responseLaneFor(laneOffset),
-          obstacles,
+          obstacles: routeObstacles,
           spine: dragOverride ? undefined : responseSpineFor(spine),
         })
       : null;
@@ -727,7 +734,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               // lines at most, then an ellipsis — with the whole label in the tooltip.
               <span className="dc-edge-label-text" title={labelLayout?.truncated ? edge.label : undefined}>
                 {labelLayout?.lines.map((line, index) => (
-                  // oxlint-disable-next-line react/no-array-index-key -- lines of one string, never reordered.
                   <span key={index} className="dc-edge-label-line">
                     {line.text}
                   </span>
@@ -901,14 +907,7 @@ function EdgeEndpointHandle({
       let best: DraftNode | undefined;
       for (const node of nodes) {
         if (node.type === 'group' || node.id === oppositeNodeId) continue;
-        if (
-          point.x < node.x ||
-          point.x > node.x + node.width ||
-          point.y < node.y ||
-          point.y > node.y + node.height
-        ) {
-          continue;
-        }
+        if (!pointInBox(point, node)) continue;
         if (!best || node.z > best.z) best = node;
       }
       return best;
@@ -934,8 +933,8 @@ function EdgeEndpointHandle({
   // — this edge is deleted while its endpoint is being dragged, or `mode` flips to `'present'`
   // (which un-renders this handle entirely) — that path never runs. Without also resetting the
   // shared `uiStore` fields here, `interactionActive` is left stuck `true`, which silently
-  // disables obstacle-avoidance/lane recomputation for every edge on the canvas until an
-  // unrelated gesture happens to flip it back off. `endDrag` is written to be idempotent
+  // freezes every open popover's placement and suppresses continuation offers until an unrelated
+  // gesture happens to flip it back off. `endDrag` is written to be idempotent
   // (resetting already-idle state is a no-op), so calling it unconditionally on unmount is safe.
   const endDragRef = useRef(endDrag);
   useEffect(() => {

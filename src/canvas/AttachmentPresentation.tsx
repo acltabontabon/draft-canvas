@@ -190,7 +190,7 @@ export function AttachmentChipRow({
  * presentation reveal at all (there is no analogous "current step" for a node), so `revealed` is
  * always false for `hostKind === 'node'`.
  */
-export function AttachmentChip({
+function AttachmentChip({
   hostKind,
   hostId,
   attachment,
@@ -351,7 +351,7 @@ export function AttachmentChip({
     };
     // cardMounted intentionally excluded: it's only ever flipped by this effect's own timeout, so
     // reacting to it here would just re-run the same branch redundantly.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const togglePin = () => {

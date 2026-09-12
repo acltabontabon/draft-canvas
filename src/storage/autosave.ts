@@ -1,4 +1,5 @@
 import type { DraftDocument } from '../document/types';
+import { clamp } from '../lib/math';
 import { QuotaExceededError, type DraftRepository } from './DraftRepository';
 
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
@@ -65,7 +66,7 @@ export class Autosave {
     this.emit({ status: 'dirty' });
 
     const waited = Date.now() - this.firstDirtyAt;
-    const delay = Math.max(0, Math.min(this.debounceMs, this.maxWaitMs - waited));
+    const delay = clamp(this.maxWaitMs - waited, 0, this.debounceMs);
 
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.flush(), delay);

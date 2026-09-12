@@ -1,4 +1,5 @@
 import type { DraftDocument, DraftNode } from '../document/types';
+import { centerOf } from '../lib/math';
 
 /** The four arrow-key directions, spelled out rather than reusing `'ArrowRight'` etc. — this
  *  module has no notion of keyboard events, only geometry and graph edges. */
@@ -7,10 +8,6 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
 interface Point {
   x: number;
   y: number;
-}
-
-function centerOf(node: DraftNode): Point {
-  return { x: node.x + node.width / 2, y: node.y + node.height / 2 };
 }
 
 /**

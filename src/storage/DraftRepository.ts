@@ -103,7 +103,13 @@ export function backgroundImageKey(documentId: string, imageId?: string): string
   return imageId ? `${documentId}#${imageId}` : documentId;
 }
 
-/** Whether `key` is one of `documentId`'s background image keys. */
+/**
+ * Whether `key` is one of `documentId`'s background image keys. A prefix match alone isn't enough:
+ * an imported document may carry an id that itself contains `#` (`d_x#1`), and its images
+ * (`d_x#1#bg_b`) must not count as `d_x`'s.
+ */
 export function isBackgroundImageKeyOf(key: string, documentId: string): boolean {
-  return key === documentId || key.startsWith(`${documentId}#`);
+  if (key === documentId) return true;
+  const prefix = `${documentId}#`;
+  return key.startsWith(prefix) && !key.slice(prefix.length).includes('#');
 }

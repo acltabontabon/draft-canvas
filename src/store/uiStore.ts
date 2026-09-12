@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import type { Preset } from '../canvas/presets';
-import { dismissalKey, type ContinuationTrigger, type DismissalKey, type MaterializedContinuation } from '../continuation';
+import { dismissalKey } from '../continuation/dismissal';
+import type { ContinuationTrigger, DismissalKey, MaterializedContinuation } from '../continuation';
 import type { Side } from '../document/types';
 import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
 import { markLastSeenRelease, readLastSeenRelease } from '../releases/productReleases';
 
-export type Toast = { id: number; message: string; tone: 'info' | 'error' };
+/** A toast's one optional button — e.g. "Undo" for something that was just removed. */
+export type ToastAction = { label: string; run: () => void };
+export type Toast = { id: number; message: string; tone: 'info' | 'error'; action?: ToastAction };
 
 /**
  * Drives the small type-picker menu (`QuickConnectMenu`) for the two
@@ -72,6 +75,7 @@ export interface ContinuationOffer extends MaterializedContinuation {
 }
 
 const CONTINUATION_PREFERENCE = 'continuation';
+const NO_MOVING_NODES: ReadonlySet<string> = new Set();
 
 /** On unless the device says otherwise. Read once at startup; a preference store that is not
  *  usable at that moment (blocked storage, a test harness still wiring up) means "on". */
@@ -165,6 +169,13 @@ export interface UiStore {
    */
   interactionActive: boolean;
   /**
+   * The nodes the in-flight gesture is moving or resizing (empty otherwise). Their committed rects
+   * are stale until it ends, so a connector touching one skips obstacle avoidance for the gesture
+   * and every other connector just leaves them out — instead of every connector on the canvas
+   * dropping its detours the moment anything moves.
+   */
+  movingNodeIds: ReadonlySet<string>;
+  /**
    * A node or edge id that `Enter` just asked to start editing. There is no
    * ref-based imperative API into the memoized node/edge components, so this
    * is the simplest hook: they watch it via an effect and clear it once
@@ -250,10 +261,14 @@ export interface UiStore {
   setPresentationReveal: (target: { edgeId: string; attachmentId: string } | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
   requestFlowRename: (flowId: string | null) => void;
-  setInteractionActive: (active: boolean) => void;
+  setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
-  notify: (message: string, tone?: Toast['tone']) => void;
+  notify: (message: string, tone?: Toast['tone'], action?: ToastAction) => void;
   dismiss: (id: number) => void;
+  /** Holds every toast's auto-dismiss while the pointer or focus is on them, so there's time to
+   *  read one — or reach its action — and restarts the countdowns once it leaves. */
+  pauseToasts: () => void;
+  resumeToasts: () => void;
   /** Marks an update as downloaded and ready to activate on the next reload. */
   setUpdateReady: () => void;
   /** Wired once by `main.tsx` at startup to the Service Worker's own
@@ -293,6 +308,9 @@ export interface UiStore {
 }
 
 let toastId = 0;
+/** Remaining display time per toast, with the running timer when not paused. */
+const toastTimers = new Map<number, { remaining: number; startedAt: number; handle: ReturnType<typeof setTimeout> | null }>();
+let toastsPaused = false;
 
 /** Set by `registerActivateUpdate`; kept outside the store's own state since
  *  it's a function reference, not something a component should re-render on. */
@@ -317,6 +335,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   flowPanelOpen: false,
   flowRenameRequestId: null,
   interactionActive: false,
+  movingNodeIds: NO_MOVING_NODES,
   editRequestId: null,
   updateReady: false,
   lastSeenProductRelease: readLastSeenRelease(),
@@ -365,20 +384,59 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
-  setInteractionActive: (interactionActive) =>
-    set((state) => (state.interactionActive === interactionActive ? state : { interactionActive })),
+  setInteractionActive: (interactionActive, movingNodeIds) =>
+    set((state) => {
+      const moving = interactionActive && movingNodeIds ? new Set(movingNodeIds) : NO_MOVING_NODES;
+      if (state.interactionActive === interactionActive && moving.size === 0 && state.movingNodeIds.size === 0) {
+        return state;
+      }
+      return { interactionActive, movingNodeIds: moving.size === 0 ? NO_MOVING_NODES : moving };
+    }),
   requestEdit: (editRequestId) => set({ editRequestId }),
 
-  notify(message, tone = 'info') {
+  notify(message, tone = 'info', action) {
     toastId += 1;
-    const toast = { id: toastId, message, tone };
+    const toast: Toast = { id: toastId, message, tone, ...(action ? { action } : {}) };
     set((state) => ({ toasts: [...state.toasts, toast] }));
-    setTimeout(() => {
-      set((state) => ({ toasts: state.toasts.filter((t) => t.id !== toast.id) }));
-    }, tone === 'error' ? 8000 : 3500);
+    // An action needs time to be reached, not just read.
+    const remaining = tone === 'error' ? 8000 : action ? 6000 : 3500;
+    const timer = { remaining, startedAt: Date.now(), handle: null as ReturnType<typeof setTimeout> | null };
+    toastTimers.set(toast.id, timer);
+    if (!toastsPaused) timer.handle = setTimeout(() => get().dismiss(toast.id), remaining);
   },
 
-  dismiss: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+  dismiss: (id) => {
+    const timer = toastTimers.get(id);
+    if (timer?.handle) clearTimeout(timer.handle);
+    toastTimers.delete(id);
+    // The last toast leaving from under a still pointer may never fire a pointer-leave; nothing
+    // is left to hold open, so the next toast must count down normally.
+    if (toastTimers.size === 0) toastsPaused = false;
+    set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
+  },
+
+  pauseToasts: () => {
+    if (toastsPaused) return;
+    toastsPaused = true;
+    const now = Date.now();
+    for (const timer of toastTimers.values()) {
+      if (!timer.handle) continue;
+      clearTimeout(timer.handle);
+      timer.handle = null;
+      timer.remaining = Math.max(0, timer.remaining - (now - timer.startedAt));
+    }
+  },
+
+  resumeToasts: () => {
+    if (!toastsPaused) return;
+    toastsPaused = false;
+    const now = Date.now();
+    for (const [id, timer] of toastTimers) {
+      timer.startedAt = now;
+      // Never snatched away the instant the pointer leaves.
+      timer.handle = setTimeout(() => get().dismiss(id), Math.max(timer.remaining, 1500));
+    }
+  },
 
   setUpdateReady: () => set({ updateReady: true }),
   registerActivateUpdate: (activate) => {

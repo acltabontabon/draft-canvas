@@ -13,7 +13,7 @@ import { familyOf } from '../text/fonts';
 import { baselineOf } from '../text/layout';
 import { el, n, type SvgEl } from './element';
 
-export const SHADOW_FILTER_ID = 'dc-shadow';
+const SHADOW_FILTER_ID = 'dc-shadow';
 
 let clipCounter = 0;
 let clipScope = 'g';

@@ -1,7 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { memo, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { useInternalNode, useReactFlow } from '@xyflow/react';
-import { useCanvasOverlay } from './useCanvasOverlay';
+import { useInternalNode, useStore } from '@xyflow/react';
 import {
   ACCENTS,
   CONNECTOR_KINDS,
@@ -40,6 +39,8 @@ import {
 } from './edgeGeometry';
 import { HintStrip } from './HintStrip';
 import { useToolbarHeight } from './useToolbarHeight';
+import { useOverlayPosition } from './useOverlayPosition';
+import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 
@@ -117,117 +118,55 @@ const TOOLBAR_CLEARANCE = 56;
  * wrong default for a document with several.
  */
 export function EdgeInspectorPopover() {
+  // The shell subscribes to nothing but "which single connector, if any" — the body below, with
+  // its whole-document subscription, is mounted only while there's a popover to show (or fade out).
+  const selectedEdge = useEditorStore((state) => {
+    if (state.mode === 'present' || state.selection.nodes.length !== 0 || state.selection.edges.length !== 1) return null;
+    return edgeIndex(state.document.edges).get(state.selection.edges[0]!) ?? null;
+  });
+  const measured = useStore((state) =>
+    selectedEdge ? state.nodeLookup.has(selectedEdge.source) && state.nodeLookup.has(selectedEdge.target) : false,
+  );
+  const open = selectedEdge !== null && measured;
+  const { mounted, closing } = usePopoverPresence(open, POPOVER_EXIT_MS);
+  // The connector it was showing, kept for the fade-out after selection has already moved on.
+  const shownEdgeId = useLastPresent(open ? selectedEdge.id : null);
+  if (!mounted || !shownEdgeId) return null;
+  return <EdgeInspectorBody edgeId={shownEdgeId} closing={closing} />;
+}
+
+function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boolean }) {
   const document = useEditorStore((state) => state.document);
-  const selection = useEditorStore((state) => state.selection);
-  const mode = useEditorStore((state) => state.mode);
   const interactionActive = useUiStore((state) => state.interactionActive);
   const store = useEditorStore;
   const theme = useThemeValue();
-  const { flowToScreenPosition } = useReactFlow();
-  const overlay = useCanvasOverlay();
 
-  const edgeId = selection.nodes.length === 0 && selection.edges.length === 1 ? selection.edges[0] : null;
-  const edge = edgeId ? edgeIndex(document.edges).get(edgeId) : undefined;
-  const sourceInternal = useInternalNode(edge?.source ?? '');
-  const targetInternal = useInternalNode(edge?.target ?? '');
+  const liveEdge = edgeIndex(document.edges).get(edgeId);
+  const liveSource = useInternalNode(liveEdge?.source ?? '');
+  const liveTarget = useInternalNode(liveEdge?.target ?? '');
 
-  const open = mode !== 'present' && Boolean(edge && sourceInternal && targetInternal);
-
-  // Same delayed-unmount fade `AttachmentPopover`/`EdgeAttachmentChip` use:
-  // the popover stays mounted one more tick after `open` flips false so
-  // `canvas.css` can play the reverse animation instead of the DOM node
-  // vanishing mid-frame.
-  const [mounted, setMounted] = useState(open);
-  const [closing, setClosing] = useState(false);
-  const hideTimer = useRef<number | null>(null);
   const [membershipOpen, setMembershipOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   usePopoverKeyboard(panelRef);
 
-  // A real measurement, not a guess: which side to sit on (see the `flipBelow` calculation
-  // below) depends on the popover's own height, and that varies a lot between the compact row
-  // and the expanded editor's several sections. Re-measures after every render — cheap (one
-  // `getBoundingClientRect` read) and guarded so it only ever triggers a re-render when the
-  // height actually changed, converging in at most one extra frame whenever content changes.
-  //
-  // Rounded to whole pixels before comparing: `getBoundingClientRect` returns sub-pixel floats
-  // that can differ by a fraction of a pixel between two renders of the same genuinely-settled
-  // layout — often while a resize or zoom is also driving `useReactFlow()`'s viewport transform.
-  // An exact `!==` on that noise never reaches a fixed point (see `ElementInspectorPopover.tsx`'s
-  // identical fix, where this was directly observed chaining into React's "Maximum update depth
-  // exceeded" crash). Whole pixels are the coarsest resolution anything here is ever laid out or
-  // visually distinguishable at, so rounding away that noise costs nothing.
-  const [measuredHeight, setMeasuredHeight] = useState(0);
-  // Same reasoning as `measuredHeight`, for the horizontal collision guard below — the panel's
-  // `max-width: 320px` (canvas.css) means width varies far less than height, but a short
-  // connector's label point can still sit close enough to its own source/target that even the
-  // panel's *minimum* width reaches into one of them.
-  const [measuredWidth, setMeasuredWidth] = useState(0);
-  // Observed rather than read during render: this popover re-renders on every pan frame now that it
-  // follows the viewport, and a layout read per frame for a value that only changes on a wrap is waste.
-  const toolbarHeight = useToolbarHeight(mounted);
-  // Deliberately no dependency array — this must re-measure after every render (content height
-  // can change for reasons with no single dependency to name: a new section appearing, a
-  // multi-line label). The `height !== measuredHeight` guard is what keeps this from looping.
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
-  useLayoutEffect(() => {
-    const rect = panelRef.current?.getBoundingClientRect();
-    const height = Math.round(rect?.height ?? 0);
-    const width = Math.round(rect?.width ?? 0);
-    if (height > 0 && height !== measuredHeight) setMeasuredHeight(height);
-    if (width > 0 && width !== measuredWidth) setMeasuredWidth(width);
-  });
+  // Observed rather than read per placement: a value that only changes when the toolbar wraps.
+  const toolbarHeight = useToolbarHeight(true);
 
   // Cached so the popover keeps rendering the connector it was showing while
-  // it fades out, instead of going blank the instant selection changes.
-  const lastEdgeRef = useRef(edge);
-  const lastSourceRef = useRef(sourceInternal);
-  const lastTargetRef = useRef(targetInternal);
-  if (open) {
-    lastEdgeRef.current = edge;
-    lastSourceRef.current = sourceInternal;
-    lastTargetRef.current = targetInternal;
-  }
+  // it fades out, instead of going blank the instant it's deleted.
+  const shown = useLastPresent(
+    liveEdge && liveSource && liveTarget ? { edge: liveEdge, source: liveSource, target: liveTarget } : null,
+  );
 
   // Selecting a *different* connector while the membership checklist is open must close it —
-  // otherwise it keeps showing the connector it was opened for. This is not covered by the
-  // `open`-keyed effect below: clicking straight from one edge to another never makes `open`
-  // itself go false, since a new edge is selected in the same tick the old one is deselected.
-  useEffect(() => {
+  // otherwise it keeps showing the connector it was opened for. So must the popover starting to
+  // close.
+  const membershipOwner = closing ? null : edgeId;
+  const [openMembershipOwner, setOpenMembershipOwner] = useState(membershipOwner);
+  if (openMembershipOwner !== membershipOwner) {
+    setOpenMembershipOwner(membershipOwner);
     setMembershipOpen(false);
-  }, [edgeId]);
-
-  useEffect(() => {
-    if (open) {
-      if (hideTimer.current !== null) {
-        window.clearTimeout(hideTimer.current);
-        hideTimer.current = null;
-      }
-      setClosing(false);
-      setMounted(true);
-      return;
-    }
-    setMembershipOpen(false);
-    if (!mounted) return;
-    setClosing(true);
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    hideTimer.current = window.setTimeout(
-      () => {
-        setMounted(false);
-        setClosing(false);
-        hideTimer.current = null;
-      },
-      reduceMotion ? 0 : POPOVER_EXIT_MS,
-    );
-    return () => {
-      if (hideTimer.current !== null) {
-        window.clearTimeout(hideTimer.current);
-        hideTimer.current = null;
-      }
-    };
-    // mounted intentionally excluded — see AttachmentPopover's identical comment.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }
 
   // Escape closes the open membership checklist first, without touching the selection — the
   // global Escape handler still clears selection on a second press. Click-away closes it the
@@ -260,16 +199,15 @@ export function EdgeInspectorPopover() {
     };
   }, [membershipOpen]);
 
-  if (!mounted) return null;
-  const displayEdge = open ? edge : lastEdgeRef.current;
-  const displaySource = open ? sourceInternal : lastSourceRef.current;
-  const displayTarget = open ? targetInternal : lastTargetRef.current;
-  if (!displayEdge || !displaySource || !displayTarget) return null;
+  const displayEdge = shown?.edge;
+  const displaySource = shown?.source;
+  const displayTarget = shown?.target;
 
   const draftNodes = nodeIndex(document.nodes);
-  const sourceRect = rectOfInternal(displaySource, draftNodes.get(displayEdge.source)?.type);
-  const targetRect = rectOfInternal(displayTarget, draftNodes.get(displayEdge.target)?.type);
-  if (!sourceRect || !targetRect) return null;
+  const sourceRect =
+    displayEdge && displaySource ? rectOfInternal(displaySource, draftNodes.get(displayEdge.source)?.type) : null;
+  const targetRect =
+    displayEdge && displayTarget ? rectOfInternal(displayTarget, draftNodes.get(displayEdge.target)?.type) : null;
 
   // The third caller of `routeBetween`, alongside the live edge component and
   // the exporter — and it has to route the connector the same way they do, or
@@ -279,55 +217,67 @@ export function EdgeInspectorPopover() {
   // canvas far from the branch the user actually clicked.
   // Obstacles and the label's lane nudge included, exactly as `DraftEdgeView` applies them — a
   // parallel or detoured connector's label otherwise sits well away from where the panel points.
-  const lane = laneIndex(document.edges).get(displayEdge.id)?.offset ?? 0;
-  const route = routeBetween(sourceRect, targetRect, displayEdge.routing, {
-    anchors: { source: displayEdge.sourceAnchor, target: displayEdge.targetAnchor },
-    lane,
-    obstacles: interactionActive ? undefined : obstaclesForEdge(document.nodes, displayEdge.source, displayEdge.target),
-    spine: routingPlan(document.nodes, document.edges).spineFor(displayEdge.id),
-  });
-  const labelNudge = labelLaneOffset(route.source.side, route.target.side, lane);
-  const labelX = route.labelX + labelNudge.x;
-  const labelY = route.labelY + labelNudge.y;
-  // Two independent reasons to prefer sitting below the connector instead of above it: the
-  // node-overlap heuristic every popover/attachment row already shares (a short connector whose
-  // label point sits close to its own source/target), and — new here, since the expanded editor
-  // is tall enough to matter — not enough screen room above the label point before the toolbar.
-  // `measuredHeight` starts at 0 (nothing measured yet, e.g. the very first frame after
-  // selecting an edge), which always reads as "enough room" — a brief default that self-corrects
-  // one frame later once `useLayoutEffect` reports the real height, never a lasting wrong guess.
-  const screenLabelPoint = flowToScreenPosition({ x: labelX, y: labelY });
-  // Measured, not guessed: the toolbar wraps to two rows below 720px (see app.css's
-  // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
-  // it — a static constant can't account for either. `TOOLBAR_CLEARANCE` stays as the fallback
-  // for the (rare) frame where `.dc-toolbar` isn't in the DOM yet.
-  const toolbarClearance = toolbarHeight ? toolbarHeight + 10 : TOOLBAR_CLEARANCE;
-  const notEnoughRoomAbove = screenLabelPoint.y - POPOVER_GAP - measuredHeight < toolbarClearance;
-  const flipBelow =
-    attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect) || notEnoughRoomAbove;
+  let labelPoint: { x: number; y: number } | null = null;
+  if (displayEdge && sourceRect && targetRect) {
+    const lane = laneIndex(document.edges).get(displayEdge.id)?.offset ?? 0;
+    const route = routeBetween(sourceRect, targetRect, displayEdge.routing, {
+      anchors: { source: displayEdge.sourceAnchor, target: displayEdge.targetAnchor },
+      lane,
+      obstacles: interactionActive ? undefined : obstaclesForEdge(document.nodes, displayEdge.source, displayEdge.target),
+      spine: routingPlan(document.nodes, document.edges).spineFor(displayEdge.id),
+    });
+    const labelNudge = labelLaneOffset(route.source.side, route.target.side, lane);
+    labelPoint = { x: route.labelX + labelNudge.x, y: route.labelY + labelNudge.y };
+  }
 
-  // Horizontal collision guard: `attachmentRowBelowsSourceOrTarget` above only checks a single
-  // point at the label's own x, so it can't see the popover's actual *width* reaching sideways
-  // into a neighbour — exactly what happens on a short connector between two nearby nodes (the
-  // label point itself sits in open canvas, but the panel is several times wider than the gap).
-  // Computed in screen space, since that's what both the node rects and the panel's own measured
-  // size are naturally in, then mapped into the overlay the popover is positioned in.
-  const toScreenRect = (rect: Rect): ScreenRect => {
-    const topLeft = flowToScreenPosition({ x: rect.x, y: rect.y });
-    const bottomRight = flowToScreenPosition({ x: rect.x + rect.width, y: rect.y + rect.height });
-    return { left: topLeft.x, top: topLeft.y, right: bottomRight.x, bottom: bottomRight.y };
-  };
-  const popoverScreenTop = flipBelow ? screenLabelPoint.y + POPOVER_GAP : screenLabelPoint.y - POPOVER_GAP - measuredHeight;
-  const popoverScreenBottom = flipBelow ? screenLabelPoint.y + POPOVER_GAP + measuredHeight : screenLabelPoint.y - POPOVER_GAP;
-  const clampedScreenX = clampPopoverCenterX(
-    screenLabelPoint.x,
-    measuredWidth / 2,
-    POPOVER_GAP,
-    popoverScreenTop,
-    popoverScreenBottom,
-    [toScreenRect(sourceRect), toScreenRect(targetRect)],
-  );
-  const labelAt = overlay.screenToOverlay({ x: clampedScreenX, y: screenLabelPoint.y });
+  const { target, placement } = useOverlayPosition<'above' | 'below'>(panelRef, 'above', (frame) => {
+    if (!labelPoint || !sourceRect || !targetRect) return null;
+    const { flowToScreenPosition, size } = frame;
+    // Two independent reasons to prefer sitting below the connector instead of above it: the
+    // node-overlap heuristic every popover/attachment row already shares (a short connector whose
+    // label point sits close to its own source/target), and not enough screen room above the
+    // label point before the toolbar — the expanded editor is tall enough to matter.
+    const screenLabelPoint = flowToScreenPosition(labelPoint);
+    // Measured, not guessed: the toolbar wraps to two rows below 720px (see app.css's
+    // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
+    // it — a static constant can't account for either. `TOOLBAR_CLEARANCE` stays as the fallback
+    // for the (rare) frame where `.dc-toolbar` isn't in the DOM yet.
+    const toolbarClearance = toolbarHeight ? toolbarHeight + 10 : TOOLBAR_CLEARANCE;
+    const notEnoughRoomAbove = screenLabelPoint.y - POPOVER_GAP - size.height < toolbarClearance;
+    const flipBelow =
+      attachmentRowBelowsSourceOrTarget(labelPoint.x, labelPoint.y, sourceRect, targetRect) || notEnoughRoomAbove;
+
+    // Horizontal collision guard: `attachmentRowBelowsSourceOrTarget` above only checks a single
+    // point at the label's own x, so it can't see the popover's actual *width* reaching sideways
+    // into a neighbour — exactly what happens on a short connector between two nearby nodes (the
+    // label point itself sits in open canvas, but the panel is several times wider than the gap).
+    // Computed in screen space, since that's what both the node rects and the panel's own measured
+    // size are naturally in, then mapped into the overlay the popover is positioned in.
+    const toScreenRect = (rect: Rect): ScreenRect => {
+      const topLeft = flowToScreenPosition({ x: rect.x, y: rect.y });
+      const bottomRight = flowToScreenPosition({ x: rect.x + rect.width, y: rect.y + rect.height });
+      return { left: topLeft.x, top: topLeft.y, right: bottomRight.x, bottom: bottomRight.y };
+    };
+    const popoverScreenTop = flipBelow ? screenLabelPoint.y + POPOVER_GAP : screenLabelPoint.y - POPOVER_GAP - size.height;
+    const popoverScreenBottom = flipBelow ? screenLabelPoint.y + POPOVER_GAP + size.height : screenLabelPoint.y - POPOVER_GAP;
+    const clampedScreenX = clampPopoverCenterX(
+      screenLabelPoint.x,
+      size.width / 2,
+      POPOVER_GAP,
+      popoverScreenTop,
+      popoverScreenBottom,
+      [toScreenRect(sourceRect), toScreenRect(targetRect)],
+    );
+    const labelAt = frame.screenToOverlay({ x: clampedScreenX, y: screenLabelPoint.y });
+    return {
+      placement: flipBelow ? 'below' : 'above',
+      transform: flipBelow
+        ? `translate(-50%, 0) translate(${labelAt.x}px, ${labelAt.y + POPOVER_GAP}px)`
+        : `translate(-50%, -100%) translate(${labelAt.x}px, ${labelAt.y - POPOVER_GAP}px)`,
+    };
+  });
+
+  if (!displayEdge || !labelPoint || !target) return null;
 
   const sourceDraftNode = draftNodes.get(displayEdge.source);
   const targetDraftNode = draftNodes.get(displayEdge.target);
@@ -350,7 +300,6 @@ export function EdgeInspectorPopover() {
       : null;
   const hintLearned = hintId === 'connector-selected' ? hasExplicitSemantics : hasAnyAttachment;
 
-  if (!overlay.target) return null;
   return createPortal(
       <div
         ref={panelRef}
@@ -358,12 +307,7 @@ export function EdgeInspectorPopover() {
         role="toolbar"
         aria-label="Connector options"
         data-closing={closing ? 'true' : undefined}
-        data-placement={flipBelow ? 'below' : 'above'}
-        style={{
-          transform: flipBelow
-            ? `translate(-50%, 0) translate(${labelAt.x}px, ${labelAt.y + POPOVER_GAP}px)`
-            : `translate(-50%, -100%) translate(${labelAt.x}px, ${labelAt.y - POPOVER_GAP}px)`,
-        }}
+        data-placement={placement}
         onPointerDown={(event) => event.stopPropagation()}
       >
         <span className="dc-popover-caret" aria-hidden="true" />
@@ -385,11 +329,13 @@ export function EdgeInspectorPopover() {
           />
         </div>
       </div>,
-    overlay.target,
+    target,
   );
 }
 
-function EdgeInspectorRow({
+/** Memoized: the body re-renders every frame an endpoint is dragged (it tracks the live label
+ *  point), and none of these props change just because a node moved. */
+const EdgeInspectorRow = memo(function EdgeInspectorRow({
   edge,
   sourceNode,
   targetNode,
@@ -463,6 +409,8 @@ function EdgeInspectorRow({
           className="dc-edge-inspector-flows"
           data-empty={memberOf.length === 0 ? 'true' : undefined}
           data-flow-state={flowChip.state}
+          // Only the "list" state opens the checklist; the other two act in one click.
+          aria-expanded={flowChip.state === 'none' || flowChip.state === 'add' ? undefined : membershipOpen}
           title="Flow membership"
           onClick={() => {
             const state = store.getState();
@@ -489,7 +437,7 @@ function EdgeInspectorRow({
       <ExpandedPanel edge={edge} sourceNode={sourceNode} targetNode={targetNode} theme={theme} store={store} />
     </>
   );
-}
+});
 
 /**
  * What the connector's flow chip says and does, in order of how much the app already knows.
@@ -1243,6 +1191,7 @@ function ExpandedPanel({
             className="dc-inspector-color-swatch"
             data-auto={currentAccentChip ? undefined : 'true'}
             aria-label="Connector colour"
+            aria-expanded={paletteOpen}
             title={currentAccentChip ? 'Change colour' : 'Auto colour — click to override'}
             style={currentAccentChip ? { background: currentAccentChip } : undefined}
             onClick={() => setPaletteOpen((v) => !v)}

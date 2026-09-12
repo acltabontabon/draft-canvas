@@ -7,6 +7,7 @@
  */
 import { findFlow } from '../document/flow';
 import type { DraftDocument, DraftViewport } from '../document/types';
+import { clamp } from '../lib/math';
 import { resolveFlowStep, resolveStepViewport, type FlowPlaybackStep } from '../presentation/useFlowPlayback';
 import { RESPONSE_PHASE_DELAY_MS } from '../presentation/responsePhase';
 import { renderFlowFrameSvg } from '../render/svg/flowFrame';
@@ -41,13 +42,27 @@ export interface GifExportOptions {
 /**
  * Hands the main thread back between frames. Each frame's palette quantization is synchronous and
  * a long flow is thousands of frames, so without this the tab can't paint progress, respond to
- * Cancel, or do anything else until the whole GIF is done.
+ * Cancel, or do anything else until the whole GIF is done. The fallback is a `MessageChannel` post,
+ * not `setTimeout(0)`: chained timers in a background tab are throttled to about one a second,
+ * which would stretch a few-seconds export into minutes the moment the user switches tabs.
  */
 function yieldToBrowser(): Promise<void> {
   const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
   if (typeof scheduler?.yield === 'function') return scheduler.yield();
-  return new Promise((resolve) => setTimeout(resolve, 0));
+  if (typeof MessageChannel === 'undefined') return new Promise((resolve) => setTimeout(resolve, 0));
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      resolve();
+    };
+    channel.port2.postMessage(null);
+  });
 }
+
+/** Work between yields: long enough that the yields themselves cost nothing measurable, short
+ *  enough that Cancel and the progress bar still respond within a few frames. */
+const YIELD_BUDGET_MS = 40;
 
 /** Not user-configurable — a fixed, reasonable size for a ticket/Slack embed. */
 const CANVAS_SIZE = { width: 960, height: 600 };
@@ -133,7 +148,7 @@ export function planGifFrames(
     // pulse restarts from 0, mirroring how the live CSS animation restarts fresh on whichever line
     // newly starts matching `[data-flow-active]` rather than continuing the other line's timeline.
     const requestFrames = step.edge?.hasResponse
-      ? Math.max(1, Math.min(holdFrames, Math.round((RESPONSE_PHASE_DELAY_MS / holdMs) * holdFrames)))
+      ? clamp(Math.round((RESPONSE_PHASE_DELAY_MS / holdMs) * holdFrames), 1, holdFrames)
       : holdFrames;
 
     for (let f = 0; f < holdFrames; f += 1) {
@@ -169,6 +184,7 @@ export async function exportFlowGifFile(
   const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
   const gif = GIFEncoder();
   const repeat = options.loop === false ? -1 : 0;
+  let lastYield = performance.now();
 
   for (let i = 0; i < frames.length; i += 1) {
     options.signal?.throwIfAborted();
@@ -197,7 +213,10 @@ export async function exportFlowGifFile(
       ...(i === 0 ? { repeat } : {}),
     });
     options.onProgress?.(i + 1, frames.length);
-    await yieldToBrowser();
+    if (performance.now() - lastYield >= YIELD_BUDGET_MS) {
+      await yieldToBrowser();
+      lastYield = performance.now();
+    }
   }
 
   options.signal?.throwIfAborted();

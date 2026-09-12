@@ -2143,7 +2143,7 @@ kbd {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 6px 14px;
+  padding: 4px 4px 4px 14px;
   border: 1px solid var(--dc-border);
   border-radius: 999px;
   background: var(--dc-surface);
@@ -2152,24 +2152,13 @@ kbd {
   font-weight: 500;
 }
 
-.dc-focus-indicator button {
-  display: flex;
-  align-items: center;
+/* The shared close button, sized to the pill: 24px meets the minimum target size. */
+.dc-focus-indicator .dc-button {
+  width: 24px;
+  height: 24px;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: 0;
+  padding: 0;
   border-radius: 50%;
-  background: none;
-  color: var(--dc-text-muted);
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.dc-focus-indicator button:hover {
-  background: var(--dc-surface-raised);
-  color: var(--dc-text);
 }
 
 /* ------------------------------------------------------------ inspector -- */
@@ -3917,6 +3906,16 @@ kbd {
   box-shadow: var(--dc-shadow-panel);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.dc-toast-message {
+  align-self: center;
+}
+
+.dc-toast-action {
+  align-self: center;
+  color: var(--dc-selection);
+  font-weight: 600;
 }
 
 .dc-toast[data-tone='error'] {

@@ -148,6 +148,28 @@ describe('FlowPanel', () => {
     expect(useUiStore.getState().flowPanelOpen).toBe(false);
   });
 
+  it('deleting a flow offers an Undo that restores it, until something else changes', () => {
+    useUiStore.setState({ toasts: [] });
+    useEditorStore.getState().createFlow('Checkout');
+    mount();
+    fireEvent.keyDown(rowFor('Checkout'), { key: 'Delete' });
+    expect(useEditorStore.getState().document.flows).toHaveLength(0);
+
+    const [toast] = useUiStore.getState().toasts;
+    expect(toast?.message).toContain('Checkout');
+    act(() => toast!.action!.run());
+    expect(useEditorStore.getState().document.flows.map((flow) => flow.title)).toEqual(['Checkout']);
+
+    // Deleted again, then another edit lands: the stale Undo must not revert that edit instead.
+    fireEvent.keyDown(rowFor('Checkout'), { key: 'Delete' });
+    const stale = useUiStore.getState().toasts.at(-1)!;
+    act(() => {
+      useEditorStore.getState().createFlow('Refunds');
+    });
+    act(() => stale.action!.run());
+    expect(useEditorStore.getState().document.flows.map((flow) => flow.title)).toEqual(['Refunds']);
+  });
+
   it('Right and Left expand and collapse a focused flow row', () => {
     useEditorStore.getState().createFlow('Checkout');
     mount();

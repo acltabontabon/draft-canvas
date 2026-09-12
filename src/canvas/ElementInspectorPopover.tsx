@@ -1,7 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useInternalNode, useReactFlow } from '@xyflow/react';
-import { useCanvasOverlay } from './useCanvasOverlay';
+import { useInternalNode, useReactFlow, useStore } from '@xyflow/react';
 import { primaryCommandsFor } from '../commands/registry';
 import type { CommandContext } from '../commands/types';
 import {
@@ -38,6 +37,8 @@ import { DATABASE_ICON_OPTIONS } from './dataStoreOptions';
 import { rectOfInternal } from './edgeGeometry';
 import { HintStrip } from './HintStrip';
 import { useToolbarHeight } from './useToolbarHeight';
+import { useOverlayPosition } from './useOverlayPosition';
+import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { QUEUE_ICON_OPTIONS } from './queueOptions';
@@ -125,109 +126,63 @@ const RIGHT_CLEARANCE_WITH_FLOW_PANEL = 312;
  * stops fitting, so it doesn't flip mid-drag or mid-resize.
  */
 export function ElementInspectorPopover({ buildCommandContext }: { buildCommandContext: () => CommandContext }) {
+  // The shell subscribes to nothing but "which single element, if any" — the body below, with its
+  // whole-document subscription, is mounted only while there's a popover to show (or fade out).
+  const selectedNodeId = useEditorStore((state) =>
+    state.mode !== 'present' && state.selection.nodes.length === 1 && state.selection.edges.length === 0
+      ? state.selection.nodes[0]!
+      : null,
+  );
+  const measured = useStore((state) => (selectedNodeId ? state.nodeLookup.has(selectedNodeId) : false));
+  const open = selectedNodeId !== null && measured;
+  const { mounted, closing } = usePopoverPresence(open, POPOVER_EXIT_MS);
+  // The element it was showing, kept for the fade-out after selection has already moved on.
+  const shownNodeId = useLastPresent(open ? selectedNodeId : null);
+  if (!mounted || !shownNodeId) return null;
+  return <ElementInspectorBody nodeId={shownNodeId} closing={closing} buildCommandContext={buildCommandContext} />;
+}
+
+function ElementInspectorBody({
+  nodeId,
+  closing,
+  buildCommandContext,
+}: {
+  nodeId: string;
+  closing: boolean;
+  buildCommandContext: () => CommandContext;
+}) {
   const document = useEditorStore((state) => state.document);
-  const selection = useEditorStore((state) => state.selection);
-  const mode = useEditorStore((state) => state.mode);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const learnModeActive = useUiStore((state) => state.learnModeActive);
   const interactionActive = useUiStore((state) => state.interactionActive);
   const store = useEditorStore;
   const theme = useThemeValue();
   const { flowToScreenPosition } = useReactFlow();
-  const overlay = useCanvasOverlay();
   const rightClearance = flowPanelOpen ? RIGHT_CLEARANCE_WITH_FLOW_PANEL : LEFT_CLEARANCE;
 
-  const nodeId = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : null;
-  const node = nodeId ? nodeIndex(document.nodes).get(nodeId) : undefined;
-  const internal = useInternalNode(nodeId ?? '');
+  const liveNode = nodeIndex(document.nodes).get(nodeId);
+  const liveInternal = useInternalNode(nodeId);
+  // Cached so the popover keeps rendering the element it was showing while it fades out, instead
+  // of going blank the instant it's deleted.
+  const shown = useLastPresent(liveNode && liveInternal ? { node: liveNode, internal: liveInternal } : null);
+  const displayNode = shown?.node;
+  const displayInternal = shown?.internal;
 
-  const open = mode !== 'present' && Boolean(node && internal);
-
-  // Same delayed-unmount fade `EdgeInspectorPopover`/`AttachmentPopover` use: the popover stays
-  // mounted one more tick after `open` flips false so `canvas.css` can play the reverse animation
-  // instead of the DOM node vanishing mid-frame.
-  const [mounted, setMounted] = useState(open);
-  const [closing, setClosing] = useState(false);
-  const hideTimer = useRef<number | null>(null);
   // One slot, not two independent booleans — a colour palette and a typography panel open from
   // the same row and would otherwise be able to stack under each other; this makes them mutually
   // exclusive for free and keeps the reset/Escape/click-away plumbing below written once.
   const [openPanel, setOpenPanel] = useState<'color' | 'typography' | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [placement, setPlacement] = useState<Placement>('above');
   usePopoverKeyboard(panelRef);
 
-  // Self-measured, not guessed: fit checks depend on the popover's own current width and height,
-  // which change as sections open/close. Re-measures after every render — cheap (one
-  // `getBoundingClientRect` read) and guarded so it only ever triggers a re-render when the size
-  // actually changed.
-  //
-  // Rounded to whole pixels before comparing: `getBoundingClientRect` returns sub-pixel floats
-  // that can differ by less than a thousandth of a pixel between two renders of the same
-  // genuinely-settled layout (observed directly: 106.3280029296875 vs 106.32806396484375 vs
-  // 106.32794189453125 for one popover that never visibly changed size) — often while a resize or
-  // zoom is also driving `useReactFlow()`'s viewport transform. An exact `!==` on that noise never
-  // reaches a fixed point: each render's `setMeasuredSize` triggers another render, which measures
-  // a new sub-pixel value, which triggers another `setMeasuredSize`, chaining into React's
-  // "Maximum update depth exceeded" crash. Whole pixels are the coarsest resolution anything here
-  // is ever laid out or visually distinguishable at, so rounding away that noise costs nothing.
-  const [measuredSize, setMeasuredSize] = useState({ width: 0, height: 0 });
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
-  useLayoutEffect(() => {
-    const rect = panelRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const width = Math.round(rect.width);
-    const height = Math.round(rect.height);
-    if (width > 0 && height > 0 && (width !== measuredSize.width || height !== measuredSize.height)) {
-      setMeasuredSize({ width, height });
-    }
-  });
-
-  // Cached so the popover keeps rendering the element it was showing while it fades out, instead
-  // of going blank the instant selection changes.
-  const lastNodeRef = useRef(node);
-  const lastInternalRef = useRef(internal);
-  if (open) {
-    lastNodeRef.current = node;
-    lastInternalRef.current = internal;
+  // Selecting a *different* element, or the popover starting to close, closes the colour
+  // palette/typography panel.
+  const panelOwner = closing ? null : nodeId;
+  const [openPanelOwner, setOpenPanelOwner] = useState(panelOwner);
+  if (openPanelOwner !== panelOwner) {
+    setOpenPanelOwner(panelOwner);
+    setOpenPanel(null);
   }
-
-  // Selecting a *different* element while the colour palette/typography panel is open must close it.
-  useEffect(() => {
-    setOpenPanel(null);
-  }, [nodeId]);
-
-  useEffect(() => {
-    if (open) {
-      if (hideTimer.current !== null) {
-        window.clearTimeout(hideTimer.current);
-        hideTimer.current = null;
-      }
-      setClosing(false);
-      setMounted(true);
-      return;
-    }
-    setOpenPanel(null);
-    if (!mounted) return;
-    setClosing(true);
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    hideTimer.current = window.setTimeout(
-      () => {
-        setMounted(false);
-        setClosing(false);
-        hideTimer.current = null;
-      },
-      reduceMotion ? 0 : POPOVER_EXIT_MS,
-    );
-    return () => {
-      if (hideTimer.current !== null) {
-        window.clearTimeout(hideTimer.current);
-        hideTimer.current = null;
-      }
-    };
-    // mounted intentionally excluded — see EdgeInspectorPopover's identical comment.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
 
   // Escape closes the open colour palette/typography panel first, without touching the selection.
   // Click-away closes it the same way, but never deselects.
@@ -250,18 +205,13 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
     };
   }, [openPanel]);
 
-  // All of the following must stay above any conditional `return` — React Hooks (the `useEffect`
-  // below) can never be called conditionally — so `rect`/`anchors` are null-safe rather than
-  // guarded by an early return.
-  const displayNode = open ? node : lastNodeRef.current;
-  const displayInternal = open ? internal : lastInternalRef.current;
   const rect = displayInternal ? rectOfInternal(displayInternal) : null;
 
   // Measured, not guessed: the toolbar wraps to two rows below 720px (see app.css's
   // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
   // it — a static constant can't account for either. `TOP_CLEARANCE` stays as the fallback for
   // the (rare) frame where `.dc-toolbar` isn't in the DOM yet.
-  const measuredToolbarHeight = useToolbarHeight(mounted);
+  const measuredToolbarHeight = useToolbarHeight(true);
   const toolbarClearance = measuredToolbarHeight ? measuredToolbarHeight + 10 : TOP_CLEARANCE;
 
   const clearances: PlacementClearances = {
@@ -273,34 +223,29 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   };
   const anchors: Record<Placement, { x: number; y: number }> | null = rect ? anchorsForRect(rect) : null;
 
-  // Stable by construction: only search for a new placement when the current one has genuinely
-  // stopped fitting, instead of re-picking the "best" one every render — that's what keeps this
-  // from flipping back and forth mid-drag or mid-resize. Runs every render deliberately (no
-  // element is selected on the very first render, so there's no single dependency list that
-  // covers "recompute whenever the resolved placement disagrees with stored state"); the
-  // `effectivePlacement !== placement` guard is what keeps it from looping.
+  // Stable by construction: only searches for a new placement when the current one has genuinely
+  // stopped fitting, instead of re-picking the "best" one every time — that's what keeps this
+  // from flipping back and forth mid-drag or mid-resize.
   //
-  // Skipped entirely while a gesture is in flight (`interactionActive`, same field
-  // `DraftEdgeView`'s obstacle avoidance skips for the same reason): a dragged or resized node's
-  // `rect` moves every animation frame, and right at the boundary between two placements'
+  // Frozen entirely while a gesture is in flight (`interactionActive`): a dragged or resized
+  // node's `rect` moves every animation frame, and right at the boundary between two placements'
   // "fits" thresholds, that continuous motion can flip `fits('above')`/`fits('below')` back and
-  // forth from one frame to the next — each flip calling `setPlacement`, which re-renders, which
-  // reads the still-moving `rect` again, which can flip right back. That is a real, not
-  // self-resolving, oscillation (unlike the sub-pixel noise `measuredSize` rounds away above), so
-  // it can run past React's update-depth limit and crash the canvas. Freezing `placement` for the
-  // duration of the gesture and resolving once more when it ends (this effect fires again as soon
-  // as `interactionActive` flips back to false) keeps the popover on its last-good side while the
-  // element is moving, then settles it in one shot against the final, still `rect`.
-  const effectivePlacement = anchors && !interactionActive
-    ? resolvePlacement(placement, anchors, flowToScreenPosition, measuredSize, clearances)
-    : placement;
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (effectivePlacement !== placement) setPlacement(effectivePlacement);
+  // forth from one frame to the next — each flip re-rendering, which reads the still-moving `rect`
+  // again, which can flip right back, past React's update-depth limit. Keeping the last-good side
+  // while the element moves, then settling once against the final `rect` (this body re-renders as
+  // `interactionActive` flips back to false), avoids that.
+  const { target, placement } = useOverlayPosition<Placement>(panelRef, 'above', (frame, current) => {
+    if (!anchors) return null;
+    const next = interactionActive
+      ? current
+      : resolvePlacement(current, anchors, frame.flowToScreenPosition, frame.size, clearances);
+    return {
+      placement: next,
+      transform: placementTransform(next, anchors, frame.size, clearances, frame.flowToScreenPosition, frame.screenToOverlay),
+    };
   });
 
-  if (!mounted) return null;
-  if (!displayNode || !displayInternal || !rect || !anchors) return null;
+  if (!displayNode || !displayInternal || !rect || !anchors || !target) return null;
 
   // Phase 7.1 — at most one hint per node, decided by its type alone (never falls through to a
   // second, near-duplicate message once the first no longer applies): a Service node always
@@ -326,24 +271,18 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   // default there; `InspectorSelect`'s own collision check (below) is what actually keeps a
   // dropdown uncovered/unclipped in that case, and as a backstop when the preferred side turns
   // out too cramped even for an 'above' or 'below' popover.
-  const menuDirection: 'up' | 'down' = effectivePlacement === 'above' ? 'up' : 'down';
+  const menuDirection: 'up' | 'down' = placement === 'above' ? 'up' : 'down';
   // The element's own screen-space vertical bounds, so a dropdown can shrink/flip rather than
   // cover it even when the popover itself barely had room to fit on its preferred side.
-  const menuAvoidRect = {
-    top: flowToScreenPosition({ x: rect.x, y: rect.y }).y,
-    bottom: flowToScreenPosition({ x: rect.x, y: rect.y + rect.height }).y,
-  };
+  const menuAvoidTop = flowToScreenPosition({ x: rect.x, y: rect.y }).y;
+  const menuAvoidBottom = flowToScreenPosition({ x: rect.x, y: rect.y + rect.height }).y;
 
-  const transform = placementTransform(
-    effectivePlacement,
-    anchors,
-    measuredSize,
-    clearances,
-    flowToScreenPosition,
-    overlay.screenToOverlay,
-  );
+  // Only a plain Queue can ever have a DLQ toggle, and the scan is skipped for every other kind.
+  const hasDlqEdge =
+    displayNode.type === 'queue' && displayNode.queueKind === 'queue' && displayNode.deliveryRole !== 'dead-letter'
+      ? document.edges.some((edge) => edge.source === displayNode.id && edge.semantic === 'deadLetters')
+      : false;
 
-  if (!overlay.target) return null;
   return createPortal(
       <div
         ref={panelRef}
@@ -353,8 +292,7 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
         aria-hidden={closing || undefined}
         data-closing={closing ? 'true' : undefined}
         data-dragging={interactionActive ? 'true' : undefined}
-        data-placement={effectivePlacement}
-        style={{ transform }}
+        data-placement={placement}
         onPointerDown={(event) => event.stopPropagation()}
       >
         {/* The caret ties the popover to the element it belongs to — see `.dc-popover-caret`. */}
@@ -363,48 +301,49 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
           {hintId && <HintStrip id={hintId} learned={hintLearned} />}
           <ElementInspectorRow
             node={displayNode}
+            hasDlqEdge={hasDlqEdge}
             openPanel={openPanel}
             setOpenPanel={setOpenPanel}
             menuDirection={menuDirection}
-            menuAvoidRect={menuAvoidRect}
+            menuAvoidTop={menuAvoidTop}
+            menuAvoidBottom={menuAvoidBottom}
             theme={theme}
             store={store}
             buildCommandContext={buildCommandContext}
           />
         </div>
       </div>,
-    overlay.target,
+    target,
   );
 }
 
-function ElementInspectorRow({
+/** Memoized: the body re-renders every frame its element is dragged or resized (it tracks the
+ *  live position), and none of these props change just because the element moved. */
+const ElementInspectorRow = memo(function ElementInspectorRow({
   node,
+  hasDlqEdge,
   openPanel,
   setOpenPanel,
   menuDirection,
-  menuAvoidRect,
+  menuAvoidTop,
+  menuAvoidBottom,
   theme,
   store,
   buildCommandContext,
 }: {
   node: DraftNode;
+  hasDlqEdge: boolean;
   openPanel: 'color' | 'typography' | null;
   setOpenPanel: (panel: 'color' | 'typography' | null) => void;
   menuDirection: 'up' | 'down';
-  menuAvoidRect: { top: number; bottom: number };
+  menuAvoidTop: number;
+  menuAvoidBottom: number;
   theme: ReturnType<typeof useThemeValue>;
   store: typeof useEditorStore;
   buildCommandContext: () => CommandContext;
 }) {
   const currentAccentChip = node.accent !== undefined ? theme.accents[node.accent].chip : undefined;
-
-  // Only a plain Queue can ever have a DLQ toggle, and the scan is skipped for every other kind —
-  // cheap enough to run every render, but there's no reason to pay even that for a Service/Topic/
-  // Junction/etc. selection.
-  const hasDlqEdge =
-    node.type === 'queue' && node.queueKind === 'queue' && node.deliveryRole !== 'dead-letter'
-      ? store.getState().document.edges.some((edge) => edge.source === node.id && edge.semantic === 'deadLetters')
-      : false;
+  const menuAvoidRect = useMemo(() => ({ top: menuAvoidTop, bottom: menuAvoidBottom }), [menuAvoidTop, menuAvoidBottom]);
 
   // The 0-3 shape-native quick actions for this node — memoized on the specific fields that can
   // change the result, never on `node` itself or `document` wholesale. `node` gets a new identity
@@ -536,6 +475,7 @@ function ElementInspectorRow({
           className="dc-inspector-color-swatch"
           data-auto={currentAccentChip ? undefined : 'true'}
           aria-label="Element colour"
+          aria-expanded={openPanel === 'color'}
           title="Change colour"
           style={currentAccentChip ? { background: currentAccentChip } : undefined}
           onClick={() => setOpenPanel(openPanel === 'color' ? null : 'color')}
@@ -544,6 +484,7 @@ function ElementInspectorRow({
           <Button
             variant="quiet"
             active={openPanel === 'typography'}
+            aria-expanded={openPanel === 'typography'}
             aria-label="Text style"
             title="Bold, italic, alignment"
             onClick={() => setOpenPanel(openPanel === 'typography' ? null : 'typography')}
@@ -646,4 +587,4 @@ function ElementInspectorRow({
       )}
     </>
   );
-}
+});

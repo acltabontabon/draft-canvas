@@ -12,7 +12,7 @@ import {
 } from '../src/document/operations';
 import { createFlow, explainEdgeTier, stepIndexOf } from '../src/document/flow';
 import { evaluateAttachCandidates, deepestBoundaryAt } from '../src/canvas/dragTargets';
-import { obstaclesForEdge } from '../src/edges/obstacles';
+import { obstaclesForEdge, withoutNodes } from '../src/edges/obstacles';
 import { isEdgeFocused } from '../src/store/editorStore';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { projectNodes, projectEdges } from '../src/canvas/projection';
@@ -277,6 +277,20 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
    * That is only sound if the scoped set draws exactly the path the full set draws — which the
    * exporter still uses — and if an untouched connector's set keeps its identity across a commit.
    */
+  it('a gesture leaves only the moving nodes out of an untouched connector\'s obstacles', () => {
+    const edge = doc.edges.find((e) => obstaclesForEdge(doc.nodes, e.source, e.target).length >= 2)!;
+    const obstacles = obstaclesForEdge(doc.nodes, edge.source, edge.target);
+    const nodeOf = (rect: (typeof obstacles)[number]) =>
+      doc.nodes.find((n) => n.x === rect.x && n.y === rect.y && n.width === rect.width && n.height === rect.height)!;
+    const moving = nodeOf(obstacles[0]!);
+
+    expect(withoutNodes(obstacles, new Set())).toBe(obstacles);
+    expect(withoutNodes(obstacles, new Set(['not-an-obstacle']))).toBe(obstacles);
+    const kept = withoutNodes(obstacles, new Set([moving.id]));
+    expect(kept).toHaveLength(obstacles.length - 1);
+    expect(kept).not.toContain(obstacles[0]);
+  });
+
   it('scoped obstacles route identically to every node, and stay stable for far-away edits', () => {
     const nodeMap = new Map(doc.nodes.map((node) => [node.id, node]));
     const all = doc.nodes.filter((node) => node.type !== 'group');

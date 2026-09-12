@@ -36,18 +36,15 @@ function mermaidKeyword(kind: ParticipantKind): 'actor' | 'participant' {
  *  are escaped before quotes: escaping in the other order would let a label ending `\"` turn into
  *  `\\"` — an escaped backslash followed by a bare, string-closing quote. */
 function sanitizeParticipantName(label: string): string {
-  return guardStatementBreaks(label.replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"'));
+  return escapeMermaidText(label.replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"'));
 }
 
 /** Mermaid ends a statement at `;` and starts a comment at `#`, anywhere on the line — including
- *  inside label and note text, where neither has an escape of its own. Its entity codes (`#59;`,
- *  `#35;`) are pulled out before parsing, so they survive to render as the literal character. One
- *  pass, so the `#`/`;` an entity code itself introduces is never re-escaped. */
+ *  inside label and note text, where neither has an escape of its own — and runs rendered text
+ *  through an HTML sanitizer that strips anything tag-shaped (`Map<String, Order>` would render as
+ *  "Map"). Its entity codes are pulled out before parsing, so they survive to render as the literal
+ *  character. One pass, so the `#`/`;` an entity code itself introduces is never re-escaped. */
 const MERMAID_ENTITY: Record<string, string> = { '#': '#35;', ';': '#59;', '<': '#lt;', '>': '#gt;', '&': '#amp;' };
-
-function guardStatementBreaks(text: string): string {
-  return text.replace(/[#;]/g, (ch) => MERMAID_ENTITY[ch]!);
-}
 
 function escapeMermaidText(text: string): string {
   return text.replace(/[#;<>&]/g, (ch) => MERMAID_ENTITY[ch]!);
@@ -57,7 +54,7 @@ function escapeMermaidText(text: string): string {
  *  delimiter Mermaid uses right after the arrow, so any literal colon in the text is guarded
  *  defensively rather than relying on exactly-once-delimiter parsing. */
 function sanitizeMessageLabel(label: string): string {
-  const clean = guardStatementBreaks(label.replace(/\r?\n/g, ' ').replace(/:/g, '-').trim());
+  const clean = escapeMermaidText(label.replace(/\r?\n/g, ' ').replace(/:/g, '-').trim());
   return clean || 'Message';
 }
 

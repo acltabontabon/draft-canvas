@@ -7,7 +7,7 @@
 import type { useInternalNode } from '@xyflow/react';
 import { anchorBandOf } from '../document/queueGeometry';
 import type { DraftNodeType } from '../document/types';
-import { type Rect } from '../edges/routing';
+import type { Rect } from '../edges/routing';
 
 export type InternalNode = NonNullable<ReturnType<typeof useInternalNode>>;
 

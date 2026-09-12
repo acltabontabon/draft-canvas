@@ -1,6 +1,7 @@
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
 import type { DraftDocument, DraftNodeType } from '../document/types';
 import { neighborhoodOf } from './context';
+import { dismissalKey } from './dismissal';
 import { RULES } from './rules';
 import type {
   Continuation,
@@ -15,9 +16,6 @@ import type {
 /** Node types a continuation can hang off. Annotations, boundaries and routing points never do. */
 const ANCHOR_TYPES: ReadonlySet<DraftNodeType> = new Set<DraftNodeType>(['service', 'database', 'queue', 'actor', 'component']);
 
-export function dismissalKey(anchorId: string, ruleId: string, neighborhoodKey: string): DismissalKey {
-  return `${anchorId}|${ruleId}|${neighborhoodKey}`;
-}
 
 /**
  * The continuations Draft Canvas is willing to offer for one node, best first — or none.

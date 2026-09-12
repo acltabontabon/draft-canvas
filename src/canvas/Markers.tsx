@@ -1,10 +1,13 @@
 import { memo, useMemo } from 'react';
+import type { DraftEdge, DraftNode } from '../document/types';
 import { useEditorStore } from '../store/editorStore';
+import { nodeIndex } from '../store/selectors';
 import { resolveEdgeColor } from '../edges/kindStyle';
 import { markerDefs } from '../render/svg/markers';
 import { shadowFilter } from '../render/svg/emit';
 import { serialize } from '../render/svg/element';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import type { Theme } from '../render/theme/tokens';
 import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 
@@ -31,29 +34,41 @@ import { useThemeValue } from '../ui/theme/useTheme';
 export const Markers = memo(function Markers() {
   const theme = useThemeValue();
   const { preset } = usePersonality();
-  const edges = useEditorStore((state) => state.document.edges);
-  const nodes = useEditorStore((state) => state.document.nodes);
+  // A primitive, so a commit that changes no connector colour (a move, a text edit, an undo of
+  // either) re-renders nothing here — not even a fresh `__html` object for React to write back.
+  const colorKey = useEditorStore((state) => edgeColorKey(state.document.nodes, state.document.edges, theme));
 
-  const markup = useMemo(() => {
-    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const html = useMemo(() => {
     // Every accent chip too, not only colours some edge currently resolves to: a flow's accent is
     // worn by its member connectors only while that flow is the lens or the presented step, and a
     // `markerRef` to a colour with no marker here draws a directed connector with no arrowhead.
-    const colors = new Set<string>([theme.edge, theme.selection, ...Object.values(theme.accents).map((accent) => accent.chip)]);
-    for (const edge of edges) {
-      colors.add(resolveEdgeColor(edge, nodesById.get(edge.source), theme));
-    }
-    return [shadowFilter(theme.shadow), ...markerDefs(colors, PERSONALITY_PROFILES[preset].arrowJitter)]
+    const colors = new Set<string>([
+      theme.edge,
+      theme.selection,
+      ...Object.values(theme.accents).map((accent) => accent.chip),
+      ...(colorKey ? colorKey.split('|') : []),
+    ]);
+    const markup = [shadowFilter(theme.shadow), ...markerDefs(colors, PERSONALITY_PROFILES[preset].arrowJitter)]
       .map(serialize)
       .join('');
-  }, [nodes, edges, theme, preset]);
+    return { __html: `<defs>${markup}</defs>` };
+  }, [colorKey, theme, preset]);
 
-  return (
-    <svg
-      className="dc-defs"
-      aria-hidden="true"
-      focusable="false"
-      dangerouslySetInnerHTML={{ __html: `<defs>${markup}</defs>` }}
-    />
-  );
+  return <svg className="dc-defs" aria-hidden="true" focusable="false" dangerouslySetInnerHTML={html} />;
 });
+
+let lastColorInputs: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[]; theme: Theme; key: string } | null =
+  null;
+
+/** The sorted, distinct colours the document's connectors resolve to, as one string. The store
+ *  selector runs on every state change (selection, hover), so the last result is kept per input. */
+function edgeColorKey(nodes: readonly DraftNode[], edges: readonly DraftEdge[], theme: Theme): string {
+  const last = lastColorInputs;
+  if (last && last.nodes === nodes && last.edges === edges && last.theme === theme) return last.key;
+  const byId = nodeIndex(nodes);
+  const colors = new Set<string>();
+  for (const edge of edges) colors.add(resolveEdgeColor(edge, byId.get(edge.source), theme));
+  const key = [...colors].sort().join('|');
+  lastColorInputs = { nodes, edges, theme, key };
+  return key;
+}

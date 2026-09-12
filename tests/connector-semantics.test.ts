@@ -1645,6 +1645,20 @@ describe('resolveJunctionEndpoint — a diamond of Junctions', () => {
     expect(resolveJunctionEndpoint(graph, j3!.id, 'source')).toEqual({ status: 'resolved', nodeId: a.id });
   });
 
+  it('is ambiguous when a nested Junction fans in from several nodes, even beside a single direct one', () => {
+    const [a, b, c] = [0, 1, 2].map((i) => createNode({ type: 'service', x: 0, y: 200 * i }));
+    const inner = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const outer = createNode({ type: 'ellipse', x: 400, y: 0 });
+    const edges = [
+      createEdge({ source: a!.id, target: inner.id }),
+      createEdge({ source: b!.id, target: inner.id }),
+      createEdge({ source: inner.id, target: outer.id }),
+      createEdge({ source: c!.id, target: outer.id }),
+    ];
+    const graph = { nodes: [a!, b!, c!, inner, outer], edges };
+    expect(resolveJunctionEndpoint(graph, outer.id, 'source')).toEqual({ status: 'ambiguous', nodeId: outer.id });
+  });
+
   it('still terminates, unresolved, on a Junction cycle with nothing real attached', () => {
     const j0 = createNode({ type: 'ellipse', x: 0, y: 0 });
     const j1 = createNode({ type: 'ellipse', x: 200, y: 0 });

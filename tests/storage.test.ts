@@ -107,23 +107,6 @@ describe('local persistence', () => {
     expect(await repository.list()).toHaveLength(0);
   });
 
-  it("removing or pruning a document never touches another document's images whose id extends it with #", async () => {
-    const repository = await IndexedDbRepository.open();
-    const dims = { width: 10, height: 10 };
-    const image = () => new Blob(['x'], { type: 'image/png' });
-    await repository.saveBackgroundImage('d_x', image(), dims, 'bg_a');
-    await repository.saveBackgroundImage('d_x#1', image(), dims, 'bg_b');
-
-    await repository.pruneBackgroundImages('d_x', null);
-    expect(await repository.loadBackgroundImage('d_x', 'bg_a')).toBeNull();
-    expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
-
-    await repository.saveBackgroundImage('d_x', image(), dims, 'bg_c');
-    await repository.remove('d_x');
-    expect(await repository.loadBackgroundImage('d_x', 'bg_c')).toBeNull();
-    expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
-  });
-
   it('renames without disturbing the canvas', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Before', 4);
@@ -135,23 +118,31 @@ describe('local persistence', () => {
     expect(loaded!.nodes).toHaveLength(4);
   });
 
+  /** Runs `during` once, right after `rename()` has read the body and before it writes. */
+  function raceAfterRead(repository: IndexedDbRepository, during: (loaded: DraftDocument) => Promise<void>) {
+    type Readable = { readBody(id: string): Promise<{ document: DraftDocument } | null> };
+    const target = repository as unknown as Readable;
+    const realRead = target.readBody.bind(repository);
+    let raced = false;
+    vi.spyOn(target, 'readBody').mockImplementation(async (id) => {
+      const read = await realRead(id);
+      if (!raced && read) {
+        raced = true;
+        await during(read.document);
+      }
+      return read;
+    });
+  }
+
   it('a rename never overwrites edits another tab saved while it was decrypting', async () => {
     const repository = await IndexedDbRepository.open();
     const otherTab = await IndexedDbRepository.open();
     const doc = documentWith('Before', 2);
     await repository.save(doc);
 
-    // The other tab's autosave lands after the rename has read the document, before it writes.
-    const realLoad = repository.load.bind(repository);
-    let raced = false;
-    vi.spyOn(repository, 'load').mockImplementation(async (id) => {
-      const loaded = await realLoad(id);
-      if (!raced) {
-        raced = true;
-        const edited = addNodes(loaded!, [createNode({ type: 'service', x: 999, y: 0 })]);
-        await otherTab.save({ ...edited, metadata: { ...edited.metadata, updatedAt: Date.now() + 1 } });
-      }
-      return loaded;
+    raceAfterRead(repository, async (loaded) => {
+      const edited = addNodes(loaded, [createNode({ type: 'service', x: 999, y: 0 })]);
+      await otherTab.save({ ...edited, metadata: { ...edited.metadata, updatedAt: Date.now() + 1 } });
     });
 
     await repository.rename(doc.metadata.id, 'After');
@@ -160,6 +151,24 @@ describe('local persistence', () => {
     const loaded = await otherTab.load(doc.metadata.id);
     expect(loaded!.metadata.title).toBe('After');
     expect(loaded!.nodes).toHaveLength(3);
+  });
+
+  it('a rename never overwrites a viewport-only save that kept the same updatedAt', async () => {
+    const repository = await IndexedDbRepository.open();
+    const otherTab = await IndexedDbRepository.open();
+    const doc = documentWith('Before', 2);
+    await repository.save(doc);
+
+    raceAfterRead(repository, async (loaded) => {
+      await otherTab.save({ ...loaded, viewport: { x: 321, y: 123, zoom: 1.5 } });
+    });
+
+    await repository.rename(doc.metadata.id, 'After');
+    vi.restoreAllMocks();
+
+    const loaded = await otherTab.load(doc.metadata.id);
+    expect(loaded!.metadata.title).toBe('After');
+    expect(loaded!.viewport).toEqual({ x: 321, y: 123, zoom: 1.5 });
   });
 
   it('closes its connection and tells listeners when a newer version needs the database', async () => {
@@ -309,6 +318,23 @@ describe.each([
   ['IndexedDbRepository', () => IndexedDbRepository.open()],
   ['MemoryRepository', () => Promise.resolve(new MemoryRepository())],
 ])('background image storage (%s)', (_name, open) => {
+  it("removing or pruning a document never touches another document's images whose id extends it with #", async () => {
+    const repository = await open();
+    const dims = { width: 10, height: 10 };
+    const image = () => new Blob(['x'], { type: 'image/png' });
+    await repository.saveBackgroundImage('d_x', image(), dims, 'bg_a');
+    await repository.saveBackgroundImage('d_x#1', image(), dims, 'bg_b');
+
+    await repository.pruneBackgroundImages('d_x', null);
+    expect(await repository.loadBackgroundImage('d_x', 'bg_a')).toBeNull();
+    expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
+
+    await repository.saveBackgroundImage('d_x', image(), dims, 'bg_c');
+    await repository.remove('d_x');
+    expect(await repository.loadBackgroundImage('d_x', 'bg_c')).toBeNull();
+    expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
+  });
+
   it('round-trips a saved image', async () => {
     const repository = await open();
     const doc = documentWith('With background');

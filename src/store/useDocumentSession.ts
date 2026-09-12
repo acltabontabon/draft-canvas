@@ -9,8 +9,20 @@ import { loadStarters } from '../starters/load';
 import { Autosave } from '../storage/autosave';
 import { getRepository, type DraftRepository } from '../storage';
 import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
-import { documentWithLiveViewport, useEditorStore } from './editorStore';
 import { useUiStore } from './uiStore';
+
+type EditorStoreModule = typeof import('./editorStore');
+
+/**
+ * The editor store — with the node renderer, routing, and starter builder it pulls in — is most of
+ * the editor's code, and the Library never touches it. Loaded the first time a canvas opens (the
+ * editor chunk warms it in the background anyway), then kept.
+ */
+let editorStoreModule: EditorStoreModule | null = null;
+async function loadEditorStore(): Promise<EditorStoreModule> {
+  editorStoreModule ??= await import('./editorStore');
+  return editorStoreModule;
+}
 
 export interface DocumentSession {
   ready: boolean;
@@ -119,7 +131,8 @@ export function useDocumentSession(): DocumentSession {
     if (!repository) return;
     const controller = new Autosave({
       repository,
-      onStateChange: (state) => useEditorStore.getState().setSaveState(state),
+      // Saves only ever run for an open canvas, so the store is loaded by the time one reports.
+      onStateChange: (state) => editorStoreModule?.useEditorStore.getState().setSaveState(state),
     });
     autosave.current = controller;
     return () => {
@@ -134,11 +147,22 @@ export function useDocumentSession(): DocumentSession {
    */
   useEffect(() => {
     if (!openId) return;
-    return useEditorStore.subscribe((state, previous) => {
-      if (state.revision === previous.revision && state.liveViewport === previous.liveViewport) return;
-      if (state.document.metadata.id !== openId) return;
-      autosave.current?.schedule(documentWithLiveViewport(state));
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    // Already loaded — `openId` is only ever set after the document went into the store — so this
+    // subscribes a microtask later, before any edit can happen.
+    void loadEditorStore().then(({ useEditorStore, documentWithLiveViewport }) => {
+      if (cancelled) return;
+      unsubscribe = useEditorStore.subscribe((state, previous) => {
+        if (state.revision === previous.revision && state.liveViewport === previous.liveViewport) return;
+        if (state.document.metadata.id !== openId) return;
+        autosave.current?.schedule(documentWithLiveViewport(state));
+      });
     });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [openId]);
 
   // A closed tab must not cost the user their last few seconds of work.
@@ -176,6 +200,7 @@ export function useDocumentSession(): DocumentSession {
         await refreshLibrary();
         return;
       }
+      const { useEditorStore } = await loadEditorStore();
       useEditorStore.getState().setDocument(loaded);
       setOpenId(loaded.metadata.id);
     },
@@ -209,6 +234,7 @@ export function useDocumentSession(): DocumentSession {
         );
         if (taken) document = cloneDocumentAsNew(document, document.metadata.title);
         await repository.save(document);
+        const { useEditorStore } = await loadEditorStore();
         useEditorStore.getState().setDocument(document);
         setOpenId(document.metadata.id);
         await refreshLibrary();
@@ -251,7 +277,7 @@ export function useDocumentSession(): DocumentSession {
     }
     // Replaced and removed backgrounds kept their images only so undo could bring them back. Undo
     // history ends here, so everything but the image actually showing goes.
-    const closing = useEditorStore.getState().document;
+    const closing = (await loadEditorStore()).useEditorStore.getState().document;
     if (repository && closing.metadata.id === openId) {
       const { background } = closing.settings;
       void repository.pruneBackgroundImages(closing.metadata.id, background.enabled ? background : null).catch((error: unknown) => {

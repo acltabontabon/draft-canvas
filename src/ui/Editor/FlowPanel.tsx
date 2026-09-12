@@ -44,7 +44,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
   useEffect(() => {
     if (!renameRequestId) return;
     useUiStore.getState().requestFlowRename(null);
-    // oxlint-disable-next-line set-state-in-effect -- one-shot external command, see comment above.
+    // oxlint-disable-next-line react/set-state-in-effect -- one-shot external command, see comment above.
     setRenamingId(renameRequestId);
     setExpandedId(renameRequestId);
   }, [renameRequestId]);
@@ -153,7 +153,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
       case 'Backspace':
         if (!flow) return;
         consume();
-        store.getState().deleteFlow(flow.id);
+        deleteFlowWithUndo(flow);
         return;
       default:
         return;
@@ -289,7 +289,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                       title="Delete"
                       onClick={(event) => {
                         event.stopPropagation();
-                        store.getState().deleteFlow(flow.id);
+                        deleteFlowWithUndo(flow);
                       }}
                     />
                   </span>
@@ -340,6 +340,26 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
  * cancel is tracked in a ref rather than state because `blur()` fires synchronously from the
  * Escape handler, before any re-render could carry a flag across.
  */
+/**
+ * Deleting a flow takes every step with it in one click, so the toast that confirms it offers the
+ * way back right there — not only through ⌘Z, which nothing on screen suggests. The Undo only
+ * reverts that delete while it's still the latest change; after anything else it does nothing.
+ */
+function deleteFlowWithUndo(flow: DraftFlow) {
+  const before = useEditorStore.getState().history.past.at(-1);
+  useEditorStore.getState().deleteFlow(flow.id);
+  const entry = useEditorStore.getState().history.past.at(-1);
+  // Nothing was recorded (the flow was already gone): nothing to confirm or undo.
+  if (!entry || entry === before) return;
+  useUiStore.getState().notify(`Deleted the “${flow.title}” flow.`, 'info', {
+    label: 'Undo',
+    run: () => {
+      const latest = useEditorStore.getState();
+      if (latest.history.past.at(-1) === entry) latest.undo();
+    },
+  });
+}
+
 function FlowTitleInput({ flow, onDone }: { flow: DraftFlow; onDone: (title: string | null) => void }) {
   const cancelled = useRef(false);
   return (
@@ -455,6 +475,7 @@ function StepRow({
             icon="more"
             variant="quiet"
             active={toolsOpen}
+            aria-expanded={toolsOpen}
             aria-label="More for this step"
             title="Spotlight extra shapes, or pin the camera for this step"
             onClick={onToggleTools}

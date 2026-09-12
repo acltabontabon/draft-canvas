@@ -318,8 +318,8 @@ export function ExportDialog() {
                 Cancel
               </Button>
             )}
-            <Button variant="solid" icon="export" disabled={cta.disabled} onClick={cta.onClick}>
-              {gifProgress !== null ? `Rendering GIF… ${gifProgress}%` : cta.label}
+            <Button variant="solid" icon="export" disabled={cta.disabled} aria-busy={busy || undefined} onClick={cta.onClick}>
+              {gifProgress !== null ? `Rendering GIF… ${gifProgress}%` : busy ? 'Exporting…' : cta.label}
             </Button>
           </span>
         </div>

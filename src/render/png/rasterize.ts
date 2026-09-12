@@ -3,7 +3,7 @@
  * export writes. One renderer, two file formats — a PNG can never disagree with
  * its SVG twin, and there is no second code path to keep in step.
  */
-export class RasterizeError extends Error {
+class RasterizeError extends Error {
   constructor(message: string, cause?: unknown) {
     super(message);
     this.name = 'RasterizeError';

@@ -232,6 +232,19 @@ describe('toPlantUml', () => {
     expect(lines.indexOf('after')).toBeLessThan(lines.indexOf('end note'));
   });
 
+  it('escapes note lines PlantUML would read as a directive, a diagram end, or another note terminator', () => {
+    const m = model({
+      participants: [{ id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' }],
+      elements: [
+        { kind: 'note', order: 0, participantIds: ['P1'], text: 'check\n!isValid(x)\n@enduml\nend hnote\nendrnote\ndone', sourceFlowId: 'f1' },
+      ],
+    });
+    const lines = toPlantUml(m).split('\n').map((line) => line.trim());
+    expect(lines).toEqual(expect.arrayContaining(['~!isValid(x)', '~@enduml', '~end hnote', '~endrnote']));
+    expect(lines.filter((line) => line === '@enduml')).toHaveLength(1);
+    expect(lines.indexOf('done')).toBeLessThan(lines.indexOf('end note'));
+  });
+
   it('wraps a long note instead of letting one sentence stretch the diagram sideways', () => {
     const long =
       'Compensation is event-driven too: Payment refunds and publishes Payment Refunded; Order reacts to that in turn.';

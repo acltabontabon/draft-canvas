@@ -38,7 +38,6 @@ export interface Theme {
   edgeLabelBg: string;
   codeBg: string;
   codeBorder: string;
-  codeGutter: string;
   shadow: string;
   accents: Record<Accent, AccentPalette>;
 }
@@ -53,14 +52,13 @@ export const DARK: Theme = {
   borderStrong: '#3d4653',
   text: '#e6e9ee',
   textMuted: '#98a1b0',
-  textFaint: '#6b7482',
+  textFaint: '#808998',
   selection: '#5fd6c9',
   selectionSoft: 'rgba(95, 214, 201, 0.16)',
   edge: '#6d7885',
   edgeLabelBg: '#12151a',
   codeBg: '#12151a',
   codeBorder: '#2c333d',
-  codeGutter: '#4a5361',
   shadow: 'rgba(0, 0, 0, 0.45)',
   accents: {
     neutral: { fill: '#181b21', line: '#3d4653', text: '#e6e9ee', chip: '#98a1b0' },
@@ -83,14 +81,13 @@ export const LIGHT: Theme = {
   borderStrong: '#b9c0ca',
   text: '#1a1d23',
   textMuted: '#59606d',
-  textFaint: '#868e9b',
-  selection: '#0f8f84',
+  textFaint: '#6a7280',
+  selection: '#0b7c72',
   selectionSoft: 'rgba(15, 143, 132, 0.12)',
   edge: '#7c8492',
   edgeLabelBg: '#ffffff',
   codeBg: '#f7f8fa',
   codeBorder: '#e2e6eb',
-  codeGutter: '#a8b0bb',
   shadow: 'rgba(19, 24, 32, 0.10)',
   accents: {
     neutral: { fill: '#ffffff', line: '#b9c0ca', text: '#1a1d23', chip: '#59606d' },
@@ -133,8 +130,6 @@ export function applyThemeVariables(theme: Theme, root: HTMLElement): void {
   set('edge', theme.edge);
   set('edge-label-bg', theme.edgeLabelBg);
   set('code-bg', theme.codeBg);
-  set('code-border', theme.codeBorder);
-  set('code-gutter', theme.codeGutter);
   set('shadow', theme.shadow);
   for (const [name, palette] of Object.entries(theme.accents)) {
     set(`accent-${name}-fill`, palette.fill);

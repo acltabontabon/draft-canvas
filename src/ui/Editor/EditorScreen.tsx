@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useReactFlow } from '@xyflow/react';
+import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { Canvas, type CanvasProps } from '../../canvas/Canvas';
 import { ContextMenu } from '../../canvas/ContextMenu';
@@ -19,6 +19,7 @@ import { DEFAULTS } from '../../document/limits';
 import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isEditableTarget } from '../../lib/isEditableTarget';
+import { centerOf } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, useEditorStore } from '../../store/editorStore';
 import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
@@ -64,7 +65,17 @@ const CODE_SAMPLES: Record<string, string> = {
   json: '{\n  "accountId": "123",\n  "status": "CANCELLED"\n}',
 };
 
-export function EditorScreen({ session }: { session: DocumentSession }) {
+/** The editor as the app shell mounts it: React Flow's provider travels with the editor's own
+ *  chunk, so the Library never loads React Flow at all. */
+export function EditorRoute({ session }: { session: DocumentSession }) {
+  return (
+    <ReactFlowProvider>
+      <EditorScreen session={session} />
+    </ReactFlowProvider>
+  );
+}
+
+function EditorScreen({ session }: { session: DocumentSession }) {
   const store = useEditorStore;
   const title = useEditorStore((state) => state.document.metadata.title);
   const mode = useEditorStore((state) => state.mode);
@@ -472,7 +483,7 @@ function useKeyboard({
       const target = state.document.nodes.find((n) => n.id === nodeId);
       if (!target) return;
       state.setSelection({ nodes: [nodeId], edges: [] });
-      const center = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+      const center = centerOf(target);
       const screen = flowToScreenPosition(center);
       const margin = 96; // clear of the toolbar and edges, not flush against them
       const onScreen =
@@ -503,7 +514,7 @@ function useKeyboard({
     if (nodes.length === 1 && edges.length === 0) {
       const node = state.document.nodes.find((n) => n.id === nodes[0]);
       if (node) {
-        flowPoint = { x: node.x + node.width / 2, y: node.y + node.height / 2 };
+        flowPoint = centerOf(node);
         target = { kind: 'node', id: node.id };
       }
     } else if (edges.length === 1 && nodes.length === 0) {
@@ -522,7 +533,7 @@ function useKeyboard({
     } else if (nodes.length + edges.length >= 2) {
       const bounds = boundsOf(state.document.nodes.filter((n) => nodes.includes(n.id)));
       flowPoint = bounds
-        ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+        ? centerOf(bounds)
         // An edges-only multi-selection has no node bounds to anchor to — the viewport center is a
         // reasonable, simple fallback; the menu's own content is correct regardless of where it opens.
         : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
@@ -798,7 +809,7 @@ function useKeyboard({
             const originNode =
               selected.length === 1 ? state.document.nodes.find((n) => n.id === selected[0]) : undefined;
             const origin = originNode
-              ? { x: originNode.x + originNode.width / 2, y: originNode.y + originNode.height / 2 }
+              ? centerOf(originNode)
               : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
             const next = nearestInDirection(state.document.nodes, origin, direction, originNode?.id);
             if (!next) return;

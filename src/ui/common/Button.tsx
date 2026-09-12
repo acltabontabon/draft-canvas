@@ -4,6 +4,8 @@ import { Icon, type IconName } from './Icon';
 interface ButtonProps extends ComponentPropsWithRef<'button'> {
   icon?: IconName;
   variant?: 'ghost' | 'solid' | 'quiet' | 'danger';
+  /** A toggle's on state. Announced as `aria-pressed` unless the button is a disclosure instead
+   *  (it passes `aria-expanded` or `aria-haspopup`), where "active" just means "its thing is open". */
   active?: boolean;
   children?: ReactNode;
 }
@@ -17,6 +19,7 @@ export function Button({
   ...rest
 }: ButtonProps) {
   const iconOnly = children === undefined;
+  const isDisclosure = rest['aria-expanded'] !== undefined || rest['aria-haspopup'] !== undefined;
   return (
     <button
       type="button"
@@ -28,6 +31,7 @@ export function Button({
       // gave it an explicit `aria-label` (which must keep winning, so this is computed before
       // `...rest` spreads).
       aria-label={rest['aria-label'] ?? (iconOnly ? rest.title : undefined)}
+      aria-pressed={active === undefined || isDisclosure ? undefined : active}
       {...rest}
     >
       {icon && <Icon name={icon} />}

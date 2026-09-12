@@ -34,7 +34,7 @@ const ARROW_WIDTH = 7;
  */
 export type MarkerVariant = 'closed' | 'open';
 
-export function markerId(color: string, variant: MarkerVariant = 'closed'): string {
+function markerId(color: string, variant: MarkerVariant = 'closed'): string {
   const suffix = variant === 'open' ? '-open' : '';
   return `dc-arrow-${color.replace(/[^a-zA-Z0-9]/g, '')}${suffix}`;
 }

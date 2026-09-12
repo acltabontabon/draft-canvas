@@ -14,13 +14,16 @@ import {
   type EdgeChange,
   type NodeChange,
   type OnSelectionChangeParams,
+  type XYPosition,
 } from '@xyflow/react';
 import { defaultTextFor } from '../document/factory';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
 import type { DraftDocument, Side } from '../document/types';
 import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
 import { isEditableTarget } from '../lib/isEditableTarget';
+import { centerOf, pointInBox } from '../lib/math';
 import { lensFlow, useEditorStore } from '../store/editorStore';
+import { edgeIndex, nodeIndex } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { CanvasBackground } from './CanvasBackground';
@@ -58,6 +61,8 @@ const PRO_OPTIONS = { hideAttribution: true } as const;
  *  its own independently-declared constant, per this file's usual "no shared clearance/threshold
  *  numbers across gestures" house style (see `DraftEdgeView.tsx`'s own `DRAG_THRESHOLD_PX`). */
 const CONTEXT_MENU_DRAG_THRESHOLD_PX = 4;
+/** How far (screen px) a dragged card moves before the connector under it is hit-tested again. */
+const EDGE_PROBE_STEP_PX = 4;
 
 /** See `onSelectionChange`: more reports than this inside the window is a feedback loop, not clicks. */
 const SELECTION_BURST_WINDOW_MS = 300;
@@ -96,7 +101,10 @@ function snapChanges(
   );
   if (moves.length === 0 || statics.length === 0) return { ...NO_SNAP, changes };
 
-  const sizes = new Map(current.map((node) => [node.id, node]));
+  // Only the moved nodes' sizes are needed — not a map of every node, rebuilt every frame.
+  const movedIds = new Set(moves.map((change) => (change.type === 'position' ? change.id : '')));
+  const sizes = new Map<string, DraftRfNode>();
+  for (const node of current) if (movedIds.has(node.id)) sizes.set(node.id, node);
   const rects: Rect[] = [];
   for (const change of moves) {
     if (change.type !== 'position' || !change.position) continue;
@@ -203,12 +211,13 @@ function sweepDescendants(
   doc: DraftDocument,
 ): DraftRfNode[] {
   if (swept.size === 0) return nodes;
-  const byId = new Map(doc.nodes.map((node) => [node.id, node]));
-  const liveById = new Map(nodes.map((node) => [node.id, node]));
+  const byId = nodeIndex(doc.nodes);
+  const liveGroups = new Map<string, DraftRfNode>();
+  for (const node of nodes) if (swept.has(node.id)) liveGroups.set(node.id, node);
   const patches = new Map<string, { x: number; y: number }>();
 
   for (const [groupId, descendantIds] of swept) {
-    const liveGroup = liveById.get(groupId);
+    const liveGroup = liveGroups.get(groupId);
     const docGroup = byId.get(groupId);
     if (!liveGroup || !docGroup) continue;
     const dx = liveGroup.position.x - docGroup.x;
@@ -305,6 +314,10 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    */
   const dwellTimer = useRef<number | null>(null);
   const dwellTargetId = useRef<string | null>(null);
+  /** The screen point the last connector hit-test ran at, while a note/code card is over no node.
+   *  `elementsFromPoint` forces a layout, so it isn't repeated until the card has moved a few
+   *  pixels; null whenever the previous frame took any other branch, so re-entry always probes. */
+  const lastEdgeProbe = useRef<{ screen: XYPosition; flow: XYPosition } | null>(null);
   /** Where the right mouse button went down, in screen coordinates — compared against the native
    *  `contextmenu` event's own position to tell a stationary right-click from a right-drag. */
   const rightPointerDown = useRef<{ x: number; y: number } | null>(null);
@@ -416,10 +429,11 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
 
       // Attach-arming only applies to a genuine single-node drag — never a
       // multi-select move, and never the sweep a dragged boundary causes.
+      let probingEdges = false;
       if (draggingIds.current.size === 1 && sweptDescendants.current.size === 0) {
         const [draggedId] = draggingIds.current;
         const state = store.getState();
-        const draggedDoc = state.document.nodes.find((n) => n.id === draggedId);
+        const draggedDoc = nodeIndex(state.document.nodes).get(draggedId!);
         const posChange = snapped.changes.find(
           (change) => change.type === 'position' && change.id === draggedId,
         );
@@ -481,14 +495,28 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
             // enough to arm instantly, the same way a strong node overlap does above — no dwell.
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(null);
-            const center = {
-              x: liveRect.x + liveRect.width / 2,
-              y: liveRect.y + liveRect.height / 2,
-            };
-            const screenPoint = flowToScreenPosition(center);
-            const edgeId = findEdgeDropCandidate(screenPoint.x, screenPoint.y, draggedDoc.id);
-            const edge = edgeId ? state.document.edges.find((e) => e.id === edgeId) : undefined;
-            useUiStore.getState().setAttachArmedEdgeTarget(edge && hasAttachmentRoom(edge, 'edge') ? edge.id : null);
+            probingEdges = true;
+            const flowPoint = centerOf(liveRect);
+            const screenPoint = flowToScreenPosition(flowPoint);
+            const lastProbe = lastEdgeProbe.current;
+            // Flow space too: an auto-pan near the viewport edge slides connectors under a card
+            // whose screen position hasn't changed.
+            if (
+              !lastProbe ||
+              Math.hypot(screenPoint.x - lastProbe.screen.x, screenPoint.y - lastProbe.screen.y) >= EDGE_PROBE_STEP_PX ||
+              Math.hypot(flowPoint.x - lastProbe.flow.x, flowPoint.y - lastProbe.flow.y) >= EDGE_PROBE_STEP_PX
+            ) {
+              lastEdgeProbe.current = { screen: screenPoint, flow: flowPoint };
+              const edgeId = findEdgeDropCandidate(screenPoint.x, screenPoint.y, draggedDoc.id);
+              const edge = edgeId ? edgeIndex(state.document.edges).get(edgeId) : undefined;
+              // The card's own connectors never arm: attaching removes the card, and them with it.
+              const canAttach =
+                edge !== undefined &&
+                edge.source !== draggedDoc.id &&
+                edge.target !== draggedDoc.id &&
+                hasAttachmentRoom(edge, 'edge');
+              useUiStore.getState().setAttachArmedEdgeTarget(canAttach ? edge.id : null);
+            }
           } else {
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(null);
@@ -500,6 +528,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         useUiStore.getState().setAttachArmedTarget(null);
         useUiStore.getState().setAttachArmedEdgeTarget(null);
       }
+      if (!probingEdges) lastEdgeProbe.current = null;
 
       setNodes((current) => {
         const next = applyNodeChanges(snapped.changes, current);
@@ -675,7 +704,6 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     (_event: unknown, _node: DraftRfNode, dragged: DraftRfNode[]) => {
       const state = store.getState();
       state.beginInteraction('Move');
-      useUiStore.getState().setInteractionActive(true);
 
       const moving = new Set(dragged.map((node) => node.id));
       draggingIds.current = moving;
@@ -691,6 +719,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         }
       }
       sweptDescendants.current = swept;
+      useUiStore.getState().setInteractionActive(true, moving);
       clearDwell();
       useUiStore.getState().setAttachArmedTarget(null);
       useUiStore.getState().setAttachArmedEdgeTarget(null);
@@ -746,10 +775,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       if (positions.size > 0) state.commitPositions(positions);
 
       if (draggedDoc && draggedDoc.type !== 'group' && finalPosition) {
-        const center = {
-          x: finalPosition.x + draggedDoc.width / 2,
-          y: finalPosition.y + draggedDoc.height / 2,
-        };
+        const center = centerOf({ ...finalPosition, width: draggedDoc.width, height: draggedDoc.height });
         const exclude = new Set([draggedDoc.id, ...descendantsOf(state.document, draggedDoc.id)]);
         const boundaryId = deepestBoundaryAt(center, state.document, exclude);
         if (boundaryId !== (draggedDoc.parentId ?? null)) {
@@ -761,6 +787,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : undefined);
     useUiStore.getState().setInteractionActive(false);
     draggingIds.current = new Set();
+    lastEdgeProbe.current = null;
     sweptDescendants.current = new Map();
     clearDwell();
     useUiStore.getState().setAttachArmedTarget(null);
@@ -818,13 +845,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       const droppedOn = [...state.document.nodes]
         .filter((node) => node.type !== 'group')
         .sort((a, b) => b.z - a.z)
-        .find(
-          (node) =>
-            position.x >= node.x &&
-            position.x <= node.x + node.width &&
-            position.y >= node.y &&
-            position.y <= node.y + node.height,
-        );
+        .find((node) => pointInBox(position, node));
 
       if (droppedOn) {
         if (droppedOn.id !== source) {
@@ -906,6 +927,14 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     return Math.hypot(event.clientX - down.x, event.clientY - down.y) > CONTEXT_MENU_DRAG_THRESHOLD_PX;
   }, []);
 
+  /** Each right press is consumed by exactly one context menu: left in place, a later Shift+F10 /
+   *  Menu-key menu (no pointer press in between) would be measured against — and restore the
+   *  selection of — that old click. */
+  const clearRightPointerSnapshot = useCallback(() => {
+    rightPointerDown.current = null;
+    selectionAtRightPointerDown.current = null;
+  }, []);
+
   const onPaneContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent) => {
       if (!interactive) return;
@@ -913,7 +942,9 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       // but see `onNodeContextMenu`) must never hijack the browser's own Copy/Paste menu.
       if (isEditableTarget(event.target)) return;
       event.preventDefault();
-      if (movedPastContextMenuThreshold(event)) return;
+      const moved = movedPastContextMenuThreshold(event);
+      clearRightPointerSnapshot();
+      if (moved) return;
       // Matches the existing plain-left-click-on-empty-canvas precedent (React Flow's own default
       // pane-click deselect) — a right-click on empty canvas is the same "click on nothing" gesture.
       store.getState().setSelection({ nodes: [], edges: [] });
@@ -928,7 +959,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         flowPosition: { x: Math.round(position.x), y: Math.round(position.y) },
       });
     },
-    [interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
+    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
   );
 
   /**
@@ -943,9 +974,11 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       if (!interactive) return;
       if (isEditableTarget(event.target)) return;
       event.preventDefault();
-      if (movedPastContextMenuThreshold(event)) return;
+      const moved = movedPastContextMenuThreshold(event);
       // The pre-click snapshot, not a fresh read — see `selectionAtRightPointerDown`'s own comment.
       const before = selectionAtRightPointerDown.current ?? store.getState().selection;
+      clearRightPointerSnapshot();
+      if (moved) return;
       const partOfMultiSelection = before.nodes.length + before.edges.length >= 2 && before.nodes.includes(node.id);
       // Either restore the multi-selection React Flow's own default click handling already
       // collapsed by this point, or replace it with just the clicked node — never leave the live
@@ -957,7 +990,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         flowPosition: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
       });
     },
-    [interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
+    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
   );
 
   /** Mirrors `onNodeContextMenu` exactly, just against `selection.edges` — see its own comment. */
@@ -966,8 +999,10 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       if (!interactive) return;
       if (isEditableTarget(event.target)) return;
       event.preventDefault();
-      if (movedPastContextMenuThreshold(event)) return;
+      const moved = movedPastContextMenuThreshold(event);
       const before = selectionAtRightPointerDown.current ?? store.getState().selection;
+      clearRightPointerSnapshot();
+      if (moved) return;
       const partOfMultiSelection = before.nodes.length + before.edges.length >= 2 && before.edges.includes(edge.id);
       store.getState().setSelection(partOfMultiSelection ? before : { nodes: [], edges: [edge.id] });
       useUiStore.getState().setContextMenu({
@@ -976,7 +1011,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         flowPosition: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
       });
     },
-    [interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
+    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
   );
 
   const onPaneDoubleClick = useCallback(
@@ -1053,6 +1088,9 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       // matching `ContextMenu.tsx`'s existing virtual-focus precedent rather than adding a
       // second, competing kind of per-node DOM focus.
       tabIndex={0}
+      // A plain `div` can't carry a name on its own — many screen readers ignore `aria-label` there.
+      role="application"
+      aria-roledescription="diagram canvas"
       aria-label="Diagram canvas"
     >
       <CanvasBackground

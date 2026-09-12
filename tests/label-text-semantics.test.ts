@@ -107,6 +107,23 @@ describe('Label/Text — creation, editing, and generic node machinery', () => {
     expect(store.getState().document.nodes).toHaveLength(1);
   });
 
+  it('finishTextEdit on an empty text duplicated alongside other nodes deletes only that copy', () => {
+    const text = store.getState().addNode({ type: 'text', x: 0, y: 0 });
+    // Keep the empty text around (a real delete-then-undo leaves it in place, as does an import).
+    store.getState().addNode({ type: 'service', x: 200, y: 0, text: 'Orders' });
+    store.getState().setSelection({ nodes: store.getState().document.nodes.map((n) => n.id), edges: [] });
+    store.getState().duplicateSelection();
+    const copies = store.getState().document.nodes.slice(2);
+    expect(copies).toHaveLength(2);
+    const copiedText = copies.find((n) => n.type === 'text')!;
+    expect(copiedText.id).not.toBe(text.id);
+
+    store.getState().finishTextEdit(copiedText.id, '');
+    const ids = store.getState().document.nodes.map((n) => n.id);
+    expect(ids).not.toContain(copiedText.id);
+    expect(ids).toContain(copies.find((n) => n.type === 'service')!.id);
+  });
+
   it('finishTextEdit leaves a node alone once it has ever received real content', () => {
     const node = store.getState().addNode({ type: 'text', x: 0, y: 0 });
     store.getState().updateNodeText(node.id, 'Order Service');

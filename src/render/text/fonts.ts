@@ -10,10 +10,10 @@
  * `system-ui` keyword: Inkscape, Illustrator and Figma resolve none of the
  * `ui-*` keywords when opening an exported .svg.
  */
-export const FONT_SANS =
+const FONT_SANS =
   'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
-export const FONT_MONO =
+const FONT_MONO =
   'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
 
 export type FontStack = 'sans' | 'mono';
@@ -36,7 +36,7 @@ export function cssFont(font: FontSpec): string {
   return `${style}${font.weight} ${font.size}px ${familyOf(font.stack)}`;
 }
 
-export const TEXT_SIZES = {
+const TEXT_SIZES = {
   nodeLabel: 14,
   nodeLabelLarge: 15,
   nodeSubtitle: 11,

@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { findFlow, flowIsPlayable } from '../document/flow';
 import { boundsOf, type Bounds } from '../document/operations';
 import type { DraftEdge, DraftFlowStep, DraftFlow, DraftNode, DraftViewport } from '../document/types';
+import { clamp } from '../lib/math';
 import { nodeIndex } from '../store/selectors';
 import { useEditorStore } from '../store/editorStore';
 import { RESPONSE_PHASE_DELAY_MS } from './responsePhase';
@@ -188,7 +189,7 @@ export function useFlowPlayback(): FlowPlaybackController {
   const goTo = useCallback(
     (target: number) => {
       if (steps.length === 0) return;
-      const clamped = Math.max(1, Math.min(steps.length, target));
+      const clamped = clamp(target, 1, steps.length);
       setFlowPlayback({ step: clamped });
       focusOn(steps.find((entry) => entry.step === clamped) ?? null);
     },

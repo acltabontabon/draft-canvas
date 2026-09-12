@@ -109,6 +109,7 @@ import type {
 } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
+import { centerOf, clamp } from '../lib/math';
 import {
   EMPTY_HISTORY,
   EMPTY_SELECTION,
@@ -911,10 +912,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // an empty, invisible node, the very thing this cleanup exists to prevent.
     const { document, history, revision } = get();
     const top = history.past[history.past.length - 1];
-    if (top && top.after === document && !top.before.nodes.some((n) => n.id === id)) {
+    // Only when that step added this one node and nothing else — a Duplicate/Paste that merely
+    // *included* an empty auto-text must not be reverted wholesale along with it.
+    const topAddedOnlyThisNode =
+      top !== undefined &&
+      top.after === document &&
+      top.after.nodes.length === top.before.nodes.length + 1 &&
+      top.after.edges.length === top.before.edges.length &&
+      !top.before.nodes.some((n) => n.id === id);
+    if (topAddedOnlyThisNode) {
       set({
         document: top.before,
-        history: { past: history.past.slice(0, -1), future: history.future },
+        // Redo entries were recorded on top of a document that still had this node.
+        history: { past: history.past.slice(0, -1), future: [] },
         selection: EMPTY_SELECTION,
         revision: revision + 1,
       });
@@ -1103,7 +1113,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setEdgeDeliveryAttempts(id, attempts) {
-    const clamped = Math.max(1, Math.min(50, Math.round(attempts)));
+    const clamped = clamp(Math.round(attempts), 1, 50);
     get().apply('Set delivery attempts', (doc) => updateEdge(doc, id, { deliveryAttempts: clamped }), {
       coalesceKey: `delivery-attempts:${id}`,
     });
@@ -1375,9 +1385,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const fragment = state.clipboard;
     if (!fragment || fragment.nodes.length === 0) return;
     const bounds = boundsOf(fragment.nodes);
-    const fragmentCenter = bounds
-      ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
-      : { x: 0, y: 0 };
+    const fragmentCenter = bounds ? centerOf(bounds) : { x: 0, y: 0 };
     const target = targetCenter ?? { x: fragmentCenter.x + 32, y: fragmentCenter.y + 32 };
     // Consecutive pastes of the same clipboard content step diagonally so they don't perfectly
     // overlap; a fresh copy/cut resets the count. `exact` (a right-click "Paste" at a captured
@@ -1572,6 +1580,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const node = state.document.nodes.find((n) => n.id === nodeId);
     const edge = state.document.edges.find((e) => e.id === edgeId);
     if (!node || !edge || !hasAttachmentRoom(edge, 'edge') || node.attachments?.length) return;
+    // Removing the node below also removes its own connectors — this one included — so the
+    // attachment would have nowhere to land and the card would simply be deleted.
+    if (edge.source === nodeId || edge.target === nodeId) return;
     // Callers only invoke this for a note/code node — checked before the drag is even armed.
     const attachment = createAttachment({
       type: node.type as AttachableType,

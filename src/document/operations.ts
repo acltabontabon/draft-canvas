@@ -8,6 +8,7 @@ import { createId } from './ids';
 import { defaultSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
+import { clamp } from '../lib/math';
 import type {
   Attachment,
   DraftDocument,
@@ -20,7 +21,7 @@ import type {
 
 const clampCoord = (n: number) =>
   Number.isFinite(n)
-    ? Math.max(-LIMITS.maxCoordinate, Math.min(LIMITS.maxCoordinate, Math.round(n)))
+    ? clamp(Math.round(n), -LIMITS.maxCoordinate, LIMITS.maxCoordinate)
     : 0;
 
 /**
@@ -42,7 +43,7 @@ export function isCanvasEmpty(doc: Pick<DraftDocument, 'nodes'>): boolean {
 
 const clampSize = (n: number) =>
   Number.isFinite(n)
-    ? Math.max(LIMITS.minNodeSize, Math.min(LIMITS.maxNodeSize, Math.round(n)))
+    ? clamp(Math.round(n), LIMITS.minNodeSize, LIMITS.maxNodeSize)
     : LIMITS.minNodeSize;
 
 /** `attachment.width`/`height` should always be set by `createAttachment` — this is a safety
@@ -504,7 +505,7 @@ export function attachToNode(
   // Full is a refusal, never a trim: slicing after the insert would silently push an existing
   // attachment (or the new one) off the end.
   if (existing.length >= LIMITS.maxAttachmentsPerNode) return doc;
-  const capped = Math.max(0, Math.min(insertIndex ?? existing.length, existing.length));
+  const capped = clamp(insertIndex ?? existing.length, 0, existing.length);
   const next = [...existing.slice(0, capped), attachment, ...existing.slice(capped)];
   return withAttachments(doc, hostId, next);
 }
@@ -883,7 +884,7 @@ export function openingViewportFor(
     (padding * screen.width) / Math.max(size.width, 1),
     (padding * screen.height) / Math.max(size.height, 1),
   );
-  const zoom = Math.min(1, Math.max(0.1, fit));
+  const zoom = clamp(fit, 0.1, 1);
   return { x: screen.width / 2, y: screen.height / 2, zoom };
 }
 
@@ -950,7 +951,7 @@ export function setParent(
 /* ------------------------------------------------------------- document ---- */
 
 export function setViewport(doc: DraftDocument, viewport: DraftViewport): DraftDocument {
-  const zoom = Math.max(LIMITS.minZoom, Math.min(LIMITS.maxZoom, viewport.zoom));
+  const zoom = clamp(viewport.zoom, LIMITS.minZoom, LIMITS.maxZoom);
   return { ...doc, viewport: { x: viewport.x, y: viewport.y, zoom } };
 }
 

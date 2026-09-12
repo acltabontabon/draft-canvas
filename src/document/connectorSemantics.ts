@@ -579,6 +579,9 @@ export function resolveJunctionEndpoint(
     // unambiguous diamond into a false "ambiguous".
     if (visited.has(id)) continue;
     const result = resolveJunctionEndpoint(graph, id, role, visited);
+    // A downstream Junction that itself fans out to several nodes makes this one ambiguous too —
+    // dropping it would report whichever sibling happened to resolve as the lone endpoint.
+    if (result.status === 'ambiguous') return { status: 'ambiguous', nodeId };
     if (result.status === 'resolved') resolvedIds.add(result.nodeId);
   }
   if (resolvedIds.size === 1) return { status: 'resolved', nodeId: [...resolvedIds][0]! };

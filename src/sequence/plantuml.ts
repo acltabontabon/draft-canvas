@@ -82,10 +82,11 @@ function noteBlock(
   const rawLines = wrapNoteLines(text);
   while (rawLines.length > 0 && rawLines[0] === '') rawLines.shift();
   while (rawLines.length > 0 && rawLines[rawLines.length - 1] === '') rawLines.pop();
-  // A content line reading `end note` would close the block early and let the rest of the note be
-  // parsed as statements; PlantUML's `~` escape keeps it literal text.
+  // Some content lines are still read as commands inside a note block: `end note` (and its
+  // `hnote`/`rnote` spellings) closes the block early, `@enduml` ends the diagram, and a leading `!`
+  // is a preprocessor directive (`!include` would even run). PlantUML's `~` escape keeps each literal.
   const contentLines = (rawLines.length > 0 ? rawLines : ['Note']).map((line) =>
-    /^\s*end\s?note\s*$/i.test(line) ? `~${line.trimStart()}` : line,
+    /^\s*(?:!|@|end\s*[hr]?note\b)/i.test(line) ? `~${line.trimStart()}` : line,
   );
   const prefix = noteKind ? (NOTE_PREFIX[noteKind] ?? '') : '';
 

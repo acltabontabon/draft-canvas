@@ -41,7 +41,7 @@ export function starterById(id: StarterId): ArchitectureStarter | undefined {
  * Chosen for silhouette as much as for subject: a fan, a topic tree, a split and a bordered core
  * read as four different shapes at 144×76, where four variations on one shape would read as noise.
  */
-export const FEATURED_STARTER_IDS: readonly StarterId[] = [
+const FEATURED_STARTER_IDS: readonly StarterId[] = [
   'microservices',
   'event-driven',
   'cqrs',
