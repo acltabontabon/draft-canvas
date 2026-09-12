@@ -133,29 +133,35 @@ async function openExport(page: Page) {
   await expect(page.getByRole('dialog', { name: 'Export' })).toBeVisible();
 }
 
+/** Export opens on whatever mode was last used (persisted); these tests always want Source. */
+async function openSourceExport(page: Page) {
+  await openExport(page);
+  const dialog = page.getByRole('dialog', { name: 'Export' });
+  await dialog.locator('[data-mode="sequence"]').click();
+  return dialog;
+}
+
 test.describe('Sequence Diagram export', () => {
-  test('lives inside Export — no toolbar action, no preview', async ({ page }) => {
+  test('lives inside Export, under Source — no toolbar action, no preview', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
 
     // No dedicated toolbar button for it.
     await expect(page.getByTitle('Sequence Diagram')).toHaveCount(0);
 
-    await openExport(page);
-    const dialog = page.getByRole('dialog', { name: 'Export' });
-    await expect(dialog.getByRole('heading', { name: 'Diagram Source' })).toBeVisible();
-    await expect(dialog.getByText('Sequence Diagram')).toBeVisible();
+    const dialog = await openSourceExport(page);
+    await expect(dialog.getByText('Sequence diagram source generated from your Flows.')).toBeVisible();
     // No preview surface anywhere in the dialog.
     await expect(dialog.locator('svg.dc-sequence-svg, .dc-sequence-preview-scroll')).toHaveCount(0);
   });
 
   test('exports Mermaid source: both flows grouped, the dependsOn edge excluded, notes preserved', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
-    await openExport(page);
+    await openSourceExport(page);
 
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export Mermaid' }).click();
     const file = await download;
-    expect(file.suggestedFilename()).toBe('payment-saga.sequence.mmd');
+    expect(file.suggestedFilename()).toBe('payment-saga.mmd');
 
     const text = readFileSync(await file.path(), 'utf8');
     expect(text).toContain('sequenceDiagram');
@@ -172,13 +178,13 @@ test.describe('Sequence Diagram export', () => {
 
   test('exports PlantUML source when Format is switched', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
-    await openExport(page);
+    const dialog = await openSourceExport(page);
 
-    await page.getByLabel('Format').selectOption('plantuml');
+    await dialog.locator('[data-value="plantuml"]').click();
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export PlantUML' }).click();
     const file = await download;
-    expect(file.suggestedFilename()).toBe('payment-saga.sequence.puml');
+    expect(file.suggestedFilename()).toBe('payment-saga.puml');
 
     const text = readFileSync(await file.path(), 'utf8');
     expect(text).toContain('@startuml');
@@ -188,55 +194,67 @@ test.describe('Sequence Diagram export', () => {
     expect(text).toContain('Question: Should this retry on failure?');
   });
 
-  test('Copy source and Copy as Markdown put the same source on the clipboard', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await importDocument(page, sagaDocument(), 'saga.draftcanvas');
-    await openExport(page);
-
-    await page.getByRole('button', { name: 'Copy source' }).click();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('sequenceDiagram');
-
-    await page.getByRole('button', { name: 'Copy as Markdown' }).click();
-    await expect
-      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toMatch(/^```mermaid\n[\s\S]*sequenceDiagram[\s\S]*```\n$/);
-  });
-
   test('shows a disabled card with teaching copy when the diagram has no Flows', async ({ page }) => {
     const doc = sagaDocument();
     doc.flows = [];
     await importDocument(page, doc, 'no-flows.draftcanvas');
-    await openExport(page);
+    const dialog = await openSourceExport(page);
 
-    const dialog = page.getByRole('dialog', { name: 'Export' });
     await expect(dialog.getByText('Add a Flow to export sequence diagram source.')).toBeVisible();
     await expect(dialog.getByRole('button', { name: /Export (Mermaid|PlantUML)/ })).toBeDisabled();
   });
 
-  test('is fully reachable by keyboard: open, change format, export, copy, close', async ({ page }) => {
+  test('has no clipboard actions — file export is the only way out', async ({ page }) => {
+    await importDocument(page, sagaDocument(), 'saga.draftcanvas');
+    const dialog = await openSourceExport(page);
+
+    await expect(dialog.getByRole('button', { name: 'Copy source' })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Copy as Markdown' })).toHaveCount(0);
+  });
+
+  test('is fully reachable by keyboard: switch to Source, change format, export, close', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
     await page.keyboard.press('Meta+e');
-    await expect(page.getByRole('dialog', { name: 'Export' })).toBeVisible();
+    const dialog = page.getByRole('dialog', { name: 'Export' });
+    await expect(dialog).toBeVisible();
 
-    const format = page.getByLabel('Format');
-    await format.focus();
-    await expect(format).toBeFocused();
-    // Native <select> value changes are exercised directly (selectOption) rather than via
-    // ArrowDown, which opens the OS-native dropdown in a real browser — not something a headless
-    // keyDown reliably drives across platforms. The Tab order below is the actual thing under
-    // test: every remaining control in the card must be plain-keyboard reachable.
-    await format.selectOption('plantuml');
-    await expect(format).toHaveValue('plantuml');
+    // The mode picker and the Format segmented control are both real `<input type="radio">`
+    // groups, so arrow-key navigation is native browser behavior a headless keyDown reliably
+    // drives — unlike an OS-native <select> dropdown, which is why this exercises arrow keys
+    // directly instead of `.selectOption()`.
+    await dialog.getByRole('radio', { name: /Image/ }).focus(); // the default mode
+    await page.keyboard.press('ArrowRight'); // Image -> Animated
+    await page.keyboard.press('ArrowRight'); // Animated -> Source
+    await expect(dialog.getByRole('radio', { name: /Source/ })).toBeChecked();
+
+    // `exact` matters: a substring match would also hit the "Source — Mermaid or PlantUML…" card.
+    await dialog.getByRole('radio', { name: 'Mermaid', exact: true }).focus();
+    await page.keyboard.press('ArrowRight'); // Mermaid -> PlantUML
+    await expect(dialog.getByRole('radio', { name: 'PlantUML', exact: true })).toBeChecked();
 
     const download = page.waitForEvent('download');
-    await page.keyboard.press('Tab'); // Copy source
-    await page.keyboard.press('Tab'); // Export PlantUML (no "Copy as Markdown" for PlantUML)
+    await page.keyboard.press('Tab'); // Export PlantUML — the only control after Format now
     await expect(page.locator(':focus')).toHaveText('Export PlantUML');
     await page.keyboard.press('Enter');
     const file = await download;
-    expect(file.suggestedFilename()).toBe('payment-saga.sequence.puml');
+    expect(file.suggestedFilename()).toBe('payment-saga.puml');
 
     // The dialog closes itself on a successful export.
     await expect(page.getByRole('dialog', { name: 'Export' })).toHaveCount(0);
+  });
+
+  test('the mode picker is arrow-key navigable', async ({ page }) => {
+    await importDocument(page, sagaDocument(), 'saga.draftcanvas');
+    await openExport(page);
+    const dialog = page.getByRole('dialog', { name: 'Export' });
+
+    await dialog.getByRole('radio', { name: /Document/ }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(dialog.getByRole('radio', { name: /Image/ })).toBeFocused();
+    await expect(dialog.getByRole('radio', { name: /Image/ })).toBeChecked();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await expect(dialog.getByRole('radio', { name: /Source/ })).toBeFocused();
+    await expect(dialog.getByRole('radio', { name: /Source/ })).toBeChecked();
   });
 });

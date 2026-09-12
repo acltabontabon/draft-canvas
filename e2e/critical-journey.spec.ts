@@ -207,8 +207,11 @@ test.describe('Draft Canvas', () => {
     /* --- export ------------------------------------------------------------ */
 
     await page.getByRole('button', { name: 'Export', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Export' })).toBeVisible();
+    const exportDialog = page.getByRole('dialog', { name: 'Export' });
+    await expect(exportDialog).toBeVisible();
 
+    // Fresh session: Export opens on its first-ever default (Image/PNG) — switch to Document.
+    await exportDialog.locator('[data-mode="document"]').click();
     const projectDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export document' }).click();
     const projectFile = await projectDownload;
@@ -227,6 +230,8 @@ test.describe('Draft Canvas', () => {
     /* --- PNG and SVG -------------------------------------------------------- */
 
     await page.getByRole('button', { name: 'Export', exact: true }).click();
+    // Image/PNG is this session's first-ever default, so PNG is already selected here.
+    await exportDialog.locator('[data-mode="image"]').click();
     const pngDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export PNG' }).click();
     const png = await pngDownload;
@@ -237,6 +242,7 @@ test.describe('Draft Canvas', () => {
     expect(pngBytes.byteLength).toBeGreaterThan(2000);
 
     await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await exportDialog.locator('[data-value="svg"]').click();
     const svgDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export SVG' }).click();
     const svg = await svgDownload;
@@ -250,6 +256,7 @@ test.describe('Draft Canvas', () => {
     /* --- animated flow (GIF) ------------------------------------------------- */
 
     await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await exportDialog.locator('[data-mode="animated"]').click();
     const gifDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export GIF' }).click();
     const gif = await gifDownload;

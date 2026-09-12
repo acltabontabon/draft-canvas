@@ -42,30 +42,30 @@ describe('sequenceSourceFor', () => {
 });
 
 describe('exportSequenceMermaidFile / exportSequencePlantUmlFile', () => {
-  it('downloads with the .sequence.mmd extension and a normalized filename', () => {
+  it('downloads with the .mmd extension and a normalized filename', () => {
     downloadText.mockClear();
     exportSequenceMermaidFile(fixture('Payment Saga!!'));
 
     expect(downloadText).toHaveBeenCalledTimes(1);
     const [text, fileName, mime] = downloadText.mock.calls[0]!;
-    expect(fileName).toBe('payment-saga.sequence.mmd');
+    expect(fileName).toBe('payment-saga.mmd');
     expect(text).toContain('sequenceDiagram');
     expect(mime).toBe('text/plain');
   });
 
-  it('downloads with the .sequence.puml extension and a normalized filename', () => {
+  it('downloads with the .puml extension and a normalized filename', () => {
     downloadText.mockClear();
     exportSequencePlantUmlFile(fixture('Payment Saga!!'));
 
     expect(downloadText).toHaveBeenCalledTimes(1);
     const [text, fileName] = downloadText.mock.calls[0]!;
-    expect(fileName).toBe('payment-saga.sequence.puml');
+    expect(fileName).toBe('payment-saga.puml');
     expect(text).toContain('@startuml');
   });
 
   it('extension constants carry the documented naming convention', () => {
-    expect(MERMAID_EXTENSION).toBe('.sequence.mmd');
-    expect(PLANTUML_EXTENSION).toBe('.sequence.puml');
+    expect(MERMAID_EXTENSION).toBe('.mmd');
+    expect(PLANTUML_EXTENSION).toBe('.puml');
   });
 
   it('an empty title falls back to the shared "draft-canvas" filename base', () => {
@@ -73,6 +73,6 @@ describe('exportSequenceMermaidFile / exportSequencePlantUmlFile', () => {
     exportSequenceMermaidFile(fixture(''));
 
     const [, fileName] = downloadText.mock.calls[0]!;
-    expect(fileName).toBe('draft-canvas.sequence.mmd');
+    expect(fileName).toBe('draft-canvas.mmd');
   });
 });

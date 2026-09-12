@@ -42,6 +42,8 @@ const PATHS = {
     'M9 18h6 M10 21h4 M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2h5c.1-.8.5-1.5 1.1-2A6 6 0 0 0 12 3z',
   folder: 'M3 6h6l2 2h10v11H3z',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.35-4.35',
+  image: 'M4 4h16v16H4z M8 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z M4 16l5-5 4 4 3-3 4 4',
+  code: 'M9 6l-6 6 6 6 M15 6l6 6-6 6',
   // A stepped route with an arrowhead — the same orthogonal elbow the canvas draws connectors
   // with, so the glyph is the product's own vocabulary rather than a generic "path" pictogram.
   flow: 'M4 7h4a3 3 0 0 1 3 3v4a3 3 0 0 0 3 3h4 M15 14l3 3-3 3',

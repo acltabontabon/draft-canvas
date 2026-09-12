@@ -111,6 +111,9 @@ test('stays workable with 100 nodes and 180 connections', async ({ page }) => {
 
   // And it still exports.
   await page.getByRole('button', { name: 'Export', exact: true }).click();
+  const exportDialog = page.getByRole('dialog', { name: 'Export' });
+  await exportDialog.locator('[data-mode="image"]').click();
+  await exportDialog.locator('[data-value="svg"]').click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export SVG' }).click();
   expect((await download).suggestedFilename()).toBe('scale.svg');

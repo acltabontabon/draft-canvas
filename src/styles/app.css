@@ -2859,87 +2859,466 @@ kbd {
 
 /* --------------------------------------------------------------- export -- */
 
-.dc-export-section {
-  margin-bottom: 22px;
+/* One accent language across the whole dialog: a TINT means "selected", a SOLID fill means
+   "this is the action". The mode cards and the format pills are tinted; only the footer CTA is
+   solid — so nothing competes with it for "primary". */
+
+/* Export's own chrome is tighter than the shared `Modal` default — a fast utility, not a page.
+   `Modal`'s other consumers (Canvas Settings, About, …) are untouched. */
+.dc-modal-export .dc-modal-header {
+  padding: 10px 10px 10px 16px;
 }
 
-.dc-export-section-last {
-  margin-bottom: 0;
+.dc-modal-export .dc-modal-body {
+  padding: 14px 16px 16px;
 }
 
-.dc-export-section-title {
-  margin: 0 0 6px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.dc-modal-export .dc-modal-footer {
+  padding: 10px 12px 10px 16px;
+  background: color-mix(in srgb, var(--dc-surface-raised) 55%, transparent);
+  border-radius: 0 0 var(--dc-radius-lg) var(--dc-radius-lg);
+}
+
+.dc-modal-export input[type='checkbox'] {
+  accent-color: var(--dc-selection);
+}
+
+/* Validation messages inside the passphrase prompt (`SecureExportPrompt`). */
+.dc-export-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+/* ---- mode cards ---------------------------------------------------------
+   Compact icon cards: enough personality to stay recognizable at a glance, small enough to read
+   as navigation rather than content. Each is a native radio hidden via `.dc-sr-only` (not
+   `display:none`), so the set keeps normal Tab/arrow-key radio-group behavior for free. */
+.dc-export-modes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.dc-export-mode {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: transparent;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease,
+    box-shadow 160ms ease;
+}
+
+.dc-export-mode svg {
+  flex-shrink: 0;
+  color: var(--dc-text-faint);
+  transition: color 120ms ease;
+}
+
+.dc-export-mode:hover {
+  border-color: var(--dc-border-strong);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+}
+
+.dc-export-mode:hover svg {
   color: var(--dc-text-muted);
 }
 
-.dc-export-secondary-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
+.dc-export-mode:has(input:checked) {
+  border-color: color-mix(in srgb, var(--dc-selection) 70%, transparent);
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+  font-weight: 600;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dc-selection) 9%, transparent);
 }
 
-.dc-export-choice[data-disabled='true'] strong,
-.dc-export-choice[data-disabled='true'] p {
-  opacity: 0.6;
+.dc-export-mode:has(input:checked) svg {
+  color: var(--dc-selection);
 }
 
-.dc-export-options {
+.dc-export-mode:has(input:focus-visible) {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 3px;
+}
+
+/* ---- body: how (left) · what you'll get (right) ------------------------- */
+.dc-export-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 196px;
+  gap: 24px;
+  align-items: start;
+}
+
+.dc-export-config {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-export-config,
+  .dc-export-stage img,
+  .dc-export-file {
+    animation: dc-export-settle 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+}
+
+@keyframes dc-export-settle {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+/* The contextual panel for whichever mode is selected — sized to its own content rather than
+   reserving room for the tallest mode (Animated). */
+.dc-export-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-bottom: 18px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--dc-border);
 }
 
-.dc-export-actions {
-  display: flex;
-  flex-direction: column;
-}
-
-.dc-export-choice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--dc-border);
-}
-
-.dc-export-choice:last-child {
-  border-bottom: 0;
-}
-
-.dc-export-choice strong {
-  font-size: 13.5px;
-  font-weight: 600;
-}
-
-.dc-export-choice p {
-  margin: 3px 0 0;
+.dc-export-panel-description {
+  margin: 0;
+  color: var(--dc-text-muted);
   font-size: 12.5px;
   line-height: 1.5;
 }
 
-.dc-export-choice-options {
+/* A row of controls that cluster together when there's room (Format + Palette, Flow + Speed) and
+   wrap onto their own lines rather than overflow when there isn't. Left-anchored on purpose: any
+   leftover width becomes trailing space after the cluster, never a gap pushed into the middle of
+   it — a control and its label stay visually adjacent, never stretched to opposite edges. */
+.dc-export-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px 22px;
+}
+
+/* A label tight against its own control — deliberately NOT `.dc-field-inline` (that class's
+   `space-between` suits a field alone on a settings row elsewhere, but stretched across a row
+   here it reproduces exactly the "label .......... control" gap this panel exists to avoid). */
+.dc-export-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+}
+
+.dc-export-field .dc-select {
+  max-width: 200px;
+  text-overflow: ellipsis;
+}
+
+.dc-export-checks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+}
+
+/* ---- the artifact: exactly what the download will be -------------------- */
+.dc-export-artifact {
+  min-width: 0;
+  margin: 0;
+}
+
+.dc-export-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 108px;
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-canvas);
+  color: var(--dc-text-faint);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent);
+  transition: background-color 180ms ease;
+}
+
+.dc-export-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* A transparent export shows the classic checkerboard — the empty pixels are the point. */
+.dc-export-stage[data-transparent='true'] {
+  background: repeating-conic-gradient(var(--dc-border) 0 25%, var(--dc-surface-raised) 0 50%) 0 0 / 12px 12px;
+}
+
+/* Text formats sit on a sliver of the canvas's own dot grid. */
+.dc-export-stage-grid {
+  background-color: var(--dc-canvas);
+  background-image: radial-gradient(var(--dc-grid) 1px, transparent 1.25px);
+  background-size: 11px 11px;
+  background-position: 5px 5px;
+}
+
+.dc-export-file {
+  position: relative;
+  padding-bottom: 8px;
+  filter: drop-shadow(0 6px 10px color-mix(in srgb, var(--dc-shadow) 70%, transparent));
+}
+
+.dc-export-file-page {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 66px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, var(--dc-surface-raised), var(--dc-surface));
+  color: var(--dc-selection);
+  clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 0 100%);
+  box-shadow: inset 0 0 0 1px var(--dc-border-strong);
+}
+
+/* The folded corner. */
+.dc-export-file-page::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 13px;
+  height: 13px;
+  border-bottom-left-radius: 3px;
+  background: var(--dc-border-strong);
+}
+
+.dc-export-file-badge {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 45%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--dc-selection) 18%, var(--dc-surface));
+  color: var(--dc-selection);
+  font: 700 8.5px/1.2 var(--dc-mono);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Animated: a play chip, plus a progress sweep paced by the chosen Speed that plays once or keeps
+   looping exactly as the GIF will. */
+.dc-export-play {
+  position: absolute;
+  right: 8px;
+  bottom: 9px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding-left: 1px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 40%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--dc-surface) 82%, transparent);
+  color: var(--dc-selection);
+  backdrop-filter: blur(4px);
+}
+
+.dc-export-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--dc-selection);
+  transform-origin: left center;
+  transform: scaleX(1);
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-export-progress {
+    transform: scaleX(0);
+    animation: dc-export-progress 2.2s linear forwards;
+  }
+
+  .dc-export-progress[data-speed='slow'] {
+    animation-duration: 3.4s;
+  }
+
+  .dc-export-progress[data-speed='fast'] {
+    animation-duration: 1.3s;
+  }
+
+  .dc-export-progress[data-loop='true'] {
+    animation-iteration-count: infinite;
+  }
+}
+
+@keyframes dc-export-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.dc-export-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin-top: 8px;
+  padding: 0 2px;
 }
 
-.dc-export-choice-options .dc-field-inline {
+.dc-export-filename {
+  display: flex;
+  min-width: 0;
+  color: var(--dc-text);
+  font: 500 11.5px/1.35 var(--dc-mono);
+  white-space: nowrap;
+}
+
+.dc-export-filename-base {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dc-export-filename-ext {
+  flex-shrink: 0;
+  color: var(--dc-selection);
+}
+
+.dc-export-meta {
+  color: var(--dc-text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-export-artifact[data-empty='true'] .dc-export-stage > *,
+.dc-export-artifact[data-empty='true'] .dc-export-filename {
+  opacity: 0.45;
+}
+
+@media (max-width: 600px) {
+  .dc-export-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .dc-export-stage {
+    height: 96px;
+  }
+}
+
+@media (max-width: 460px) {
+  .dc-export-modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---- segmented control --------------------------------------------------
+   A generic 2-3 option pill group — `SegmentedControl`, shared with anything that needs a small
+   mutually-exclusive choice, not export-specific. Kept here since export is its only caller today.
+   Tinted when checked, never solid: solid is reserved for the dialog's one action. */
+.dc-segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-canvas);
+}
+
+.dc-segmented[data-disabled='true'] {
+  opacity: 0.5;
+}
+
+.dc-segmented-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 12px;
+  border-radius: 3px;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.dc-segmented-option:hover {
+  color: var(--dc-text);
+}
+
+.dc-segmented[data-disabled='true'] .dc-segmented-option {
+  cursor: default;
+}
+
+.dc-segmented-option:has(input:checked) {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dc-selection) 45%, transparent);
+}
+
+.dc-segmented-option:has(input:focus-visible) {
+  z-index: 1;
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+/* ---- footer -------------------------------------------------------------
+   Two DIFFERENT things — reassurance and the action — so here, and only here, full-width
+   distribution is right. Inside `Modal`'s `footer` slot (which stays `flex-end` for every other
+   dialog), this wrapper fills the row and takes over its own layout. */
+.dc-export-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.dc-export-footer-note {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  font-size: 12px;
+  color: var(--dc-text-faint);
 }
 
-.dc-export-note {
-  margin: 14px 0 0;
-  font-size: 12px;
+.dc-export-footer .dc-button-solid {
+  height: 32px;
+  padding: 0 14px 0 12px;
+  border-radius: var(--dc-radius-sm);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent),
+    0 6px 16px -8px color-mix(in srgb, var(--dc-selection) 80%, transparent);
+}
+
+.dc-export-footer .dc-button-solid:disabled {
+  box-shadow: none;
 }
 
 /* ------------------------------------------------------------ shortcuts -- */

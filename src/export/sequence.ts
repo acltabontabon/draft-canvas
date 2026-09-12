@@ -8,16 +8,15 @@ import { buildSequenceModel, toMermaid, toPlantUml } from '../sequence';
 import { downloadText } from './download';
 import { fileNameFor } from './project';
 
-export const MERMAID_EXTENSION = '.sequence.mmd';
-export const PLANTUML_EXTENSION = '.sequence.puml';
+export const MERMAID_EXTENSION = '.mmd';
+export const PLANTUML_EXTENSION = '.puml';
 const SEQUENCE_MIME = 'text/plain';
 
 export type SequenceFormat = 'mermaid' | 'plantuml';
 
 /**
  * The sequence source text for the whole document's playable Flows, in the requested format —
- * the exact string the matching export function downloads and "Copy source"/"Copy as Markdown"
- * copy, so none of the three paths can ever drift from what the others produce.
+ * shared so `exportSequenceMermaidFile`/`exportSequencePlantUmlFile` can't drift from each other.
  */
 export function sequenceSourceFor(document: DraftDocument, format: SequenceFormat): string {
   const model = buildSequenceModel(document);
