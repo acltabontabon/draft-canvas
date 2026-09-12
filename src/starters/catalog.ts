@@ -195,11 +195,28 @@ const monolith: ArchitectureStarter = {
     },
   ],
   edges: [
-    down('client', 'api'),
-    down('api', 'logic'),
-    down('logic', 'data'),
-    down('data', 'database'),
-    across('logic', 'external'),
+    { key: 'call', ...down('client', 'api') },
+    { key: 'dispatch', ...down('api', 'logic') },
+    { key: 'access', ...down('logic', 'data') },
+    { key: 'persist', ...down('data', 'database') },
+    { key: 'reach', ...across('logic', 'external') },
+  ],
+  flows: [
+    {
+      title: 'Handle a request',
+      accent: 'green',
+      steps: [
+        { edgeKey: 'call' },
+        { edgeKey: 'dispatch' },
+        { edgeKey: 'access' },
+        { edgeKey: 'persist' },
+      ],
+    },
+    {
+      title: 'Call an external dependency',
+      accent: 'amber',
+      steps: [{ edgeKey: 'call' }, { edgeKey: 'dispatch' }, { edgeKey: 'reach' }],
+    },
   ],
 };
 
@@ -489,21 +506,50 @@ const modularMonolith: ArchitectureStarter = {
     },
   ],
   edges: [
-    down('client', 'api'),
+    { key: 'call', ...down('client', 'api') },
     // All three leave the same point on API's bottom edge, so Smart Routing bundles them into one
     // shared trunk with one collapsed "uses" caption — three individual edges in the document
     // model (each still its own relationship, still independently selectable/deletable), one
     // deliberate, symmetric fork on screen. See this block's own doc comment for why this starter
     // wants the bundle here, unlike the module→database connectors below.
-    down('api', 'module-payments'),
-    down('api', 'module-orders'),
-    down('api', 'module-customer'),
+    { key: 'dispatch-payments', ...down('api', 'module-payments') },
+    { key: 'dispatch-orders', ...down('api', 'module-orders') },
+    { key: 'dispatch-customer', ...down('api', 'module-customer') },
     // The one controlled, explicit module dependency — see this block's own doc comment for why
     // it's exactly one, and why it's captioned as a contract rather than the plain inferred `uses`.
-    { from: 'module-orders', to: 'module-customer', sourceAnchor: RIGHT, targetAnchor: LEFT, label: 'uses public API' },
+    {
+      key: 'uses-public-api',
+      from: 'module-orders',
+      to: 'module-customer',
+      sourceAnchor: RIGHT,
+      targetAnchor: LEFT,
+      label: 'uses public API',
+    },
     // The one high-level "this application persists somewhere" connector — from the boundary
     // itself, not any one module. Deliberately uncaptioned: see this block's own doc comment.
-    down('app', 'database'),
+    { key: 'persist', ...down('app', 'database') },
+  ],
+  flows: [
+    {
+      title: 'Handle a Payments request',
+      accent: 'green',
+      steps: [{ edgeKey: 'call' }, { edgeKey: 'dispatch-payments' }, { edgeKey: 'persist' }],
+    },
+    {
+      title: 'Handle an Orders request',
+      accent: 'amber',
+      steps: [
+        { edgeKey: 'call' },
+        { edgeKey: 'dispatch-orders' },
+        { edgeKey: 'uses-public-api', caption: 'Never reaches into Customer’s internals' },
+        { edgeKey: 'persist' },
+      ],
+    },
+    {
+      title: 'Handle a Customer request',
+      accent: 'teal',
+      steps: [{ edgeKey: 'call' }, { edgeKey: 'dispatch-customer' }, { edgeKey: 'persist' }],
+    },
   ],
 };
 
@@ -653,17 +699,52 @@ const microservices: ArchitectureStarter = {
     },
   ],
   edges: [
-    down('client', 'gateway'),
-    ...MICRO_NAMES.map((_, index) => ({ ...down('gateway', `service-${index}`), condition: MICRO_ROUTES[index]! })),
-    ...MICRO_NAMES.map((_, index) => down(`service-${index}`, `store-${index}`)),
+    { key: 'call', ...down('client', 'gateway') },
+    ...MICRO_NAMES.map((name, index) => ({
+      ...down('gateway', `service-${index}`),
+      condition: MICRO_ROUTES[index]!,
+      key: `route-${name.toLowerCase()}`,
+    })),
+    ...MICRO_NAMES.map((name, index) => ({
+      ...down(`service-${index}`, `store-${index}`),
+      key: `write-${name.toLowerCase()}`,
+    })),
     {
+      key: 'publish',
       from: 'service-1',
       to: 'events',
       sourceAnchor: RIGHT,
       targetAnchor: MICRO_PUBLISH_IN,
       attachments: [{ type: 'note', text: 'OrderPlaced — emitted after the Orders DB commit, never before.' }],
     },
-    { from: 'events', to: 'service-2', sourceAnchor: MICRO_DELIVER_OUT, targetAnchor: LEFT },
+    { key: 'deliver', from: 'events', to: 'service-2', sourceAnchor: MICRO_DELIVER_OUT, targetAnchor: LEFT },
+  ],
+  flows: [
+    {
+      title: 'Manage accounts',
+      accent: 'teal',
+      steps: [{ edgeKey: 'call' }, { edgeKey: 'route-accounts' }, { edgeKey: 'write-accounts' }],
+    },
+    {
+      title: 'Place an order',
+      accent: 'amber',
+      steps: [
+        { edgeKey: 'call' },
+        { edgeKey: 'route-orders' },
+        { edgeKey: 'write-orders' },
+        { edgeKey: 'publish', caption: 'Only after the Orders DB commits' },
+      ],
+    },
+    {
+      title: 'Process a payment',
+      accent: 'green',
+      steps: [{ edgeKey: 'call' }, { edgeKey: 'route-payments' }, { edgeKey: 'write-payments' }],
+    },
+    {
+      title: 'React to an order event',
+      accent: 'rose',
+      steps: [{ edgeKey: 'publish' }, { edgeKey: 'deliver' }],
+    },
   ],
 };
 
@@ -853,6 +934,7 @@ const eventDriven: ArchitectureStarter = {
   ],
   edges: [
     {
+      key: 'publish',
       ...down('producer', 'topic'),
       label: 'publishes OrderCreated',
       attachments: [
@@ -877,11 +959,12 @@ const eventDriven: ArchitectureStarter = {
     },
     // All three leave the same point on the Topic's bottom edge so Smart Routing bundles them into
     // one trunk with one collapsed `fans out` caption — see this block's doc comment.
-    ...EVENT_LANE_KEYS.map((lane) => down('topic', `${lane}-queue`)),
-    ...EVENT_LANE_KEYS.map((lane) => down(`${lane}-queue`, `${lane}-service`)),
-    down('projection-service', 'read-store'),
-    down('integration-service', 'external'),
+    ...EVENT_LANE_KEYS.map((lane) => ({ ...down('topic', `${lane}-queue`), key: `fan-out-${lane}` })),
+    ...EVENT_LANE_KEYS.map((lane) => ({ ...down(`${lane}-queue`, `${lane}-service`), key: `consume-${lane}` })),
+    { key: 'project', ...down('projection-service', 'read-store') },
+    { key: 'call-external', ...down('integration-service', 'external') },
     {
+      key: 'dead-letter',
       from: 'integration-queue',
       to: 'integration-dlq',
       sourceAnchor: EVENT_TUBE_OUT,
@@ -893,6 +976,41 @@ const eventDriven: ArchitectureStarter = {
           noteKind: 'note',
           text: 'Poison messages park here for inspection and redrive. Alert on depth.',
         },
+      ],
+    },
+  ],
+  flows: [
+    {
+      title: 'Build a read model',
+      accent: 'green',
+      steps: [
+        { edgeKey: 'publish' },
+        { edgeKey: 'fan-out-projection' },
+        { edgeKey: 'consume-projection' },
+        { edgeKey: 'project' },
+      ],
+    },
+    {
+      title: 'Run business logic',
+      accent: 'teal',
+      steps: [{ edgeKey: 'publish' }, { edgeKey: 'fan-out-processing' }, { edgeKey: 'consume-processing' }],
+    },
+    {
+      title: 'Reach an external system',
+      accent: 'amber',
+      steps: [
+        { edgeKey: 'publish' },
+        { edgeKey: 'fan-out-integration' },
+        { edgeKey: 'consume-integration' },
+        { edgeKey: 'call-external' },
+      ],
+    },
+    {
+      title: 'Handle a failed delivery',
+      accent: 'rose',
+      steps: [
+        { edgeKey: 'fan-out-integration' },
+        { edgeKey: 'dead-letter', caption: 'After 3 failed delivery attempts' },
       ],
     },
   ],
@@ -1139,17 +1257,43 @@ const hexagonal: ArchitectureStarter = {
   ],
   edges: [
     // Both driving adapters meet the inbound port at one point — one funnel, one `calls`.
-    across('rest', 'inbound-port'),
-    across('consumer', 'inbound-port'),
-    across('inbound-port', 'use-cases'),
-    down('use-cases', 'domain'),
+    { key: 'rest-call', ...across('rest', 'inbound-port') },
+    { key: 'consumer-call', ...across('consumer', 'inbound-port') },
+    { key: 'dispatch', ...across('inbound-port', 'use-cases') },
+    { key: 'use-domain', ...down('use-cases', 'domain') },
     // One fork from Use Cases to both outbound ports — one trunk, one `uses`.
-    across('use-cases', 'persistence-port'),
-    across('use-cases', 'integration-port'),
-    across('persistence-port', 'persistence'),
-    across('integration-port', 'integration'),
-    across('persistence', 'database'),
-    across('integration', 'external'),
+    { key: 'use-persistence-port', ...across('use-cases', 'persistence-port') },
+    { key: 'use-integration-port', ...across('use-cases', 'integration-port') },
+    { key: 'impl-persistence', ...across('persistence-port', 'persistence') },
+    { key: 'impl-integration', ...across('integration-port', 'integration') },
+    { key: 'write-database', ...across('persistence', 'database') },
+    { key: 'call-external', ...across('integration', 'external') },
+  ],
+  flows: [
+    {
+      title: 'Handle an HTTP request',
+      accent: 'green',
+      steps: [
+        { edgeKey: 'rest-call' },
+        { edgeKey: 'dispatch' },
+        { edgeKey: 'use-domain' },
+        { edgeKey: 'use-persistence-port' },
+        { edgeKey: 'impl-persistence' },
+        { edgeKey: 'write-database' },
+      ],
+    },
+    {
+      title: 'Consume a message',
+      accent: 'amber',
+      steps: [
+        { edgeKey: 'consumer-call' },
+        { edgeKey: 'dispatch' },
+        { edgeKey: 'use-domain' },
+        { edgeKey: 'use-integration-port' },
+        { edgeKey: 'impl-integration' },
+        { edgeKey: 'call-external' },
+      ],
+    },
   ],
 };
 
@@ -1331,12 +1475,29 @@ const backendForFrontend: ArchitectureStarter = {
     ),
   ],
   edges: [
-    down('web-client', 'web-bff'),
-    down('mobile-client', 'mobile-bff'),
+    { key: 'web-call', ...down('web-client', 'web-bff') },
+    { key: 'mobile-call', ...down('mobile-client', 'mobile-bff') },
     // One fan per adapter, from opposite sides — see this block's doc comment.
-    ...BFF_SERVICES.map((key) => across('web-bff', key)),
-    { from: 'mobile-bff', to: 'customer', sourceAnchor: LEFT, targetAnchor: RIGHT },
-    { from: 'mobile-bff', to: 'orders', sourceAnchor: LEFT, targetAnchor: RIGHT },
+    ...BFF_SERVICES.map((key) => ({ ...across('web-bff', key), key: `web-${key}` })),
+    { key: 'mobile-customer', from: 'mobile-bff', to: 'customer', sourceAnchor: LEFT, targetAnchor: RIGHT },
+    { key: 'mobile-orders', from: 'mobile-bff', to: 'orders', sourceAnchor: LEFT, targetAnchor: RIGHT },
+  ],
+  flows: [
+    {
+      title: 'Web request',
+      accent: 'teal',
+      steps: [
+        { edgeKey: 'web-call' },
+        { edgeKey: 'web-customer' },
+        { edgeKey: 'web-orders' },
+        { edgeKey: 'web-recommendations' },
+      ],
+    },
+    {
+      title: 'Mobile request',
+      accent: 'amber',
+      steps: [{ edgeKey: 'mobile-call' }, { edgeKey: 'mobile-customer' }, { edgeKey: 'mobile-orders' }],
+    },
   ],
 };
 

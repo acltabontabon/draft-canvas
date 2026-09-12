@@ -623,7 +623,11 @@ describe('buildStarter', () => {
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     expect(nodes).toHaveLength(13);
     expect(edges).toHaveLength(7);
-    expect(flows).toEqual([]);
+    // Two flows: one per client experience, matching the tailored fan each adapter draws.
+    expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
+      ['Web request', 4],
+      ['Mobile request', 3],
+    ]);
 
     // Two BFFs, both plain `api`-kind services (never `gateway`), each inside its own experience
     // boundary with its own client — and no gateway anywhere: BFF ≠ API Gateway is the whole

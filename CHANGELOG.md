@@ -4,6 +4,12 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Every starter now ships with pre-built flows: Monolith, Modular Monolith, Microservices,
+  Event-Driven, Hexagonal, and Backend for Frontend join CQRS, both Sagas, and Transactional
+  Outbox in offering a ready-made walkthrough of the diagram.
+
 ## [1.0.0] - 2026-09-12
 
 The first stable release. Draft Canvas has understood shapes for a while; this is the release

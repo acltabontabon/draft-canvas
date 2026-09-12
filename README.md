@@ -90,7 +90,7 @@ On a typical architecture diagram (~90 nodes — services, databases, queues, bo
 
 Measured against the production build in Chromium, on real architecture diagrams (not synthetic shapes) built from Draft Canvas's own starter catalog. These are reference-machine numbers, not a guarantee for every device.
 
-Measured on: Apple M2 Pro, macOS 25.6.0, Chromium 151.0.7922.34, Draft Canvas 0.8.0.
+Measured on: Apple M2 Pro, macOS 25.6.0, Chromium 151.0.7922.34, Draft Canvas 1.0.0.
 
 ![JS heap vs. diagram size](benchmark/memory-chart.svg)
 
