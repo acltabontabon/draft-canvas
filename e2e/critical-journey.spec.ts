@@ -33,7 +33,7 @@ async function createNode(page: Page, tool: string, at: { x: number; y: number }
  */
 async function openFlowPanel(page: Page) {
   const panel = page.locator('.dc-flow-panel');
-  if (!(await panel.isVisible())) await page.getByTitle('Flows (F)').click();
+  if (!(await panel.isVisible())) await page.getByRole('button', { name: 'Flows', exact: true }).click();
   await expect(panel).toBeVisible();
 }
 
@@ -260,7 +260,7 @@ test.describe('Draft Canvas', () => {
 
     /* --- delete locally, then import back ----------------------------------- */
 
-    await page.getByTitle('Back to your diagrams').click();
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
     await expect(page.getByRole('heading', { name: 'Recently edited' })).toBeVisible();
 
     await page.getByRole('button', { name: /^Delete Payment Flow/ }).click();
@@ -321,7 +321,7 @@ test.describe('Draft Canvas', () => {
     await addToFlow(page, 1, 'Untitled flow');
     await expect(page.locator('.dc-edge-step')).toHaveCount(2);
 
-    await page.getByTitle('Present (Cmd+Enter)').click();
+    await page.getByRole('button', { name: 'Present', exact: true }).click();
     // The flow just built is the active one, so presentation starts it directly.
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
@@ -352,7 +352,7 @@ test.describe('Draft Canvas', () => {
     await page.locator('.dc-node').first().click();
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
 
-    await page.getByTitle('Present (Cmd+Enter)').click();
+    await page.getByRole('button', { name: 'Present', exact: true }).click();
     await expect(page.locator('.dc-canvas[data-explain="on"], .react-flow')).toBeVisible();
     // A selection ring from editing has no meaning in a read-only
     // presentation, and no drag-in-progress chrome (guides, attach
@@ -366,7 +366,7 @@ test.describe('Draft Canvas', () => {
     await newCanvas(page, 'Escape leaves plain present mode');
     await createNode(page, 'Service', { x: 400, y: 300 });
 
-    await page.getByTitle('Present (Cmd+Enter)').click();
+    await page.getByRole('button', { name: 'Present', exact: true }).click();
     await expect(page.locator('.dc-editor[data-mode="present"]')).toBeVisible();
 
     await page.keyboard.press('Escape');

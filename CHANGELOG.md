@@ -8,7 +8,6 @@ All notable changes to Draft Canvas are documented here.
 
 - Home screen redesigned with interactive starter previews—hover or arrow-key to explore.
 - Blank canvas redesigned: four suggested starters drawn as miniature architectures, with "Browse all starters" for the rest.
-- Auto-follow system light/dark theme (pin a theme to override).
 - Text formatting: semantic roles (Body, Label, Heading, Title, Technical), Bold/Italic, alignment, and multiline editing (Enter for newline, Cmd+Enter to commit).
 - New shape: **Table** for logical tables inside a store.
 - **Projects** semantic relationship for write-model projections.
@@ -41,6 +40,9 @@ All notable changes to Draft Canvas are documented here.
 - Unified visual design across element and connector popovers.
 - Connector nudging only happens when routes actually overlap.
 - Starter grouping and layout improved in ⌘K and home screen.
+- Light and dark always follow your system appearance; the theme toggle is gone.
+- Editor toolbar rebuilt around four zones: the canvas name, the creation tools as one centred rail, Flows and Present beside undo/redo, and the occasional settings behind a More menu.
+- Every toolbar tooltip now shares one design at two densities, and shortcut keys finally show the right modifier on Windows and Linux.
 
 ## [0.8.0] - 2026-09-10
 

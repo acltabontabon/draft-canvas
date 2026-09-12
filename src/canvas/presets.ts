@@ -23,8 +23,11 @@ export interface Preset {
  *  primitive's tooltip copy has one home. */
 export interface PrimitiveTooltipContent {
   title: string;
-  description: string;
+  /** Omit for a conventional action (Undo, Export) that needs no teaching — `Tooltip` renders the
+   *  compact density when it's absent. Every *primitive* has one. */
+  description?: string;
   usageHint?: string;
+  /** Space-separated key tokens, one cap each: `Esc`, `S`, `⌘ Z`. */
   shortcut?: string;
 }
 

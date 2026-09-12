@@ -34,7 +34,7 @@ async function createNode(page: Page, tool: string, at: { x: number; y: number }
  */
 async function openFlowPanel(page: Page) {
   const panel = page.locator('.dc-flow-panel');
-  if (!(await panel.isVisible())) await page.getByTitle('Flows (F)').click();
+  if (!(await panel.isVisible())) await page.getByRole('button', { name: 'Flows', exact: true }).click();
   await expect(panel).toBeVisible();
 }
 
@@ -178,7 +178,7 @@ test.describe('Flows', () => {
     await closeFlowPanel(page);
 
     // Present it — the active flow starts directly, no picker.
-    await page.getByTitle('Present (Cmd+Enter)').click();
+    await page.getByRole('button', { name: 'Present', exact: true }).click();
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Happy path');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 3');
@@ -252,7 +252,7 @@ test.describe('Flows', () => {
 
     // Reopening from the library is the "fresh open" this guards — a reload
     // keeps the in-memory store, which would mask a regression here.
-    await page.getByTitle('Back to your diagrams').click();
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
     await page.locator('.dc-library-item', { hasText: 'Fresh open badges' }).click();
     await expect(page.locator('.dc-editor')).toBeVisible();
 
@@ -368,7 +368,7 @@ test.describe('Flows', () => {
     });
     await expect(page.locator('.dc-editor')).toBeVisible();
 
-    await page.getByTitle('Present (Cmd+Enter)').click();
+    await page.getByRole('button', { name: 'Present', exact: true }).click();
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Walkthrough');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 1');

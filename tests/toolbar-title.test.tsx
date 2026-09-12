@@ -18,7 +18,6 @@ function renderToolbar(title: string, onTitleChange = vi.fn()) {
       title={title}
       onTitleChange={onTitleChange}
       onBack={() => {}}
-      onFit={() => {}}
       onPresent={() => {}}
       onExport={() => {}}
     />,

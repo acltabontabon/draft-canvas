@@ -313,7 +313,7 @@ test.describe('connection-attached details', () => {
     // Outside click commits (Escape now discards — see the dedicated test for that).
     await page.locator('.react-flow__pane').click({ position: { x: 100, y: 500 } });
 
-    await page.getByRole('button', { name: 'Present (Cmd+Enter)' }).click();
+    await page.getByRole('button', { name: 'Present', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Exit presentation' })).toBeVisible();
 
     await expect(chip).toBeVisible();

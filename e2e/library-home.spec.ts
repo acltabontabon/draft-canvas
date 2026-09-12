@@ -25,7 +25,7 @@ test.describe('Home screen', () => {
     await page.keyboard.press('ControlOrMeta+z');
     await expect(page.locator('.dc-node')).toHaveCount(13);
 
-    await page.getByTitle('Back to your diagrams').click();
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
     const row = page.locator('.dc-library-item', { hasText: 'Hexagonal' });
     await expect(row).toBeVisible();
     // The fingerprint is there on return — the summary was written on create,
@@ -39,7 +39,7 @@ test.describe('Home screen', () => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Start from Monolith' }).click();
     await expect(page.locator('.dc-editor')).toBeVisible();
-    await page.getByTitle('Back to your diagrams').click();
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
     await expect(page.locator('.dc-library-item', { hasText: 'Monolith' })).toBeVisible();
 
     await page.keyboard.press('/');
@@ -65,7 +65,7 @@ test.describe('Home screen', () => {
 
     // Back on first run only because that blank canvas is still the one thing in the library —
     // delete it to get there again.
-    await page.getByTitle('Back to your diagrams').click();
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
     await page.getByRole('button', { name: /^Delete Untitled/ }).click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
 

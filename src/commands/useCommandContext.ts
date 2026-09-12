@@ -5,7 +5,6 @@ import type { DraftNode } from '../document/types';
 import type { FlowPlaybackController } from '../presentation/useFlowPlayback';
 import { flowFitViewNodes, useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
-import { useTheme } from '../ui/theme/useTheme';
 import type { CommandContext } from './types';
 
 export interface UseCommandContextParams {
@@ -27,9 +26,6 @@ export function useCommandContext({ createAt, createAtPointer, playback }: UseCo
   // new identity every time and would re-render forever.
   const viewWidth = useStore((state) => state.width);
   const viewHeight = useStore((state) => state.height);
-  const { toggle: toggleTheme, preference: themePreference, setPreference: setThemePreference } = useTheme();
-  const pinnedTheme = themePreference !== 'system';
-
   return useCallback(
     (): CommandContext => {
       const editor = useEditorStore.getState();
@@ -48,20 +44,15 @@ export function useCommandContext({ createAt, createAtPointer, playback }: UseCo
         playback,
         createAt,
         createAtPointer,
-        toggleTheme,
-        ...(pinnedTheme ? { followSystemTheme: () => setThemePreference('system') } : {}),
       };
     },
     [
       createAt,
       createAtPointer,
       fitView,
-      pinnedTheme,
       playback,
       screenToFlowPosition,
-      setThemePreference,
       setViewport,
-      toggleTheme,
       viewHeight,
       viewWidth,
       zoomIn,

@@ -65,9 +65,6 @@ export interface CommandContext {
   createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode;
   /** Under the pointer, or in the middle of the view — same placement the single-key shortcuts use. */
   createAtPointer: (preset: Preset) => DraftNode;
-  toggleTheme: () => void;
-  /** Present only while a light/dark override is pinned — clears it back to the OS appearance. */
-  followSystemTheme?: () => void;
 }
 
 /**

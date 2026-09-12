@@ -686,6 +686,25 @@
   gap: 10px;
 }
 
+.dc-tooltip-keys {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 3px;
+}
+
+/* The smaller sibling: a label and its keys on one line. Same border, fill, shadow and radius as
+   the rich card — only the padding and the missing body change, so the two read as one family
+   rather than as a designed tooltip and a leftover native one. No `max-width`: a compact tooltip
+   is one short line and should never wrap. */
+.dc-tooltip[data-density='compact'] {
+  max-width: none;
+  padding: 5px 7px 5px 9px;
+}
+
+.dc-tooltip[data-density='compact'] .dc-tooltip-header {
+  gap: 12px;
+}
+
 .dc-tooltip-title {
   font-size: 12.5px;
   font-weight: 600;
@@ -1804,6 +1823,33 @@
   flex: none;
   display: inline-flex;
   gap: 3px;
+}
+
+/* The toolbar's overflow menu reuses the context menu's shell wholesale and adds only what a
+   right-click menu never needs: a check gutter for the one toggle, and a dot for whichever row
+   the collapsed trigger's badge was standing in for. */
+.dc-toolbar-menu {
+  min-width: 208px;
+}
+
+.dc-toolbar-menu-item {
+  gap: 8px;
+}
+
+.dc-toolbar-menu-check {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  color: var(--dc-selection);
+}
+
+.dc-toolbar-menu-item .dc-new-dot[data-inline='true'],
+.dc-toolbar-menu-item .dc-update-dot[data-inline='true'] {
+  position: static;
+  flex: none;
+  box-shadow: none;
 }
 
 .dc-context-menu-kbd kbd {

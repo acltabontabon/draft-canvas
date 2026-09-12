@@ -50,7 +50,6 @@ export function stubContext(overrides: Partial<CommandContext> = {}): CommandCon
       }),
     createAtPointer: (preset) =>
       useEditorStore.getState().addNode({ type: preset.type, x: 0, y: 0, text: preset.text ?? '' }),
-    toggleTheme: vi.fn(),
     ...overrides,
   };
 }

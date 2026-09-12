@@ -62,6 +62,7 @@ export function StatusBar({ durable }: { durable: boolean }) {
         <button
           type="button"
           className="dc-zoom-value"
+          aria-label="Fit to view"
           onClick={() => void fitView({ padding: 0.2, duration: 300, nodes: flowFitViewNodes(useEditorStore.getState()) })}
           title="Fit to view"
         >

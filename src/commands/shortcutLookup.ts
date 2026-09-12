@@ -95,7 +95,6 @@ function buildFixtureContext(selection: { nodes: string[]; edges: string[] }): C
     },
     createAt: () => NODE_A,
     createAtPointer: () => NODE_A,
-    toggleTheme: NOOP,
     // The two stores are large, real interfaces this fixture only implements a slice of — every
     // command-builder function this module calls is read directly above to confirm it never
     // touches anything past that slice. `unknown` first, not a direct cast, so TS doesn't try to

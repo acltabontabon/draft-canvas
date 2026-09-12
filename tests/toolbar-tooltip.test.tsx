@@ -18,7 +18,6 @@ function renderToolbar() {
       title="Untitled canvas"
       onTitleChange={() => {}}
       onBack={() => {}}
-      onFit={() => {}}
       onPresent={() => {}}
       onExport={() => {}}
     />,

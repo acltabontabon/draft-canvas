@@ -144,13 +144,13 @@ describe('CommandPalette', () => {
 
   it('reopening after running a command starts from an empty query', () => {
     mount();
-    fireEvent.change(input(), { target: { value: 'theme' } });
+    fireEvent.change(input(), { target: { value: 'keyboard' } });
     key('Enter');
     expect(useUiStore.getState().commandPaletteOpen).toBe(false);
     act(() => useUiStore.getState().setCommandPaletteOpen(true));
     expect(input().value).toBe('');
-    // …and, having just run it, the theme toggle now leads under Recent.
-    expect(highlighted()).toHaveTextContent('Toggle light / dark theme');
+    // …and, having just run it, that command now leads under Recent.
+    expect(highlighted()).toHaveTextContent('Keyboard shortcuts');
     expect(screen.getByText('Recent')).toBeInTheDocument();
   });
 

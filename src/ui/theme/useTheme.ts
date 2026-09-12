@@ -1,28 +1,15 @@
 import { createContext, useContext } from 'react';
 import { DARK, themeFor, type Theme, type ThemeName } from '../../render/theme/tokens';
 
-/** `system` follows `prefers-color-scheme`, live; the other two are an explicit override. */
-export type ThemePreference = 'system' | ThemeName;
-
 export interface ThemeContextValue {
-  /** The palette actually on screen, whatever the preference resolved to. */
+  /** The palette on screen. Always whatever the OS is set to — there is no override. */
   name: ThemeName;
   theme: Theme;
-  preference: ThemePreference;
-  setPreference: (preference: ThemePreference) => void;
-  /** An explicit override — same as `setPreference(name)`. */
-  setTheme: (name: ThemeName) => void;
-  /** Pins the opposite of what is on screen. */
-  toggle: () => void;
 }
 
 export const ThemeContext = createContext<ThemeContextValue>({
   name: 'dark',
   theme: DARK,
-  preference: 'system',
-  setPreference: () => {},
-  setTheme: () => {},
-  toggle: () => {},
 });
 
 export function useTheme(): ThemeContextValue {

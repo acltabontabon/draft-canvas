@@ -14,7 +14,7 @@ async function newCanvas(page: Page, title: string) {
   await titleField.fill(title);
   await titleField.blur();
   await expect(page.locator('.dc-save')).toContainText('Saved locally');
-  await page.getByTitle('Back to your diagrams').click();
+  await page.getByRole('button', { name: 'Back to your diagrams' }).click();
 }
 
 /** The sidebar's clickable project row itself — distinct from its hover-revealed

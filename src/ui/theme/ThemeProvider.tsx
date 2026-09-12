@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { applyThemeVariables, themeFor, type ThemeName } from '../../render/theme/tokens';
-import { readPreference, removePreference, writePreference } from '../../lib/preferences';
-import { ThemeContext, type ThemePreference } from './useTheme';
+import { removePreference } from '../../lib/preferences';
+import { ThemeContext } from './useTheme';
 
-/** Only ever written by an explicit choice — the absence of it *is* "follow the system". */
-const OVERRIDE_KEY = 'theme-override';
 /**
- * What earlier builds wrote on every first launch, chosen or not — so its value can't be told
- * apart from a real choice. Never read; removed once so everyone starts out following the OS.
+ * Keys earlier builds wrote to pin a palette against the OS. That choice no longer exists, so
+ * they are removed once rather than left sitting in `localStorage` forever — otherwise someone
+ * who pinned dark years ago would keep a key that nothing reads.
+ *
+ * `theme` is older still: it was written on every first launch, chosen or not, so its value could
+ * never be told apart from a real choice.
  */
-const LEGACY_KEY = 'theme';
+const RETIRED_KEYS = ['theme-override', 'theme'];
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 
@@ -33,44 +35,26 @@ function systemTheme(): ThemeName {
   return query.matches ? 'dark' : 'light';
 }
 
-function initialPreference(): ThemePreference {
-  const stored = readPreference(OVERRIDE_KEY);
-  return stored === 'dark' || stored === 'light' ? stored : 'system';
-}
-
 /**
- * Draft Canvas follows the OS appearance, live, unless someone explicitly picks a side (the
- * editor toolbar, ⌘K, or Canvas settings). The preference is one of the few things kept in
- * `localStorage`: read synchronously on boot, and the variables applied in a layout effect, so the
- * first React paint is already the right palette. Before React mounts, `tokens.css` follows
- * `prefers-color-scheme` on its own.
+ * Draft Canvas follows the OS appearance, live. There is deliberately no override: an editor that
+ * quietly disagrees with the rest of your desktop is a papercut, and the choice cost a toolbar
+ * button, a settings row and two commands to maintain.
+ *
+ * The variables are applied in a layout effect so the first React paint is already the right
+ * palette. Before React mounts, `tokens.css` follows `prefers-color-scheme` on its own.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preference, setPreference] = useState<ThemePreference>(initialPreference);
-  const system = useSyncExternalStore(subscribeSystem, systemTheme, () => 'dark' as const);
-  const name: ThemeName = preference === 'system' ? system : preference;
+  const name = useSyncExternalStore(subscribeSystem, systemTheme, () => 'dark' as const);
 
   useLayoutEffect(() => {
     applyThemeVariables(themeFor(name), document.documentElement);
   }, [name]);
 
   useEffect(() => {
-    removePreference(LEGACY_KEY);
+    for (const key of RETIRED_KEYS) removePreference(key);
   }, []);
 
-  useEffect(() => {
-    if (preference === 'system') removePreference(OVERRIDE_KEY);
-    else writePreference(OVERRIDE_KEY, preference);
-  }, [preference]);
-
-  const setTheme = useCallback((next: ThemeName) => setPreference(next), []);
-  // Flips what is on screen, whichever way it got there — so from "system" it pins the opposite.
-  const toggle = useCallback(() => setPreference(name === 'dark' ? 'light' : 'dark'), [name]);
-
-  const value = useMemo(
-    () => ({ name, theme: themeFor(name), preference, setPreference, setTheme, toggle }),
-    [name, preference, setTheme, toggle],
-  );
+  const value = useMemo(() => ({ name, theme: themeFor(name) }), [name]);
 
   return <ThemeContext value={value}>{children}</ThemeContext>;
 }

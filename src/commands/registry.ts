@@ -347,22 +347,6 @@ function viewCommands(ctx: CommandContext): Command[] {
     keywords: ['suggest', 'suggestion', 'ghost', 'next', 'continue', 'assist', 'autocomplete'],
     run: (inner) => inner.ui.setContinuationsEnabled(!inner.ui.continuationsEnabled),
   });
-  commands.push({
-    id: 'theme-toggle',
-    title: 'Toggle light / dark theme',
-    group: 'view',
-    keywords: ['theme', 'dark', 'light', 'appearance'],
-    run: (inner) => inner.toggleTheme(),
-  });
-  if (ctx.followSystemTheme) {
-    commands.push({
-      id: 'theme-system',
-      title: 'Match system theme',
-      group: 'view',
-      keywords: ['theme', 'dark', 'light', 'appearance', 'os', 'auto'],
-      run: (inner) => inner.followSystemTheme?.(),
-    });
-  }
   return commands;
 }
 

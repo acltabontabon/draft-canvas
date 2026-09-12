@@ -1734,11 +1734,18 @@ kbd {
   min-height: 0;
 }
 
+/* Three tracks. The outer two are equal fractions and the middle is intrinsic, so the create
+   rail sits on a stable optical centre no matter how long the canvas title or the active flow's
+   name grows — under `space-between` it drifted with every rename. The side tracks truncate
+   rather than push; the width tiers further down are what keep that promise as space runs out.
+
+   `.dc-toolbar` stays the single outer element: `ElementInspectorPopover` and its sibling measure
+   this box's height to know how much room they have. */
 .dc-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 22px;
   height: var(--dc-bar-height);
   padding: 0 10px;
   border-bottom: 1px solid var(--dc-border);
@@ -1746,34 +1753,19 @@ kbd {
   flex-shrink: 0;
 }
 
-.dc-toolbar-group {
+/* ---- document identity: the quiet anchor -------------------------------- */
+
+.dc-toolbar-lead {
   display: flex;
   align-items: center;
   gap: 2px;
   min-width: 0;
-}
-
-.dc-toolbar-tools {
-  flex-shrink: 1;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.dc-toolbar-tools::-webkit-scrollbar {
-  display: none;
-}
-
-.dc-toolbar-divider {
-  width: 1px;
-  height: 18px;
-  margin: 0 6px;
-  background: var(--dc-border);
-  flex-shrink: 0;
+  justify-self: start;
 }
 
 .dc-title-input {
   min-width: 80px;
-  max-width: 260px;
+  max-width: 240px;
   height: 28px;
   padding: 0 8px;
   border: 1px solid transparent;
@@ -1785,6 +1777,9 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition:
+    background-color 120ms var(--dc-ease-out),
+    border-color 120ms var(--dc-ease-out);
 }
 
 .dc-title-input:hover {
@@ -1795,6 +1790,269 @@ kbd {
   border-color: var(--dc-border-strong);
   background: var(--dc-canvas);
   outline: none;
+}
+
+/* ---- the create rail: one instrument ------------------------------------ */
+
+/* A recess, borrowed from `.dc-segmented`. In dark themes the `--dc-canvas` fill does the work;
+   in light it is barely a shade off `--dc-surface`, so the hairline border is what actually draws
+   the trough. Both have to read, which is why the border is not optional here. */
+.dc-create-rail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-canvas);
+}
+
+/* Interaction | annotation | architecture. The 10px between families against 1px within one is
+   the whole grouping mechanism — no dividers. */
+.dc-create-family {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.dc-create-rail .dc-button {
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 3px;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  transition:
+    background-color 120ms var(--dc-ease-out),
+    border-color 120ms var(--dc-ease-out),
+    color 120ms var(--dc-ease-out),
+    box-shadow 120ms var(--dc-ease-out);
+}
+
+.dc-create-rail .dc-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-text) 7%, transparent);
+  color: var(--dc-text);
+}
+
+/* The instrument in your hand. A tint, never a fill — the house rule (see the export dialog's
+   own note) reserves solid for "this is the action". A raised treatment was tried and dropped:
+   lifting to `--dc-surface` is white-on-near-white in light mode, so the state that matters most
+   would have read clearly in one theme and mushily in the other. */
+.dc-create-rail .dc-button[data-active='true'] {
+  background: var(--dc-selection-soft);
+  border-color: color-mix(in srgb, var(--dc-selection) 45%, transparent);
+  color: var(--dc-selection);
+  font-weight: 600;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dc-selection) 9%, transparent);
+}
+
+.dc-create-rail .dc-button[data-active='true']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-selection) 22%, transparent);
+  color: var(--dc-selection);
+}
+
+/* ---- workspace: what you do to the canvas -------------------------------
+
+   Two control classes, and nothing in between. A *capability* (Flows, Present) is a glyph plus a
+   word, in one shared shape. A *utility* (undo, redo, commands, export, more) is a square icon.
+   Mixing the two — a bare word beside an icon-and-word beside a lone icon — is what made this end
+   of the bar read as three unrelated systems. Grouping is spacing only: 2px inside a cluster
+   against 18px between them, no separators. */
+
+.dc-toolbar-trail {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  justify-self: end;
+}
+
+.dc-toolbar-history,
+.dc-toolbar-modes,
+.dc-toolbar-utilities {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* --- capabilities --- */
+
+/* One composed control, not a glyph followed by a label: the 7px gap is tuned against the 14px
+   icon so the pair reads as a single object, and both siblings inherit it from here rather than
+   each setting their own. */
+.dc-toolbar-mode {
+  gap: 7px;
+  height: 28px;
+  padding: 0 9px;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  min-width: 0;
+}
+
+.dc-toolbar-mode svg {
+  flex: none;
+  /* Smaller than a utility's 16px: beside a word, a 16px glyph out-weighs the text it belongs to. */
+  width: 14px;
+  height: 14px;
+}
+
+.dc-toolbar-mode:hover:not(:disabled) {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+}
+
+/* Flows can be persistently on, so it earns the same tint the rail's active tool uses — one
+   active language across the whole bar. Present is momentary and deliberately has none. */
+.dc-toolbar-mode[data-active='true'] {
+  background: var(--dc-selection-soft);
+  border-color: color-mix(in srgb, var(--dc-selection) 45%, transparent);
+  color: var(--dc-selection);
+  font-weight: 600;
+}
+
+.dc-mode-label {
+  white-space: nowrap;
+}
+
+.dc-flow-toggle {
+  min-width: 0;
+}
+
+.dc-flow-toggle-sep {
+  color: var(--dc-text-faint);
+}
+
+.dc-flow-toggle-title {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+/* --- utilities --- */
+
+/* Square, identical hit targets. `.dc-button`'s icon-only padding gives a 30px-wide box whose
+   width drifts with the glyph inside it; these are pinned to 28x28 so undo, redo, commands,
+   export and more are interchangeable slots. */
+.dc-toolbar-history .dc-button,
+.dc-toolbar-utilities .dc-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+  color: var(--dc-text-faint);
+}
+
+.dc-toolbar-history .dc-button:hover:not(:disabled),
+.dc-toolbar-utilities .dc-button:hover:not(:disabled) {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+}
+
+.dc-toolbar-history .dc-button:disabled,
+.dc-toolbar-utilities .dc-button:disabled {
+  opacity: 0.32;
+}
+
+.dc-toolbar-utilities .dc-button[data-active='true'] {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+/* Optical sizing, not nominal — a row that measures correct can still look ragged. */
+.dc-toolbar-utilities .dc-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* The magnifier's ring sits inside its box, so it reads a touch small next to the arrows. */
+.dc-toolbar-utilities .dc-button svg[data-icon='search'] {
+  width: 17px;
+  height: 17px;
+}
+
+/* `more` is three zero-length segments drawn as round caps, so its dots render at the stroke
+   width itself — barely over a pixel, which left it visibly fainter than every sibling no matter
+   how large the box got. Weight, not size, is what was missing: thickening the stroke gives the
+   dots actual mass and puts the glyph back in parity with the arrows and the magnifier. */
+.dc-toolbar-utilities .dc-button svg[data-icon='more'] {
+  width: 18px;
+  height: 18px;
+  stroke-width: 3;
+}
+
+.dc-badge-anchor {
+  display: inline-flex;
+}
+
+/* ---- width tiers -------------------------------------------------------
+
+   Thresholds measured, not rounded: the create rail is ~737px and the full trailing cluster
+   ~337px, so on a 1440 laptop there are only ~130px of slack for two gutters. A centred middle
+   track collides with whichever side is wider the moment that side outgrows its own track, so
+   each tier below shortens the trailing cluster before that can happen. Verified by measuring
+   `.dc-create-rail`'s gap to `.dc-toolbar-trail` at each breakpoint — it never drops under ~24px.
+
+   Nothing is ever hidden outright: a label collapses to the icon it already had, and a control
+   that leaves the bar reappears in the More menu, which is why the fold is driven from
+   `useToolbarDensity` rather than `display: none` (two copies of one command would make every
+   `getByRole` ambiguous). */
+
+/* The two capabilities drop their words together — never one worded and one bare, which is the
+   exact mismatch this grammar exists to prevent. They keep their glyphs and their `aria-label`,
+   so the accessible name is identical at every width. */
+@media (max-width: 1319px) {
+  .dc-mode-label,
+  /* The active flow's name goes with them: once Flows is a 28px square, a 150px name hanging off
+     it would overflow the square rather than shorten it. */
+  .dc-flow-toggle-sep,
+  .dc-flow-toggle-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .dc-toolbar-mode {
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+/* Measured: with the mode labels folded the trailing cluster is ~236px and the rail ~689px, so a
+   centred middle track stops fitting just under 1260. Past that the rail gives up the centre,
+   takes whatever space is left and scrolls — honest about running out of room, rather than
+   silently overlapping its neighbours, which is exactly what an untested breakpoint did here. */
+@media (max-width: 1259px) {
+  .dc-toolbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 14px;
+  }
+
+  .dc-create-rail {
+    justify-self: stretch;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .dc-create-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dc-create-rail .dc-button {
+    padding: 0 6px;
+  }
+
+  .dc-title-input {
+    max-width: 170px;
+  }
 }
 
 /* ----------------------------------------------------------- status bar -- */
@@ -2123,24 +2381,6 @@ kbd {
 
 .dc-input-response {
   width: 130px;
-}
-
-/* The toolbar's one flow control: a toggle for the panel that also reads as state. The word
-   "Flows" is the fixed part; the active flow's title, when there is one, is what changes — kept
-   on a leash so a long name can't push the rest of the toolbar off the edge. */
-.dc-flow-toggle {
-  gap: 6px;
-}
-
-.dc-flow-toggle-sep {
-  color: var(--dc-text-faint);
-}
-
-.dc-flow-toggle-title {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .dc-flow-panel {
@@ -3316,18 +3556,34 @@ kbd {
     grid-template-columns: 1fr;
   }
 
-  /* Title on the first row, the tool palette scrolling on its own below. */
+  /* Title and workspace actions on the first row, the create rail on its own below — as grid
+     areas now, which says the arrangement outright instead of implying it with `order`. */
   .dc-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'lead trail'
+      'rail rail';
     height: auto;
-    flex-wrap: wrap;
-    gap: 6px;
+    gap: 6px 12px;
     padding: 6px 8px;
   }
 
-  .dc-toolbar-tools {
-    order: 3;
-    width: 100%;
-    padding-bottom: 2px;
+  .dc-toolbar-lead {
+    grid-area: lead;
+  }
+
+  .dc-toolbar-trail {
+    grid-area: trail;
+  }
+
+  .dc-create-rail {
+    grid-area: rail;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .dc-create-rail::-webkit-scrollbar {
+    display: none;
   }
 
   .dc-title-input {

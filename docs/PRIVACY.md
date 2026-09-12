@@ -38,8 +38,7 @@ reopen works with no internet connection after the first successful visit.
 
 ### localStorage
 
-Short, named UI preferences only: `draft-canvas.theme-override` (`dark`/`light`, written only
-when you pin a theme — absent means "match the system"), `draft-canvas.personality`
+Short, named UI preferences only: `draft-canvas.personality`
 (the roughness preset), `draft-canvas.last-seen-version` and `draft-canvas.feature-seen.<id>` (the
 "New" badges), `draft-canvas.hint.<id>` (which contextual hints have been learned), and — for the
 command palette's history — `draft-canvas.command-recent.<n>` (the ids of the last few commands

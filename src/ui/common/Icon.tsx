@@ -17,8 +17,6 @@ const PATHS = {
   plus: 'M12 5v14 M5 12h14',
   close: 'M6 6l12 12 M18 6L6 18',
   keyboard: 'M3 7h18v10H3z M7 11h.01 M11 11h.01 M15 11h.01 M8 14h8',
-  sun: 'M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z M12 2v2 M12 20v2 M4 12H2 M22 12h-2 M5 5l1.5 1.5 M17.5 17.5L19 19 M19 5l-1.5 1.5 M6.5 17.5L5 19',
-  moon: 'M20 14a8 8 0 0 1-10-10 8 8 0 1 0 10 10z',
   lock: 'M6 11h12v9H6z M9 11V8a3 3 0 0 1 6 0v3',
   play: 'M7 4l12 8-12 8z',
   file: 'M6 3h8l4 4v14H6z M14 3v4h4',
@@ -44,6 +42,9 @@ const PATHS = {
     'M9 18h6 M10 21h4 M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2h5c.1-.8.5-1.5 1.1-2A6 6 0 0 0 12 3z',
   folder: 'M3 6h6l2 2h10v11H3z',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.35-4.35',
+  // A stepped route with an arrowhead — the same orthogonal elbow the canvas draws connectors
+  // with, so the glyph is the product's own vocabulary rather than a generic "path" pictogram.
+  flow: 'M4 7h4a3 3 0 0 1 3 3v4a3 3 0 0 0 3 3h4 M15 14l3 3-3 3',
 } as const;
 
 export type IconName = keyof typeof PATHS;
@@ -68,6 +69,9 @@ export const Icon = memo(function Icon({ name, size = 16, className }: IconProps
       strokeLinejoin="round"
       aria-hidden="true"
       focusable="false"
+      // Lets a caller tune one glyph optically without a wrapper class — see the toolbar's
+      // utility sizing, where `search` and `more` need a nudge the others don't.
+      data-icon={name}
     >
       <path d={PATHS[name]} />
     </svg>

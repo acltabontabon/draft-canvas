@@ -63,14 +63,14 @@ test.describe('command palette', () => {
 
   test('the toolbar button opens it too', async ({ page }) => {
     await newCanvas(page, 'Palette button');
-    await page.getByRole('button', { name: 'Commands (Cmd+K)' }).click();
+    await page.getByRole('button', { name: 'Commands', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Search commands' })).toBeFocused();
   });
 
   test('closing it returns focus to whatever opened it', async ({ page }) => {
     await newCanvas(page, 'Palette focus return');
-    const trigger = page.getByRole('button', { name: 'Commands (Cmd+K)' });
+    const trigger = page.getByRole('button', { name: 'Commands', exact: true });
     await trigger.click();
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
     await page.keyboard.press('Escape');
@@ -168,7 +168,8 @@ test.describe('command palette — discoverability', () => {
     await page.locator('.dc-node').first().click();
     await expect(page.locator('.dc-hint-strip')).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Learn Draft Canvas' }).click();
+    await page.getByRole('button', { name: /^More/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: 'Learn Draft Canvas' }).click();
     const strip = page.locator('.dc-hint-strip');
     await expect(strip).toContainText('Attach a note or code snippet');
     await strip.getByRole('button', { name: 'Dismiss hint' }).click();
@@ -182,7 +183,8 @@ test.describe('command palette — discoverability', () => {
 
   test('an element with no hint of its own teaches ⌘K instead, until the palette has opened', async ({ page }) => {
     await newCanvas(page, 'Palette hint — boundary');
-    await page.getByRole('button', { name: 'Learn Draft Canvas' }).click();
+    await page.getByRole('button', { name: /^More/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: 'Learn Draft Canvas' }).click();
     // A boundary has no attachment/semantics hint of its own, so it falls straight to the ⌘K hint.
     await page.locator('.react-flow__pane').click({ button: 'right', position: { x: 400, y: 300 } });
     await page.getByRole('menuitem', { name: 'Add Boundary' }).click();

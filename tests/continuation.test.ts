@@ -769,7 +769,6 @@ describe('commands: Add <label> (suggested)', () => {
       playback: { active: false, flowId: null, step: 0, start: () => {}, stop: () => {}, next: () => {}, prev: () => {} },
       createAt: () => undefined as never,
       createAtPointer: () => undefined as never,
-      toggleTheme: () => {},
     } as unknown as CommandContext;
   }
 

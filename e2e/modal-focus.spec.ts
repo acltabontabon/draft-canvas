@@ -16,21 +16,27 @@ async function newCanvas(page: Page, title: string) {
   await field.blur();
 }
 
+async function openShortcutSheet(page: Page) {
+  await page.getByRole('button', { name: /^More/ }).click();
+  await page.getByRole('menuitem', { name: 'Keyboard shortcuts' }).click();
+}
+
 test.describe('Modal focus behavior', () => {
   test('closing the keyboard shortcuts sheet returns focus to whatever opened it', async ({ page }) => {
     await newCanvas(page, 'Modal focus return');
-    const trigger = page.getByRole('button', { name: 'Keyboard shortcuts (?)' });
-    await trigger.click();
+    const trigger = page.getByRole('button', { name: /^More/ });
+    await openShortcutSheet(page);
     await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
 
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeHidden();
+    // The sheet now opens from the overflow menu, so "whatever opened it" is that trigger.
     await expect(trigger).toBeFocused();
   });
 
   test('Tab cycles within the sheet instead of escaping to the page behind it', async ({ page }) => {
     await newCanvas(page, 'Modal tab trap');
-    await page.getByRole('button', { name: 'Keyboard shortcuts (?)' }).click();
+    await openShortcutSheet(page);
     const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
     await expect(dialog).toBeVisible();
 
@@ -48,7 +54,7 @@ test.describe('Modal focus behavior', () => {
 
   test('shows the previously-undocumented shortcuts, and the filter narrows the list', async ({ page }) => {
     await newCanvas(page, 'Modal shortcuts content');
-    await page.getByRole('button', { name: 'Keyboard shortcuts (?)' }).click();
+    await openShortcutSheet(page);
     const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
     await expect(dialog).toBeVisible();
 

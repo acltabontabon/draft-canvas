@@ -56,14 +56,6 @@ describe('commandsFor — edit mode', () => {
     expect(ids(stubContext())).toContain('redo');
   });
 
-  it('offers "Match system theme" only while a theme is pinned', () => {
-    expect(ids(stubContext())).not.toContain('theme-system');
-    let followed = false;
-    const ctx = stubContext({ followSystemTheme: () => void (followed = true) });
-    commandsFor(ctx).find((command) => command.id === 'theme-system')!.run(ctx);
-    expect(followed).toBe(true);
-  });
-
   it('only offers "Exit spotlight" while Focus Mode is on', () => {
     expect(ids(stubContext())).not.toContain('focus-exit');
     useEditorStore.getState().enterFocus([], []);

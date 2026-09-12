@@ -263,10 +263,6 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
     [buildCommandContext, setContextMenu],
   );
 
-  const onFit = useCallback(() => {
-    void fitView({ padding: 0.2, duration: 320, nodes: flowFitViewNodes(useEditorStore.getState()) });
-  }, [fitView]);
-
   const onPresent = useCallback(() => {
     // Read before `playback.start()` flips `flowPlayback.active` — otherwise the fit-view
     // guard would see playback as already active and skip scoping to the presented flow.
@@ -290,7 +286,6 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
           title={title}
           onTitleChange={rename}
           onBack={() => void session.closeDocument()}
-          onFit={onFit}
           onPresent={onPresent}
           onExport={() => setExportOpen(true)}
         />

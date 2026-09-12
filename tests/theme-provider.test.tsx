@@ -1,5 +1,4 @@
 import { act, render, screen } from '@testing-library/react';
-import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // `vi.mock` of `lib/preferences`, so a pinned theme in one test can't leak into the next through
@@ -32,13 +31,8 @@ function fakeSystem(initiallyDark: boolean) {
   };
 }
 
-const api = {} as ReturnType<typeof useTheme>;
 function Probe() {
-  const theme = useTheme();
-  useEffect(() => {
-    Object.assign(api, theme);
-  });
-  return <span data-testid="theme">{`${theme.preference}:${theme.name}`}</span>;
+  return <span data-testid="theme">{useTheme().name}</span>;
 }
 
 const mount = () =>
@@ -60,49 +54,34 @@ describe('ThemeProvider', () => {
   it('follows the system appearance, and keeps following it while open', () => {
     const system = fakeSystem(false);
     mount();
-    expect(screen.getByTestId('theme')).toHaveTextContent('system:light');
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
     expect(document.documentElement.dataset.theme).toBe('light');
 
     act(() => system.set(true));
-    expect(screen.getByTestId('theme')).toHaveTextContent('system:dark');
+    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
-  it('writes nothing until someone actually picks a side', () => {
+  it('never writes a preference — the OS is the only source', () => {
     fakeSystem(true);
     mount();
     expect(prefs.size).toBe(0);
   });
 
-  it('pins an explicit choice, ignores the system after that, and forgets it on "system"', () => {
-    const system = fakeSystem(true);
-    mount();
-
-    act(() => api.toggle());
-    expect(screen.getByTestId('theme')).toHaveTextContent('light:light');
-    expect(prefs.get('theme-override')).toBe('light');
-
-    act(() => system.set(false));
-    act(() => system.set(true));
-    expect(screen.getByTestId('theme')).toHaveTextContent('light:light');
-
-    act(() => api.setPreference('system'));
-    expect(screen.getByTestId('theme')).toHaveTextContent('system:dark');
-    expect(prefs.has('theme-override')).toBe(false);
-  });
-
-  it('restores a pinned theme on the next launch', () => {
+  it('ignores a theme an older build pinned, and clears it', () => {
     fakeSystem(true);
     prefs.set('theme-override', 'light');
     mount();
-    expect(screen.getByTestId('theme')).toHaveTextContent('light:light');
+    // The pin loses to the OS rather than surviving as an invisible override.
+    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
+    expect(prefs.has('theme-override')).toBe(false);
   });
 
   it('drops the value older builds wrote on every first launch, so it can never pin anything', () => {
     fakeSystem(false);
     prefs.set('theme', 'dark');
     mount();
-    expect(screen.getByTestId('theme')).toHaveTextContent('system:light');
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
     expect(prefs.has('theme')).toBe(false);
   });
 });
