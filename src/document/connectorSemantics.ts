@@ -73,8 +73,8 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
           return 'scheduler';
         case 'gateway':
           return 'gateway';
-        // A BFF *calls* the services it composes — it is not a gateway that routes, so it takes
-        // the plain service rows rather than the gateway ones.
+        // A service acting as a Backend for Frontend *calls* the services it composes — it is not
+        // a gateway that routes, so it takes the plain service rows rather than the gateway ones.
         default:
           return 'service';
       }

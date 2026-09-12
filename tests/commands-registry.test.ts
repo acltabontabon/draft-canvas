@@ -540,7 +540,7 @@ describe('primaryCommandsFor — primary popover quick actions', () => {
 
   it('a Service that owns data offers Add Data Store; a Gateway offers Add Service; the rest offer nothing', () => {
     const state = useEditorStore.getState();
-    for (const serviceKind of ['generic', 'api', 'worker', 'bff'] as const) {
+    for (const serviceKind of ['generic', 'api', 'worker'] as const) {
       const service = state.addNode({ type: 'service', serviceKind, x: 0, y: 0 });
       expect(primaryIds(service)).toEqual(['add-data-store']);
     }

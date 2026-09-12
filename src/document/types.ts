@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 10;
+export const CURRENT_VERSION = 11;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -114,10 +114,7 @@ export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
 
 /** Sub-kinds of the developer presets. Purely a labelling convenience — the
  *  base type's silhouette and accent always dominate; see `nodes/describe.ts`. */
-/** `bff` — a Backend for Frontend: a backend owned by, and shaped for, one client experience. It
- *  composes downstream services and is deliberately *not* a `gateway` (one shared front door that
- *  routes); a BFF calls. Folds to the plain `service` category — see `connectorSemantics.ts`. */
-export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external', 'scheduler', 'gateway', 'bff'] as const;
+export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external', 'scheduler', 'gateway'] as const;
 export type ServiceKind = (typeof SERVICE_KINDS)[number];
 
 export const DATABASE_KINDS = [

@@ -101,7 +101,6 @@ const SERVICE_KIND_LABELS: Partial<Record<ServiceKind, string>> = {
   external: 'EXTERNAL',
   scheduler: 'SCHEDULER',
   gateway: 'GATEWAY',
-  bff: 'BFF',
 };
 const DATABASE_KIND_LABELS: Partial<Record<DatabaseKind, string>> = {
   sql: 'SQL',
@@ -481,37 +480,9 @@ function service(node: DraftNode, ctx: DescribeContext): Shape[] {
       return serviceScheduler(node, ctx);
     case 'gateway':
       return serviceGateway(node, ctx);
-    case 'bff':
-      return serviceBff(node, ctx);
     default:
       return serviceGeneric(node, ctx);
   }
-}
-
-/**
- * BFF: Generic's card and cap, plus the kind tag — deliberately *not* Gateway's silhouette. A
- * Backend for Frontend is one client's own adapter, not a shared front door, so it must never be
- * mistaken for one at a glance; the tag says which it is and the plain card says "an ordinary
- * service that happens to be owned by a frontend."
- */
-function serviceBff(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
-  const capHeight = 4;
-  return [
-    outlineShape(
-      node.id,
-      ctx,
-      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
-      { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
-    ),
-    {
-      t: 'group',
-      clip: { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
-      children: [{ t: 'rect', x: 0.75, y: 0.75, w: node.width - 1.5, h: capHeight, fill: palette.chip }],
-    },
-    ...centredLabel(node, ctx, { top: capHeight, bottom: tagRow(), color: palette.text }),
-    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.bff!, ctx.theme.textMuted),
-  ];
 }
 
 /** Generic: the family's neutral baseline — a rounded card with a coloured

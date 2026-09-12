@@ -473,6 +473,66 @@ describe('v8 to v9 migration: Projects', () => {
   });
 });
 
+describe('v10 to v11 migration: BFF Service kind removal', () => {
+  function v10Fixture(overrides: { nodes?: unknown[]; edges?: unknown[] } = {}) {
+    return {
+      format: DRAFT_FORMAT,
+      version: 10,
+      metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0 },
+      nodes: overrides.nodes ?? [],
+      edges: overrides.edges ?? [],
+      settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
+      flows: [],
+    };
+  }
+
+  it('retypes a bff Service to api, preserving label and other properties', () => {
+    const raw = v10Fixture({
+      nodes: [
+        {
+          id: 'a',
+          type: 'service',
+          serviceKind: 'bff',
+          x: 10,
+          y: 20,
+          width: 140,
+          height: 70,
+          text: 'Web BFF',
+          accent: 'teal',
+        },
+      ],
+    });
+    const result = parseDocument(JSON.stringify(raw));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.version).toBe(CURRENT_VERSION);
+    expect(result.document.nodes[0]).toMatchObject({
+      type: 'service',
+      serviceKind: 'api',
+      x: 10,
+      y: 20,
+      width: 140,
+      height: 70,
+      text: 'Web BFF',
+      accent: 'teal',
+    });
+  });
+
+  it('leaves non-bff services and other node types untouched', () => {
+    const raw = v10Fixture({
+      nodes: [
+        { id: 'a', type: 'service', serviceKind: 'gateway', x: 0, y: 0, text: 'Gateway' },
+        { id: 'b', type: 'note', x: 0, y: 0, text: 'A note' },
+      ],
+    });
+    const result = parseDocument(JSON.stringify(raw));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.nodes[0]).toMatchObject({ type: 'service', serviceKind: 'gateway' });
+    expect(result.document.nodes[1]).toMatchObject({ type: 'note' });
+  });
+});
+
 /**
  * Every fixture-based test above already exercises the full v1→current chain incidentally (a gap
  * anywhere in `MIGRATIONS` would make any of them throw "Missing migration..."), but that

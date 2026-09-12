@@ -197,7 +197,7 @@ export type CompanionSpec =
 export function ownsData(node: Pick<DraftNode, 'type' | 'serviceKind'>): boolean {
   if (node.type !== 'service') return false;
   const kind = node.serviceKind ?? 'generic';
-  return kind === 'generic' || kind === 'api' || kind === 'worker' || kind === 'bff';
+  return kind === 'generic' || kind === 'api' || kind === 'worker';
 }
 
 export interface EditorStore {

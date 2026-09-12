@@ -26,7 +26,6 @@ describe('shapeKindOf', () => {
     [{ type: 'service', serviceKind: 'worker' }, 'service'],
     [{ type: 'service', serviceKind: 'scheduler' }, 'service'],
     [{ type: 'service', serviceKind: 'gateway' }, 'service'],
-    [{ type: 'service', serviceKind: 'bff' }, 'service'],
     [{ type: 'service', serviceKind: 'external' }, 'external'],
     [{ type: 'database' }, 'database'],
     [{ type: 'database', databaseKind: 'sql' }, 'database'],

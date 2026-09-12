@@ -236,6 +236,23 @@ function migrateAddRouteMode(doc: Record<string, unknown>): Record<string, unkno
 }
 
 /**
+ * v11 removed the `bff` Service kind — a Backend for Frontend is an architectural role, not a
+ * distinct runtime primitive, and is now represented as a plain `api` Service (label, position,
+ * and connections carry the role instead). This migration retypes any Service node's
+ * `serviceKind: 'bff'` to `'api'`, leaving every other field untouched.
+ */
+function migrateBffToApi(doc: Record<string, unknown>): Record<string, unknown> {
+  const retype = (raw: unknown): unknown => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const item = raw as Record<string, unknown>;
+    if (item.type !== 'service' || item.serviceKind !== 'bff') return item;
+    return { ...item, serviceKind: 'api' };
+  };
+  const rawNodes = Array.isArray(doc.nodes) ? doc.nodes : [];
+  return { ...doc, nodes: rawNodes.map(retype) };
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
@@ -248,6 +265,7 @@ const MIGRATIONS: Record<number, Migration> = {
   7: migrateHasResponse,
   8: migrateAddProjectId,
   9: migrateAddRouteMode,
+  10: migrateBffToApi,
 };
 
 export class UnsupportedVersionError extends Error {

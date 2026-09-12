@@ -9,7 +9,7 @@ All notable changes to Draft Canvas are documented here.
 - Home screen redesigned with interactive starter previews—hover or arrow-key to explore.
 - Auto-follow system light/dark theme (pin a theme to override).
 - Text formatting: semantic roles (Body, Label, Heading, Title, Technical), Bold/Italic, alignment, and multiline editing (Enter for newline, Cmd+Enter to commit).
-- Two new shapes: **Backend for Frontend** (BFF) for frontend-specific adapters, and **Table** for logical tables inside a store.
+- New shape: **Table** for logical tables inside a store.
 - **Projects** semantic relationship for write-model projections.
 - One-click continuations: "Connect Data Store" on Services, "Route to Service" on Gateways.
 - **Intent Continuation**: smart suggestions appear as you draw (queues beside topics, workers beside queues, services beside routes). Press Tab to accept or Escape to dismiss.

@@ -48,8 +48,6 @@ describe('categoryOf', () => {
 
   it('reads Scheduler and Gateway as their own categories', () => {
     expect(categoryOf({ type: 'service', serviceKind: 'scheduler' })).toBe('scheduler');
-    // A BFF calls — it is a plain service to the matrix, never a routing gateway.
-    expect(categoryOf({ type: 'service', serviceKind: 'bff' })).toBe('service');
     expect(categoryOf({ type: 'service', serviceKind: 'gateway' })).toBe('gateway');
   });
 

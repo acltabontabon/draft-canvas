@@ -1163,12 +1163,13 @@ const hexagonal: ArchitectureStarter = {
  * **What each element is.**
  * - `Web Client` / `Mobile Client` are `device` Actors: the pattern is about *client experiences*,
  *   and a browser and a phone are the two that most often diverge in what they need.
- * - `Web BFF` / `Mobile BFF` are `bff` Services — the kind exists so this node can never be read
- *   as an API Gateway. A gateway is one shared front door (routing, auth, rate limits — see
- *   Microservices) and its connectors say `routes`; a BFF is *one client's* adapter that shapes and
- *   aggregates calls for that experience alone, and its connectors say `calls`. There is
- *   deliberately **no gateway** here: drawing both would blur exactly the distinction this starter
- *   exists to make, and the Web BFF's note says so in one line.
+ * - `Web BFF` / `Mobile BFF` are plain `api` Services — Backend for Frontend is an architectural
+ *   role, not its own shape kind, so the label and the diagram itself carry the distinction from
+ *   an API Gateway rather than a dedicated silhouette. A gateway is one shared front door (routing,
+ *   auth, rate limits — see Microservices) and its connectors say `routes`; a BFF is *one client's*
+ *   adapter that shapes and aggregates calls for that experience alone, and its connectors say
+ *   `calls`. There is deliberately **no gateway** here: drawing both would blur exactly the
+ *   distinction this starter exists to make, and the Web BFF's note says so in one line.
  * - Each client and its BFF share a boundary titled for the *experience* and subtitled with who
  *   owns it: the BFF belongs to the team that owns that client, which is the whole reason it may be
  *   tailored. Two boundaries, not one, is what says "not a shared layer." Nothing here says every
@@ -1264,7 +1265,7 @@ function bffExperience(
     {
       key: `${key}-bff`,
       type: 'service',
-      serviceKind: 'bff',
+      serviceKind: 'api',
       text: adapter,
       accent: 'teal',
       parent: `${key}-box`,

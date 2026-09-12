@@ -139,7 +139,6 @@ const SERVICE_KIND_NAMES: Record<ServiceKind, string> = {
   external: 'External System',
   scheduler: 'Scheduler',
   gateway: 'Gateway',
-  bff: 'BFF',
 };
 const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = {
   sql: 'SQL data store',

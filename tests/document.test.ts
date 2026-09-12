@@ -15,7 +15,7 @@ import {
   setTitle,
   updateNode,
 } from '../src/document/operations';
-import { CURRENT_VERSION, DRAFT_FORMAT } from '../src/document/types';
+import { CURRENT_VERSION, DRAFT_FORMAT, SERVICE_KINDS } from '../src/document/types';
 
 function sample() {
   const a = createNode({ type: 'service', x: 0, y: 0, text: 'Order Service' });
@@ -181,6 +181,10 @@ describe('createNode — a Service\'s default label follows its subtype', () => 
     const node = createNode({ type: 'service', x: 0, y: 0, serviceKind: 'api', text: 'Payments' });
     expect(node.text).toBe('Payments');
     expect(node.textOrigin).toBe('explicit');
+  });
+
+  it('exposes exactly six Service kinds — Backend for Frontend is a labeled API Service, not its own kind', () => {
+    expect(SERVICE_KINDS).toEqual(['generic', 'api', 'worker', 'external', 'scheduler', 'gateway']);
   });
 });
 

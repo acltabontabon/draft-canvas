@@ -38,7 +38,6 @@ export const SERVICE_KIND_OPTION_LABELS: Record<ServiceKind, string> = {
   external: 'External',
   scheduler: 'Scheduler',
   gateway: 'Gateway',
-  bff: 'Backend for Frontend',
 };
 
 export const DATABASE_KIND_OPTION_LABELS: Record<DatabaseKind, string> = {

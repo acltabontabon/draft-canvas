@@ -625,10 +625,12 @@ describe('buildStarter', () => {
     expect(edges).toHaveLength(7);
     expect(flows).toEqual([]);
 
-    // Two BFFs, both the `bff` kind (never `gateway`), each inside its own experience boundary
-    // with its own client — and no gateway anywhere: BFF ≠ API Gateway is the whole lesson.
+    // Two BFFs, both plain `api`-kind services (never `gateway`), each inside its own experience
+    // boundary with its own client — and no gateway anywhere: BFF ≠ API Gateway is the whole
+    // lesson, carried by label and connections rather than a dedicated shape kind.
     expect(nodes.some((node) => node.serviceKind === 'gateway')).toBe(false);
-    const adapters = nodes.filter((node) => node.serviceKind === 'bff');
+    const adapters = [byText('Web BFF'), byText('Mobile BFF')];
+    expect(adapters.every((node) => node.serviceKind === 'api')).toBe(true);
     expect(adapters.map((node) => node.text).sort()).toEqual(['Mobile BFF', 'Web BFF']);
     expect(new Set(adapters.map((node) => node.parentId)).size).toBe(2);
     for (const adapter of adapters) {

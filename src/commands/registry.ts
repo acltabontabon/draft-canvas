@@ -766,8 +766,8 @@ function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
 /** A Service's own shape-native quick actions — "Add Data Store" for a service kind that owns
  *  data, "Add Service" (a routed target) for a Gateway — computed once here and reused by both
  *  `nodeCommands` and `primaryCommandsFor`, the same single-source discipline as
- *  `queueQuickCommands`. An External System, a Scheduler and a BFF's downstream are left alone:
- *  the natural continuation for those isn't a companion this command could name honestly. */
+ *  `queueQuickCommands`. An External System and a Scheduler are left alone: the natural
+ *  continuation for those isn't a companion this command could name honestly. */
 function serviceQuickCommands(node: DraftNode): Command[] {
   const commands: Command[] = [];
   if (ownsData(node)) {

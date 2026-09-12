@@ -45,9 +45,8 @@ export const PRODUCT_RELEASES: ProductRelease[] = [
           'Move between elements and along their connections without a mouse, and Tab now reaches the canvas as a single stop instead of visiting every shape.',
       },
       {
-        title: 'Backend for Frontend and Table',
-        description:
-          'Two new primitives: a Service can be a BFF (connectors read as calls, not routes, to tell it apart from a Gateway), and a Data Store can hold named Tables.',
+        title: 'Table',
+        description: 'A Data Store can hold named Tables.',
       },
       {
         title: 'Polish and reliability',
