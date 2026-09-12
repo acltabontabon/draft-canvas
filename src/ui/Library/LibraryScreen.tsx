@@ -49,6 +49,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   const setMoveMenuOpenFor = useUiStore((state) => state.setMoveMenuOpenFor);
   const fileInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<DraftSummary | null>(null);
   const [renaming, setRenaming] = useState<DraftSummary | null>(null);
   const [securePendingFile, setSecurePendingFile] = useState<File | null>(null);
@@ -207,7 +208,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
             <ProjectSidebar session={session} library={session.library} view={view} onViewChange={setView} />
           )}
 
-          <section className="dc-library-list">
+          <section className="dc-library-list" ref={listRef}>
             <div className="dc-library-list-head">
               <div className="dc-library-list-head-left">
                 <h2>{heading}</h2>
@@ -343,8 +344,17 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                 variant="danger"
                 icon="trash"
                 onClick={() => {
-                  void session.deleteDocument(confirmDelete.id);
+                  const index = canvases.findIndex((entry) => entry.id === confirmDelete.id);
                   setConfirmDelete(null);
+                  // The dialog hands focus back to the row's trash button, which the delete then
+                  // removes — so once the list has re-rendered, land on the row that took its place.
+                  void session.deleteDocument(confirmDelete.id).then(() =>
+                    requestAnimationFrame(() => {
+                      const rows = listRef.current?.querySelectorAll<HTMLElement>('.dc-library-item') ?? [];
+                      const next = rows[Math.min(index, rows.length - 1)] ?? searchInput.current;
+                      if (next && window.document.activeElement === window.document.body) next.focus();
+                    }),
+                  );
                 }}
               >
                 Delete
@@ -481,10 +491,10 @@ function RenameDialog({
   onSubmit: (title: string) => void;
 }) {
   const [value, setValue] = useState(entry.title);
+  // An empty title is simply not submittable (the button says so by being disabled) — not a silent close.
   const submit = () => {
     const title = value.trim();
     if (title) onSubmit(title);
-    else onClose();
   };
 
   return (
@@ -496,7 +506,7 @@ function RenameDialog({
           <Button variant="quiet" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="solid" icon="check" onClick={submit}>
+          <Button variant="solid" icon="check" disabled={!value.trim()} onClick={submit}>
             Rename
           </Button>
         </>

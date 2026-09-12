@@ -3,7 +3,7 @@ import { EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from
 import { useShallow } from 'zustand/react/shallow';
 import type { DraftNode } from '../document/types';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
-import { explainEdgeTier, lensEdgeTier, stepIndexOf } from '../document/flow';
+import { explainEdgeTier, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import {
   LABEL_LINE_GAP,
@@ -25,14 +25,15 @@ import {
 import { routingPlan } from '../edges/bundles';
 import { layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
-import { attachmentRowBelowsSourceOrTarget, obstaclesForEdge, rectOfInternal } from './edgeGeometry';
+import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
+import { obstaclesForEdge } from '../edges/obstacles';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { roughenPath } from '../render/roughness/roughPath';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { accentOf } from '../render/theme/tokens';
-import { isEdgeFocused, lensFlow, useEditorStore } from '../store/editorStore';
+import { isEdgeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
 import { selectEdge, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
@@ -66,18 +67,18 @@ function pointRect(point: { x: number; y: number }): Rect {
   return { x: point.x, y: point.y, width: 0, height: 0 };
 }
 
-/**
- * Anchors the label chip to whichever side of the line `labelSide` picked, instead of centering
- * it on the line itself — the fix for a label visually cut through by its own connector. Only
- * this chip moves; the event dot, conditional diamond, caption, and condition chip all keep
- * anchoring straight at `(x, y)` as before, since they were never the ones being cut through.
- */
 /** The side a request/response connector's reply label is forced to, relative to the request
  *  label's own side — guarantees "request above / response below" (or the left/right
  *  equivalent) across every routing mode, rather than leaving it to incidental agreement between
  *  the two independently-computed (source/target-swapped) routes' own `labelSide`. */
 const OPPOSITE_SIDE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
 
+/**
+ * Anchors the label chip to whichever side of the line `labelSide` picked, instead of centering
+ * it on the line itself — the fix for a label visually cut through by its own connector. Only
+ * this chip moves; the event dot, conditional diamond, caption, and condition chip all keep
+ * anchoring straight at `(x, y)` as before, since they were never the ones being cut through.
+ */
 function labelChipTransform(side: Side, x: number, y: number): string {
   switch (side) {
     case 'right':
@@ -144,13 +145,27 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     return source && target ? capabilityFor(categoryOf(source), categoryOf(target))?.status : undefined;
   });
   const showSequence = useEditorStore((state) => state.document.settings.showSequence);
-  const flows = useEditorStore((state) => state.document.flows);
-  const flowPlayback = useEditorStore((state) => state.flowPlayback);
-  const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
+  // Playback, step badges and Focus are read as small per-edge primitives, not as the whole
+  // `flows`/`flowPlayback`/`focus` objects: a step change then re-renders only the connectors whose
+  // own tier actually flipped, instead of every connector on the canvas (same as `DraftNodeView`).
+  const tier = useEditorStore((state) => explainTierForEdge(state, id));
+  const playbackActive = useEditorStore((state) => state.flowPlayback.active);
+  // Only the active connector can be in its response phase, so only it re-renders when that flips.
+  const responsePhase = useEditorStore(
+    (state) => state.flowPlayback.phase === 'response' && explainTierForEdge(state, id) === 'active',
+  );
+  const playingAccent = useEditorStore((state) => playingFlowOf(state)?.accent);
+  const stepNumber = useEditorStore((state) =>
+    state.selectedFlowId ? stepIndexOf(findFlow(state.document, state.selectedFlowId), id) : undefined,
+  );
+  const focusDimmed = useEditorStore((state) => {
+    if (!state.focus.active) return false;
+    const self = selectEdge(state.document, id);
+    return self ? !isEdgeFocused(state.focus, self) : false;
+  });
   // The flow object comes straight out of `document.flows`, so its identity only changes when the
   // flow itself does — this subscription doesn't re-render every edge on unrelated store writes.
   const lensFlowValue = useEditorStore(lensFlow);
-  const focus = useEditorStore((state) => state.focus);
   const mode = useEditorStore((state) => state.mode);
   const updateEdgeLabel = useEditorStore((state) => state.updateEdgeLabel);
   const setEdgeCondition = useEditorStore((state) => state.setEdgeCondition);
@@ -242,23 +257,15 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // one where this edge (or a node it references) has just been deleted and
   // this component is about to render nothing. `edge` may still be
   // undefined at this point, hence the optional-chained guards throughout.
-  const playingFlow = flowPlayback.active && flowPlayback.flowId
-    ? flows.find((f) => f.id === flowPlayback.flowId)
-    : undefined;
-  const overlayFlow = selectedFlowId ? flows.find((f) => f.id === selectedFlowId) : undefined;
-  const stepNumber = overlayFlow && edge ? stepIndexOf(overlayFlow, edge.id) : undefined;
-
-  const tier = playingFlow && edge ? explainEdgeTier(stepIndexOf(playingFlow, edge.id), flowPlayback.step) : 'hidden';
-  const isActiveStep = flowPlayback.active && tier === 'active';
-  const isShownStep = flowPlayback.active && tier === 'shown';
-  const dimmed = flowPlayback.active && tier === 'hidden';
+  const isActiveStep = playbackActive && tier === 'active';
+  const isShownStep = playbackActive && tier === 'shown';
+  const dimmed = playbackActive && tier === 'hidden';
   // Which of a request/response connector's two lines the active step's pulse animates — see
   // `FlowPlaybackState.phase`. Irrelevant, and always `'request'`, for a plain edge (no
   // `hasResponse`) or one not the active step, so existing single-line playback is entirely
   // unchanged.
   const pulseTarget: 'request' | 'response' =
-    isActiveStep && edge?.hasResponse && flowPlayback.phase === 'response' ? 'response' : 'request';
-  const focusDimmed = focus.active && edge ? !isEdgeFocused(focus, edge) : false;
+    isActiveStep && edge?.hasResponse && responsePhase ? 'response' : 'request';
 
   // Merely *selecting* a flow (not presenting it) is a gentler lens: every
   // member reads equally lit, there is no step progression — see
@@ -281,7 +288,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // its own active/shown/hidden opacity tiers; tinting all of them with the
   // flow's colour at the same time would read as busy rather than calm.
   const presentationAccent =
-    isActiveStep && playingFlow?.accent ? accentOf(theme, playingFlow.accent).chip : undefined;
+    isActiveStep && playingAccent ? accentOf(theme, playingAccent).chip : undefined;
   const color =
     presentationAccent ?? lensAccent ?? (edge ? resolveEdgeColor(edge, { accent: sourceAccent }, theme) : theme.edge);
 
@@ -305,7 +312,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     if (!switched || !lensMember) return;
     setLensPulsing(true);
     const timeout = setTimeout(() => setLensPulsing(false), 650);
-    return () => clearTimeout(timeout);
+    // Reset on cleanup too: a second lens switch inside the 650ms that no longer includes this
+    // edge returns early above, so the timeout cancelled here would otherwise leave it pulsing.
+    return () => {
+      clearTimeout(timeout);
+      setLensPulsing(false);
+    };
   }, [lensFlowId, lensMember]);
 
   if (!edge || !sourceNode || !targetNode) return null;
@@ -1044,3 +1056,14 @@ function badgeY(route: ReturnType<typeof routeBetween>): number {
   return route.source.y;
 }
 
+/** The flow being presented, if any. */
+function playingFlowOf(state: EditorStore) {
+  const { active, flowId } = state.flowPlayback;
+  return active && flowId ? findFlow(state.document, flowId) : undefined;
+}
+
+/** This connector's Presentation tier — a string, so only connectors whose tier flips re-render. */
+function explainTierForEdge(state: EditorStore, id: string): ExplainTier {
+  const flow = playingFlowOf(state);
+  return flow ? explainEdgeTier(stepIndexOf(flow, id), state.flowPlayback.step) : 'hidden';
+}

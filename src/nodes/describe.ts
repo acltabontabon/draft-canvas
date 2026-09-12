@@ -2278,7 +2278,7 @@ function group(node: DraftNode, ctx: DescribeContext): Shape[] {
 
 /* ------------------------------------------------------------ code cards -- */
 
-export function codeMetrics(ctx: DescribeContext) {
+function codeMetrics(ctx: DescribeContext) {
   const lineHeight = FONTS.code.size * LINE_HEIGHTS.code;
   const { ascent, descent } = ctx.measurer.metrics(FONTS.code);
   return {

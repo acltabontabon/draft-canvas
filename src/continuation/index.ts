@@ -10,7 +10,7 @@
  * only, nothing from `store/` or `canvas/`. See `docs/ARCHITECTURE.md`.
  */
 
-export { neighborhoodOf, resolvedNeighborCategory } from './context';
+export { neighborhoodOf } from './context';
 export { continuationsFor, dismissalKey } from './engine';
 export { gapForCaption, horizontalAnchorsFor, materialize } from './materialize';
 export { RULES } from './rules';

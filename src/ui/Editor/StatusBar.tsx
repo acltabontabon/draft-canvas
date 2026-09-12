@@ -6,8 +6,7 @@ import { Icon } from '../common/Icon';
 /**
  * The save indicator is the only place the local-first promise is visible while
  * working, so it says where the data went, not just that something happened.
- */
-/**
+ *
  * Says what is actually true.
  *
  * "Saved locally" while an edit is still queued would be a small lie, and the
@@ -42,7 +41,10 @@ export function StatusBar({ durable }: { durable: boolean }) {
   return (
     <footer className="dc-status">
       <div className="dc-status-left">
-<span className="dc-save" data-status={save.status}>{saveLabel(save, durable)}</span>
+        {/* A live region, so a save that starts failing mid-session is announced, not only drawn. */}
+        <span className="dc-save" data-status={save.status} role="status">
+          {saveLabel(save, durable)}
+        </span>
         <span className="dc-muted dc-status-hint">
           {durable
             ? 'Your diagrams stay in this browser. Nothing you draw is uploaded.'
@@ -62,7 +64,7 @@ export function StatusBar({ durable }: { durable: boolean }) {
         <button
           type="button"
           className="dc-zoom-value"
-          aria-label="Fit to view"
+          aria-label={`${Math.round(zoom * 100)}%, fit to view`}
           onClick={() => void fitView({ padding: 0.2, duration: 300, nodes: flowFitViewNodes(useEditorStore.getState()) })}
           title="Fit to view"
         >

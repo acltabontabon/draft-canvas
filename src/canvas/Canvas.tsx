@@ -59,6 +59,10 @@ const PRO_OPTIONS = { hideAttribution: true } as const;
  *  numbers across gestures" house style (see `DraftEdgeView.tsx`'s own `DRAG_THRESHOLD_PX`). */
 const CONTEXT_MENU_DRAG_THRESHOLD_PX = 4;
 
+/** See `onSelectionChange`: more reports than this inside the window is a feedback loop, not clicks. */
+const SELECTION_BURST_WINDOW_MS = 300;
+const SELECTION_BURST_LIMIT = 10;
+
 /** How much further Presentation Mode dims a configured background, on top of
  *  the user's own setting — enough to recede further without disappearing. */
 const PRESENTATION_EXTRA_DIM = 0.2;
@@ -513,9 +517,25 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         if (change.type === 'dimensions' && change.resizing === false) {
           const resized = change.dimensions;
           if (resized) {
-            store
-              .getState()
-              .updateNodeById(change.id, { width: resized.width, height: resized.height }, 'Resize');
+            // A top/left handle moves the node as well as sizing it, but React Flow's terminal
+            // frame carries only dimensions — the position only ever streamed into the view. The
+            // last live position has to be committed alongside the size, or projection snaps the
+            // node back to its pre-resize x/y and it appears to have grown the other way.
+            const posChange = snapped.changes.find(
+              (c) => c.type === 'position' && c.id === change.id && c.position,
+            );
+            const position =
+              (posChange?.type === 'position' ? posChange.position : undefined) ??
+              liveNodes.find((node) => node.id === change.id)?.position;
+            store.getState().updateNodeById(
+              change.id,
+              {
+                ...(position ? { x: position.x, y: position.y } : {}),
+                width: resized.width,
+                height: resized.height,
+              },
+              'Resize',
+            );
           }
         }
       }
@@ -594,8 +614,6 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    * thing that throws "Maximum update depth exceeded") gets to reset between them and can never
    * be exhausted. A crash becomes, at worst, a rare visual flicker.
    */
-  const SELECTION_BURST_WINDOW_MS = 300;
-  const SELECTION_BURST_LIMIT = 10;
   const selectionBurst = useRef({ count: 0, windowEndsAt: 0 });
   const pendingSelectionRef = useRef<{ nodes: string[]; edges: string[] } | null>(null);
   const selectionFrameRef = useRef<number | null>(null);
@@ -740,7 +758,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       }
     }
 
-    state.endInteraction();
+    state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : undefined);
     useUiStore.getState().setInteractionActive(false);
     draggingIds.current = new Set();
     sweptDescendants.current = new Map();
@@ -866,7 +884,14 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
 
   const onCanvasPointerDown = useCallback(
     (event: React.PointerEvent) => {
-      if (event.button !== 2) return;
+      // Any other press clears the snapshot: a touch/pen long-press opens a context menu with
+      // `button === 0`, and must not be measured against (or restore the selection of) some
+      // earlier, unrelated right-click.
+      if (event.button !== 2) {
+        rightPointerDown.current = null;
+        selectionAtRightPointerDown.current = null;
+        return;
+      }
       rightPointerDown.current = { x: event.clientX, y: event.clientY };
       selectionAtRightPointerDown.current = store.getState().selection;
     },

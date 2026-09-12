@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { getViewportForBounds, useReactFlow, useStore } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import { findFlow, flowIsPlayable } from '../document/flow';
+import { boundsOf, type Bounds } from '../document/operations';
 import type { DraftEdge, DraftFlowStep, DraftFlow, DraftNode, DraftViewport } from '../document/types';
 import { nodeIndex } from '../store/selectors';
 import { useEditorStore } from '../store/editorStore';
@@ -47,12 +48,6 @@ export function resolveFlowStep(
   return { edge, edges, extraNodes, index, step, caption: stepEntry.caption, viewport: stepEntry.viewport };
 }
 
-export interface Bounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 /**
  * The bounding box a step's playback focus fits to: the union of its edges'
@@ -68,16 +63,7 @@ export function stepFocusBounds(target: FlowPlaybackStep, nodesById: Map<string,
     if (source) members.push(source);
     if (dest) members.push(dest);
   }
-  if (members.length === 0) return null;
-
-  const x = Math.min(...members.map((n) => n.x));
-  const y = Math.min(...members.map((n) => n.y));
-  return {
-    x,
-    y,
-    width: Math.max(...members.map((n) => n.x + n.width)) - x,
-    height: Math.max(...members.map((n) => n.y + n.height)) - y,
-  };
+  return boundsOf(members);
 }
 
 export interface FlowPlaybackController {

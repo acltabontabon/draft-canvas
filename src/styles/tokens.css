@@ -4,7 +4,7 @@
  * both palettes as a static fallback that follows `prefers-color-scheme`, so
  * the first paint before React mounts already matches the OS.
  *
- * Everything else — spacing, radii, typography, easing — lives only here.
+ * Everything else — radii, layers, typography, easing — lives only here.
  */
 :root {
   --dc-canvas: #0f1115;
@@ -32,6 +32,21 @@
   --dc-radius-sm: 5px;
   --dc-radius: 8px;
   --dc-radius-lg: 12px;
+
+  /* Floating layers above the canvas, lowest first. Stacking *inside* the canvas (1–4) stays local
+     to canvas.css; these are the ones that have to agree with each other across files. */
+  --dc-z-chrome: 6; /* inspector strip, flow panel */
+  --dc-z-popover: 7; /* anchored element/connector popovers */
+  --dc-z-bar: 8; /* focus indicator, presentation bar, quick connect */
+  --dc-z-menu: 9; /* context and move menus */
+  --dc-z-modal: 40; /* modal and command-palette backdrops */
+  --dc-z-toast: 60;
+  --dc-z-prompt: 65; /* clipboard permission card */
+  --dc-z-tooltip: 70;
+
+  /* Behind a dialog. The palette's is lighter: it is a quick, transient surface. */
+  --dc-scrim: rgba(0, 0, 0, 0.45);
+  --dc-scrim-light: rgba(0, 0, 0, 0.35);
 
   --dc-bar-height: 46px;
   --dc-status-height: 32px;

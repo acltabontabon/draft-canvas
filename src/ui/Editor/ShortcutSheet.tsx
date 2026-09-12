@@ -26,6 +26,11 @@ function matches(query: string, ...haystack: (string | undefined)[]): boolean {
 
 export function ShortcutSheet() {
   const open = useUiStore((state) => state.shortcutsOpen);
+  // Mounted only while open, so the filter starts empty each time.
+  return open ? <ShortcutSheetBody /> : null;
+}
+
+function ShortcutSheetBody() {
   const setOpen = useUiStore((state) => state.setShortcutsOpen);
   const learnModeActive = useUiStore((state) => state.learnModeActive);
   const setLearnModeActive = useUiStore((state) => state.setLearnModeActive);
@@ -35,8 +40,6 @@ export function ShortcutSheet() {
     () => ALL_PRESETS.map((preset) => ({ keys: [preset.shortcut], label: `${preset.label} — ${preset.hint}` })),
     [],
   );
-
-  if (!open) return null;
 
   const rowMatches = (row: Row) =>
     isGestureRow(row)

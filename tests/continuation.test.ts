@@ -10,7 +10,6 @@ import {
   dismissalKey,
   materialize,
   neighborhoodOf,
-  resolvedNeighborCategory,
   RULES,
   type ContinuationRule,
   type ContinuationTrigger,
@@ -307,15 +306,9 @@ describe('continuationsFor — rule tables', () => {
     expect(ids(graph([topic('t')], []), 'nope', 'drop')).toEqual([]);
   });
 
-  it('a Junction sitting in a chain resolves through it and misfires no current rule', () => {
+  it('a Junction sitting in a chain misfires no current rule', () => {
     // Actor -> Junction -> Service
     const doc = graph([actor('u'), { id: 'j', type: 'ellipse' }, service('s')], [['u', 'j'], ['j', 's']]);
-
-    const fedByJunction = neighborhoodOf(doc, 's')!.in.find((e) => e.other.id === 'j')!;
-    expect(resolvedNeighborCategory(doc, fedByJunction, 'in')).toBe('actor');
-
-    const feedsJunction = neighborhoodOf(doc, 'u')!.out.find((e) => e.other.id === 'j')!;
-    expect(resolvedNeighborCategory(doc, feedsJunction, 'out')).toBe('service');
 
     // A Junction never anchors a continuation, and sitting between two other nodes changes neither
     // of their own category nor their own incident-edge shape — no existing rule reacts to it.

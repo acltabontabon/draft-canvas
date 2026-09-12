@@ -8,7 +8,7 @@ import type { StarterId } from '../starters';
 import { loadStarters } from '../starters/load';
 import { Autosave } from '../storage/autosave';
 import { getRepository, type DraftRepository } from '../storage';
-import { IndexedDbRepository } from '../storage/IndexedDbRepository';
+import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
 import { documentWithLiveViewport, useEditorStore } from './editorStore';
 import { useUiStore } from './uiStore';
 
@@ -87,9 +87,7 @@ export function useDocumentSession(): DocumentSession {
       if (repo instanceof IndexedDbRepository) {
         void repo
           .migrateLegacyRecords()
-          .catch((error: unknown) => {
-            console.warn('[draft-canvas] Background encryption sweep failed:', error);
-          })
+          .catch((error: unknown) => logDiagnostic(error, { operation: 'encryption-sweep' }))
           // Chained, not parallel: both sweeps decrypt bodies, and running
           // them together would decrypt the oldest records twice at once.
           // The library re-reads only when a row actually changed — the
@@ -98,15 +96,23 @@ export function useDocumentSession(): DocumentSession {
           .then(async ({ updated }) => {
             if (updated > 0 && !cancelled) setLibrary(await repo.list());
           })
-          .catch((error: unknown) => {
-            console.warn('[draft-canvas] Library fingerprint backfill failed:', error);
-          });
+          .catch((error: unknown) => logDiagnostic(error, { operation: 'library-backfill' }));
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [notify]);
+
+  // A newer build opened in another tab is upgrading the database; this tab has let go of its
+  // connection so that can finish, and nothing here saves any more until a reload.
+  useEffect(
+    () =>
+      onStorageSuperseded(() =>
+        notify('Draft Canvas was updated in another tab. Reload this tab to keep saving your changes.', 'error'),
+      ),
+    [notify],
+  );
 
   // One autosave controller per repository, torn down with it.
   useEffect(() => {

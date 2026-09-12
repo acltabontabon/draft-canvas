@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Modal } from '../src/ui/common/Modal';
 
 /**
@@ -41,5 +41,29 @@ describe('Modal focus handling', () => {
     fireEvent.change(field, { target: { value: 'x' } });
     expect(screen.getByTestId('render-count').textContent).toBe('1');
     expect(document.activeElement).toBe(field);
+  });
+
+  it('leaves an autoFocus field focused instead of pulling focus back to the panel', () => {
+    render(
+      <Modal title="Rename" onClose={() => void 0}>
+        <input aria-label="Title" autoFocus />
+      </Modal>,
+    );
+    expect(document.activeElement).toBe(screen.getByLabelText('Title'));
+  });
+
+  it('Escape in a modal opened from inside another closes only the inner one', () => {
+    const outerClose = vi.fn();
+    const innerClose = vi.fn();
+    render(
+      <Modal title="Export" onClose={outerClose}>
+        <Modal title="Passphrase" onClose={innerClose}>
+          <input aria-label="Passphrase" />
+        </Modal>
+      </Modal>,
+    );
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(innerClose).toHaveBeenCalledOnce();
+    expect(outerClose).not.toHaveBeenCalled();
   });
 });

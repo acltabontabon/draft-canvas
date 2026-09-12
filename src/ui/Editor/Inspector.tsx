@@ -30,10 +30,15 @@ import { NOTE_LABELS, BOUNDARY_PRESET_OPTION_LABELS } from './nodeKindLabels';
  * taking a permanent column, because the canvas is the product.
  */
 export function Inspector() {
-  const document = useEditorStore((state) => state.document);
   const selection = useEditorStore((state) => state.selection);
+  // This strip is only for multi- or mixed selections (see the early returns below); for anything
+  // else it needn't follow the document, which changes on every drag frame.
+  const shown = selection.nodes.length + selection.edges.length > 1;
+  const document = useEditorStore((state) => (shown ? state.document : null));
   const store = useEditorStore;
   const theme = useThemeValue();
+
+  if (!document) return null;
 
   const nodes = selection.nodes
     .map((id) => nodeIndex(document.nodes).get(id))

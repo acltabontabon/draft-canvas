@@ -1259,7 +1259,7 @@ export function routeEdge(
 }
 
 /** Type guard for a handle id / stored value that should be one of the four sides. */
-export function isSide(value: unknown): value is Side {
+function isSide(value: unknown): value is Side {
   return typeof value === 'string' && (SIDES as readonly string[]).includes(value);
 }
 

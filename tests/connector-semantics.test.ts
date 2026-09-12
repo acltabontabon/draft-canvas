@@ -8,6 +8,7 @@ import {
   isEligibleForReinference,
   isSyncPairing,
   quickFixesFor,
+  resolveJunctionEndpoint,
   resolveTransparentCategory,
 } from '../src/document/connectorSemantics';
 import { createDocument, createEdge, createNode, type CreateNodeInput } from '../src/document/factory';
@@ -1626,5 +1627,28 @@ describe('Junction connections — store integration (connect/reconnect through 
     expect(restoredOutgoing.semantic).toBe('publishes');
     expect(restoredOutgoing.kind).toBe('event');
     expect(restoredOutgoing.semanticsOrigin).toBe('explicit');
+  });
+});
+
+describe('resolveJunctionEndpoint — a diamond of Junctions', () => {
+  it('resolves the far corner to the one real origin, not ambiguous', () => {
+    const a = createNode({ type: 'service', x: 0, y: 0 });
+    const [j0, j1, j2, j3] = [0, 1, 2, 3].map((i) => createNode({ type: 'ellipse', x: 200 * (i + 1), y: 0 }));
+    const edges = [
+      createEdge({ source: a.id, target: j0!.id }),
+      createEdge({ source: j0!.id, target: j1!.id }),
+      createEdge({ source: j0!.id, target: j2!.id }),
+      createEdge({ source: j1!.id, target: j3!.id }),
+      createEdge({ source: j2!.id, target: j3!.id }),
+    ];
+    const graph = { nodes: [a, j0!, j1!, j2!, j3!], edges };
+    expect(resolveJunctionEndpoint(graph, j3!.id, 'source')).toEqual({ status: 'resolved', nodeId: a.id });
+  });
+
+  it('still terminates, unresolved, on a Junction cycle with nothing real attached', () => {
+    const j0 = createNode({ type: 'ellipse', x: 0, y: 0 });
+    const j1 = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const edges = [createEdge({ source: j0.id, target: j1.id }), createEdge({ source: j1.id, target: j0.id })];
+    expect(resolveJunctionEndpoint({ nodes: [j0, j1], edges }, j0.id, 'source').status).toBe('unresolved');
   });
 });

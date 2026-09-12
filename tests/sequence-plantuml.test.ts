@@ -221,6 +221,17 @@ describe('toPlantUml', () => {
     expect(out).toContain('end note\n');
   });
 
+  it('escapes a content line reading `end note` so it cannot close the block early', () => {
+    const m = model({
+      participants: [{ id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' }],
+      elements: [{ kind: 'note', order: 0, participantIds: ['P1'], text: 'before\nend note\nafter', sourceFlowId: 'f1' }],
+    });
+    const lines = toPlantUml(m).split('\n').map((line) => line.trim());
+    expect(lines.filter((line) => /^end\s?note$/i.test(line))).toHaveLength(1);
+    expect(lines).toContain('~end note');
+    expect(lines.indexOf('after')).toBeLessThan(lines.indexOf('end note'));
+  });
+
   it('wraps a long note instead of letting one sentence stretch the diagram sideways', () => {
     const long =
       'Compensation is event-driven too: Payment refunds and publishes Payment Refunded; Order reacts to that in turn.';

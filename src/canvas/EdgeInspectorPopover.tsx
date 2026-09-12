@@ -23,12 +23,13 @@ import {
   type ConnectionCapability,
 } from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
-import { laneIndex, routeBetween, type Rect } from '../edges/routing';
+import { labelLaneOffset, laneIndex, routeBetween, type Rect } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
+import { obstaclesForEdge } from '../edges/obstacles';
 import type { HintId } from '../learning/hints';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
-import { edgeIndex, nodeIndex } from '../store/selectors';
+import { anyExplicitSemantics, documentHasAttachments, edgeIndex, nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
 import {
@@ -38,6 +39,7 @@ import {
   type ScreenRect,
 } from './edgeGeometry';
 import { HintStrip } from './HintStrip';
+import { useToolbarHeight } from './useToolbarHeight';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 
@@ -118,6 +120,7 @@ export function EdgeInspectorPopover() {
   const document = useEditorStore((state) => state.document);
   const selection = useEditorStore((state) => state.selection);
   const mode = useEditorStore((state) => state.mode);
+  const interactionActive = useUiStore((state) => state.interactionActive);
   const store = useEditorStore;
   const theme = useThemeValue();
   const { flowToScreenPosition } = useReactFlow();
@@ -274,11 +277,18 @@ export function EdgeInspectorPopover() {
   // already missing here (harmless while the drift was a few pixels); a shared
   // trunk makes it matter, since an un-bundled label point sits out in open
   // canvas far from the branch the user actually clicked.
+  // Obstacles and the label's lane nudge included, exactly as `DraftEdgeView` applies them — a
+  // parallel or detoured connector's label otherwise sits well away from where the panel points.
+  const lane = laneIndex(document.edges).get(displayEdge.id)?.offset ?? 0;
   const route = routeBetween(sourceRect, targetRect, displayEdge.routing, {
     anchors: { source: displayEdge.sourceAnchor, target: displayEdge.targetAnchor },
-    lane: laneIndex(document.edges).get(displayEdge.id)?.offset ?? 0,
+    lane,
+    obstacles: interactionActive ? undefined : obstaclesForEdge(document.nodes, displayEdge.source, displayEdge.target),
     spine: routingPlan(document.nodes, document.edges).spineFor(displayEdge.id),
   });
+  const labelNudge = labelLaneOffset(route.source.side, route.target.side, lane);
+  const labelX = route.labelX + labelNudge.x;
+  const labelY = route.labelY + labelNudge.y;
   // Two independent reasons to prefer sitting below the connector instead of above it: the
   // node-overlap heuristic every popover/attachment row already shares (a short connector whose
   // label point sits close to its own source/target), and — new here, since the expanded editor
@@ -286,7 +296,7 @@ export function EdgeInspectorPopover() {
   // `measuredHeight` starts at 0 (nothing measured yet, e.g. the very first frame after
   // selecting an edge), which always reads as "enough room" — a brief default that self-corrects
   // one frame later once `useLayoutEffect` reports the real height, never a lasting wrong guess.
-  const screenLabelPoint = flowToScreenPosition({ x: route.labelX, y: route.labelY });
+  const screenLabelPoint = flowToScreenPosition({ x: labelX, y: labelY });
   // Measured, not guessed: the toolbar wraps to two rows below 720px (see app.css's
   // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
   // it — a static constant can't account for either. `TOOLBAR_CLEARANCE` stays as the fallback
@@ -294,7 +304,7 @@ export function EdgeInspectorPopover() {
   const toolbarClearance = toolbarHeight ? toolbarHeight + 10 : TOOLBAR_CLEARANCE;
   const notEnoughRoomAbove = screenLabelPoint.y - POPOVER_GAP - measuredHeight < toolbarClearance;
   const flipBelow =
-    attachmentRowBelowsSourceOrTarget(route.labelX, route.labelY, sourceRect, targetRect) || notEnoughRoomAbove;
+    attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect) || notEnoughRoomAbove;
 
   // Horizontal collision guard: `attachmentRowBelowsSourceOrTarget` above only checks a single
   // point at the label's own x, so it can't see the popover's actual *width* reaching sideways
@@ -326,11 +336,10 @@ export function EdgeInspectorPopover() {
   // (`semanticsOrigin: 'explicit'`, already stamped by `setEdgeSemantic`/`setEdgeHasResponse`/
   // `setEdgeKind`), not just on dismissal — the existing, precise signal for "the user has already
   // worked with what a connector can mean," not a new field invented for this.
-  const hasExplicitSemantics = document.edges.some((e) => e.semanticsOrigin === 'explicit');
+  const hasExplicitSemantics = anyExplicitSemantics(document.edges);
   // The same underlying capability (Phase 2.7's drag-to-attach) whichever kind of element taught
   // it first — attaching to a node counts as much as attaching to a connector.
-  const hasAnyAttachment =
-    document.nodes.some((n) => n.attachments?.length) || document.edges.some((e) => e.attachments?.length);
+  const hasAnyAttachment = documentHasAttachments(document);
   // At most one hint per connector: semantics first (the more central concept), the
   // drag-to-attach nudge only once semantics are out of the way — mirrors
   // `ElementInspectorPopover`'s own service-node/attachment-slot priority.
@@ -378,23 +387,6 @@ export function EdgeInspectorPopover() {
       </div>,
     overlay.target,
   );
-}
-
-/** The editor toolbar's height, kept current with a `ResizeObserver` while `active`. */
-function useToolbarHeight(active: boolean): number | undefined {
-  const [height, setHeight] = useState<number>();
-  useEffect(() => {
-    if (!active) return;
-    const toolbar = window.document.querySelector('.dc-toolbar');
-    if (!toolbar) return;
-    const measure = () => setHeight(Math.round(toolbar.getBoundingClientRect().height));
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(toolbar);
-    return () => observer.disconnect();
-  }, [active]);
-  return height;
 }
 
 function EdgeInspectorRow({

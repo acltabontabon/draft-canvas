@@ -1,4 +1,3 @@
-import { LIMITS } from '../document/limits';
 import { parseDocument, type NormalizeResult } from '../document/validate';
 import {
   decryptFromExport,
@@ -8,7 +7,7 @@ import {
 } from '../crypto/passphraseExport';
 import type { DraftDocument } from '../document/types';
 import { downloadText } from './download';
-import { fileNameFor } from './project';
+import { fileNameFor, readImportText } from './project';
 
 export { SECURE_EXPORT_FILE_EXTENSION, SECURE_EXPORT_MIME };
 
@@ -32,22 +31,9 @@ export async function exportSecureProjectFile(document: DraftDocument, passphras
  * `adoptDocument` → `repository.save()` path, which always encrypts.
  */
 export async function readSecureProjectFile(file: File, passphrase: string): Promise<NormalizeResult> {
-  if (file.size > LIMITS.maxFileBytes) {
-    return {
-      ok: false,
-      error: `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. Draft Canvas opens files up to ${LIMITS.maxFileBytes / 1024 / 1024} MB.`,
-    };
-  }
-  let text: string;
-  try {
-    text = await file.text();
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : 'That file could not be read.',
-    };
-  }
-  const decrypted = await decryptFromExport(text, passphrase);
+  const read = await readImportText(file);
+  if (!read.ok) return read;
+  const decrypted = await decryptFromExport(read.text, passphrase);
   if (!decrypted.ok) return decrypted;
   return parseDocument(decrypted.document);
 }

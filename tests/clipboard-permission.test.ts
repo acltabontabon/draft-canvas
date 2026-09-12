@@ -107,7 +107,21 @@ describe('requestClipboardRead', () => {
     expect(ui.notify).toHaveBeenCalledWith('Clipboard access is blocked by your browser.');
   });
 
-  it('already denied: skips both the dialog and the read, and just notifies', async () => {
+  it('previously denied: skips the dialog but still tries the read, and notifies if it fails again', async () => {
+    prefs.set('clipboard-permission', 'denied');
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { readText: vi.fn() } });
+    const editor = fakeEditor(false);
+    const ui = fakeUi(true);
+
+    await requestClipboardRead(editor, ui);
+
+    expect(ui.requestClipboardPermission).not.toHaveBeenCalled();
+    expect(editor.syncClipboardFromSystem).toHaveBeenCalledOnce();
+    expect(prefs.get('clipboard-permission')).toBe('denied');
+    expect(ui.notify).toHaveBeenCalledWith('Clipboard access is blocked by your browser.');
+  });
+
+  it('previously denied but the read now succeeds: recovers to "granted" without a notice', async () => {
     prefs.set('clipboard-permission', 'denied');
     vi.stubGlobal('navigator', { ...navigator, clipboard: { readText: vi.fn() } });
     const editor = fakeEditor(true);
@@ -115,8 +129,7 @@ describe('requestClipboardRead', () => {
 
     await requestClipboardRead(editor, ui);
 
-    expect(ui.requestClipboardPermission).not.toHaveBeenCalled();
-    expect(editor.syncClipboardFromSystem).not.toHaveBeenCalled();
-    expect(ui.notify).toHaveBeenCalledWith('Clipboard access is blocked by your browser.');
+    expect(prefs.get('clipboard-permission')).toBe('granted');
+    expect(ui.notify).not.toHaveBeenCalled();
   });
 });

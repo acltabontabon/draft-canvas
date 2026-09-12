@@ -687,7 +687,7 @@
  * fixed` and portaled to `document.body`, so this chrome intentionally mirrors the popovers below
  * (border/radius/shadow tokens, `dc-attachment-card-in`'s fade) without sharing their component. */
 .dc-tooltip {
-  z-index: 70;
+  z-index: var(--dc-z-tooltip);
   max-width: 220px;
   padding: 8px 10px;
   border: 1px solid var(--dc-border);
@@ -941,7 +941,7 @@
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 7;
+  z-index: var(--dc-z-popover);
   pointer-events: all;
 }
 
@@ -998,7 +998,7 @@
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 7;
+  z-index: var(--dc-z-popover);
   display: flex;
   flex-direction: column;
   width: max-content;
@@ -1374,10 +1374,12 @@
   text-transform: uppercase;
 }
 
+/* The label sits right beside its toggle — pushing them to opposite edges of a wide popover
+   separated a control from the word that names it. */
 .dc-inspector-section-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
 }
 
 .dc-inspector-section-row {
@@ -1763,13 +1765,13 @@
   position: fixed;
   left: 0;
   top: 0;
-  z-index: 8;
+  z-index: var(--dc-z-bar);
   display: flex;
   flex-direction: column;
   min-width: 132px;
   padding: 4px;
   border: 1px solid var(--dc-border);
-  border-radius: 8px;
+  border-radius: var(--dc-radius);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
 }
@@ -1797,14 +1799,14 @@
   position: fixed;
   left: 0;
   top: 0;
-  z-index: 9;
+  z-index: var(--dc-z-menu);
   display: flex;
   flex-direction: column;
   min-width: 176px;
   max-width: 260px;
   padding: 4px;
   border: 1px solid var(--dc-border);
-  border-radius: 8px;
+  border-radius: var(--dc-radius);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
   outline: none;
@@ -2033,6 +2035,10 @@
    careful row look accidental. */
 .dc-empty-key {
   white-space: nowrap;
+}
+
+.dc-empty-keys kbd + kbd {
+  margin-left: 2px;
 }
 
 .dc-empty-keys kbd {

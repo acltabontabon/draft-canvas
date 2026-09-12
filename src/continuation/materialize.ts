@@ -139,7 +139,7 @@ function preferredDirection(doc: DraftDocument, anchor: DraftNode): CompanionDir
  * `chooseSides` would have picked anyway; the difference is only that this locks it in rather
  * than leaving both preview and real edge to (hopefully) agree by recomputing it twice.
  */
-export function anchorsForPlacement(
+function anchorsForPlacement(
   source: Pick<DraftNode, 'x' | 'y' | 'width' | 'height' | 'type'>,
   target: Pick<DraftNode, 'x' | 'y' | 'width' | 'height' | 'type'>,
 ): { sourceAnchor: EdgeAnchor; targetAnchor: EdgeAnchor } {

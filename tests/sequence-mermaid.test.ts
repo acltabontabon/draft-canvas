@@ -50,6 +50,27 @@ describe('toMermaid', () => {
     expect(out).toContain('A-)B: Publish');
   });
 
+  it('writes `;` and `#` in a message label as entity codes, so neither ends the statement', () => {
+    const m = model({
+      participants: [
+        { id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' },
+        { id: 'P2', alias: 'B', label: 'B', category: 'service', kind: 'participant', sourceNodeId: 'b' },
+      ],
+      elements: [
+        {
+          kind: 'group',
+          id: 'f1',
+          label: 'Flow',
+          sourceFlowId: 'f1',
+          children: [
+            { kind: 'message', order: 0, from: 'P1', to: 'P2', label: 'Retry #2; then give up', interaction: 'sync', sourceFlowId: 'f1', sourceEdgeIds: [], sourceStepIds: [] },
+          ],
+        },
+      ],
+    });
+    expect(toMermaid(m)).toContain('A->>B: Retry #35;2#59; then give up');
+  });
+
   it('guards a literal colon in a message label', () => {
     const m = model({
       participants: [
@@ -220,7 +241,7 @@ describe('toMermaid', () => {
     expect(segments.length).toBeGreaterThan(1);
     for (const segment of segments) expect(segment.length).toBeLessThanOrEqual(60);
     // Colons are still guarded, so compare against the same substitution the emitter makes.
-    expect(segments.join(' ')).toBe(long.replace(/:/g, '-'));
+    expect(segments.join(' ')).toBe(long.replace(/:/g, '-').replace(/;/g, '#59;'));
   });
 
   it('collapses a multi-line note (e.g. Code) into one line via <br/>, escaping HTML-sensitive characters', () => {
@@ -246,7 +267,9 @@ describe('toMermaid', () => {
       ],
     });
     const out = toMermaid(m);
-    expect(out).toContain('Note over A: if (a &lt; b &amp;&amp; b &gt; c) {<br/>retry();<br/>}');
+    // Mermaid entity codes, not HTML entities: `&lt;`'s own `;` (and the code's `;`) would end the
+    // statement mid-note.
+    expect(out).toContain('Note over A: if (a #lt; b #amp;#amp; b #gt; c) {<br/>retry()#59;<br/>}');
   });
 
   it('does not truncate a very long message label', () => {

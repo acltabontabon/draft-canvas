@@ -64,13 +64,11 @@ import {
   type TextRole,
 } from './types';
 import { clamp } from '../lib/math';
+import { isRecord } from '../lib/isRecord';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
   | { ok: false; error: string };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const finite = (value: unknown, fallback: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -152,6 +150,52 @@ function safeId(value: unknown): string | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > LIMITS.maxIdLength) return null;
   return trimmed;
+}
+
+/**
+ * A host's attachment list — shared by nodes and connectors, which carry the identical shape. Keeps
+ * at most `max`, gives missing or duplicate ids fresh ones, and keeps a card's size (detaching
+ * restores it at the size it had, not a default). Counts what it dropped and cut so the caller can
+ * report it.
+ */
+function parseAttachments(
+  value: unknown,
+  max: number,
+): { attachments: Attachment[]; dropped: number; truncated: number } {
+  const raw = Array.isArray(value) ? value : [];
+  const attachments: Attachment[] = [];
+  const seenIds = new Set<string>();
+  let dropped = 0;
+  for (const rawAttachment of raw.slice(0, max)) {
+    if (!isRecord(rawAttachment)) {
+      dropped += 1;
+      continue;
+    }
+    let id = safeId(rawAttachment.id);
+    if (!id || seenIds.has(id)) id = createId('a');
+    seenIds.add(id);
+
+    const type = oneOf<AttachableType>(rawAttachment.type, ATTACHABLE_TYPES, 'note');
+    const attachment: Attachment = { id, type };
+
+    const label = text(rawAttachment.text, LIMITS.maxTextLength);
+    if (label !== undefined) attachment.text = label;
+
+    const accent = oneOfOptional<Accent>(rawAttachment.accent, ACCENTS);
+    if (accent !== undefined) attachment.accent = accent;
+
+    Object.assign(attachment, validateAttachableFields(rawAttachment, type));
+
+    const width = finite(rawAttachment.width, Number.NaN);
+    const height = finite(rawAttachment.height, Number.NaN);
+    if (Number.isFinite(width) && Number.isFinite(height)) {
+      attachment.width = clamp(width, LIMITS.minNodeSize, LIMITS.maxNodeSize);
+      attachment.height = clamp(height, LIMITS.minNodeSize, LIMITS.maxNodeSize);
+    }
+
+    attachments.push(attachment);
+  }
+  return { attachments, dropped, truncated: Math.max(0, raw.length - max) };
 }
 
 /**
@@ -340,44 +384,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
       if (candidate.textItalic === true) node.textItalic = true;
     }
 
-    const rawAttachments = Array.isArray(candidate.attachments) ? candidate.attachments : [];
-    if (rawAttachments.length > LIMITS.maxAttachmentsPerNode) {
-      truncatedAttachments += rawAttachments.length - LIMITS.maxAttachmentsPerNode;
-    }
-    if (rawAttachments.length > 0) {
-      const attachments: Attachment[] = [];
-      const seenAttachmentIds = new Set<string>();
-      for (const rawAttachment of rawAttachments.slice(0, LIMITS.maxAttachmentsPerNode)) {
-        if (!isRecord(rawAttachment)) {
-          droppedAttachments += 1;
-          continue;
-        }
-        let attachmentId = safeId(rawAttachment.id);
-        if (!attachmentId || seenAttachmentIds.has(attachmentId)) attachmentId = createId('a');
-        seenAttachmentIds.add(attachmentId);
-
-        const attachmentType = oneOf<AttachableType>(rawAttachment.type, ATTACHABLE_TYPES, 'note');
-        const attachment: Attachment = { id: attachmentId, type: attachmentType };
-
-        const attachmentLabel = text(rawAttachment.text, LIMITS.maxTextLength);
-        if (attachmentLabel !== undefined) attachment.text = attachmentLabel;
-
-        const attachmentAccent = oneOfOptional<Accent>(rawAttachment.accent, ACCENTS);
-        if (attachmentAccent !== undefined) attachment.accent = attachmentAccent;
-
-        Object.assign(attachment, validateAttachableFields(rawAttachment, attachmentType));
-
-        const width = finite(rawAttachment.width, Number.NaN);
-        const height = finite(rawAttachment.height, Number.NaN);
-        if (Number.isFinite(width) && Number.isFinite(height)) {
-          attachment.width = clamp(width, LIMITS.minNodeSize, LIMITS.maxNodeSize);
-          attachment.height = clamp(height, LIMITS.minNodeSize, LIMITS.maxNodeSize);
-        }
-
-        attachments.push(attachment);
-      }
-      if (attachments.length > 0) node.attachments = attachments;
-    }
+    const nodeAttachments = parseAttachments(candidate.attachments, LIMITS.maxAttachmentsPerNode);
+    droppedAttachments += nodeAttachments.dropped;
+    truncatedAttachments += nodeAttachments.truncated;
+    if (nodeAttachments.attachments.length > 0) node.attachments = nodeAttachments.attachments;
 
     nodes.push(node);
   }
@@ -526,48 +536,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     const targetAnchor = parseAnchor(candidate.targetAnchor);
     if (targetAnchor) edge.targetAnchor = targetAnchor;
 
-    // Same repair discipline as a node's own `attachments` above — this is
-    // the identical `Attachment` shape, just hosted on a connector instead.
-    const rawEdgeAttachments = Array.isArray(candidate.attachments) ? candidate.attachments : [];
-    if (rawEdgeAttachments.length > LIMITS.maxAttachmentsPerEdge) {
-      truncatedEdgeAttachments += rawEdgeAttachments.length - LIMITS.maxAttachmentsPerEdge;
-    }
-    if (rawEdgeAttachments.length > 0) {
-      const attachments: Attachment[] = [];
-      const seenEdgeAttachmentIds = new Set<string>();
-      for (const rawAttachment of rawEdgeAttachments.slice(0, LIMITS.maxAttachmentsPerEdge)) {
-        if (!isRecord(rawAttachment)) {
-          droppedEdgeAttachments += 1;
-          continue;
-        }
-        let attachmentId = safeId(rawAttachment.id);
-        if (!attachmentId || seenEdgeAttachmentIds.has(attachmentId)) attachmentId = createId('a');
-        seenEdgeAttachmentIds.add(attachmentId);
-
-        const attachmentType = oneOf<AttachableType>(rawAttachment.type, ATTACHABLE_TYPES, 'note');
-        const attachment: Attachment = { id: attachmentId, type: attachmentType };
-
-        const attachmentLabel = text(rawAttachment.text, LIMITS.maxTextLength);
-        if (attachmentLabel !== undefined) attachment.text = attachmentLabel;
-
-        const attachmentAccent = oneOfOptional<Accent>(rawAttachment.accent, ACCENTS);
-        if (attachmentAccent !== undefined) attachment.accent = attachmentAccent;
-
-        Object.assign(attachment, validateAttachableFields(rawAttachment, attachmentType));
-
-        // Kept for the same reason a node's attachment keeps it: detaching restores the card at
-        // the size it had, not a default.
-        const width = finite(rawAttachment.width, Number.NaN);
-        const height = finite(rawAttachment.height, Number.NaN);
-        if (Number.isFinite(width) && Number.isFinite(height)) {
-          attachment.width = clamp(width, LIMITS.minNodeSize, LIMITS.maxNodeSize);
-          attachment.height = clamp(height, LIMITS.minNodeSize, LIMITS.maxNodeSize);
-        }
-
-        attachments.push(attachment);
-      }
-      if (attachments.length > 0) edge.attachments = attachments;
-    }
+    // The identical `Attachment` shape a node carries, just hosted on a connector.
+    const edgeAttachments = parseAttachments(candidate.attachments, LIMITS.maxAttachmentsPerEdge);
+    droppedEdgeAttachments += edgeAttachments.dropped;
+    truncatedEdgeAttachments += edgeAttachments.truncated;
+    if (edgeAttachments.attachments.length > 0) edge.attachments = edgeAttachments.attachments;
 
     edges.push(edge);
   }
@@ -602,7 +575,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   const flows: DraftFlow[] = [];
   let droppedFlows = 0;
   let droppedFlowSteps = 0;
+  let truncatedFlowSteps = 0;
   const seenFlowIds = new Set<string>();
+  if (rawFlows.length > LIMITS.maxFlows) {
+    repairs.push(`The canvas had too many flows; kept the first ${LIMITS.maxFlows}.`);
+  }
 
   for (const candidateFlow of rawFlows.slice(0, LIMITS.maxFlows)) {
     if (!isRecord(candidateFlow)) {
@@ -621,6 +598,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     const steps: DraftFlowStep[] = [];
     const seenStepEdgeIds = new Set<string>();
     const seenStepIds = new Set<string>();
+    if (rawSteps.length > LIMITS.maxStepsPerFlow) truncatedFlowSteps += 1;
     for (const candidateStep of rawSteps.slice(0, LIMITS.maxStepsPerFlow)) {
       if (!isRecord(candidateStep)) {
         droppedFlowSteps += 1;
@@ -688,7 +666,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
 
   if (droppedFlows > 0) repairs.push(`Dropped ${droppedFlows} unreadable flow(s).`);
   if (droppedFlowSteps > 0) {
-    repairs.push(`Dropped ${droppedFlowSteps} flow step(s) referencing a missing connection.`);
+    repairs.push(`Dropped ${droppedFlowSteps} flow step(s) that were unreadable or had nothing left to show.`);
+  }
+  if (truncatedFlowSteps > 0) {
+    repairs.push(`${truncatedFlowSteps} flow(s) had too many steps; kept the first ${LIMITS.maxStepsPerFlow} of each.`);
   }
 
   /* ------------------------------------------------------------ document -- */

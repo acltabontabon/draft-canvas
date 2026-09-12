@@ -275,8 +275,9 @@ function flowCommands(ctx: CommandContext): Command[] {
       run: startPresentation,
     });
   }
-  commands.push(
-    {
+  // Not offered once the document holds `LIMITS.maxFlows` — `createFlow` would silently refuse.
+  if (ctx.editor.document.flows.length < LIMITS.maxFlows) {
+    commands.push({
       id: 'flow-new',
       title: 'New flow',
       group: 'flow',
@@ -284,7 +285,9 @@ function flowCommands(ctx: CommandContext): Command[] {
       run: (inner) => {
         newFlow(inner);
       },
-    },
+    });
+  }
+  commands.push(
     {
       id: 'flow-manage',
       title: 'Show flows',
@@ -981,7 +984,12 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   // `stepIndexOf`, not a primary-`edgeId` scan: a connector that is only an *extra* member of a
   // step is still in that flow, and offering to add it again would be a silent no-op.
   const flowsContaining = ctx.editor.document.flows.filter((flow) => stepIndexOf(flow, edge.id) !== undefined);
-  const flowsAvailable = ctx.editor.document.flows.filter((flow) => !flowsContaining.includes(flow));
+  // A flow already at `LIMITS.maxStepsPerFlow` can't take the connector; listing it would switch the
+  // lens to a flow that silently didn't change.
+  const flowsAvailable = ctx.editor.document.flows.filter(
+    (flow) => !flowsContaining.includes(flow) && flow.steps.length < LIMITS.maxStepsPerFlow,
+  );
+  const canStartFlow = ctx.editor.document.flows.length < LIMITS.maxFlows;
   const commands: Command[] = [
     {
       id: 'edge-semantic',
@@ -1104,12 +1112,16 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
               deep.editor.setSelectedFlowId(flow.id);
             },
           })),
-          {
-            id: 'edge-add-to-flow:new',
-            title: 'New flow',
-            hint: 'Starts a flow with this connector',
-            run: (deep) => startFlowWith(deep, edge),
-          },
+          ...(canStartFlow
+            ? [
+                {
+                  id: 'edge-add-to-flow:new',
+                  title: 'New flow',
+                  hint: 'Starts a flow with this connector',
+                  run: (deep: CommandContext) => startFlowWith(deep, edge),
+                },
+              ]
+            : []),
         ],
       }),
     },
@@ -1146,6 +1158,8 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       addAttachmentCommand({ hostKind: 'edge', edge }, 'code', 'connector'),
     );
   }
+  // Nowhere left to add it: every flow already has it or is full, and no room for a new one.
+  if (flowsAvailable.length === 0 && !canStartFlow) return commands.filter((command) => command.id !== 'edge-add-to-flow');
   return commands;
 }
 

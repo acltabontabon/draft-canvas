@@ -28,7 +28,7 @@ import { effectiveTextRole } from '../nodes/describe';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
-import { nodeIndex } from '../store/selectors';
+import { documentHasAttachments, nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
 import { BOUNDARY_PRESET_OPTION_LABELS, NOTE_LABELS, TEXT_ROLE_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
@@ -37,6 +37,7 @@ import { COMPONENT_ICON_OPTIONS } from './componentOptions';
 import { DATABASE_ICON_OPTIONS } from './dataStoreOptions';
 import { rectOfInternal } from './edgeGeometry';
 import { HintStrip } from './HintStrip';
+import { useToolbarHeight } from './useToolbarHeight';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { QUEUE_ICON_OPTIONS } from './queueOptions';
@@ -260,7 +261,7 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
   // it — a static constant can't account for either. `TOP_CLEARANCE` stays as the fallback for
   // the (rare) frame where `.dc-toolbar` isn't in the DOM yet.
-  const measuredToolbarHeight = window.document.querySelector('.dc-toolbar')?.getBoundingClientRect().height;
+  const measuredToolbarHeight = useToolbarHeight(mounted);
   const toolbarClearance = measuredToolbarHeight ? measuredToolbarHeight + 10 : TOP_CLEARANCE;
 
   const clearances: PlacementClearances = {
@@ -306,8 +307,7 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   // teaches attachments via its own framing; any other non-group node with nothing attached yet
   // gets the generic nudge. Both retire together (Phase 7.2) — see `hasAnyAttachment` below —
   // since they teach the same underlying capability.
-  const hasAnyAttachment =
-    document.nodes.some((n) => n.attachments?.length) || document.edges.some((e) => e.attachments?.length);
+  const hasAnyAttachment = documentHasAttachments(document);
   const primaryHint: HintId | null =
     displayNode.type === 'service'
       ? 'service-node'

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   exportFlowGifFile,
   exportPngFile,
@@ -76,8 +76,10 @@ export function ExportDialog() {
   const open = useUiStore((state) => state.exportOpen);
   const setOpen = useUiStore((state) => state.setExportOpen);
   const notify = useUiStore((state) => state.notify);
-  const document = useEditorStore((state) => state.document);
-  const selection = useEditorStore((state) => state.selection);
+  // Stays mounted after its first open (so in-session choices survive) — but only subscribes to the
+  // document while actually open, or every drag frame would re-render a hidden dialog.
+  const document = useEditorStore((state) => (open ? state.document : null));
+  const selection = useEditorStore((state) => (open ? state.selection : null));
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const { name } = useTheme();
   const { preset } = usePersonality();
@@ -90,6 +92,10 @@ export function ExportDialog() {
   const [selectionOnly, setSelectionOnly] = useState(false);
   const [includeBackground, setIncludeBackground] = useState(true);
   const [busy, setBusy] = useState(false);
+  // A GIF of a long flow takes a while: its progress drives the button, and Cancel (or closing the
+  // dialog) aborts it between frames.
+  const [gifProgress, setGifProgress] = useState<number | null>(null);
+  const gifAbort = useRef<AbortController | null>(null);
   const [securePromptOpen, setSecurePromptOpen] = useState(false);
   const [gifFlowIdChoice, setGifFlowIdChoice] = useState<string | null>(null);
   const [gifSpeed, setGifSpeed] = useState<GifSpeed>('normal');
@@ -106,11 +112,12 @@ export function ExportDialog() {
   const effectiveMode: ExportMode = selectionRequested ? 'image' : mode;
 
   const close = () => {
+    gifAbort.current?.abort();
     requestExportSelection(false);
     setOpen(false);
   };
 
-  if (!open) return null;
+  if (!open || !document || !selection) return null;
 
   const setMode = (next: ExportMode) => {
     setModeState(next);
@@ -221,6 +228,7 @@ export function ExportDialog() {
       await task();
       close();
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return; // cancelled, not failed
       notify(
         error instanceof Error ? `${what} failed: ${error.message}` : `${what} failed.`,
         'error',
@@ -256,17 +264,25 @@ export function ExportDialog() {
               label: 'Export GIF',
               disabled: busy || !gifFlowId,
               onClick: () =>
-                void run(
-                  () =>
-                    exportFlowGifFile(document, gifFlowId, {
+                void run(async () => {
+                  const controller = new AbortController();
+                  gifAbort.current = controller;
+                  setGifProgress(0);
+                  try {
+                    await exportFlowGifFile(document, gifFlowId, {
                       theme: paletteName,
                       speed: gifSpeed,
                       loop: gifLoop,
                       includeBackground: options.includeBackground,
                       preset,
-                    }),
-                  'GIF export',
-                ),
+                      signal: controller.signal,
+                      onProgress: (done, total) => setGifProgress(Math.floor((done / total) * 100)),
+                    });
+                  } finally {
+                    gifAbort.current = null;
+                    setGifProgress(null);
+                  }
+                }, 'GIF export'),
             }
           : {
               label: `Export ${SEQUENCE_FORMAT_LABEL[sequenceFormat]}`,
@@ -296,9 +312,16 @@ export function ExportDialog() {
             <Icon name="lock" size={13} />
             Generated locally in your browser.
           </span>
-          <Button variant="solid" icon="export" disabled={cta.disabled} onClick={cta.onClick}>
-            {cta.label}
-          </Button>
+          <span className="dc-export-footer-actions">
+            {gifProgress !== null && (
+              <Button variant="quiet" onClick={() => gifAbort.current?.abort()}>
+                Cancel
+              </Button>
+            )}
+            <Button variant="solid" icon="export" disabled={cta.disabled} onClick={cta.onClick}>
+              {gifProgress !== null ? `Rendering GIF… ${gifProgress}%` : cta.label}
+            </Button>
+          </span>
         </div>
       }
     >

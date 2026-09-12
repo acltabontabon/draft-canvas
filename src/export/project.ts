@@ -2,7 +2,7 @@ import { LIMITS } from '../document/limits';
 import { CURRENT_VERSION, DRAFT_FORMAT, type DraftDocument } from '../document/types';
 import { parseDocument, type NormalizeResult } from '../document/validate';
 
-export const FILE_EXTENSION = '.draftcanvas';
+const FILE_EXTENSION = '.draftcanvas';
 export const FILE_MIME = 'application/json';
 
 /**
@@ -47,21 +47,26 @@ export function fileNameFor(title: string, extension = FILE_EXTENSION): string {
   return `${base}${extension}`;
 }
 
-export async function readProjectFile(file: File): Promise<NormalizeResult> {
+/** An imported file's text, or why it can't be opened — the size cap and read failure every import
+ *  shares, before any format-specific parsing. */
+export async function readImportText(file: File): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   if (file.size > LIMITS.maxFileBytes) {
     return {
       ok: false,
       error: `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. Draft Canvas opens files up to ${LIMITS.maxFileBytes / 1024 / 1024} MB.`,
     };
   }
-  let text: string;
   try {
-    text = await file.text();
+    return { ok: true, text: await file.text() };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : 'That file could not be read.',
     };
   }
-  return deserializeDocument(text);
+}
+
+export async function readProjectFile(file: File): Promise<NormalizeResult> {
+  const read = await readImportText(file);
+  return read.ok ? deserializeDocument(read.text) : read;
 }

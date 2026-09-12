@@ -32,6 +32,21 @@ export interface GifExportOptions {
   includeBackground?: boolean;
   /** Phase 5.2 — Intentional Roughness preset. Defaults to `'clean'`. */
   preset?: PersonalityPreset;
+  /** Stops the export between frames; the returned promise rejects with the signal's reason. */
+  signal?: AbortSignal;
+  /** Called after each encoded frame, with how many are done out of how many in total. */
+  onProgress?: (done: number, total: number) => void;
+}
+
+/**
+ * Hands the main thread back between frames. Each frame's palette quantization is synchronous and
+ * a long flow is thousands of frames, so without this the tab can't paint progress, respond to
+ * Cancel, or do anything else until the whole GIF is done.
+ */
+function yieldToBrowser(): Promise<void> {
+  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (typeof scheduler?.yield === 'function') return scheduler.yield();
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 /** Not user-configurable — a fixed, reasonable size for a ticket/Slack embed. */
@@ -156,6 +171,7 @@ export async function exportFlowGifFile(
   const repeat = options.loop === false ? -1 : 0;
 
   for (let i = 0; i < frames.length; i += 1) {
+    options.signal?.throwIfAborted();
     const frame = frames[i]!;
     const { svg } = renderFlowFrameSvg(
       document,
@@ -180,8 +196,11 @@ export async function exportFlowGifFile(
       delay: frame.delayMs,
       ...(i === 0 ? { repeat } : {}),
     });
+    options.onProgress?.(i + 1, frames.length);
+    await yieldToBrowser();
   }
 
+  options.signal?.throwIfAborted();
   gif.finish();
   const blob = new Blob([new Uint8Array(gif.bytes())], { type: 'image/gif' });
   downloadBlob(blob, fileNameFor(document.metadata.title, '.gif'));

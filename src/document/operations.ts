@@ -243,9 +243,8 @@ export function removeElements(
   );
   if (nodes.length === doc.nodes.length && edges.length === doc.edges.length) return doc;
 
-  const removedEdgeIds = new Set(
-    doc.edges.filter((e) => !edges.includes(e)).map((e) => e.id),
-  );
+  const keptEdges = new Set(edges);
+  const removedEdgeIds = new Set(doc.edges.filter((e) => !keptEdges.has(e)).map((e) => e.id));
   return pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds, removingNodes);
 }
 
@@ -263,7 +262,7 @@ export function extractFragment(doc: DraftDocument, nodeIds: Iterable<string>): 
 }
 
 /** Re-identifies a fragment and offsets it, so paste never collides with the original. */
-export function instantiateFragment(
+function instantiateFragment(
   fragment: Clipboard,
   offset: { x: number; y: number },
 ): Clipboard {
@@ -322,7 +321,13 @@ export function pasteFragment(
   const truncated = instantiated.nodes.length > nodeRoom || instantiated.edges.length > edgeRoom;
   const keptNodeIds = new Set(instantiated.nodes.slice(0, nodeRoom).map((n) => n.id));
   const created = {
-    nodes: instantiated.nodes.slice(0, nodeRoom),
+    // A boundary sits after its members in the fragment, so the cap can cut it while keeping
+    // them — a kept child must not point at a parent that never arrived.
+    nodes: instantiated.nodes.slice(0, nodeRoom).map((node) => {
+      if (!node.parentId || keptNodeIds.has(node.parentId)) return node;
+      const { parentId: _dropped, ...unparented } = node;
+      return unparented;
+    }),
     // An edge kept past the node cap would dangle, so it's dropped along with whatever edge-count
     // truncation removes — both filters collapse to one pass.
     edges: instantiated.edges
@@ -704,7 +709,7 @@ export function detachFromEdge(
 /** Spacing between a generated companion node (a DLQ, a consumer) and the node that spawned it —
  *  the same value `detachFromNode`'s own unconditional offset already uses. Exported so a caller
  *  that needs a *larger* gap (e.g. to fit a connector's own caption text — see
- *  `store/editorStore.ts`'s `gapForCaption`) has a floor to widen from, rather than a second,
+ *  `continuation/materialize.ts`'s `gapForCaption`) has a floor to widen from, rather than a second,
  *  independently-drifting magic number. */
 export const COMPANION_GAP = 32;
 
@@ -909,6 +914,17 @@ export function setParent(
 ): DraftDocument {
   const set = new Set(childIds);
   let changed = false;
+  // Walking up from the new parent is O(depth); asking for each child's whole subtree
+  // (`descendantsOf`) was a full scan of the document per child.
+  const byId = parentId === undefined ? null : new Map(doc.nodes.map((node) => [node.id, node]));
+  const isAncestorOfParent = (id: string) => {
+    const seen = new Set<string>();
+    for (let at = byId?.get(parentId!); at && !seen.has(at.id); at = at.parentId ? byId!.get(at.parentId) : undefined) {
+      if (at.id === id) return true;
+      seen.add(at.id);
+    }
+    return false;
+  };
   const nodes = doc.nodes.map((node) => {
     if (!set.has(node.id) || node.id === parentId) return node;
     if (parentId === undefined) {
@@ -924,7 +940,7 @@ export function setParent(
     // these targets before ever offering them as a drop candidate; the
     // guard lives here too so correctness doesn't depend on every future
     // caller remembering to pre-filter the same way.
-    if (descendantsOf(doc, node.id).includes(parentId)) return node;
+    if (isAncestorOfParent(node.id)) return node;
     changed = true;
     return { ...node, parentId };
   });

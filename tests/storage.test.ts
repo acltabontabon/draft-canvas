@@ -107,6 +107,23 @@ describe('local persistence', () => {
     expect(await repository.list()).toHaveLength(0);
   });
 
+  it("removing or pruning a document never touches another document's images whose id extends it with #", async () => {
+    const repository = await IndexedDbRepository.open();
+    const dims = { width: 10, height: 10 };
+    const image = () => new Blob(['x'], { type: 'image/png' });
+    await repository.saveBackgroundImage('d_x', image(), dims, 'bg_a');
+    await repository.saveBackgroundImage('d_x#1', image(), dims, 'bg_b');
+
+    await repository.pruneBackgroundImages('d_x', null);
+    expect(await repository.loadBackgroundImage('d_x', 'bg_a')).toBeNull();
+    expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
+
+    await repository.saveBackgroundImage('d_x', image(), dims, 'bg_c');
+    await repository.remove('d_x');
+    expect(await repository.loadBackgroundImage('d_x', 'bg_c')).toBeNull();
+    expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
+  });
+
   it('renames without disturbing the canvas', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Before', 4);
@@ -116,6 +133,49 @@ describe('local persistence', () => {
     const loaded = await repository.load(doc.metadata.id);
     expect(loaded!.metadata.title).toBe('After');
     expect(loaded!.nodes).toHaveLength(4);
+  });
+
+  it('a rename never overwrites edits another tab saved while it was decrypting', async () => {
+    const repository = await IndexedDbRepository.open();
+    const otherTab = await IndexedDbRepository.open();
+    const doc = documentWith('Before', 2);
+    await repository.save(doc);
+
+    // The other tab's autosave lands after the rename has read the document, before it writes.
+    const realLoad = repository.load.bind(repository);
+    let raced = false;
+    vi.spyOn(repository, 'load').mockImplementation(async (id) => {
+      const loaded = await realLoad(id);
+      if (!raced) {
+        raced = true;
+        const edited = addNodes(loaded!, [createNode({ type: 'service', x: 999, y: 0 })]);
+        await otherTab.save({ ...edited, metadata: { ...edited.metadata, updatedAt: Date.now() + 1 } });
+      }
+      return loaded;
+    });
+
+    await repository.rename(doc.metadata.id, 'After');
+    vi.restoreAllMocks();
+
+    const loaded = await otherTab.load(doc.metadata.id);
+    expect(loaded!.metadata.title).toBe('After');
+    expect(loaded!.nodes).toHaveLength(3);
+  });
+
+  it('closes its connection and tells listeners when a newer version needs the database', async () => {
+    const { onStorageSuperseded } = await import('../src/storage/IndexedDbRepository');
+    await IndexedDbRepository.open();
+    const listener = vi.fn();
+    const stop = onStorageSuperseded(listener);
+
+    const upgraded = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('draft-canvas', 99);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    stop();
+    upgraded.close();
+    expect(listener).toHaveBeenCalledOnce();
   });
 
   it('duplicates into an independent document', async () => {

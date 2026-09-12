@@ -63,6 +63,37 @@ test.describe('editing', () => {
     expect(Math.abs(restored.height - after.height)).toBeLessThan(4);
   });
 
+  test('resizing from the top-left corner keeps the moved origin after a reload', async ({ page }) => {
+    await newCanvas(page, 'Resizing top-left');
+    await create(page, 'Service', { x: 500, y: 350 });
+
+    const node = page.locator('.dc-node').first();
+    await node.click();
+    const before = (await node.boundingBox())!;
+
+    const corner = (await page.locator('.dc-resize-handle').nth(0).boundingBox())!;
+    await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(corner.x - 120, corner.y - 80, { steps: 12 });
+    await page.mouse.up();
+
+    // The bottom-right corner stays put; the top-left moved out with the pointer.
+    const after = (await node.boundingBox())!;
+    expect(after.x).toBeLessThan(before.x - 100);
+    expect(after.y).toBeLessThan(before.y - 60);
+    expect(Math.abs(after.x + after.width - (before.x + before.width))).toBeLessThan(4);
+    expect(Math.abs(after.y + after.height - (before.y + before.height))).toBeLessThan(4);
+
+    await expect(page.locator('.dc-save')).toContainText('Saved locally');
+    await page.reload();
+    await page.locator('.dc-library-item', { hasText: 'Resizing top-left' }).click();
+
+    const restored = (await page.locator('.dc-node').first().boundingBox())!;
+    expect(Math.abs(restored.x - after.x)).toBeLessThan(4);
+    expect(Math.abs(restored.y - after.y)).toBeLessThan(4);
+    expect(Math.abs(restored.width - after.width)).toBeLessThan(4);
+  });
+
   test('a resize is one undo step', async ({ page }) => {
     await newCanvas(page, 'Resize undo');
     await create(page, 'Service', { x: 400, y: 300 });

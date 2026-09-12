@@ -22,7 +22,7 @@ import type { ContinuationRule } from './types';
  * only says *when it applies* and *what it adds*, never whether the connection is legal.
  */
 
-export const TOPIC_FAN_OUT_QUEUE: ContinuationRule = {
+const TOPIC_FAN_OUT_QUEUE: ContinuationRule = {
   id: 'topic-fan-out-queue',
   tier: 'primary',
   label: 'Queue',
@@ -37,7 +37,7 @@ export const TOPIC_FAN_OUT_QUEUE: ContinuationRule = {
   repeatable: (trigger) => trigger === 'drop',
 };
 
-export const TOPIC_FAN_OUT_WORKER: ContinuationRule = {
+const TOPIC_FAN_OUT_WORKER: ContinuationRule = {
   id: 'topic-fan-out-worker',
   tier: 'secondary',
   label: 'Worker',
@@ -50,7 +50,7 @@ export const TOPIC_FAN_OUT_WORKER: ContinuationRule = {
   repeatable: (trigger) => trigger === 'drop',
 };
 
-export const QUEUE_CONSUMER: ContinuationRule = {
+const QUEUE_CONSUMER: ContinuationRule = {
   id: 'queue-consumer',
   tier: 'primary',
   label: 'Worker',
@@ -67,7 +67,7 @@ export const QUEUE_CONSUMER: ContinuationRule = {
   repeatable: (trigger) => trigger === 'drop',
 };
 
-export const QUEUE_DEAD_LETTER: ContinuationRule = {
+const QUEUE_DEAD_LETTER: ContinuationRule = {
   id: 'queue-dead-letter',
   tier: 'secondary',
   label: 'Dead-letter queue',
@@ -88,7 +88,7 @@ export const QUEUE_DEAD_LETTER: ContinuationRule = {
   }),
 };
 
-export const STREAM_DEAD_LETTER: ContinuationRule = {
+const STREAM_DEAD_LETTER: ContinuationRule = {
   id: 'stream-dead-letter',
   tier: 'secondary',
   label: 'Dead-letter topic',
@@ -110,7 +110,7 @@ export const STREAM_DEAD_LETTER: ContinuationRule = {
   }),
 };
 
-export const GATEWAY_ROUTE: ContinuationRule = {
+const GATEWAY_ROUTE: ContinuationRule = {
   id: 'gateway-route',
   tier: 'primary',
   label: 'Service',

@@ -3,10 +3,10 @@ import { useEffect, useRef } from 'react';
 /**
  * Captures whatever element has real DOM focus the moment `active` becomes true, and restores
  * focus to it — if it's still attached to the document — the moment `active` goes back to false
- * or the calling component unmounts, whichever comes first. Shared by `Modal` (always "active" for
- * its own mount lifetime — the caller only renders it while open) and `CommandPalette` (a stable
- * `active: open` boolean on an always-mounted component) so the two dialogs can't drift on this
- * behavior: closing either must hand focus back to whatever opened it, not drop it to `<body>`.
+ * or the calling component unmounts, whichever comes first. Shared by `Modal`, `CommandPalette` and
+ * `ClipboardPermissionDialog` so the dialogs can't drift on this behavior: closing any of them must
+ * hand focus back to whatever opened it, not drop it to `<body>`. `active` may be a constant `true`
+ * for a component that only mounts while open, or a reactive flag on one that stays mounted.
  *
  * The capture itself has to happen synchronously during render, not inside a `useEffect` (even a
  * layout one): both `Modal` and `CommandPalette` focus something of their own via the `autoFocus`

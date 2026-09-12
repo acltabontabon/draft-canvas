@@ -22,14 +22,13 @@ import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { useSettle } from './useContinuation';
 import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
-import { lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
+import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { SvgSurface } from './SvgSurface';
-import type { DraftNodeData } from './projection';
 
 /**
  * One component renders every node type.
@@ -47,7 +46,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // A string, not an object: the selector runs for every node on every store
   // change, and only the nodes whose tier actually flips re-render.
   const explainTier = useEditorStore((state) => explainTierFor(state, id));
-  const focused = useEditorStore((state) => state.focus.active && state.focus.nodeIds.includes(id));
+  const focused = useEditorStore((state) => isNodeFocused(state.focus, id));
   const lensMember = useEditorStore((state) => lensMemberFor(state, id));
   const updateNodeText = useEditorStore((state) => state.updateNodeText);
   const updateNodeById = useEditorStore((state) => state.updateNodeById);
@@ -621,4 +620,3 @@ const STATIC_HANDLE_STYLES: ReadonlyMap<string, CSSProperties> = new Map(
   ]),
 );
 
-export type { DraftNodeData };

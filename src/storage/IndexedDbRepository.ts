@@ -15,6 +15,7 @@ import {
 } from './DraftRepository';
 import { isLibraryShape, libraryShapeOf } from '../document/shape';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
+import { isRecord } from '../lib/isRecord';
 
 const DB_NAME = 'draft-canvas';
 const DB_VERSION = 3;
@@ -22,6 +23,24 @@ const DB_VERSION = 3;
 /** Ask for persistent storage once there's something worth protecting, not
  *  on every save — see `requestPersistentStorage`. */
 let persistenceRequested = false;
+
+/** How many times a metadata-only edit (rename, move) re-reads and retries when another tab
+ *  saved the same document between its read and its write. */
+const METADATA_WRITE_ATTEMPTS = 3;
+
+const supersededListeners = new Set<() => void>();
+
+/**
+ * Called when a newer build, opened in another tab, needs this tab's connection closed to upgrade
+ * the database. This tab closes it (otherwise that tab's open hangs forever) and can no longer
+ * save — the listener's job is to tell the user to reload.
+ */
+export function onStorageSuperseded(listener: () => void): () => void {
+  supersededListeners.add(listener);
+  return () => {
+    supersededListeners.delete(listener);
+  };
+}
 
 /**
  * Meta and body live in separate stores on purpose: rendering the library only
@@ -83,6 +102,7 @@ export class IndexedDbRepository implements DraftRepository {
   static async open(): Promise<IndexedDbRepository> {
     if (typeof indexedDB === 'undefined') throw new StorageUnavailableError();
     try {
+      let opened: IDBPDatabase<DraftDb> | undefined;
       const db = await openDB<DraftDb>(DB_NAME, DB_VERSION, {
         upgrade(database) {
           if (!database.objectStoreNames.contains('documents')) {
@@ -102,10 +122,15 @@ export class IndexedDbRepository implements DraftRepository {
         blocked() {
           console.warn('[draft-canvas] Another tab is holding an older database version open.');
         },
+        blocking() {
+          opened?.close();
+          for (const listener of supersededListeners) listener();
+        },
         terminated() {
           console.warn('[draft-canvas] The local database connection was closed unexpectedly.');
         },
       });
+      opened = db;
       return new IndexedDbRepository(db);
     } catch (error) {
       throw new StorageUnavailableError(error);
@@ -143,7 +168,7 @@ export class IndexedDbRepository implements DraftRepository {
       // ordinary `save()` path — a failure here only loses the "derive once"
       // optimisation, never correctness.
       try {
-        await this.saveVerified(document);
+        await this.saveVerified(document, read.row);
       } catch (error) {
         console.warn(
           `[draft-canvas] Could not persist the migrated copy of record ${id}; continuing with the in-memory version:`,
@@ -162,7 +187,12 @@ export class IndexedDbRepository implements DraftRepository {
    */
   private async readBody(
     id: string,
-  ): Promise<{ document: DraftDocument; wasEncrypted: boolean; priorVersion: unknown } | null> {
+  ): Promise<{
+    document: DraftDocument;
+    wasEncrypted: boolean;
+    priorVersion: unknown;
+    row: EncryptedBody | LegacyBody;
+  } | null> {
     let fetched;
     try {
       fetched = await this.db.get('bodies', id);
@@ -203,7 +233,7 @@ export class IndexedDbRepository implements DraftRepository {
     }
 
     const priorVersion = isRecord(rawDocument) ? rawDocument.version : undefined;
-    return { document: result.document, wasEncrypted, priorVersion };
+    return { document: result.document, wasEncrypted, priorVersion, row };
   }
 
   /**
@@ -260,10 +290,7 @@ export class IndexedDbRepository implements DraftRepository {
         tx.objectStore('bodies').put(encrypted),
         tx.done,
       ]);
-      if (!persistenceRequested) {
-        persistenceRequested = true;
-        requestPersistentStorage();
-      }
+      requestPersistenceOnce();
     } catch (error) {
       if (isQuotaError(error)) throw new QuotaExceededError(error);
       throw error;
@@ -279,7 +306,7 @@ export class IndexedDbRepository implements DraftRepository {
    * `save()` path autosave calls on every edit, where an extra decrypt round
    * trip would add real, unrequested cost with no evidence it's needed.
    */
-  private async saveVerified(document: DraftDocument): Promise<void> {
+  private async saveVerified(document: DraftDocument, readRow: EncryptedBody | LegacyBody): Promise<void> {
     const key = await getOrCreateMasterKey();
     const encrypted = await encryptDocument(document, key);
     const verified = await decryptDocument(encrypted, key);
@@ -289,34 +316,78 @@ export class IndexedDbRepository implements DraftRepository {
       );
     }
     const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
+    // Only if the row is still the one that was read: another tab may have saved real edits while
+    // this one decrypted and re-encrypted, and the migrated copy of the older row must not win.
+    const current = await tx.objectStore('bodies').get(document.metadata.id);
+    if (!current || !sameBody(current, readRow)) {
+      await tx.done;
+      return;
+    }
     await Promise.all([
       tx.objectStore('documents').put(summarize(document)),
       tx.objectStore('bodies').put(encrypted),
       tx.done,
     ]);
-    if (!persistenceRequested) {
-      persistenceRequested = true;
-      requestPersistentStorage();
+    requestPersistenceOnce();
+  }
+
+  /**
+   * A metadata-only edit (rename, move to a project) is a decrypt → change → encrypt round trip,
+   * which can't sit inside one IndexedDB transaction. Instead the write commits only if the
+   * document's summary is still exactly as it was before the read — otherwise another tab saved
+   * in between, and the edit is redone against that newer content rather than overwriting it.
+   */
+  private async updateMetadata(
+    id: string,
+    change: (metadata: DraftDocument['metadata']) => DraftDocument['metadata'],
+  ): Promise<void> {
+    for (let attempt = 0; attempt < METADATA_WRITE_ATTEMPTS; attempt += 1) {
+      const before = await this.db.get('documents', id);
+      const document = await this.load(id);
+      if (!before || !document) return;
+      const next = { ...document, metadata: change({ ...document.metadata, updatedAt: Date.now() }) };
+      try {
+        const encrypted = await encryptDocument(next, await getOrCreateMasterKey());
+        const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
+        const current = await tx.objectStore('documents').get(id);
+        // Deleted meanwhile: nothing to rename, and writing would resurrect it.
+        if (!current) {
+          await tx.done;
+          return;
+        }
+        if (current.updatedAt === before.updatedAt) {
+          await Promise.all([
+            tx.objectStore('documents').put(summarize(next)),
+            tx.objectStore('bodies').put(encrypted),
+            tx.done,
+          ]);
+          return;
+        }
+        await tx.done;
+      } catch (error) {
+        if (isQuotaError(error)) throw new QuotaExceededError(error);
+        throw error;
+      }
     }
+    throw new Error(`[draft-canvas] ${id} kept changing in another tab; the change was not saved.`);
   }
 
   async remove(id: string): Promise<void> {
     const tx = this.db.transaction(['documents', 'bodies', 'backgroundImages'], 'readwrite');
+    const images = tx.objectStore('backgroundImages');
+    // Every image the document ever had under `BackgroundSettings.imageId` (`<id>#<imageId>`).
+    const imageKeys = await ownedImageKeys(images, id);
     await Promise.all([
       tx.objectStore('documents').delete(id),
       tx.objectStore('bodies').delete(id),
-      tx.objectStore('backgroundImages').delete(id),
-      // Every image the document ever had under `BackgroundSettings.imageId` (`<id>#<imageId>`).
-      tx.objectStore('backgroundImages').delete(IDBKeyRange.bound(`${id}#`, `${id}#\uffff`)),
+      images.delete(id),
+      ...imageKeys.map((key) => images.delete(key)),
       tx.done,
     ]);
   }
 
   async rename(id: string, title: string): Promise<void> {
-    const document = await this.load(id);
-    if (!document) return;
-    document.metadata = { ...document.metadata, title, updatedAt: Date.now() };
-    await this.save(document);
+    await this.updateMetadata(id, (metadata) => ({ ...metadata, title }));
   }
 
   async listProjects(): Promise<Project[]> {
@@ -344,13 +415,12 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   async moveDocumentToProject(id: string, projectId: string | undefined): Promise<void> {
-    const document = await this.load(id);
-    if (!document) return;
-    const metadata = { ...document.metadata, updatedAt: Date.now() };
-    if (projectId) metadata.projectId = projectId;
-    else delete metadata.projectId;
-    document.metadata = metadata;
-    await this.save(document);
+    await this.updateMetadata(id, (metadata) => {
+      const next = { ...metadata };
+      if (projectId) next.projectId = projectId;
+      else delete next.projectId;
+      return next;
+    });
   }
 
   async usage(): Promise<{ usage: number; quota: number } | null> {
@@ -379,8 +449,12 @@ export class IndexedDbRepository implements DraftRepository {
    * a partially-migrated state.
    */
   async migrateLegacyRecords(): Promise<{ migrated: number; failed: number }> {
-    const all = await this.db.getAll('bodies');
-    const legacy = all.filter(isLegacyBody);
+    // Walked with a cursor, keeping only legacy rows: `getAll` would hold every encrypted body in
+    // memory at once on every launch, just to find what is almost always none.
+    const legacy: LegacyBody[] = [];
+    for (let cursor = await this.db.transaction('bodies').store.openCursor(); cursor; cursor = await cursor.continue()) {
+      if (isLegacyBody(cursor.value)) legacy.push(cursor.value);
+    }
     if (legacy.length === 0) return { migrated: 0, failed: 0 };
 
     const key = await getOrCreateMasterKey();
@@ -389,7 +463,7 @@ export class IndexedDbRepository implements DraftRepository {
     for (const row of legacy) {
       try {
         const encrypted = await migrateLegacyRecord(row, key);
-        // `all` was read before any of this async work: if the diagram was opened and
+        // `legacy` was read before any of this async work: if the diagram was opened and
         // autosaved meanwhile, its row is already a newer encrypted body, and writing
         // this stale plaintext snapshot's ciphertext over it would silently undo those
         // edits. Every save encrypts, so "still legacy" means "still untouched".
@@ -445,13 +519,38 @@ export class IndexedDbRepository implements DraftRepository {
   async pruneBackgroundImages(documentId: string, keep: { imageId?: string } | null): Promise<void> {
     const kept = keep ? backgroundImageKey(documentId, keep.imageId) : null;
     const tx = this.db.transaction('backgroundImages', 'readwrite');
-    const keys = [
-      documentId,
-      ...(await tx.store.getAllKeys(IDBKeyRange.bound(`${documentId}#`, `${documentId}#\uffff`))),
-    ];
+    const keys = [documentId, ...(await ownedImageKeys(tx.store, documentId))];
     await Promise.all([...keys.filter((key) => key !== kept).map((key) => tx.store.delete(key)), tx.done]);
   }
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+function requestPersistenceOnce(): void {
+  if (persistenceRequested) return;
+  persistenceRequested = true;
+  requestPersistentStorage();
+}
+
+/** Whether two reads of a `bodies` row are the same write. Every encryption draws a fresh IV, so
+ *  an unchanged IV means an unchanged row; a legacy row can only have been replaced by an
+ *  encrypted one, since nothing writes plaintext any more. */
+function sameBody(a: EncryptedBody | LegacyBody, b: EncryptedBody | LegacyBody): boolean {
+  if (isEncryptedBody(a) && isEncryptedBody(b)) {
+    return a.iv.length === b.iv.length && a.iv.every((byte, i) => byte === b.iv[i]);
+  }
+  return isLegacyBody(a) && isLegacyBody(b);
+}
+
+/**
+ * The `<documentId>#<imageId>` keys belonging to exactly this document. A key range alone isn't
+ * enough: an imported document may carry an id that itself contains `#` (`d_x#1`), whose images
+ * sort inside `d_x`'s range — closing `d_x` must not delete them.
+ */
+async function ownedImageKeys(
+  store: { getAllKeys(query: IDBKeyRange): Promise<IDBValidKey[]> },
+  documentId: string,
+): Promise<string[]> {
+  const prefix = `${documentId}#`;
+  const keys = await store.getAllKeys(IDBKeyRange.bound(prefix, `${prefix}\uffff`));
+  return keys.filter((key): key is string => typeof key === 'string' && !key.slice(prefix.length).includes('#'));
+}
+

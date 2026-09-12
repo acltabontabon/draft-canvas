@@ -4,6 +4,7 @@ import { rank } from '../src/commands/fuzzy';
 import { STARTER_IDS } from '../src/starters';
 import type { CommandContext } from '../src/commands/types';
 import { createDocument } from '../src/document/factory';
+import { LIMITS } from '../src/document/limits';
 import { stubContext, stubPlayback } from './commandStubs';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
@@ -327,6 +328,25 @@ describe('commandsFor — contextual (8.2)', () => {
     expect(stage.options.map((o) => o.title)).toEqual(['Refund', 'New flow']);
     stage.options[1]!.run(ctx);
     expect(useEditorStore.getState().document.flows).toHaveLength(3);
+  });
+
+  it('Add to flow… leaves out full flows, and New flow once the flow cap is reached', () => {
+    const state = useEditorStore.getState();
+    const api = state.addNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    const db = state.addNode({ type: 'database', x: 300, y: 0, text: 'DB' });
+    const edge = state.connect(api.id, db.id)!;
+    const fullSteps = Array.from({ length: LIMITS.maxStepsPerFlow }, (_, i) => ({ id: `s${i}`, edgeId: `x${i}` }));
+    const flows = Array.from({ length: LIMITS.maxFlows }, (_, i) => ({
+      id: `f${i}`,
+      title: `Flow ${i}`,
+      steps: i === 0 ? [] : fullSteps,
+    }));
+    useEditorStore.setState((s) => ({ document: { ...s.document, flows } as typeof s.document }));
+    useEditorStore.getState().setSelection({ nodes: [], edges: [edge.id] });
+
+    const ctx = stubContext();
+    expect(ids(ctx)).not.toContain('flow-new');
+    expect(stageOf(ctx, 'edge-add-to-flow').options.map((o) => o.title)).toEqual(['Flow 0']);
   });
 
   it('multi-selection: group, align, distribute (≥3), spotlight, duplicate, export selection, delete', () => {

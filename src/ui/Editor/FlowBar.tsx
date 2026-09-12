@@ -15,7 +15,8 @@ import { Button } from '../common/Button';
  * chrome visible in presentation mode — the canvas itself carries the story.
  */
 export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
-  const document = useEditorStore((state) => state.document);
+  // Only while presenting — the bar isn't shown otherwise, so it needn't follow every edit.
+  const document = useEditorStore((state) => (playback.active ? state.document : null));
   const mode = useEditorStore((state) => state.mode);
   const setMode = useEditorStore((state) => state.setMode);
 
@@ -79,7 +80,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
     );
   }
 
-  if (!playback.current || !playback.flow) return null;
+  if (!playback.current || !playback.flow || !document) return null;
 
   const nodes = nodeIndex(document.nodes);
   const primary = playback.current.edge;

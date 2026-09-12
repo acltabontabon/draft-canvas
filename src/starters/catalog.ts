@@ -828,7 +828,7 @@ const EVENT_QUEUE_Y = EVENT_TOPIC_Y + NAMED_QUEUE.height + BAND;
 const EVENT_WORKER_Y = EVENT_QUEUE_Y + QUEUE.height + INNER_BAND;
 const EVENT_SIDE_EFFECT_Y = EVENT_WORKER_Y + SERVICE.height + INNER_BAND;
 /** Room for the dead-letter route's own "after 3 attempts" caption to sit between its two tubes
- *  with clear air either side — the same width `editorStore.ts`'s `gapForCaption` would leave when
+ *  with clear air either side — the same width `continuation/materialize.ts`'s `gapForCaption` would leave when
  *  "Add DLQ" places one interactively. */
 const EVENT_DLQ_GAP = BAND;
 /** The dead-letter route runs tube-to-tube: the sides are pinned so the route is a level line, and

@@ -1,6 +1,6 @@
-import { categoryOf, resolveTransparentCategory, type NodeCategory } from '../document/connectorSemantics';
+import { categoryOf } from '../document/connectorSemantics';
 import type { DraftDocument } from '../document/types';
-import type { IncidentEdge, Neighborhood } from './types';
+import type { Neighborhood } from './types';
 
 /**
  * One node and its one-hop surroundings — the only graph context a rule is ever given. One pass
@@ -45,20 +45,3 @@ function neighborhoodKey(
   return `${category}|${parts.join(',')}`;
 }
 
-/**
- * What an incident edge's `other` node *actually is*, seeing straight through it if it is a
- * Junction — a routing point has no semantic identity of its own (see `connectorSemantics.ts`'s
- * Junction notes), so a rule whose evidence needs to know what a neighbor *really is* (not just
- * what is directly attached) must resolve through it rather than reading `IncidentEdge.category`
- * literally. `direction` is which side of `nb` the edge came from: `'out'` (an `nb.out` entry,
- * anchor → other) resolves what `other` ultimately *feeds*; `'in'` (an `nb.in` entry, other →
- * anchor) resolves what ultimately *feeds* `other`.
- *
- * A thin wrapper over `connectorSemantics.ts`'s `resolveTransparentCategory` — unused by any rule
- * today (none currently need to see past a Junction; see `rules.ts`'s Junction-hardening note) —
- * kept here as the one place a future rule that does need it should reach for, instead of
- * re-deriving the same recursion.
- */
-export function resolvedNeighborCategory(doc: DraftDocument, incident: IncidentEdge, direction: 'in' | 'out'): NodeCategory {
-  return resolveTransparentCategory(doc, incident.other.id, direction === 'out' ? 'target' : 'source');
-}

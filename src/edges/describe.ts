@@ -22,6 +22,7 @@ import {
   routeEdge,
   strokeSeed,
   type EdgeSpine,
+  type Rect,
   type RoutedEdge,
   type Side,
 } from './routing';
@@ -45,6 +46,8 @@ export interface EdgeDescribeContext {
    * independently, exactly as every connector did before this field existed.
    */
   spine?: EdgeSpine;
+  /** The nodes this connector may detour around. Omitted: every node but its endpoints and groups. */
+  obstacles?: readonly Rect[];
   /** Phase 5.2 — Intentional Roughness. Defaults to `'clean'` at call sites
    *  that construct this object directly without a preset. */
   preset?: PersonalityPreset;
@@ -151,9 +154,13 @@ export function describeEdge(
   // Every other real node counts as an obstacle to route around; group
   // boundaries are big translucent containers, not something a connector
   // should detour around. Same rule the live canvas uses — see `DraftEdgeView.tsx`.
-  const obstacles = [...nodes.values()]
-    .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
-    .map(rectOf);
+  // A caller routing many connectors passes the scoped set (`obstaclesForEdge`) instead, which
+  // draws the same path without checking every node for every connector.
+  const obstacles =
+    ctx.obstacles ??
+    [...nodes.values()]
+      .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
+      .map(rectOf);
   const route = routeEdge(edge, nodes, { lane: ctx.lane, obstacles, spine: ctx.spine });
   if (!route) return null;
 

@@ -1,14 +1,12 @@
 import { encryptDocument, decryptDocument } from './documentCipher';
 import type { EncryptedBody } from './types';
+import { isRecord } from '../lib/isRecord';
 
 /** The plaintext shape every `bodies` row had before encryption existed. */
 export interface LegacyBody {
   id: string;
   document: unknown;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * `instanceof Uint8Array` / `instanceof ArrayBuffer` can be `false` for a
@@ -39,8 +37,8 @@ export function isLegacyBody(row: unknown): row is LegacyBody {
 }
 
 /**
- * Encrypts one legacy plaintext row, verifying the result decrypts back to
- * the same content *before* returning it — the caller only persists what
+ * Encrypts one legacy plaintext row, verifying the result decrypts back
+ * (authenticates under the key) *before* returning it — the caller only persists what
  * this function hands back, so a record that fails self-verification never
  * overwrites the still-readable plaintext it came from. This is the whole
  * safety contract: encrypt → verify → only then does the caller's `put`

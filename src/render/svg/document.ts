@@ -1,4 +1,5 @@
 import { describeEdge } from '../../edges/describe';
+import { obstaclesForEdge } from '../../edges/obstacles';
 import { describeNode, describeContext } from '../../nodes/describe';
 import { findFlow, stepIndexOf } from '../../document/flow';
 import { boundsOf } from '../../document/operations';
@@ -204,7 +205,13 @@ export function buildScene(
   for (const edge of edges) {
     const stepIndex = stepIndexOf(options.selectedFlow, edge.id);
     const lane = lanes.get(edge.id)?.offset ?? 0;
-    const described = describeEdge(edge, nodeMap, { ...edgeCtx, stepIndex, lane, spine: plan.spineFor(edge.id) });
+    const described = describeEdge(edge, nodeMap, {
+      ...edgeCtx,
+      stepIndex,
+      lane,
+      spine: plan.spineFor(edge.id),
+      obstacles: obstaclesForEdge(nodes, edge.source, edge.target),
+    });
     if (!described) continue;
     if (edge.directed) arrowColors.add(described.color);
 

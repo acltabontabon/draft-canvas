@@ -360,6 +360,31 @@ describe('importing untrusted files', () => {
     expect(result.document.flows[0]!.steps.map((s) => s.edgeId)).toEqual(['e1', 'e2']);
   });
 
+  it('says so when flows or steps past the caps are cut, instead of dropping them silently', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        { id: 'a', type: 'note', x: 0, y: 0 },
+        { id: 'b', type: 'note', x: 100, y: 0 },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'b' }],
+      flows: Array.from({ length: LIMITS.maxFlows + 1 }, (_, i) => ({
+        id: `f${i}`,
+        title: `Flow ${i}`,
+        steps:
+          i === 0
+            ? Array.from({ length: LIMITS.maxStepsPerFlow + 5 }, (_, j) => ({ id: `s${j}`, viewport: { x: j, y: 0, zoom: 1 } }))
+            : [],
+      })),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.flows).toHaveLength(LIMITS.maxFlows);
+    expect(result.document.flows[0]!.steps).toHaveLength(LIMITS.maxStepsPerFlow);
+    expect(result.repairs.some((r) => r.includes('too many flows'))).toBe(true);
+    expect(result.repairs.some((r) => r.includes('too many steps'))).toBe(true);
+  });
+
   it('reads a "frame" step with extraNodeIds/extraEdgeIds/viewport and no primary edgeId', () => {
     const result = parse({
       ...base,

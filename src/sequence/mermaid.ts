@@ -36,30 +36,45 @@ function mermaidKeyword(kind: ParticipantKind): 'actor' | 'participant' {
  *  are escaped before quotes: escaping in the other order would let a label ending `\"` turn into
  *  `\\"` — an escaped backslash followed by a bare, string-closing quote. */
 function sanitizeParticipantName(label: string): string {
-  return label.replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return guardStatementBreaks(label.replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"'));
+}
+
+/** Mermaid ends a statement at `;` and starts a comment at `#`, anywhere on the line — including
+ *  inside label and note text, where neither has an escape of its own. Its entity codes (`#59;`,
+ *  `#35;`) are pulled out before parsing, so they survive to render as the literal character. One
+ *  pass, so the `#`/`;` an entity code itself introduces is never re-escaped. */
+const MERMAID_ENTITY: Record<string, string> = { '#': '#35;', ';': '#59;', '<': '#lt;', '>': '#gt;', '&': '#amp;' };
+
+function guardStatementBreaks(text: string): string {
+  return text.replace(/[#;]/g, (ch) => MERMAID_ENTITY[ch]!);
+}
+
+function escapeMermaidText(text: string): string {
+  return text.replace(/[#;<>&]/g, (ch) => MERMAID_ENTITY[ch]!);
 }
 
 /** A message's label runs to the end of its line with no quoting mechanism of its own; `:` is the
  *  delimiter Mermaid uses right after the arrow, so any literal colon in the text is guarded
  *  defensively rather than relying on exactly-once-delimiter parsing. */
 function sanitizeMessageLabel(label: string): string {
-  const clean = label.replace(/\r?\n/g, ' ').replace(/:/g, '-').trim();
+  const clean = guardStatementBreaks(label.replace(/\r?\n/g, ' ').replace(/:/g, '-').trim());
   return clean || 'Message';
 }
 
 /**
  * A note's text, collapsed to Mermaid's single line — this format has no real multi-line block
  * form, unlike PlantUML's `note over ... end note`. The text is wrapped first (`wrapNoteLines`,
- * on the raw text, so entity escaping below can't skew the measured width), `&`/`<`/`>` are then
- * HTML-escaped (so literal code containing `<div>` or `&&` can't be misread by Mermaid's HTML-ish
- * note renderer), each line is colon-guarded the same defensive way a message label already is
+ * on the raw text, so entity escaping below can't skew the measured width), `&`/`<`/`>` (and the
+ * statement-breaking `#`/`;`) are then written as Mermaid entity codes (so literal code containing
+ * `<div>`, `&&` or `retry();` can't be misread by the parser or its HTML-ish note renderer — plain
+ * HTML entities would themselves end the statement at their `;`), each line is colon-guarded the same defensive way a message label already is
  * (`:` is still Mermaid's own note-text delimiter), and the lines are joined with a literal
  * `<br/>` — Mermaid's own documented line-break token inside note text, not a hack. Lossy for text
  * containing a literal colon or angle bracket — a deliberate safety-over-fidelity tradeoff.
  */
 function sanitizeNoteText(text: string): string {
   const lines = wrapNoteLines(text)
-    .map((line) => line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/:/g, '-').trim())
+    .map((line) => escapeMermaidText(line.replace(/:/g, '-').trim()))
     .filter((line) => line.length > 0);
   return lines.join('<br/>') || 'Note';
 }
@@ -113,35 +128,6 @@ function renderElement(element: SequenceElement, depth: number, aliasOf: (id: st
       lines.push(`${pad}end`);
       return lines;
     }
-    // Reserved for a future explicit Flow relationship — see `SequenceAlternative`'s own doc
-    // comment in types.ts. `build.ts` never constructs these in V1; kept renderable so the type
-    // union doesn't force an unsafe cast if it ever does.
-    case 'alt': {
-      const lines: string[] = [];
-      element.branches.forEach((branch, i) => {
-        lines.push(`${pad}${i === 0 ? 'alt' : 'else'} ${branch.label}`);
-        for (const child of branch.children) lines.push(...renderElement(child, depth + 1, aliasOf));
-      });
-      lines.push(`${pad}end`);
-      return lines;
-    }
-    case 'loop': {
-      const lines = [`${pad}loop ${element.label}`];
-      for (const child of element.children) lines.push(...renderElement(child, depth + 1, aliasOf));
-      lines.push(`${pad}end`);
-      return lines;
-    }
-    case 'par': {
-      const lines: string[] = [];
-      element.branches.forEach((branch, i) => {
-        lines.push(`${pad}${i === 0 ? 'par' : 'and'} ${branch.label}`);
-        for (const child of branch.children) lines.push(...renderElement(child, depth + 1, aliasOf));
-      });
-      lines.push(`${pad}end`);
-      return lines;
-    }
-    case 'divider':
-      return [`${pad}%% -- ${element.label} --`];
   }
 }
 

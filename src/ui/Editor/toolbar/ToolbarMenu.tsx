@@ -83,6 +83,13 @@ export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMe
           event.stopPropagation();
           onDismiss();
           return;
+        // Same as `ContextMenu`: leaving by keyboard closes the menu rather than stranding it open
+        // over wherever focus landed.
+        case 'Tab':
+          event.preventDefault();
+          event.stopPropagation();
+          onDismiss();
+          return;
         case 'ArrowDown':
           event.preventDefault();
           setHighlight((at) => Math.min(itemsRef.current.length - 1, at + 1));
@@ -101,6 +108,8 @@ export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMe
           return;
         case 'Enter':
         case ' ': {
+          // Only while the menu has focus — never swallow a space typed into a field elsewhere.
+          if (!panel.current?.contains(document.activeElement)) return;
           event.preventDefault();
           itemsRef.current[highlightRef.current]?.onSelect();
           return;

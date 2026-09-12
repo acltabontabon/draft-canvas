@@ -191,6 +191,12 @@ type View =
 
 export function AboutDialog() {
   const open = useUiStore((state) => state.aboutOpen);
+  // Mounted only while open, so every open starts on About rather than on whatever release the
+  // last visit drilled into.
+  return open ? <AboutDialogBody /> : null;
+}
+
+function AboutDialogBody() {
   const setOpen = useUiStore((state) => state.setAboutOpen);
   const updateReady = useUiStore((state) => state.updateReady);
   const activateUpdate = useUiStore((state) => state.activateUpdate);
@@ -215,8 +221,6 @@ export function AboutDialog() {
     }
     headingRef.current?.focus();
   }, [viewKey]);
-
-  if (!open) return null;
 
   const openWhatsNew = () => {
     setView({ kind: 'whats-new' });

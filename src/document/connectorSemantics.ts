@@ -569,10 +569,15 @@ export function resolveJunctionEndpoint(
 ): JunctionEndpointResolution {
   const node = graph.nodes.find((n) => n.id === nodeId);
   if (!node) return { status: 'unresolved', nodeId };
-  if (categoryOf(node) !== 'junction' || visited.has(nodeId)) return { status: 'resolved', nodeId };
+  if (categoryOf(node) !== 'junction') return { status: 'resolved', nodeId };
   visited.add(nodeId);
   const resolvedIds = new Set<string>();
   for (const id of junctionNeighborIds(graph, nodeId, role)) {
+    // A Junction already walked (a cycle, or the far corner of a diamond reached a second way)
+    // contributes nothing new: whatever it leads to was collected the first time. Resolving it to
+    // *itself* instead would count the Junction as a second concrete endpoint and turn an
+    // unambiguous diamond into a false "ambiguous".
+    if (visited.has(id)) continue;
     const result = resolveJunctionEndpoint(graph, id, role, visited);
     if (result.status === 'resolved') resolvedIds.add(result.nodeId);
   }

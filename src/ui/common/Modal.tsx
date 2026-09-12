@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useFocusReturn } from './useFocusReturn';
 import { Button } from './Button';
 import { Icon } from './Icon';
@@ -25,8 +25,26 @@ interface ModalProps {
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/**
+ * Open modals by opening order. Every `Modal` listens on `window` in the capture phase, and
+ * `stopPropagation` can't stop a sibling listener on that same target — so without this, Escape in a
+ * modal opened from inside another (Secure export's passphrase prompt over Export) closed both.
+ * Only the most recently opened one handles keys. The order is taken at first render, not in an
+ * effect: effects run child-first, which would rank a nested modal *below* the one containing it.
+ */
+let modalSequence = 0;
+const openModals = new Set<number>();
+
 export function Modal({ title, onClose, children, footer, width = 460, className, onBack, backLabel }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
+  const [order] = useState(() => (modalSequence += 1));
+
+  useEffect(() => {
+    openModals.add(order);
+    return () => {
+      openModals.delete(order);
+    };
+  }, [order]);
 
   // A `Modal` only ever exists while its caller is showing it — no separate `open` prop — so
   // "active" for the whole focus-return lifecycle is simply "for as long as this is mounted".
@@ -35,12 +53,24 @@ export function Modal({ title, onClose, children, footer, width = 460, className
   // Mount-only: focusing the panel on every re-run of the keydown-listener effect below would
   // steal focus back from whatever's focused inside the modal (e.g. a slider or text field)
   // any time a caller passes a fresh `onClose` identity — which most do, on every render.
+  // What the dialog starts focused on: a field inside that took focus through `autoFocus` (applied
+  // during commit, before this runs) keeps it — pulling focus to the panel would make the first
+  // keystrokes miss the field — otherwise the panel itself. Remembered in a ref so StrictMode's
+  // simulated remount (whose cleanup hands focus back to the trigger) lands on the same element.
+  const initialFocus = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    panel.current?.focus();
+    const root = panel.current;
+    if (!root) return;
+    if (!initialFocus.current || !root.contains(initialFocus.current)) {
+      const active = document.activeElement;
+      initialFocus.current = active instanceof HTMLElement && root.contains(active) ? active : root;
+    }
+    if (document.activeElement !== initialFocus.current) initialFocus.current.focus();
   }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (Math.max(...openModals) !== order) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         onClose();
@@ -68,7 +98,7 @@ export function Modal({ title, onClose, children, footer, width = 460, className
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [onClose]);
+  }, [onClose, order]);
 
   return (
     <div className="dc-modal-backdrop" onPointerDown={onClose}>

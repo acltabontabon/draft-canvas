@@ -411,13 +411,6 @@ export function EditorScreen({ session }: { session: DocumentSession }) {
 }
 
 /**
- * Keyboard handling for the whole editor.
- *
- * Anything typed into a field belongs to that field, so the handler bails out
- * the moment focus is inside an input — otherwise pressing "n" while renaming a
- * node would spawn a note.
- */
-/**
  * The one screen-reader-facing signal Intent Continuation makes: a polite announcement when a new
  * offer appears — once per offer, never on a re-show — so a ghost that is only visual otherwise
  * is still discoverable without a pointer.
@@ -435,6 +428,13 @@ function ContinuationAnnouncer() {
   );
 }
 
+/**
+ * Keyboard handling for the whole editor.
+ *
+ * Anything typed into a field belongs to that field, so the handler bails out
+ * the moment focus is inside an input — otherwise pressing "n" while renaming a
+ * node would spawn a note.
+ */
 function useKeyboard({
   createAtPointer,
   playback,

@@ -12,7 +12,7 @@ import {
 } from '../src/document/operations';
 import { createFlow, explainEdgeTier, stepIndexOf } from '../src/document/flow';
 import { evaluateAttachCandidates, deepestBoundaryAt } from '../src/canvas/dragTargets';
-import { obstaclesForEdge } from '../src/canvas/edgeGeometry';
+import { obstaclesForEdge } from '../src/edges/obstacles';
 import { isEdgeFocused } from '../src/store/editorStore';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { projectNodes, projectEdges } from '../src/canvas/projection';

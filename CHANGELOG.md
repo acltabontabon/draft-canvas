@@ -36,6 +36,28 @@ All notable changes to Draft Canvas are documented here.
 - Long connector labels wrap onto two lines on the canvas, matching exports, instead of running
   across the diagram on one line.
 - The "Reconnect source/target" commands no longer offer the connector's other end.
+- Resizing a shape from its top or left edge keeps where you dragged it to, instead of snapping
+  back and growing the other way.
+- A connector's popover points at its label on parallel and detoured connectors, not beside it.
+- Undo no longer brings back an empty Text element you clicked away from, nudging one selection
+  and then another undoes as two steps, and dragging a background slider is one undo step.
+- Exported Mermaid source no longer breaks on a `;` or `#` in a label or note (such as code), and
+  PlantUML notes containing a line reading `end note` stay intact.
+- A junction reached along two paths no longer shows up as its own participant in sequence exports.
+- Closing or deleting one diagram can no longer remove another diagram's background image.
+- Pasting near the element limit no longer leaves pasted shapes pointing at a boundary that didn't fit.
+- Renaming or moving a diagram from the homepage no longer overwrites changes saved in another tab,
+  and opening an updated Draft Canvas no longer hangs while an older tab is still open.
+- New flow and Add to flow aren't offered when there is no room for another flow or step, and
+  importing a file past those limits now says what was left out.
+- Paste from the menu or palette tries the clipboard again after the browser blocked it once.
+- Escape in the passphrase prompt closes just the prompt, not Export with it, and dialogs with a
+  text field start with the cursor in it.
+- The toolbar's More menu closes on Tab and no longer reacts to Space typed elsewhere.
+- About and Keyboard Shortcuts open fresh each time, and the "New" indicator stays until you've
+  actually seen the feature.
+- Library row actions are visible on touch screens, and a long element name in a flow step no
+  longer pushes its remove button out of view.
 
 ### Changed
 
@@ -48,6 +70,13 @@ All notable changes to Draft Canvas are documented here.
   context menu closes on Tab.
 - Attachment cards work better with screen readers, and a connector's attachment chips only join
   the Tab order once that connector is selected.
+- Animated GIF export shows its progress and can be cancelled, and the rest of the app stays
+  responsive while it renders.
+- Hidden panels and dialogs no longer redraw while you drag, and stepping through a presentation
+  only redraws the connectors that change.
+- Error notices and save failures are announced to screen readers, and search and title fields
+  show a clearer focus ring.
+- Menus, popovers, and dialogs share one set of corner radii and layering.
 
 ## [1.1.0] - 2026-09-13
 

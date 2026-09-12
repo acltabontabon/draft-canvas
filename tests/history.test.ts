@@ -122,6 +122,42 @@ describe('undo and redo', () => {
     expect(store.getState().history.past).toHaveLength(before);
   });
 
+  it('a gesture can close under a different label than it opened with', () => {
+    const node = store.getState().addNode({ type: 'note', x: 10, y: 10 });
+    store.getState().beginInteraction('Move');
+    store.getState().commitPositions(new Map([[node.id, { x: 50, y: 10 }]]));
+    store.getState().endInteraction('Attach');
+    expect(store.getState().history.past.at(-1)!.label).toBe('Attach');
+  });
+
+  it('coalesces repeated nudges of one selection, but not of different selections', () => {
+    const a = store.getState().addNode({ type: 'note', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'note', x: 300, y: 0 });
+    const before = store.getState().history.past.length;
+
+    store.getState().setSelection({ nodes: [a.id], edges: [] });
+    store.getState().nudgeSelection(1, 0);
+    store.getState().nudgeSelection(1, 0);
+    expect(store.getState().history.past).toHaveLength(before + 1);
+
+    store.getState().setSelection({ nodes: [b.id], edges: [] });
+    store.getState().nudgeSelection(1, 0);
+    expect(store.getState().history.past).toHaveLength(before + 2);
+
+    store.getState().undo();
+    expect(store.getState().document.nodes.find((n) => n.id === a.id)!.x).toBe(2);
+    expect(store.getState().document.nodes.find((n) => n.id === b.id)!.x).toBe(300);
+  });
+
+  it('coalesces a slider drag on a setting into one undo step', () => {
+    const background = store.getState().document.settings.background;
+    const before = store.getState().history.past.length;
+    for (const dim of [0.1, 0.2, 0.3]) {
+      store.getState().updateSettings({ background: { ...background, dim } }, { coalesceKey: 'background-dim' });
+    }
+    expect(store.getState().history.past).toHaveLength(before + 1);
+  });
+
   it('coalesces consecutive text edits on the same node', () => {
     const node = store.getState().addNode({ type: 'note', x: 0, y: 0, text: '' });
     const before = store.getState().history.past.length;

@@ -46,8 +46,15 @@ type Entry = Command | (CommandOption & { group?: undefined });
  * `role="dialog"` — and `ContextMenu`'s keyboard mechanics (a ref for the highlight so the
  * listener is registered once per open, not once per keystroke).
  */
-export function CommandPalette({ createAt, createAtPointer, playback }: CommandPaletteProps) {
+export function CommandPalette(props: CommandPaletteProps) {
   const open = useUiStore((state) => state.commandPaletteOpen);
+  // The body subscribes to the whole document so an open palette re-lists as it changes; mounting
+  // it only while open keeps every drag frame from re-rendering a palette nobody can see, and
+  // makes each open a fresh start.
+  return open ? <CommandPaletteBody {...props} /> : null;
+}
+
+function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPaletteProps) {
   const setOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
   const learnModeActive = useUiStore((state) => state.learnModeActive);
@@ -64,7 +71,7 @@ export function CommandPalette({ createAt, createAtPointer, playback }: CommandP
 
   // Whatever had focus (a toolbar button, the canvas) when ⌘K was pressed gets it back on close —
   // shared with `Modal` so the two dialogs can't drift on this.
-  useFocusReturn(open);
+  useFocusReturn(true);
 
   const [query, setQuery] = useState('');
   const [stage, setStage] = useState<CommandStage | null>(null);
@@ -79,7 +86,6 @@ export function CommandPalette({ createAt, createAtPointer, playback }: CommandP
   // The list, re-derived whenever the query, the stage, or any reactive slice above changes.
   // `commandsFor` is pure and a few dozen entries long — cheaper to rebuild than to cache.
   const rows = useMemo<RankedEntry<Entry>[]>(() => {
-    if (!open) return [];
     if (stage) return rank(query, stage.options);
     const commands = commandsFor(buildContext());
     if (!query.trim()) {
@@ -104,22 +110,18 @@ export function CommandPalette({ createAt, createAtPointer, playback }: CommandP
     return ranked.filter((row) => !isJump(row.entry) || jumps++ < JUMP_LIMIT);
     // The reactive slices are what make this recompute; they aren't read here directly.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, stage, query, buildContext, mode, selection, document, focus, flowPlayback, selectedFlowId, learnModeActive]);
+  }, [stage, query, buildContext, mode, selection, document, focus, flowPlayback, selectedFlowId, learnModeActive]);
 
-  // Fresh start every time it opens; and nothing else may keep competing for the keyboard.
+  // Nothing else may keep competing for the keyboard. (State starts fresh on its own: the body
+  // only exists while the palette is open.)
   useEffect(() => {
-    if (!open) return;
-    setQuery('');
-    setStage(null);
-    setStageRoot(null);
-    setHighlight(0);
     setQuickConnect(null);
     // Synchronous, not deferred to a frame: a backgrounded tab may not paint a frame for a
     // while, and the first keystroke must land in this input, not on the canvas behind it.
     inputRef.current?.focus();
     // Opening it once is the whole lesson (Phase 7.2) — the "press ⌘K" hint has nothing left to say.
     retireHint('command-palette');
-  }, [open, retireHint, setQuickConnect]);
+  }, [retireHint, setQuickConnect]);
 
   useEffect(() => {
     highlightRef.current = highlight;
@@ -176,7 +178,6 @@ export function CommandPalette({ createAt, createAtPointer, playback }: CommandP
   queryRef.current = query;
 
   useEffect(() => {
-    if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       const meta = event.metaKey || event.ctrlKey;
       if (meta && event.key.toLowerCase() === 'k') {
@@ -241,9 +242,7 @@ export function CommandPalette({ createAt, createAtPointer, playback }: CommandP
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [open, run, setOpen]);
-
-  if (!open) return null;
+  }, [run, setOpen]);
 
   const searching = query.trim().length > 0;
   const placeholder = stage

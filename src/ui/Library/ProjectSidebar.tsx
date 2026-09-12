@@ -185,10 +185,10 @@ function ProjectNameDialog({
   onSubmit: (name: string) => void;
 }) {
   const [value, setValue] = useState(initialValue);
+  // An empty name is simply not submittable (the button says so by being disabled) — not a silent close.
   const submit = () => {
     const name = value.trim();
     if (name) onSubmit(name);
-    else onClose();
   };
 
   return (
@@ -200,7 +200,7 @@ function ProjectNameDialog({
           <Button variant="quiet" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="solid" icon={submitIcon} onClick={submit}>
+          <Button variant="solid" icon={submitIcon} disabled={!value.trim()} onClick={submit}>
             {submitLabel}
           </Button>
         </>

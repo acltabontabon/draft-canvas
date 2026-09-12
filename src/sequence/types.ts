@@ -115,41 +115,7 @@ export interface SequenceGroup {
   children: SequenceElement[];
 }
 
-/**
- * Reserved for a future explicit `DraftFlow.relationship` field. NOT constructed by V1's
- * `buildSequenceModel` — no inference heuristic exists or is planned to decide "alt vs. loop vs.
- * plain group" from a flow's name or position (a flow named "Compensation" or "Retry" is not
- * evidence of anything — see `docs/SEMANTICS.md`). Included in the union now so `SequenceElement`
- * is already the right shape: adding real support later means teaching `build.ts` to emit one more
- * variant and teaching both renderers to switch on it — never restructuring `SequenceModel`, never
- * touching `SequenceGroup`/`SequenceMessage`/`SequenceNote`.
- */
-export interface SequenceAlternative {
-  kind: 'alt';
-  branches: { label: string; children: SequenceElement[] }[];
-}
-export interface SequenceLoop {
-  kind: 'loop';
-  label: string;
-  children: SequenceElement[];
-}
-export interface SequenceParallel {
-  kind: 'par';
-  branches: { label: string; children: SequenceElement[] }[];
-}
-export interface SequenceDivider {
-  kind: 'divider';
-  label: string;
-}
-
-export type SequenceElement =
-  | SequenceMessage
-  | SequenceNote
-  | SequenceGroup
-  | SequenceAlternative
-  | SequenceLoop
-  | SequenceParallel
-  | SequenceDivider;
+export type SequenceElement = SequenceMessage | SequenceNote | SequenceGroup;
 
 export interface SequenceModel {
   /** The document's own title — header-comment use only (see `mermaid.ts`/`plantuml.ts`), never
@@ -158,6 +124,6 @@ export interface SequenceModel {
   participants: SequenceParticipant[];
   /** Top level is zero or more `SequenceGroup`s, one per playable flow that produced at least one
    *  message or note, in `document.flows` array order. Never a bare message/note at the top level
-   *  in V1. `alt`/`loop`/`par`/`divider` never appear at any level in V1's output. */
+   *  in V1. */
   elements: SequenceElement[];
 }

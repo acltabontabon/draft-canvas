@@ -82,7 +82,11 @@ function noteBlock(
   const rawLines = wrapNoteLines(text);
   while (rawLines.length > 0 && rawLines[0] === '') rawLines.shift();
   while (rawLines.length > 0 && rawLines[rawLines.length - 1] === '') rawLines.pop();
-  const contentLines = rawLines.length > 0 ? rawLines : ['Note'];
+  // A content line reading `end note` would close the block early and let the rest of the note be
+  // parsed as statements; PlantUML's `~` escape keeps it literal text.
+  const contentLines = (rawLines.length > 0 ? rawLines : ['Note']).map((line) =>
+    /^\s*end\s?note\s*$/i.test(line) ? `~${line.trimStart()}` : line,
+  );
   const prefix = noteKind ? (NOTE_PREFIX[noteKind] ?? '') : '';
 
   const lines = [`${pad}note over ${anchor}`, `${INDENT.repeat(depth + 1)}${prefix}${contentLines[0]}`];
@@ -106,35 +110,6 @@ function renderElement(element: SequenceElement, depth: number, aliasOf: (id: st
       lines.push(`${pad}end`);
       return lines;
     }
-    // Reserved for a future explicit Flow relationship — see `SequenceAlternative`'s own doc
-    // comment in types.ts. `build.ts` never constructs these in V1; kept renderable so the type
-    // union doesn't force an unsafe cast if it ever does.
-    case 'alt': {
-      const lines: string[] = [];
-      element.branches.forEach((branch, i) => {
-        lines.push(`${pad}${i === 0 ? 'alt' : 'else'} ${branch.label}`);
-        for (const child of branch.children) lines.push(...renderElement(child, depth + 1, aliasOf));
-      });
-      lines.push(`${pad}end`);
-      return lines;
-    }
-    case 'loop': {
-      const lines = [`${pad}loop ${element.label}`];
-      for (const child of element.children) lines.push(...renderElement(child, depth + 1, aliasOf));
-      lines.push(`${pad}end`);
-      return lines;
-    }
-    case 'par': {
-      const lines: string[] = [];
-      element.branches.forEach((branch, i) => {
-        lines.push(`${pad}${i === 0 ? 'par' : 'and'} ${branch.label}`);
-        for (const child of branch.children) lines.push(...renderElement(child, depth + 1, aliasOf));
-      });
-      lines.push(`${pad}end`);
-      return lines;
-    }
-    case 'divider':
-      return [`${pad}== ${element.label} ==`];
   }
 }
 

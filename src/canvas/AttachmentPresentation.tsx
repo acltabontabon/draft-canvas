@@ -12,7 +12,7 @@ import { Icon } from '../ui/common/Icon';
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css` — the card
  *  stays mounted this long after `visible` goes false so the CSS fade-out has time to play
  *  instead of the DOM node just vanishing mid-animation. */
-export const ATTACHMENT_CARD_EXIT_MS = 120;
+const ATTACHMENT_CARD_EXIT_MS = 120;
 
 /**
  * Module-level, not component state: `AttachmentChip` needs to tell "closed via Escape" (discard

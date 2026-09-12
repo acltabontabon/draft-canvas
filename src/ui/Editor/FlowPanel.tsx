@@ -28,10 +28,11 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
   const open = useUiStore((state) => state.flowPanelOpen);
   const setOpen = useUiStore((state) => state.setFlowPanelOpen);
   const renameRequestId = useUiStore((state) => state.flowRenameRequestId);
-  const document = useEditorStore((state) => state.document);
+  // Only while open: a closed panel has no reason to re-render on every drag frame.
+  const document = useEditorStore((state) => (open ? state.document : null));
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const setSelectedFlowId = useEditorStore((state) => state.setSelectedFlowId);
-  const selection = useEditorStore((state) => state.selection);
+  const selection = useEditorStore((state) => (open ? state.selection : null));
   const store = useEditorStore;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -68,7 +69,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
     target?.focus();
   }, [open, renameRequestId, renamingId]);
 
-  if (!open) return null;
+  if (!open || !document || !selection) return null;
 
   const nodes = nodeIndex(document.nodes);
   const edges = edgeIndex(document.edges);
@@ -92,6 +93,14 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
     playback.pickFlow(flow.id);
   };
 
+  // Closing from inside the panel hands focus back to the toggle that opens it, rather than
+  // dropping it to <body> when the panel unmounts.
+  const closePanel = () => {
+    const hadFocus = rootRef.current?.contains(window.document.activeElement) ?? false;
+    setOpen(false);
+    if (hadFocus) window.document.querySelector<HTMLElement>('.dc-flow-toggle')?.focus();
+  };
+
   const rowElements = () =>
     Array.from(rootRef.current?.querySelectorAll<HTMLElement>('.dc-flow-row') ?? []);
 
@@ -108,7 +117,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
     switch (event.key) {
       case 'Escape':
         consume();
-        setOpen(false);
+        closePanel();
         return;
       case 'ArrowDown':
       case 'ArrowUp': {
@@ -158,7 +167,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
         {document.flows.length > 0 && (
           <Button variant="quiet" icon="plus" aria-label="New flow" title="New flow" onClick={createNewFlow} />
         )}
-        <Button variant="quiet" icon="close" aria-label="Close" title="Close (Esc)" onClick={() => setOpen(false)} />
+        <Button variant="quiet" icon="close" aria-label="Close" title="Close (Esc)" onClick={closePanel} />
       </header>
 
       {document.flows.length === 0 ? (
@@ -463,7 +472,9 @@ function StepRow({
         <div className="dc-flow-step-extras">
           {extraNodes.map((node) => (
             <span key={node.id} className="dc-flow-step-chip">
-              {displayNameFor(node)}
+              <span className="dc-flow-step-chip-label" title={displayNameFor(node)}>
+                {displayNameFor(node)}
+              </span>
               <Button
                 icon="close"
                 variant="quiet"
@@ -477,8 +488,10 @@ function StepRow({
             const extraTarget = nodes.get(extraEdge.target);
             return (
               <span key={extraEdge.id} className="dc-flow-step-chip">
-                {extraSource ? displayNameFor(extraSource) : 'Untitled'} →{' '}
-                {extraTarget ? displayNameFor(extraTarget) : 'Untitled'}
+                <span className="dc-flow-step-chip-label">
+                  {extraSource ? displayNameFor(extraSource) : 'Untitled'} →{' '}
+                  {extraTarget ? displayNameFor(extraTarget) : 'Untitled'}
+                </span>
                 <Button
                   icon="close"
                   variant="quiet"
@@ -490,7 +503,7 @@ function StepRow({
           })}
           {step.viewport && (
             <span className="dc-flow-step-chip">
-              Pinned view
+              <span className="dc-flow-step-chip-label">Pinned view</span>
               <Button
                 icon="close"
                 variant="quiet"
@@ -504,9 +517,9 @@ function StepRow({
 
       {toolsOpen && (
         <div className="dc-flow-step-tools">
+          {/* No aria-label: the visible words are the name, so speech control users can say them. */}
           <Button
             variant="quiet"
-            aria-label="Add current selection to this step"
             title="Spotlight whatever is selected on the canvas during this step"
             disabled={!canAddSelection}
             onClick={addSelection}
@@ -515,7 +528,6 @@ function StepRow({
           </Button>
           <Button
             variant="quiet"
-            aria-label="Save the current canvas view to this step"
             title="Present this step from exactly the current camera position"
             onClick={() => store.getState().setFlowStepViewport(flow.id, step.id, documentWithLiveViewport(store.getState()).viewport)}
           >

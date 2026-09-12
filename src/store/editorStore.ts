@@ -174,8 +174,24 @@ export function isEdgeFocused(
   edge: { id: string; source: string; target: string },
 ): boolean {
   if (!focus.active) return false;
-  if (focus.edgeIds.includes(edge.id)) return true;
-  return focus.nodeIds.includes(edge.source) && focus.nodeIds.includes(edge.target);
+  const ids = focusIdSets(focus);
+  if (ids.edges.has(edge.id)) return true;
+  return ids.nodes.has(edge.source) && ids.nodes.has(edge.target);
+}
+
+/** Whether a node is lit by Focus — see `isEdgeFocused`. */
+export function isNodeFocused(focus: FocusState, nodeId: string): boolean {
+  return focus.active && focusIdSets(focus).nodes.has(nodeId);
+}
+
+/** Every node and edge selector asks on every store update while Focus is on; the id lists become
+ *  Sets once per focus state rather than being scanned per element. */
+const focusSetCache = new WeakMap<FocusState, { nodes: ReadonlySet<string>; edges: ReadonlySet<string> }>();
+
+function focusIdSets(focus: FocusState) {
+  let sets = focusSetCache.get(focus);
+  if (!sets) focusSetCache.set(focus, (sets = { nodes: new Set(focus.nodeIds), edges: new Set(focus.edgeIds) }));
+  return sets;
 }
 
 interface Interaction {
@@ -235,7 +251,9 @@ export interface EditorStore {
 
   /* Interactions (drag, resize) collapse into one undo entry */
   beginInteraction: (label: string) => void;
-  endInteraction: () => void;
+  /** `label` overrides the one `beginInteraction` opened with, when the gesture turned out to be
+   *  something else (a drag that ended as an attach). */
+  endInteraction: (label?: string) => void;
 
   /* Editing commands */
   addNode: (input: CreateNodeInput) => DraftNode;
@@ -434,7 +452,8 @@ export interface EditorStore {
 
   /* Document-level */
   rename: (title: string) => void;
-  updateSettings: (patch: Partial<DraftSettings>) => void;
+  /** `coalesceKey` folds a continuous control (a slider drag) into one undo step. */
+  updateSettings: (patch: Partial<DraftSettings>, options?: { coalesceKey?: string }) => void;
   persistViewport: (viewport: DraftViewport) => void;
 
   /* History */
@@ -745,7 +764,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     interaction = { label, document: state.document, selection: state.selection };
   },
 
-  endInteraction() {
+  endInteraction(label) {
     const active = interaction;
     interaction = null;
     if (!active) return;
@@ -754,7 +773,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (state.document === active.document) return;
     set((s) => ({
       history: pushEntry(s.history, {
-        label: active.label,
+        label: label ?? active.label,
         before: active.document,
         after: s.document,
         selectionBefore: active.selection,
@@ -887,6 +906,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (resultingText.trim()) return;
     const node = get().document.nodes.find((n) => n.id === id);
     if (!node || node.type !== 'text' || node.textOrigin !== 'auto') return;
+    // Abandoned straight after creation (nothing else happened in between): take back the "Add
+    // text" step itself instead of recording a delete on top of it — otherwise one ⌘Z brings back
+    // an empty, invisible node, the very thing this cleanup exists to prevent.
+    const { document, history, revision } = get();
+    const top = history.past[history.past.length - 1];
+    if (top && top.after === document && !top.before.nodes.some((n) => n.id === id)) {
+      set({
+        document: top.before,
+        history: { past: history.past.slice(0, -1), future: history.future },
+        selection: EMPTY_SELECTION,
+        revision: revision + 1,
+      });
+      return;
+    }
     get().apply('Delete empty text', (doc) => removeElements(doc, [id]), { selection: EMPTY_SELECTION });
   },
 
@@ -1273,7 +1306,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         .filter((node) => node !== undefined)
         .map((node) => [node.id, { x: node.x + dx, y: node.y + dy }] as const),
     );
-    state.apply('Nudge', (doc) => moveNodes(doc, positions), { coalesceKey: 'nudge' });
+    // Keyed on *which* nodes: nudging one selection and then another within the coalesce window
+    // are two separate moves, and must undo separately.
+    state.apply('Nudge', (doc) => moveNodes(doc, positions), {
+      coalesceKey: `nudge:${[...positions.keys()].sort().join(',')}`,
+    });
   },
 
   deleteSelection() {
@@ -1678,8 +1715,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Rename', (doc) => setTitle(doc, title), { coalesceKey: 'title' });
   },
 
-  updateSettings(patch) {
-    get().apply('Change settings', (doc) => setSettings(doc, patch));
+  updateSettings(patch, options) {
+    get().apply('Change settings', (doc) => setSettings(doc, patch), { coalesceKey: options?.coalesceKey });
   },
 
   persistViewport(viewport) {

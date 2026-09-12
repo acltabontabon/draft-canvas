@@ -92,7 +92,17 @@ describe('Label/Text — creation, editing, and generic node machinery', () => {
     // the resulting (still empty) text.
     store.getState().finishTextEdit(node.id, '');
     expect(store.getState().document.nodes).toHaveLength(0);
-    // Fully undoable, like any other delete.
+    // Leaves no trace in history: undo must not bring back an empty, invisible node.
+    expect(store.getState().history.past).toHaveLength(0);
+    store.getState().undo();
+    expect(store.getState().document.nodes).toHaveLength(0);
+  });
+
+  it('finishTextEdit records an undoable delete when other edits happened since the add', () => {
+    const node = store.getState().addNode({ type: 'text', x: 0, y: 0 });
+    store.getState().nudgeSelection(10, 0);
+    store.getState().finishTextEdit(node.id, '');
+    expect(store.getState().document.nodes).toHaveLength(0);
     store.getState().undo();
     expect(store.getState().document.nodes).toHaveLength(1);
   });

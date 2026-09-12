@@ -8,7 +8,7 @@ vi.mock('../src/lib/preferences', () => ({
   writePreference: (key: string, value: string) => void store.set(key, value),
 }));
 
-const { useIsNewFeature } = await import('../src/learning/useNewFeature');
+const { useIsNewFeature, __resetNewFeatureSessionForTests } = await import('../src/learning/useNewFeature');
 const { PRODUCT } = await import('../src/product');
 
 function Probe({ onReady }: { onReady: (api: ReturnType<typeof useIsNewFeature>) => void }) {
@@ -19,10 +19,11 @@ function Probe({ onReady }: { onReady: (api: ReturnType<typeof useIsNewFeature>)
 
 beforeEach(() => {
   store.clear();
+  __resetNewFeatureSessionForTests();
 });
 
 /**
- * Phase 7.3 — nothing looks "new" on a fresh install (no baseline to compare against); a
+ * Nothing looks "new" on a fresh install (no baseline to compare against); a
  * returning device whose last-seen version predates the catalog entry's fixed `sinceVersion`
  * (see `newFeatures.ts`) sees the badge until it retires.
  */
@@ -64,6 +65,23 @@ describe('useIsNewFeature', () => {
     act(() => latest!.retire());
     expect(latest!.isNew).toBe(false);
     expect(store.get('feature-seen.learn-mode')).toBe('1');
+  });
+
+  it('stays new across remounts in the same session, until it is actually retired', () => {
+    store.set('last-seen-version', '0.0.1-alpha.0');
+    let latest: ReturnType<typeof useIsNewFeature> | undefined;
+    const first = render(<Probe onReady={(api) => (latest = api)} />);
+    first.unmount();
+    render(<Probe onReady={(api) => (latest = api)} />);
+    expect(latest!.isNew).toBe(true);
+  });
+
+  it('ranks a release above its own prerelease', () => {
+    // learn-mode shipped in 0.1.0-alpha.4; the 0.1.0 release came after it, so it isn't new there.
+    store.set('last-seen-version', '0.1.0');
+    let latest: ReturnType<typeof useIsNewFeature> | undefined;
+    render(<Probe onReady={(api) => (latest = api)} />);
+    expect(latest!.isNew).toBe(false);
   });
 
   it('refreshes the stored version on mount', () => {

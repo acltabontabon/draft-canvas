@@ -31,16 +31,14 @@ export async function requestClipboardRead(editor: EditorStore, ui: UiStore): Pr
   if (!isClipboardReadAvailable()) return; // nothing to ask permission for
 
   const pref = getPreference();
-  if (pref === 'denied') {
-    ui.notify('Clipboard access is blocked by your browser.');
-    return;
-  }
-  if (pref === 'granted') {
+  if (pref !== 'unknown') {
+    // Asked before (either way): skip our own explanation and just try. A remembered "denied" is
+    // not final — a dismissed browser prompt in Firefox/Safari rejects the read once, and the user
+    // may since have allowed it in site settings — so every explicit Paste gets a real attempt,
+    // and a success flips the preference back.
     const ok = await editor.syncClipboardFromSystem();
-    if (!ok) {
-      writePreference(KEY, 'denied');
-      ui.notify('Clipboard access is blocked by your browser.');
-    }
+    writePreference(KEY, ok ? 'granted' : 'denied');
+    if (!ok) ui.notify('Clipboard access is blocked by your browser.');
     return;
   }
 

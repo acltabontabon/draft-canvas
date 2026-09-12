@@ -51,7 +51,7 @@ export function recordUse(id: string): void {
  * reaches `fuzzy.ts`'s prefix bonus — a command you use constantly still loses to the thing whose
  * name you just typed the start of.
  */
-export const FREQUENCY_BONUS_CAP = 2.5;
+const FREQUENCY_BONUS_CAP = 2.5;
 
 export function frequencyBonus(id: string): number {
   return Math.min(FREQUENCY_BONUS_CAP, Math.log2(1 + usageCount(id)));

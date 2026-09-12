@@ -21,6 +21,7 @@ import {
   updateNode,
 } from '../src/document/operations';
 import { CURRENT_VERSION, DRAFT_FORMAT, SERVICE_KINDS } from '../src/document/types';
+import { LIMITS } from '../src/document/limits';
 
 function sample() {
   const a = createNode({ type: 'service', x: 0, y: 0, text: 'Order Service' });
@@ -114,6 +115,20 @@ describe('document model', () => {
     const pastedEdge = result.doc.edges.find((edge) => result.edgeIds.includes(edge.id))!;
     expect(result.nodeIds).toContain(pastedEdge.source);
     expect(result.nodeIds).toContain(pastedEdge.target);
+  });
+
+  it('un-parents pasted children whose boundary was cut by the node cap', () => {
+    const filler = Array.from({ length: LIMITS.maxNodes - 2 }, (_, i) => createNode({ type: 'note', x: i, y: 0 }));
+    const group = createNode({ type: 'group', x: 0, y: 0, width: 400, height: 300 });
+    const child = { ...createNode({ type: 'service', x: 20, y: 20 }), parentId: group.id };
+    // Members before their boundary, the order `groupSelection` leaves them in.
+    const fragment = { nodes: [child, createNode({ type: 'service', x: 60, y: 60 }), group], edges: [] };
+    const result = pasteFragment(addNodes(createDocument(), filler), fragment, { x: 0, y: 0 });
+
+    expect(result.truncated).toBe(true);
+    expect(result.nodeIds).toHaveLength(2);
+    const ids = new Set(result.doc.nodes.map((n) => n.id));
+    for (const node of result.doc.nodes) if (node.parentId) expect(ids.has(node.parentId)).toBe(true);
   });
 
   it('excludes edges that leave the copied fragment', () => {

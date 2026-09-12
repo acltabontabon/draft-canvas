@@ -126,7 +126,8 @@ function EmptyCanvas({
                 <kbd>S</kbd> service
               </span>
               <span className="dc-empty-key">
-                <kbd>{MOD_SYMBOL}K</kbd> commands
+                <kbd>{MOD_SYMBOL}</kbd>
+                <kbd>K</kbd> commands
               </span>
               <span className="dc-empty-key">
                 <kbd>?</kbd> shortcuts

@@ -1,17 +1,25 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from './Button';
+import { useFocusReturn } from './useFocusReturn';
 
 /**
  * The small, contextual ask shown before the very first `navigator.clipboard.readText()` call —
  * only ever triggered by an explicit clipboard action (context-menu/palette Paste; see
  * `lib/clipboardPermission.ts`), never on mount or on tab focus. Deliberately lighter than
  * `Modal.tsx`: no dimmed backdrop, no focus trap — a quiet fixed card, not a legal-document
- * moment.
+ * moment. It does take focus and mark itself modal, so the editor's shortcuts wait for the answer.
  */
 export function ClipboardPermissionDialog() {
   const request = useUiStore((state) => state.clipboardPermissionRequest);
   const resolve = useUiStore((state) => state.resolveClipboardPermissionRequest);
+  const card = useRef<HTMLDivElement>(null);
+  // Still a question the user has to answer before anything else happens, so it takes focus (and
+  // hands it back) and reads as modal — which is also what stands the editor's shortcuts down.
+  useFocusReturn(Boolean(request));
+  useEffect(() => {
+    if (request) card.current?.focus();
+  }, [request]);
 
   useEffect(() => {
     if (!request) return;
@@ -28,7 +36,14 @@ export function ClipboardPermissionDialog() {
   if (!request) return null;
 
   return (
-    <div className="dc-clipboard-permission" role="alertdialog" aria-labelledby="dc-clipboard-permission-title">
+    <div
+      ref={card}
+      className="dc-clipboard-permission"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="dc-clipboard-permission-title"
+      tabIndex={-1}
+    >
       <p id="dc-clipboard-permission-title" className="dc-clipboard-permission-title">
         Paste from your clipboard?
       </p>

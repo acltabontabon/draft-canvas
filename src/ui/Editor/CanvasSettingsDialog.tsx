@@ -37,6 +37,12 @@ const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif';
  */
 export function CanvasSettingsDialog() {
   const open = useUiStore((state) => state.settingsOpen);
+  // The body subscribes to the whole document; keeping it unmounted while closed stops every
+  // drag frame from re-rendering a dialog nobody can see.
+  return open ? <CanvasSettingsBody /> : null;
+}
+
+function CanvasSettingsBody() {
   const setOpen = useUiStore((state) => state.setSettingsOpen);
   const notify = useUiStore((state) => state.notify);
   const continuationsEnabled = useUiStore((state) => state.continuationsEnabled);
@@ -47,8 +53,6 @@ export function CanvasSettingsDialog() {
   const { theme } = useTheme();
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-
-  if (!open) return null;
 
   const background = document.settings.background;
   const documentId = document.metadata.id;
@@ -135,31 +139,37 @@ export function CanvasSettingsDialog() {
               </label>
 
               <label className="dc-field">
-                <span>Dim</span>
+                <span>
+                  Dim <span className="dc-muted">{Math.round(background.dim * 100)}%</span>
+                </span>
                 <input
                   type="range"
                   min={0}
                   max={100}
                   value={Math.round(background.dim * 100)}
                   onChange={(event) =>
-                    updateSettings({
-                      background: { ...background, dim: Number(event.target.value) / 100 },
-                    })
+                    updateSettings(
+                      { background: { ...background, dim: Number(event.target.value) / 100 } },
+                      { coalesceKey: 'background-dim' },
+                    )
                   }
                 />
               </label>
 
               <label className="dc-field">
-                <span>Blur</span>
+                <span>
+                  Blur <span className="dc-muted">{Math.round(background.blur * 100)}%</span>
+                </span>
                 <input
                   type="range"
                   min={0}
                   max={100}
                   value={Math.round(background.blur * 100)}
                   onChange={(event) =>
-                    updateSettings({
-                      background: { ...background, blur: Number(event.target.value) / 100 },
-                    })
+                    updateSettings(
+                      { background: { ...background, blur: Number(event.target.value) / 100 } },
+                      { coalesceKey: 'background-blur' },
+                    )
                   }
                 />
               </label>
