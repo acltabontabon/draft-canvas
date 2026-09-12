@@ -69,6 +69,11 @@ test.describe('Home screen', () => {
     await page.getByRole('button', { name: /^Delete Untitled/ }).click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
 
+    // The library's own header has a same-named "New canvas" button (`LibraryScreen`) that's still
+    // on screen for a moment after the delete confirms — waiting for the first-run starters group,
+    // which only exists once the library has actually emptied out, is what makes the locator below
+    // resolve to the sheet (`FirstRunHome`) rather than a stale reference to that header button.
+    await expect(page.getByRole('group', { name: 'Starters' })).toBeVisible();
     const sheet = page.getByRole('button', { name: 'New canvas' });
     await sheet.focus();
     await page.keyboard.press('ArrowRight');
