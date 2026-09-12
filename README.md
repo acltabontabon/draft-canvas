@@ -7,8 +7,6 @@ An opinionated diagramming tool for devs to sketch fast when a meeting suddenly 
 
 <img width="100%" alt="A minute-and-a-half run through Draft Canvas: on a blank canvas, placing a service, naming it, and dragging a connector onto empty space to pick what lands; accepting the suggested worker with Tab; clearing it and using the command palette to drop in a composed CQRS architecture instead; changing two data stores' kinds from a grid of shape previews; dropping a note onto a connector and opening it to read it back; opening an attached code card; presenting a flow one connector at a time; and the whole editor following a switch to a light system theme" src="docs/media/demo.gif">
 
-<sub>A minute and a half, start to finish — <a href="docs/media/demo.mp4">sharper as MP4</a>.</sub>
-
 **[Try it →](https://acltabontabon.com/draft-canvas/)** Nothing you draw leaves your browser.
 
 ## Why local-first
@@ -44,6 +42,3 @@ Measured against the production build in Chromium, on real architecture diagrams
 Measured on: Apple M2 Pro, macOS 25.6.0, Chromium 151.0.7922.34, Draft Canvas 0.8.0.
 
 ![JS heap vs. diagram size](benchmark/memory-chart.svg)
-
-Full methodology, limitations, and how to reproduce this: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
-<!-- performance:end -->
