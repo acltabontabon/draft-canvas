@@ -111,6 +111,23 @@ export function useOverlayPosition<P extends string>(
     });
   }, [storeApi]);
 
+  // The canvas itself changing size — Learn docking beside it, or leaving — moves where its edges
+  // are without moving the viewport or re-rendering anything here.
+  useEffect(() => {
+    if (!target || typeof ResizeObserver === 'undefined') return;
+    let first = true;
+    const observer = new ResizeObserver(() => {
+      // The initial callback only reports the size placement already used.
+      if (first) {
+        first = false;
+        return;
+      }
+      applyRef.current();
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [target]);
+
   useEffect(
     () => () => {
       observerRef.current?.observer.disconnect();

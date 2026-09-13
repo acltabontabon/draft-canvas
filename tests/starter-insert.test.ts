@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDocument } from '../src/document/factory';
+import { createDocument, createNode } from '../src/document/factory';
 import { createFlow, flowHasMembers } from '../src/document/flow';
 import { LIMITS } from '../src/document/limits';
 import { boundsOf, freeOriginFor, INSERT_GAP } from '../src/document/operations';
@@ -7,6 +7,7 @@ import type { Bounds } from '../src/document/operations';
 import { parseDocument } from '../src/document/validate';
 import { ARCHITECTURE_STARTERS, starterById, starterSize } from '../src/starters';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { useUiStore } from '../src/store/uiStore';
 
 /** Inserting a starter is the one action in the app that puts a whole diagram on the canvas at
  *  once. What matters is that it behaves like every other edit: one undo step, nothing existing
@@ -151,6 +152,19 @@ describe('insertStarter', () => {
     const created = store.getState().insertStarter(starterById('transactional-outbox')!);
     expect(created).toHaveLength(8);
     expect(store.getState().document.flows).toHaveLength(LIMITS.maxFlows);
+  });
+
+  it('adds nothing, and says so, when the diagram has no room for the whole starter', () => {
+    const filler = Array.from({ length: LIMITS.maxNodes - 2 }, (_, i) =>
+      createNode({ type: 'service', x: i * 200, y: 5000 }),
+    );
+    store.setState((state) => ({ document: { ...state.document, nodes: filler } }));
+    const toasts = useUiStore.getState().toasts.length;
+
+    expect(store.getState().insertStarter(starterById('monolith')!)).toEqual([]);
+    expect(store.getState().document.nodes).toHaveLength(LIMITS.maxNodes - 2);
+    expect(store.getState().history.past).toHaveLength(0);
+    expect(useUiStore.getState().toasts.length).toBe(toasts + 1);
   });
 
   it('keeps its flows through a save and reopen', () => {

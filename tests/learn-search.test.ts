@@ -50,6 +50,12 @@ describe('Learn search', () => {
     expect(searchLearn('async').shortcuts).toBe(false);
   });
 
+  it('treats words that name Object members as plain words', () => {
+    for (const query of ['constructor', 'constructors', '__proto__', 'toString', 'constructor injection']) {
+      expect(() => searchLearn(query)).not.toThrow();
+    }
+  });
+
   it('returns nothing for nonsense or an empty box', () => {
     expect(searchLearn('zzqx')).toEqual({ recipes: [], shortcuts: false });
     expect(searchLearn('   ')).toEqual({ recipes: [], shortcuts: false });

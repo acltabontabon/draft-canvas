@@ -64,7 +64,7 @@ Each of these has a failure mode that is silent, delayed, or both.
   `registry.ts` (and `search.ts` for jump targets); nothing else may build one ad hoc.
 - **Learn content is data.** A recipe is an entry in `src/learn/recipes.ts` plus a scene in
   `src/learn/scenes/` (the compiler insists on the pair); `src/learn/` stays free of React so the
-  palette can search it, and everything that draws lives in `src/ui/learn/`, loaded only when Learn
+  palette can list recipe titles without loading Learn, and everything that draws lives in `src/ui/learn/`, loaded only when Learn
   opens. Every label a recipe names must be a label the product actually shows.
 - **`version` is read only in `src/document/migrate.ts`.** Nothing else may branch on it.
 - **No side effects inside React state updaters.** React runs them twice in development; doing

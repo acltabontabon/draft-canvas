@@ -126,14 +126,17 @@ const posterCache = new Map<string, string>();
  */
 export function scenePoster(
   sceneId: string,
-  frame: Pick<ResolvedFrame, 'nodes' | 'edges' | 'flow'>,
+  /** Only called on a cache miss — resolving a scene's frames is the expensive part. */
+  lastFrame: () => Pick<ResolvedFrame, 'nodes' | 'edges' | 'flow'> | undefined,
   theme: Theme,
   themeName: string,
   preset: PersonalityPreset,
-): string {
+): string | null {
   const cacheKey = `${sceneId}|${themeName}|${preset}`;
   const cached = posterCache.get(cacheKey);
   if (cached) return cached;
+  const frame = lastFrame();
+  if (!frame) return null;
 
   const ctx = { theme, preset, key: `poster-${sceneId}` };
   const scene = build(frame, ctx, `learn-poster-${sceneId}`);

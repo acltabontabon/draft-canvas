@@ -148,13 +148,9 @@ function ElementInspectorBody({
 }) {
   const document = useEditorStore((state) => state.document);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
-  // Subscribed only so a docked Learn drawer opening or closing re-measures the right edge.
-  useUiStore((state) => state.learnOpen);
   const interactionActive = useUiStore((state) => state.interactionActive);
   const theme = useThemeValue();
   const { flowToScreenPosition } = useReactFlow();
-  // The Flows panel while it's open, and anything docked beside the canvas — see `canvasFrame.ts`.
-  const rightEdge = rightClearance(flowPanelOpen, LEFT_CLEARANCE);
 
   const liveNode = nodeIndex(document.nodes).get(nodeId);
   const liveInternal = useInternalNode(nodeId);
@@ -210,12 +206,12 @@ function ElementInspectorBody({
   const measuredToolbarHeight = useToolbarHeight(true);
   const toolbarClearance = measuredToolbarHeight ? measuredToolbarHeight + 10 : TOP_CLEARANCE;
 
-  const clearances: PlacementClearances = {
+  const baseClearances: PlacementClearances = {
     gap: GAP,
     top: toolbarClearance,
     bottom: BOTTOM_CLEARANCE,
     left: LEFT_CLEARANCE,
-    right: rightEdge,
+    right: LEFT_CLEARANCE,
   };
   const anchors: Record<Placement, { x: number; y: number }> | null = rect ? anchorsForRect(rect) : null;
 
@@ -232,6 +228,10 @@ function ElementInspectorBody({
   // `interactionActive` flips back to false), avoids that.
   const { target, placement } = useOverlayPosition<Placement>(panelRef, 'above', (frame, current) => {
     if (!anchors) return null;
+    // Read at placement time, not render time: a docked Learn drawer changes where the canvas ends
+    // after this rendered (see `useOverlayPosition`'s canvas observer) — plus the Flows panel while
+    // it's open. See `canvasFrame.ts`.
+    const clearances = { ...baseClearances, right: rightClearance(flowPanelOpen, LEFT_CLEARANCE) };
     const next = interactionActive
       ? current
       : resolvePlacement(current, anchors, frame.flowToScreenPosition, frame.size, clearances);

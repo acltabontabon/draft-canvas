@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { Canvas, type CanvasProps } from '../../canvas/Canvas';
@@ -41,18 +41,36 @@ import { Toolbar } from './Toolbar';
 import { Button } from '../common/Button';
 import { ClipboardPermissionDialog } from '../common/ClipboardPermissionDialog';
 import { ErrorBoundary } from '../common/ErrorBoundary';
+import { PanelBoundary } from '../common/PanelBoundary';
+import { retryableLazy } from '../common/retryableLazy';
 import { motionMs } from '../../lib/motion';
 
 // Export (its panels, previews, and exporters) is a sizeable slice of the editor that most sessions
 // never open — fetched the first time it is, then kept mounted so its in-session choices survive.
-const ExportDialog = lazy(() => import('./ExportDialog').then((module) => ({ default: module.ExportDialog })));
+const ExportDialogChunk = retryableLazy(() => import('./ExportDialog').then((module) => ({ default: module.ExportDialog })));
 // Learn and every one of its scenes arrive the first time it's opened, and stay mounted after — so
 // the editor itself carries nothing but the recipe titles its palette can search.
-const LearnDrawer = lazy(() => import('../learn/LearnDrawer').then((module) => ({ default: module.LearnDrawer })));
+const LearnDrawerChunk = retryableLazy(() => import('../learn/LearnDrawer').then((module) => ({ default: module.LearnDrawer })));
 
 /** Whether a modal dialog (`Modal`'s `aria-modal` panel) is up — the editor's shortcuts stand down. */
 function modalIsOpen(): boolean {
   return document.querySelector('[aria-modal="true"]') !== null;
+}
+
+/** A modal other than Learn's sheet. Learn covers the canvas on a narrow window but still teaches its
+ *  ⌘ chords ("press ⌘K"), so those keep working over it; everything else stands down as for any modal. */
+function dialogIsOpen(): boolean {
+  return document.querySelector('[aria-modal="true"]:not(.dc-learn)') !== null;
+}
+
+/** Whether this ⌘C/⌘X/⌘A belongs to the page's own text — reading Learn, or text selected in it —
+ *  rather than to the canvas selection. */
+function isTextChord(event: KeyboardEvent): boolean {
+  if (isInOwnKeyboardRegion(event.target)) return true;
+  // Clicking plain text (not a control) leaves focus on the page itself.
+  if (event.target !== document.body) return false;
+  const selected = window.getSelection();
+  return Boolean(selected && !selected.isCollapsed && selected.anchorNode?.parentElement?.closest('[data-dc-keyboard-region]'));
 }
 
 /** Whether keyboard focus is on the canvas itself (or nowhere in particular) rather than on a
@@ -97,6 +115,24 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const learnOpen = useUiStore((state) => state.learnOpen);
   const [learnMounted, setLearnMounted] = useState(learnOpen);
   if (learnOpen && !learnMounted) setLearnMounted(true);
+  // A panel that fails to load (or to render) closes with a toast rather than taking the editor down
+  // with it — and unmounts, so the next open tries a fresh import.
+  const onExportFailed = useCallback((error: Error, componentStack: string) => {
+    logDiagnostic(error, { operation: 'export-panel' }, componentStack);
+    ExportDialogChunk.reset();
+    setExportMounted(false);
+    const ui = useUiStore.getState();
+    ui.setExportOpen(false);
+    ui.notify('Export couldn’t open. Check your connection and try again.', 'error');
+  }, []);
+  const onLearnFailed = useCallback((error: Error, componentStack: string) => {
+    logDiagnostic(error, { operation: 'learn-panel' }, componentStack);
+    LearnDrawerChunk.reset();
+    setLearnMounted(false);
+    const ui = useUiStore.getState();
+    ui.closeLearn();
+    ui.notify('Learn couldn’t open. Check your connection and try again.', 'error');
+  }, []);
   const quickConnect = useUiStore((state) => state.quickConnect);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
   const reconnecting = useUiStore((state) => state.reconnectDragActive);
@@ -413,9 +449,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         </div>
 
         {learnMounted && (
-          <Suspense fallback={null}>
-            <LearnDrawer />
-          </Suspense>
+          <PanelBoundary onError={onLearnFailed}>
+            <Suspense fallback={null}>
+              <LearnDrawerChunk.Component />
+            </Suspense>
+          </PanelBoundary>
         )}
       </div>
 
@@ -423,9 +461,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
 
       <ShortcutSheet />
       {exportMounted && (
-        <Suspense fallback={null}>
-          <ExportDialog />
-        </Suspense>
+        <PanelBoundary onError={onExportFailed}>
+          <Suspense fallback={null}>
+            <ExportDialogChunk.Component />
+          </Suspense>
+        </PanelBoundary>
       )}
       <CanvasSettingsDialog />
       <ClipboardPermissionDialog />
@@ -630,8 +670,8 @@ function useKeyboard({
       // A modal (Export, Settings, Shortcuts, About) focuses its own panel, which
       // `isEditableTarget` doesn't count — without this, Backspace deleted the selection
       // behind the dialog and letter keys dropped nodes under it. Its own Escape/Tab
-      // handling is untouched.
-      if (modalIsOpen()) return;
+      // handling is untouched. (Learn's sheet stops bare keys further down, after the ⌘ chords.)
+      if (dialogIsOpen()) return;
 
       const meta = event.metaKey || event.ctrlKey;
       const state = useEditorStore.getState();
@@ -650,6 +690,7 @@ function useKeyboard({
           !playback.active &&
           !state.focus.active &&
           focusIsOnCanvas() &&
+          !modalIsOpen() &&
           stepContinuation(state, event.key === ']' ? 1 : -1)
         ) {
           event.preventDefault();
@@ -660,6 +701,7 @@ function useKeyboard({
       if (meta) {
         const key = event.key.toLowerCase();
         if (presenting && ['z', 'y', 'x', 'd', 'a', 'g', 'b', 'i'].includes(key)) return;
+        if ((key === 'c' || key === 'x' || key === 'a') && !event.shiftKey && isTextChord(event)) return;
         switch (key) {
           case 'z':
             event.preventDefault();
@@ -746,24 +788,26 @@ function useKeyboard({
         }
       }
 
-      // Focus in Learn (docked beside a live canvas): its buttons and links own the bare keys — a
-      // letter must not drop a shape behind it, nor Backspace delete the selection. ⌘ chords above
-      // still reach the canvas.
-      if (isInOwnKeyboardRegion(event.target)) return;
-
       // Matched by `event.code` (the physical key) rather than `event.key` (the character a
       // layout produces for Shift+Digit1/Shift+Slash) — on a layout where Shift+1 doesn't type
       // '!', or Shift+/ doesn't type '?', matching the produced character would silently never
       // fire. Pulled out of the switch below since `switch (event.key)` can't express this.
-      if (event.shiftKey && event.code === 'Digit1') {
-        event.preventDefault();
-        void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
-        return;
-      }
+      // `?` works from inside Learn too, which shows it as the key for the shortcut sheet.
       if (event.shiftKey && event.code === 'Slash') {
         // Otherwise the "?" that opened the sheet types itself into the sheet's own filter.
         event.preventDefault();
         setShortcutsOpen(true);
+        return;
+      }
+
+      // Focus in Learn (docked beside a live canvas): its buttons and links own the bare keys — a
+      // letter must not drop a shape behind it, nor Backspace delete the selection. ⌘ chords above
+      // still reach the canvas. As a sheet over the canvas, Learn holds them wherever focus is.
+      if (isInOwnKeyboardRegion(event.target) || modalIsOpen()) return;
+
+      if (event.shiftKey && event.code === 'Digit1') {
+        event.preventDefault();
+        void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
         return;
       }
 

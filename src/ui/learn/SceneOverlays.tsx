@@ -1,5 +1,5 @@
 import type { SceneControl, SceneCursor, SceneOverlay } from '../../learn/types';
-import { Icon, type IconName } from '../common/Icon';
+import { Icon } from '../common/Icon';
 import { keyCap } from './keys';
 import { at } from './stage';
 
@@ -39,7 +39,7 @@ function Control({ control }: { control: SceneControl }) {
     case 'button':
       return (
         <span className="dc-learn-ctl dc-learn-ctl-button" data-pressed={control.pressed ? 'true' : undefined}>
-          {control.icon && <Icon name={control.icon as IconName} size={12} />}
+          {control.icon && <Icon name={control.icon} size={12} />}
           {control.text}
         </span>
       );

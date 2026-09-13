@@ -55,12 +55,12 @@ export function SceneView({ scene }: { scene: Scene }) {
     <figure className="dc-learn-scene" ref={rootRef}>
       <div
         className="dc-learn-stage"
-        role="img"
-        aria-label={scene.label}
         data-playing={clock.playing ? 'true' : undefined}
         data-reduced={clock.reduced ? 'true' : undefined}
       >
-        <div className="dc-learn-stage-inner" key={clock.loop}>
+        {/* The picture is the image; the Pause button beside it stays a button a screen reader can reach
+            (inside `role="img"`, everything is presentational). */}
+        <div className="dc-learn-stage-inner" key={clock.loop} role="img" aria-label={scene.label}>
           <svg viewBox={`0 0 ${SCENE_WIDTH} ${SCENE_HEIGHT}`} aria-hidden="true" focusable="false">
             <defs dangerouslySetInnerHTML={{ __html: rendered.defs }} />
             {drawn.backdrops.map(({ node, html }) => (

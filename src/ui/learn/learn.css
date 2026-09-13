@@ -31,7 +31,7 @@
   right: 0;
   bottom: 0;
   width: min(480px, 100vw);
-  z-index: var(--dc-z-modal);
+  z-index: var(--dc-z-drawer);
   border-left: 1px solid var(--dc-border);
   box-shadow: var(--dc-shadow-panel);
 }
@@ -39,8 +39,15 @@
 .dc-learn-scrim {
   position: fixed;
   inset: 0;
-  z-index: var(--dc-z-modal);
+  z-index: var(--dc-z-drawer);
   background: var(--dc-scrim-light);
+  transition: opacity 160ms ease;
+}
+
+/* A dialog opened from the sheet (Keyboard shortcuts) brings its own scrim; two stacked read as a
+   blackout. */
+body:has(.dc-modal-backdrop, .dc-palette-backdrop) .dc-learn-scrim {
+  opacity: 0;
 }
 
 /* Content arrives and settles; the docked column itself snaps to width at once, because resizing
@@ -134,7 +141,7 @@
 }
 
 .dc-learn-close:hover {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
   color: var(--dc-text);
 }
 
@@ -150,6 +157,16 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
+}
+
+/* One motion at a time: opening onto home slides the whole view in with the drawer; coming back from a
+   recipe moves only the list, the way it went. */
+.dc-learn-home[data-returning='true'] {
+  animation: none;
+}
+
+.dc-learn-home:not([data-returning='true']) > .dc-learn-body {
+  animation: none;
 }
 
 .dc-learn-search {
@@ -212,7 +229,7 @@
 }
 
 .dc-learn-search-clear:hover {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
   color: var(--dc-text);
 }
 
@@ -221,7 +238,10 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 var(--dc-learn-pad) 18px;
+  /* 4px of room above the first row, given back as margin, so its focus ring isn't clipped by the
+     scroll box. */
+  margin-top: -4px;
+  padding: 4px var(--dc-learn-pad) 18px;
   scrollbar-width: thin;
   scrollbar-color: var(--dc-border-strong) transparent;
   animation: dc-learn-back 220ms var(--dc-ease-out) both;
@@ -259,7 +279,7 @@
   height: 28px;
   padding: 0 11px 0 8px;
   border: 1px solid var(--dc-border);
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   background: transparent;
   color: var(--dc-text-muted);
   font: 500 12px/1 var(--dc-font);
@@ -346,7 +366,7 @@
 
 .dc-learn-stop:hover,
 .dc-learn-row:hover {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
 }
 
 .dc-learn-stop-dot {
@@ -467,20 +487,15 @@
   color: var(--dc-text-muted);
 }
 
+/* The app's own key cap (`kbd` in app.css) — same edge, radius and fill — set to a fixed height so a
+   row of them lines up with the text beside it. */
 .dc-learn kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
   height: 20px;
   padding: 0 5px;
-  border: 1px solid var(--dc-border-strong);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  background: var(--dc-surface-raised);
-  color: var(--dc-text);
   font: 600 11px/1 var(--dc-mono);
-  box-sizing: border-box;
 }
 
 .dc-learn-shortcuts {
@@ -499,10 +514,6 @@
   cursor: pointer;
 }
 
-.dc-learn-shortcuts span {
-  flex: 1;
-}
-
 .dc-learn-shortcuts:hover {
   color: var(--dc-text);
 }
@@ -513,7 +524,7 @@
   height: 26px;
   padding: 0 10px;
   border: 1px solid var(--dc-border);
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   background: transparent;
   color: var(--dc-text);
   font: 500 12px/1 var(--dc-font);
@@ -526,7 +537,7 @@
 
 .dc-learn-pill:hover {
   border-color: var(--dc-border-strong);
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
 }
 
 .dc-learn-empty {
@@ -561,7 +572,7 @@
   gap: 8px;
   padding: 10px var(--dc-learn-pad) 12px;
   border-top: 1px solid var(--dc-border);
-  animation: dc-learn-fade 180ms ease both;
+  animation: dc-fade-in 180ms ease both;
 }
 
 .dc-learn-context-label {
@@ -584,12 +595,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-
-@keyframes dc-learn-fade {
-  from {
-    opacity: 0;
-  }
 }
 
 /* ---------------------------------------------------------------------------------- recipe -- */
@@ -617,7 +622,7 @@
 }
 
 .dc-learn-back:hover {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
   color: var(--dc-text);
 }
 
@@ -681,7 +686,7 @@
   background-image: radial-gradient(var(--dc-grid) calc(1.4 * var(--u)), transparent calc(1.5 * var(--u)));
   background-size: calc(22 * var(--u)) calc(22 * var(--u));
   background-position: calc(11 * var(--u)) calc(11 * var(--u));
-  animation: dc-learn-fade 360ms ease both;
+  animation: dc-fade-in 360ms ease both;
 }
 
 .dc-learn-stage svg {
@@ -732,7 +737,7 @@
 }
 
 .dc-learn-edge-overlay[data-enter='true'] {
-  animation: dc-learn-fade 260ms ease 300ms both;
+  animation: dc-fade-in 260ms ease 300ms both;
 }
 
 @keyframes dc-learn-draw-r {
@@ -791,14 +796,14 @@
   fill: none;
   stroke: var(--dc-selection);
   stroke-width: 1.5;
-  animation: dc-learn-fade 160ms ease both;
+  animation: dc-fade-in 160ms ease both;
 }
 
 .dc-learn-handle {
   fill: var(--dc-canvas);
   stroke: var(--dc-selection);
   stroke-width: 1.5;
-  animation: dc-learn-fade 160ms ease both;
+  animation: dc-fade-in 160ms ease both;
 }
 
 /* Borrowed UI, in stage units. */
@@ -942,7 +947,7 @@
 .dc-learn-ctl-chip {
   border-style: dashed;
   border-color: var(--dc-border-strong);
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   color: var(--dc-text-muted);
 }
 
@@ -971,9 +976,11 @@
   height: calc(24 * var(--u));
   padding: 0 calc(10 * var(--u));
   border: 1px solid var(--dc-border);
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   color: var(--dc-text-muted);
-  transition: all 160ms ease;
+  transition-property: border-color, background-color, color, scale;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
 }
 
 .dc-learn-ctl-switch[data-on='true'] {
@@ -1051,7 +1058,7 @@
   height: calc(26 * var(--u));
   padding: 0 calc(6 * var(--u)) 0 calc(11 * var(--u));
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   background: var(--dc-selection);
   color: var(--dc-canvas);
   font-size: calc(12 * var(--u));
@@ -1113,6 +1120,12 @@
   animation: dc-learn-blink 1s steps(2, jump-none) infinite;
 }
 
+/* A paused or off-screen scene doesn't keep a caret blinking — it holds still, visible. Only the caret:
+   stepping by hand pauses playback too, and stopping entrance animations would change the frame. */
+.dc-learn-stage:not([data-playing]) .dc-learn-caret {
+  animation: none;
+}
+
 @keyframes dc-learn-blink {
   50% {
     opacity: 0;
@@ -1147,7 +1160,7 @@
   max-width: calc(470 * var(--u));
   height: calc(34 * var(--u));
   padding: 0 calc(14 * var(--u));
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   translate: -50% 0;
   white-space: nowrap;
 }
@@ -1211,7 +1224,7 @@
   font-family: var(--dc-mono);
   font-size: calc(12 * var(--u));
   white-space: pre;
-  animation: dc-learn-fade 240ms ease both;
+  animation: dc-fade-in 240ms ease both;
 }
 
 .dc-learn-code code:nth-of-type(2) {
@@ -1228,7 +1241,7 @@
   border: 1px dashed var(--dc-selection);
   border-radius: calc(3 * var(--u));
   background: var(--dc-selection-soft);
-  animation: dc-learn-marquee 860ms cubic-bezier(0.45, 0.05, 0.2, 1) both;
+  animation: dc-learn-marquee 860ms var(--dc-ease-in-out) both;
 }
 
 @keyframes dc-learn-marquee {
@@ -1244,7 +1257,7 @@
   height: calc(22 * var(--u));
   padding: 0 calc(8 * var(--u)) 0 calc(6 * var(--u));
   border: 1px solid var(--dc-border-strong);
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   background: var(--dc-surface-raised);
   color: var(--dc-text-muted);
   font-size: calc(11 * var(--u));
@@ -1268,7 +1281,7 @@
   height: calc(21 * var(--u));
   margin: calc(-2 * var(--u)) 0 0 calc(-2 * var(--u));
   transition-property: left, top;
-  transition-timing-function: cubic-bezier(0.45, 0.05, 0.2, 1);
+  transition-timing-function: var(--dc-ease-in-out);
 }
 
 .dc-learn-cursor svg {
@@ -1373,7 +1386,7 @@
   height: 28px;
   padding: 0 11px 0 4px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   background: transparent;
   color: var(--dc-text-muted);
   font: 500 12px/1 var(--dc-font);
@@ -1397,7 +1410,9 @@
   border: 1px solid var(--dc-border-strong);
   border-radius: 50%;
   font: 600 10px/1 var(--dc-mono);
-  transition: all 200ms ease;
+  transition-property: border-color, background-color, color;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
 }
 
 .dc-learn-step[aria-current='step'] {
@@ -1457,6 +1472,31 @@
 }
 
 /* ---------------------------------------------------------------------------------- motion -- */
+
+/* Touch: nothing to hover, so the scene's Pause shows outright (a looping picture must be stoppable);
+   targets grow to a fingertip; and a "?" key hint is advice no one without a keyboard can take. */
+@media (hover: none) and (pointer: coarse) {
+  .dc-learn-playpause {
+    width: 32px;
+    height: 32px;
+    opacity: 1;
+  }
+
+  .dc-learn-search-clear {
+    width: 32px;
+    height: 32px;
+  }
+
+  .dc-learn-pill,
+  .dc-learn-topic {
+    height: 32px;
+  }
+
+  .dc-learn-shortcuts kbd,
+  .dc-learn-row kbd {
+    display: none;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .dc-learn,

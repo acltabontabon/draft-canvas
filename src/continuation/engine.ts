@@ -140,7 +140,6 @@ function evaluate(doc: DraftDocument, nb: Neighborhood, rule: ContinuationRule):
       score: 0,
       label: rule.label,
       actionLabel: `Add ${rule.label}`,
-      reason: rule.reason,
       fragment,
       branches: rule.branches,
       anchorId: nb.node.id,

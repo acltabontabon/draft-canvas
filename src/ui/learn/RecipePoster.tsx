@@ -15,9 +15,7 @@ export const RecipePoster = memo(function RecipePoster({ recipeId }: { recipeId:
   const src = useMemo(() => {
     const scene = sceneFor(recipeId);
     if (!scene) return null;
-    const { frames } = resolveScene(scene);
-    const last = frames[frames.length - 1];
-    return last ? scenePoster(recipeId, last, theme, name, preset) : null;
+    return scenePoster(recipeId, () => resolveScene(scene).frames.at(-1), theme, name, preset);
   }, [recipeId, theme, name, preset]);
 
   return (

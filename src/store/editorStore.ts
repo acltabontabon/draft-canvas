@@ -81,7 +81,7 @@ import {
   updateFlowStepCaption as updateFlowStepCaptionOp,
 } from '../document/flow';
 import { relationshipCaptionLabel, SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
-import { DEFAULTS } from '../document/limits';
+import { DEFAULTS, LIMITS } from '../document/limits';
 import {
   capabilityFor,
   categoryOf,
@@ -263,7 +263,8 @@ export interface EditorStore {
   addNode: (input: CreateNodeInput) => DraftNode;
   /** One undoable bulk add. `flows` (a starter's predefined walkthroughs) join the same entry, so
    *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. */
-  addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string, flows?: DraftFlow[]) => void;
+  /** False (and nothing added) when the result would pass the document limits. */
+  addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string, flows?: DraftFlow[]) => boolean;
   /**
    * Inserts a Starter — a composed opening diagram — as one undoable action, clear of
    * whatever is already on the canvas, and leaves it selected. Returns the nodes it created, the
@@ -710,6 +711,17 @@ export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefin
   return ids.length > 0 ? ids.map((id) => ({ id })) : undefined;
 }
 
+/**
+ * Whether a bulk add still fits the document limits. `LIMITS` is otherwise enforced only on a whole
+ * document (import, load) and on paste — past it, the next load would keep the first nodes and
+ * silently drop the newest, so an add that doesn't fit is refused up front and said out loud.
+ */
+function roomFor(doc: DraftDocument, nodeCount: number, edgeCount: number): boolean {
+  if (doc.nodes.length + nodeCount <= LIMITS.maxNodes && doc.edges.length + edgeCount <= LIMITS.maxEdges) return true;
+  useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
+  return false;
+}
+
 export const useEditorStore = create<EditorStore>((set, get) => ({
   document: createDocument(),
   history: EMPTY_HISTORY,
@@ -822,11 +834,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   addNodesWithEdges(nodes, edges, label, flows = []) {
+    if (!roomFor(get().document, nodes.length, edges.length)) return false;
     get().apply(
       label,
       (doc) => flows.reduce((next, flow) => addFlow(next, flow), addEdges(addNodes(doc, nodes), edges)),
       { selection: { nodes: nodes.map((n) => n.id), edges: [] } },
     );
+    return true;
   },
 
   acceptContinuation(offer) {
@@ -836,6 +850,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const present = new Set(state.document.nodes.map((n) => n.id));
     for (const node of offer.nodes) present.add(node.id);
     if (!present.has(offer.anchorId) || !offer.edges.every((e) => present.has(e.source) && present.has(e.target))) return;
+    if (!roomFor(state.document, offer.nodes.length, offer.edges.length)) return;
     // Selects where the sentence now ends — not every node the fragment added — so the next offer
     // chains from the tail. Flows are never touched: a continuation is drawing, not narrating.
     state.apply(offer.actionLabel, (doc) => addEdges(addNodes(doc, offer.nodes), offer.edges), {
@@ -859,8 +874,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // The insert itself is then the plainest bulk add there is, which is what makes one ⌘Z undo
     // the whole architecture and one ⌘⇧Z bring it back.
     const { nodes, edges, flows } = buildStarter(starter, freeOriginFor(state.document, starterSize(starter)));
-    state.addNodesWithEdges(nodes, edges, `Insert ${starter.name}`, flows);
-    return nodes;
+    return state.addNodesWithEdges(nodes, edges, `Insert ${starter.name}`, flows) ? nodes : [];
   },
 
   connect(source, target, sourceSide, targetSide, sourceOffset = 0.5, targetOffset = 0.5) {

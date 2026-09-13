@@ -15,7 +15,8 @@ const EXIT_MS = 160;
 
 /**
  * Below this width there isn't room to dock beside the canvas without crushing it, so Learn becomes
- * a sheet over it instead — modal, with its own scrim and focus trap. Must match `learn.css`.
+ * a sheet over it instead — modal, with its own scrim and focus trap. `data-mode` carries the
+ * answer to `learn.css`, so this is the only place the width is written down.
  */
 const SHEET_QUERY = '(max-width: 1179px)';
 
@@ -76,35 +77,60 @@ function LearnPanel({ closing, sheet }: { closing: boolean; sheet: boolean }) {
     if (inside && returnFocusTo && document.contains(returnFocusTo)) returnFocusTo.focus();
   }, [closing, returnFocusTo]);
 
-  // Going back lands on the row you came from, not at the top of the list.
+  // Coming back from a recipe is a step back, not an arrival: home plays only its back motion.
   const [shownId, setShownId] = useState(recipe?.id ?? null);
-  const [returnRow, setReturnRow] = useState<string | null>(null);
+  const [returning, setReturning] = useState(false);
   if ((recipe?.id ?? null) !== shownId) {
-    setReturnRow(recipe ? null : shownId);
+    setReturning(!recipe);
     setShownId(recipe?.id ?? null);
   }
 
+  // Focus moves only when asked to: an explicit open (`openLearn`), or navigating between home and a
+  // recipe. A drawer that merely remounts — after a presentation, or on the next document with Learn
+  // still docked — leaves focus on the canvas, where the next keystroke is meant to land.
+  const shownRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     if (closing) return;
+    const current = recipe?.id ?? null;
+    const previous = shownRef.current;
+    shownRef.current = current;
+    const navigated = previous !== undefined && previous !== current;
+    const requested = useUiStore.getState().takeLearnFocus();
+    if (!navigated && !requested) return;
     if (recipe) {
       headingRef.current?.focus({ preventScroll: true });
       return;
     }
-    const row = returnRow ? panelRef.current?.querySelector<HTMLElement>(`[data-recipe-id="${returnRow}"]`) : null;
+    // Going back lands on the row you came from, not at the top of the list.
+    const row = navigated && previous ? panelRef.current?.querySelector<HTMLElement>(`[data-recipe-id="${previous}"]`) : null;
     (row ?? searchRef.current)?.focus({ preventScroll: Boolean(row) });
     // Re-runs on navigation and on every explicit open request — not on each keystroke.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [recipe?.id, focusRequest]);
 
+  // As a sheet, Learn holds Tab like any modal — at the window, so a Tab taken while focus has
+  // fallen to the page (the control that held it unmounted) still comes back in. A dialog opened on
+  // top (the shortcut sheet) runs its own trap.
+  useEffect(() => {
+    if (!sheet) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (!panelRef.current || document.querySelector('[aria-modal="true"]:not(.dc-learn)')) return;
+      trapTab(event, panelRef.current);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [sheet]);
+
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (sheet && panelRef.current) trapTab(event.nativeEvent, panelRef.current);
     if (event.key !== 'Escape' || isImeKeyEvent(event)) return;
     // Learn's Escape steps back one level at a time — the same way Escape steps back everywhere else.
     event.preventDefault();
     event.stopPropagation();
     if (recipe) showLearnRecipe(null);
-    else if (query && event.target === searchRef.current) setLearnQuery('');
-    else closeLearn();
+    else if (query) {
+      setLearnQuery('');
+      searchRef.current?.focus();
+    } else closeLearn();
   };
 
   return (
@@ -141,7 +167,7 @@ function LearnPanel({ closing, sheet }: { closing: boolean; sheet: boolean }) {
         {recipe ? (
           <LearnRecipe key={recipe.id} recipe={recipe} headingRef={headingRef} onBack={() => showLearnRecipe(null)} onOpen={showLearnRecipe} />
         ) : (
-          <LearnHome searchRef={searchRef} onOpen={showLearnRecipe} />
+          <LearnHome searchRef={searchRef} returning={returning} onOpen={showLearnRecipe} />
         )}
       </aside>
     </>

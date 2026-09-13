@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { BOUNDARY_PRESETS, CODE_LANGUAGES, ACCENTS, NOTE_KINDS } from '../../document/types';
 import type {
   Accent,
@@ -15,6 +16,7 @@ import { ACTOR_ICON_OPTIONS } from '../../canvas/actorOptions';
 import { COMPONENT_ICON_OPTIONS } from '../../canvas/componentOptions';
 import { DATABASE_ICON_OPTIONS } from '../../canvas/dataStoreOptions';
 import { InspectorSelect } from '../../canvas/InspectorSelect';
+import { usePopoverKeyboard } from '../../canvas/usePopoverKeyboard';
 import { QUEUE_ICON_OPTIONS } from '../../canvas/queueOptions';
 import { SERVICE_ICON_OPTIONS } from '../../canvas/serviceOptions';
 import { LANGUAGE_LABELS } from '../../render/code/highlight';
@@ -36,6 +38,9 @@ export function Inspector() {
   const shown = selection.nodes.length + selection.edges.length > 1;
   const document = useEditorStore((state) => (shown ? state.document : null));
   const theme = useThemeValue();
+  // A toolbar in name and in keys: ←/→ between its controls, Home/End to either end.
+  const rootRef = useRef<HTMLDivElement>(null);
+  usePopoverKeyboard(rootRef);
 
   if (!document) return null;
 
@@ -67,8 +72,11 @@ export function Inspector() {
     for (const edge of edges) state.updateEdgeById(edge.id, { accent }, 'Recolour');
   };
 
+  const accents = new Set([...nodes, ...edges].map((element) => element.accent));
+  const sharedAccent = accents.size === 1 ? [...accents][0] : undefined;
+
   return (
-    <div className="dc-inspector" role="toolbar" aria-label="Selection options">
+    <div ref={rootRef} className="dc-inspector" role="toolbar" aria-label="Selection options">
       <span className="dc-inspector-label">
         {nodes.length > 0 && `${nodes.length} ${nodes.length === 1 ? 'element' : 'elements'}`}
         {nodes.length > 0 && edges.length > 0 && ' · '}
@@ -86,6 +94,7 @@ export function Inspector() {
             className="dc-swatch"
             title={accent}
             aria-label={`Colour ${accent}`}
+            aria-pressed={accent === sharedAccent}
             style={{ background: theme.accents[accent].chip }}
             onClick={() => setAccent(accent)}
           />

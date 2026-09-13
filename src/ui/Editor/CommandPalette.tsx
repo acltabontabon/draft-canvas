@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Preset } from '../../canvas/presets';
 import { rank, type RankedEntry } from '../../commands/fuzzy';
-import { commandsFor, LEARN_LIMIT, LEARN_RANK_PENALTY, learnCommands } from '../../commands/registry';
+import { askLearnCommand, commandsFor, LEARN_LIMIT, LEARN_RANK_PENALTY, learnCommands } from '../../commands/registry';
 import { frequencyBonus, recentIds, recordUse } from '../../commands/history';
 import { JUMP_LIMIT, JUMP_RANK_PENALTY, jumpCommands } from '../../commands/search';
 import {
@@ -102,17 +102,22 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
     // Frequently used commands get a small nudge — never enough to beat a better text match.
     // Learn recipes answer "how do I…" the same way, handicapped harder still: doing wins.
     const groupOf = (entry: Entry) => ('group' in entry ? entry.group : undefined);
-    const ranked = rank(query, [...commands, ...(jumpCommands(document) as Entry[]), ...(learnCommands() as Entry[])], (entry) =>
+    // Presenting, Learn stays out of the way (it can't open over a presentation), so it isn't offered.
+    const presenting = mode === 'present';
+    const learn = presenting ? [] : (learnCommands() as Entry[]);
+    const ranked = rank(query, [...commands, ...(jumpCommands(document) as Entry[]), ...learn], (entry) =>
       groupOf(entry) === 'jump' ? -JUMP_RANK_PENALTY : groupOf(entry) === 'learn' ? -LEARN_RANK_PENALTY : frequencyBonus(entry.id),
     );
     let jumps = 0;
     let learns = 0;
-    return ranked.filter((row) => {
+    const kept = ranked.filter((row) => {
       const group = groupOf(row.entry);
       if (group === 'jump') return jumps++ < JUMP_LIMIT;
       if (group === 'learn') return learns++ < LEARN_LIMIT;
       return true;
     });
+    // Never a dead end: a question the palette can't answer goes to Learn, which reads more into it.
+    return kept.length === 0 && !presenting ? [{ entry: askLearnCommand(query), score: 0, indices: [] }] : kept;
     // The reactive slices are what make this recompute; they aren't read here directly.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, query, buildContext, mode, selection, document, focus, flowPlayback, selectedFlowId]);
@@ -165,8 +170,9 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
         setOpen(true);
         return;
       }
-      // Only a real command earns a place in history — a jump target is a place, not an action.
-      if (!root.startsWith('jump-')) recordUse(root);
+      // Only a real command earns a place in history — a jump target is a place, not an action, and
+      // a Learn row is reading, not doing (it'd only push real commands out of Recent).
+      if (!root.startsWith('jump-') && !root.startsWith('learn-')) recordUse(root);
     },
     [buildContext, setOpen],
   );

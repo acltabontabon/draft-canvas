@@ -81,7 +81,6 @@ export function offerFor(doc: DraftDocument, state: QuickConnectState, item: Qui
           score: 0,
           label: item.label,
           actionLabel: `Add ${item.label}`,
-          reason: '',
           fragment: { nodes: [item.node], edges: [{ from: 'anchor', to: item.node.key }] },
           anchorId: state.source,
           neighborhoodKey: '',

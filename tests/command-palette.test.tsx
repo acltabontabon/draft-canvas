@@ -242,6 +242,8 @@ describe('CommandPalette', () => {
     expect(useUiStore.getState().learnOpen).toBe(true);
     expect(useUiStore.getState().learnRecipeId).toBe('attach-note');
     expect(useUiStore.getState().commandPaletteOpen).toBe(false);
+    // Reading isn't doing: a Learn row never takes a Recent slot from a real command.
+    expect([...prefs.keys()].some((name) => name.startsWith('command-recent.'))).toBe(false);
   });
 
   it('keeps Learn out of the list until something is typed', () => {
@@ -249,7 +251,29 @@ describe('CommandPalette', () => {
     expect(options().some((row) => row.textContent?.includes('Attach a note'))).toBe(false);
   });
 
-  it('shows "No matching commands." for a query nothing matches', () => {
+  it('keeps Learn out of a presentation, where it could not open', () => {
+    useEditorStore.setState({ mode: 'present' });
+    mount();
+    fireEvent.change(input(), { target: { value: 'flow' } });
+    expect(screen.queryAllByRole('option').some((row) => row.textContent?.includes('Learn'))).toBe(false);
+  });
+
+  it('hands a query nothing matches over to Learn', () => {
+    useUiStore.setState({ learnQuery: '', learnRecipeId: 'junction' });
+    mount();
+    fireEvent.change(input(), { target: { value: ' zzzzqq ' } });
+    expect(options()).toHaveLength(1);
+    expect(highlighted()).toHaveTextContent('Ask Learn about “zzzzqq”');
+    key('Enter');
+    const ui = useUiStore.getState();
+    expect(ui.commandPaletteOpen).toBe(false);
+    expect(ui.learnOpen).toBe(true);
+    expect(ui.learnQuery).toBe('zzzzqq');
+    expect(ui.learnRecipeId).toBeNull();
+  });
+
+  it('shows "No matching commands." for a query nothing matches while presenting', () => {
+    useEditorStore.setState({ mode: 'present' });
     mount();
     fireEvent.change(input(), { target: { value: 'zzzzqq' } });
     expect(screen.getByText('No matching commands.')).toBeInTheDocument();

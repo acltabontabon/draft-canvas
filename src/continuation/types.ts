@@ -144,7 +144,6 @@ export interface Continuation {
   label: string;
   /** What accepting does, as a command: "Add Queue", "Connect to Order Events". */
   actionLabel: string;
-  reason: string;
   fragment: Fragment;
   /** Carried from the rule for ranking — see `ContinuationRule.branches`. */
   branches?: boolean;

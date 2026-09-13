@@ -18,7 +18,7 @@ const { LearnDrawer } = await import('../src/ui/learn/LearnDrawer');
 
 function resetStores() {
   useEditorStore.setState({ document: createDocument('Learn'), selection: { nodes: [], edges: [] }, mode: 'edit' });
-  useUiStore.setState({ learnOpen: false, learnRecipeId: null, learnQuery: '', learnCategory: null, shortcutsOpen: false });
+  useUiStore.setState({ learnOpen: false, learnRecipeId: null, learnQuery: '', learnCategory: null, learnFocusPending: false, shortcutsOpen: false });
   prefs.clear();
 }
 
@@ -72,14 +72,31 @@ describe('Learn drawer', () => {
     const row = screen.getByRole('button', { name: /Add a dead-letter queue/ });
     expect(row).toHaveFocus();
 
-    act(() => search().focus());
+    // From the row, not only from the box: Escape clears the search first, wherever focus is in Learn.
     await user.keyboard('{Escape}');
     expect(search()).toHaveValue('');
+    expect(search()).toHaveFocus();
     expect(useUiStore.getState().learnOpen).toBe(true);
 
     await user.keyboard('{Escape}');
     expect(useUiStore.getState().learnOpen).toBe(false);
     await waitFor(() => expect(screen.queryByRole('complementary')).toBeNull());
+  });
+
+  it('leads from the search box into its answers by keyboard', async () => {
+    const user = userEvent.setup();
+    render(<LearnDrawer />);
+    open();
+    await user.type(search(), 'dlq{Enter}');
+    expect(screen.getByRole('heading', { name: 'Add a dead-letter queue' })).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    act(() => search().focus());
+    await user.keyboard('{ArrowDown}');
+    const rows = within(screen.getByRole('list', { name: 'Results' })).getAllByRole('button');
+    expect(rows[0]).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(search()).toHaveFocus();
   });
 
   it('opens straight onto a recipe from a deep link, even when already open', () => {
@@ -108,6 +125,13 @@ describe('Learn drawer', () => {
     await user.click(screen.getByRole('button', { name: 'async' }));
     expect(search()).toHaveValue('async');
     expect(screen.getByRole('button', { name: /Make a call\s*async/ })).toBeInTheDocument();
+    // The pill pressed is gone; focus went with the answer, not to the page behind Learn.
+    expect(search()).toHaveFocus();
+
+    await user.clear(search());
+    await user.type(search(), 'zzqx');
+    await user.click(screen.getByRole('button', { name: 'Flows' }));
+    expect(screen.getByRole('button', { name: /Flows/, pressed: true })).toHaveFocus();
   });
 
   it('filters by topic in place, and a second press returns to the short version', async () => {
@@ -128,12 +152,12 @@ describe('Learn drawer', () => {
     useEditorStore.setState({ document: { ...createDocument('Learn'), nodes: [queue] }, selection: { nodes: ['q'], edges: [] } });
     render(<LearnDrawer />);
     open();
-    const context = screen.getByRole('complementary', { name: 'About the selected Queue' });
+    const context = screen.getByRole('region', { name: 'About the selected Queue' });
     expect(context).toHaveTextContent('Selected · Queue');
     expect(within(context).getByRole('button', { name: 'Add a dead-letter queue' })).toBeInTheDocument();
 
     act(() => useEditorStore.setState({ selection: { nodes: [], edges: [] } }));
-    expect(screen.queryByRole('complementary', { name: /About the selected/ })).toBeNull();
+    expect(screen.queryByRole('region', { name: /About the selected/ })).toBeNull();
   });
 
   it('steps aside while presenting, and comes back after', () => {
@@ -143,6 +167,8 @@ describe('Learn drawer', () => {
     return waitFor(() => expect(screen.queryByRole('complementary')).toBeNull()).then(() => {
       act(() => useEditorStore.setState({ mode: 'edit' }));
       expect(drawer()).toBeInTheDocument();
+      // Coming back isn't a request for focus: the next keystroke still belongs to the canvas.
+      expect(drawer().contains(document.activeElement)).toBe(false);
     });
   });
 

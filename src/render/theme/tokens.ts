@@ -82,7 +82,7 @@ export const LIGHT: Theme = {
   text: '#1a1d23',
   textMuted: '#59606d',
   textFaint: '#6a7280',
-  selection: '#0b7c72',
+  selection: '#0a746b',
   selectionSoft: 'rgba(15, 143, 132, 0.12)',
   edge: '#7c8492',
   edgeLabelBg: '#ffffff',

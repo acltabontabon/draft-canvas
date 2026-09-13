@@ -25,7 +25,7 @@
 }
 
 .dc-button:hover:not(:disabled) {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
   color: var(--dc-text);
 }
 
@@ -128,7 +128,7 @@ kbd {
   padding: 1px 5px;
   border: 1px solid var(--dc-border);
   border-bottom-width: 2px;
-  border-radius: 4px;
+  border-radius: var(--dc-radius-xs);
   background: var(--dc-surface-raised);
   color: var(--dc-text);
   font-size: 11px;
@@ -204,7 +204,7 @@ kbd {
 
 .dc-brand-about:hover {
   color: var(--dc-text-muted);
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
 }
 
 .dc-lede {
@@ -307,7 +307,7 @@ kbd {
 }
 
 .dc-sidebar-row:hover {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
   color: var(--dc-text);
 }
 
@@ -401,7 +401,7 @@ kbd {
 }
 
 .dc-sidebar-action:hover {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
   color: var(--dc-text);
 }
 
@@ -645,7 +645,7 @@ kbd {
 
 .dc-move-menu-row:hover,
 .dc-move-menu-row[data-highlighted='true'] {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
 }
 
 .dc-move-menu-check {
@@ -911,7 +911,7 @@ kbd {
   margin-left: 3px;
   padding: 0 6px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--dc-radius-sm);
   background: color-mix(in srgb, var(--dc-canvas) 16%, transparent);
   color: inherit;
   font-size: 12px;
@@ -1087,7 +1087,7 @@ kbd {
 .dc-wire-caption {
   position: absolute;
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: var(--dc-radius-xs);
   background: var(--dc-canvas);
   color: var(--dc-text-muted);
   font-size: 12px;
@@ -1571,21 +1571,6 @@ kbd {
   }
 }
 
-@keyframes dc-home-fade {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes dc-home-draw {
-  from {
-    stroke-dashoffset: 1;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
 .dc-home-head,
 .dc-home-start,
 .dc-home .dc-starter,
@@ -1619,7 +1604,7 @@ kbd {
 .dc-home .dc-wire-spine,
 .dc-home .dc-wire-branch path:first-child {
   stroke-dasharray: 1;
-  animation: dc-home-draw 260ms var(--dc-ease-out) both;
+  animation: dc-draw-in 260ms var(--dc-ease-out) both;
 }
 
 .dc-home .dc-wire-trunk {
@@ -1637,7 +1622,7 @@ kbd {
 .dc-home .dc-wire-arrow,
 .dc-home .dc-wire-junction,
 .dc-home .dc-wire-caption {
-  animation: dc-home-fade 200ms ease both;
+  animation: dc-fade-in 200ms ease both;
 }
 
 .dc-home .dc-wire-junction {
@@ -1842,7 +1827,7 @@ kbd {
 
 .dc-local-toggle:hover {
   color: var(--dc-text-muted);
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
 }
 
 .dc-local-more {
@@ -2137,7 +2122,7 @@ kbd {
 }
 
 .dc-toolbar-mode:hover:not(:disabled) {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
   color: var(--dc-text);
 }
 
@@ -2186,7 +2171,7 @@ kbd {
 
 .dc-toolbar-history .dc-button:hover:not(:disabled),
 .dc-toolbar-utilities .dc-button:hover:not(:disabled) {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
   color: var(--dc-text);
 }
 
@@ -2365,7 +2350,7 @@ kbd {
   gap: 8px;
   padding: 4px 4px 4px 14px;
   border: 1px solid var(--dc-border);
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
   font-size: 12.5px;
@@ -2419,22 +2404,38 @@ kbd {
 
 .dc-swatches {
   display: flex;
-  gap: 3px;
+  align-items: center;
+  /* 16px swatches 8px apart: each one's 24px target (below) meets its neighbour's without overlap. */
+  gap: 8px;
 }
 
 .dc-swatch {
+  position: relative;
   width: 16px;
   height: 16px;
   padding: 0;
   /* Relative to the text colour, so a pale swatch keeps a visible edge on the light theme's white
      surface as well as the dark one's. */
   border: 1px solid color-mix(in srgb, var(--dc-text) 16%, transparent);
-  border-radius: 4px;
+  border-radius: var(--dc-radius-xs);
   cursor: pointer;
+}
+
+.dc-swatch::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
 }
 
 .dc-swatch:hover {
   transform: scale(1.14);
+}
+
+/* Every selected element already wears this colour. */
+.dc-swatch[aria-pressed='true'] {
+  box-shadow:
+    0 0 0 2px var(--dc-surface),
+    0 0 0 3.5px var(--dc-selection);
 }
 
 /* -------------------------------------------------------------- explain -- */
@@ -2458,7 +2459,7 @@ kbd {
   gap: 8px;
   padding: 6px 8px 6px 14px;
   border: 1px solid var(--dc-border);
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
 }
@@ -2509,7 +2510,7 @@ kbd {
 
 .dc-explain-condition {
   padding: 1px 7px;
-  border-radius: 4px;
+  border-radius: var(--dc-radius-xs);
   background: var(--dc-edge-label-bg);
   color: var(--dc-text-muted);
   font-size: 11px;
@@ -2603,7 +2604,6 @@ kbd {
 }
 
 .dc-flow-panel-header strong {
-  flex: 1;
   font-size: 13px;
 }
 
@@ -2616,7 +2616,6 @@ kbd {
   justify-content: center;
   width: 20px;
   height: 20px;
-  margin-left: auto;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -2634,13 +2633,21 @@ kbd {
   color: var(--dc-selection);
 }
 
+@media (hover: none) and (pointer: coarse) {
+  .dc-learn-link {
+    width: 28px;
+    height: 28px;
+  }
+}
+
 .dc-learn-link-inline {
   margin-left: 4px;
   vertical-align: -5px;
 }
 
+/* The "?" belongs to the title it explains; the panel's own buttons keep to the far edge. */
 .dc-flow-panel-header .dc-learn-link {
-  margin: 0 4px 0 0;
+  margin: 0 auto 0 4px;
 }
 
 /* The empty state teaches the concept and offers the one thing to do next. */
@@ -2705,7 +2712,7 @@ kbd {
   height: 22px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--dc-radius-xs);
   background: none;
   color: var(--dc-text-faint);
   font-size: 10px;
@@ -2727,7 +2734,7 @@ kbd {
   min-width: 0;
   padding: 3px 6px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--dc-radius-xs);
   background: none;
   color: var(--dc-text);
   font: inherit;
@@ -2760,7 +2767,7 @@ kbd {
   min-width: 0;
   padding: 3px 6px;
   border: 1px solid var(--dc-selection);
-  border-radius: 4px;
+  border-radius: var(--dc-radius-xs);
   background: var(--dc-surface);
   color: var(--dc-text);
   font: inherit;
@@ -2833,7 +2840,7 @@ kbd {
   min-width: 0;
   padding: 2px 6px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--dc-radius-xs);
   background: none;
   color: var(--dc-text);
   font: inherit;
@@ -2846,7 +2853,7 @@ kbd {
 }
 
 .dc-flow-step-label:hover {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
 }
 
 .dc-flow-step-arrow {
@@ -2907,7 +2914,7 @@ kbd {
   max-width: 100%;
   padding: 2px 2px 2px 8px;
   border: 1px solid var(--dc-border);
-  border-radius: 999px;
+  border-radius: var(--dc-radius-pill);
   background: var(--dc-surface-raised);
   color: var(--dc-text-muted);
   font-size: 11px;
@@ -3009,7 +3016,7 @@ kbd {
 .dc-modal-back:hover,
 .dc-modal-back:focus-visible {
   color: var(--dc-selection);
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
 }
 
 .dc-modal-back:focus-visible {
@@ -3170,7 +3177,7 @@ kbd {
 
 .dc-export-mode:hover {
   border-color: var(--dc-border-strong);
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
   color: var(--dc-text);
 }
 
@@ -3324,7 +3331,7 @@ kbd {
   place-items: center;
   width: 54px;
   height: 66px;
-  border-radius: 5px;
+  border-radius: var(--dc-radius-sm);
   background: linear-gradient(180deg, var(--dc-surface-raised), var(--dc-surface));
   color: var(--dc-selection);
   clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 0 100%);
@@ -3350,7 +3357,7 @@ kbd {
   transform: translateX(-50%);
   padding: 2px 5px;
   border: 1px solid color-mix(in srgb, var(--dc-selection) 45%, transparent);
-  border-radius: 4px;
+  border-radius: var(--dc-radius-xs);
   background: color-mix(in srgb, var(--dc-selection) 18%, var(--dc-surface));
   color: var(--dc-selection);
   font: 700 8.5px/1.2 var(--dc-mono);
@@ -3962,7 +3969,7 @@ kbd {
 
 .dc-release-row:hover,
 .dc-release-row:focus-visible {
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
 }
 
 .dc-release-row:focus-visible {
@@ -4058,7 +4065,7 @@ kbd {
 
 .dc-about-link:hover {
   color: var(--dc-selection);
-  background: var(--dc-surface-raised);
+  background: var(--dc-surface-hover);
   transform: translateY(-1px);
 }
 

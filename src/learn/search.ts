@@ -53,8 +53,6 @@ const ALIASES: Readonly<Record<string, readonly string[]>> = {
   webhook: ['async', 'interaction'],
   rest: ['http', 'response'],
   api: ['http', 'kind'],
-  image: ['export'],
-  png: ['export'],
 };
 
 /** Terms that mean "show me the keys" — answered by the Keyboard shortcuts row, not by a recipe. */
@@ -73,7 +71,7 @@ export interface LearnSearchResult {
   shortcuts: boolean;
 }
 
-export function normalizeQuery(query: string): string {
+function normalizeQuery(query: string): string {
   return query.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
@@ -128,7 +126,10 @@ function scoreRecipe(recipe: LearnRecipe, query: string): { score: number; title
     if (score > best.score) best = { score, titleIndices: hit.titleIndices };
 
     // Aliases are listed closest meaning first — Kafka is a topic before it is a queue.
-    for (const [rank, alias] of (ALIASES[term] ?? []).entries()) {
+    // `hasOwn`, not `ALIASES[term]`: a typed "constructor" or "__proto__" would otherwise read
+    // Object.prototype's own members off the literal.
+    const aliases = Object.hasOwn(ALIASES, term) ? ALIASES[term]! : [];
+    for (const [rank, alias] of aliases.entries()) {
       const aliased = termScore(recipe, alias);
       const aliasScore = Math.min(aliased.score, 80) - 30 - rank * 6;
       if (aliasScore > best.score) best = { score: aliasScore, titleIndices: [] };

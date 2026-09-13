@@ -81,7 +81,7 @@ export const RECIPES = [
     summary: 'Set Interaction mode to Async — the line gets a break mark.',
     category: 'connections',
     keywords: ['async', 'asynchronous', 'sync', 'synchronous', 'mode', 'fire and forget', 'non-blocking', 'background', 'dashed'],
-    note: 'Want it dashed as well? Right-click the connector → Make async.',
+    note: 'Want it dashed as well? Right-click the connector → Make asynchronous.',
     related: ['describe-interaction', 'add-response'],
     appliesTo: { edge: true },
   },

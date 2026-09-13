@@ -3,6 +3,7 @@ import type { Preset } from '../canvas/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
 import type { Side } from '../document/types';
+import type { RecipeCategory } from '../learn/types';
 import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
 import { markLastSeenRelease, readLastSeenRelease } from '../releases/productReleases';
@@ -257,9 +258,12 @@ export interface UiStore {
   learnOpen: boolean;
   learnRecipeId: string | null;
   learnQuery: string;
-  learnCategory: string | null;
+  learnCategory: RecipeCategory | null;
   /** Bumped by every `openLearn`, so a drawer that is already open still takes focus. */
   learnFocusRequest: number;
+  /** Whether the latest `openLearn` still wants focus. Consumed by the drawer, so a drawer that merely
+   *  remounts (after a presentation, or on the next document) doesn't pull focus off the canvas. */
+  learnFocusPending: boolean;
 
   /** The homepage search box's current query — see `LibraryScreen.tsx`. Matches
    *  against canvas title and project name (see that file's search-filter comment
@@ -323,10 +327,12 @@ export interface UiStore {
   /** Opens Learn — on `recipeId` when given (a deep link always wins), else where it was left. */
   openLearn: (recipeId?: string) => void;
   closeLearn: () => void;
+  /** Reads and clears `learnFocusPending`. */
+  takeLearnFocus: () => boolean;
   /** Home (`null`) or one recipe, inside the drawer. */
   showLearnRecipe: (recipeId: string | null) => void;
   setLearnQuery: (query: string) => void;
-  setLearnCategory: (category: string | null) => void;
+  setLearnCategory: (category: RecipeCategory | null) => void;
   /** Identity-preserving: an offer equal in trigger, rule, anchor and neighborhood keeps the node
    *  and edge ids already held (re-keying the fresh geometry onto them), so unrelated document
    *  changes never re-mint a ghost's React keys. */
@@ -398,6 +404,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   learnQuery: '',
   learnCategory: null,
   learnFocusRequest: 0,
+  learnFocusPending: false,
   continuation: null,
   continuationDismissals: new Set<DismissalKey>(),
   continuationsEnabled: initialContinuationsEnabled(),
@@ -512,9 +519,15 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => ({
       learnOpen: true,
       learnFocusRequest: state.learnFocusRequest + 1,
+      learnFocusPending: true,
       ...(recipeId ? { learnRecipeId: recipeId } : {}),
     })),
   closeLearn: () => set({ learnOpen: false }),
+  takeLearnFocus: () => {
+    const pending = get().learnFocusPending;
+    if (pending) set({ learnFocusPending: false });
+    return pending;
+  },
   showLearnRecipe: (learnRecipeId) => set({ learnRecipeId }),
   setLearnQuery: (learnQuery) => set({ learnQuery }),
   setLearnCategory: (learnCategory) => set({ learnCategory }),

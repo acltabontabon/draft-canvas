@@ -1340,14 +1340,35 @@ export const LEARN_RANK_PENALTY = 1.5;
  * ("service", "queue") are deliberately broad for Learn's own box, and here they'd shoulder aside
  * the command that actually does the thing.
  */
-export function learnCommands(): Command[] {
-  return RECIPES.map((recipe) => ({
+export function learnCommands(): readonly Command[] {
+  // Recipes never change at runtime, so neither do their rows — built once, not on every keystroke.
+  learnRows ??= RECIPES.map((recipe) => ({
     id: `learn-${recipe.id}`,
     title: recipe.title,
     group: 'learn' as const,
     keywords: ['learn', 'how'],
     run: (inner) => inner.ui.openLearn(recipe.id),
   }));
+  return learnRows;
+}
+let learnRows: Command[] | undefined;
+
+/**
+ * The palette's answer when nothing matches: carry the question over to Learn's own search, which
+ * reads keywords and aliases the palette deliberately doesn't.
+ */
+export function askLearnCommand(query: string): Command {
+  const question = query.trim();
+  return {
+    id: 'learn-ask',
+    title: `Ask Learn about “${question}”`,
+    group: 'learn',
+    run: (inner) => {
+      inner.ui.setLearnQuery(question);
+      inner.ui.showLearnRecipe(null);
+      inner.ui.openLearn();
+    },
+  };
 }
 
 /** Every command that applies to `ctx` right now, in display order. */

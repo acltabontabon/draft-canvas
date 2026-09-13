@@ -5,7 +5,7 @@
  */
 
 /** `FlowPanel`'s fixed 300px width + a 12px gap, while it's open. */
-export const FLOW_PANEL_CLEARANCE = 312;
+const FLOW_PANEL_CLEARANCE = 312;
 
 function canvasRect(): DOMRect | null {
   if (typeof document === 'undefined') return null;

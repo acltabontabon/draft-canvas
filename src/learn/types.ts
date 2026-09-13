@@ -1,13 +1,14 @@
 import type { CreateEdgeInput, CreateNodeInput } from '../document/factory';
 import type { DraftEdge, DraftNode } from '../document/types';
+import type { IconName } from '../ui/common/Icon';
 
 /**
  * Learn's vocabulary. A recipe answers one concrete question ("how do I make a call async?") with a
  * scene first and a sentence second — so the recipe itself is mostly metadata for finding it, and
  * the explaining is done by its `Scene` (see `scenes/`).
  *
- * Everything here is plain data with no React, so the command palette can search recipes without
- * pulling the drawer (or any scene) into its chunk.
+ * Everything here is plain data with no React (the icon name is a type only), so the command
+ * palette can list recipe titles without pulling the drawer (or any scene) into its chunk.
  */
 
 export type RecipeCategory = 'shapes' | 'connections' | 'architecture' | 'flows';
@@ -65,7 +66,7 @@ export interface SceneCursor extends ScenePoint {
 /** A control inside a mocked popover. Only the one or two that matter to the recipe, never the lot. */
 export type SceneControl =
   | { type: 'select'; label: string; value: string; options?: readonly string[]; highlight?: string }
-  | { type: 'button'; text: string; icon?: string; pressed?: boolean }
+  | { type: 'button'; text: string; icon?: IconName; pressed?: boolean }
   | { type: 'chip'; text: string; pressed?: boolean; accent?: boolean }
   | { type: 'toggle'; label: string; on: boolean; pressed?: boolean };
 

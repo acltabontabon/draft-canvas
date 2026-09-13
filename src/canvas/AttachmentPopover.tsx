@@ -70,11 +70,8 @@ export function AttachmentPopover() {
 
 function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string; closing: boolean; listening: boolean }) {
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
-  // Subscribed only so a docked Learn drawer opening or closing re-measures the right edge.
-  useUiStore((state) => state.learnOpen);
   const interactionActive = useUiStore((state) => state.interactionActive);
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
-  const rightEdge = rightClearance(flowPanelOpen, LEFT_CLEARANCE);
   const liveHost = useEditorStore((state) => selectNode(state.document, hostId));
   const liveInternal = useInternalNode(hostId);
   const updateAttachment = useEditorStore((state) => state.updateAttachment);
@@ -122,12 +119,12 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
 
   // Measured, not a constant: the toolbar wraps to two rows on narrow viewports.
   const toolbarHeight = useToolbarHeight(true);
-  const clearances: PlacementClearances = {
+  const baseClearances: PlacementClearances = {
     gap: GAP,
     top: toolbarHeight ? toolbarHeight + 10 : TOP_CLEARANCE,
     bottom: BOTTOM_CLEARANCE,
     left: LEFT_CLEARANCE,
-    right: rightEdge,
+    right: LEFT_CLEARANCE,
   };
   const anchors = rect ? anchorsForRect(rect) : null;
 
@@ -136,6 +133,10 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
   // flipping (or oscillating) mid-drag or mid-resize.
   const { target, placement } = useOverlayPosition<Placement>(panelRef, 'right', (frame, current) => {
     if (!anchors) return null;
+    // Read at placement time, not render time: a docked Learn drawer changes where the canvas ends
+    // after this rendered (see `useOverlayPosition`'s canvas observer) — plus the Flows panel while
+    // it's open. See `canvasFrame.ts`.
+    const clearances = { ...baseClearances, right: rightClearance(flowPanelOpen, LEFT_CLEARANCE) };
     const next = interactionActive
       ? current
       : resolvePlacement(current, anchors, frame.flowToScreenPosition, frame.size, clearances);

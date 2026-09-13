@@ -38,7 +38,7 @@ export function LearnRecipe({ recipe, headingRef, onBack, onOpen }: LearnRecipeP
       <p className="dc-learn-summary">{recipe.summary}</p>
 
       {recipe.keys && (
-        <div className="dc-learn-keyrow" aria-label="Keys">
+        <div className="dc-learn-keyrow" role="group" aria-label="Keys">
           {recipe.keys.map((combo, i) => (
             <KeyCombo key={i} keys={combo} />
           ))}

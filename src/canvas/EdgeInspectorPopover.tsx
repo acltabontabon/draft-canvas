@@ -38,6 +38,8 @@ import {
 } from './edgeGeometry';
 import { useToolbarHeight } from './useToolbarHeight';
 import { useOverlayPosition } from './useOverlayPosition';
+import { rightClearance } from './canvasFrame';
+import { clamp } from '../lib/math';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
@@ -102,6 +104,9 @@ const POPOVER_GAP = 28;
 /** The toolbar's own height (`--dc-bar-height` in `tokens.css`) plus a small margin — sitting
  *  above the connector must never mean sitting *behind* the toolbar. */
 const TOOLBAR_CLEARANCE = 56;
+
+/** The least room kept between the popover and either side edge of the visible canvas. */
+const SCREEN_MARGIN = 12;
 
 /**
  * The contextual control for a single selected connector — anchored at its
@@ -268,7 +273,13 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
       popoverScreenBottom,
       [toScreenRect(sourceRect), toScreenRect(targetRect)],
     );
-    const labelAt = frame.screenToOverlay({ x: clampedScreenX, y: screenLabelPoint.y });
+    // …and never past the canvas's own edges: React Flow's root clips, and a docked Learn drawer or the
+    // Flows panel can end the visible canvas well short of the window's right edge.
+    const halfWidth = size.width / 2;
+    const minX = SCREEN_MARGIN + halfWidth;
+    const maxX = window.innerWidth - rightClearance(useUiStore.getState().flowPanelOpen, SCREEN_MARGIN) - halfWidth;
+    const onCanvasX = minX <= maxX ? clamp(clampedScreenX, minX, maxX) : clampedScreenX;
+    const labelAt = frame.screenToOverlay({ x: onCanvasX, y: screenLabelPoint.y });
     return {
       placement: flipBelow ? 'below' : 'above',
       transform: flipBelow

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveScene, stepStarts } from '../src/learn/frames';
 import { CATEGORIES, QUICK_START, RECIPES, recipeById } from '../src/learn/recipes';
@@ -23,6 +25,18 @@ describe('Learn recipes', () => {
       expect(recipe.summary.length, recipe.id).toBeLessThanOrEqual(90);
       expect(recipe.summary.replace(/\.$/, ''), recipe.id).not.toMatch(/\.\s/);
       if (recipe.note) expect(recipe.note.length, recipe.id).toBeLessThanOrEqual(90);
+    }
+  });
+
+  it('name only menu items the product actually has', () => {
+    // "right-click → Make asynchronous": each label after an arrow must be a command title somewhere.
+    const commands = readFileSync(resolve(__dirname, '../src/commands/registry.ts'), 'utf8');
+    for (const recipe of recipes) {
+      for (const text of [recipe.summary, recipe.note ?? '']) {
+        for (const [, label] of text.matchAll(/right-click[^→]*→\s*([^.,]+)/gi)) {
+          expect(commands, `${recipe.id}: "${label}"`).toContain(`'${label!.trim()}'`);
+        }
+      }
     }
   });
 

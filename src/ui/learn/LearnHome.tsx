@@ -1,7 +1,8 @@
-import { useMemo, type RefObject } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from 'react';
+import { flushSync } from 'react-dom';
 import { CATEGORIES, QUICK_START, RECIPES, recipesIn, type LearnCategory } from '../../learn/recipes';
 import { searchLearn, type RecipeMatch } from '../../learn/search';
-import type { LearnRecipe, RecipeCategory } from '../../learn/types';
+import type { LearnRecipe } from '../../learn/types';
 import type { DraftNode } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -10,6 +11,8 @@ import { RecipePoster } from './RecipePoster';
 
 interface LearnHomeProps {
   searchRef: RefObject<HTMLInputElement | null>;
+  /** Back from a recipe, rather than opening onto home. */
+  returning: boolean;
   onOpen: (recipeId: string) => void;
 }
 
@@ -20,10 +23,10 @@ const TRY_INSTEAD = ['async', 'flow', 'export'];
  * Learn's landing: a search box that answers "how do I…", the short version of Draft Canvas as a
  * six-stop route, and four ways in by topic. Never a directory — sixteen links would be a wall.
  */
-export function LearnHome({ searchRef, onOpen }: LearnHomeProps) {
+export function LearnHome({ searchRef, returning, onOpen }: LearnHomeProps) {
   const query = useUiStore((state) => state.learnQuery);
   const setQuery = useUiStore((state) => state.setLearnQuery);
-  const category = useUiStore((state) => state.learnCategory) as RecipeCategory | null;
+  const category = useUiStore((state) => state.learnCategory);
   const setCategory = useUiStore((state) => state.setLearnCategory);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
 
@@ -31,8 +34,44 @@ export function LearnHome({ searchRef, onOpen }: LearnHomeProps) {
   const searching = query.trim().length > 0;
   const activeCategory = CATEGORIES.find((candidate) => candidate.id === category);
 
+  // Spoken once typing pauses, not on every keystroke.
+  const summary = searching ? announce(results.recipes.length, results.shortcuts) : '';
+  const [announced, setAnnounced] = useState(summary);
+  useEffect(() => {
+    const id = window.setTimeout(() => setAnnounced(summary), ANNOUNCE_DELAY_MS);
+    return () => window.clearTimeout(id);
+  }, [summary]);
+
+  // The search box leads into what it found: Enter opens the best answer, ↓ walks into the list.
+  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === 'Enter' && searching) {
+      event.preventDefault();
+      const top = results.recipes[0];
+      if (top) onOpen(top.recipe.id);
+      else if (results.shortcuts) setShortcutsOpen(true);
+    } else if (event.key === 'ArrowDown') {
+      const first = listItems(event.currentTarget)[0];
+      if (!first) return;
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  // ↑/↓ between the rows of whatever the body is showing; ↑ from the first goes back to the box.
+  const onBodyKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const items = listItems(event.currentTarget);
+    const index = items.indexOf(event.target as HTMLElement);
+    if (index < 0) return;
+    event.preventDefault();
+    const next = index + (event.key === 'ArrowDown' ? 1 : -1);
+    if (next < 0) searchRef.current?.focus();
+    else items[Math.min(next, items.length - 1)]?.focus();
+  };
+
   return (
-    <div className="dc-learn-home">
+    <div className="dc-learn-home" data-returning={returning ? 'true' : undefined}>
       <div className="dc-learn-search">
         <Icon name="search" size={14} />
         <input
@@ -40,6 +79,7 @@ export function LearnHome({ searchRef, onOpen }: LearnHomeProps) {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={onSearchKeyDown}
           placeholder="How do I…"
           aria-label="Search Learn"
           aria-controls="dc-learn-body"
@@ -56,25 +96,33 @@ export function LearnHome({ searchRef, onOpen }: LearnHomeProps) {
         )}
       </div>
       <p className="dc-sr-only" aria-live="polite">
-        {searching ? announce(results.recipes.length, results.shortcuts) : ''}
+        {announced}
       </p>
 
-      <div className="dc-learn-body" id="dc-learn-body">
+      {/* Arrow keys over native buttons, not a composite widget: each row stays a plain Tab stop. */}
+      <div className="dc-learn-body" id="dc-learn-body" onKeyDown={onBodyKeyDown}>
         {searching ? (
           <SearchResults
             matches={results.recipes}
             shortcuts={results.shortcuts}
             onOpen={onOpen}
-            onTry={(next) => setQuery(next)}
+            // The pill pressed is about to unmount; focus goes where the answer is, not to the page.
+            onTry={(next) => {
+              setQuery(next);
+              searchRef.current?.focus();
+            }}
             onCategory={(next) => {
-              setQuery('');
-              setCategory(next);
+              flushSync(() => {
+                setQuery('');
+                setCategory(next);
+              });
+              searchRef.current?.closest('.dc-learn-home')?.querySelector<HTMLElement>('.dc-learn-topic[aria-pressed="true"]')?.focus();
             }}
             onShortcuts={() => setShortcutsOpen(true)}
           />
         ) : (
           <>
-            <nav className="dc-learn-topics" aria-label="Topics">
+            <div className="dc-learn-topics" role="group" aria-label="Topics">
               {CATEGORIES.map((candidate) => (
                 <button
                   key={candidate.id}
@@ -87,7 +135,7 @@ export function LearnHome({ searchRef, onOpen }: LearnHomeProps) {
                   {candidate.label}
                 </button>
               ))}
-            </nav>
+            </div>
 
             {activeCategory ? (
               <section className="dc-learn-section" aria-labelledby="dc-learn-topic-title">
@@ -114,9 +162,18 @@ export function LearnHome({ searchRef, onOpen }: LearnHomeProps) {
   );
 }
 
+const ANNOUNCE_DELAY_MS = 400;
+
 function announce(count: number, shortcuts: boolean): string {
   if (count === 0) return shortcuts ? 'Keyboard shortcuts' : 'No results';
-  return `${count} ${count === 1 ? 'recipe' : 'recipes'}`;
+  const recipes = `${count} ${count === 1 ? 'recipe' : 'recipes'}`;
+  return shortcuts ? `${recipes}, plus Keyboard shortcuts` : recipes;
+}
+
+/** The rows ↑/↓ step through, in order — within the Learn view `from` sits in. */
+function listItems(from: HTMLElement): HTMLElement[] {
+  const body = from.closest('.dc-learn-home')?.querySelector('.dc-learn-body');
+  return body ? Array.from(body.querySelectorAll<HTMLElement>('.dc-learn-row, .dc-learn-stop, .dc-learn-shortcuts')) : [];
 }
 
 /** The short version: six stops on a line, the way a flow reads — no progress, no checkmarks. */
@@ -304,7 +361,7 @@ function SelectionContext({ onOpen }: { onOpen: (id: string) => void }) {
 
   if (!offer) return null;
   return (
-    <aside className="dc-learn-context" aria-label={`About the selected ${offer.label}`}>
+    <section className="dc-learn-context" aria-label={`About the selected ${offer.label}`}>
       <span className="dc-learn-context-label">
         <span className="dc-learn-context-dot" aria-hidden="true" />
         Selected · {offer.label}
@@ -316,7 +373,7 @@ function SelectionContext({ onOpen }: { onOpen: (id: string) => void }) {
           </button>
         ))}
       </span>
-    </aside>
+    </section>
   );
 }
 

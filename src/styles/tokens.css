@@ -11,6 +11,9 @@
   --dc-grid: #252a33;
   --dc-surface: #181b21;
   --dc-surface-raised: #1e222a;
+  /* A hovered row or button. Dark: one step up. Light can't step up from white, so it tints toward
+     the text instead — `surface-raised` there is the same #fff as the surface it sits on. */
+  --dc-surface-hover: var(--dc-surface-raised);
   --dc-border: #2c333d;
   --dc-border-strong: #3d4653;
   --dc-text: #e6e9ee;
@@ -28,9 +31,11 @@
   --dc-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --dc-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
+  --dc-radius-xs: 4px;
   --dc-radius-sm: 5px;
   --dc-radius: 8px;
   --dc-radius-lg: 12px;
+  --dc-radius-pill: 999px;
 
   /* Floating layers above the canvas, lowest first. Stacking *inside* the canvas (1–4) stays local
      to canvas.css; these are the ones that have to agree with each other across files. */
@@ -38,6 +43,7 @@
   --dc-z-popover: 7; /* anchored element/connector popovers */
   --dc-z-bar: 8; /* focus indicator, presentation bar, quick connect */
   --dc-z-menu: 9; /* context and move menus */
+  --dc-z-drawer: 30; /* Learn as a sheet over a narrow canvas — under any dialog opened from it */
   --dc-z-modal: 40; /* modal and command-palette backdrops */
   --dc-z-toast: 60;
   --dc-z-prompt: 65; /* clipboard permission card */
@@ -54,12 +60,15 @@
 
   /* Decelerating, never springy: things arrive and settle, nothing bounces. */
   --dc-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Accelerate, then settle — for something that travels (Learn's marquee), not something arriving. */
+  --dc-ease-in-out: cubic-bezier(0.45, 0.05, 0.2, 1);
 
   color-scheme: dark;
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
+  --dc-surface-hover: color-mix(in srgb, var(--dc-text) 6%, var(--dc-surface));
   --dc-danger: #c2455f;
   --dc-shadow-panel: 0 8px 28px -10px rgba(19, 24, 32, 0.22), 0 1px 2px rgba(19, 24, 32, 0.08);
 }
@@ -73,12 +82,13 @@
     --dc-grid: #dfe3e8;
     --dc-surface: #ffffff;
     --dc-surface-raised: #ffffff;
+    --dc-surface-hover: color-mix(in srgb, var(--dc-text) 6%, var(--dc-surface));
     --dc-border: #dde1e7;
     --dc-border-strong: #b9c0ca;
     --dc-text: #1a1d23;
     --dc-text-muted: #59606d;
     --dc-text-faint: #6a7280;
-    --dc-selection: #0b7c72;
+    --dc-selection: #0a746b;
     --dc-selection-soft: rgba(15, 143, 132, 0.12);
     --dc-edge: #7c8492;
     --dc-edge-label-bg: #ffffff;
@@ -151,4 +161,21 @@ pre {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* Shared entrances. `from` only, so each element settles on its own resting style. */
+@keyframes dc-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A stroke drawing itself in; the path needs `pathLength="1"` and `stroke-dasharray: 1`. */
+@keyframes dc-draw-in {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }

@@ -11,6 +11,7 @@ All notable changes to Draft Canvas are documented here.
   sentence, and the keys to press. Your canvas stays live next to it.
 - Learn recipes show up in the command palette as you type, and a small "?" on the connector
   editor, the Flows panel and the sequence diagram export opens the matching one.
+- When nothing in the command palette matches, it offers to ask Learn instead.
 - Suggestions have alternatives: press `]` or `[` to step through them, then Tab to add the one
   showing. On a shape with no suggestion, `]` asks for some.
 - Keep pressing Tab to keep sketching. Suggestions continue after each one you add and stop when
@@ -37,12 +38,21 @@ All notable changes to Draft Canvas are documented here.
   spine, the others just a name, so the page stays calm as starters are added. ↑/↓
   move between categories, ←/→ between starters. Starter previews are centred and their
   boundaries drawn lighter.
+- The toolbar for a multi-selection works with the arrow keys, and its colour swatches are easier
+  to hit and show which colour the selection already has.
 - "Browse all starters" is calmer: each starter shows its description right under its name when
   you hover or focus it, instead of in a line at the bottom. Categories read as quiet dividers.
 
 ### Fixed
 
 - Pressing ? to open Keyboard shortcuts no longer types a "?" into its filter.
+- If Export can't load (for example, offline after an update), it says so instead of taking the
+  editor down with it.
+- Inserting a starter or accepting a suggestion into a diagram at its size limit now tells you
+  nothing was added, instead of quietly losing the newest shapes the next time it opens.
+- Hovered buttons, menu rows and list items are visible again in the light theme.
+- The connector editor stays inside the visible canvas when the Flows panel is open.
+- Attachment chips on connectors show a focus ring when reached with the keyboard.
 - Escape in a dialog no longer also dismisses the suggestion behind it.
 - Opening a diagram that has exactly one flow no longer dims everything outside that flow — every
   diagram now opens showing the whole picture, and a flow is only highlighted once you pick it.

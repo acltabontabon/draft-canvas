@@ -108,14 +108,12 @@ test.describe('Learn Draft Canvas', () => {
 
     await page.locator('.dc-node').first().click();
     await expect(page.getByRole('toolbar', { name: 'Element options' })).toBeVisible();
-    await expect(page.locator('.dc-hint-strip')).toHaveCount(0);
 
     await connect(page, 0, 1);
     await expect(page.locator('.dc-edge-line')).toHaveCount(1);
     await clickEdge(page, 0);
     const popover = page.getByRole('toolbar', { name: 'Connector options' });
     await expect(popover).toBeVisible();
-    await expect(page.locator('.dc-hint-strip')).toHaveCount(0);
 
     await popover.getByRole('button', { name: 'Learn: Say what the arrow means' }).click();
     const learn = page.getByRole('complementary', { name: 'Learn Draft Canvas' });

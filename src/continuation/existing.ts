@@ -106,7 +106,6 @@ export function existingTargetCandidates(doc: DraftDocument, nb: Neighborhood): 
       // The pill must not read like a new node called that: it says what happens.
       label: `Connect to ${name}`,
       actionLabel: `Connect to ${name}`,
-      reason: inbound === 0 ? `${name} is right here and not connected to anything yet.` : `${name} is right here.`,
       fragment: { nodes: [], edges: [{ from: 'anchor', to: 'target' }], existing: [{ key: 'target', nodeId: node.id }] },
       anchorId: anchor.id,
       neighborhoodKey: nb.key,
