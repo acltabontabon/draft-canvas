@@ -22,6 +22,16 @@ async function openShortcutSheet(page: Page) {
 }
 
 test.describe('Modal focus behavior', () => {
+  test('? opens the shortcuts sheet without typing itself into its filter', async ({ page }) => {
+    await newCanvas(page, 'Question mark');
+    await page.locator('.react-flow__pane').click({ position: { x: 300, y: 300 } });
+    await page.keyboard.press('Shift+Slash');
+    const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.locator('input').first()).toHaveValue('');
+    await expect(sheet).toContainText('Export');
+  });
+
   test('closing the keyboard shortcuts sheet returns focus to whatever opened it', async ({ page }) => {
     await newCanvas(page, 'Modal focus return');
     const trigger = page.getByRole('button', { name: /^More/ });

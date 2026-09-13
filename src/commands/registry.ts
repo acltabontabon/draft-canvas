@@ -422,7 +422,9 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       title: 'Export…',
       group: 'canvas',
       keywords: ['png', 'svg', 'gif', 'download', 'save', 'share', 'image', 'sequence diagram', 'mermaid', 'plantuml', 'uml'],
-      shortcut: `${MOD_SYMBOL} E`,
+      // ⌘⇧E leads because it always reaches the page: browser extensions (Claude's, among others)
+      // claim a bare ⌘E before Draft Canvas ever sees it. ⌘E still works wherever it gets through.
+      shortcut: `${MOD_SYMBOL} Shift E`,
       run: (inner) => inner.ui.setExportOpen(true),
     },
     {

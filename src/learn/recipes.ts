@@ -1,3 +1,4 @@
+import { MOD_SYMBOL } from '../lib/platform';
 import type { LearnRecipe, RecipeCategory } from './types';
 
 /**
@@ -172,8 +173,8 @@ export const RECIPES = [
     summary: 'Export → Source, then Mermaid or PlantUML.',
     category: 'flows',
     keywords: ['export', 'sequence', 'sequence diagram', 'mermaid', 'plantuml', 'uml', 'mmd', 'puml', 'diagram as code', 'markdown', 'docs', 'text'],
-    keys: [['mod', 'e']],
-    note: 'Every flow on the canvas lands in the same file.',
+    keys: [['mod', 'shift', 'e']],
+    note: `Plain ${MOD_SYMBOL} E works too, unless a browser extension claims it first.`,
     related: ['add-to-flow', 'present-flow'],
   },
 ] as const satisfies readonly LearnRecipe[];

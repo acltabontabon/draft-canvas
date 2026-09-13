@@ -67,7 +67,7 @@ export const SECTIONS: Section[] = [
       { commandId: 'duplicate' },
       { commandId: 'delete', label: 'Delete selection' },
       { commandId: 'select-all' },
-      { commandId: 'export' },
+      { commandId: 'export', label: `Export (${mod} E also works)` },
     ],
   },
   {

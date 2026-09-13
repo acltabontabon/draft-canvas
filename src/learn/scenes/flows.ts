@@ -72,7 +72,7 @@ export const exportSequence: Scene = {
   label: 'A two-step flow is exported: Export, then Source, then Mermaid, producing a sequenceDiagram where Checkout calls Orders and Orders calls Payments.',
   frames: [
     { ms: 1000, step: 'Start from a flow', add: { nodes: NODES, edges: EDGES }, flow: ['e1', 'e2'] },
-    { ms: 800, step: 'Export → Source', overlay: { kind: 'keys', keys: ['mod', 'e'] } },
+    { ms: 800, step: 'Export → Source', overlay: { kind: 'keys', keys: ['mod', 'shift', 'e'] } },
     {
       ms: 1300,
       overlay: { kind: 'picker', at: { x: 280, y: 130 }, title: 'Export', items: ['Document', 'Image', 'Animated', 'Source'], highlight: 'Source' },

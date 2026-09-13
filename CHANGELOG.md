@@ -31,6 +31,8 @@ All notable changes to Draft Canvas are documented here.
 
 ### Changed
 
+- Export's shortcut is now ⌘⇧E (Ctrl+Shift+E), which browser extensions don't intercept. ⌘E
+  still works wherever it reaches the page.
 - The home screen's starters are now an index: one category open at a time on the connector's
   spine, the others just a name and a count, so the page stays calm as starters are added. ↑/↓
   move between categories, ←/→ between starters. Starter previews are centred and their
@@ -38,6 +40,7 @@ All notable changes to Draft Canvas are documented here.
 
 ### Fixed
 
+- Pressing ? to open Keyboard shortcuts no longer types a "?" into its filter.
 - Escape in a dialog no longer also dismisses the suggestion behind it.
 - Opening a diagram that has exactly one flow no longer dims everything outside that flow — every
   diagram now opens showing the whole picture, and a flow is only highlighted once you pick it.

@@ -685,6 +685,8 @@ function useKeyboard({
             state.duplicateSelection();
             return;
           case 'e':
+            // ⌘E and ⌘⇧E both (`key` is lowercased above). ⌘⇧E is the one shown everywhere: a
+            // browser extension can claim a bare ⌘E before this page receives it.
             event.preventDefault();
             setExportOpen(true);
             return;
@@ -759,6 +761,8 @@ function useKeyboard({
         return;
       }
       if (event.shiftKey && event.code === 'Slash') {
+        // Otherwise the "?" that opened the sheet types itself into the sheet's own filter.
+        event.preventDefault();
         setShortcutsOpen(true);
         return;
       }

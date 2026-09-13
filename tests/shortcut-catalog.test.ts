@@ -27,7 +27,7 @@ describe('shortcutCatalog', () => {
     expect(shortcutOf('redo')).toBe(`${MOD_SYMBOL} Shift Z`);
     expect(shortcutOf('select-all')).toBe(`${MOD_SYMBOL} A`);
     expect(shortcutOf('paste')).toBe(`${MOD_SYMBOL} V`);
-    expect(shortcutOf('export')).toBe(`${MOD_SYMBOL} E`);
+    expect(shortcutOf('export')).toBe(`${MOD_SYMBOL} Shift E`);
     expect(shortcutOf('shortcuts')).toBe('?');
     expect(shortcutOf('fit')).toBe('Shift 1');
     expect(shortcutOf('zoom-in')).toBe(`${MOD_SYMBOL} +`);

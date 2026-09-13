@@ -154,6 +154,18 @@ test.describe('Sequence Diagram export', () => {
     await expect(dialog.locator('svg.dc-sequence-svg, .dc-sequence-preview-scroll')).toHaveCount(0);
   });
 
+  test('opens from the keyboard with ⌘⇧E — the chord extensions leave alone — and ⌘E too', async ({ page }) => {
+    await importDocument(page, sagaDocument(), 'saga.draftcanvas');
+    const dialog = page.getByRole('dialog', { name: 'Export' });
+    for (const chord of ['ControlOrMeta+Shift+E', 'ControlOrMeta+e']) {
+      await page.locator('.react-flow__pane').click({ position: { x: 20, y: 20 } });
+      await page.keyboard.press(chord);
+      await expect(dialog, chord).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+    }
+  });
+
   test('exports Mermaid source: both flows grouped, the dependsOn edge excluded, notes preserved', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
     await openSourceExport(page);
