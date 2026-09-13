@@ -187,6 +187,7 @@ test.describe('Database → Database relationships', () => {
       'Replicates',
       'CDC',
       'Syncs',
+      'Transforms',
       'Depends on',
     ]);
   });

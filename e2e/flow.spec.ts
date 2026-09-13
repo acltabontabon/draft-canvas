@@ -243,7 +243,9 @@ test.describe('Flows', () => {
     await expect(page.locator('.dc-flow-item .dc-flow-title')).toHaveText('Renamed flow');
   });
 
-  test('a freshly opened document with one flow shows its step badges immediately', async ({ page }) => {
+  test('a freshly opened document with one flow opens on the whole diagram, and choosing the flow shows its step badges', async ({
+    page,
+  }) => {
     await newCanvas(page, 'Fresh open badges');
     await buildArchitecture(page);
     await addToFlow(page, 0);
@@ -256,7 +258,15 @@ test.describe('Flows', () => {
     await page.locator('.dc-library-item', { hasText: 'Fresh open badges' }).click();
     await expect(page.locator('.dc-editor')).toBeVisible();
 
-    // No flow selection, no click — badges must already be showing.
+    // Opening never selects a flow, however many the document has: the default view is the whole
+    // diagram, so there are no step badges until the user picks the flow.
+    await openFlowPanel(page);
+    await expect(page.locator('.dc-flow-diagram')).toHaveAttribute('data-selected', 'true');
+    await expect(page.locator('.dc-flow-item')).not.toHaveAttribute('data-selected', 'true');
+    await expect(page.locator('.dc-edge-step')).toHaveCount(0);
+
+    await page.locator('.dc-flow-item .dc-flow-item-head').click();
+    await expect(page.locator('.dc-flow-item')).toHaveAttribute('data-selected', 'true');
     await expect(page.locator('.dc-edge-step')).toHaveCount(2);
   });
 
