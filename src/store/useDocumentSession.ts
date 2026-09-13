@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { canEncryptLocally } from '../crypto/availability';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
 import { freeOriginFor, openingViewportFor } from '../document/operations';
 import { createId } from '../document/ids';
@@ -254,7 +255,12 @@ export function useDocumentSession(): DocumentSession {
         await refreshLibrary();
       } catch (error) {
         logDiagnostic(error, { operation: 'adopt-document', documentId: document.metadata.id });
-        notify('Could not save that diagram — local storage may be full or unavailable.', 'error');
+        notify(
+          canEncryptLocally()
+            ? 'Could not save that diagram — local storage may be full or unavailable.'
+            : 'Could not save that diagram — Draft Canvas needs HTTPS or localhost to save anything.',
+          'error',
+        );
       }
     },
     [notify, projects, refreshLibrary, repository],

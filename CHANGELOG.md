@@ -52,6 +52,8 @@ All notable changes to Draft Canvas are documented here.
 
 ### Fixed
 
+- Opened over plain `http://` from another address, Draft Canvas now says up front that it needs
+  HTTPS or `localhost` to save diagrams, instead of New canvas quietly failing.
 - Pressing ? to open Keyboard shortcuts no longer types a "?" into its filter.
 - If Export can't load (for example, offline after an update), it says so instead of taking the
   editor down with it.

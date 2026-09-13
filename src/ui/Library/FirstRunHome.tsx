@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type PointerEvent, type RefObject } from 'react';
+import { canEncryptLocally } from '../../crypto/availability';
 import { PRODUCT } from '../../product';
 import type { StarterId } from '../../starters';
 import type { DocumentSession } from '../../store/useDocumentSession';
@@ -56,6 +57,8 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
   }, []);
 
   const note = <LocalNote durable={session.durable} repository={session.repository} />;
+  // A note that has to warn moves up out of the footer, where it can't be missed.
+  const warn = !session.durable || !canEncryptLocally();
 
   return (
     <div className="dc-home">
@@ -129,10 +132,10 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
           </div>
         </div>
 
-        {!session.durable && <div className="dc-home-warn">{note}</div>}
+        {warn && <div className="dc-home-warn">{note}</div>}
       </div>
 
-      {session.durable && (
+      {!warn && (
         <footer className="dc-home-status">
           <div className="dc-home-status-inner">{note}</div>
         </footer>

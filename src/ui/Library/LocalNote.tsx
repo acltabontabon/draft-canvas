@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { canEncryptLocally } from '../../crypto/availability';
 import type { DraftRepository } from '../../storage';
 import { Icon } from '../common/Icon';
 
@@ -11,11 +12,37 @@ import { Icon } from '../common/Icon';
  *
  * When the browser refused storage the line turns into the warning and
  * starts open: that is the one time this footnote is the most important
- * thing on the screen.
+ * thing on the screen. The same goes, more strongly, for a page opened
+ * somewhere the browser won't allow encryption: there nothing saves at all.
  */
 export function LocalNote({ durable, repository }: { durable: boolean; repository: DraftRepository | null }) {
-  const [open, setOpen] = useState(!durable);
-  const estimate = useStorageEstimate(repository, open);
+  const secure = canEncryptLocally();
+  const [open, setOpen] = useState(!secure || !durable);
+  const estimate = useStorageEstimate(repository, open && secure);
+
+  if (!secure) {
+    return (
+      <div className="dc-local" data-warn="true">
+        <button type="button" className="dc-local-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <Icon name="lock" size={13} />
+          <span>Diagrams can&rsquo;t be saved here — Draft Canvas needs HTTPS or localhost.</span>
+          <span className="dc-local-more">{open ? 'Less' : 'Details'}</span>
+        </button>
+        {open && (
+          <div className="dc-local-detail">
+            <p className="dc-warn">
+              This page was opened over plain <code>http://</code>, and browsers only allow the encryption
+              Draft Canvas stores diagrams with on HTTPS or <code>localhost</code>.
+            </p>
+            <p>
+              Open it at an <code>https://</code> address instead, or at <code>localhost</code> on the
+              machine that runs it.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="dc-local" data-warn={durable ? undefined : 'true'}>
