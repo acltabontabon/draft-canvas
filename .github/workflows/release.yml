@@ -43,6 +43,36 @@ jobs:
             }
             found { print }
           ' CHANGELOG.md > changelog-section.md
+
+          # CHANGELOG.md hard-wraps each bullet across lines for readability
+          # as a file. A release body isn't rendered as a file, though — it's
+          # rendered like a comment, where a single newline is a hard break —
+          # so without this, every wrapped line would show up as its own
+          # forced line instead of flowing as one sentence. Re-join each
+          # bullet's continuation lines before they become the release body.
+          python3 -c '
+          import re
+          with open("changelog-section.md") as f:
+              lines = f.read().splitlines()
+          out, buf = [], None
+          for line in lines:
+              if line.strip() == "":
+                  if buf is not None:
+                      out.append(buf)
+                      buf = None
+                  out.append("")
+              elif line.startswith("#") or line.startswith("- ") or not line.startswith(" "):
+                  if buf is not None:
+                      out.append(buf)
+                  buf = line
+              else:
+                  buf = line.strip() if buf is None else buf + " " + line.strip()
+          if buf is not None:
+              out.append(buf)
+          with open("changelog-section.md", "w") as f:
+              f.write("\n".join(out) + "\n")
+          '
+
           cat changelog-section.md >> release-notes.md
 
           if [ -s changelog-section.md ]; then
