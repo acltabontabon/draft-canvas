@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { isImeKeyEvent } from '../../../lib/isEditableTarget';
 
 interface DiagramTitleFieldProps {
   title: string;
@@ -51,6 +52,7 @@ export function DiagramTitleField({ title, onTitleChange }: DiagramTitleFieldPro
         // Without this, typing "s" in the title arms the Service tool: the editor's global
         // single-key shortcuts listen on `window`.
         event.stopPropagation();
+        if (isImeKeyEvent(event)) return;
         if (event.key === 'Enter') {
           event.preventDefault();
           event.currentTarget.blur();

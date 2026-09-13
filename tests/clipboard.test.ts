@@ -138,7 +138,7 @@ describe('group/boundary copy', () => {
     expect(pastedChild.parentId).toBeUndefined();
   });
 
-  it('leaves the original child alone when only the parent boundary is selected', () => {
+  it('copying just the boundary brings its contents, and leaves the originals alone', () => {
     const { doc, boundary, child } = boundaryWithChild();
     store.setState({ document: doc });
     store.getState().setSelection({ nodes: [boundary.id], edges: [] });
@@ -147,8 +147,11 @@ describe('group/boundary copy', () => {
 
     const original = store.getState().document.nodes.find((n) => n.id === child.id)!;
     expect(original.parentId).toBe(boundary.id);
-    const pastedIds = store.getState().selection.nodes;
-    expect(pastedIds).toHaveLength(1);
+    // A boundary is its contents — cutting one deletes them, so a copy must carry them too.
+    const pasted = store.getState().document.nodes.filter((n) => store.getState().selection.nodes.includes(n.id));
+    expect(pasted).toHaveLength(2);
+    const pastedBoundary = pasted.find((n) => n.type === 'group')!;
+    expect(pasted.find((n) => n.type !== 'group')!.parentId).toBe(pastedBoundary.id);
   });
 });
 

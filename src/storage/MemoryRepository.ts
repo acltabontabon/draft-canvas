@@ -1,4 +1,12 @@
-import { backgroundImageKey, isBackgroundImageKeyOf, summarize, type DraftRepository } from './DraftRepository';
+import {
+  backgroundImageKey,
+  isBackgroundImageKeyOf,
+  reconcileMetadata,
+  sharedMetadataOf,
+  summarize,
+  type DraftRepository,
+  type SharedMetadata,
+} from './DraftRepository';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 
 /**
@@ -27,8 +35,11 @@ export class MemoryRepository implements DraftRepository {
     return found ? structuredClone(found) : null;
   }
 
-  async save(document: DraftDocument): Promise<void> {
-    this.documents.set(document.metadata.id, structuredClone(document));
+  async save(document: DraftDocument, base?: SharedMetadata): Promise<SharedMetadata | void> {
+    const stored = this.documents.get(document.metadata.id);
+    const written = base && stored ? reconcileMetadata(document, base, stored.metadata) : document;
+    this.documents.set(document.metadata.id, structuredClone(written));
+    if (written !== document) return sharedMetadataOf(written.metadata);
   }
 
   async remove(id: string): Promise<void> {

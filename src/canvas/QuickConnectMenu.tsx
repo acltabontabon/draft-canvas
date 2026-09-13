@@ -66,6 +66,25 @@ export function QuickConnectMenu({
   const panel = useRef<HTMLDivElement>(null);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const [highlighted, setHighlighted] = useState(0);
+  // Read by the key listener through refs, so moving the highlight doesn't tear down and re-add the
+  // window listeners (and restart the deferred outside-click one) on every arrow press.
+  const highlightedRef = useRef(highlighted);
+  highlightedRef.current = highlighted;
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  // Same focus handling as `ContextMenu`: the menu takes focus so a screen reader follows the
+  // highlight (`aria-activedescendant`), and gives it back on close unless a choice moved it on.
+  const [returnFocusTo] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
+  useLayoutEffect(() => {
+    const menu = panel.current;
+    menu?.focus({ preventScroll: true });
+    return () => {
+      const active = document.activeElement;
+      const unclaimed = !active || active === document.body || (menu?.contains(active) ?? false);
+      if (unclaimed && returnFocusTo?.isConnected) returnFocusTo.focus({ preventScroll: true });
+    };
+  }, [returnFocusTo]);
 
   const [measuredSize, setMeasuredSize] = useState({ width: 0, height: 0 });
   // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -95,14 +114,15 @@ export function QuickConnectMenu({
           event.preventDefault();
           event.stopPropagation();
           const delta = event.key === 'ArrowDown' ? 1 : -1;
-          setHighlighted((index) => (index + delta + items.length) % items.length);
+          const count = itemsRef.current.length;
+          setHighlighted((index) => (index + delta + count) % count);
           return;
         }
         case 'Enter':
         case 'Tab': {
           event.preventDefault();
           event.stopPropagation();
-          const item = items[Math.min(highlighted, items.length - 1)];
+          const item = itemsRef.current[Math.min(highlightedRef.current, itemsRef.current.length - 1)];
           if (item) onSelect(item);
           return;
         }
@@ -114,15 +134,20 @@ export function QuickConnectMenu({
       if (panel.current && !panel.current.contains(event.target as Node)) onDismiss();
     };
     window.addEventListener('keydown', onKeyDown, true);
+    // Screen-pinned, like `ContextMenu`: a resize or losing the window closes it.
+    window.addEventListener('resize', onDismiss);
+    window.addEventListener('blur', onDismiss);
     // Deferred so the pointerup that released the connection drag does not
     // itself count as the "click outside" that dismisses the menu.
     const id = window.setTimeout(() => window.addEventListener('pointerdown', onPointerDown), 0);
     return () => {
       window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('resize', onDismiss);
+      window.removeEventListener('blur', onDismiss);
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };
-  }, [onDismiss, onSelect, items, highlighted]);
+  }, [onDismiss, onSelect]);
 
   const clearances = {
     gap: GAP,
@@ -144,12 +169,15 @@ export function QuickConnectMenu({
       className="dc-quick-connect"
       role="menu"
       aria-label="Add element"
+      aria-activedescendant={current ? `dc-quick-connect-item-${Math.min(highlighted, items.length - 1)}` : undefined}
+      tabIndex={-1}
       style={{ transform }}
     >
       {items.map((item, index) => (
         <div key={item.id} className="dc-quick-connect-row">
           {hasSuggestions && index === firstPreset && <div className="dc-quick-connect-separator" role="separator" />}
           <button
+            id={`dc-quick-connect-item-${index}`}
             type="button"
             role="menuitem"
             className="dc-quick-connect-item"

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useFocusReturn } from './useFocusReturn';
 import { Button } from './Button';
 import { Icon } from './Icon';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 
 interface ModalProps {
   title: string;
@@ -24,6 +25,17 @@ interface ModalProps {
  *  take focus regardless of matching the selector. */
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Reachable by Tab: not inside a hidden/inert subtree, and not an unchecked radio whose group has a
+ *  checked one (the browser Tabs only to a group's checked member). */
+function isTabbable(element: HTMLElement): boolean {
+  if (element.closest('[hidden], [inert]')) return false;
+  if (element instanceof HTMLInputElement && element.type === 'radio' && !element.checked && element.name) {
+    const group = Array.from(element.ownerDocument.getElementsByName(element.name));
+    if (group.some((member) => member instanceof HTMLInputElement && member.checked)) return false;
+  }
+  return true;
+}
 
 /**
  * Open modals by opening order. Every `Modal` listens on `window` in the capture phase, and
@@ -71,6 +83,8 @@ export function Modal({ title, onClose, children, footer, width = 460, className
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (Math.max(...openModals) !== order) return;
+      // Escape that cancels an IME conversion in one of the dialog's fields isn't "close".
+      if (isImeKeyEvent(event)) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         onClose();
@@ -80,10 +94,17 @@ export function Modal({ title, onClose, children, footer, width = 460, className
       // canvas/toolbar chrome sits behind the backdrop — a keyboard user has no way back in short
       // of reopening it. Wraps at either end rather than blocking Tab outright once it reaches one.
       if (event.key !== 'Tab' || !panel.current) return;
-      const focusable = Array.from(panel.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      const focusable = Array.from(panel.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(isTabbable);
       if (focusable.length === 0) return;
       const first = focusable[0]!;
       const last = focusable[focusable.length - 1]!;
+      // Focus already outside — the control that held it unmounted (a step change), leaving it on
+      // the page. The next Tab would walk into whatever sits behind the backdrop.
+      if (!panel.current.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+        return;
+      }
       // The mount effect above focuses the panel itself first (so a screen reader announces the
       // dialog's own label before any one control), not a child — so "at the boundary" also means
       // "focus hasn't left that panel root yet", not just "on the first/last real control".

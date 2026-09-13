@@ -61,10 +61,9 @@ describe('Tooltip densities', () => {
     ]);
   });
 
-  it('names the trigger via aria-describedby at either density', () => {
-    const tooltip = mount({ title: 'Export', shortcut: '⌘ E' });
-    expect(screen.getByRole('button', { name: 'Export' }).getAttribute('aria-describedby')).toBe(
-      tooltip.id,
-    );
+  it('describes the trigger at either density, before the bubble has ever opened', () => {
+    mount({ title: 'Export', shortcut: '⌘ E' });
+    const describedBy = screen.getByRole('button', { name: 'Export' }).getAttribute('aria-describedby');
+    expect(document.getElementById(describedBy!)?.textContent).toBe('Shortcut ⌘ E');
   });
 });

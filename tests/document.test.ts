@@ -314,6 +314,80 @@ describe('group / ungroup keep nesting intact', () => {
     store.getState().ungroupSelection();
     expect(kids.every((k) => nodeById(k.id).parentId === outer.id)).toBe(true);
   });
+
+  it('ungrouping drops connectors drawn to the boundary itself, and the flow steps that walked them', () => {
+    const { outer, kids } = outerWith(1);
+    const db = store.getState().addNode({ type: 'service', x: 1400, y: 100 });
+    const toBoundary = store.getState().connect(outer.id, db.id)!;
+    const inner = store.getState().connect(kids[0]!.id, db.id)!;
+    const flowId = store.getState().createFlow('Story')!;
+    store.getState().addEdgeToFlow(flowId, toBoundary.id);
+    store.getState().addEdgeToFlow(flowId, inner.id);
+
+    store.getState().setSelection({ nodes: [outer.id], edges: [] });
+    store.getState().ungroupSelection();
+
+    const doc = store.getState().document;
+    expect(doc.edges.map((e) => e.id)).toEqual([inner.id]);
+    expect(doc.flows[0]!.steps.map((s) => s.edgeId)).toEqual([inner.id]);
+  });
+
+  it('cut and paste of a boundary brings back its contents and their connectors', () => {
+    const { outer, kids } = outerWith(2);
+    store.getState().connect(kids[0]!.id, kids[1]!.id);
+    store.getState().setSelection({ nodes: [outer.id], edges: [] });
+    store.getState().cutSelection();
+    expect(store.getState().document.nodes).toHaveLength(0);
+
+    store.getState().paste();
+    const doc = store.getState().document;
+    const boundary = doc.nodes.find((n) => n.type === 'group')!;
+    expect(doc.nodes.filter((n) => n.parentId === boundary.id)).toHaveLength(2);
+    expect(doc.edges).toHaveLength(1);
+  });
+
+  it('nudging, aligning and distributing a boundary carries its contents along', () => {
+    const { outer, kids } = outerWith(1);
+    const kid = kids[0]!;
+    store.getState().setSelection({ nodes: [outer.id], edges: [] });
+    store.getState().nudgeSelection(10, 0);
+    expect(nodeById(kid.id).x).toBe(kid.x + 10);
+
+    const loose = store.getState().addNode({ type: 'service', x: 0, y: 1000 });
+    const kidBefore = nodeById(kid.id);
+    store.getState().setSelection({ nodes: [outer.id, loose.id], edges: [] });
+    store.getState().align('bottom');
+    const dy = nodeById(outer.id).y;
+    expect(dy).toBeGreaterThan(0);
+    expect(nodeById(kid.id).y).toBe(kidBefore.y + dy);
+  });
+});
+
+describe('insert worker', () => {
+  it('keeps the replaced connector\'s label, condition and attachments on the inbound leg', () => {
+    const store = useEditorStore;
+    __resetInteraction();
+    store.setState({ document: createDocument('Worker'), history: { past: [], future: [] }, selection: { nodes: [], edges: [] }, revision: 0 });
+    const queue = store.getState().addNode({ type: 'queue', x: 0, y: 0 });
+    const target = store.getState().addNode({ type: 'service', x: 600, y: 0 });
+    const edge = store.getState().connect(queue.id, target.id)!;
+    const note = createAttachment({ type: 'note', text: 'payload' });
+    store.getState().apply('Seed', (doc) => ({
+      ...doc,
+      edges: doc.edges.map((e) => (e.id === edge.id ? { ...e, label: 'ORDER_CREATED', condition: 'paid', attachments: [note] } : e)),
+    }));
+
+    store.getState().insertWorkerOnEdge(edge.id);
+
+    const doc = store.getState().document;
+    const inbound = doc.edges.find((e) => e.source === queue.id)!;
+    const outbound = doc.edges.find((e) => e.target === target.id)!;
+    expect(inbound.label).toBe('ORDER_CREATED');
+    expect(inbound.condition).toBe('paid');
+    expect(inbound.attachments).toEqual([note]);
+    expect(outbound.label).toBeUndefined();
+    expect(outbound.attachments).toBeUndefined();
+  });
 });
 
 describe('z-order', () => {

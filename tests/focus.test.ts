@@ -31,15 +31,6 @@ describe('focus mode', () => {
     expect(store.getState().history.past).toHaveLength(before);
   });
 
-  it('toggles a member in and out of the focus set', () => {
-    store.getState().enterFocus(['a'], []);
-    store.getState().toggleFocusMember('b', 'node');
-    expect(store.getState().focus.nodeIds).toEqual(['a', 'b']);
-
-    store.getState().toggleFocusMember('a', 'node');
-    expect(store.getState().focus.nodeIds).toEqual(['b']);
-  });
-
   it('drops deleted elements from focus, and leaves Focus when nothing focused is left', () => {
     const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const b = store.getState().addNode({ type: 'service', x: 300, y: 0 });
@@ -65,11 +56,6 @@ describe('focus mode', () => {
     expect(store.getState().history.past).toHaveLength(past + 1);
     store.getState().undo();
     expect(store.getState().document.nodes[0]!.x).toBe(0);
-  });
-
-  it('does nothing when toggling while focus is not active', () => {
-    store.getState().toggleFocusMember('a', 'node');
-    expect(store.getState().focus).toEqual({ active: false, nodeIds: [], edgeIds: [] });
   });
 
   it('is mutually exclusive with flow playback', () => {

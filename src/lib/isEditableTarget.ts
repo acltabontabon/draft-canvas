@@ -10,3 +10,21 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }
+
+const CONTROL_SELECTOR =
+  'button, a[href], summary, [role="button"], [role="link"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"], [role="slider"]';
+
+/**
+ * Whether an event's target is a control that Enter/Space activate on their own. A global
+ * shortcut claiming those keys (and calling `preventDefault`) would cancel the click the user
+ * meant — Enter on a focused inspector button starting a text edit instead, Space on a focused
+ * "Previous" advancing the presentation.
+ */
+export function isActivatableTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(CONTROL_SELECTOR) !== null;
+}
+
+/** An Enter/Escape that is part of an IME composition (confirming or cancelling a conversion). */
+export function isImeKeyEvent(event: { isComposing?: boolean; keyCode?: number; nativeEvent?: { isComposing?: boolean } }): boolean {
+  return event.isComposing === true || event.nativeEvent?.isComposing === true || event.keyCode === 229;
+}

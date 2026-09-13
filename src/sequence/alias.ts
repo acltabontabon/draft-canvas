@@ -37,6 +37,22 @@ const RESERVED_ALIASES = new Set([
   'right',
   'of',
   'as',
+  // PlantUML commands that start a line — a message line opening with one (`Title -> Api`) could
+  // be read as the command instead.
+  'title',
+  'header',
+  'footer',
+  'caption',
+  'legend',
+  'skinparam',
+  'hide',
+  'show',
+  'autonumber',
+  'newpage',
+  'create',
+  'ref',
+  'hnote',
+  'rnote',
 ]);
 
 const MAX_ALIAS_LENGTH = 40;

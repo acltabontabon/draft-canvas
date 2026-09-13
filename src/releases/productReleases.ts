@@ -21,6 +21,47 @@ export type { ProductRelease, ProductReleaseHighlight } from './types';
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.3.0',
+    date: '2026-09-13',
+    highlights: [
+      {
+        title: 'Boundaries keep their contents',
+        description:
+          "Copying, cutting, nudging, or ungrouping a boundary now takes what's inside it along, instead of leaving it behind or pointing at nothing.",
+      },
+      {
+        title: 'Flows stay accurate',
+        description:
+          "Turning a fan of connectors into a junction, or inserting a worker on one, no longer loses a flow step or the connector's label and attachments.",
+      },
+      {
+        title: 'Cross-tab edits stay put',
+        description:
+          "Renaming or moving a diagram in one tab is no longer overwritten by another tab's autosave, and undoing an unrelated edit no longer reverts it.",
+      },
+      {
+        title: 'Keyboard and IME fixes',
+        description:
+          'Enter and Space on a focused button now press it instead of editing your diagram, holding a shortcut key no longer piles up copies, and composing Japanese, Chinese, or Korean text with Enter no longer submits the field early.',
+      },
+      {
+        title: 'Easier to grab when zoomed out',
+        description:
+          'Connection dots, resize handles, and connectors are easier to click precisely, and a connection dot no longer jumps when you hover it.',
+      },
+      {
+        title: 'Menus behave',
+        description:
+          "Right-click and quick-add menus close when you pan or zoom, and the Library's move-to-project menu now supports arrow keys, Home, and End.",
+      },
+      {
+        title: 'More accurate screen reader support',
+        description:
+          'Screen readers announce each step while presenting instead of staying silent, and no longer narrate every autosave.',
+      },
+    ],
+  },
+  {
     version: '1.2.0',
     date: '2026-09-13',
     highlights: [

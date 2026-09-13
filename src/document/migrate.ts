@@ -7,6 +7,7 @@
  */
 import { createId } from './ids';
 import { CURRENT_VERSION } from './types';
+import { isFiniteNumber } from '../lib/math';
 
 type Migration = (doc: Record<string, unknown>) => Record<string, unknown>;
 
@@ -23,7 +24,7 @@ function migrateSequenceToFlows(doc: Record<string, unknown>): Record<string, un
   for (const raw of edges) {
     if (!raw || typeof raw !== 'object') continue;
     const edge = raw as Record<string, unknown>;
-    if (typeof edge.sequence === 'number' && Number.isFinite(edge.sequence)) {
+    if (isFiniteNumber(edge.sequence)) {
       sequenced.push({ id: edge.id, sequence: edge.sequence });
     }
   }

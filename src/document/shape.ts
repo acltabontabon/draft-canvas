@@ -1,6 +1,7 @@
 import { categoryOf } from './connectorSemantics';
 import { boundsOf } from './operations';
 import { SHAPE_VERSION, type DraftEdge, type DraftNode, type LibraryShape, type ShapeKind } from './types';
+import { isFiniteNumber } from '../lib/math';
 
 /**
  * The library's topology fingerprint — see `LibraryShape` in `types.ts`.
@@ -116,8 +117,6 @@ export function libraryShapeOf(nodes: readonly DraftNode[], edges: readonly Draf
 
   return { v: SHAPE_VERSION, w: unit(bounds.width), h: unit(bounds.height), nodes: shapeNodes, edges: shapeEdges };
 }
-
-const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
 /**
  * Summaries are read straight out of IndexedDB and never pass through

@@ -5,10 +5,10 @@ import { useUiStore } from '../store/uiStore';
 
 /**
  * A one-line, dismissible explanation folded into the top of whichever contextual popover
- * selecting the element already opens (Phase 7.1) — never a second floating box anchored beside
+ * selecting the element already opens — never a second floating box anchored beside
  * the one that just appeared.
  *
- * `learned` is the caller's own "this behavior was just demonstrated" signal (Phase 7.2) — e.g.
+ * `learned` is the caller's own "this behavior was just demonstrated" signal — e.g.
  * "does any node or edge already carry an attachment?" — kept as a derived boolean the caller
  * computes from state it already has, rather than this component reaching into the document
  * itself, so one small primitive covers every hint regardless of what teaches it.

@@ -25,9 +25,10 @@ import { pointer } from '../store/uiStore';
 import { focusBounds, focusNodes } from './search';
 import { ARCHITECTURE_STARTERS } from '../starters';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
+import { count } from '../lib/plural';
 
 /**
- * Phase 8.1/8.2 — the whole command catalog, derived fresh from context on every call. Nothing
+ * The whole command catalog, derived fresh from context on every call. Nothing
  * here is registered ahead of time or kept in a store: `commandsFor` reads the selection, the
  * mode, and the document, and returns exactly the commands that make sense *right now*, in the
  * order they should list. Cheap (a few dozen entries), pure, and trivially testable.
@@ -126,7 +127,7 @@ function presentFlowStage(ctx: CommandContext): CommandStage {
     options: ctx.playback.flows.map((flow) => ({
       id: `present-flow:${flow.id}`,
       title: flow.title,
-      hint: `${flow.steps.length} step${flow.steps.length === 1 ? '' : 's'}`,
+      hint: count(flow.steps.length, 'step'),
       run: (inner) => {
         inner.editor.setMode('present');
         inner.playback.pickFlow(flow.id);
@@ -258,7 +259,7 @@ function flowCommands(ctx: CommandContext): Command[] {
             hint:
               inner.editor.selectedFlowId === flow.id
                 ? 'Current'
-                : `${flow.steps.length} step${flow.steps.length === 1 ? '' : 's'}`,
+                : count(flow.steps.length, 'step'),
             run: (deep: CommandContext) => deep.editor.setSelectedFlowId(flow.id),
           })),
         ],
@@ -947,7 +948,7 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
         title: 'Select Contents',
         group: 'selection',
         keywords: ['children', 'members', 'inside'],
-        hint: `${descendantIds.length} element${descendantIds.length === 1 ? '' : 's'}`,
+        hint: count(descendantIds.length, 'element'),
         run: (inner) => {
           const edgeIds = inner.editor.document.edges
             .filter((edge) => descendantSet.has(edge.source) && descendantSet.has(edge.target))
@@ -1106,7 +1107,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
           ...flowsAvailable.map((flow) => ({
             id: `edge-add-to-flow:${flow.id}`,
             title: flow.title,
-            hint: `${flow.steps.length} step${flow.steps.length === 1 ? '' : 's'}`,
+            hint: count(flow.steps.length, 'step'),
             run: (deep: CommandContext) => {
               deep.editor.addEdgeToFlow(flow.id, edge.id);
               deep.editor.setSelectedFlowId(flow.id);

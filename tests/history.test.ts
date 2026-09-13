@@ -403,4 +403,34 @@ describe('undo and redo', () => {
     store.getState().undo();
     expect(store.getState().document.nodes.at(-1)!.text).toBe('198');
   });
+
+  it('a cross-tab metadata adoption survives undoing/redoing an unrelated edit', () => {
+    const documentId = store.getState().document.metadata.id;
+    store.getState().addNode({ type: 'note', x: 0, y: 0, text: 'A' });
+
+    store.getState().adoptStoredMetadata(documentId, { title: 'Renamed elsewhere' });
+    expect(store.getState().document.metadata.title).toBe('Renamed elsewhere');
+
+    store.getState().addNode({ type: 'note', x: 200, y: 0, text: 'B' });
+    store.getState().undo();
+    // The adopted title isn't part of this undo step (it never went through `apply()`), so
+    // undoing an unrelated edit must not revert it.
+    expect(store.getState().document.metadata.title).toBe('Renamed elsewhere');
+    expect(store.getState().document.nodes).toHaveLength(1);
+
+    store.getState().redo();
+    expect(store.getState().document.metadata.title).toBe('Renamed elsewhere');
+    expect(store.getState().document.nodes).toHaveLength(2);
+  });
+
+  it('undoing the user’s own rename still reverts the title', () => {
+    store.getState().rename('Custom title');
+    expect(store.getState().document.metadata.title).toBe('Custom title');
+
+    store.getState().undo();
+    expect(store.getState().document.metadata.title).toBe('History');
+
+    store.getState().redo();
+    expect(store.getState().document.metadata.title).toBe('Custom title');
+  });
 });

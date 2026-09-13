@@ -1,8 +1,8 @@
 /**
  * A minimal SVG element description.
  *
- * Two backends consume it: `toReact` renders the live canvas, `serialize`
- * produces the exported file. Having a single intermediate representation means
+ * One serializer consumes it for both surfaces: `serialize` produces the exported file, and
+ * `canvas/SvgSurface.tsx` paints that same markup onto the live canvas. Having a single intermediate representation means
  * the canvas and the export are not merely similar — they are the same tree.
  */
 export interface SvgEl {

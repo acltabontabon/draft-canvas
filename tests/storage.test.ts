@@ -107,6 +107,39 @@ describe('local persistence', () => {
     expect(await repository.list()).toHaveLength(0);
   });
 
+  it('an open editor\'s save keeps a rename and move made in another tab, but still writes its own rename', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Before');
+    await repository.save(doc);
+    const base = { title: 'Before' };
+
+    await repository.rename(doc.metadata.id, 'Renamed elsewhere');
+    await repository.moveDocumentToProject(doc.metadata.id, 'p1');
+    const edited = addNodes(doc, [createNode({ type: 'service', x: 900, y: 0 })]);
+    const adopted = await repository.save(edited, base);
+
+    expect(adopted).toEqual({ title: 'Renamed elsewhere', projectId: 'p1' });
+    const loaded = (await repository.load(doc.metadata.id))!;
+    expect(loaded.metadata.title).toBe('Renamed elsewhere');
+    expect(loaded.metadata.projectId).toBe('p1');
+    expect(loaded.nodes).toHaveLength(3);
+    expect((await repository.list())[0]).toMatchObject({ title: 'Renamed elsewhere', projectId: 'p1' });
+
+    // A rename made in this editor is its own change, and wins.
+    const renamedHere = { ...edited, metadata: { ...edited.metadata, title: 'Mine', projectId: 'p1' } };
+    expect(await repository.save(renamedHere, adopted!)).toBeUndefined();
+    expect((await repository.load(doc.metadata.id))!.metadata.title).toBe('Mine');
+  });
+
+  it('a rename of a body that exists but cannot be read fails instead of reporting success', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Unreadable');
+    await repository.save(doc);
+    const decrypt = vi.spyOn(documentCipher, 'decryptDocument').mockResolvedValue(null);
+    await expect(repository.rename(doc.metadata.id, 'After')).rejects.toThrow();
+    decrypt.mockRestore();
+  });
+
   it('renames without disturbing the canvas', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Before', 4);
@@ -511,6 +544,51 @@ describe('autosave', () => {
 
     autosave.dispose();
     vi.useRealTimers();
+  });
+
+  it('takes on a rename made in another tab and keeps it across later saves', async () => {
+    const repository = new MemoryRepository();
+    const doc = documentWith('Before');
+    await repository.save(doc);
+    const adopted: string[] = [];
+    const autosave = new Autosave({
+      repository,
+      onStateChange: () => {},
+      onMetadataAdopted: (_id, metadata) => adopted.push(metadata.title),
+    });
+    autosave.track(doc);
+
+    await repository.rename(doc.metadata.id, 'Renamed elsewhere');
+    autosave.schedule(addNodes(doc, [createNode({ type: 'note', x: 0, y: 400 })]));
+    await autosave.flush();
+    // The editor store takes the adopted title on (`adoptStoredMetadata`) before the next edit.
+    const adoptedDoc = { ...doc, metadata: { ...doc.metadata, title: adopted[0]! } };
+    autosave.schedule(addNodes(adoptedDoc, [createNode({ type: 'note', x: 0, y: 800 })]));
+    await autosave.flush();
+
+    expect(adopted).toEqual(['Renamed elsewhere']);
+    expect((await repository.load(doc.metadata.id))!.metadata.title).toBe('Renamed elsewhere');
+    autosave.dispose();
+  });
+
+  it('untrack drops a closed document’s baseline', async () => {
+    const repository = new MemoryRepository();
+    const doc = documentWith('Before');
+    await repository.save(doc);
+    const autosave = new Autosave({ repository, onStateChange: () => {} });
+    autosave.track(doc);
+
+    autosave.untrack(doc.metadata.id);
+
+    // With no baseline left, a later rename made elsewhere is no longer detected as "changed
+    // elsewhere" — the stale in-memory title is written straight over it, same as a document that
+    // was never tracked at all.
+    await repository.rename(doc.metadata.id, 'Renamed elsewhere');
+    autosave.schedule(addNodes(doc, [createNode({ type: 'note', x: 0, y: 400 })]));
+    await autosave.flush();
+
+    expect((await repository.load(doc.metadata.id))!.metadata.title).toBe('Before');
+    autosave.dispose();
   });
 
   it('flushes immediately when asked, so a closing tab keeps the work', async () => {

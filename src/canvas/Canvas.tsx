@@ -9,6 +9,7 @@ import {
   applyNodeChanges,
   useReactFlow,
   useStore,
+  useStoreApi,
   type Connection,
   type FinalConnectionState,
   type EdgeChange,
@@ -237,6 +238,26 @@ function sweepDescendants(
 
 /** A host's name in the one-line "Attach to …" pill — a note can hold pages of text, and the pill
  *  never wraps, so anything past a short name would run off across the canvas. */
+/**
+ * Publishes the zoom as `--dc-zoom` on React Flow's root, for the few hit areas that must stay a
+ * steady size on screen (`canvas.css`). Written from a store subscription — no React render per
+ * zoom frame — and in 5% steps, since every change restyles the canvas subtree.
+ */
+function useZoomVariable() {
+  const storeApi = useStoreApi();
+  useEffect(() => {
+    let written: { node: HTMLElement; zoom: number } | null = null;
+    const publish = ({ domNode, transform }: { domNode: HTMLElement | null; transform: [number, number, number] }) => {
+      const zoom = Math.round(transform[2] * 20) / 20;
+      if (!domNode || (written?.node === domNode && written.zoom === zoom)) return;
+      domNode.style.setProperty('--dc-zoom', String(zoom));
+      written = { node: domNode, zoom };
+    };
+    publish(storeApi.getState());
+    return storeApi.subscribe(publish);
+  }, [storeApi]);
+}
+
 function truncateForAffordance(text: string): string {
   const firstLine = text.split('\n', 1)[0]!.trim();
   return firstLine.length > 40 ? `${firstLine.slice(0, 39)}…` : firstLine;
@@ -284,11 +305,11 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   // A fresh object here would defeat React Flow's own memoized renderer on every drag frame.
   const connectionLineStyle = useMemo(() => ({ stroke: theme.selection, strokeWidth: 1.8 }), [theme.selection]);
 
-  const store = useEditorStore;
   const { screenToFlowPosition, flowToScreenPosition, getNodes } = useReactFlow();
 
   const interactive = mode === 'edit';
   useContinuation(interactive);
+  useZoomVariable();
 
   const [guides, setGuides] = useState<Guide[]>([]);
   const attachArmedTarget = useUiStore((state) => state.attachArmedTarget);
@@ -408,7 +429,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       );
       if (dimChange && resizingNodeId.current !== dimChange.id) {
         resizingNodeId.current = dimChange.id;
-        resizeStaticRects.current = store
+        resizeStaticRects.current = useEditorStore
           .getState()
           .document.nodes.filter((node) => node.id !== dimChange.id)
           .map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height }));
@@ -432,7 +453,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       let probingEdges = false;
       if (draggingIds.current.size === 1 && sweptDescendants.current.size === 0) {
         const [draggedId] = draggingIds.current;
-        const state = store.getState();
+        const state = useEditorStore.getState();
         const draggedDoc = nodeIndex(state.document.nodes).get(draggedId!);
         const posChange = snapped.changes.find(
           (change) => change.type === 'position' && change.id === draggedId,
@@ -532,7 +553,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
 
       setNodes((current) => {
         const next = applyNodeChanges(snapped.changes, current);
-        return sweepDescendants(next, sweptDescendants.current, store.getState().document);
+        return sweepDescendants(next, sweptDescendants.current, useEditorStore.getState().document);
       });
 
       // Guides appear and disappear; they do not move every frame. Updating
@@ -556,7 +577,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
             const position =
               (posChange?.type === 'position' ? posChange.position : undefined) ??
               liveNodes.find((node) => node.id === change.id)?.position;
-            store.getState().updateNodeById(
+            useEditorStore.getState().updateNodeById(
               change.id,
               {
                 ...(position ? { x: position.x, y: position.y } : {}),
@@ -569,7 +590,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         }
       }
     },
-    [clearDwell, flowToScreenPosition, getNodes, setNodes, store],
+    [clearDwell, flowToScreenPosition, getNodes, setNodes],
   );
 
   const setEdges = useCallback(
@@ -659,14 +680,14 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       const nodeIds = selectedNodeList.map((node) => node.id);
       // Compares against whatever the *next* commit will actually see — a still-pending report
       // from earlier this same burst, if there is one, not the (about to be stale) store value.
-      const baseline = pendingSelectionRef.current ?? store.getState().selection;
+      const baseline = pendingSelectionRef.current ?? useEditorStore.getState().selection;
       // See `resolveSelectedEdgeIds`'s own doc comment (`projection.ts`) for why this can't
       // just trust React Flow's reported `selectedEdgeList` unconditionally.
       const edgeIds = resolveSelectedEdgeIds(
         nodeIds,
         baseline.nodes,
         selectedEdgeList.map((edge) => edge.id),
-        store.getState().document.edges,
+        useEditorStore.getState().document.edges,
       );
       const next = { nodes: nodeIds, edges: edgeIds };
       if (sameSelection(baseline, next)) return;
@@ -678,7 +699,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       burst.windowEndsAt = now + SELECTION_BURST_WINDOW_MS;
 
       if (burst.count <= SELECTION_BURST_LIMIT) {
-        store.getState().setSelection(next);
+        useEditorStore.getState().setSelection(next);
         return;
       }
       pendingSelectionRef.current = next;
@@ -687,11 +708,11 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
           selectionFrameRef.current = null;
           const pending = pendingSelectionRef.current;
           pendingSelectionRef.current = null;
-          if (pending) store.getState().setSelection(pending);
+          if (pending) useEditorStore.getState().setSelection(pending);
         });
       }
     },
-    [store],
+    [],
   );
 
   /**
@@ -702,7 +723,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    */
   const onNodeDragStart = useCallback(
     (_event: unknown, _node: DraftRfNode, dragged: DraftRfNode[]) => {
-      const state = store.getState();
+      const state = useEditorStore.getState();
       state.beginInteraction('Move');
 
       const moving = new Set(dragged.map((node) => node.id));
@@ -728,7 +749,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         .filter((node) => !moving.has(node.id))
         .map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height }));
     },
-    [clearDwell, store],
+    [clearDwell],
   );
 
   /**
@@ -748,7 +769,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    */
   const onNodeDragStop = useCallback(() => {
     setGuides([]);
-    const state = store.getState();
+    const state = useEditorStore.getState();
     const draggedIds = draggingIds.current;
     const rfNodes = getNodes();
     const positions = new Map(
@@ -792,7 +813,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     clearDwell();
     useUiStore.getState().setAttachArmedTarget(null);
     useUiStore.getState().setAttachArmedEdgeTarget(null);
-  }, [clearDwell, getNodes, store]);
+  }, [clearDwell, getNodes]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -803,7 +824,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       // `document/types.ts`.
       const sourceAnchor = parseAnchorId(connection.sourceHandle);
       const targetAnchor = parseAnchorId(connection.targetHandle);
-      store
+      useEditorStore
         .getState()
         .connect(
           connection.source,
@@ -814,7 +835,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
           targetAnchor?.offset,
         );
     },
-    [store],
+    [],
   );
 
   /**
@@ -836,7 +857,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       const point = 'changedTouches' in event ? event.changedTouches[0] : event;
       if (!point) return;
       const position = screenToFlowPosition({ x: point.clientX, y: point.clientY });
-      const state = store.getState();
+      const state = useEditorStore.getState();
 
       // React Flow only reports `toNode` when the pointer is within the
       // connection radius of a handle, so anywhere else on a node counts as a
@@ -879,7 +900,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         position,
       );
     },
-    [onQuickConnectMenu, screenToFlowPosition, store],
+    [onQuickConnectMenu, screenToFlowPosition],
   );
 
   // Reconnecting an existing connector's endpoint is driven entirely by hand
@@ -894,7 +915,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
 
   /**
    * The selection as it stood the instant the right button went down — read again inside
-   * `onNodeContextMenu`/`onEdgeContextMenu` instead of a fresh `store.getState().selection`, because
+   * `onNodeContextMenu`/`onEdgeContextMenu` instead of a fresh `useEditorStore.getState().selection`, because
    * by the time those fire, React Flow's own default click-to-select handling (on the node/edge's
    * own wrapper, a descendant of this div) has already run and collapsed the selection to just the
    * clicked element — confirmed empirically, not assumed. Capturing here, on `onPointerDownCapture`
@@ -914,9 +935,9 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         return;
       }
       rightPointerDown.current = { x: event.clientX, y: event.clientY };
-      selectionAtRightPointerDown.current = store.getState().selection;
+      selectionAtRightPointerDown.current = useEditorStore.getState().selection;
     },
-    [store],
+    [],
   );
 
   /** True once the pointer has moved past `CONTEXT_MENU_DRAG_THRESHOLD_PX` since the right button
@@ -947,7 +968,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       if (moved) return;
       // Matches the existing plain-left-click-on-empty-canvas precedent (React Flow's own default
       // pane-click deselect) — a right-click on empty canvas is the same "click on nothing" gesture.
-      store.getState().setSelection({ nodes: [], edges: [] });
+      useEditorStore.getState().setSelection({ nodes: [], edges: [] });
       // The literal click point, in flow coordinates — no centering offset here. "Add X" needs one
       // (a node's `x`/`y` is its top-left, not its center), but "Paste" wants the raw point, since
       // `paste()` already computes its own offset from the pasted fragment's own bounding box; the
@@ -959,7 +980,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         flowPosition: { x: Math.round(position.x), y: Math.round(position.y) },
       });
     },
-    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
+    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition],
   );
 
   /**
@@ -976,21 +997,21 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       event.preventDefault();
       const moved = movedPastContextMenuThreshold(event);
       // The pre-click snapshot, not a fresh read — see `selectionAtRightPointerDown`'s own comment.
-      const before = selectionAtRightPointerDown.current ?? store.getState().selection;
+      const before = selectionAtRightPointerDown.current ?? useEditorStore.getState().selection;
       clearRightPointerSnapshot();
       if (moved) return;
       const partOfMultiSelection = before.nodes.length + before.edges.length >= 2 && before.nodes.includes(node.id);
       // Either restore the multi-selection React Flow's own default click handling already
       // collapsed by this point, or replace it with just the clicked node — never leave the live
       // store holding that collapsed-to-one-node state.
-      store.getState().setSelection(partOfMultiSelection ? before : { nodes: [node.id], edges: [] });
+      useEditorStore.getState().setSelection(partOfMultiSelection ? before : { nodes: [node.id], edges: [] });
       useUiStore.getState().setContextMenu({
         target: partOfMultiSelection ? { kind: 'selection' } : { kind: 'node', id: node.id },
         screenPosition: { x: event.clientX, y: event.clientY },
         flowPosition: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
       });
     },
-    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
+    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition],
   );
 
   /** Mirrors `onNodeContextMenu` exactly, just against `selection.edges` — see its own comment. */
@@ -1000,18 +1021,18 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       if (isEditableTarget(event.target)) return;
       event.preventDefault();
       const moved = movedPastContextMenuThreshold(event);
-      const before = selectionAtRightPointerDown.current ?? store.getState().selection;
+      const before = selectionAtRightPointerDown.current ?? useEditorStore.getState().selection;
       clearRightPointerSnapshot();
       if (moved) return;
       const partOfMultiSelection = before.nodes.length + before.edges.length >= 2 && before.edges.includes(edge.id);
-      store.getState().setSelection(partOfMultiSelection ? before : { nodes: [], edges: [edge.id] });
+      useEditorStore.getState().setSelection(partOfMultiSelection ? before : { nodes: [], edges: [edge.id] });
       useUiStore.getState().setContextMenu({
         target: partOfMultiSelection ? { kind: 'selection' } : { kind: 'edge', id: edge.id },
         screenPosition: { x: event.clientX, y: event.clientY },
         flowPosition: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
       });
     },
-    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition, store],
+    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition],
   );
 
   const onPaneDoubleClick = useCallback(
@@ -1064,13 +1085,26 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     [screenToFlowPosition],
   );
 
+  // A pan or zoom by the user slides the canvas out from under a menu pinned to a screen point, and
+  // wheel/trackpad gestures never fire the pointerdown those menus close on. Programmatic moves
+  // (fit, reveal) pass no event and leave them be.
+  const onMoveStart = useCallback((event: MouseEvent | TouchEvent | null) => {
+    if (!event) return;
+    const ui = useUiStore.getState();
+    if (ui.contextMenu) ui.setContextMenu(null);
+    if (ui.quickConnect) {
+      ui.setQuickConnect(null);
+      if (ui.continuation?.trigger === 'drop') ui.setContinuation(null);
+    }
+  }, []);
+
   const onMoveEnd = useCallback(
     (_event: unknown, viewport: { x: number; y: number; zoom: number }) => {
       // Persisted as document state, deliberately not as an undo step: nobody
       // wants Ctrl+Z to undo a scroll.
-      store.getState().persistViewport(viewport);
+      useEditorStore.getState().persistViewport(viewport);
     },
-    [store],
+    [],
   );
 
   const grid = document.settings.grid;
@@ -1117,6 +1151,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         onPaneClick={onPaneClick}
         onPaneContextMenu={onPaneContextMenu}
         onPointerMove={onPointerMove}
+        onMoveStart={onMoveStart}
         onMoveEnd={onMoveEnd}
         defaultViewport={document.viewport}
         minZoom={0.1}
@@ -1169,7 +1204,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
             color={theme.grid}
             // React Flow's own grid layer paints an opaque backdrop by
             // default — without this, it silently covers `.dc-canvas`'s own
-            // background (and, since Phase 5.1, a configured background
+            // background (and a configured background
             // image) with its own dark fill, coincidentally close enough to
             // the app's dark theme that this went unnoticed until now.
             bgColor="transparent"

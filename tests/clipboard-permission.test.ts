@@ -133,3 +133,14 @@ describe('requestClipboardRead', () => {
     expect(ui.notify).not.toHaveBeenCalled();
   });
 });
+
+describe('uiStore.requestClipboardPermission', () => {
+  it('a second ask while the dialog is up settles with the same answer as the first', async () => {
+    const { useUiStore } = await import('../src/store/uiStore');
+    const first = useUiStore.getState().requestClipboardPermission();
+    const second = useUiStore.getState().requestClipboardPermission();
+    useUiStore.getState().resolveClipboardPermissionRequest(true);
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(useUiStore.getState().clipboardPermissionRequest).toBeNull();
+  });
+});

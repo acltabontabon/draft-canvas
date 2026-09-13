@@ -52,7 +52,7 @@ describe('Toolbar primitive tooltips', () => {
         expect(tooltip.textContent).toContain(content.description);
         if (content.usageHint) expect(tooltip.textContent).toContain(content.usageHint);
         if (content.shortcut) expect(tooltip.textContent).toContain(content.shortcut);
-        expect(button.getAttribute('aria-describedby')).toBe(tooltip.id);
+        expect(document.getElementById(button.getAttribute('aria-describedby')!)?.textContent).toContain(content.description);
 
         fireEvent.mouseLeave(button);
         act(() => {

@@ -1,6 +1,12 @@
 import type { DraftDocument } from '../document/types';
 import { clamp } from '../lib/math';
-import { QuotaExceededError, type DraftRepository } from './DraftRepository';
+import {
+  QuotaExceededError,
+  reconcileMetadata,
+  sharedMetadataOf,
+  type DraftRepository,
+  type SharedMetadata,
+} from './DraftRepository';
 
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
@@ -17,6 +23,8 @@ export interface AutosaveOptions {
   debounceMs?: number;
   /** Upper bound on how long continuous editing can defer a write. */
   maxWaitMs?: number;
+  /** A save kept a rename or move made elsewhere; the open document should take it on too. */
+  onMetadataAdopted?: (documentId: string, metadata: SharedMetadata) => void;
 }
 
 const DEBOUNCE_MS = 700;
@@ -39,6 +47,9 @@ export class Autosave {
   private readonly onStateChange: (state: SaveState) => void;
   private readonly debounceMs: number;
   private readonly maxWaitMs: number;
+  private readonly onMetadataAdopted: AutosaveOptions['onMetadataAdopted'];
+  /** Per document, the title/project last loaded or written — see `DraftRepository.save`. */
+  private readonly baselines = new Map<string, SharedMetadata>();
 
   private pending: DraftDocument | null = null;
   private inFlight = false;
@@ -56,6 +67,18 @@ export class Autosave {
     this.onStateChange = options.onStateChange;
     this.debounceMs = options.debounceMs ?? DEBOUNCE_MS;
     this.maxWaitMs = options.maxWaitMs ?? MAX_WAIT_MS;
+    this.onMetadataAdopted = options.onMetadataAdopted;
+  }
+
+  /** Records the metadata of a document as it is on disk right now (just opened or created). */
+  track(document: DraftDocument): void {
+    this.baselines.set(document.metadata.id, sharedMetadataOf(document.metadata));
+  }
+
+  /** Drops a document's baseline once it's no longer open, so a long session spent opening many
+   *  documents doesn't accumulate one entry per document forever. */
+  untrack(documentId: string): void {
+    this.baselines.delete(documentId);
   }
 
   /** Records a new version of the document and schedules a write. */
@@ -108,7 +131,18 @@ export class Autosave {
     }, SHOW_SAVING_AFTER_MS);
 
     try {
-      await this.repository.save(document);
+      const id = document.metadata.id;
+      const base = this.baselines.get(id);
+      const adopted = await this.repository.save(document, base);
+      this.baselines.set(id, adopted ?? sharedMetadataOf(document.metadata));
+      if (adopted && base) {
+        // An edit queued during this write still carries the old values, and would read as this
+        // editor changing them back.
+        // (Re-read through a cast: TypeScript still narrows `pending` to the `null` set above.)
+        const queued = this.pending as DraftDocument | null;
+        if (queued?.metadata.id === id) this.pending = reconcileMetadata(queued, base, adopted);
+        this.onMetadataAdopted?.(id, adopted);
+      }
       this.lastFailed = false;
       this.clearSavingIndicator();
       this.emit({ status: 'saved', lastSavedAt: Date.now() });

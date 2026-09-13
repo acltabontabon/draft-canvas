@@ -32,6 +32,7 @@ import { ExportArtifact, type ArtifactVisual } from './ExportArtifact';
 import { SecureExportPrompt } from './SecureExportPrompt';
 import type { DocumentFormat, ExportMode, ImageFormat } from './exportTypes';
 import type { ThemeName } from '../../render/theme/tokens';
+import { count } from '../../lib/plural';
 
 const EXPORT_MODE_PREFERENCE = 'export-mode';
 const EXPORT_DOCUMENT_FORMAT_PREFERENCE = 'export-document-format';
@@ -61,10 +62,6 @@ function readSequenceFormatPreference(): SequenceFormat {
 
 const SEQUENCE_FORMAT_LABEL: Record<SequenceFormat, string> = { mermaid: 'Mermaid', plantuml: 'PlantUML' };
 const SPEED_LABEL: Record<GifSpeed, string> = { slow: 'Slow', normal: 'Normal', fast: 'Fast' };
-
-function count(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? '' : 's'}`;
-}
 
 /**
  * Export is choose → configure → export: one mode picker, one contextual panel for whatever's

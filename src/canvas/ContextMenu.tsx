@@ -60,10 +60,20 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
   });
 
   // Real focus lands on the menu itself (there's no input to anchor it to, unlike the palette) —
-  // `aria-activedescendant` below announces which row is "virtually" current.
+  // `aria-activedescendant` below announces which row is "virtually" current. Read during the first
+  // render, before that focus moves: closing hands focus back (Shift+F10 then Escape would otherwise
+  // leave it on the page body, and the next Tab starts from the top) — unless the chosen command
+  // already put it somewhere of its own.
+  const [returnFocusTo] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
   useLayoutEffect(() => {
-    panel.current?.focus();
-  }, []);
+    const menu = panel.current;
+    menu?.focus();
+    return () => {
+      const active = document.activeElement;
+      const unclaimed = !active || active === document.body || (menu?.contains(active) ?? false);
+      if (unclaimed && returnFocusTo?.isConnected) returnFocusTo.focus({ preventScroll: true });
+    };
+  }, [returnFocusTo]);
 
   const itemIndices = useMemo(
     () => entries.reduce<number[]>((acc, entry, index) => (entry.type === 'command' ? [...acc, index] : acc), []),
@@ -131,11 +141,17 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
       if (panel.current && !panel.current.contains(event.target as Node)) onDismiss();
     };
     window.addEventListener('keydown', onKeyDown, true);
+    // A menu pinned to a screen point means nothing once the page under it resizes or the window
+    // loses focus (panning the canvas closes it from `Canvas.tsx`'s `onMoveStart`).
+    window.addEventListener('resize', onDismiss);
+    window.addEventListener('blur', onDismiss);
     // Deferred so the pointerup/click that opened this menu does not itself
     // count as the "click outside" that immediately dismisses it.
     const id = window.setTimeout(() => window.addEventListener('pointerdown', onPointerDown), 0);
     return () => {
       window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('resize', onDismiss);
+      window.removeEventListener('blur', onDismiss);
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };
@@ -167,6 +183,7 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
             id={`dc-context-menu-item-${index}`}
             type="button"
             role="menuitem"
+            aria-keyshortcuts={entry.command.shortcut}
             className="dc-context-menu-item"
             data-highlighted={index === highlight ? 'true' : undefined}
             data-destructive={entry.command.id === 'delete' ? 'true' : undefined}
@@ -177,7 +194,7 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
           >
             <span className="dc-context-menu-title">{entry.command.title}</span>
             {entry.command.shortcut && (
-              <span className="dc-context-menu-kbd">
+              <span className="dc-context-menu-kbd" aria-hidden="true">
                 {entry.command.shortcut.split(' ').map((key, i) => (
                   <kbd key={`${key}-${i}`}>{key}</kbd>
                 ))}

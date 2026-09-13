@@ -11,8 +11,12 @@ import {
   backgroundImageKey,
   isBackgroundImageKeyOf,
   isQuotaError,
+  reconcileMetadata,
+  sameSharedMetadata,
+  sharedMetadataOf,
   summarize,
   type DraftRepository,
+  type SharedMetadata,
 } from './DraftRepository';
 import { isLibraryShape, libraryShapeOf } from '../document/shape';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
@@ -56,7 +60,7 @@ export function onStorageSuperseded(listener: () => void): () => void {
  */
 /**
  * One row per document id — deliberately not a generic, content-hashed asset
- * table. Phase 5.1 only ever needs a single background image per document;
+ * table. It only ever needs a single background image per document;
  * building dedup/reference-counting for a future asset system that doesn't
  * exist yet would be speculative. Stored unencrypted, unlike `bodies`: a
  * wallpaper image is far less sensitive than diagram content, and threading
@@ -281,17 +285,33 @@ export class IndexedDbRepository implements DraftRepository {
     return { updated, failed, skipped };
   }
 
-  async save(document: DraftDocument): Promise<void> {
+  async save(document: DraftDocument, base?: SharedMetadata): Promise<SharedMetadata | void> {
+    const id = document.metadata.id;
     try {
       const key = await getOrCreateMasterKey();
-      const encrypted = await encryptDocument(document, key);
-      const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
-      await Promise.all([
-        tx.objectStore('documents').put(summarize(document)),
-        tx.objectStore('bodies').put(encrypted),
-        tx.done,
-      ]);
-      requestPersistenceOnce();
+      // Encrypting can't happen inside the transaction, so a rename that lands between reading the
+      // summary and writing is caught by re-reading it there, and the merge is redone.
+      for (let attempt = 1; ; attempt += 1) {
+        const before = base ? await this.db.get('documents', id) : undefined;
+        const written = base && before ? reconcileMetadata(document, base, before) : document;
+        const encrypted = await encryptDocument(written, key);
+        const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
+        if (before && attempt < METADATA_WRITE_ATTEMPTS) {
+          const current = await tx.objectStore('documents').get(id);
+          if (current && !sameSharedMetadata(current, before)) {
+            await tx.done;
+            continue;
+          }
+        }
+        await Promise.all([
+          tx.objectStore('documents').put(summarize(written)),
+          tx.objectStore('bodies').put(encrypted),
+          tx.done,
+        ]);
+        requestPersistenceOnce();
+        if (written !== document) return sharedMetadataOf(written.metadata);
+        return;
+      }
     } catch (error) {
       if (isQuotaError(error)) throw new QuotaExceededError(error);
       throw error;
@@ -346,7 +366,12 @@ export class IndexedDbRepository implements DraftRepository {
   ): Promise<void> {
     for (let attempt = 0; attempt < METADATA_WRITE_ATTEMPTS; attempt += 1) {
       const read = await this.readBody(id);
-      if (!read) return;
+      // Deleted (nothing to change) is fine; a body that exists but can't be read is not — reporting
+      // success would leave the summary disagreeing with what the user just asked for.
+      if (!read) {
+        if (await this.db.get('bodies', id)) throw new Error(`[draft-canvas] ${id} could not be read; its details were not changed.`);
+        return;
+      }
       const { document } = read;
       const next = { ...document, metadata: change({ ...document.metadata, updatedAt: Date.now() }) };
       try {

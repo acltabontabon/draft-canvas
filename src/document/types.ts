@@ -435,7 +435,7 @@ export interface DraftEdge {
   semanticsOrigin?: 'inferred' | 'explicit';
   /**
    * Supporting detail (a note, or a code/JSON snippet) hidden by default and revealed on hover or
-   * selection — see `EdgeAttachmentReveal` in `DraftEdgeView.tsx`. The exact same `Attachment`
+   * selection — see `AttachmentChipRow` in `AttachmentPresentation.tsx`. The exact same `Attachment`
    * type a node uses, reused rather than duplicated; an array for the same reason node attachments
    * are, though the toolbar and reveal card only ever create or show the first entry in v1. Kept
    * entirely separate from the older, narrower `details` field above (which stays exactly as it
@@ -535,7 +535,7 @@ export interface Project {
 }
 
 /**
- * Phase 5.1 — a decorative, canvas-layer backdrop. Presentation knobs only:
+ * A decorative, canvas-layer backdrop. Presentation knobs only:
  * the image bytes themselves live in a dedicated IndexedDB store, keyed by
  * this document's id (see `storage/IndexedDbRepository.ts`), never inline
  * here — `localStorage`-style inlining would duplicate large binary data
@@ -569,8 +569,8 @@ export interface DraftSettings {
 export interface DraftDocument {
   format: DraftFormat;
   /** The document's schema version — see `CURRENT_VERSION` and `migrate.ts`.
-   *  Deliberately independent of the app's own version (`PRODUCT.version`,
-   *  Phase 6): a diagram written by an old build stays readable by opening it
+   *  Deliberately independent of the app's own version (`PRODUCT.version`):
+   *  a diagram written by an old build stays readable by opening it
    *  through the migrations below, with no relation to which app release
    *  wrote it. */
   version: number;

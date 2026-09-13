@@ -5,6 +5,7 @@ import type { LibraryView } from './libraryFilter';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Modal } from '../common/Modal';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 
 interface ProjectSidebarProps {
   session: DocumentSession;
@@ -81,7 +82,9 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
               aria-current={view.kind === 'project' && view.projectId === project.id ? 'page' : undefined}
               onClick={() => onViewChange({ kind: 'project', projectId: project.id })}
             >
-              <span className="dc-sidebar-project-name">{project.name}</span>
+              <span className="dc-sidebar-project-name" title={project.name}>
+                {project.name}
+              </span>
               <span className="dc-muted dc-sidebar-count">{countByProject.get(project.id) ?? 0}</span>
             </button>
             <div className="dc-sidebar-project-actions">
@@ -218,7 +221,7 @@ function ProjectNameDialog({
           maxLength={200}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') submit();
+            if (event.key === 'Enter' && !isImeKeyEvent(event)) submit();
           }}
         />
       </label>

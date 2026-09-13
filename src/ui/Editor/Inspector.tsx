@@ -35,7 +35,6 @@ export function Inspector() {
   // else it needn't follow the document, which changes on every drag frame.
   const shown = selection.nodes.length + selection.edges.length > 1;
   const document = useEditorStore((state) => (shown ? state.document : null));
-  const store = useEditorStore;
   const theme = useThemeValue();
 
   if (!document) return null;
@@ -63,7 +62,7 @@ export function Inspector() {
   if (nodes.length === 1 && edges.length === 0) return null;
 
   const setAccent = (accent: Accent) => {
-    const state = store.getState();
+    const state = useEditorStore.getState();
     for (const node of nodes) state.updateNodeById(node.id, { accent }, 'Recolour');
     for (const edge of edges) state.updateEdgeById(edge.id, { accent }, 'Recolour');
   };
@@ -96,7 +95,7 @@ export function Inspector() {
             variant="ghost"
             title="Derive this connection's colour from its source node instead of a fixed one"
             onClick={() => {
-              const state = store.getState();
+              const state = useEditorStore.getState();
               for (const edge of edges) state.updateEdgeById(edge.id, { accent: undefined }, 'Reset colour');
             }}
           >
@@ -113,7 +112,7 @@ export function Inspector() {
             aria-label="Note kind"
             value={onlyNode.noteKind ?? 'note'}
             onChange={(event) =>
-              store
+              useEditorStore
                 .getState()
                 .updateNodeById(
                   onlyNode.id,
@@ -139,7 +138,7 @@ export function Inspector() {
             aria-label="Code language"
             value={onlyNode.language ?? 'plaintext'}
             onChange={(event) =>
-              store
+              useEditorStore
                 .getState()
                 .updateNodeById(
                   onlyNode.id,
@@ -166,7 +165,7 @@ export function Inspector() {
             value={onlyNode.serviceKind ?? 'generic'}
             options={SERVICE_ICON_OPTIONS}
             onChange={(value) =>
-              store
+              useEditorStore
                 .getState()
                 .updateNodeById(onlyNode.id, { serviceKind: value as ServiceKind }, 'Change service type')
             }
@@ -185,7 +184,7 @@ export function Inspector() {
             value={onlyNode.databaseKind ?? 'generic'}
             options={DATABASE_ICON_OPTIONS}
             onChange={(value) =>
-              store
+              useEditorStore
                 .getState()
                 .updateNodeById(onlyNode.id, { databaseKind: value as DatabaseKind }, 'Change data store type')
             }
@@ -204,7 +203,7 @@ export function Inspector() {
             value={onlyNode.queueKind ?? 'queue'}
             options={QUEUE_ICON_OPTIONS}
             onChange={(value) =>
-              store.getState().updateNodeById(onlyNode.id, { queueKind: value as QueueKind }, 'Change queue type')
+              useEditorStore.getState().updateNodeById(onlyNode.id, { queueKind: value as QueueKind }, 'Change queue type')
             }
             preferredDirection="up"
           />
@@ -220,7 +219,7 @@ export function Inspector() {
             value={onlyNode.actorKind ?? 'human'}
             options={ACTOR_ICON_OPTIONS}
             onChange={(value) =>
-              store.getState().updateNodeById(onlyNode.id, { actorKind: value as ActorKind }, 'Change actor type')
+              useEditorStore.getState().updateNodeById(onlyNode.id, { actorKind: value as ActorKind }, 'Change actor type')
             }
             preferredDirection="up"
           />
@@ -236,7 +235,7 @@ export function Inspector() {
             value={onlyNode.componentKind ?? 'generic'}
             options={COMPONENT_ICON_OPTIONS}
             onChange={(value) =>
-              store
+              useEditorStore
                 .getState()
                 .updateNodeById(onlyNode.id, { componentKind: value as ComponentKind }, 'Change component type')
             }
@@ -254,7 +253,7 @@ export function Inspector() {
             defaultValue=""
             onChange={(event) => {
               if (!event.target.value) return;
-              store.getState().align(event.target.value as AlignEdge);
+              useEditorStore.getState().align(event.target.value as AlignEdge);
               event.target.value = '';
             }}
           >
@@ -273,14 +272,14 @@ export function Inspector() {
               <Button
                 variant="quiet"
                 title="Distribute evenly, left to right"
-                onClick={() => store.getState().distribute('x')}
+                onClick={() => useEditorStore.getState().distribute('x')}
               >
                 Distribute ↔
               </Button>
               <Button
                 variant="quiet"
                 title="Distribute evenly, top to bottom"
-                onClick={() => store.getState().distribute('y')}
+                onClick={() => useEditorStore.getState().distribute('y')}
               >
                 Distribute ↕
               </Button>
@@ -289,7 +288,7 @@ export function Inspector() {
           <Button
             variant="quiet"
             title="Enclose in a boundary"
-            onClick={() => store.getState().groupSelection()}
+            onClick={() => useEditorStore.getState().groupSelection()}
           >
             Group
           </Button>
@@ -304,7 +303,7 @@ export function Inspector() {
             aria-label="Boundary preset"
             value={onlyNode.boundaryPreset ?? 'boundary'}
             onChange={(event) =>
-              store
+              useEditorStore
                 .getState()
                 .updateNodeById(
                   onlyNode.id,
@@ -319,7 +318,7 @@ export function Inspector() {
               </option>
             ))}
           </select>
-          <Button variant="quiet" onClick={() => store.getState().ungroupSelection()}>
+          <Button variant="quiet" onClick={() => useEditorStore.getState().ungroupSelection()}>
             Ungroup
           </Button>
         </>
@@ -330,7 +329,7 @@ export function Inspector() {
         variant="quiet"
         title="Fade everything else, to focus on this while explaining (Esc to exit)"
         onClick={() =>
-          store.getState().enterFocus(
+          useEditorStore.getState().enterFocus(
             nodes.map((node) => node.id),
             edges.map((edge) => edge.id),
           )
@@ -343,7 +342,7 @@ export function Inspector() {
         variant="quiet"
         aria-label="Delete selection"
         title="Delete (Backspace)"
-        onClick={() => store.getState().deleteSelection()}
+        onClick={() => useEditorStore.getState().deleteSelection()}
       />
     </div>
   );

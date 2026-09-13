@@ -16,7 +16,12 @@ export interface DraftRepository {
 
   list(): Promise<DraftSummary[]>;
   load(id: string): Promise<DraftDocument | null>;
-  save(document: DraftDocument): Promise<void>;
+  /**
+   * Writes the document. With `base` — the title/project this editor last loaded or wrote — a
+   * rename or move made meanwhile elsewhere (another tab's Library) is kept rather than reverted;
+   * resolves with the metadata actually written when that differs from the document's own.
+   */
+  save(document: DraftDocument, base?: SharedMetadata): Promise<SharedMetadata | void>;
   remove(id: string): Promise<void>;
   rename(id: string, title: string): Promise<void>;
   /** Estimated bytes used, when the browser will tell us. */
@@ -35,7 +40,7 @@ export interface DraftRepository {
   moveDocumentToProject(id: string, projectId: string | undefined): Promise<void>;
 
   /**
-   * Phase 5.1 — one background image per document, stored separately from
+   * One background image per document, stored separately from
    * the document body itself (see `document/types.ts`'s `BackgroundSettings`
    * doc comment for why). `remove(id)` deletes this row too.
    */
@@ -80,6 +85,35 @@ export function isQuotaError(error: unknown): boolean {
     return error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED';
   }
   return false;
+}
+
+/** The part of a document's metadata the Library can change without opening it. */
+export interface SharedMetadata {
+  title: string;
+  projectId?: string;
+}
+
+export function sharedMetadataOf(metadata: SharedMetadata): SharedMetadata {
+  return metadata.projectId ? { title: metadata.title, projectId: metadata.projectId } : { title: metadata.title };
+}
+
+export function sameSharedMetadata(a: SharedMetadata, b: SharedMetadata): boolean {
+  return a.title === b.title && a.projectId === b.projectId;
+}
+
+/**
+ * Field by field: one that changed on disk since `base` while this document still carries the
+ * `base` value was changed elsewhere, and wins. One this editor changed itself is kept — the
+ * latest writer of a field it actually touched is the one the user last acted in.
+ */
+export function reconcileMetadata(document: DraftDocument, base: SharedMetadata, stored: SharedMetadata): DraftDocument {
+  const metadata = { ...document.metadata };
+  if (stored.title !== base.title && metadata.title === base.title) metadata.title = stored.title;
+  if (stored.projectId !== base.projectId && metadata.projectId === base.projectId) {
+    if (stored.projectId) metadata.projectId = stored.projectId;
+    else delete metadata.projectId;
+  }
+  return sameSharedMetadata(metadata, document.metadata) ? document : { ...document, metadata };
 }
 
 export function summarize(document: DraftDocument): DraftSummary {

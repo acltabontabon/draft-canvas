@@ -1,9 +1,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { clamp } from '../lib/math';
 
 export interface InspectorSelectOption {
   value: string;
   label: string;
-  /** A small preview rendered before the label — e.g. `DataStoreKindIcon`. Only meaningful
+  /** A small preview rendered before the label — e.g. a kind's shape preview. Only meaningful
    *  alongside `layout: 'grid'`; ignored by the default list layout. */
   icon?: ReactNode;
 }
@@ -139,7 +140,7 @@ export function InspectorSelect({
             : other;
 
     setDirection(resolved);
-    setMaxHeight(Math.max(0, Math.min(220, space[resolved])));
+    setMaxHeight(clamp(space[resolved], 0, 220));
 
     // Horizontal: the menu (now free to grow via CSS `width: max-content`) is measured at its
     // natural, unclamped width — the widest option's real width, not the trigger's. It stays
@@ -167,7 +168,7 @@ export function InspectorSelect({
     // options while the menu stays open and mounted (e.g. switching selection between shape
     // types) re-measures instead of keeping a stale width from the previous option set.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, preferredDirection, avoidRect?.top, avoidRect?.bottom, options.map((o) => o.label).join(' ')]);
+  }, [open, preferredDirection, avoidRect?.top, avoidRect?.bottom, options.map((o) => o.label).join('\u0000')]);
 
   const commit = (index: number) => {
     const option = options[index];

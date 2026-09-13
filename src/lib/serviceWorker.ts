@@ -1,7 +1,7 @@
 import { registerSW } from 'virtual:pwa-register';
 
 /**
- * Registers the offline app-shell Service Worker (Phase 6) and reports back
+ * Registers the offline app-shell Service Worker and reports back
  * once a new version has finished downloading, without ever activating it
  * itself. `updateSW(true)` is the only thing that ever triggers `skipWaiting`
  * and a reload — see `AboutDialog.tsx`'s "Update ready" action — so a

@@ -8,6 +8,7 @@ import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { useTheme, useThemeValue } from '../ui/theme/useTheme';
 import { Icon } from '../ui/common/Icon';
+import { isImeKeyEvent } from '../lib/isEditableTarget';
 
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css` — the card
  *  stays mounted this long after `visible` goes false so the CSS fade-out has time to play
@@ -288,7 +289,7 @@ function AttachmentChip({
   useEffect(() => {
     if (!pinned && !revealed) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || isImeKeyEvent(event)) return;
       event.stopPropagation();
       // The actual discard-vs-commit decision for a live edit is made by the commit effect above,
       // reading `wasLastKeydownEscape()` — see its doc comment for why this handler itself often

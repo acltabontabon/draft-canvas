@@ -1,5 +1,5 @@
 import { ATTACHABLE_TYPES, type DraftDocument, type DraftNode, type DraftNodeType } from '../document/types';
-import { pointInBox } from '../lib/math';
+import { centerOf, pointInBox } from '../lib/math';
 import { hasAttachmentRoom } from '../document/operations';
 import type { Rect } from '../edges/routing';
 
@@ -18,9 +18,7 @@ function overlapArea(a: Rect, b: Rect): number {
 }
 
 function centerInside(rect: Rect, target: Rect): boolean {
-  const cx = rect.x + rect.width / 2;
-  const cy = rect.y + rect.height / 2;
-  return cx >= target.x && cx <= target.x + target.width && cy >= target.y && cy <= target.y + target.height;
+  return pointInBox(centerOf(rect), target);
 }
 
 export interface AttachCandidates {

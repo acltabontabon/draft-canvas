@@ -1062,7 +1062,7 @@ export function placeLabel(
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const lengthSq = dx * dx + dy * dy;
-    const t = lengthSq === 0 ? 0 : Math.min(1, Math.max(0, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSq));
+    const t = lengthSq === 0 ? 0 : clamp(((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSq, 0, 1);
     const px = a.x + dx * t;
     const py = a.y + dy * t;
     const distance = (point.x - px) ** 2 + (point.y - py) ** 2;
@@ -1085,7 +1085,7 @@ export function placeLabel(
   if (a.corner && b.corner) {
     along =
       length >= LABEL_BEND_CLEARANCE * 2
-        ? Math.min(length - LABEL_BEND_CLEARANCE, Math.max(LABEL_BEND_CLEARANCE, along))
+        ? clamp(along, LABEL_BEND_CLEARANCE, length - LABEL_BEND_CLEARANCE)
         : length / 2;
   }
   const x = a.x + (dx / length) * along;

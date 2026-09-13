@@ -439,22 +439,34 @@ export function spliceEdgeInFlows(
   replacementEdgeIds: readonly string[],
 ): DraftDocument {
   if (replacementEdgeIds.length === 0 || doc.flows.length === 0) return doc;
-  const [first, ...rest] = replacementEdgeIds as [string, ...string[]];
   let docChanged = false;
   const flows = doc.flows.map((flow) => {
     if (stepIndexOf(flow, edgeId) === undefined) return flow;
     const steps: DraftFlowStep[] = [];
+    // A connector may lead at most one step per flow (validation repairs a repeat away on the next
+    // load). Splicing several members onto one shared trunk — Convert to junction — would
+    // otherwise write that trunk once per member, so a replacement that already leads a step is
+    // skipped rather than repeated.
+    const leading = new Set(flow.steps.flatMap((step) => (step.edgeId && step.edgeId !== edgeId ? [step.edgeId] : [])));
     // Budgeted against the whole flow, not the steps written so far — the originals still
     // to come would otherwise push a near-full flow past the cap, and the next load's
     // validation would silently trim its last step.
     let budget = Math.max(0, LIMITS.maxStepsPerFlow - flow.steps.length);
     for (const step of flow.steps) {
       if (step.edgeId === edgeId) {
+        const [first, ...rest] = replacementEdgeIds.filter((id) => !leading.has(id));
+        if (first === undefined) {
+          const { edgeId: _replaced, ...withoutEdge } = step;
+          if (step.extraEdgeIds?.length || step.extraNodeIds?.length || step.viewport) steps.push(withoutEdge);
+          continue;
+        }
         steps.push({ ...step, edgeId: first });
+        leading.add(first);
         for (const id of rest) {
           if (budget <= 0) break;
           budget -= 1;
           steps.push({ id: createId('fs'), edgeId: id });
+          leading.add(id);
         }
         continue;
       }

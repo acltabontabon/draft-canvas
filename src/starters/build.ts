@@ -150,7 +150,7 @@ export function buildStarter(
       ...(spec.deliveryAttempts !== undefined ? { deliveryAttempts: spec.deliveryAttempts } : {}),
       ...(spec.accent !== undefined ? { accent: spec.accent } : {}),
     });
-    // Same assignment `convertToJunction` makes — `createEdge` has no attachment input of its own.
+    // Same assignment `convertBundleToJunction` makes — `createEdge` has no attachment input of its own.
     if (spec.attachments?.length) edge.attachments = spec.attachments.map(createAttachment);
     if (spec.key !== undefined) edgeIds.set(spec.key, edge.id);
     edges.push(edge);

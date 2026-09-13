@@ -41,9 +41,13 @@ export function StatusBar({ durable }: { durable: boolean }) {
   return (
     <footer className="dc-status">
       <div className="dc-status-left">
-        {/* A live region, so a save that starts failing mid-session is announced, not only drawn. */}
-        <span className="dc-save" data-status={save.status} role="status">
+        <span className="dc-save" data-status={save.status}>
           {saveLabel(save, durable)}
+        </span>
+        {/* Announced separately from the label, which cycles Unsaved → Saving… → Saved on every
+            commit and would speak three times per drag. Only a failure is news. */}
+        <span className="dc-sr-only" role="status">
+          {!durable ? 'Storage unavailable. Changes are kept in memory only.' : save.status === 'error' ? saveLabel(save, durable) : ''}
         </span>
         <span className="dc-muted dc-status-hint">
           {durable

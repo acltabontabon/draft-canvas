@@ -18,7 +18,7 @@ createRoot(container).render(
   </StrictMode>,
 );
 
-// Offline app-shell caching (Phase 6). Registered after the initial render so
+// Offline app-shell caching. Registered after the initial render so
 // it never delays first paint; the returned activate function only ever runs
 // on the user's own explicit "Update ready" action (see AboutDialog.tsx).
 const activateUpdate = initServiceWorker(() => useUiStore.getState().setUpdateReady());

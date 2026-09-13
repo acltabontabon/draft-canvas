@@ -283,9 +283,11 @@ function AboutDialogBody() {
             ) : (
               <button type="button" className="dc-about-version-action" onClick={openWhatsNew}>
                 {unread && <span className="dc-release-dot" aria-hidden="true" />}
-                What's New
-                {unread && <span className="dc-sr-only"> — new</span>}
-                {' →'}
+                {/* One text run, so the flex gap spaces only the dot — not the label and the arrow. */}
+                <span>
+                  What's New{unread && <span className="dc-sr-only"> — new</span>}
+                  {'\u00a0→'}
+                </span>
               </button>
             )}
           </div>

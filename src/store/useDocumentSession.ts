@@ -133,6 +133,7 @@ export function useDocumentSession(): DocumentSession {
       repository,
       // Saves only ever run for an open canvas, so the store is loaded by the time one reports.
       onStateChange: (state) => editorStoreModule?.useEditorStore.getState().setSaveState(state),
+      onMetadataAdopted: (id, metadata) => editorStoreModule?.useEditorStore.getState().adoptStoredMetadata(id, metadata),
     });
     autosave.current = controller;
     return () => {
@@ -153,6 +154,9 @@ export function useDocumentSession(): DocumentSession {
     // subscribes a microtask later, before any edit can happen.
     void loadEditorStore().then(({ useEditorStore, documentWithLiveViewport }) => {
       if (cancelled) return;
+      // What's on disk right now, so a later save can tell a rename made here from one made in
+      // another tab's Library.
+      autosave.current?.track(useEditorStore.getState().document);
       unsubscribe = useEditorStore.subscribe((state, previous) => {
         if (state.revision === previous.revision && state.liveViewport === previous.liveViewport) return;
         if (state.document.metadata.id !== openId) return;
@@ -162,6 +166,7 @@ export function useDocumentSession(): DocumentSession {
     return () => {
       cancelled = true;
       unsubscribe?.();
+      autosave.current?.untrack(openId);
     };
   }, [openId]);
 

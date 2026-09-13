@@ -20,6 +20,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../common/Icon';
 import { useFocusReturn } from '../common/useFocusReturn';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 
 interface CommandPaletteProps {
   createAt: (preset: Preset, position: { x: number; y: number }) => DraftNode;
@@ -34,7 +35,7 @@ const RECENT_SHOWN = 5;
 type Entry = Command | (CommandOption & { group?: undefined });
 
 /**
- * Phase 8 — the ⌘K command surface. One searchable list that adapts to what's selected, so a
+ * The ⌘K command surface. One searchable list that adapts to what's selected, so a
  * developer narrating a system can keep talking and keep typing: `serv` adds a service, `conn`
  * connects it, `spot` spotlights it. Deterministic and offline — every row is a thin call onto a
  * store action that already exists (see `commands/registry.ts`); the palette owns nothing but
@@ -119,7 +120,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
     // Synchronous, not deferred to a frame: a backgrounded tab may not paint a frame for a
     // while, and the first keystroke must land in this input, not on the canvas behind it.
     inputRef.current?.focus();
-    // Opening it once is the whole lesson (Phase 7.2) — the "press ⌘K" hint has nothing left to say.
+    // Opening it once is the whole lesson — the "press ⌘K" hint has nothing left to say.
     retireHint('command-palette');
   }, [retireHint, setQuickConnect]);
 
@@ -179,6 +180,8 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Enter confirming an IME conversion in the search box must not run the highlighted row.
+      if (isImeKeyEvent(event)) return;
       const meta = event.metaKey || event.ctrlKey;
       if (meta && event.key.toLowerCase() === 'k') {
         event.preventDefault();
@@ -284,7 +287,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
         <div id="dc-palette-list" ref={listRef} className="dc-palette-list" role="listbox">
           {rows.length === 0 && (
             <div className="dc-palette-empty">
-              {stage ? 'Nothing matches.' : 'No matching commands.'}
+              {stage ? 'No matching options.' : 'No matching commands.'}
             </div>
           )}
           {rows.map(({ entry, indices }, index) => {
@@ -303,6 +306,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
                   id={`dc-palette-row-${index}`}
                   role="option"
                   aria-selected={index === highlight}
+                  aria-keyshortcuts={entry.shortcut}
                   className="dc-palette-row"
                   onPointerMove={() => {
                     if (highlightRef.current !== index) setHighlight(index);
@@ -315,7 +319,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
                     <span className="dc-palette-tag">{GROUP_LABELS[group]}</span>
                   )}
                   {entry.shortcut && (
-                    <span className="dc-palette-kbd">
+                    <span className="dc-palette-kbd" aria-hidden="true">
                       {entry.shortcut.split(' ').map((key, i) => (
                         <kbd key={`${key}-${i}`}>{key}</kbd>
                       ))}

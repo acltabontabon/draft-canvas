@@ -31,7 +31,7 @@ export interface GifExportOptions {
   theme?: ThemeName;
   /** Whether to draw a configured background. Defaults to `true`. */
   includeBackground?: boolean;
-  /** Phase 5.2 — Intentional Roughness preset. Defaults to `'clean'`. */
+  /** Intentional Roughness preset. Defaults to `'clean'`. */
   preset?: PersonalityPreset;
   /** Stops the export between frames; the returned promise rejects with the signal's reason. */
   signal?: AbortSignal;

@@ -48,7 +48,7 @@ export interface EdgeDescribeContext {
   spine?: EdgeSpine;
   /** The nodes this connector may detour around. Omitted: every node but its endpoints and groups. */
   obstacles?: readonly Rect[];
-  /** Phase 5.2 — Intentional Roughness. Defaults to `'clean'` at call sites
+  /** Intentional Roughness. Defaults to `'clean'` at call sites
    *  that construct this object directly without a preset. */
   preset?: PersonalityPreset;
 }

@@ -7,7 +7,7 @@ import type { UiStore } from '../store/uiStore';
 import { STARTER_CATEGORIES } from '../starters/types';
 
 /**
- * Phase 8 — the command surface's vocabulary. A command is a *thin* front-end onto an operation
+ * The command surface's vocabulary. A command is a *thin* front-end onto an operation
  * the editor store already exposes: it never mutates the document itself, it calls the same
  * action the toolbar, popover, or keyboard shortcut would. That is what keeps the palette instant,
  * offline, undoable, and impossible to drift from the rest of the app — there is exactly one way

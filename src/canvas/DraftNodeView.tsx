@@ -29,6 +29,8 @@ import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { SvgSurface } from './SvgSurface';
+import { isImeKeyEvent } from '../lib/isEditableTarget';
+import { count } from '../lib/plural';
 
 /**
  * One component renders every node type.
@@ -350,6 +352,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           type="button"
           className="dc-code-copy"
           title="Copy code"
+          // The canvas is one Tab stop; only the selected node's own controls join the order after it.
+          tabIndex={selected ? 0 : -1}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
@@ -377,7 +381,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           type="button"
           className="dc-attachment-badge"
           data-open={popoverOpen ? 'true' : undefined}
-          title={`${attachmentCount} attachment${attachmentCount === 1 ? '' : 's'}`}
+          title={count(attachmentCount, 'attachment')}
+          aria-label={count(attachmentCount, 'attachment')}
+          aria-expanded={popoverOpen}
+          tabIndex={selected ? 0 : -1}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
@@ -424,6 +431,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
             // but React Flow's own key bindings (Shift = box selection) are not guarded for a
             // modifier pressed inside an input.
             event.stopPropagation();
+            // Enter/Escape that confirm or cancel an IME conversion aren't commit/cancel.
+            if (isImeKeyEvent(event)) return;
             if (event.key === 'Escape') {
               event.preventDefault();
               // A note keeps what was typed — losing a paragraph of meeting notes to a reflexive

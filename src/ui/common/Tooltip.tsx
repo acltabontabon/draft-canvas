@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { PrimitiveTooltipContent } from '../../canvas/presets';
+import { clamp } from '../../lib/math';
 
 /** Hover must clear this before the tooltip appears — long enough that a pointer merely
  *  travelling across the toolbar never triggers it. */
@@ -134,6 +135,9 @@ export function Tooltip({ content, children }: TooltipProps) {
   const hideTimer = useRef<number | null>(null);
   const warmth = useContext(TooltipWarmthContext);
   const id = useId();
+  const description = [content.description, content.usageHint, content.shortcut && `Shortcut ${content.shortcut}`]
+    .filter(Boolean)
+    .join('. ');
 
   const clearTimers = () => {
     if (showTimer.current !== null) window.clearTimeout(showTimer.current);
@@ -200,7 +204,7 @@ export function Tooltip({ content, children }: TooltipProps) {
     );
     const centered = anchorRect.left + anchorRect.width / 2 - bubbleRect.width / 2;
     const left = Math.round(
-      Math.min(Math.max(centered, VIEWPORT_MARGIN), window.innerWidth - bubbleRect.width - VIEWPORT_MARGIN),
+      clamp(centered, VIEWPORT_MARGIN, window.innerWidth - bubbleRect.width - VIEWPORT_MARGIN),
     );
     setPosition((current) =>
       current && current.top === top && current.left === left && current.placement === placement
@@ -226,12 +230,20 @@ export function Tooltip({ content, children }: TooltipProps) {
       if (event.key === 'Escape' && open) close();
     },
     onPointerDown: close,
-    'aria-describedby': open ? id : undefined,
+    // Always wired, to text that is always in the DOM: the bubble only exists a render after focus,
+    // and a screen reader reads the description at the moment focus lands. The name already comes
+    // from the trigger itself, so only what the tooltip adds is described.
+    'aria-describedby': description ? `${id}-description` : undefined,
   };
 
   return (
     <>
       {children(triggerProps)}
+      {description && (
+        <span id={`${id}-description`} hidden>
+          {description}
+        </span>
+      )}
       {open &&
         createPortal(
           <div

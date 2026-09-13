@@ -3,7 +3,7 @@ import { readProjectFile } from '../../export/project';
 import { looksLikeSecureExport, readSecureProjectFile } from '../../export/secureProject';
 import type { DraftSummary } from '../../document/types';
 import type { NormalizeResult } from '../../document/validate';
-import { isEditableTarget } from '../../lib/isEditableTarget';
+import { isEditableTarget, isImeKeyEvent } from '../../lib/isEditableTarget';
 import { PRODUCT } from '../../product';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
@@ -481,7 +481,7 @@ function SecureImportPrompt({
           onChange={(event) => setPassphrase(event.target.value)}
           onKeyDown={(event) => {
             event.stopPropagation();
-            if (event.key === 'Enter') void submit();
+            if (event.key === 'Enter' && !isImeKeyEvent(event)) void submit();
           }}
         />
       </label>
@@ -528,7 +528,7 @@ function RenameDialog({
           maxLength={200}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') submit();
+            if (event.key === 'Enter' && !isImeKeyEvent(event)) submit();
           }}
         />
       </label>

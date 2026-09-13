@@ -43,6 +43,7 @@ import { useOverlayPosition } from './useOverlayPosition';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
+import { isImeKeyEvent } from '../lib/isEditableTarget';
 
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   http: 'HTTP',
@@ -91,7 +92,7 @@ const POPOVER_EXIT_MS = 120;
 
 /**
  * Gap between the connector's own label point and the popover. Deliberately larger than
- * `EdgeAttachmentRow`'s 12px: that row sits right at the label point because nothing else lives
+ * the attachment chip row's 12px: that row sits right at the label point because nothing else lives
  * there, but this popover's anchor point is also where the request label itself now renders
  * (tight to its line, by design) — a 12px gap put the two directly on top of each other. 28px
  * clears a typical single-line label chip's own height plus its line clearance.
@@ -138,7 +139,6 @@ export function EdgeInspectorPopover() {
 function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boolean }) {
   const document = useEditorStore((state) => state.document);
   const interactionActive = useUiStore((state) => state.interactionActive);
-  const store = useEditorStore;
   const theme = useThemeValue();
 
   const liveEdge = edgeIndex(document.edges).get(edgeId);
@@ -282,12 +282,12 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
   const sourceDraftNode = draftNodes.get(displayEdge.source);
   const targetDraftNode = draftNodes.get(displayEdge.target);
 
-  // Phase 7.1/7.2 — retires the moment any connector's semantics have been explicitly touched
+  // Retires the moment any connector's semantics have been explicitly touched
   // (`semanticsOrigin: 'explicit'`, already stamped by `setEdgeSemantic`/`setEdgeHasResponse`/
   // `setEdgeKind`), not just on dismissal — the existing, precise signal for "the user has already
   // worked with what a connector can mean," not a new field invented for this.
   const hasExplicitSemantics = anyExplicitSemantics(document.edges);
-  // The same underlying capability (Phase 2.7's drag-to-attach) whichever kind of element taught
+  // The same underlying capability (drag-to-attach) whichever kind of element taught
   // it first — attaching to a node counts as much as attaching to a connector.
   const hasAnyAttachment = documentHasAttachments(document);
   // At most one hint per connector: semantics first (the more central concept), the
@@ -325,7 +325,6 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
             membershipOpen={membershipOpen}
             setMembershipOpen={setMembershipOpen}
             theme={theme}
-            store={store}
           />
         </div>
       </div>,
@@ -342,7 +341,6 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
   membershipOpen,
   setMembershipOpen,
   theme,
-  store,
 }: {
   edge: DraftEdge;
   sourceNode: DraftNode | undefined;
@@ -350,7 +348,6 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
   membershipOpen: boolean;
   setMembershipOpen: (open: boolean) => void;
   theme: ReturnType<typeof useThemeValue>;
-  store: typeof useEditorStore;
 }) {
   const flows = useEditorStore((state) => state.document.flows);
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
@@ -380,11 +377,12 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
             spellCheck={false}
             onFocus={(event) => event.currentTarget.select()}
             onBlur={(event) => {
-              store.getState().updateEdgeLabel(edge.id, event.currentTarget.value.trim());
+              useEditorStore.getState().updateEdgeLabel(edge.id, event.currentTarget.value.trim());
               setEditingLabel(false);
             }}
             onKeyDown={(event) => {
               event.stopPropagation();
+              if (isImeKeyEvent(event)) return;
               if (event.key === 'Enter') event.currentTarget.blur();
               if (event.key === 'Escape') setEditingLabel(false);
             }}
@@ -413,12 +411,12 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
           aria-expanded={flowChip.state === 'none' || flowChip.state === 'add' ? undefined : membershipOpen}
           title="Flow membership"
           onClick={() => {
-            const state = store.getState();
+            const state = useEditorStore.getState();
             switch (flowChip.state) {
               case 'none':
                 // No flows at all: one click starts one with this connector, and the panel
                 // opens on its name — the same create-and-name motion as everywhere else.
-                startFlowWithEdge(store, edge.id);
+                startFlowWithEdge(edge.id);
                 return;
               case 'add':
                 // The active flow is the context — one click, no picker.
@@ -433,8 +431,8 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
         </button>
       </div>
 
-      {membershipOpen && <MembershipPanel edgeId={edge.id} store={store} />}
-      <ExpandedPanel edge={edge} sourceNode={sourceNode} targetNode={targetNode} theme={theme} store={store} />
+      {membershipOpen && <MembershipPanel edgeId={edge.id} />}
+      <ExpandedPanel edge={edge} sourceNode={sourceNode} targetNode={targetNode} theme={theme} />
     </>
   );
 });
@@ -466,8 +464,8 @@ function flowChipFor(
 
 /** Starts a new flow with this connector as its first step, makes it the active flow, and hands
  *  it to the Flows panel to be named — the same create-and-name motion the panel and palette use. */
-function startFlowWithEdge(store: typeof useEditorStore, edgeId: string) {
-  const state = store.getState();
+function startFlowWithEdge(edgeId: string) {
+  const state = useEditorStore.getState();
   const flowId = state.createFlow();
   if (!flowId) return;
   state.addEdgeToFlow(flowId, edgeId);
@@ -483,7 +481,7 @@ function startFlowWithEdge(store: typeof useEditorStore, edgeId: string) {
  * expose rename or step reordering here — that is the Flows panel's job; a membership checklist
  * is not the place for it.
  */
-function MembershipPanel({ edgeId, store }: { edgeId: string; store: typeof useEditorStore }) {
+function MembershipPanel({ edgeId }: { edgeId: string }) {
   const flows = useEditorStore((state) => state.document.flows);
 
   return (
@@ -502,7 +500,7 @@ function MembershipPanel({ edgeId, store }: { edgeId: string; store: typeof useE
                   type="checkbox"
                   checked={step !== undefined}
                   onChange={() => {
-                    const state = store.getState();
+                    const state = useEditorStore.getState();
                     if (step) {
                       // Leaving a step it merely spotlights must not delete the step itself.
                       if (step.edgeId === edgeId) state.removeFlowStep(flow.id, step.id);
@@ -523,7 +521,7 @@ function MembershipPanel({ edgeId, store }: { edgeId: string; store: typeof useE
           );
         })}
       </ul>
-      <Button variant="quiet" onClick={() => startFlowWithEdge(store, edgeId)}>
+      <Button variant="quiet" onClick={() => startFlowWithEdge(edgeId)}>
         + New flow
       </Button>
     </div>
@@ -596,7 +594,7 @@ function SplitTextEditor({
   };
   const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     event.stopPropagation();
-    if (event.key === 'Enter') event.currentTarget.blur();
+    if (event.key === 'Enter' && !isImeKeyEvent(event)) event.currentTarget.blur();
   };
 
   return (
@@ -648,7 +646,7 @@ function SingleTextEditor({
       onBlur={(event) => onCommit(event.currentTarget.value.trim())}
       onKeyDown={(event) => {
         event.stopPropagation();
-        if (event.key === 'Enter') event.currentTarget.blur();
+        if (event.key === 'Enter' && !isImeKeyEvent(event)) event.currentTarget.blur();
       }}
     />
   );
@@ -701,7 +699,7 @@ function HttpRequestEditor({ value, onCommit }: { value: string; onCommit: (next
         onBlur={(event) => commit(method, event.currentTarget.value)}
         onKeyDown={(event) => {
           event.stopPropagation();
-          if (event.key === 'Enter') event.currentTarget.blur();
+          if (event.key === 'Enter' && !isImeKeyEvent(event)) event.currentTarget.blur();
         }}
       />
     </div>
@@ -732,7 +730,7 @@ const SERVICE_MODE_OPTIONS: InspectorSelectOption[] = [
  * means for a service call. This section updates `kind` directly via `updateEdgeById` instead,
  * so the primary line never dashes just because Async was chosen.
  */
-function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: typeof useEditorStore }) {
+function ServiceInteractionSection({ edge }: { edge: DraftEdge }) {
   // Generic Call ('calls') is the fallback reading for anything outside {http, calls} too —
   // including an edge that predates this editor and was left on some other `EdgeSemantic`.
   const protocol = edge.semantic === 'http' ? 'http' : 'calls';
@@ -764,7 +762,7 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
             // are independent fields in this editor, and choosing a protocol must never
             // overwrite the Request text underneath it.
             onChange={(value) =>
-              store
+              useEditorStore
                 .getState()
                 .updateEdgeById(edge.id, { semantic: value as EdgeSemantic, semanticsOrigin: 'explicit' }, 'Set protocol')
             }
@@ -775,7 +773,7 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
             ariaLabel="Interaction mode"
             onChange={(value) => {
               const nowAsync = value === 'async';
-              store.getState().updateEdgeById(
+              useEditorStore.getState().updateEdgeById(
                 edge.id,
                 {
                   kind: nowAsync ? 'async' : undefined,
@@ -798,7 +796,7 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
           <HttpRequestEditor
             key={edge.label ?? ''}
             value={edge.label ?? ''}
-            onCommit={(next) => store.getState().updateEdgeLabel(edge.id, next)}
+            onCommit={(next) => useEditorStore.getState().updateEdgeLabel(edge.id, next)}
           />
         ) : (
           // Wrapped in the same `.dc-inspector-section-row` every other single-control row in
@@ -813,7 +811,7 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
               value={edge.label ?? ''}
               placeholder="Validate customer"
               ariaLabel="Request"
-              onCommit={(next) => store.getState().updateEdgeLabel(edge.id, next)}
+              onCommit={(next) => useEditorStore.getState().updateEdgeLabel(edge.id, next)}
             />
           </div>
         )}
@@ -830,7 +828,7 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
               aria-pressed={Boolean(edge.hasResponse)}
               aria-label="Response line"
               title="Draw a quieter reply line back to the caller"
-              onClick={() => store.getState().setEdgeHasResponse(edge.id, !edge.hasResponse)}
+              onClick={() => useEditorStore.getState().setEdgeHasResponse(edge.id, !edge.hasResponse)}
             >
               {edge.hasResponse ? 'On' : 'Off'}
             </button>
@@ -844,7 +842,7 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
                   value={edge.response ?? ''}
                   firstPlaceholder="200"
                   restPlaceholder="Customers"
-                  onCommit={(next) => store.getState().setEdgeResponse(edge.id, next)}
+                  onCommit={(next) => useEditorStore.getState().setEdgeResponse(edge.id, next)}
                 />
               ) : (
                 <SingleTextEditor
@@ -852,7 +850,7 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
                   value={edge.response ?? ''}
                   placeholder="OK"
                   ariaLabel="Response"
-                  onCommit={(next) => store.getState().setEdgeResponse(edge.id, next)}
+                  onCommit={(next) => useEditorStore.getState().setEdgeResponse(edge.id, next)}
                 />
               )}
               {isHttp && !edge.response && (
@@ -860,7 +858,7 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
                   type="button"
                   className="dc-inspector-hint"
                   title="Guess a response from the request's own verb"
-                  onClick={() => store.getState().setEdgeResponse(edge.id, inferSuccessResponse(edge.label))}
+                  onClick={() => useEditorStore.getState().setEdgeResponse(edge.id, inferSuccessResponse(edge.label))}
                 >
                   Guess
                 </button>
@@ -889,11 +887,9 @@ function ServiceInteractionSection({ edge, store }: { edge: DraftEdge; store: ty
 function RelationshipGuidance({
   edge,
   capability,
-  store,
 }: {
   edge: DraftEdge;
   capability: ConnectionCapability | undefined;
-  store: typeof useEditorStore;
 }) {
   const fixes = quickFixesFor(capability, edge);
   const retarget = fixes.find((fix) => fix.id === 'retarget-relation');
@@ -916,8 +912,8 @@ function RelationshipGuidance({
               className="dc-relationship-guidance-fix"
               onClick={() =>
                 fix.id === 'insert-worker'
-                  ? store.getState().insertWorkerOnEdge(edge.id)
-                  : store.getState().setEdgeSemantic(edge.id, fix.semantic)
+                  ? useEditorStore.getState().insertWorkerOnEdge(edge.id)
+                  : useEditorStore.getState().setEdgeSemantic(edge.id, fix.semantic)
               }
             >
               {fix.label}
@@ -943,13 +939,11 @@ function ExpandedPanel({
   sourceNode,
   targetNode,
   theme,
-  store,
 }: {
   edge: DraftEdge;
   sourceNode: DraftNode | undefined;
   targetNode: DraftNode | undefined;
   theme: ReturnType<typeof useThemeValue>;
-  store: typeof useEditorStore;
 }) {
   const [editingBehavior, setEditingBehavior] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -1037,9 +1031,9 @@ function ExpandedPanel({
 
   return (
     <div className="dc-edge-inspector-panel dc-edge-inspector-expanded">
-      <RelationshipGuidance edge={edge} capability={capability} store={store} />
+      <RelationshipGuidance edge={edge} capability={capability} />
       {isServiceToService ? (
-        <ServiceInteractionSection edge={edge} store={store} />
+        <ServiceInteractionSection edge={edge} />
       ) : (
         <>
           <section className="dc-inspector-section">
@@ -1050,7 +1044,7 @@ function ExpandedPanel({
                 ariaLabel="Interaction type"
                 options={relationOptions}
                 onChange={(value) =>
-                  store.getState().setEdgeSemantic(edge.id, (value || undefined) as EdgeSemantic | undefined)
+                  useEditorStore.getState().setEdgeSemantic(edge.id, (value || undefined) as EdgeSemantic | undefined)
                 }
               />
               {showBehaviorPicker ? (
@@ -1062,7 +1056,7 @@ function ExpandedPanel({
                     ...behaviorOptions.map((kind) => ({ value: kind, label: CONNECTOR_KIND_LABELS[kind] })),
                   ]}
                   onChange={(value) =>
-                    store.getState().setEdgeKind(edge.id, (value || undefined) as ConnectorKind | undefined)
+                    useEditorStore.getState().setEdgeKind(edge.id, (value || undefined) as ConnectorKind | undefined)
                   }
                 />
               ) : (
@@ -1090,7 +1084,7 @@ function ExpandedPanel({
                   value={edge.label ?? ''}
                   firstPlaceholder="GET"
                   restPlaceholder="Customer"
-                  onCommit={(next) => store.getState().updateEdgeLabel(edge.id, next)}
+                  onCommit={(next) => useEditorStore.getState().updateEdgeLabel(edge.id, next)}
                 />
               </section>
 
@@ -1103,7 +1097,7 @@ function ExpandedPanel({
                     data-active={edge.hasResponse ? 'true' : undefined}
                     aria-pressed={Boolean(edge.hasResponse)}
                     title="Draw a quieter reply line back to the caller"
-                    onClick={() => store.getState().setEdgeHasResponse(edge.id, !edge.hasResponse)}
+                    onClick={() => useEditorStore.getState().setEdgeHasResponse(edge.id, !edge.hasResponse)}
                   >
                     {edge.hasResponse ? 'On' : 'Off'}
                   </button>
@@ -1116,14 +1110,14 @@ function ExpandedPanel({
                       value={edge.response ?? ''}
                       firstPlaceholder="200"
                       restPlaceholder="Customer"
-                      onCommit={(next) => store.getState().setEdgeResponse(edge.id, next)}
+                      onCommit={(next) => useEditorStore.getState().setEdgeResponse(edge.id, next)}
                     />
                     {!edge.response && (
                       <button
                         type="button"
                         className="dc-inspector-hint"
                         title="Guess a response from the request's own verb"
-                        onClick={() => store.getState().setEdgeResponse(edge.id, inferSuccessResponse(edge.label))}
+                        onClick={() => useEditorStore.getState().setEdgeResponse(edge.id, inferSuccessResponse(edge.label))}
                       >
                         Guess
                       </button>
@@ -1143,7 +1137,7 @@ function ExpandedPanel({
             <Button
               variant="ghost"
               aria-label="Decrease delivery attempts"
-              onClick={() => store.getState().setEdgeDeliveryAttempts(edge.id, (edge.deliveryAttempts ?? 3) - 1)}
+              onClick={() => useEditorStore.getState().setEdgeDeliveryAttempts(edge.id, (edge.deliveryAttempts ?? 3) - 1)}
             >
               −
             </Button>
@@ -1151,7 +1145,7 @@ function ExpandedPanel({
             <Button
               variant="ghost"
               aria-label="Increase delivery attempts"
-              onClick={() => store.getState().setEdgeDeliveryAttempts(edge.id, (edge.deliveryAttempts ?? 3) + 1)}
+              onClick={() => useEditorStore.getState().setEdgeDeliveryAttempts(edge.id, (edge.deliveryAttempts ?? 3) + 1)}
             >
               +
             </Button>
@@ -1167,7 +1161,7 @@ function ExpandedPanel({
             ariaLabel="Connector shape"
             options={routingOptions}
             onChange={(value) =>
-              store
+              useEditorStore
                 .getState()
                 .updateEdgeById(edge.id, { routing: value as typeof edge.routing }, 'Change routing')
             }
@@ -1182,7 +1176,7 @@ function ExpandedPanel({
             variant="ghost"
             active={edge.directed}
             title="Show an arrowhead"
-            onClick={() => store.getState().updateEdgeById(edge.id, { directed: !edge.directed }, 'Change direction')}
+            onClick={() => useEditorStore.getState().updateEdgeById(edge.id, { directed: !edge.directed }, 'Change direction')}
           >
             Arrow
           </Button>
@@ -1203,10 +1197,10 @@ function ExpandedPanel({
               placeholder="Condition…"
               defaultValue={edge.condition ?? ''}
               spellCheck={false}
-              onBlur={(event) => store.getState().setEdgeCondition(edge.id, event.currentTarget.value)}
+              onBlur={(event) => useEditorStore.getState().setEdgeCondition(edge.id, event.currentTarget.value)}
               onKeyDown={(event) => {
                 event.stopPropagation();
-                if (event.key === 'Enter') event.currentTarget.blur();
+                if (event.key === 'Enter' && !isImeKeyEvent(event)) event.currentTarget.blur();
               }}
             />
           )}
@@ -1222,7 +1216,7 @@ function ExpandedPanel({
                 aria-label={`Colour ${accent}`}
                 style={{ background: theme.accents[accent].chip }}
                 onClick={() => {
-                  store.getState().updateEdgeById(edge.id, { accent }, 'Recolour');
+                  useEditorStore.getState().updateEdgeById(edge.id, { accent }, 'Recolour');
                   setPaletteOpen(false);
                 }}
               />
@@ -1232,7 +1226,7 @@ function ExpandedPanel({
                 variant="ghost"
                 title="Derive this connection's colour from its source node instead of a fixed one"
                 onClick={() => {
-                  store.getState().updateEdgeById(edge.id, { accent: undefined }, 'Reset colour');
+                  useEditorStore.getState().updateEdgeById(edge.id, { accent: undefined }, 'Reset colour');
                   setPaletteOpen(false);
                 }}
               >

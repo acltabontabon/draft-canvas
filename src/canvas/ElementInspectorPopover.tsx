@@ -155,7 +155,6 @@ function ElementInspectorBody({
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const learnModeActive = useUiStore((state) => state.learnModeActive);
   const interactionActive = useUiStore((state) => state.interactionActive);
-  const store = useEditorStore;
   const theme = useThemeValue();
   const { flowToScreenPosition } = useReactFlow();
   const rightClearance = flowPanelOpen ? RIGHT_CLEARANCE_WITH_FLOW_PANEL : LEFT_CLEARANCE;
@@ -247,10 +246,10 @@ function ElementInspectorBody({
 
   if (!displayNode || !displayInternal || !rect || !anchors || !target) return null;
 
-  // Phase 7.1 — at most one hint per node, decided by its type alone (never falls through to a
+  // At most one hint per node, decided by its type alone (never falls through to a
   // second, near-duplicate message once the first no longer applies): a Service node always
   // teaches attachments via its own framing; any other non-group node with nothing attached yet
-  // gets the generic nudge. Both retire together (Phase 7.2) — see `hasAnyAttachment` below —
+  // gets the generic nudge. Both retire together — see `hasAnyAttachment` below —
   // since they teach the same underlying capability.
   const hasAnyAttachment = documentHasAttachments(document);
   const primaryHint: HintId | null =
@@ -259,7 +258,7 @@ function ElementInspectorBody({
       : displayNode.type !== 'group' && !displayNode.attachments?.length
         ? 'attachment-slot'
         : null;
-  // Phase 8 — once the element's own hint is learned or dismissed (or it never had one), the
+  // Once the element's own hint is learned or dismissed (or it never had one), the
   // palette gets a turn instead. Hints only ever surface at all while Learn Draft Canvas mode is
   // on (`HintStrip`'s own gate) — nothing here shows outside a Learn mode review pass.
   const hintId: HintId | null = learnModeActive ? (primaryHint ?? 'command-palette') : null;
@@ -308,7 +307,6 @@ function ElementInspectorBody({
             menuAvoidTop={menuAvoidTop}
             menuAvoidBottom={menuAvoidBottom}
             theme={theme}
-            store={store}
             buildCommandContext={buildCommandContext}
           />
         </div>
@@ -328,7 +326,6 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   menuAvoidTop,
   menuAvoidBottom,
   theme,
-  store,
   buildCommandContext,
 }: {
   node: DraftNode;
@@ -339,7 +336,6 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   menuAvoidTop: number;
   menuAvoidBottom: number;
   theme: ReturnType<typeof useThemeValue>;
-  store: typeof useEditorStore;
   buildCommandContext: () => CommandContext;
 }) {
   const currentAccentChip = node.accent !== undefined ? theme.accents[node.accent].chip : undefined;
@@ -371,7 +367,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           value: node.noteKind ?? 'note',
           ariaLabel: 'Note kind',
           onChange: (value) =>
-            store.getState().updateNodeById(node.id, { noteKind: value as NoteKind }, 'Change note kind'),
+            useEditorStore.getState().updateNodeById(node.id, { noteKind: value as NoteKind }, 'Change note kind'),
         };
       case 'code':
         return {
@@ -379,7 +375,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           value: node.language ?? 'plaintext',
           ariaLabel: 'Code language',
           onChange: (value) =>
-            store.getState().updateNodeById(node.id, { language: value as CodeLanguage }, 'Change language'),
+            useEditorStore.getState().updateNodeById(node.id, { language: value as CodeLanguage }, 'Change language'),
         };
       case 'service':
         // Grid, like Data Store: each of the six kinds now has its own real silhouette (see
@@ -391,7 +387,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           value: node.serviceKind ?? 'generic',
           ariaLabel: 'Service type',
           onChange: (value) =>
-            store.getState().updateNodeById(node.id, { serviceKind: value as ServiceKind }, 'Change service type'),
+            useEditorStore.getState().updateNodeById(node.id, { serviceKind: value as ServiceKind }, 'Change service type'),
           layout: 'grid',
         };
       case 'database':
@@ -400,7 +396,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           value: node.databaseKind ?? 'generic',
           ariaLabel: 'Data Store type',
           onChange: (value) =>
-            store
+            useEditorStore
               .getState()
               .updateNodeById(node.id, { databaseKind: value as DatabaseKind }, 'Change data store type'),
           layout: 'grid',
@@ -411,7 +407,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           value: node.queueKind ?? 'queue',
           ariaLabel: 'Queue type',
           onChange: (value) =>
-            store.getState().updateNodeById(node.id, { queueKind: value as QueueKind }, 'Change queue type'),
+            useEditorStore.getState().updateNodeById(node.id, { queueKind: value as QueueKind }, 'Change queue type'),
         };
       case 'group':
         return {
@@ -419,7 +415,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           value: node.boundaryPreset ?? 'boundary',
           ariaLabel: 'Boundary preset',
           onChange: (value) =>
-            store.getState().updateNodeById(node.id, { boundaryPreset: value as BoundaryPreset }, 'Change boundary preset'),
+            useEditorStore.getState().updateNodeById(node.id, { boundaryPreset: value as BoundaryPreset }, 'Change boundary preset'),
         };
       case 'actor':
         return {
@@ -427,7 +423,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           value: node.actorKind ?? 'human',
           ariaLabel: 'Actor type',
           onChange: (value) =>
-            store.getState().updateNodeById(node.id, { actorKind: value as ActorKind }, 'Change actor type'),
+            useEditorStore.getState().updateNodeById(node.id, { actorKind: value as ActorKind }, 'Change actor type'),
         };
       case 'component':
         return {
@@ -435,7 +431,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           value: node.componentKind ?? 'generic',
           ariaLabel: 'Component type',
           onChange: (value) =>
-            store.getState().updateNodeById(node.id, { componentKind: value as ComponentKind }, 'Change component type'),
+            useEditorStore.getState().updateNodeById(node.id, { componentKind: value as ComponentKind }, 'Change component type'),
         };
       case 'text':
         return {
@@ -443,7 +439,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           value: effectiveTextRole(node),
           ariaLabel: 'Text role',
           onChange: (value) =>
-            store.getState().updateNodeById(node.id, { textRole: value as TextRole }, 'Change text role'),
+            useEditorStore.getState().updateNodeById(node.id, { textRole: value as TextRole }, 'Change text role'),
         };
       default:
         return null;
@@ -507,7 +503,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
         <Button
           variant="quiet"
           title="Fade everything else, to focus on this while explaining (Esc to exit)"
-          onClick={() => store.getState().enterFocus([node.id], [])}
+          onClick={() => useEditorStore.getState().enterFocus([node.id], [])}
         >
           Focus
         </Button>
@@ -517,7 +513,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           className="dc-popover-delete"
           aria-label="Delete selection"
           title="Delete (Backspace)"
-          onClick={() => store.getState().deleteSelection()}
+          onClick={() => useEditorStore.getState().deleteSelection()}
         />
       </div>
 
@@ -532,7 +528,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
               aria-label={`Colour ${accent}`}
               style={{ background: theme.accents[accent].chip }}
               onClick={() => {
-                store.getState().updateNodeById(node.id, { accent }, 'Recolour');
+                useEditorStore.getState().updateNodeById(node.id, { accent }, 'Recolour');
                 setOpenPanel(null);
               }}
             />
@@ -550,7 +546,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
               aria-label="Bold"
               title={`Bold (${node.textBold ? 'on' : 'off'}, ${MOD_SYMBOL}B)`}
               style={{ fontWeight: 700 }}
-              onClick={() => store.getState().updateNodeById(node.id, { textBold: !node.textBold }, 'Toggle bold')}
+              onClick={() => useEditorStore.getState().updateNodeById(node.id, { textBold: !node.textBold }, 'Toggle bold')}
             >
               B
             </Button>
@@ -562,7 +558,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
               title={`Italic (${node.textItalic ? 'on' : 'off'}, ${MOD_SYMBOL}I)`}
               style={{ fontStyle: 'italic' }}
               onClick={() =>
-                store.getState().updateNodeById(node.id, { textItalic: !node.textItalic }, 'Toggle italic')
+                useEditorStore.getState().updateNodeById(node.id, { textItalic: !node.textItalic }, 'Toggle italic')
               }
             >
               I
@@ -579,7 +575,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
                 aria-pressed={(node.textAlign ?? 'left') === align}
                 aria-label={`Align ${align}`}
                 title={`Align ${align}`}
-                onClick={() => store.getState().updateNodeById(node.id, { textAlign: align }, 'Change alignment')}
+                onClick={() => useEditorStore.getState().updateNodeById(node.id, { textAlign: align }, 'Change alignment')}
               />
             ))}
           </div>

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { displayNameFor } from '../../document/factory';
-import { isEditableTarget } from '../../lib/isEditableTarget';
+import { isActivatableTarget, isEditableTarget } from '../../lib/isEditableTarget';
 import { nodeIndex } from '../../store/selectors';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -32,6 +32,8 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
       // true, which covers `picking` too (a `flowId === null` sub-state of `active`, not a
       // separate one). A second listener here used to race it; one owner is enough.
       if (playback.picking) return;
+      // Space on a focused bar button (Previous, Exit…) is that button's click, not "next".
+      if (event.key === ' ' && isActivatableTarget(event.target)) return;
       if (event.key === 'ArrowRight' || event.key === ' ') {
         event.preventDefault();
         playback.next();
@@ -44,7 +46,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [playback]);
 
-  // A presenter-revealed attachment (see `EdgeAttachmentChip`'s
+  // A presenter-revealed attachment (see `AttachmentChip`'s
   // `presentationReveal`) is scoped to the step it was revealed on — advancing
   // or retreating a step always collapses it, so nothing stray survives into
   // an unrelated later step. No persistent pin across steps in this pass.
@@ -94,6 +96,14 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
     <div className="dc-explain" role="region" aria-label="Flow playback">
       {details && <DetailPanel language={details.language} code={details.code} />}
 
+      {/* The bar changes in place as the presenter steps, which a screen reader wouldn't notice. */}
+      <span className="dc-sr-only" role="status">
+        {`Step ${playback.step} of ${playback.steps.length}: ${
+          primary
+            ? `${source ? displayNameFor(source) : 'Untitled'} to ${target ? displayNameFor(target) : 'Untitled'}`
+            : playback.current.extraNodes.map((n) => displayNameFor(n)).join(', ')
+        }${caption ? `. ${caption}` : ''}`}
+      </span>
       <div className="dc-explain-bar">
         <span className="dc-explain-flow-title">{playback.flow.title}</span>
         <span className="dc-explain-count">
@@ -125,7 +135,11 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
             </span>
           )
         )}
-        {caption && <span className="dc-explain-caption">{caption}</span>}
+        {caption && (
+          <span className="dc-explain-caption" title={caption}>
+            {caption}
+          </span>
+        )}
         {condition && <span className="dc-explain-condition">[{condition}]</span>}
         <span className="dc-inspector-divider" />
         <Button

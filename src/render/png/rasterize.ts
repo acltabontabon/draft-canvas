@@ -67,7 +67,7 @@ export interface RasterizedPixels {
 
 /**
  * Same rasterization `rasterizeSvg` uses, but returns raw RGBA pixels instead
- * of an encoded PNG — what the Phase 4.3 GIF exporter feeds to `gifenc`'s
+ * of an encoded PNG — what the GIF exporter feeds to `gifenc`'s
  * quantizer one frame at a time.
  */
 export async function rasterizeSvgToPixels(

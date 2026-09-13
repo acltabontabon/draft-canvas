@@ -3,6 +3,7 @@ import type { LibraryShape } from '../../document/types';
 import { buildStarter } from '../../starters/build';
 import type { ArchitectureStarter, StarterId } from '../../starters/types';
 import { layoutShape, type ShapeBox } from './shapeLayout';
+import { clamp } from '../../lib/math';
 
 /** Deeper than this and a pulse through the topology stops reading as one gesture. */
 export const MAX_PULSE_DEPTH = 4;
@@ -87,5 +88,5 @@ export function edgeDepths(shape: LibraryShape): number[] {
       queue.push(next);
     }
   }
-  return shape.edges.map(([from]) => Math.min(MAX_PULSE_DEPTH, Math.max(0, depth[from] ?? 0)));
+  return shape.edges.map(([from]) => clamp(depth[from] ?? 0, 0, MAX_PULSE_DEPTH));
 }

@@ -18,7 +18,7 @@ import { defaultSizeFor } from '../../document/factory';
 import { DEFAULTS } from '../../document/limits';
 import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
-import { isEditableTarget } from '../../lib/isEditableTarget';
+import { isActivatableTarget, isEditableTarget } from '../../lib/isEditableTarget';
 import { centerOf } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, useEditorStore } from '../../store/editorStore';
@@ -76,7 +76,6 @@ export function EditorRoute({ session }: { session: DocumentSession }) {
 }
 
 function EditorScreen({ session }: { session: DocumentSession }) {
-  const store = useEditorStore;
   const title = useEditorStore((state) => state.document.metadata.title);
   const mode = useEditorStore((state) => state.mode);
   const rename = useEditorStore((state) => state.rename);
@@ -129,7 +128,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           ? naturalCodeSize(code, describeContext(theme))
           : undefined;
 
-      const node = store.getState().addNode({
+      const node = useEditorStore.getState().addNode({
         type: preset.type,
         x: Math.round(position.x),
         y: Math.round(position.y),
@@ -153,7 +152,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       if (node.type === 'note' || node.type === 'text' || autoEdit) useUiStore.getState().requestEdit(node.id);
       return node;
     },
-    [arm, store, theme],
+    [arm, theme],
   );
 
   /**
@@ -185,10 +184,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const onQuickConnectHighlight = useCallback(
     (item: QuickConnectItem) => {
       if (!quickConnect?.source) return;
-      const offer = offerFor(store.getState().document, quickConnect, item);
+      const offer = offerFor(useEditorStore.getState().document, quickConnect, item);
       setContinuation(offer ?? null);
     },
-    [quickConnect, setContinuation, store],
+    [quickConnect, setContinuation],
   );
 
   /**
@@ -205,15 +204,15 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         setQuickConnect(null);
         return;
       }
-      const offer = offerFor(store.getState().document, quickConnect, item);
+      const offer = offerFor(useEditorStore.getState().document, quickConnect, item);
       if (offer) {
-        store.getState().acceptContinuation(offer);
+        useEditorStore.getState().acceptContinuation(offer);
         if (offer.nodes[0]?.type === 'note') useUiStore.getState().requestEdit(offer.nodes[0].id);
       }
       setContinuation(null);
       setQuickConnect(null);
     },
-    [createAt, quickConnect, setContinuation, setQuickConnect, store],
+    [createAt, quickConnect, setContinuation, setQuickConnect],
   );
 
   /**
@@ -228,7 +227,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
    */
   const createAtPointer = useCallback(
     (preset: Preset) => {
-      const state = store.getState();
+      const state = useEditorStore.getState();
       const { nodes: selectedNodes } = state.selection;
       const host = selectedNodes.length === 1 ? state.document.nodes.find((n) => n.id === selectedNodes[0]) : undefined;
       const position = pointer.known
@@ -241,7 +240,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // this one always opens the new element ready to name.
       return createAt(preset, position, true);
     },
-    [createAt, screenToFlowPosition, store],
+    [createAt, screenToFlowPosition],
   );
 
   useKeyboard({ createAtPointer, playback });
@@ -453,7 +452,6 @@ function useKeyboard({
   createAtPointer: (preset: Preset) => void;
   playback: ReturnType<typeof useFlowPlayback>;
 }) {
-  const store = useEditorStore;
   const setExportOpen = useUiStore((state) => state.setExportOpen);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const arm = useUiStore((state) => state.arm);
@@ -467,7 +465,7 @@ function useKeyboard({
   // Deliberately *not* re-derived from the live selection: once a press selects a neighbor, that
   // neighbor *is* the selection, so the only way to tell "still mid-cycle from the original
   // anchor" apart from "the user selected this node some other way" is to remember it here. A
-  // press whose live selection no longer matches `lastLanded` — or that switches direction, e.g.
+  // press whose live selection no longer matches `relCycleLastLanded` — or that switches direction, e.g.
   // Right then Left — starts a brand-new cycle/walk from whatever is selected now: switching
   // direction reads as "go back from here", not "keep exploring the original anchor's other
   // siblings", so it must not silently keep the old anchor.
@@ -479,7 +477,7 @@ function useKeyboard({
    *  keyboard navigation that lands somewhere invisible would otherwise feel like it did nothing. */
   const selectAndReveal = useCallback(
     (nodeId: string) => {
-      const state = store.getState();
+      const state = useEditorStore.getState();
       const target = state.document.nodes.find((n) => n.id === nodeId);
       if (!target) return;
       state.setSelection({ nodes: [nodeId], edges: [] });
@@ -493,7 +491,7 @@ function useKeyboard({
         screen.y < window.innerHeight - margin;
       if (!onScreen) void setCenter(center.x, center.y, { zoom: getZoom(), duration: 200 });
     },
-    [flowToScreenPosition, getZoom, setCenter, store],
+    [flowToScreenPosition, getZoom, setCenter],
   );
 
   /**
@@ -506,7 +504,7 @@ function useKeyboard({
    * clears it), so this always falls through to the no-op branch without needing its own check.
    */
   const openContextMenuFromKeyboard = useCallback(() => {
-    const state = store.getState();
+    const state = useEditorStore.getState();
     const { nodes, edges } = state.selection;
     let flowPoint: { x: number; y: number } | undefined;
     let target: ContextMenuTarget | undefined;
@@ -546,7 +544,7 @@ function useKeyboard({
       screenPosition: flowToScreenPosition(flowPoint),
       flowPosition: flowPoint,
     });
-  }, [flowToScreenPosition, screenToFlowPosition, store]);
+  }, [flowToScreenPosition, screenToFlowPosition]);
 
   // Cmd/Ctrl+V is a real OS paste gesture, so the browser fires a native `paste` event carrying
   // `clipboardData` synchronously — reading that needs no `navigator.clipboard` permission at all,
@@ -559,7 +557,7 @@ function useKeyboard({
       if (useUiStore.getState().commandPaletteOpen) return;
       if (useUiStore.getState().contextMenu) return;
       // Nothing lands behind a dialog, and a presentation is read-only.
-      if (modalIsOpen() || store.getState().mode === 'present') return;
+      if (modalIsOpen() || useEditorStore.getState().mode === 'present') return;
       event.preventDefault();
       // Best-effort adoption of whatever the OS clipboard actually handed us — foreign text, or
       // none at all (e.g. a blocked/failed clipboard write elsewhere), is not an error. `paste()`
@@ -567,15 +565,15 @@ function useKeyboard({
       // sync: same-tab paste must keep working off the in-memory clipboard even when nothing came
       // through here.
       const text = event.clipboardData?.getData('text/plain');
-      if (text) store.getState().applyExternalClipboardText(text);
+      if (text) useEditorStore.getState().applyExternalClipboardText(text);
       const target = pointer.known
         ? { x: pointer.x, y: pointer.y }
         : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-      store.getState().paste(target);
+      useEditorStore.getState().paste(target);
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
-  }, [store, screenToFlowPosition]);
+  }, [screenToFlowPosition]);
 
   // Escape on a ghost, ahead of everyone else. React Flow deselects a focused node on Escape from
   // its own handler on the node element, and every popover has its own capture-phase Escape; a
@@ -613,7 +611,7 @@ function useKeyboard({
       if (modalIsOpen()) return;
 
       const meta = event.metaKey || event.ctrlKey;
-      const state = store.getState();
+      const state = useEditorStore.getState();
       // Presenting is read-only: the canvas already refuses pointer edits and the palette
       // offers present-only commands, so the keyboard must not be the one way to edit.
       const presenting = state.mode === 'present';
@@ -641,6 +639,8 @@ function useKeyboard({
             return;
           case 'd':
             event.preventDefault();
+            // Held down, key repeat would stamp out a copy per repeat tick.
+            if (event.repeat) return;
             state.duplicateSelection();
             return;
           case 'e':
@@ -648,7 +648,7 @@ function useKeyboard({
             setExportOpen(true);
             return;
           case 'k':
-            // The command palette (Phase 8). Only opens from here — while it's open its own
+            // The command palette. Only opens from here — while it's open its own
             // capture-phase listener owns every key, including the ⌘K that closes it again.
             event.preventDefault();
             setCommandPaletteOpen(true);
@@ -718,6 +718,8 @@ function useKeyboard({
       }
 
       if (presenting && event.key !== 'Escape') return;
+      // Enter and Space belong to a focused button, menu item or tab — they activate it.
+      if ((event.key === 'Enter' || event.key === ' ') && isActivatableTarget(event.target)) return;
 
       switch (event.key) {
         case 'Backspace':
@@ -854,6 +856,7 @@ function useKeyboard({
       const preset = presetForShortcut(event.key);
       if (preset) {
         event.preventDefault();
+        if (event.repeat) return;
         createAtPointer(preset);
       }
     };
@@ -872,7 +875,6 @@ function useKeyboard({
     setExportOpen,
     setFlowPanelOpen,
     setShortcutsOpen,
-    store,
     zoomIn,
     zoomOut,
   ]);

@@ -210,6 +210,7 @@ export function baselineOf(layout: TextLayout, index: number): number {
   return index * layout.lineHeight + halfLeading + layout.ascent;
 }
 
+/** Test seam: `tests/setup.ts` empties it between tests. */
 export function clearLayoutCache(): void {
   layoutCache.clear();
 }

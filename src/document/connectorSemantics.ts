@@ -453,8 +453,8 @@ export function quickFixesFor(
  * `behaviors` array; emptiness alone doesn't mean "a call," only
  * `defaultRelation` does. Independent of the edge's *current* `kind`;
  * callers combine this with `edge.kind === undefined || edge.kind ===
- * 'sync'` themselves — mirrors how `AdvancedPanel`'s own
- * `behaviorMatchesPolicy` is a separate concern from `capabilityFor`'s
+ * 'sync'` themselves — mirrors how `ExpandedPanel` in `EdgeInspectorPopover.tsx`
+ * keeps its own `behaviorMatchesPolicy` separate from `capabilityFor`'s
  * opinion.
  */
 export function isSyncPairing(source: NodeCategory, target: NodeCategory): boolean {

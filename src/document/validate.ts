@@ -63,15 +63,14 @@ import {
   type TextAlign,
   type TextRole,
 } from './types';
-import { clamp } from '../lib/math';
+import { clamp, isFiniteNumber } from '../lib/math';
 import { isRecord } from '../lib/isRecord';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
   | { ok: false; error: string };
 
-const finite = (value: unknown, fallback: number): number =>
-  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+const finite = (value: unknown, fallback: number): number => (isFiniteNumber(value) ? value : fallback);
 
 /**
  * Control characters have no place in a label and confuse DOM and SVG alike.

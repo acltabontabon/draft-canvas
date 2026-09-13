@@ -11,6 +11,7 @@ import { LocalNote } from './LocalNote';
 import { SelectionChrome } from './SelectionChrome';
 import { StarterShelf } from './StarterShelf';
 import { useStarters } from './useStarters';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 
 /**
  * The home screen for a library with nothing in it — the first thing anyone sees, so it does one
@@ -41,7 +42,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Enter' || event.repeat || event.defaultPrevented || event.isComposing) return;
+      if (event.key !== 'Enter' || event.repeat || event.defaultPrevented || isImeKeyEvent(event)) return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (event.target !== document.body && event.target !== document.documentElement) return;
       if (document.querySelector('[role="dialog"]')) return;

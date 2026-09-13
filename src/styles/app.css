@@ -643,7 +643,8 @@ kbd {
   white-space: nowrap;
 }
 
-.dc-move-menu-row:hover {
+.dc-move-menu-row:hover,
+.dc-move-menu-row[data-highlighted='true'] {
   background: var(--dc-surface-raised);
 }
 
@@ -2008,10 +2009,8 @@ kbd {
    each tier below shortens the trailing cluster before that can happen. Verified by measuring
    `.dc-create-rail`'s gap to `.dc-toolbar-trail` at each breakpoint — it never drops under ~24px.
 
-   Nothing is ever hidden outright: a label collapses to the icon it already had, and a control
-   that leaves the bar reappears in the More menu, which is why the fold is driven from
-   `useToolbarDensity` rather than `display: none` (two copies of one command would make every
-   `getByRole` ambiguous). */
+   Nothing is ever hidden outright: a label collapses to the icon it already had, visually hidden
+   rather than `display: none`, so the accessible name is the same at every width. */
 
 /* The two capabilities drop their words together — never one worded and one bare, which is the
    exact mismatch this grammar exists to prevent. They keep their glyphs and their `aria-label`,
@@ -3483,16 +3482,21 @@ kbd {
    install takes the slot when there is one; What's New otherwise. Never both at once. */
 .dc-about-version-row {
   display: flex;
-  align-items: baseline;
+  /* Centre, not baseline: the action is an inline-flex box whose first item can be the unread dot,
+     which has no text baseline of its own — baseline alignment dropped the label below the version. */
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-top: 14px;
 }
 
 /* Quiet metadata, not a badge — no border, no background, just faint monospace. */
-.dc-about-version {
+.dc-about-version,
+.dc-about-version-action {
+  font: inherit;
   font-family: var(--dc-mono);
   font-size: 11px;
+  line-height: 16px;
   letter-spacing: 0.01em;
   color: var(--dc-text-faint);
 }
@@ -3500,14 +3504,10 @@ kbd {
 .dc-about-version-action {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   padding: 0;
   border: none;
   background: none;
-  font: inherit;
-  font-family: var(--dc-mono);
-  font-size: 11px;
-  color: var(--dc-text-faint);
   cursor: pointer;
   transition: color 90ms ease;
 }
@@ -3987,7 +3987,7 @@ kbd {
 
 /* ------------------------------------------------------- command palette -- */
 
-/* Phase 8 — ⌘K. Anchored toward the top like every palette people already know (Spotlight,
+/* ⌘K. Anchored toward the top like every palette people already know (Spotlight,
    Raycast, the VS Code command palette): the eye lands on the input before the list, and a
    growing/shrinking list never shifts the input around. */
 

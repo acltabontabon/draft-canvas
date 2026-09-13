@@ -4,6 +4,37 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-13
+
+### Fixed
+
+- Copying, cutting, or duplicating a boundary now brings what's inside it. Cutting one used to
+  delete its contents and paste back an empty frame.
+- Nudging a boundary with the arrow keys, or aligning and distributing it, moves its contents
+  with it.
+- Ungrouping a boundary also removes connectors drawn to the boundary itself, instead of leaving
+  them pointing at nothing.
+- Converting a fan of connectors to a junction no longer repeats the shared connector in a flow,
+  which lost a step the next time the diagram was opened.
+- Inserting a worker on a connector keeps the connector's label, condition, and attachments.
+- Renaming a diagram or moving it to a project in another tab is no longer undone when the diagram
+  is open and saves in this one.
+- Undoing or redoing an unrelated edit no longer reverts a rename or project move made in another
+  tab.
+- Enter and Space on a focused button now press that button instead of editing the selected shape
+  or advancing a presentation, and holding a shape key or ⌘D no longer adds a pile of copies.
+- Confirming Japanese, Chinese, or Korean input with Enter no longer submits the field.
+- A connection dot no longer jumps off its spot when hovered, and connection dots, resize handles,
+  and connectors are easier to grab when zoomed out.
+- Right-click and quick-add menus close when you pan or zoom the canvas, and closing the
+  right-click menu returns keyboard focus to the canvas.
+- The Library's "move to project" menu supports arrow keys, Home, and End, and returns keyboard
+  focus to the button that opened it when you close it.
+- Notices no longer stay on screen for good after you dismiss another one from the keyboard.
+- Tab can no longer move focus out of a dialog after a step change inside it.
+- The version and What's New link in About now line up.
+- Screen readers no longer announce every save, and do announce each step while presenting.
+
 ## [1.2.0] - 2026-09-13
 
 ### Added
@@ -758,7 +789,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.2.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.3.0...main
+[1.3.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/acltabontabon/draft-canvas/compare/v0.8.0...v1.0.0

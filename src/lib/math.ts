@@ -1,3 +1,6 @@
+/** A real number — not NaN, not ±Infinity, not a numeric string. For data read back from disk or a file. */
+export const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
 /** `n` held within `[min, max]`. */
 export const clamp = (n: number, min: number, max: number): number => Math.max(min, Math.min(max, n));
 

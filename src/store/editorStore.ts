@@ -25,6 +25,7 @@ import {
   boundsOf,
   bringForward,
   bringToFront,
+  carryDescendants,
   detachFromEdge as detachFromEdgeOp,
   detachFromNode,
   distributeNodes,
@@ -96,6 +97,7 @@ import type {
   DraftDocument,
   DraftEdge,
   DraftFlow,
+  DraftMetadata,
   DraftNode,
   ConnectorKind,
   DatabaseKind,
@@ -123,6 +125,7 @@ import {
   type Selection,
 } from '../history/HistoryStack';
 import type { SaveState } from '../storage/autosave';
+import type { SharedMetadata } from '../storage/DraftRepository';
 
 export type EditorMode = 'edit' | 'present';
 
@@ -416,7 +419,7 @@ export interface EditorStore {
   removeAttachment: (hostId: string, attachmentId: string) => void;
   reorderAttachment: (hostId: string, attachmentId: string, direction: -1 | 1) => void;
 
-  /* Edge attachments — see `EdgeAttachmentReveal` in `DraftEdgeView.tsx`. */
+  /* Edge attachments — see `AttachmentChipRow` in `AttachmentPresentation.tsx`. */
   attachToEdge: (edgeId: string, attachment: Attachment) => void;
   /** Dragging an existing Note/Code node onto a connector folds it into that connector's
    *  attachment — the same idea as `attachExistingNode`, mirrored for an edge target. */
@@ -466,12 +469,13 @@ export interface EditorStore {
   /* Selection and modes */
   setSelection: (selection: Selection) => void;
   setSaveState: (state: SaveState) => void;
+  /** Takes on a title/project changed in another tab, without an undo step or a new save. */
+  adoptStoredMetadata: (documentId: string, metadata: SharedMetadata) => void;
   setMode: (mode: EditorMode) => void;
   setFlowPlayback: (playback: Partial<FlowPlaybackState>) => void;
 
   /* Focus mode */
   enterFocus: (nodeIds: string[], edgeIds: string[]) => void;
-  toggleFocusMember: (id: string, kind: 'node' | 'edge') => void;
   exitFocus: () => void;
 }
 
@@ -599,6 +603,33 @@ let interaction: Interaction | null = null;
  *  applied, so an unchanged clipboard doesn't keep resetting `pasteRepeat`. */
 let lastSystemClipboardText: string | null = null;
 const PASTE_STAGGER_STEP = 16;
+
+/**
+ * `adoptStoredMetadata` patches `title`/`projectId` straight onto the live document, deliberately
+ * bypassing `apply()` so a cross-tab rename/move doesn't create its own undo step. But `undo`/`redo`
+ * swap `document` for an older/newer history snapshot taken *before* that adoption ran, so without
+ * this, time-traveling past it would silently revert the adopted value — and the next autosave
+ * would then write that reverted value back over the rename/move made in the other tab.
+ *
+ * Per field, only take the snapshot's value when this specific entry actually changed that field
+ * (its `before`/`after` differ there) — that's a real Rename/Move the user is undoing or redoing.
+ * Otherwise keep whatever the live document currently carries, so an out-of-band adoption rides
+ * through time travel unaffected.
+ */
+function carryAdoptedMetadata(
+  target: DraftDocument,
+  before: DraftMetadata,
+  after: DraftMetadata,
+  live: DraftMetadata,
+): DraftDocument {
+  const metadata = { ...target.metadata };
+  if (before.title === after.title) metadata.title = live.title;
+  if (before.projectId === after.projectId) {
+    if (live.projectId) metadata.projectId = live.projectId;
+    else delete metadata.projectId;
+  }
+  return { ...target, metadata };
+}
 
 /**
  * `undo`/`redo` swap `document` without going through `setDocument` (which
@@ -986,7 +1017,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       kind: toWorker?.defaultBehavior,
       async: toWorker?.defaultAsync,
       semanticsOrigin: toWorker?.defaultRelation ? 'inferred' : undefined,
+      // What the user wrote about the message rides on the leg it enters the worker by. The
+      // response fields don't carry over — a worker in between makes the hop asynchronous.
+      label: edge.label,
+      condition: edge.condition,
+      accent: edge.accent,
     });
+    if (edge.attachments) edgeToWorker.attachments = edge.attachments;
     const edgeFromWorker = createEdge({
       source: worker.id,
       target: edge.target,
@@ -1318,7 +1355,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
     // Keyed on *which* nodes: nudging one selection and then another within the coalesce window
     // are two separate moves, and must undo separately.
-    state.apply('Nudge', (doc) => moveNodes(doc, positions), {
+    state.apply('Nudge', (doc) => carryDescendants(doc, moveNodes(doc, positions), positions.keys()), {
       coalesceKey: `nudge:${[...positions.keys()].sort().join(',')}`,
     });
   },
@@ -1433,12 +1470,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   align(edge) {
     const { selection, apply } = get();
-    apply('Align', (doc) => alignNodes(doc, selection.nodes, edge));
+    apply('Align', (doc) => carryDescendants(doc, alignNodes(doc, selection.nodes, edge), selection.nodes));
   },
 
   distribute(axis) {
     const { selection, apply } = get();
-    apply('Distribute', (doc) => distributeNodes(doc, selection.nodes, axis));
+    apply('Distribute', (doc) => carryDescendants(doc, distributeNodes(doc, selection.nodes, axis), selection.nodes));
   },
 
   groupSelection() {
@@ -1460,10 +1497,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const sharedParent = members.every((n) => n.parentId === members[0]!.parentId) ? members[0]!.parentId : undefined;
 
     const padding = 28;
-    const minX = Math.min(...members.map((n) => n.x)) - padding;
-    const minY = Math.min(...members.map((n) => n.y)) - padding - 12;
-    const maxX = Math.max(...members.map((n) => n.x + n.width)) + padding;
-    const maxY = Math.max(...members.map((n) => n.y + n.height)) + padding;
+    const bounds = boundsOf(members)!;
+    const minX = bounds.x - padding;
+    const minY = bounds.y - padding - 12;
+    const maxX = bounds.x + bounds.width + padding;
+    const maxY = bounds.y + bounds.height + padding;
     const minZ = Math.min(...members.map((n) => n.z));
 
     const boundary = createNode({
@@ -1509,10 +1547,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         let detached = doc;
         for (const child of children) detached = setParent(detached, [child.id], survivingParentOf(child.parentId));
         // Remove only the boundary; `removeElements` would take the contents too — but that also
-        // means skipping its flow cleanup, so a boundary spotlit by a flow step is pruned here.
+        // means skipping its cascade, so connectors drawn to the boundary itself and flow steps
+        // that spotlit it or walked those connectors are pruned here.
+        const edges = detached.edges.filter((e) => !boundaryIds.has(e.source) && !boundaryIds.has(e.target));
+        const kept = new Set(edges);
+        const removedEdgeIds = new Set(detached.edges.filter((e) => !kept.has(e)).map((e) => e.id));
         return pruneFlowSteps(
-          { ...detached, nodes: detached.nodes.filter((n) => !boundaryIds.has(n.id)) },
-          new Set(),
+          { ...detached, nodes: detached.nodes.filter((n) => !boundaryIds.has(n.id)), edges },
+          removedEdgeIds,
           boundaryIds,
         );
       },
@@ -1749,7 +1791,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!entry) return;
     set((s) => ({
       history,
-      document: entry.before,
+      document: carryAdoptedMetadata(entry.before, entry.before.metadata, entry.after.metadata, s.document.metadata),
       selection: entry.selectionBefore,
       revision: s.revision + 1,
       ...reconcileSessionState(entry.before, s),
@@ -1767,7 +1809,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!entry) return;
     set((s) => ({
       history,
-      document: entry.after,
+      document: carryAdoptedMetadata(entry.after, entry.before.metadata, entry.after.metadata, s.document.metadata),
       selection: entry.selectionAfter,
       revision: s.revision + 1,
       ...reconcileSessionState(entry.after, s),
@@ -1780,6 +1822,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setSelection(selection) {
     set({ selection });
+  },
+
+  adoptStoredMetadata(documentId, shared) {
+    const { document } = get();
+    if (document.metadata.id !== documentId) return;
+    const metadata = { ...document.metadata, title: shared.title };
+    if (shared.projectId) metadata.projectId = shared.projectId;
+    else delete metadata.projectId;
+    set({ document: { ...document, metadata } });
   },
 
   setSaveState(save) {
@@ -1811,16 +1862,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       focus: { active: true, nodeIds, edgeIds },
       flowPlayback: s.flowPlayback.active ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
     }));
-  },
-
-  toggleFocusMember(id, kind) {
-    set((s) => {
-      if (!s.focus.active) return s;
-      const key = kind === 'node' ? 'nodeIds' : 'edgeIds';
-      const current = s.focus[key];
-      const next = current.includes(id) ? current.filter((memberId) => memberId !== id) : [...current, id];
-      return { focus: { ...s.focus, [key]: next } };
-    });
   },
 
   exitFocus() {

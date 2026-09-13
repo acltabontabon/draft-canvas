@@ -3,7 +3,7 @@ import { Button } from '../common/Button';
 
 /**
  * A small, temporary state indicator shown only while Focus Mode is active —
- * not permanent chrome. Unlike `ExplainBar`, this has no step controls: Focus
+ * not permanent chrome. Unlike `FlowBar`, this has no step controls: Focus
  * has no ordering, and must work in edit mode too, so it stays its own
  * lightweight element rather than a mode of the walkthrough bar.
  */

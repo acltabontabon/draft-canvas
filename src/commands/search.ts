@@ -4,9 +4,10 @@ import { displayNameFor } from '../document/factory';
 import { boundsOf, type Bounds } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import type { Command, CommandContext } from './types';
+import { count } from '../lib/plural';
 
 /**
- * Phase 8.3 — the same palette is the fastest way to find something on a big canvas. Every
+ * The same palette is the fastest way to find something on a big canvas. Every
  * named node, every flow, and every labelled connector becomes a "Jump to" row; the palette
  * fuzzy-ranks them with the same matcher as commands and shows the best few *after* command
  * matches, only once a query is typed (an empty palette is for commands, not an index).
@@ -116,7 +117,7 @@ export function jumpCommands(document: DraftDocument): Command[] {
       title: flow.title,
       group: 'jump',
       keywords: ['flow'],
-      hint: `Flow · ${flow.steps.length} step${flow.steps.length === 1 ? '' : 's'}`,
+      hint: `Flow · ${count(flow.steps.length, 'step')}`,
       run: (ctx) => {
         ctx.editor.setSelectedFlowId(flow.id);
         const edgesById = new Map(ctx.editor.document.edges.map((edge) => [edge.id, edge]));

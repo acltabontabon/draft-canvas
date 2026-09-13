@@ -41,7 +41,7 @@ export interface ExportOptions {
   /** Whether to draw a configured background — see `ResolvedBackground`. Defaults to `true`. */
   includeBackground?: boolean;
   background?: ResolvedBackground;
-  /** Phase 5.2 — Intentional Roughness preset. Defaults to `'clean'`. */
+  /** Intentional Roughness preset. Defaults to `'clean'`. */
   preset?: PersonalityPreset;
 }
 
@@ -164,7 +164,7 @@ function applyPulse(lineEls: SvgEl[], pulsePhase: number): void {
  * Builds the node/edge SVG elements shared by every scene renderer — the
  * bounds-fit whole-document export (`renderDocumentSvg`) and the
  * camera-framed, tier-decorated single flow-step frame
- * (`renderFlowFrameSvg`, Phase 4.3). Both funnel through the same
+ * (`renderFlowFrameSvg`). Both funnel through the same
  * `describeNode`/`describeEdge` calls; only the surrounding viewBox/root and
  * any tier decoration differ.
  */

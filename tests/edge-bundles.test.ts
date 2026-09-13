@@ -5,6 +5,7 @@ import { describeEdge } from '../src/edges/describe';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { addEdges, addNodes } from '../src/document/operations';
+import { parseDocument } from '../src/document/validate';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { getMeasurer } from '../src/render/text/measure';
 import { DARK } from '../src/render/theme/tokens';
@@ -532,15 +533,25 @@ describe('taking manual control of a bundle', () => {
     useEditorStore.getState().addEdgeToFlow(flowId, edges[0]!.id);
     useEditorStore.getState().addEdgeToFlow(flowId, edges[1]!.id);
 
+    const stepIds = useEditorStore.getState().document.flows[0]!.steps.map((step) => step.id);
+    useEditorStore.getState().updateFlowStepCaption(flowId, stepIds[1]!, 'second');
+
     useEditorStore.getState().convertBundleToJunction(edges[0]!.id);
     const doc = useEditorStore.getState().document;
     const junction = doc.nodes.find((node) => node.type === 'ellipse')!;
     const shared = doc.edges.find((edge) => edge.target === junction.id)!;
-    const steps = doc.flows[0]!.steps.map((step) => step.edgeId);
-    expect(steps).toHaveLength(4);
-    expect(steps[0]).toBe(shared.id);
-    expect(steps[2]).toBe(shared.id);
-    expect(steps.every((id) => doc.edges.some((edge) => edge.id === id))).toBe(true);
+    const steps = doc.flows[0]!.steps;
+    // The shared trunk leads one step only — a repeat is invalid and the next load would drop it,
+    // taking the second member's caption with it.
+    expect(steps.map((step) => step.edgeId)).toEqual([
+      shared.id,
+      doc.edges.find((edge) => edge.source === junction.id && edge.target === edges[0]!.target)!.id,
+      doc.edges.find((edge) => edge.source === junction.id && edge.target === edges[1]!.target)!.id,
+    ]);
+    expect(steps[2]!.caption).toBe('second');
+
+    const reloaded = parseDocument(JSON.stringify(doc));
+    expect(reloaded.ok && reloaded.document.flows[0]!.steps).toHaveLength(3);
   });
 
   it('does nothing for a connector that is not bundled', () => {

@@ -21,6 +21,7 @@ import { FONTS, LINE_HEIGHTS, type FontSpec } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../ui/personality/usePersonality';
+import { clamp } from '../lib/math';
 
 /**
  * Turns a node from the document model into a display list.
@@ -33,7 +34,7 @@ import type { PersonalityPreset } from '../ui/personality/usePersonality';
 export interface DescribeContext {
   theme: Theme;
   measurer: TextMeasurer;
-  /** Phase 5.2 — Intentional Roughness. Defaults to `'clean'`, today's exact
+  /** Intentional Roughness. Defaults to `'clean'`, today's exact
    *  appearance, so every existing call site that only passes a theme keeps
    *  compiling and keeps producing byte-identical output. */
   preset: PersonalityPreset;
@@ -60,7 +61,7 @@ const NOTE_PADDING_BOTTOM = 8;
 export const NOTE_AUTO_MAX_HEIGHT = 320;
 
 /** Notes are colour-coded by intent — the whole point of having four kinds. Exported so an edge
- *  attachment (`EdgeAttachmentReveal` in `DraftEdgeView.tsx`) can match a note's own look exactly
+ *  attachment (`AttachmentChipRow` in `AttachmentPresentation.tsx`) can match a note's own look exactly
  *  rather than duplicating this table. */
 export const NOTE_ACCENTS: Record<NoteKind, 'amber' | 'blue' | 'rose' | 'green'> = {
   note: 'amber',
@@ -2393,14 +2394,8 @@ export function naturalCodeSize(
   const lines = code.split('\n');
   const longest = lines.reduce((max, line) => Math.max(max, line.length), 0);
   return {
-    width: Math.min(680, Math.max(260, longest * metrics.charWidth + CODE_PADDING_X * 2 + 8)),
-    height: Math.min(
-      520,
-      Math.max(
-        110,
-        CODE_HEADER_HEIGHT + CODE_PADDING_Y * 2 + Math.min(lines.length, 40) * metrics.lineHeight,
-      ),
-    ),
+    width: clamp(longest * metrics.charWidth + CODE_PADDING_X * 2 + 8, 260, 680),
+    height: clamp(CODE_HEADER_HEIGHT + CODE_PADDING_Y * 2 + Math.min(lines.length, 40) * metrics.lineHeight, 110, 520),
   };
 }
 

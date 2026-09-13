@@ -254,9 +254,16 @@ export interface Clipboard {
   edges: DraftEdge[];
 }
 
-/** Extracts a self-contained fragment: only edges whose endpoints are both copied. */
+/**
+ * Extracts a self-contained fragment: only edges whose endpoints are both copied. A boundary
+ * brings its contents — cutting one deletes them (`removeElements`), so a copy of just the frame
+ * would lose them on paste.
+ */
 export function extractFragment(doc: DraftDocument, nodeIds: Iterable<string>): Clipboard {
   const ids = new Set(nodeIds);
+  for (const node of doc.nodes) {
+    if (node.type === 'group' && ids.has(node.id)) for (const id of descendantsOf(doc, node.id)) ids.add(id);
+  }
   const nodes = doc.nodes.filter((n) => ids.has(n.id));
   const edges = doc.edges.filter((e) => ids.has(e.source) && ids.has(e.target));
   return { nodes: structuredClone(nodes), edges: structuredClone(edges) };
@@ -906,6 +913,39 @@ export function descendantsOf(doc: DraftDocument, id: string): string[] {
     }
   }
   return [...result];
+}
+
+/**
+ * Coordinates are absolute, so an op that repositions only the ids it was given (nudge, align,
+ * distribute) leaves a boundary's contents behind. This moves every other node by whatever its
+ * nearest repositioned ancestor moved between `before` and `after` — the same thing a canvas
+ * drag does by sweeping descendants along.
+ */
+export function carryDescendants(
+  before: DraftDocument,
+  after: DraftDocument,
+  positionedIds: Iterable<string>,
+): DraftDocument {
+  if (before === after) return after;
+  const positioned = new Set(positionedIds);
+  const beforeById = new Map(before.nodes.map((node) => [node.id, node]));
+  const afterById = new Map(after.nodes.map((node) => [node.id, node]));
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const node of after.nodes) {
+    if (positioned.has(node.id) || !node.parentId) continue;
+    const seen = new Set<string>();
+    let ancestor = afterById.get(node.parentId);
+    while (ancestor && !positioned.has(ancestor.id) && !seen.has(ancestor.id)) {
+      seen.add(ancestor.id);
+      ancestor = ancestor.parentId ? afterById.get(ancestor.parentId) : undefined;
+    }
+    const was = ancestor && positioned.has(ancestor.id) ? beforeById.get(ancestor.id) : undefined;
+    if (!ancestor || !was) continue;
+    const dx = ancestor.x - was.x;
+    const dy = ancestor.y - was.y;
+    if (dx !== 0 || dy !== 0) positions.set(node.id, { x: node.x + dx, y: node.y + dy });
+  }
+  return moveNodes(after, positions);
 }
 
 export function setParent(

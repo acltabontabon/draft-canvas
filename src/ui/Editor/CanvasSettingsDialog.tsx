@@ -31,7 +31,7 @@ const PRESET_HINTS: Record<PersonalityPreset, string> = {
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif';
 
 /**
- * Canvas Settings — a small, deliberately single-surface dialog (Phase 5).
+ * Canvas Settings — a small, deliberately single-surface dialog.
  * The Background section (5.1) lives here; the Personality section (5.2)
  * joins it on the same surface rather than opening a second settings screen.
  */

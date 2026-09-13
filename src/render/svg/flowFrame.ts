@@ -1,5 +1,5 @@
 /**
- * Renders one frame of a Phase 4.3 animated flow (GIF) export: the whole
+ * Renders one frame of an animated flow (GIF) export: the whole
  * document, camera-cropped to a step's viewport, with the same active/shown/
  * hidden opacity tiers and connector pulse Presentation Mode itself shows —
  * see `explainNodeTier`/`explainEdgeTier` in `document/flow.ts` and the
@@ -26,7 +26,7 @@ export interface FlowFrameOptions {
   background?: ResolvedBackground;
   /** An additional scrim multiplier — e.g. Presentation Mode's extra dim. */
   extraDim?: number;
-  /** Phase 5.2 — Intentional Roughness preset. Defaults to `'clean'`. */
+  /** Intentional Roughness preset. Defaults to `'clean'`. */
   preset?: PersonalityPreset;
 }
 

@@ -43,6 +43,32 @@ describe('Modal focus handling', () => {
     expect(document.activeElement).toBe(field);
   });
 
+  it('Tab brings focus back into the dialog after the focused control unmounted', () => {
+    render(
+      <Modal title="Export" onClose={() => void 0}>
+        <button type="button">First</button>
+        <button type="button">Last</button>
+      </Modal>,
+    );
+    document.body.focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+  });
+
+  it('the Tab trap skips an unchecked radio in a group that has a checked one', () => {
+    render(
+      <Modal title="Format" onClose={() => void 0}>
+        <button type="button">First</button>
+        <input type="radio" name="fmt" aria-label="PNG" defaultChecked />
+        <input type="radio" name="fmt" aria-label="SVG" />
+      </Modal>,
+    );
+    // PNG is the last stop — Tab from it wraps instead of landing on SVG (or leaving the dialog).
+    screen.getByLabelText('PNG').focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(document.activeElement).toBe(screen.getByRole('dialog').querySelector('button'));
+  });
+
   it('leaves an autoFocus field focused instead of pulling focus back to the panel', () => {
     render(
       <Modal title="Rename" onClose={() => void 0}>

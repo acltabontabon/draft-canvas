@@ -41,6 +41,7 @@ import { useThemeValue } from '../ui/theme/useTheme';
 import { FONTS, cssFont } from '../render/text/fonts';
 import { Lru } from '../lib/lru';
 import { pointInBox } from '../lib/math';
+import { isImeKeyEvent } from '../lib/isEditableTarget';
 
 const NO_OBSTACLES: readonly Rect[] = [];
 
@@ -629,7 +630,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           real label the moment there is one. A request/response connector now gets one too (see
           `relationshipCaptionLabel`) — the two-line shape communicates "this is a call," but not
           *what kind* of call, which is exactly what left a fresh Service→Service connector with
-          no visible text at all. `captionAnchor`'s `awayFromResponse` flag is what keeps this from
+          no visible text at all. `captionAnchor`'s `responseAway` flag is what keeps this from
           landing on top of the response line's own label — see its own doc comment. */}
       {!hasLabel && !hasStep && edge.semantic && (() => {
         const isUnusual = relationshipStatus === 'unusual' || relationshipStatus === 'questionable';
@@ -722,6 +723,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                 }}
                 onKeyDown={(event) => {
                   event.stopPropagation();
+                  if (isImeKeyEvent(event)) return;
                   if (event.key === 'Enter') {
                     updateEdgeLabel(edge.id, event.currentTarget.value.trim());
                     stopEditing();
@@ -797,6 +799,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                   }}
                   onKeyDown={(event) => {
                     event.stopPropagation();
+                    if (isImeKeyEvent(event)) return;
                     if (event.key === 'Enter') {
                       setEdgeCondition(edge.id, event.currentTarget.value.trim());
                       stopEditingCondition();
@@ -950,10 +953,14 @@ function EdgeEndpointHandle({
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       event.stopPropagation();
+      // Only the primary button repoints — a right-click here is a context-menu gesture, not a drag.
+      if (event.button !== 0) return;
       cancelled.current = false;
       dragStarted.current = false;
       startClient.current = { x: event.clientX, y: event.clientY };
       event.currentTarget.setPointerCapture(event.pointerId);
+      // A second pointer landing mid-drag (multi-touch) must not orphan the first Escape listener.
+      if (onKeyDownRef.current) window.removeEventListener('keydown', onKeyDownRef.current);
       onKeyDownRef.current = (keyEvent) => {
         if (keyEvent.key !== 'Escape') return;
         cancelled.current = true;

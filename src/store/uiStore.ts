@@ -94,7 +94,7 @@ export interface UiStore {
   shortcutsOpen: boolean;
   exportOpen: boolean;
   aboutOpen: boolean;
-  /** Canvas Settings — background image and personality preset (Phase 5). */
+  /** Canvas Settings — background image and personality preset. */
   settingsOpen: boolean;
   toasts: Toast[];
   quickConnect: QuickConnectState | null;
@@ -183,16 +183,16 @@ export interface UiStore {
    */
   editRequestId: string | null;
   /** True once a newer app build has finished downloading in the background
-   *  and is waiting to be activated (Phase 6.2/6.3) — see `serviceWorker.ts`
+   *  and is waiting to be activated — see `serviceWorker.ts`
    *  and `AboutDialog.tsx`'s update-ready state. */
   updateReady: boolean;
   /** The version whose About → What's New notes this device has acknowledged — see
    *  `releases/productReleases.ts`'s `readLastSeenRelease`/`markLastSeenRelease`. */
   lastSeenProductRelease: string;
-  /** Phase 8 — whether the ⌘K command palette is showing. See `CommandPalette.tsx`. */
+  /** Whether the ⌘K command palette is showing. See `CommandPalette.tsx`. */
   commandPaletteOpen: boolean;
   /**
-   * The node or edge id the palette's "Jump to" just landed on (Phase 8.3), so its view can flash
+   * The node or edge id the palette's "Jump to" just landed on, so its view can flash
    * once. Cleared by the palette itself a moment later — the same shape as `editRequestId`: a
    * one-shot request into memoized views that have no imperative API.
    */
@@ -220,7 +220,7 @@ export interface UiStore {
    * the view itself.
    */
   settleNodeId: string | null;
-  /** Phase 7.4 — "Learn Draft Canvas" mode. Deliberately not persisted: an opt-in pass a user
+  /** "Learn Draft Canvas" mode. Deliberately not persisted: an opt-in pass a user
    *  asks for each time, never a saved setting — see `HintStrip.tsx`, which shows a hint
    *  regardless of its own retired state while this is true. */
   learnModeActive: boolean;
@@ -479,7 +479,21 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setLibraryView: (libraryView) => set({ libraryView }),
   setMoveMenuOpenFor: (moveMenuOpenFor) => set({ moveMenuOpenFor }),
   requestClipboardPermission: () =>
-    new Promise<boolean>((resolve) => set({ clipboardPermissionRequest: { resolve } })),
+    new Promise<boolean>((resolve) => {
+      // A second ask while the dialog is already up waits on the same answer — replacing the
+      // pending resolver would leave the first caller's promise unsettled forever.
+      const pending = get().clipboardPermissionRequest;
+      set({
+        clipboardPermissionRequest: {
+          resolve: pending
+            ? (allowed) => {
+                pending.resolve(allowed);
+                resolve(allowed);
+              }
+            : resolve,
+        },
+      });
+    }),
   resolveClipboardPermissionRequest: (allowed) => {
     get().clipboardPermissionRequest?.resolve(allowed);
     set({ clipboardPermissionRequest: null });

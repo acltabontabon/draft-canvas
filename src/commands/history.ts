@@ -1,7 +1,7 @@
 import { readPreference, removePreference, writePreference } from '../lib/preferences';
 
 /**
- * Phase 8.4 — a small, local memory of which commands get used. Two things come out of it: the
+ * A small, local memory of which commands get used. Two things come out of it: the
  * "Recent" group at the top of an empty palette (so ⌘K → Enter repeats the last command), and a
  * gentle ranking nudge for a query, so "Add Service, Add Service, Connect, Connect" during a
  * rapid sketch rises toward the top without ever beating a clearly better text match.

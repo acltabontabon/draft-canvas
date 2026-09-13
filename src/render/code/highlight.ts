@@ -197,6 +197,7 @@ function cheapHash(value: string): number {
   return hash;
 }
 
+/** Test seam: `tests/setup.ts` empties it between tests. */
 export function clearHighlightCache(): void {
   cache.clear();
 }

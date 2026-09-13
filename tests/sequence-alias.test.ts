@@ -33,6 +33,9 @@ describe('aliasFor', () => {
     expect(aliasFor('participant', 'P7', new Set())).toBe('P7');
     expect(aliasFor('Group', 'P8', new Set())).toBe('P8');
     expect(aliasFor('loop', 'P9', new Set())).toBe('P9');
+    // PlantUML line commands, too.
+    expect(aliasFor('Title', 'P11', new Set())).toBe('P11');
+    expect(aliasFor('Legend', 'P12', new Set())).toBe('P12');
   });
 
   it('truncates a very long label to a bounded alias length', () => {

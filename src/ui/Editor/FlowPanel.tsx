@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { displayNameFor } from '../../document/factory';
 import { flowIsPlayable } from '../../document/flow';
 import type { DraftFlow, DraftFlowStep } from '../../document/types';
-import { isEditableTarget } from '../../lib/isEditableTarget';
+import { isEditableTarget, isImeKeyEvent } from '../../lib/isEditableTarget';
+import { count } from '../../lib/plural';
 import { documentWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
@@ -33,7 +34,6 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const setSelectedFlowId = useEditorStore((state) => state.setSelectedFlowId);
   const selection = useEditorStore((state) => (open ? state.selection : null));
-  const store = useEditorStore;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [toolsStepId, setToolsStepId] = useState<string | null>(null);
@@ -83,13 +83,13 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
   };
 
   const createNewFlow = () => {
-    const id = store.getState().createFlow();
+    const id = useEditorStore.getState().createFlow();
     if (!id) return;
     beginRename(id);
   };
 
   const present = (flow: DraftFlow) => {
-    store.getState().setMode('present');
+    useEditorStore.getState().setMode('present');
     playback.pickFlow(flow.id);
   };
 
@@ -204,7 +204,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
             const expanded = expandedId === flow.id;
             const selected = selectedFlowId === flow.id;
             const playable = flowIsPlayable(document, flow);
-            const count = flow.steps.length;
+            const steps = flow.steps.length;
             return (
               <li
                 key={flow.id}
@@ -233,7 +233,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                     <FlowTitleInput
                       flow={flow}
                       onDone={(title) => {
-                        if (title !== null) store.getState().renameFlow(flow.id, title);
+                        if (title !== null) useEditorStore.getState().renameFlow(flow.id, title);
                         setRenamingId(null);
                       }}
                     />
@@ -257,7 +257,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                     </button>
                   )}
                   <span className="dc-muted dc-flow-step-count">
-                    {count === 0 ? 'no steps' : `${count} step${count === 1 ? '' : 's'}`}
+                    {steps === 0 ? 'no steps' : count(steps, 'step')}
                   </span>
                   <span className="dc-flow-item-actions">
                     <Button
@@ -310,10 +310,10 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                         canAddSelection={selection.nodes.length > 0 || selection.edges.length > 0}
                         addSelection={() => {
                           for (const nodeId of selection.nodes) {
-                            store.getState().addFlowStepExtraNode(flow.id, step.id, nodeId);
+                            useEditorStore.getState().addFlowStepExtraNode(flow.id, step.id, nodeId);
                           }
                           for (const edgeId of selection.edges) {
-                            store.getState().addFlowStepExtraEdge(flow.id, step.id, edgeId);
+                            useEditorStore.getState().addFlowStepExtraEdge(flow.id, step.id, edgeId);
                           }
                         }}
                       />
@@ -373,6 +373,7 @@ function FlowTitleInput({ flow, onDone }: { flow: DraftFlow; onDone: (title: str
       onBlur={(event) => onDone(cancelled.current ? null : event.currentTarget.value)}
       onKeyDown={(event) => {
         event.stopPropagation();
+        if (isImeKeyEvent(event)) return;
         if (event.key === 'Enter') event.currentTarget.blur();
         if (event.key === 'Escape') {
           cancelled.current = true;
@@ -406,7 +407,6 @@ function StepRow({
   canAddSelection: boolean;
   addSelection: () => void;
 }) {
-  const store = useEditorStore;
   const edge = step.edgeId ? edges.get(step.edgeId) : undefined;
   if (step.edgeId && !edge) return null; // dangling — pruned on next edit, not shown meanwhile
   const source = edge ? nodes.get(edge.source) : undefined;
@@ -432,7 +432,7 @@ function StepRow({
               ? `${source ? displayNameFor(source) : 'Untitled'} → ${target ? displayNameFor(target) : 'Untitled'}${detail ? ` · ${detail}` : ''} — select this connector`
               : detail
           }
-          onClick={() => (edge ? store.getState().setSelection({ nodes: [], edges: [edge.id] }) : undefined)}
+          onClick={() => (edge ? useEditorStore.getState().setSelection({ nodes: [], edges: [edge.id] }) : undefined)}
         >
           {edge ? (
             <>
@@ -462,14 +462,14 @@ function StepRow({
             variant="quiet"
             aria-label="Move earlier"
             disabled={index === 0}
-            onClick={() => store.getState().moveFlowStep(flow.id, step.id, -1)}
+            onClick={() => useEditorStore.getState().moveFlowStep(flow.id, step.id, -1)}
           />
           <Button
             icon="forward"
             variant="quiet"
             aria-label="Move later"
             disabled={index === flow.steps.length - 1}
-            onClick={() => store.getState().moveFlowStep(flow.id, step.id, 1)}
+            onClick={() => useEditorStore.getState().moveFlowStep(flow.id, step.id, 1)}
           />
           <Button
             icon="more"
@@ -484,7 +484,7 @@ function StepRow({
             icon="close"
             variant="quiet"
             aria-label="Remove step"
-            onClick={() => store.getState().removeFlowStep(flow.id, step.id)}
+            onClick={() => useEditorStore.getState().removeFlowStep(flow.id, step.id)}
           />
         </span>
       </div>
@@ -500,7 +500,7 @@ function StepRow({
                 icon="close"
                 variant="quiet"
                 aria-label={`Remove ${displayNameFor(node)} from step`}
-                onClick={() => store.getState().removeFlowStepExtraNode(flow.id, step.id, node.id)}
+                onClick={() => useEditorStore.getState().removeFlowStepExtraNode(flow.id, step.id, node.id)}
               />
             </span>
           ))}
@@ -517,7 +517,7 @@ function StepRow({
                   icon="close"
                   variant="quiet"
                   aria-label="Remove connector from step"
-                  onClick={() => store.getState().removeFlowStepExtraEdge(flow.id, step.id, extraEdge.id)}
+                  onClick={() => useEditorStore.getState().removeFlowStepExtraEdge(flow.id, step.id, extraEdge.id)}
                 />
               </span>
             );
@@ -529,7 +529,7 @@ function StepRow({
                 icon="close"
                 variant="quiet"
                 aria-label="Clear this step's saved view"
-                onClick={() => store.getState().setFlowStepViewport(flow.id, step.id, null)}
+                onClick={() => useEditorStore.getState().setFlowStepViewport(flow.id, step.id, null)}
               />
             </span>
           )}
@@ -550,7 +550,7 @@ function StepRow({
           <Button
             variant="quiet"
             title="Present this step from exactly the current camera position"
-            onClick={() => store.getState().setFlowStepViewport(flow.id, step.id, documentWithLiveViewport(store.getState()).viewport)}
+            onClick={() => useEditorStore.getState().setFlowStepViewport(flow.id, step.id, documentWithLiveViewport(useEditorStore.getState()).viewport)}
           >
             {step.viewport ? 'Update pinned view' : 'Pin view'}
           </Button>
