@@ -21,6 +21,17 @@ export type { ProductRelease, ProductReleaseHighlight } from './types';
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.5.0',
+    date: '2026-09-14',
+    highlights: [
+      {
+        title: 'Draft Canvas for VS Code',
+        description:
+          "Keep diagrams next to your code: the new VS Code extension opens a .draftcanvas file straight into the canvas and saves your edits back to that file, ready to commit.",
+      },
+    ],
+  },
+  {
     version: '1.4.0',
     date: '2026-09-14',
     highlights: [

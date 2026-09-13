@@ -4,6 +4,13 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-14
+
+### Added
+
+- Draft Canvas can now edit a `.draftcanvas` file for the new VS Code extension. Opened this way,
+  it goes straight to that diagram, and edits go back to the file instead of the browser's library.
+
 ## [1.4.0] - 2026-09-14
 
 ### Added
@@ -887,7 +894,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.4.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.5.0...main
+[1.5.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.1.0...v1.2.0
