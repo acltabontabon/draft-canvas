@@ -75,7 +75,7 @@ jobs:
           node-version: 22.14.0
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
-      - run: npm ci --omit=optional
+      - run: npm ci
         working-directory: vscode-extension
       - uses: actions/download-artifact@v8
         with:

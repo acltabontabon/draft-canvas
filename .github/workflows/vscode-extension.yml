@@ -38,8 +38,7 @@ jobs:
           node-version: 22.14.0
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
-      # keytar is vsce's optional credential store for interactive logins; nothing here needs it.
-      - run: npm ci --omit=optional
+      - run: npm ci
       - run: npm run compile
 
       - name: Package

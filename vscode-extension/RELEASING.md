@@ -65,7 +65,7 @@ Nothing is deployed to Pages or Docker, and the root changelog and version are u
 
 ```bash
 cd vscode-extension
-npm ci --omit=optional
+npm ci
 npm run compile
 npx vsce package
 node scripts/check-vsix.mjs draft-canvas-0.1.1.vsix
