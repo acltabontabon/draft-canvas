@@ -27,8 +27,12 @@ describe('starterShape', () => {
         expect(box.x + box.w).toBeLessThanOrEqual(GLYPH_WIDTH + 0.01);
         expect(box.y + box.h).toBeLessThanOrEqual(GLYPH_HEIGHT + 0.01);
       }
-      // Flush left: every drawing starts on the same edge as the name under it.
-      expect(Math.min(...boxes.map((box) => box.x))).toBeCloseTo(bounds.x);
+      // Centred: every tile carries the same optical footprint whatever the drawing's proportions.
+      const left = Math.min(...boxes.map((box) => box.x));
+      const right = Math.max(...boxes.map((box) => box.x + box.w));
+      expect((left + right) / 2).toBeCloseTo(GLYPH_WIDTH / 2, 0);
+      expect(bounds.x).toBeCloseTo(left);
+      expect(bounds.width).toBeCloseTo(right - left);
     },
   );
 

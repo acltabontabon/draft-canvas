@@ -14,7 +14,16 @@ const TICK = 22;
  * each target actually landed, so it measures them (one ResizeObserver, nothing on scroll or
  * pointer) rather than guessing: any split, any count.
  */
-export function Wire({ geometry, caption }: { geometry: WireGeometry; caption?: string }) {
+export function Wire({
+  geometry,
+  caption,
+  active,
+}: {
+  geometry: WireGeometry;
+  caption?: string;
+  /** Which target's branch is the open one, if the layout has such a thing — drawn a step louder. */
+  active?: number;
+}) {
   const { width, height, trunkY, labelYs } = geometry;
   const spineX = width - TICK;
   const top = Math.min(trunkY, ...labelYs);
@@ -26,7 +35,7 @@ export function Wire({ geometry, caption }: { geometry: WireGeometry; caption?: 
         <path className="dc-wire-trunk" d={`M0 ${trunkY}H${spineX}`} pathLength={1} />
         {bottom - top > 1 && <path className="dc-wire-spine" d={`M${spineX} ${top}V${bottom}`} pathLength={1} />}
         {labelYs.map((y, i) => (
-          <g key={i} className="dc-wire-branch">
+          <g key={i} className="dc-wire-branch" data-active={i === active ? '' : undefined}>
             <path d={`M${spineX} ${y}H${tipX}`} pathLength={1} />
             <path className="dc-wire-arrow" d={`M${tipX - 4} ${y - 3}L${tipX} ${y}L${tipX - 4} ${y + 3}`} />
           </g>

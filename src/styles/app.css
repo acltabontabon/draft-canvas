@@ -1062,6 +1062,28 @@ kbd {
 }
 
 /* An edge label, the way the canvas draws one: no box, just a halo of canvas behind the words. */
+/* The home's spine, one step quieter than its trunk: it organises the branches, it doesn't
+   frame them. The open branch is the one drawn at full strength. */
+.dc-home .dc-wire {
+  stroke-width: 1;
+}
+
+.dc-home .dc-wire-trunk {
+  stroke-width: 1.25;
+}
+
+.dc-home .dc-wire-branch {
+  opacity: 0.8;
+  transition:
+    opacity 120ms ease,
+    stroke 120ms ease;
+}
+
+.dc-home .dc-wire-branch[data-active] {
+  opacity: 1;
+  stroke: var(--dc-text-muted);
+}
+
 .dc-wire-caption {
   position: absolute;
   padding: 2px 7px;
@@ -1094,13 +1116,15 @@ kbd {
 .dc-shelf-label {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 10px;
   color: var(--dc-text-muted);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.12em;
   line-height: 18px;
+  white-space: nowrap;
   text-transform: uppercase;
+  transition: color 120ms ease;
 }
 
 .dc-shelf-count {
@@ -1108,7 +1132,66 @@ kbd {
   font-family: var(--dc-mono);
   font-weight: 400;
   letter-spacing: 0;
+  opacity: 0.7;
+}
+
+/*
+ * The index: every category a branch on the spine, one of them open. A closed branch is its
+ * label and its count, nothing more — the count says there is more, the open branch's tiles say
+ * what. Counts sit in their own column, the way an index aligns its numbers. Rows keep one
+ * height open or closed, so the wire's branches, which are measured once, never drift.
+ */
+.dc-shelf-index {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  justify-content: start;
+}
+
+.dc-shelf-branch {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: span 2;
+  column-gap: 14px;
+  align-items: baseline;
+  margin-left: -8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-shelf-branch:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 0;
+}
+
+/* Its own column, at the label's size — secondary, never a badge. */
+.dc-shelf-branch .dc-shelf-count {
+  font-size: 11px;
+  line-height: 18px;
+}
+
+/* Closed branches a step quieter; the open one is the one whose tiles are underneath. */
+.dc-shelf-branch .dc-shelf-label,
+.dc-shelf-branch .dc-shelf-count {
   opacity: 0.8;
+  transition:
+    color 120ms ease,
+    opacity 120ms ease;
+}
+
+.dc-shelf-branch:hover .dc-shelf-label,
+.dc-shelf-branch[data-active] .dc-shelf-label {
+  color: var(--dc-text);
+  opacity: 1;
+}
+
+.dc-shelf-branch:hover .dc-shelf-count,
+.dc-shelf-branch[data-active] .dc-shelf-count {
+  opacity: 1;
 }
 
 .dc-shelf-grid {
@@ -1116,6 +1199,37 @@ kbd {
   grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
   gap: 10px 14px;
   margin-top: 8px;
+}
+
+/* The shelf: every category's tiles laid in the same cell, so the region is always as tall as
+   the largest of them and opening a branch changes nothing above, below, or beside it. Only the
+   open one is visible, focusable, or hit-testable. */
+.dc-shelf-stack {
+  display: grid;
+}
+
+.dc-shelf-stack > .dc-shelf-grid {
+  grid-area: 1 / 1;
+  grid-template-columns: repeat(auto-fill, 144px);
+  justify-content: start;
+  gap: 18px 14px;
+  margin-top: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(3px);
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    transform 120ms var(--dc-ease-out),
+    visibility 0s linear 120ms;
+}
+
+.dc-shelf-stack > .dc-shelf-grid[data-active] {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+  transition-delay: 0s, 0s, 0s;
 }
 
 .dc-starter {
@@ -1190,6 +1304,13 @@ kbd {
   color: var(--dc-selection);
 }
 
+/* Three nested boundaries at this size are the loudest thing in the drawing unless told
+   otherwise; the connectors are what say what a starter is. */
+.dc-starter-glyph .dc-fingerprint-boundary {
+  stroke-dasharray: 2 2;
+  opacity: 0.32;
+}
+
 .dc-starter-edge-line,
 .dc-starter-edge-arrow {
   fill: none;
@@ -1222,6 +1343,10 @@ kbd {
   .dc-starter:hover .dc-starter-edge-pulse,
   .dc-starter:focus-visible .dc-starter-edge-pulse {
     animation: none;
+  }
+
+  .dc-shelf-stack > .dc-shelf-grid {
+    transition: none;
   }
 }
 
@@ -1385,6 +1510,7 @@ kbd {
 .dc-home-head,
 .dc-home-start,
 .dc-home .dc-shelf-label,
+.dc-home .dc-shelf-branch .dc-shelf-count,
 .dc-home .dc-starter,
 .dc-home .dc-shelf-readout {
   animation: dc-home-rise 260ms var(--dc-ease-out) both;
@@ -1394,7 +1520,8 @@ kbd {
   animation-delay: 60ms;
 }
 
-.dc-home .dc-shelf-label {
+.dc-home .dc-shelf-label,
+.dc-home .dc-shelf-branch .dc-shelf-count {
   animation-delay: 200ms;
 }
 
@@ -1491,6 +1618,10 @@ kbd {
     row-gap: 6px;
   }
 
+  .dc-shelf-stack > .dc-shelf-grid {
+    row-gap: 10px;
+  }
+
   .dc-starter-swatch {
     height: 78px;
   }
@@ -1554,6 +1685,11 @@ kbd {
   .dc-shelf-grid {
     grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
     gap: 6px 12px;
+  }
+
+  .dc-shelf-stack > .dc-shelf-grid {
+    grid-template-columns: repeat(auto-fill, 124px);
+    row-gap: 14px;
   }
 
   .dc-home-tagline {

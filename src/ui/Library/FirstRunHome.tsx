@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type PointerEvent, type RefObject } from 'react';
+import { useEffect, useId, useRef, useState, type PointerEvent, type RefObject } from 'react';
 import { PRODUCT } from '../../product';
 import type { StarterId } from '../../starters';
 import type { DocumentSession } from '../../store/useDocumentSession';
@@ -31,6 +31,8 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
   const importHintId = useId();
   const wire = useWireGeometry(stageRef, wireRef, sheetRef, '.dc-shelf-label');
   const spotlight = useSpotlight(sheetRef);
+  // Which branch of the index is open, so the wire can light that one.
+  const [branch, setBranch] = useState(0);
 
   const startBlank = () => void session.newDocument();
   const starters = useStarters();
@@ -76,7 +78,8 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
               onPointerLeave={spotlight.leave}
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowRight' && event.key !== 'ArrowDown') return;
-                const first = shelfRef.current?.querySelector<HTMLButtonElement>('.dc-starter');
+                // The open branch's first tile; the other panels are inert and can't take focus.
+                const first = shelfRef.current?.querySelector<HTMLButtonElement>('.dc-shelf-grid:not([inert]) .dc-starter');
                 if (!first) return;
                 event.preventDefault();
                 first.focus();
@@ -104,7 +107,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
           </div>
 
           <div className="dc-home-wire" ref={wireRef} aria-hidden="true">
-            {wire && <Wire geometry={wire} caption="or cheat a little" />}
+            {wire && <Wire geometry={wire} caption="or cheat a little" active={branch} />}
           </div>
 
           <div className="dc-home-starters">
@@ -116,7 +119,9 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
                 starters={starters.ARCHITECTURE_STARTERS}
                 onStart={startFrom}
                 onExitStart={() => sheetRef.current?.focus()}
+                onActiveChange={setBranch}
                 shelfRef={shelfRef}
+                mode="index"
               />
             ) : (
               <div className="dc-shelf-pending" aria-hidden="true" />

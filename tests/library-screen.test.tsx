@@ -77,7 +77,7 @@ describe('LibraryScreen — first run', () => {
     expect(await screen.findByRole('button', { name: 'Start from Monolith' })).toBeInTheDocument();
   });
 
-  it('offers every starter and none of the library a first run has nothing to fill', () => {
+  it('offers every starter and none of the library a first run has nothing to fill', async () => {
     const session = stubSession();
     const { container } = render(<LibraryScreen session={session} />);
 
@@ -88,8 +88,17 @@ describe('LibraryScreen — first run', () => {
     expect(screen.getByRole('button', { name: 'About Draft Canvas' })).toBeInTheDocument();
     // Still exactly one file input, whatever state the screen is in.
     expect(container.querySelectorAll('input[type="file"]')).toHaveLength(1);
-    const starters = within(screen.getByRole('group', { name: 'Starters' })).getAllByRole('button');
-    expect(starters.map((button) => button.getAttribute('aria-label'))).toEqual([
+    // The index names every category the catalog has, in its order, and opens the first.
+    const group = screen.getByRole('group', { name: 'Starters' });
+    const tabs = within(group).getAllByRole('tab');
+    // A closed branch says its name and how many, and nothing else.
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Architectures7', 'Data Architectures3', 'Patterns3']);
+    expect(tabs.map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
+    expect(within(group).getByRole('tab', { name: 'Architectures' })).toBe(tabs[0]);
+    // Only the open branch's tiles are on the page; the others are drawn, but inert and hidden.
+    expect(within(group).queryByText(/Medallion · Kappa/)).not.toBeInTheDocument();
+    const visible = () => within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'));
+    expect(visible()).toEqual([
       'Start from Monolith',
       'Start from Modular Monolith',
       'Start from Microservices',
@@ -97,13 +106,18 @@ describe('LibraryScreen — first run', () => {
       'Start from Hexagonal',
       'Start from Backend for Frontend',
       'Start from CQRS',
-      'Start from Medallion',
-      'Start from Kappa',
-      'Start from Change Data Capture',
+    ]);
+    await userEvent.click(within(group).getByRole('tab', { name: 'Data Architectures' }));
+    expect(visible()).toEqual(['Start from Medallion', 'Start from Kappa', 'Start from Change Data Capture']);
+    expect(within(group).getByRole('tab', { name: 'Data Architectures' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(within(group).getByRole('tab', { name: 'Patterns' }));
+    expect(visible()).toEqual([
       'Start from Saga – Orchestration',
       'Start from Saga – Choreography',
       'Start from Transactional Outbox',
     ]);
+    // Every tile is still in the document: the shelf keeps the tallest branch's height.
+    expect(within(group).getAllByRole('button', { hidden: true })).toHaveLength(13);
   });
 
   it('seeds a canvas from a starter, from the keyboard', async () => {
@@ -119,8 +133,11 @@ describe('LibraryScreen — first run', () => {
     render(<LibraryScreen session={stubSession()} />);
     expect(screen.getAllByRole('button', { name: /new canvas/i })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /import/i })).toHaveLength(1);
-    // Only the starters live inside the starter group — nothing else may join it.
-    expect(within(screen.getByRole('group', { name: 'Starters' })).getAllByRole('button')).toHaveLength(13);
+    // Only the starters live inside the starter group — nothing else may join it: the open
+    // branch's seven on the page, all thirteen in the document.
+    const group = screen.getByRole('group', { name: 'Starters' });
+    expect(within(group).getAllByRole('button')).toHaveLength(7);
+    expect(within(group).getAllByRole('button', { hidden: true })).toHaveLength(13);
   });
 
   it('starts a blank canvas on Enter when nothing on the page has focus', async () => {
@@ -152,9 +169,36 @@ describe('LibraryScreen — first run', () => {
     await userEvent.keyboard('{ArrowRight}');
     expect(screen.getByRole('button', { name: 'Start from Modular Monolith' })).toHaveFocus();
     await userEvent.keyboard('{End}');
-    expect(screen.getByRole('button', { name: 'Start from Transactional Outbox' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Start from CQRS' })).toHaveFocus();
+    // Past the shelf's last row, ↓ opens the next branch and lands in it; ↑ comes back.
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('tab', { name: 'Data Architectures' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Start from Medallion' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(screen.getByRole('tab', { name: 'Architectures' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Start from CQRS' })).toHaveFocus();
     await userEvent.keyboard('{Home}{ArrowLeft}');
     expect(sheet).toHaveFocus();
+  });
+
+  it('walks the index itself: ↑/↓ open a branch, → steps into it', async () => {
+    render(<LibraryScreen session={stubSession()} />);
+    const architectures = screen.getByRole('tab', { name: 'Architectures' });
+    // The open branch is the index's one Tab stop.
+    expect(architectures).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tab', { name: 'Patterns' })).toHaveAttribute('tabindex', '-1');
+    architectures.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    const data = screen.getByRole('tab', { name: 'Data Architectures' });
+    expect(data).toHaveFocus();
+    expect(data).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Start from Kappa' })).toBeInTheDocument();
+    await userEvent.keyboard('{End}');
+    expect(screen.getByRole('tab', { name: 'Patterns' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('button', { name: 'Start from Saga – Orchestration' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('button', { name: 'New canvas' })).toHaveFocus();
   });
 
   it('names what a starter is to a screen reader without a tooltip', () => {

@@ -18,6 +18,7 @@ export function StarterBrowser({
     <Modal title="Starters" width={780} onClose={onClose} className="dc-modal-starters">
       <StarterShelf
         starters={ARCHITECTURE_STARTERS}
+        mode="all"
         onStart={(id) => {
           // Close first: the canvas behind is about to stop being empty, and a dialog left open
           // over a freshly drawn architecture hides the thing it just made.

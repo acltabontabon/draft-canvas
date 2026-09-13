@@ -11,6 +11,13 @@ All notable changes to Draft Canvas are documented here.
   database changes downstream without polling), each with a built-in
   flow. Starters are now grouped into Architectures, Data Architectures, and Patterns.
 
+### Changed
+
+- The home screen's starters are now an index: one category open at a time on the connector's
+  spine, the others just a name and a count, so the page stays calm as starters are added. ↑/↓
+  move between categories, ←/→ between starters. Starter previews are centred and their
+  boundaries drawn lighter.
+
 ### Fixed
 
 - Opening a diagram that has exactly one flow no longer dims everything outside that flow — every

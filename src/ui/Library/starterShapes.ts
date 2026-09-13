@@ -17,8 +17,8 @@ export interface StarterShape {
   shape: LibraryShape;
   /** Per `shape.edges` entry: how many hops its source sits from a node nothing points into. */
   depths: number[];
-  /** `shape.nodes` laid out in the glyph box — fitted, vertically centred, flush left so every
-   *  drawing starts on the same edge as the name under it. */
+  /** `shape.nodes` laid out in the glyph box — fitted and centred on both axes, so every tile
+   *  carries the same optical footprint whatever the drawing's proportions. */
   boxes: ShapeBox[];
   /** Horizontal middle of the drawing, as a fraction of the glyph's width. */
   centerX: number;
@@ -39,17 +39,14 @@ export function starterShape(starter: ArchitectureStarter): StarterShape {
   if (cached) return cached;
   const { nodes, edges } = buildStarter(starter, { x: 0, y: 0 });
   const shape = libraryShapeOf(nodes, edges);
-  const fitted = layoutShape(shape, GLYPH_WIDTH, GLYPH_HEIGHT, GLYPH_PAD);
-  const left = Math.min(...fitted.map((box) => box.x));
-  const right = Math.max(...fitted.map((box) => box.x + box.w));
-  const shift = Number.isFinite(left) ? GLYPH_PAD - left : 0;
-  const boxes = fitted.map((box) => ({ ...box, x: box.x + shift, cx: box.cx + shift }));
-  const drawn = Number.isFinite(left);
+  const boxes = layoutShape(shape, GLYPH_WIDTH, GLYPH_HEIGHT, GLYPH_PAD);
+  const drawn = boxes.length > 0;
+  const left = drawn ? Math.min(...boxes.map((box) => box.x)) : 0;
+  const right = drawn ? Math.max(...boxes.map((box) => box.x + box.w)) : GLYPH_WIDTH;
   const top = drawn ? Math.min(...boxes.map((box) => box.y)) : 0;
   const bottom = drawn ? Math.max(...boxes.map((box) => box.y + box.h)) : GLYPH_HEIGHT;
-  const width = drawn ? right - left : GLYPH_WIDTH;
-  const centerX = drawn ? (GLYPH_PAD + width / 2) / GLYPH_WIDTH : 0.5;
-  const bounds = { x: drawn ? GLYPH_PAD : 0, y: top, width, height: bottom - top };
+  const centerX = (left + right) / 2 / GLYPH_WIDTH;
+  const bounds = { x: left, y: top, width: right - left, height: bottom - top };
   const result = { shape, depths: edgeDepths(shape), boxes, centerX, bounds };
   cache.set(starter.id, result);
   return result;
