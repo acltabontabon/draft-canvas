@@ -37,11 +37,17 @@ const each = (name: string, run: (starter: ArchitectureStarter) => void) =>
   );
 
 describe('the starter catalog', () => {
-  it('exposes exactly the ten declared starters, each reachable by id, architectures before patterns', () => {
+  it('exposes exactly the thirteen declared starters, each reachable by id, architectures then data architectures then patterns', () => {
     expect(ARCHITECTURE_STARTERS.map((starter) => starter.id)).toEqual([...STARTER_IDS]);
     for (const id of STARTER_IDS) expect(starterById(id)?.id).toBe(id);
     const categories = ARCHITECTURE_STARTERS.map((starter) => starter.category);
-    expect(categories.lastIndexOf('architecture')).toBeLessThan(categories.indexOf('pattern'));
+    expect(categories.lastIndexOf('architecture')).toBeLessThan(categories.indexOf('data'));
+    expect(categories.lastIndexOf('data')).toBeLessThan(categories.indexOf('pattern'));
+    expect(ARCHITECTURE_STARTERS.filter((s) => s.category === 'data').map((s) => s.id)).toEqual([
+      'medallion',
+      'kappa',
+      'cdc',
+    ]);
     expect(ARCHITECTURE_STARTERS.filter((s) => s.category === 'pattern').map((s) => s.id)).toEqual([
       'saga-orchestration',
       'saga-choreography',
@@ -84,9 +90,13 @@ describe('the starter catalog', () => {
   });
 
   each('stays small enough to be a starting point', (starter) => {
-    // 13, not 12: Hexagonal carries a boundary and that boundary's one subtitle on top of its eleven
-    // architectural elements — the elements themselves stay well inside "a starting point."
-    expect(starter.nodes.length).toBeLessThanOrEqual(13);
+    // Boundaries and their quiet annotations (a subtitle, a descriptor under a layer) frame a
+    // starter; they aren't things someone has to understand. The cap is on the architectural
+    // elements — Hexagonal and Event-Driven sit at eleven — with a looser ceiling on the framing so
+    // a starter can't hide bulk in it either: Medallion frames nine elements in three zones.
+    const elements = starter.nodes.filter((spec) => spec.type !== 'group' && !(spec.type === 'text' && spec.annotation));
+    expect(elements.length).toBeLessThanOrEqual(11);
+    expect(starter.nodes.length).toBeLessThanOrEqual(18);
     expect(starter.edges.length).toBeLessThanOrEqual(10);
   });
 

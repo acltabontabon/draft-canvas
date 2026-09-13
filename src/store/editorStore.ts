@@ -737,11 +737,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: EMPTY_SELECTION,
       flowPlayback: { active: false, flowId: null, step: 0 },
       focus: { active: false, nodeIds: [], edgeIds: [] },
-      // With exactly one flow there's no ambiguity about which one's step
-      // badges to show, so a freshly opened diagram isn't blank of them.
-      // With several, none is auto-selected — guessing wrong would be worse
-      // than showing none until the user picks.
-      selectedFlowId: document.flows.length === 1 ? document.flows[0]!.id : null,
+      // Never auto-selected, however many flows the document has — the default view on open is
+      // the diagram itself, not a flow lens. The user opts into a flow explicitly.
+      selectedFlowId: null,
       revision: state.revision + 1,
       liveViewport: null,
     }));

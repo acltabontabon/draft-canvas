@@ -36,6 +36,9 @@ export const STARTER_IDS = [
   'hexagonal',
   'bff',
   'cqrs',
+  'medallion',
+  'kappa',
+  'cdc',
   'saga-orchestration',
   'saga-choreography',
   'transactional-outbox',
@@ -49,17 +52,25 @@ export type StarterId = (typeof STARTER_IDS)[number];
  * `pattern` answers "how do I solve this particular recurring design problem?" — a saga, an
  * outbox. The line is pragmatic, not academic (BFF and CQRS are strictly patterns, but they shape
  * a system's structure enough to belong with the architectures), it exists only so the palette
- * can show two short lists instead of one long one, and it never implies exclusivity: a real
+ * can show short lists instead of one long one, and it never implies exclusivity: a real
  * system composes several — Event-Driven with CQRS and an Outbox, Microservices with a BFF and a
  * Saga. A pattern starter is drawn at the scope of the problem it solves, never padded to look
  * like an architecture.
+ *
+ * `data` is a third, narrower bucket for the family of starters about how data itself moves and
+ * refines across a system — Medallion, Kappa, Change Data Capture. By the `architecture`/`pattern`
+ * line above, CDC alone would read as a `pattern` (it solves one recurring problem — propagating a
+ * database's changes — at its own scope, the same shape as Transactional Outbox); it's grouped here
+ * anyway because the three read as one coherent, discoverable family, which matters more here than
+ * the finer scope distinction.
  */
-export type StarterCategory = 'architecture' | 'pattern';
+export type StarterCategory = 'architecture' | 'data' | 'pattern';
 
-/** The two categories in display order, with the header each discovery surface shows for it —
- *  the palette, the empty canvas and the Library welcome all read this one list. */
+/** The categories in display order, with the header each discovery surface shows for it — the
+ *  palette, the empty canvas and the Library welcome all read this one list. */
 export const STARTER_CATEGORIES: readonly { id: StarterCategory; label: string }[] = [
   { id: 'architecture', label: 'Architectures' },
+  { id: 'data', label: 'Data Architectures' },
   { id: 'pattern', label: 'Patterns' },
 ];
 

@@ -97,6 +97,9 @@ describe('LibraryScreen — first run', () => {
       'Start from Hexagonal',
       'Start from Backend for Frontend',
       'Start from CQRS',
+      'Start from Medallion Architecture',
+      'Start from Kappa Architecture',
+      'Start from Change Data Capture',
       'Start from Saga – Orchestration',
       'Start from Saga – Choreography',
       'Start from Transactional Outbox',
@@ -117,7 +120,7 @@ describe('LibraryScreen — first run', () => {
     expect(screen.getAllByRole('button', { name: /new canvas/i })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /import/i })).toHaveLength(1);
     // Only the starters live inside the starter group — nothing else may join it.
-    expect(within(screen.getByRole('group', { name: 'Starters' })).getAllByRole('button')).toHaveLength(10);
+    expect(within(screen.getByRole('group', { name: 'Starters' })).getAllByRole('button')).toHaveLength(13);
   });
 
   it('starts a blank canvas on Enter when nothing on the page has focus', async () => {
@@ -164,7 +167,7 @@ describe('LibraryScreen — first run', () => {
   it('draws each starter from its own topology', () => {
     const { container } = render(<LibraryScreen session={stubSession()} />);
     const tiles = container.querySelectorAll('.dc-starter');
-    expect(tiles).toHaveLength(10);
+    expect(tiles).toHaveLength(13);
     for (const tile of tiles) {
       expect(tile.querySelector('svg.dc-starter-glyph .dc-starter-edge-line')).not.toBeNull();
     }

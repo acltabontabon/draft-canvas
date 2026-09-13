@@ -89,9 +89,15 @@ describe('capabilityFor — the capability matrix', () => {
   it('database → service: defaults to reads, never offers messaging semantics', () => {
     const cap = capabilityFor('database', 'service')!;
     expect(cap.defaultRelation).toBe('reads');
-    expect(cap.relations).toEqual(['reads', 'query', 'dependsOn']);
+    expect(cap.relations).toEqual(['reads', 'query', 'cdc', 'dependsOn']);
     expect(cap.relations).not.toContain('publishes');
     expect(cap.relations).not.toContain('consumes');
+  });
+
+  it('database → service: also offers cdc, for a worker that tails the change log rather than querying', () => {
+    const cap = capabilityFor('database', 'service')!;
+    expect(cap.relations).toContain('cdc');
+    expect(cap.defaultRelation).toBe('reads');
   });
 
   it('service → queue: defaults to publishes, offers command as a sharper alternative, implies event behaviour with no picker', () => {
@@ -180,6 +186,24 @@ describe('capabilityFor — the capability matrix', () => {
     expect(cap.status).toBeUndefined();
   });
 
+  it('topic → searchIndex: defaults to indexes, the same word worker → searchIndex already uses', () => {
+    const cap = capabilityFor('topic', 'searchIndex')!;
+    expect(cap.defaultRelation).toBe('indexes');
+    expect(cap.relations).toEqual(['indexes', 'dependsOn']);
+    expect(cap.status).toBeUndefined();
+  });
+
+  it('topic → database: defaults to ingests, a warehouse sinking a stream directly', () => {
+    const cap = capabilityFor('topic', 'database')!;
+    expect(cap.defaultRelation).toBe('ingests');
+    expect(cap.relations).toEqual(['ingests', 'dependsOn']);
+    expect(cap.status).toBeUndefined();
+  });
+
+  it('database → topic stays unlisted — the inverse needs a publisher in between, not a direct opinion', () => {
+    expect(capabilityFor('database', 'topic')).toBeUndefined();
+  });
+
   it('queue → topic: unusual, no default, offers a guidance message and an Insert Worker quick fix', () => {
     const cap = capabilityFor('queue', 'topic')!;
     expect(cap.defaultRelation).toBeUndefined();
@@ -193,7 +217,14 @@ describe('capabilityFor — the capability matrix', () => {
   it('database → database: defaults to ingests, offers data-movement intents, no request/response shape', () => {
     const cap = capabilityFor('database', 'database')!;
     expect(cap.defaultRelation).toBe('ingests');
-    expect(cap.relations).toEqual(['ingests', 'replicates', 'cdc', 'syncs', 'dependsOn']);
+    expect(cap.relations).toEqual(['ingests', 'replicates', 'cdc', 'syncs', 'transforms', 'dependsOn']);
+    expect(cap.status).toBeUndefined();
+  });
+
+  it('objectStorage → database: defaults to transforms, a landing zone refined into a structured table', () => {
+    const cap = capabilityFor('objectStorage', 'database')!;
+    expect(cap.defaultRelation).toBe('transforms');
+    expect(cap.relations).toEqual(['transforms', 'dependsOn']);
     expect(cap.status).toBeUndefined();
   });
 
@@ -367,11 +398,14 @@ describe('capabilityFor — the capability matrix', () => {
   it('a topic never falls back to a plain queue\'s entry for an unlisted pairing — same "no fallback" rule cache already follows', () => {
     expect(capabilityFor('topic', 'topic')).toBeUndefined();
     expect(capabilityFor('database', 'topic')).toBeUndefined();
-    expect(capabilityFor('topic', 'database')).toBeUndefined();
+    // topic → database IS listed now (a stream sinking into a warehouse) — see the dedicated test
+    // above; only its inverse stays unlisted.
   });
 
   it('the new storage sub-kinds never fall back to a plain database\'s entry for an unlisted pairing', () => {
     expect(capabilityFor('fileSystem', 'database')).toBeUndefined();
+    // objectStorage → database IS listed now (a landing zone refined into a table) — see the
+    // dedicated test above; the reverse and every other unlisted storage pairing still isn't.
     expect(capabilityFor('objectStorage', 'fileSystem')).toBeUndefined();
     expect(capabilityFor('searchIndex', 'cache')).toBeUndefined();
   });

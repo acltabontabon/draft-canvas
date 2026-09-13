@@ -73,7 +73,7 @@ unrestricted connector.
 | Source → Target | Relations offered | Default | Notes |
 | --- | --- | --- | --- |
 | Service → Database | writes, reads, query, projects, dependsOn | writes | `projects` is a derived write — a projection materialising a read model |
-| Database → Service | reads, query, dependsOn | reads | |
+| Database → Service | reads, query, cdc, dependsOn | reads | `cdc` — a worker tailing the database's own change log, not an ordinary query |
 | Service → Cache | writes, reads, invalidates, dependsOn | writes | `invalidates` is cache-only |
 | Cache → Service | reads, dependsOn | reads | |
 | Service → File System | reads, writes, watches, dependsOn | writes | |
@@ -81,12 +81,15 @@ unrestricted connector.
 | Service → Object Storage | reads, writes, dependsOn | writes | |
 | Object Storage → Service | reads, dependsOn | reads | |
 | Object Storage → Queue/Topic | publishes, event, dependsOn | publishes | object storage is the one storage kind that legitimately triggers a downstream event |
+| Object Storage → Database | transforms, dependsOn | transforms | a landing zone refined into a structured table |
 | Service → Search Index | searches, indexes, dependsOn | searches | |
 | Service → Queue | publishes, command, event, dependsOn | publishes | |
 | Queue → Service | consumes, deliversTo, event, dependsOn | consumes | |
 | Service → Topic | publishes, event, dependsOn | publishes | |
 | Topic → Service | deliversTo, consumes, dependsOn | deliversTo | a topic fans out to every subscriber |
 | Topic → Queue | fansOut, deliversTo, dependsOn | fansOut | |
+| Topic → Search Index | indexes, dependsOn | indexes | a stream feeding a search index directly, the same word `Service → Search Index` uses |
+| Topic → Database | ingests, dependsOn | ingests | a warehouse sinking a stream directly; the reverse pairing stays unlisted |
 | Queue → Topic | dependsOn, event | *(none)* | **`status: 'unusual'`** — see below |
 | Queue → Dead-letter queue | deadLetters, dependsOn | deadLetters | `failure` behaviour and a dashed (`async`) line — the same edge "Add DLQ" generates; `deliveryAttempts` captions it "after N attempts" |
 | Topic → Dead-letter queue | dependsOn | *(none)* | **`status: 'unusual'`** — a topic never dead-letters; retries and a DLQ belong to each consumer's own queue |
@@ -98,7 +101,7 @@ unrestricted connector.
 | Port → Component / Service | implementedBy, dependsOn | implementedBy | the thing after the port depends on the port's owner |
 | Port → Database | dependsOn | *(none)* | **`status: 'unusual'`** — a port is a contract; something implements it and talks to the store |
 | Actor → Service | calls, http, command, query | calls | synchronous by predetermination, no behaviour picker |
-| Database → Database | ingests, replicates, cdc, syncs, dependsOn | ingests | data movement, not a request/response shape |
+| Database → Database | ingests, replicates, cdc, syncs, transforms, dependsOn | ingests | data movement, not a request/response shape; `transforms` when the data's shape genuinely changes |
 
 A relation offered here is a *suggestion*, never a restriction — the inspector always keeps an
 edge's current value selectable even if it's not in the list.
@@ -120,8 +123,8 @@ the behaviour (`event` dots its own line) or to the user.
 - **`EdgeSemantic`** — what the connection *represents*: `http`, `grpc`, `event`, `command`,
   `query`, `reads`, `writes`, `publishes`, `consumes`, `calls`, `dependsOn`, `fansOut`,
   `deliversTo`, `ingests`, `replicates`, `cdc`, `syncs`, `deadLetters`, `invalidates`, `watches`,
-  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implementedBy`, `compensates`, `projects`. A label convenience only —
-  never changes the connector's colour.
+  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implementedBy`, `compensates`, `projects`,
+  `transforms`. A label convenience only — never changes the connector's colour.
 - **`ConnectorKind`** — how it *behaves*: `sync`, `async`, `event`, `callback`, `conditional`,
   `retry`, `failure`, `fallback`. Drives the solid/dashed line and small glyphs, not the caption.
 

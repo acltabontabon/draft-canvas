@@ -21,21 +21,30 @@ export type CommandGroup =
   | 'connector'
   | 'create'
   | 'starter'
+  | 'data'
   | 'pattern'
   | 'flow'
   | 'jump'
   | 'view'
   | 'canvas';
 
+/** A `StarterCategory` id's own label from `STARTER_CATEGORIES`, looked up by id rather than by
+ *  position — `starterCommands()` maps `architecture → starter` group-for-group, so this can't
+ *  just index the array positionally without silently mislabelling a group the moment a category
+ *  is inserted between two existing ones (as `data` now is). */
+const starterCategoryLabel = (id: (typeof STARTER_CATEGORIES)[number]['id']) =>
+  STARTER_CATEGORIES.find((category) => category.id === id)!.label;
+
 export const GROUP_LABELS: Record<CommandGroup, string> = {
   recent: 'Recent',
   selection: 'Selection',
   connector: 'Connector',
   create: 'Create',
-  // Both are Starters (`src/starters/`); the two headers are its `StarterCategory` split, so the
-  // list reads as two short groups rather than one long one. See that type for what the line means.
-  starter: STARTER_CATEGORIES[0]!.label,
-  pattern: STARTER_CATEGORIES[1]!.label,
+  // All three are Starters (`src/starters/`); each header is one `StarterCategory` bucket, so the
+  // list reads as short groups rather than one long one. See that type for what each one means.
+  starter: starterCategoryLabel('architecture'),
+  data: starterCategoryLabel('data'),
+  pattern: starterCategoryLabel('pattern'),
   flow: 'Flows',
   jump: 'Jump to',
   view: 'View',

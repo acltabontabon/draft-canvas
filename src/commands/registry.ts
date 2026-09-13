@@ -24,6 +24,7 @@ import { ownsData } from '../store/editorStore';
 import { pointer } from '../store/uiStore';
 import { focusBounds, focusNodes } from './search';
 import { ARCHITECTURE_STARTERS } from '../starters';
+import type { StarterCategory } from '../starters';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
 import { count } from '../lib/plural';
 
@@ -1297,14 +1298,21 @@ function selectionCommands(ctx: CommandContext): Command[] {
  * They never depend on `ctx`, so unlike the selection-driven builders this one takes no argument —
  * a starter applies to any canvas, empty or not. Exported for the same reason `nodeCommands` is:
  * the empty canvas's starter row is a second surface over these identical commands, not a second
- * implementation of them (`ui/Editor/EmptyState.tsx`). The catalog lists every architecture before
- * any pattern, which is what keeps the two headers contiguous without sorting here.
+ * implementation of them (`ui/Editor/EmptyState.tsx`). The catalog lists every architecture, then
+ * every data architecture, then every pattern, which is what keeps the three headers contiguous
+ * without sorting here.
  */
+const STARTER_CATEGORY_GROUP: Record<StarterCategory, CommandGroup> = {
+  architecture: 'starter',
+  data: 'data',
+  pattern: 'pattern',
+};
+
 export function starterCommands(): Command[] {
   return ARCHITECTURE_STARTERS.map((starter) => ({
     id: `starter-${starter.id}`,
     title: starter.name,
-    group: starter.category === 'pattern' ? 'pattern' : 'starter',
+    group: STARTER_CATEGORY_GROUP[starter.category],
     keywords: starter.aliases,
     hint: starter.description,
     run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter))),

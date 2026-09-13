@@ -196,7 +196,9 @@ const CALL_BEHAVIORS: ConnectorKind[] = ['sync', 'async', 'callback', 'condition
  * need an entry for every category combination `external` participates in).
  *
  * Deliberately sparse: a pair with no entry (queue↔queue, topic↔topic,
- * actor↔database, database↔topic, fileSystem↔queue, objectStorage↔database,
+ * actor↔database, database↔topic (the inverse, `topic>database`, IS listed —
+ * a stream feeding a store is common; a store feeding a stream needs a
+ * publisher in between, so it stays unlisted), fileSystem↔queue,
  * searchIndex>service, anything touching a `generic` node, …) has no
  * contextual opinion at all — `capabilityFor` returns `undefined` and callers
  * fall back to full, unrestricted behaviour, exactly as today. Only pairs the
@@ -216,7 +218,11 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // `projects` sits beside `writes`: a projection materialising a read model is a write, but a
   // derived one — CQRS/read-model diagrams need the two to read differently.
   'service>database': capability(['writes', 'reads', 'query', 'projects', 'dependsOn'], 'writes', []),
-  'database>service': capability(['reads', 'query', 'dependsOn'], 'reads', []),
+  // 'cdc' beside 'reads': a worker that tails the database's own change log (rather than issuing
+  // ordinary queries) is the same log-tailing relationship `database>database` already offers —
+  // just now also expressible when the tailer is a service, not another database. Default stays
+  // 'reads': most database→service edges are still an ordinary read.
+  'database>service': capability(['reads', 'query', 'cdc', 'dependsOn'], 'reads', []),
   // Cache gets one verb a plain database connection structurally can't
   // express — invalidating a cached copy is a different architectural move
   // than writing through to a system of record.
@@ -290,6 +296,15 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // `queue>service` above which keeps 'consumes'.
   'topic>service': capability(['deliversTo', 'consumes', 'dependsOn'], 'deliversTo', [], 'event'),
   'topic>queue': capability(['fansOut', 'deliversTo', 'dependsOn'], 'fansOut', [], 'event'),
+  // A stream feeding a search index directly (real-time indexing off a change/event feed) reuses
+  // 'indexes' rather than inventing a second word for the same idea `worker>searchIndex` already
+  // names — `searchIndex` never falls back to a generic `database`/`queue` row (see the matrix's
+  // own "no opinion beats a wrong one" rule above), so this needs its own explicit entry.
+  'topic>searchIndex': capability(['indexes', 'dependsOn'], 'indexes', []),
+  // A warehouse/analytics store ingesting straight off a stream (a "sink," no separate consumer
+  // shown) reuses 'ingests' — the same word and the same default `database>database` already
+  // uses for "the most common intent when a fresh connection is drawn."
+  'topic>database': capability(['ingests', 'dependsOn'], 'ingests', []),
   // Deliberately NOT the inverse of 'topic>queue' — a queue doesn't itself publish into a
   // topic; something normally has to consume it and forward the message. Narrower relation
   // list, no default (nothing should ever auto-infer into this), 'unusual' status with a
@@ -317,8 +332,15 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // Deliberately not JDBC/synchronous-request-shaped — see `defaultsToResponse`, which this
   // pairing is intentionally absent from. "Ingests" is the default because it's the most
   // common intent when a fresh connection is drawn; the others are equally valid, explicit
-  // choices, not lesser alternatives.
-  'database>database': capability(['ingests', 'replicates', 'cdc', 'syncs', 'dependsOn'], 'ingests', []),
+  // choices, not lesser alternatives. 'transforms' sits beside them for a pairing where the data
+  // genuinely changes shape (cleaned, normalised, aggregated) rather than just moving or copying.
+  'database>database': capability(['ingests', 'replicates', 'cdc', 'syncs', 'transforms', 'dependsOn'], 'ingests', []),
+  // A landing zone (object storage: raw, minimally-transformed files) being refined into a
+  // structured table — the one storage-to-storage move that's genuinely a transformation, not a
+  // copy, so it reuses 'transforms' rather than inventing a second word for the same idea. Default
+  // is 'transforms' itself: unlike `database>database`, there's no plain-copy default to preserve
+  // here (`objectStorage>service`'s own 'reads' already covers "read the raw files as they are").
+  'objectStorage>database': capability(['transforms', 'dependsOn'], 'transforms', []),
   // The one place a Worker's own architectural role (background processor, not a request
   // handler) changes a default rather than just a shape: an indexer worker builds the index
   // rather than querying it. Same relation options as the plain `service>searchIndex` entry —

@@ -70,4 +70,5 @@ export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   implementedBy: { label: 'implemented by' },
   compensates: { label: 'compensates' },
   projects: { label: 'projects' },
+  transforms: { label: 'transforms' },
 };

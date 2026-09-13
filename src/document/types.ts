@@ -219,6 +219,11 @@ export const EDGE_SEMANTICS = [
    *  read store. Offered beside `writes` so the authoritative write and the derived one never read
    *  the same. */
   'projects',
+  /** Cleaning, normalising, validating, enriching, or aggregating data into a more refined form —
+   *  the move a data-pipeline layer (raw → refined → curated) makes, distinct from a plain copy
+   *  (`ingests`/`replicates`/`syncs`) or a derived read model (`projects`), neither of which says
+   *  the shape of the data actually changed. */
+  'transforms',
 ] as const;
 export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];
 

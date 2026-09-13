@@ -1,5 +1,6 @@
 /**
- * The Starters, composed by hand: seven architectures and two patterns (see `StarterCategory`).
+ * The Starters, composed by hand: seven architectures, three data architectures, and three
+ * patterns (see `StarterCategory`).
  *
  * Every coordinate here is deliberate. These are canonical diagrams whose structure is known in
  * advance, so the composition is authored rather than solved: hierarchy reads top to bottom (or,
@@ -1729,6 +1730,575 @@ const cqrs: ArchitectureStarter = {
   ],
 };
 
+/* ---------------------------------------------------------- medallion -- */
+/**
+ * Progressive refinement, drawn so the three layers are the whole picture: sources on the left,
+ * consumers on the right, and between them one wide **Lakehouse** boundary holding Bronze → Silver →
+ * Gold — the same kind of thing three times, each more trustworthy than the last. Everything else
+ * is supporting context, and the composition says so: the sources and the consumers sit in their
+ * own smaller zones, and `Ingestion` stands alone between them, a step rather than a place.
+ *
+ * **What each element is, and what it is careful not to say.**
+ * - `Sources` frames three representative source *classes*, not a catalogue: `Operational
+ *   Database` (structured, a system of record), `Files` (batch drops — a File System, not the lake
+ *   itself), `Event Stream` (continuous facts). They read `reads`/`reads`/`consumes` from the
+ *   matrix, so the streaming source is honestly the one dashed, asynchronous line among them.
+ * - `Ingestion` is one plain Worker for both batch and stream — a background process that lands
+ *   data as it arrives. Splitting it into two would make this an ingestion diagram; the layers are
+ *   the point, and "how each source is pulled" is the first thing a user specialises.
+ * - `Bronze`, `Silver`, `Gold` are three `table` Data Stores inside the one boundary. Not object
+ *   storage for Bronze and tables above it: that reads as three different systems ("bucket, table,
+ *   table"), and Medallion is three *zones of one store* rising in trust. The boundary carries the
+ *   substrate; identical shapes carry "same thing, refined"; the quiet descriptor under each layer
+ *   carries what the trust actually is — raw and source-aligned, validated and conformed, curated
+ *   and business-ready. No bronze/silver/gold colour gradient anywhere: the layers read from
+ *   position, label, and descriptor alone, in any theme.
+ * - The two connectors between layers are where refinement happens, so they say what happens:
+ *   `validate + conform` into Silver (the data-quality step — its note carries dedupe, typing and
+ *   schema enforcement), `model + aggregate` into Gold. Both are `transforms` underneath, never a
+ *   plain copy. `Ingestion → Bronze` is labelled `lands raw` for the same reason.
+ * - `Serving` frames `Analytics / BI` and `Data API` — two kinds of consumer, both reading Gold and
+ *   nothing upstream of it, which is the entire reason Gold exists. Two is enough to show Gold is
+ *   built for consumption without turning the right edge into a fan-out exhibit.
+ *
+ * **Routing.** `Files` is level with `Ingestion`, which is level with the three tables: one
+ * unbroken straight run from the middle source to Gold. The other two sources meet Ingestion from
+ * above and below — `Operational Database` into its top, `Event Stream` into its bottom — each one
+ * clean corner, mirror images of each other. Not a left-side fan: the stream's `consumes` can never
+ * share the two `reads`' trunk, and a separate elbow beside that trunk bends at a different x and
+ * squeezes the trunk's caption between two parallel lines. Three sides, three arrows, nothing
+ * running alongside anything. Gold forks symmetrically to both consumers, one bundled `reads`. The
+ * layer gap is wide enough for a label chip to sit clear of both tables.
+ *
+ * **Flow.** "Raw to insight" walks one representative source straight through to one
+ * representative consumer — the others land and read the same way.
+ */
+const MED_SUBTITLE = { width: 200, height: 24 };
+/** First content row clears the boundary's subtitle — the same arithmetic as `CQRS_TOP`. */
+const MED_LAKE_TOP = BOUNDARY_TITLE_SUBLINE_Y + MED_SUBTITLE.height + 8;
+/** Wider than `BAND`: a `validate + conform` label chip is centred in this gap and must clear
+ *  both tables with air to spare. */
+const MED_LAYER_GAP = 152;
+/** A one-line annotation at the minimum node height (`minSizeFor`), the same as a subtitle's. */
+const MED_DESCRIPTOR_HEIGHT = 24;
+const MED_DESCRIPTOR_Y = MED_LAKE_TOP + TABLE.height + 8;
+const MED_LAKE_HEIGHT = MED_DESCRIPTOR_Y + MED_DESCRIPTOR_HEIGHT + BOUNDARY_PAD;
+const MED_LAKE_WIDTH = BOUNDARY_PAD * 2 + TABLE.width * 3 + MED_LAYER_GAP * 2;
+/** The whole composition's spine: the tables' centre line. */
+const MED_SPINE_CENTER = MED_LAKE_TOP + TABLE.height / 2;
+/** Stacked siblings inside the Sources/Serving zones — tighter than `INNER_BAND` so neither box towers. */
+const MED_STACK_GAP = 40;
+/** Room between the Sources zone and Ingestion for the three arrows' captions. */
+const MED_SOURCE_GAP = 96;
+const MED_SOURCES_X = 0;
+const MED_SOURCES_WIDTH = STORE.width + BOUNDARY_PAD * 2;
+const MED_FILES_Y = centeredAt(MED_SPINE_CENTER, STORE.height);
+const MED_DB_Y = MED_FILES_Y - MED_STACK_GAP - STORE.height;
+/** How far above the spine `Operational Database`'s arrow leaves — `Event Stream`'s tube sits the
+ *  same distance below it, so the two corners into Ingestion mirror each other exactly. */
+const MED_SOURCE_REACH = MED_SPINE_CENTER - (MED_DB_Y + STORE.height / 2);
+const MED_STREAM_Y = tubeCenteredAt(MED_SPINE_CENTER + MED_SOURCE_REACH, NAMED_QUEUE.height);
+const MED_SOURCES_Y = MED_DB_Y - BOUNDARY_HEADER_TITLE_ONLY;
+const MED_SOURCES_HEIGHT = MED_STREAM_Y + NAMED_QUEUE.height + BOUNDARY_PAD - MED_SOURCES_Y;
+const MED_INGEST_X = MED_SOURCES_X + MED_SOURCES_WIDTH + MED_SOURCE_GAP;
+const MED_LAKE_X = MED_INGEST_X + SERVICE.width + GUTTER;
+const MED_BRONZE_X = MED_LAKE_X + BOUNDARY_PAD;
+const MED_SILVER_X = MED_BRONZE_X + TABLE.width + MED_LAYER_GAP;
+const MED_GOLD_X = MED_SILVER_X + TABLE.width + MED_LAYER_GAP;
+const MED_SERVING_X = MED_LAKE_X + MED_LAKE_WIDTH + GUTTER;
+const MED_SERVING_WIDTH = SERVICE.width + BOUNDARY_PAD * 2;
+const MED_CONSUMER_X = MED_SERVING_X + BOUNDARY_PAD;
+const MED_CONSUMER_SPAN = SERVICE.height * 2 + MED_STACK_GAP;
+const MED_ANALYTICS_Y = MED_SPINE_CENTER - MED_CONSUMER_SPAN / 2;
+const MED_API_Y = MED_ANALYTICS_Y + SERVICE.height + MED_STACK_GAP;
+const MED_SERVING_Y = MED_ANALYTICS_Y - BOUNDARY_HEADER_TITLE_ONLY;
+const MED_SERVING_HEIGHT = MED_API_Y + SERVICE.height + BOUNDARY_PAD - MED_SERVING_Y;
+
+/** The quiet line under each layer — annotation text is left-aligned at its own x, so the box is
+ *  sized to the words and centred under the table. */
+function medallionDescriptor(key: string, tableX: number, text: string, width: number): StarterNodeSpec {
+  return {
+    key,
+    type: 'text',
+    text,
+    annotation: true,
+    parent: 'lake',
+    x: centeredAt(tableX + TABLE.width / 2, width),
+    y: MED_DESCRIPTOR_Y,
+    width,
+    height: MED_DESCRIPTOR_HEIGHT,
+  };
+}
+
+const medallion: ArchitectureStarter = {
+  id: 'medallion',
+  category: 'data',
+  name: 'Medallion Architecture',
+  description: 'Refine raw data into validated, business-ready datasets',
+  aliases: ['medallion', 'medallion architecture', 'bronze silver gold', 'lakehouse', 'data lake', 'etl', 'data pipeline'],
+  nodes: [
+    {
+      key: 'sources',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'Sources',
+      x: MED_SOURCES_X,
+      y: MED_SOURCES_Y,
+      width: MED_SOURCES_WIDTH,
+      height: MED_SOURCES_HEIGHT,
+    },
+    {
+      key: 'db',
+      type: 'database',
+      databaseKind: 'generic',
+      text: 'Operational Database',
+      accent: 'blue',
+      parent: 'sources',
+      x: MED_SOURCES_X + BOUNDARY_PAD,
+      y: MED_DB_Y,
+      ...STORE,
+    },
+    {
+      key: 'files',
+      type: 'database',
+      databaseKind: 'file-system',
+      text: 'Files',
+      accent: 'blue',
+      parent: 'sources',
+      x: MED_SOURCES_X + BOUNDARY_PAD,
+      y: MED_FILES_Y,
+      ...STORE,
+    },
+    {
+      key: 'stream',
+      type: 'queue',
+      queueKind: 'stream',
+      text: 'Event Stream',
+      parent: 'sources',
+      x: centeredAt(MED_SOURCES_X + MED_SOURCES_WIDTH / 2, NAMED_QUEUE.width),
+      y: MED_STREAM_Y,
+      ...NAMED_QUEUE,
+    },
+    {
+      key: 'ingestion',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Ingestion',
+      accent: 'teal',
+      x: MED_INGEST_X,
+      y: centeredAt(MED_SPINE_CENTER, SERVICE.height),
+      ...SERVICE,
+    },
+    {
+      key: 'lake',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'Lakehouse',
+      x: MED_LAKE_X,
+      y: 0,
+      width: MED_LAKE_WIDTH,
+      height: MED_LAKE_HEIGHT,
+    },
+    boundarySubtitle('lake-subtitle', 'lake', MED_LAKE_X, 'One lake, three levels of trust', MED_SUBTITLE),
+    {
+      key: 'bronze',
+      type: 'database',
+      databaseKind: 'table',
+      text: 'Bronze',
+      accent: 'blue',
+      parent: 'lake',
+      x: MED_BRONZE_X,
+      y: MED_LAKE_TOP,
+      ...TABLE,
+      attachments: [
+        {
+          type: 'note',
+          text: 'Append-only landing, kept exactly as received — so everything downstream can be rebuilt from here.',
+        },
+      ],
+    },
+    medallionDescriptor('bronze-descriptor', MED_BRONZE_X, 'Raw, source-aligned', 116),
+    {
+      key: 'silver',
+      type: 'database',
+      databaseKind: 'table',
+      text: 'Silver',
+      accent: 'blue',
+      parent: 'lake',
+      x: MED_SILVER_X,
+      y: MED_LAKE_TOP,
+      ...TABLE,
+      attachments: [
+        {
+          type: 'note',
+          text: 'Deduplicated, typed, schema-enforced — business entities start to emerge here.',
+        },
+      ],
+    },
+    medallionDescriptor('silver-descriptor', MED_SILVER_X, 'Validated, conformed', 120),
+    {
+      key: 'gold',
+      type: 'database',
+      databaseKind: 'table',
+      text: 'Gold',
+      accent: 'blue',
+      parent: 'lake',
+      x: MED_GOLD_X,
+      y: MED_LAKE_TOP,
+      ...TABLE,
+      attachments: [
+        {
+          type: 'note',
+          text: 'Modelled and aggregated for the questions asked of it — optimised for reads, not for landing.',
+        },
+      ],
+    },
+    medallionDescriptor('gold-descriptor', MED_GOLD_X, 'Curated, business-ready', 138),
+    {
+      key: 'serving',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'Serving',
+      x: MED_SERVING_X,
+      y: MED_SERVING_Y,
+      width: MED_SERVING_WIDTH,
+      height: MED_SERVING_HEIGHT,
+    },
+    {
+      key: 'analytics',
+      type: 'service',
+      serviceKind: 'api',
+      text: 'Analytics / BI',
+      accent: 'teal',
+      parent: 'serving',
+      x: MED_CONSUMER_X,
+      y: MED_ANALYTICS_Y,
+      ...SERVICE,
+    },
+    {
+      key: 'data-api',
+      type: 'service',
+      serviceKind: 'api',
+      text: 'Data API',
+      accent: 'teal',
+      parent: 'serving',
+      x: MED_CONSUMER_X,
+      y: MED_API_Y,
+      ...SERVICE,
+    },
+  ],
+  edges: [
+    { key: 'db-ingest', from: 'db', to: 'ingestion', sourceAnchor: RIGHT, targetAnchor: TOP },
+    { key: 'files-ingest', ...across('files', 'ingestion') },
+    { key: 'stream-ingest', from: 'stream', to: 'ingestion', sourceAnchor: RIGHT, targetAnchor: BOTTOM },
+    { key: 'land', ...across('ingestion', 'bronze'), label: 'lands raw' },
+    { key: 'refine', ...across('bronze', 'silver'), semantic: 'transforms', label: 'validate + conform' },
+    { key: 'curate', ...across('silver', 'gold'), semantic: 'transforms', label: 'model + aggregate' },
+    { key: 'to-analytics', ...across('gold', 'analytics') },
+    { key: 'to-api', ...across('gold', 'data-api') },
+  ],
+  flows: [
+    {
+      title: 'Raw to insight',
+      accent: 'teal',
+      steps: [
+        { edgeKey: 'db-ingest', caption: 'Source data arrives' },
+        { edgeKey: 'land', caption: 'Landed in Bronze exactly as received' },
+        { edgeKey: 'refine', caption: 'Validated, deduplicated, and conformed into Silver' },
+        { edgeKey: 'curate', caption: 'Modelled and aggregated into Gold' },
+        { edgeKey: 'to-analytics', caption: 'Analytics reads business-ready data' },
+      ],
+    },
+  ],
+};
+
+/* -------------------------------------------------------------- kappa -- */
+/**
+ * One durable, append-only log is the source for both live processing and historical replay — the
+ * defining idea, and the one thing that has to be unmistakable next to a plain pub/sub diagram.
+ * There is no separate batch path and no second copy of the processing logic: the same processor,
+ * reading the same log, is how both "the newest event" and "everything since the beginning" get
+ * handled.
+ *
+ * **What each element is, and what it is careful not to say.**
+ * - `Application` and `External System` are two generic producers — enough to show the log accepts
+ *   more than one kind of source without turning the front half into its own diagram.
+ * - `Event Log` is a **Stream**, not a Topic or a plain Queue: Draft Canvas already draws a Stream
+ *   as continuous, staggered segments rather than a row of envelopes specifically because a stream
+ *   *is* the durable history, not a mailbox a worker drains and forgets. Its note says the one
+ *   thing that makes this Kappa rather than an ordinary event bus: retained history can be
+ *   replayed through the very same processing path.
+ * - `Stream Processor` is a Worker — a continuous consumer, exactly what Worker already means, so
+ *   no "stream processor" kind is needed. It reads from the log and writes derived state; nothing
+ *   about its shape says "live-only."
+ * - `Materialized View` is a `table` Data Store, reached by `projects` rather than a plain
+ *   `writes`: it is a *derived* read model built from the log, the same relationship CQRS's own
+ *   projection uses, not the system of record.
+ * - `Query API` and `Analytics` both read the view and never the log directly — the point of
+ *   materialising it at all.
+ *
+ * **Replay, without a second edge.** A durable log being replayed through the *same* path is best
+ * shown as the same path, not a second arrow beside it (which would draw the log as looping back
+ * on itself for no real geometric reason) — so `Event Log → Stream Processor` and
+ * `Stream Processor → Materialized View` are walked a second time, in a second flow, with replay
+ * framed captions instead. Nothing about the connectors themselves changes.
+ *
+ * **Routing.** Both producers reach the log's same left-middle point, off-level, funnelling into
+ * one trunk — the same technique Hexagonal's two driving adapters use. `Event Log` → `Stream
+ * Processor` → `Materialized View` is one straight run; the view forks symmetrically to its two
+ * consumers.
+ *
+ * **Flows.** "Process event" is the live path end to end. "Replay history" re-walks its middle two
+ * steps — the log doesn't care which flow is walking it, which is exactly the point.
+ */
+const KAP_ROW_GAP = 140;
+const KAP_ROW_A_Y = 0;
+const KAP_ROW_B_Y = KAP_ROW_A_Y + SERVICE.height + KAP_ROW_GAP;
+const KAP_ROW_A_CENTER = KAP_ROW_A_Y + SERVICE.height / 2;
+const KAP_ROW_B_CENTER = KAP_ROW_B_Y + SERVICE.height / 2;
+const KAP_SPINE_CENTER = (KAP_ROW_A_CENTER + KAP_ROW_B_CENTER) / 2;
+/** Wider than the shared `TABLE`: "Materialized View" doesn't fit the plain table card's width. */
+const KAP_VIEW = { width: 172, height: TABLE.height };
+const KAP_PRODUCER_X = 0;
+const KAP_LOG_X = KAP_PRODUCER_X + SERVICE.width + BAND;
+const KAP_PROCESSOR_X = KAP_LOG_X + NAMED_QUEUE.width + BAND;
+const KAP_VIEW_X = KAP_PROCESSOR_X + SERVICE.width + BAND;
+const KAP_CONSUMER_X = KAP_VIEW_X + KAP_VIEW.width + BAND;
+const KAP_CONSUMER_SPAN = SERVICE.height * 2 + GUTTER;
+const KAP_CONSUMER_TOP = KAP_SPINE_CENTER - KAP_CONSUMER_SPAN / 2;
+
+const kappa: ArchitectureStarter = {
+  id: 'kappa',
+  category: 'data',
+  name: 'Kappa Architecture',
+  description: 'Process live and historical data through one durable stream',
+  aliases: ['kappa', 'kappa architecture', 'durable log', 'log replay', 'materialized view', 'stream processing', 'unified log'],
+  nodes: [
+    {
+      key: 'application',
+      type: 'service',
+      serviceKind: 'generic',
+      text: 'Application',
+      accent: 'teal',
+      x: KAP_PRODUCER_X,
+      y: KAP_ROW_A_Y,
+      ...SERVICE,
+    },
+    {
+      key: 'external',
+      type: 'service',
+      serviceKind: 'external',
+      text: 'External System',
+      accent: 'teal',
+      x: KAP_PRODUCER_X,
+      y: KAP_ROW_B_Y,
+      ...SERVICE,
+    },
+    {
+      key: 'log',
+      type: 'queue',
+      queueKind: 'stream',
+      text: 'Event Log',
+      x: KAP_LOG_X,
+      y: tubeCenteredAt(KAP_SPINE_CENTER, NAMED_QUEUE.height),
+      ...NAMED_QUEUE,
+      attachments: [{ type: 'note', text: 'Retained history can be replayed through the same processing path.' }],
+    },
+    {
+      key: 'processor',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Stream Processor',
+      accent: 'teal',
+      x: KAP_PROCESSOR_X,
+      y: centeredAt(KAP_SPINE_CENTER, SERVICE.height),
+      ...SERVICE,
+    },
+    {
+      key: 'view',
+      type: 'database',
+      databaseKind: 'table',
+      text: 'Materialized View',
+      accent: 'blue',
+      x: KAP_VIEW_X,
+      y: centeredAt(KAP_SPINE_CENTER, KAP_VIEW.height),
+      ...KAP_VIEW,
+    },
+    {
+      key: 'query-api',
+      type: 'service',
+      serviceKind: 'api',
+      text: 'Query API',
+      accent: 'teal',
+      x: KAP_CONSUMER_X,
+      y: KAP_CONSUMER_TOP,
+      ...SERVICE,
+    },
+    {
+      key: 'analytics',
+      type: 'service',
+      serviceKind: 'api',
+      text: 'Analytics',
+      accent: 'teal',
+      x: KAP_CONSUMER_X,
+      y: KAP_CONSUMER_TOP + SERVICE.height + GUTTER,
+      ...SERVICE,
+    },
+  ],
+  edges: [
+    { key: 'app-publish', ...across('application', 'log') },
+    { key: 'ext-publish', ...across('external', 'log') },
+    { key: 'consume', ...across('log', 'processor') },
+    { key: 'materialize', ...across('processor', 'view'), semantic: 'projects' },
+    { key: 'query', ...across('view', 'query-api') },
+    { key: 'analyze', ...across('view', 'analytics') },
+  ],
+  flows: [
+    {
+      title: 'Process event',
+      accent: 'teal',
+      steps: [
+        { edgeKey: 'app-publish', caption: 'A producer publishes an event' },
+        { edgeKey: 'consume', caption: 'The stream processor consumes it' },
+        { edgeKey: 'materialize', caption: 'It updates the materialized view' },
+        { edgeKey: 'query', caption: 'A consumer reads the derived state' },
+      ],
+    },
+    {
+      title: 'Replay history',
+      accent: 'violet',
+      steps: [
+        { edgeKey: 'consume', caption: 'Historical events replay through the same path' },
+        { edgeKey: 'materialize', caption: 'Materialized state rebuilds from history' },
+      ],
+    },
+  ],
+};
+
+/* ---------------------------------------------------------------- cdc -- */
+/**
+ * Changes to an operational database reach downstream systems without those systems ever polling
+ * it — the whole idea, so the diagram spends its every element on the path a change actually
+ * takes, and none on how any one downstream system happens to use it.
+ *
+ * **What each element is, and what it is careful not to say.**
+ * - `Application` writes to `Operational Database` — an ordinary `writes`, kept as its own
+ *   connector so the diagram can never read as "a consumer produces the change." The database
+ *   commits it; nothing downstream is involved in that commit.
+ * - `CDC Connector` reaches the database with `cdc`, not a plain `reads` — the same log-tailing
+ *   relationship a database-to-database replica already carries, now expressed toward a service.
+ *   Its note names the mechanism without diagramming it: it reads the database's own change log,
+ *   never the tables, and never on a poll interval.
+ * - `Change Stream` is a **Topic**: captured changes broadcast to however many independent
+ *   downstream systems are listening, not one queue one consumer drains.
+ * - `Search Index` and `Data Warehouse` are two different, real downstream systems — not two
+ *   instances of the same idea — each consuming the stream directly and never touching the
+ *   database. `indexes` and `ingests` name what each one specifically does with a captured change.
+ *
+ * **Routing.** `Application` → `Operational Database` → `CDC Connector` → `Change Stream` →
+ * `Search Index` is one unbroken straight spine; `Data Warehouse` is the one node the stream
+ * reaches off-level, below the spine.
+ *
+ * **Flow.** "Propagate database change" walks the one representative downstream branch
+ * (`Search Index`) end to end; `Data Warehouse` receives the identical broadcast a click away.
+ */
+const CDC_SPINE_CENTER = STORE.height / 2;
+const CDC_APP_X = 0;
+const CDC_DB_X = CDC_APP_X + SERVICE.width + BAND;
+const CDC_CONNECTOR_X = CDC_DB_X + STORE.width + BAND;
+const CDC_STREAM_X = CDC_CONNECTOR_X + SERVICE.width + BAND;
+const CDC_SINK_X = CDC_STREAM_X + NAMED_QUEUE.width + BAND;
+const CDC_WAREHOUSE_Y = STORE.height + GUTTER;
+
+const cdc: ArchitectureStarter = {
+  id: 'cdc',
+  category: 'data',
+  name: 'Change Data Capture',
+  description: 'Propagate database changes downstream without polling',
+  aliases: ['cdc', 'change data capture', 'cdc pipeline', 'change stream', 'log-based replication', 'debezium'],
+  nodes: [
+    {
+      key: 'application',
+      type: 'service',
+      serviceKind: 'generic',
+      text: 'Application',
+      accent: 'teal',
+      x: CDC_APP_X,
+      y: centeredAt(CDC_SPINE_CENTER, SERVICE.height),
+      ...SERVICE,
+    },
+    {
+      key: 'database',
+      type: 'database',
+      databaseKind: 'generic',
+      text: 'Operational Database',
+      accent: 'blue',
+      x: CDC_DB_X,
+      y: 0,
+      ...STORE,
+    },
+    {
+      key: 'connector',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'CDC Connector',
+      accent: 'teal',
+      x: CDC_CONNECTOR_X,
+      y: centeredAt(CDC_SPINE_CENTER, SERVICE.height),
+      ...SERVICE,
+      attachments: [{ type: 'note', text: "Reads the database's own change log — never the tables, never on a poll interval." }],
+    },
+    {
+      key: 'stream',
+      type: 'queue',
+      queueKind: 'topic',
+      text: 'Change Stream',
+      x: CDC_STREAM_X,
+      y: tubeCenteredAt(CDC_SPINE_CENTER, NAMED_QUEUE.height),
+      ...NAMED_QUEUE,
+    },
+    {
+      key: 'search-index',
+      type: 'database',
+      databaseKind: 'search-index',
+      text: 'Search Index',
+      accent: 'blue',
+      x: CDC_SINK_X,
+      y: 0,
+      ...STORE,
+    },
+    {
+      key: 'warehouse',
+      type: 'database',
+      databaseKind: 'generic',
+      text: 'Data Warehouse',
+      accent: 'blue',
+      x: CDC_SINK_X,
+      y: CDC_WAREHOUSE_Y,
+      ...STORE,
+    },
+  ],
+  edges: [
+    { key: 'write', ...across('application', 'database') },
+    { key: 'capture', ...across('database', 'connector'), semantic: 'cdc' },
+    { key: 'publish', ...across('connector', 'stream') },
+    { key: 'to-index', ...across('stream', 'search-index') },
+    { key: 'to-warehouse', ...across('stream', 'warehouse') },
+  ],
+  flows: [
+    {
+      title: 'Propagate database change',
+      accent: 'teal',
+      steps: [
+        { edgeKey: 'write', caption: 'The application writes a transaction, which the database commits' },
+        { edgeKey: 'capture', caption: 'CDC captures the committed change from the database’s log' },
+        { edgeKey: 'publish', caption: 'The change is published to the stream' },
+        { edgeKey: 'to-index', caption: 'The consumer receives the change and updates its own projection' },
+      ],
+    },
+  ],
+};
+
 /* ---------------------------------------------------- saga – orchestration -- */
 /**
  * A business transaction across services, coordinated by one orchestrator as a *sequence of
@@ -2156,7 +2726,7 @@ const transactionalOutbox: ArchitectureStarter = {
   category: 'pattern',
   name: 'Transactional Outbox',
   description: 'Persist state and event intent atomically, publish after',
-  aliases: ['outbox', 'transactional outbox', 'outbox pattern', 'dual write', 'reliable publish', 'cdc'],
+  aliases: ['outbox', 'transactional outbox', 'outbox pattern', 'dual write', 'reliable publish'],
   nodes: [
     {
       key: 'producer',
@@ -2279,8 +2849,8 @@ const transactionalOutbox: ArchitectureStarter = {
   ],
 };
 
-/** Architectures first, then patterns — the palette's two headers stay contiguous by construction
- *  (`commands/registry.ts`'s `starterCommands`). */
+/** Architectures first, then data architectures, then patterns — the palette's three headers stay
+ *  contiguous by construction (`commands/registry.ts`'s `starterCommands`). */
 export const ARCHITECTURE_STARTERS: readonly ArchitectureStarter[] = [
   monolith,
   modularMonolith,
@@ -2289,6 +2859,9 @@ export const ARCHITECTURE_STARTERS: readonly ArchitectureStarter[] = [
   hexagonal,
   backendForFrontend,
   cqrs,
+  medallion,
+  kappa,
+  cdc,
   sagaOrchestration,
   sagaChoreography,
   transactionalOutbox,

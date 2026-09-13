@@ -592,18 +592,25 @@ describe('architecture starters', () => {
 
   const top = (query: string) => rank(query, commandsFor(stubContext()))[0]!.entry.id;
 
-  it('offers one row per starter, under Architectures then Patterns, each with a one-line description', () => {
+  it('offers one row per starter, under Architectures then Data Architectures then Patterns, each with a one-line description', () => {
     const starters = commandsFor(stubContext()).filter(
-      (command) => command.group === 'starter' || command.group === 'pattern',
+      (command) => command.group === 'starter' || command.group === 'data' || command.group === 'pattern',
     );
     expect(starters.map((command) => command.id)).toEqual(STARTER_IDS.map((id) => `starter-${id}`));
     for (const command of starters) {
       expect(command.hint).toBeTruthy();
       expect(command.title).not.toMatch(/template/i);
     }
-    // The two headers stay contiguous: every architecture precedes every pattern.
+    // The three headers stay contiguous: every architecture precedes every data architecture,
+    // which precedes every pattern.
     const groups = starters.map((command) => command.group);
-    expect(groups.lastIndexOf('starter')).toBeLessThan(groups.indexOf('pattern'));
+    expect(groups.lastIndexOf('starter')).toBeLessThan(groups.indexOf('data'));
+    expect(groups.lastIndexOf('data')).toBeLessThan(groups.indexOf('pattern'));
+    expect(starters.filter((command) => command.group === 'data').map((command) => command.id)).toEqual([
+      'starter-medallion',
+      'starter-kappa',
+      'starter-cdc',
+    ]);
     expect(starters.filter((command) => command.group === 'pattern').map((command) => command.id)).toEqual([
       'starter-saga-orchestration',
       'starter-saga-choreography',
@@ -645,6 +652,20 @@ describe('architecture starters', () => {
     ['no orchestrator', 'saga-choreography'],
     ['outbox', 'transactional-outbox'],
     ['dual write', 'transactional-outbox'],
+    ['medallion', 'medallion'],
+    ['medallion architecture', 'medallion'],
+    ['bronze silver gold', 'medallion'],
+    ['lakehouse', 'medallion'],
+    ['data lake', 'medallion'],
+    ['kappa', 'kappa'],
+    ['kappa architecture', 'kappa'],
+    ['materialized view', 'kappa'],
+    ['durable log', 'kappa'],
+    ['log replay', 'kappa'],
+    ['cdc', 'cdc'],
+    ['change data capture', 'cdc'],
+    ['change stream', 'cdc'],
+    ['debezium', 'cdc'],
   ])('"%s" leads with the %s starter', (query, id) => {
     expect(top(query)).toBe(`starter-${id}`);
   });

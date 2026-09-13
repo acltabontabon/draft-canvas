@@ -581,14 +581,11 @@ describe('flows through the store', () => {
     expect(store.getState().selectedFlowId).toBe(kept);
   });
 
-  it('opening a document auto-selects its one flow, so step badges are not blank on first load', () => {
-    const doc = addFlow(createDocument('X'), createFlow({ title: 'Only flow', id: 'f1' }));
+  it('opening a document never auto-selects a flow, however many it has — the default view is the diagram', () => {
+    let doc = addFlow(createDocument('X'), createFlow({ title: 'Only flow', id: 'f1' }));
     store.getState().setDocument(doc);
-    expect(store.getState().selectedFlowId).toBe('f1');
-  });
+    expect(store.getState().selectedFlowId).toBeNull();
 
-  it('opening a document with several flows selects none — guessing wrong would be worse', () => {
-    let doc = addFlow(createDocument('X'), createFlow({ title: 'A', id: 'f1' }));
     doc = addFlow(doc, createFlow({ title: 'B', id: 'f2' }));
     store.getState().setDocument(doc);
     expect(store.getState().selectedFlowId).toBeNull();
