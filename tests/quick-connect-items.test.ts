@@ -27,6 +27,7 @@ describe('quickConnectItems', () => {
     const rows = quickConnectItems(topicDoc(), drop('t'));
     expect(rows.map((r) => `${r.kind}:${r.label}`)).toEqual([
       'continuation:Queue',
+      'continuation:Queue → Worker',
       'continuation:Worker',
       'preset:Service',
       'preset:Data Store',
@@ -56,6 +57,21 @@ describe('offerFor', () => {
     // No matrix row for topic → actor: the connector is created plain, as a hand-drawn one would be.
     expect(actor.edges[0]!.semantic).toBeUndefined();
     expect(actor.edges[0]!.source).toBe('t');
+  });
+
+  it('previews a whole chain from the drop point outward, and a chain stands in for no single preset', () => {
+    const doc = topicDoc();
+    const rows = quickConnectItems(doc, drop('t'));
+    const chain = offerFor(doc, drop('t'), rows.find((r) => r.label === 'Queue → Worker')!)!;
+    expect(chain.nodes.map((n) => n.type)).toEqual(['queue', 'service']);
+    expect(chain.nodes[0]!.x).toBe(800 - 140 / 2);
+    expect(chain.nodes[1]!.x).toBeGreaterThan(chain.nodes[0]!.x + chain.nodes[0]!.width);
+    expect(chain.edges.map((e) => e.semantic)).toEqual(['fansOut', 'consumes']);
+    expect(chain.continueFromId).toBe(chain.nodes[1]!.id);
+  });
+
+  it('never lists keyboard-only alternatives: a Service source is still presets only', () => {
+    expect(quickConnectItems(topicDoc(), drop('pub')).every((r) => r.kind === 'preset')).toBe(true);
   });
 
   it('is nothing for a picker with no source', () => {

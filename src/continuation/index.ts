@@ -1,28 +1,36 @@
 /**
- * Intent Continuation — the deterministic "next move" Draft Canvas is willing to offer for what
- * the user has already drawn. Not a recommender, not AI: a short list of rules (`rules.ts`), a
- * one-hop graph context (`context.ts`), and a pipeline (`engine.ts`) in which the capability
- * matrix — never a rule — decides what is technically allowed. `materialize.ts` turns an offer
- * into real, positioned elements so the preview and the accepted result are the same objects.
+ * Intent Continuation — architecture autocomplete: the deterministic next moves Draft Canvas is
+ * willing to offer for what the user has already drawn. Not a recommender, not AI. The pieces:
  *
- * Silence is the default outcome. This module never learns what a ghost is; see `canvas/` for
- * how an offer is shown. Layering matches the rest of the app: `document/` and `render/text`
+ * - `context.ts` — one node's neighborhood (plus the connectors leaving its neighbors).
+ * - `rules.ts` / `families.ts` — authored candidates: one node, or a short chain (`defineChain`).
+ * - `existing.ts` — candidates that connect to a suitable node already drawn nearby.
+ * - `engine.ts` — generate → matrix validity → suppression → derived confidence → `rank.ts`.
+ *   The capability matrix, never a rule, decides what is technically allowed.
+ * - `materialize.ts` (+ `naming.ts`) — one candidate as real, positioned elements, so the preview
+ *   and the accepted result are the same objects.
+ *
+ * Silence is the default outcome: only high confidence shows unprompted; the rest waits to be
+ * asked for. This module never learns what a ghost is, or how alternatives are cycled — see
+ * `canvas/`. Layering matches the rest of the app: `document/`, `edges/routing` and `render/text`
  * only, nothing from `store/` or `canvas/`. See `docs/ARCHITECTURE.md`.
  */
 
 export { neighborhoodOf } from './context';
-export { continuationsFor } from './engine';
-export { dismissalKey } from './dismissal';
+export { continuationsFor, type ContinuationOptions } from './engine';
+export { ANY_CANDIDATE, dismissalKey } from './dismissal';
 export { gapForCaption, horizontalAnchorsFor, materialize } from './materialize';
 export { RULES } from './rules';
 export type {
   Continuation,
+  ContinuationConfidence,
   ContinuationRule,
   ContinuationTier,
   ContinuationTrigger,
   DismissalKey,
   Fragment,
   FragmentEdgeSpec,
+  FragmentExistingRef,
   FragmentNodeSpec,
   MaterializedContinuation,
   Neighborhood,

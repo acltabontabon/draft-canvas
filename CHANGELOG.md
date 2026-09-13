@@ -6,6 +6,15 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
+- Suggestions have alternatives: press `]` or `[` to step through them, then Tab to add the one
+  showing. On a shape with no suggestion, `]` asks for some.
+- Keep pressing Tab to keep sketching. Suggestions continue after each one you add and stop when
+  there's no clear next step.
+- A suggestion can be a small group, like a topic's queue and worker, added and undone in one step.
+- Suggestions connect to a matching shape that's already nearby instead of drawing a duplicate.
+- Suggestions follow what you've drawn: a topic with a subscriber offers another like it first,
+  and a queue with a consumer offers a dead-letter queue first.
+- A worker added after a queue named "Billing Queue" is named "Billing Worker".
 - Three new Data Architecture starters: Medallion (progressive data refinement), Kappa (a durable
   event stream for both live and historical processing), and Change Data Capture (propagating
   database changes downstream without polling), each with a built-in

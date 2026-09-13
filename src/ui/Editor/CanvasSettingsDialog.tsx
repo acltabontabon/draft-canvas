@@ -204,8 +204,9 @@ function CanvasSettingsBody() {
           <h3>Intent Continuation</h3>
           <p className="dc-muted">
             When a node you select has an obvious next move — a queue after a topic, a worker after a
-            queue — Draft Canvas sketches it in place. Tab or click adds it; Escape or just drawing
-            waves it away. A device preference, not part of this document.
+            queue, or the topic already next to a service — Draft Canvas sketches it in place. Tab or
+            click adds it, ] shows the alternatives, and Escape or just drawing waves it away. A
+            device preference, not part of this document.
           </p>
           <label className="dc-check">
             <input

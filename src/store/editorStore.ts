@@ -274,8 +274,8 @@ export interface EditorStore {
   insertStarter: (starter: ArchitectureStarter) => DraftNode[];
   /**
    * Accepts an Intent Continuation offer (see `src/continuation/`): the previewed nodes and
-   * connectors become real in one undoable step, the offer's primary node is selected (so the
-   * next offer can chain from it) and marked to settle in. The offer itself is cleared here, not
+   * connectors become real in one undoable step, the node the fragment ends on is selected (so the
+   * next offer can chain from it) and new nodes settle in. The offer itself is cleared here, not
    * by the caller, so every accept path — Tab, click, ⌘K — leaves the UI in the same state.
    */
   acceptContinuation: (offer: MaterializedContinuation) => void;
@@ -831,12 +831,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   acceptContinuation(offer) {
     const state = get();
-    // A stale offer (its anchor was deleted underneath it) adds nothing.
-    if (!state.document.nodes.some((n) => n.id === offer.anchorId)) return;
-    state.addNodesWithEdges(offer.nodes, offer.edges, `Add ${offer.label}`);
+    // A stale offer (its anchor, or an existing node it connects to, was deleted underneath it)
+    // adds nothing.
+    const present = new Set(state.document.nodes.map((n) => n.id));
+    for (const node of offer.nodes) present.add(node.id);
+    if (!present.has(offer.anchorId) || !offer.edges.every((e) => present.has(e.source) && present.has(e.target))) return;
+    // Selects where the sentence now ends — not every node the fragment added — so the next offer
+    // chains from the tail. Flows are never touched: a continuation is drawing, not narrating.
+    state.apply(offer.actionLabel, (doc) => addEdges(addNodes(doc, offer.nodes), offer.edges), {
+      selection: { nodes: [offer.continueFromId], edges: [] },
+    });
     const ui = useUiStore.getState();
     ui.setContinuation(null);
-    ui.setSettleNodeId(offer.primaryNodeId);
+    ui.setContinuationCycle(null);
+    ui.setSettleNodeIds(offer.nodes.map((n) => n.id));
+    ui.recordContinuationAccepted(offer.ruleId);
   },
 
   insertStarter(starter) {

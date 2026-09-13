@@ -1,7 +1,9 @@
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
-import type { DraftDocument, DraftNodeType } from '../document/types';
-import { neighborhoodOf } from './context';
-import { dismissalKey } from './dismissal';
+import type { DraftDocument, DraftNode } from '../document/types';
+import { ANCHOR_TYPES, neighborhoodOf } from './context';
+import { ANY_CANDIDATE, dismissalKey } from './dismissal';
+import { existingTargetCandidates } from './existing';
+import { rank } from './rank';
 import { RULES } from './rules';
 import type {
   Continuation,
@@ -13,72 +15,106 @@ import type {
   Neighborhood,
 } from './types';
 
-/** Node types a continuation can hang off. Annotations, boundaries and routing points never do. */
-const ANCHOR_TYPES: ReadonlySet<DraftNodeType> = new Set<DraftNodeType>(['service', 'database', 'queue', 'actor', 'component']);
-
+export interface ContinuationOptions {
+  /** Escaped offers. The quiet trigger honours them; explicit callers usually pass none. */
+  dismissed?: ReadonlySet<DismissalKey>;
+  /** Rule ids accepted recently in this session — a light ranking hint only (`rank.ts`). */
+  recent?: readonly string[];
+  rules?: readonly ContinuationRule[];
+}
 
 /**
- * The continuations Draft Canvas is willing to offer for one node, best first — or none.
+ * The continuations Draft Canvas is willing to offer for one node, best first — or none. Two
+ * sources: the authored `RULES` (new nodes, alone or as a short chain) and `existing.ts` (a
+ * connector to a suitable node already drawn nearby — never in the drop picker, whose whole point
+ * is a new node where the user let go).
  *
- * Deterministic by construction: the same document, anchor, trigger and dismissals always
- * produce the same array. The pipeline is generate → technical validity → suppression → order,
- * and every stage is generic; a rule contributes only its `when` and its fragment.
+ * Deterministic by construction: the same document, anchor, trigger and options always produce
+ * the same array. The pipeline is generate → technical validity → suppression → confidence →
+ * rank, and every stage is generic; a rule contributes only its `when` and its fragment.
  *
  * - **Validity** is the capability matrix, never the rule. Every fragment edge must resolve to a
  *   pairing with a default relation and no `unusual`/`questionable` status. If the matrix changes,
  *   the rules follow; a rule physically cannot surface a pairing the matrix rejects.
  * - **Suppression** is where the feature knows when to stay quiet: an equivalent relationship
- *   already leaving the anchor (unless the rule is `repeatable` for this trigger), a dismissal
- *   pinned to this exact neighborhood, and — on the quiet `'select'` trigger — anything below
- *   `primary`.
- * - **Order** is `(tier, position in RULES)`. No scores.
+ *   already leaving the anchor (unless the rule is `repeatable` for this trigger), and a
+ *   dismissal pinned to this exact neighborhood.
+ * - **Confidence** is derived, not authored: `high` only for a `primary` rule whose quiet-trigger
+ *   evidence holds and which repeats nothing already drawn. The quiet `'select'` trigger returns
+ *   only `high` candidates; the explicit triggers return everything, ordered.
+ * - **Order** is `rank.ts`: confidence, then contextual signals, then tier and declaration order.
  */
 export function continuationsFor(
   doc: DraftDocument,
   anchorId: string,
   trigger: ContinuationTrigger,
-  dismissed: ReadonlySet<DismissalKey> = EMPTY,
-  rules: readonly ContinuationRule[] = RULES,
+  options: ContinuationOptions = {},
 ): Continuation[] {
   const nb = neighborhoodOf(doc, anchorId);
   if (!nb || !ANCHOR_TYPES.has(nb.node.type)) return [];
+  const { dismissed = EMPTY, recent = NONE, rules = RULES } = options;
+  if (dismissed.has(dismissalKey(anchorId, ANY_CANDIDATE, nb.key))) return [];
 
-  const offered: Continuation[] = [];
+  const candidates: Continuation[] = [];
   for (const rule of rules) {
-    if (trigger === 'select' && rule.tier !== 'primary') continue;
+    if (rule.surfaces === 'invoke' && trigger !== 'invoke') continue;
     if (dismissed.has(dismissalKey(anchorId, rule.id, nb.key))) continue;
     if (!rule.when(nb, trigger)) continue;
     const fragment = rule.fragment(nb);
-    if (!fragmentIsValid(nb, fragment)) continue;
-    if (!(rule.repeatable?.(trigger) ?? false) && hasEquivalent(nb, fragment)) continue;
-    offered.push({
+    if (!fragmentIsValid(doc, nb, fragment)) continue;
+    const equivalent = hasEquivalent(doc, nb, fragment);
+    if (equivalent && !(rule.repeatable?.(trigger) ?? false)) continue;
+    const confidence = rule.tier === 'primary' && !equivalent && rule.when(nb, 'select') ? 'high' : 'medium';
+    if (trigger === 'select' && confidence !== 'high') continue;
+    candidates.push({
+      id: rule.id,
       ruleId: rule.id,
       tier: rule.tier,
+      confidence,
+      score: 0,
       label: rule.label,
+      actionLabel: `Add ${rule.label}`,
       reason: rule.reason,
       fragment,
+      branches: rule.branches,
       anchorId,
       neighborhoodKey: nb.key,
     });
   }
-  // Stable: primaries first, otherwise the order the rules were declared in.
-  return offered.sort((a, b) => tierRank(a) - tierRank(b));
+  if (trigger !== 'drop') {
+    for (const candidate of existingTargetCandidates(doc, nb)) {
+      if (dismissed.has(dismissalKey(anchorId, candidate.id, nb.key))) continue;
+      if (trigger === 'select' && candidate.confidence !== 'high') continue;
+      candidates.push(candidate);
+    }
+  }
+  return rank(candidates, { nb, recent });
 }
 
 const EMPTY: ReadonlySet<DismissalKey> = new Set();
+const NONE: readonly string[] = [];
 
-const tierRank = (c: Continuation) => (c.tier === 'primary' ? 0 : 1);
-
-function specOf(nb: Neighborhood, fragment: Fragment, ref: string): FragmentNodeSpec | Neighborhood['node'] | undefined {
-  return ref === 'anchor' ? nb.node : fragment.nodes.find((n) => n.key === ref);
+/** What a fragment edge end refers to: the anchor, a node the fragment adds, or a node already drawn. */
+export function resolveRef(
+  doc: DraftDocument,
+  nb: Neighborhood,
+  fragment: Fragment,
+  ref: string,
+): FragmentNodeSpec | DraftNode | undefined {
+  if (ref === 'anchor') return nb.node;
+  const spec = fragment.nodes.find((n) => n.key === ref);
+  if (spec) return spec;
+  const existing = fragment.existing?.find((e) => e.key === ref);
+  return existing ? doc.nodes.find((n) => n.id === existing.nodeId) : undefined;
 }
 
 /** Every edge the fragment would add must be one the matrix offers with a clean status. */
-function fragmentIsValid(nb: Neighborhood, fragment: Fragment): boolean {
-  if (fragment.nodes.length === 0 || fragment.edges.length === 0) return false;
+function fragmentIsValid(doc: DraftDocument, nb: Neighborhood, fragment: Fragment): boolean {
+  if (fragment.edges.length === 0) return false;
+  if (fragment.nodes.length === 0 && (fragment.existing?.length ?? 0) === 0) return false;
   return fragment.edges.every((spec) => {
-    const from = specOf(nb, fragment, spec.from);
-    const to = specOf(nb, fragment, spec.to);
+    const from = resolveRef(doc, nb, fragment, spec.from);
+    const to = resolveRef(doc, nb, fragment, spec.to);
     if (!from || !to) return false;
     const capability = capabilityFor(categoryOf(from), categoryOf(to));
     return capability?.defaultRelation !== undefined && (capability.status ?? 'valid') === 'valid';
@@ -91,10 +127,10 @@ function fragmentIsValid(nb: Neighborhood, fragment: Fragment): boolean {
  * so a hand-drawn `Queue → Service` (consumes) counts as the consumer a `Queue → Worker` rule
  * would add.
  */
-function hasEquivalent(nb: Neighborhood, fragment: Fragment): boolean {
+function hasEquivalent(doc: DraftDocument, nb: Neighborhood, fragment: Fragment): boolean {
   return fragment.edges.some((spec) => {
     if (spec.from !== 'anchor') return false;
-    const to = specOf(nb, fragment, spec.to);
+    const to = resolveRef(doc, nb, fragment, spec.to);
     if (!to) return false;
     const semantic = capabilityFor(nb.category, categoryOf(to))?.defaultRelation;
     return semantic !== undefined && nb.out.some(({ edge }) => edge.semantic === semantic);

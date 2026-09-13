@@ -173,14 +173,20 @@ describes a real runtime interaction and is never excluded.
 The next moves Draft Canvas will sketch for a selected node (see
 [`docs/ARCHITECTURE.md`'s Intent Continuation](ARCHITECTURE.md#derived-capabilities)). Every
 connector a rule adds is inferred from the capability matrix above — a rule that proposed a pairing
-the matrix does not offer, or flags `unusual`, is dropped by the engine before it can show. Order
-is ranking. `primary` may appear unprompted on selection; `secondary` only in the picker a
-connector dropped on empty canvas opens.
+the matrix does not offer, or flags `unusual`, is dropped by the engine before it can show.
+
+A rule adds one node or a short chain (`Queue → Worker`). Each candidate gets a **confidence**,
+derived rather than authored: **high** only for a `primary` rule whose evidence holds in this exact
+neighborhood and which repeats nothing already drawn — the one kind of suggestion that may appear
+unprompted as a ghost. Everything else is **medium**: listed when asked — `]` / `[` on the canvas,
+or the picker a connector dropped on empty canvas opens. Rules marked "keyboard only" below never
+appear in that picker, whose standing presets already cover those shapes.
 
 <!-- continuation-rules:start — generated from `src/continuation/rules.ts`; `tests/continuation.test.ts` fails on drift -->
 | Rule | Tier | Adds | Reason |
 | --- | --- | --- | --- |
 | `topic-fan-out-queue` | primary | Queue | This topic has a publisher but no delivery path. |
+| `topic-subscriber` | secondary | Queue → Worker | A subscriber: its own queue and the worker consuming it. |
 | `topic-fan-out-worker` | secondary | Worker | Subscribers can also receive directly from the topic. |
 | `queue-consumer` | primary | Worker | This queue has no consumer. |
 | `queue-dead-letter` | secondary | Dead-letter queue | This queue has a consumer but no dead-letter path. |
@@ -192,11 +198,52 @@ connector dropped on empty canvas opens.
 | `object-storage-fan-out-topic` | secondary | Topic | Multiple subscribers can watch this bucket through a topic instead. |
 | `port-implementation-component` | primary | Component | This port isn't implemented by anything yet. |
 | `port-implementation-service` | secondary | Service | A port can also be implemented by a whole service. |
+| `service-data-store` | secondary | Data Store | Services usually own their data. |
+| `service-topic` | secondary | Topic | Publish events other parts of the system react to. |
+| `service-queue` | secondary | Queue | Hand work off to be processed later. |
+| `service-service` | secondary | Service | Call another service. |
+| `service-cache` | secondary | Cache | Keep hot reads close. |
+| `service-external` | secondary | External System | Call a system outside this one. |
 | `worker-indexes` | secondary | Search Index | This worker doesn't index anything yet. |
+| `actor-gateway` | secondary | Gateway | Requests usually enter through a gateway. |
+| `actor-api` | secondary | API | Or call an API directly. |
 <!-- continuation-rules:end -->
 
-Deliberately no rule starts from a plain Service, an Actor, a Data Store, a Cache, a File System, a
+Keyboard only: the `service-*` and `actor-*` rules.
+
+Nothing starts unprompted from a plain Service, an Actor, a Data Store, a Cache, a File System, a
 Search Index or a bare (non-Port) Component: each has too many valid next moves for any one of them
-to be *the* move, and no suggestion beats a weak one. Adding a rule for one category is never
-license to assume a neighboring one is now covered too — see `tests/continuation.test.ts`'s broad
-silence sweep.
+to be *the* move, and no suggestion beats a weak one. Services and Actors get a short list when
+asked; the rest get nothing at all. Adding a rule for one category is never license to assume a
+neighboring one is now covered too — see `tests/continuation.test.ts`'s broad silence sweep.
+
+### Ranking
+
+Confidence always comes first. Among candidates of the same confidence, a few named signals
+(`src/continuation/rank.ts`) reorder — never promote — and ties fall back to tier, then the table's
+order:
+
+| Signal | Effect |
+| --- | --- |
+| Sibling branch | A fan-out anchor (Topic, Gateway, Object Storage) that already has a branch of the same shape ranks another one first — a Topic with a `Queue → Worker` subscriber leads with `Queue → Worker`. |
+| Repeats what's there | The same verb to the same kind of node the anchor already has drops back: a Queue with a consumer leads with its dead-letter queue, a Service writing to a Data Store gets another Data Store last (a Cache is unaffected). Fan-out rules are exempt. |
+| Already drawn | Connecting to an existing node outranks creating a look-alike. |
+| Recently accepted | A rule accepted earlier in this session gets a small nudge among medium candidates. Session-only, never saved. |
+
+### Connecting to what's already there
+
+Before drawing something new, the engine looks for a node already on the canvas that finishes the
+sentence — "Order Service *publishes* Order Events", the topic right next to it. Only these verbs
+qualify: publishes, writes, fans out, delivers to, consumes, routes, triggers, and calls from an
+Actor. A candidate must be nearby, in the same boundary, not already connected either way, not two
+hops upstream (no loops), and not already receiving that verb from someone else.
+
+It ghosts unprompted only when the target has no connections coming in, the anchor doesn't
+already do the same thing to the same kind of node, the names share a word ("Payment Service" /
+"Payments DB") or it is the only such node around, and the direction is not a coin toss. Two loose
+shapes that could each continue into the other — a Service and a Topic side by side — stay quiet
+until one of them is connected. The ghost is only the connector plus an outline on the target;
+nothing is duplicated.
+
+Not yet: continuation does not read the active Flow (the flow lens turns it off) or which starter a
+diagram came from (documents don't record it). Accepting never changes a Flow.

@@ -72,6 +72,8 @@ test.describe('Intent Continuation', () => {
     await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');
     await expect(page.locator('.dc-ghost-edges text')).toHaveText('fans out');
     await expect(page.locator('.dc-ghost-pill')).toContainText('Queue');
+    // Alternatives exist, so the pill counts them — quietly, one ghost at a time.
+    await expect(page.locator('.dc-ghost-pill-next')).toContainText('1/3');
 
     await page.keyboard.press('Tab');
     await expect(page.locator('.dc-node')).toHaveCount(3);
@@ -139,7 +141,7 @@ test.describe('Intent Continuation', () => {
   test('clicking the ghost accepts it too', async ({ page }) => {
     await newCanvas(page, 'Continuation click');
     await publisherAndTopic(page);
-    await page.locator('.dc-ghost-pill').click();
+    await page.locator('.dc-ghost-pill-accept').click();
     await expect(page.locator('.dc-node')).toHaveCount(3);
     await expect(captions(page)).toContainText(['publishes', 'fans out']);
   });
@@ -191,7 +193,7 @@ test.describe('Intent Continuation', () => {
     const menu = page.locator('.dc-quick-connect');
     await expect(menu).toBeVisible();
     const rows = menu.locator('.dc-quick-connect-item');
-    await expect(rows).toHaveText(['Queue', 'Worker', 'Service', 'Data Store', 'Actor']);
+    await expect(rows).toHaveText(['Queue', 'Queue → Worker', 'Worker', 'Service', 'Data Store', 'Actor']);
     await expect(rows.nth(0)).toHaveAttribute('data-highlighted', 'true');
     await expect(rows.nth(0)).toHaveAttribute('data-suggested', 'true');
     await expect(page.locator('.dc-ghost')).toHaveAttribute('data-trigger', 'drop');
@@ -203,8 +205,16 @@ test.describe('Intent Continuation', () => {
     await page.keyboard.press('ArrowDown');
     expect(await page.evaluate(() => document.querySelectorAll('.dc-ghost-node').length)).toBeGreaterThan(0);
     await expect(rows.nth(1)).toHaveAttribute('data-highlighted', 'true');
+    // A compound row previews the whole fragment it would add.
+    await expect(page.locator('.dc-ghost-node')).toHaveCount(2);
+    await expect(page.locator('.dc-ghost-edges text')).toHaveText(['fans out', 'consumes']);
+
+    await page.keyboard.press('ArrowDown');
+    await expect(rows.nth(2)).toHaveAttribute('data-highlighted', 'true');
     await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'service');
     await expect(page.locator('.dc-ghost-edges text')).toHaveText('delivers to');
+
+    await page.keyboard.press('ArrowUp');
 
     await page.keyboard.press('ArrowUp');
     expect(await page.evaluate(() => document.querySelectorAll('.dc-ghost-node').length)).toBeGreaterThan(0);
@@ -235,8 +245,92 @@ test.describe('Intent Continuation', () => {
     expect(Math.abs(ghostBoxAfter.width / topicBoxAfter.width - ratioBefore)).toBeLessThan(0.05);
 
     // Still a real, clickable, functioning affordance at the new zoom level.
-    await page.locator('.dc-ghost-pill').click();
+    await page.locator('.dc-ghost-pill-accept').click();
     await expect(page.locator('.dc-node')).toHaveCount(3);
+  });
+
+  test('] and [ cycle the alternatives through one ghost, and Tab adds whichever is showing', async ({ page }) => {
+    await newCanvas(page, 'Continuation cycling');
+    await publisherAndTopic(page);
+    const next = page.locator('.dc-ghost-pill-next');
+    await expect(next).toContainText('1/3');
+
+    await page.keyboard.press(']');
+    await expect(next).toContainText('2/3');
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+    await expect(page.locator('.dc-ghost-node')).toHaveCount(2);
+    await expect(page.locator('.dc-ghost-pill')).toContainText('Queue → Worker');
+
+    await page.keyboard.press(']');
+    await expect(next).toContainText('3/3');
+    await expect(page.locator('.dc-ghost-node')).toHaveCount(1);
+    await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'service');
+    await page.keyboard.press(']');
+    await expect(next).toContainText('1/3');
+    await page.keyboard.press('[');
+    await expect(next).toContainText('3/3');
+    await page.keyboard.press('[');
+    await expect(next).toContainText('2/3');
+
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.dc-node')).toHaveCount(4);
+    await expect(captions(page)).toContainText(['publishes', 'fans out', 'consumes']);
+    // One step undoes the whole fragment.
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+  });
+
+  test('clicking the count steps to the next alternative', async ({ page }) => {
+    await newCanvas(page, 'Continuation cycling click');
+    await publisherAndTopic(page);
+    await page.locator('.dc-ghost-pill-next').click();
+    await expect(page.locator('.dc-ghost-pill-next')).toContainText('2/3');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.dc-node')).toHaveCount(4);
+  });
+
+  test('a shape already on the canvas is connected to rather than drawn again', async ({ page }) => {
+    await newCanvas(page, 'Continuation existing');
+    // Actor → Service, so the Service is mid-sentence, then a Topic drawn next to it but not wired.
+    await create(page, 'Actor', { x: 120, y: 300 });
+    await create(page, 'Service', { x: 380, y: 300 });
+    await connect(page, 0, 1);
+    await page.keyboard.press('Escape');
+    await create(page, 'Queue', { x: 660, y: 300 });
+    await chooseInspectorOption(page, 'Queue type', 'Topic');
+    await page.locator('.dc-node').nth(1).click();
+
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+    await expect(page.locator('.dc-ghost-node')).toHaveCount(0);
+    await expect(page.locator('.dc-ghost-target')).toHaveCount(1);
+    await expect(page.locator('.dc-ghost-edges text')).toHaveText('publishes');
+    await expect(page.locator('.dc-ghost-pill')).toContainText('Connect');
+
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.dc-node')).toHaveCount(3);
+    await expect(page.locator('.dc-edge')).toHaveCount(2);
+    await expect(captions(page)).toContainText(['calls', 'publishes']);
+    // The topic is now selected and continues the sentence.
+    await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');
+  });
+
+  test('] asks for suggestions where none show on their own, and typing a label never cycles', async ({ page }) => {
+    await newCanvas(page, 'Continuation ask');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await page.locator('.dc-node').nth(0).click();
+    await expect(page.locator('.dc-ghost')).toHaveCount(0);
+
+    await page.keyboard.press(']');
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+    await expect(page.locator('.dc-ghost-pill')).toContainText('Data Store');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-ghost')).toHaveCount(0);
+
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Orders]');
+    await expect(page.locator('.dc-ghost')).toHaveCount(0);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.dc-node').nth(0)).toContainText('Orders]');
   });
 
   test('dismissing the drop picker leaves no preview behind', async ({ page }) => {

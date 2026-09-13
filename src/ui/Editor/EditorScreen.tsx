@@ -9,6 +9,7 @@ import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { nearestInDirection, nextRelationshipNeighbor, type Direction } from '../../canvas/spatialNav';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { offerFor, quickConnectItems, type QuickConnectItem } from '../../canvas/quickConnectItems';
+import { stepContinuation } from '../../canvas/stepContinuation';
 import { contextMenuCommandsFor } from '../../commands/contextMenu';
 import { starterCommands } from '../../commands/registry';
 import type { Command } from '../../commands/types';
@@ -426,11 +427,14 @@ function EditorScreen({ session }: { session: DocumentSession }) {
  * is still discoverable without a pointer.
  */
 function ContinuationAnnouncer() {
-  const message = useUiStore((state) =>
-    state.continuation?.trigger === 'select'
-      ? `Suggested: ${state.continuation.label}. Press Tab to add it.`
-      : '',
-  );
+  const message = useUiStore((state) => {
+    const offer = state.continuation;
+    if (offer?.trigger !== 'select') return '';
+    const ids = offer.alternatives ?? [];
+    if (ids.length < 2) return `Suggested: ${offer.label}. Press Tab to add it.`;
+    const position = `${ids.indexOf(offer.id) + 1} of ${ids.length}`;
+    return `Suggested: ${offer.label}, ${position}. Press Tab to add it, or ] for the next.`;
+  });
   return (
     <div className="dc-sr-only" aria-live="polite">
       {message}
@@ -615,6 +619,24 @@ function useKeyboard({
       // Presenting is read-only: the canvas already refuses pointer edits and the palette
       // offers present-only commands, so the keyboard must not be the one way to edit.
       const presenting = state.mode === 'present';
+
+      // `]` / `[` step through Intent Continuation's alternatives — or, with nothing showing, ask
+      // for them. Matched on the produced character, not the physical key, and ahead of the
+      // Cmd/Ctrl branch because AltGr arrives as Ctrl+Alt on Windows (German `[` is AltGr+8, and
+      // Option+5 on a Mac — hence Alt is allowed too). Cmd and plain Ctrl chords are left alone.
+      if ((event.key === ']' || event.key === '[') && !event.metaKey && !(event.ctrlKey && !event.altKey)) {
+        if (
+          !event.repeat &&
+          !presenting &&
+          !playback.active &&
+          !state.focus.active &&
+          focusIsOnCanvas() &&
+          stepContinuation(state, event.key === ']' ? 1 : -1)
+        ) {
+          event.preventDefault();
+        }
+        return;
+      }
 
       if (meta) {
         const key = event.key.toLowerCase();

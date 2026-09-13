@@ -17,13 +17,18 @@ import { SvgSurface } from './SvgSurface';
  *  from its line, so the two never read as different systems. */
 const PILL_GAP = 8;
 
+/** How far the outline marking an existing target sits outside that node's box. */
+const TARGET_OUTSET = 6;
+
 /**
  * Intent Continuation's preview: the nodes and connectors an offer would add, drawn in flow space
  * inside `Canvas`'s `<ViewportPortal>` so they pan and zoom with the diagram but never enter the
  * document, projection, history or an export. Every picture comes from the same
  * `describeNode → emitDisplayList` pipeline the real node uses, and every connector from the
  * same `routeBetween`/`dashForEdge`/marker the real edge will get — a ghost is the real thing at
- * reduced opacity, not an approximation of it.
+ * reduced opacity, not an approximation of it. A compound offer (Queue → Worker) draws all of
+ * its nodes and connectors; an offer to connect to something already drawn draws only the
+ * connector and a quiet outline around that node — never a copy of it.
  *
  * A `'select'` offer carries its own affordance (the pill; the box itself is clickable too) and
  * is what Tab accepts. A `'drop'` offer is the Quick Connect menu's live preview of its
@@ -40,18 +45,16 @@ export const ContinuationGhost = memo(function ContinuationGhost() {
 function GhostBody({ offer, anchor, learn }: { offer: ContinuationOffer; anchor: DraftNode; learn: boolean }) {
   const theme = useThemeValue();
   const { preset } = usePersonality();
-  const primary = offer.nodes[0]!;
   const showPill = offer.trigger === 'select';
 
   const accept = () => useEditorStore.getState().acceptContinuation(offer);
+  const next = () => useUiStore.getState().cycleContinuation(1);
 
   // One subscription and one `rectOf` pass for the whole ghost, shared by every `GhostEdge` below,
   // instead of each edge independently subscribing to the full node array and re-deriving rects —
   // the dominant cost behind unrelated document edits re-rendering every ghost edge. Includes the
   // offer's *other* fragment nodes too (not just the real document's), so a multi-node fragment's
-  // ghost edges see the same obstacles the real edges will see once accepted — today's single-node
-  // fragments make this a no-op, but it means preview and accepted routing can never drift apart
-  // simply because one fragment node doesn't exist in the document yet and the other now does.
+  // ghost edges see the same obstacles the real edges will see once accepted.
   const nodes = useEditorStore((state) => state.document.nodes);
   const obstacleRects = useMemo(
     () => [
@@ -60,31 +63,70 @@ function GhostBody({ offer, anchor, learn }: { offer: ContinuationOffer; anchor:
     ],
     [nodes, offer.nodes],
   );
+  // Endpoints a ghost connector can reach: the anchor, the fragment's own new nodes, and — for a
+  // connect-to-existing offer — nodes already drawn, read live so the preview follows them.
+  const endpoints = useMemo(() => {
+    const byId = new Map<string, DraftNode>([[anchor.id, anchor]]);
+    for (const ref of offer.fragment.existing ?? []) {
+      const node = nodes.find((n) => n.id === ref.nodeId);
+      if (node) byId.set(node.id, node);
+    }
+    for (const node of offer.nodes) byId.set(node.id, node);
+    return byId;
+  }, [anchor, nodes, offer.fragment.existing, offer.nodes]);
+  const targets = (offer.fragment.existing ?? []).flatMap((ref) => endpoints.get(ref.nodeId) ?? []);
+
+  // The pill sits under what the offer adds — the first new node, or the existing node it reaches.
+  const pillHost = offer.nodes[0] ?? endpoints.get(offer.continueFromId) ?? anchor;
+  const alternatives = offer.alternatives ?? [];
+  const position = alternatives.length > 1 ? `${alternatives.indexOf(offer.id) + 1}/${alternatives.length}` : undefined;
 
   return (
     <div className="dc-ghost" data-trigger={offer.trigger} aria-hidden={showPill ? undefined : 'true'}>
+      {targets.map((target) => (
+        <div
+          key={target.id}
+          className="dc-ghost-target"
+          data-type={target.type}
+          style={{
+            transform: `translate(${target.x - TARGET_OUTSET}px, ${target.y - TARGET_OUTSET}px)`,
+            width: target.width + TARGET_OUTSET * 2,
+            height: target.height + TARGET_OUTSET * 2,
+          }}
+        />
+      ))}
       <svg className="dc-ghost-edges" width={1} height={1} aria-hidden="true" focusable="false">
         {offer.edges.map((edge) => (
-          <GhostEdge key={edge.id} edge={edge} offer={offer} anchor={anchor} obstacleRects={obstacleRects} />
+          <GhostEdge key={edge.id} edge={edge} endpoints={endpoints} obstacleRects={obstacleRects} />
         ))}
       </svg>
       {offer.nodes.map((node) => (
         <GhostNode key={node.id} node={node} theme={theme} preset={preset} onClick={showPill ? accept : undefined} />
       ))}
       {showPill && (
-        <button
-          type="button"
+        <div
           className="dc-ghost-pill"
-          style={{ transform: `translate(${primary.x}px, ${primary.y + primary.height + PILL_GAP}px)` }}
-          onClick={accept}
-          aria-label={`Add ${offer.label} after ${anchor.text || anchor.type} (Tab)`}
+          style={{ transform: `translate(${pillHost.x}px, ${pillHost.y + pillHost.height + PILL_GAP}px)` }}
         >
-          <span className="dc-ghost-pill-main">
-            <span>{offer.label}</span>
-            <kbd>Tab</kbd>
-          </span>
-          {learn && offer.reason && <span className="dc-ghost-reason">{offer.reason}</span>}
-        </button>
+          <button
+            type="button"
+            className="dc-ghost-pill-accept"
+            onClick={accept}
+            aria-label={`${offer.actionLabel} after ${anchor.text || anchor.type} (Tab)`}
+          >
+            <span className="dc-ghost-pill-main">
+              <span>{offer.label}</span>
+              <kbd>Tab</kbd>
+            </span>
+            {learn && offer.reason && <span className="dc-ghost-reason">{offer.reason}</span>}
+          </button>
+          {position && (
+            <button type="button" className="dc-ghost-pill-next" onClick={next} aria-label="Next suggestion (])">
+              <span>{position}</span>
+              <span aria-hidden="true">›</span>
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -130,19 +172,16 @@ function GhostNode({
 
 function GhostEdge({
   edge,
-  offer,
-  anchor,
+  endpoints,
   obstacleRects,
 }: {
   edge: DraftEdge;
-  offer: ContinuationOffer;
-  anchor: DraftNode;
+  endpoints: ReadonlyMap<string, DraftNode>;
   obstacleRects: { id: string; rect: Rect }[];
 }) {
   const theme = useThemeValue();
-  const byId = new Map<string, DraftNode>([[anchor.id, anchor], ...offer.nodes.map((n) => [n.id, n] as const)]);
-  const source = byId.get(edge.source);
-  const target = byId.get(edge.target);
+  const source = endpoints.get(edge.source);
+  const target = endpoints.get(edge.target);
   if (!source || !target) return null;
   const obstacles = obstacleRects.filter((n) => n.id !== source.id && n.id !== target.id).map((n) => n.rect);
   const route = routeBetween(rectOf(source), rectOf(target), edge.routing, {

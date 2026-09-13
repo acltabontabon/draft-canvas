@@ -673,13 +673,16 @@ function continuationCommandFor(ctx: CommandContext, node: DraftNode): Command |
     shown && shown.anchorId === node.id && shown.trigger === 'select'
       ? shown
       : (() => {
-          const [first] = continuationsFor(ctx.editor.document, node.id, 'select', ctx.ui.continuationDismissals);
+          const [first] = continuationsFor(ctx.editor.document, node.id, 'select', {
+            dismissed: ctx.ui.continuationDismissals,
+            recent: ctx.ui.continuationRecent,
+          });
           return first ? materialize(ctx.editor.document, first) : undefined;
         })();
   if (!offer) return undefined;
   return {
     id: 'accept-continuation',
-    title: `Add ${offer.label}`,
+    title: offer.actionLabel,
     group: 'selection',
     keywords: ['suggested', 'continue', 'next', 'ghost', offer.label.toLowerCase()],
     hint: 'Suggested',

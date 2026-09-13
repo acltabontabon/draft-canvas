@@ -2732,10 +2732,7 @@
   left: 0;
   top: 0;
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 4px 9px;
+  align-items: stretch;
   border: 1px solid var(--dc-border);
   border-radius: 999px;
   background: var(--dc-surface);
@@ -2743,15 +2740,66 @@
   font: 500 11px/1.4 var(--dc-font);
   white-space: nowrap;
   box-shadow: var(--dc-shadow-panel);
-  cursor: pointer;
+  overflow: hidden;
   pointer-events: all;
 }
 
-.dc-ghost-pill:hover,
-.dc-ghost-pill:focus-visible {
-  background: var(--dc-selection-soft);
+.dc-ghost-pill button {
+  display: inline-flex;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dc-ghost-pill-accept {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px 9px;
+}
+
+/* The alternatives count reads as part of the same pill, set off by a hairline rather than space. */
+.dc-ghost-pill .dc-ghost-pill-next {
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px 4px 7px;
+  border-left: 1px solid var(--dc-border);
+  color: var(--dc-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-ghost-pill:has(.dc-ghost-pill-accept:hover, .dc-ghost-pill-accept:focus-visible) {
   border-color: var(--dc-selection);
+}
+
+.dc-ghost-pill-accept:hover,
+.dc-ghost-pill-accept:focus-visible,
+.dc-ghost-pill-next:hover,
+.dc-ghost-pill-next:focus-visible {
+  background: var(--dc-selection-soft);
   outline: none;
+}
+
+.dc-ghost-pill .dc-ghost-pill-next:hover,
+.dc-ghost-pill .dc-ghost-pill-next:focus-visible {
+  color: var(--dc-text);
+}
+
+/* An existing node a suggestion would connect to: marked, never duplicated. */
+.dc-ghost-target {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 1.5px dashed var(--dc-selection);
+  border-radius: 12px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.dc-ghost-target[data-type='actor'] {
+  border-radius: 50%;
 }
 
 .dc-ghost-pill-main {

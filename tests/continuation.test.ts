@@ -16,6 +16,7 @@ import {
 } from '../src/continuation';
 import { capabilityFor, categoryOf, inferRelationship } from '../src/document/connectorSemantics';
 import { createDocument, createEdge, createNode, defaultSizeFor } from '../src/document/factory';
+import { addFlow, createFlow } from '../src/document/flow';
 import { addEdges, addNodes, placeNear } from '../src/document/operations';
 import { rectOf, routeBetween } from '../src/edges/routing';
 import type { CreateNodeInput } from '../src/document/factory';
@@ -55,7 +56,7 @@ const port = (id: string): Spec => ({ id, type: 'component', componentKind: 'por
 const actor = (id: string): Spec => ({ id, type: 'actor' });
 
 const ids = (doc: DraftDocument, anchor: string, trigger: ContinuationTrigger, dismissed?: ReadonlySet<string>) =>
-  continuationsFor(doc, anchor, trigger, dismissed).map((c) => c.ruleId);
+  continuationsFor(doc, anchor, trigger, { dismissed }).map((c) => c.ruleId);
 
 /* ------------------------------------------------------------------ */
 /* Rule tables                                                          */
@@ -75,28 +76,35 @@ const CASES: Case[] = [
     doc: graph([service('pub'), topic('t')], [['pub', 't']]),
     anchor: 't',
     select: ['topic-fan-out-queue'],
-    drop: ['topic-fan-out-queue', 'topic-fan-out-worker'],
+    drop: ['topic-fan-out-queue', 'topic-subscriber', 'topic-fan-out-worker'],
   },
   {
     name: 'Topic with no edges at all — no evidence on select, offered on explicit drop',
     doc: graph([topic('t')], []),
     anchor: 't',
     select: [],
-    drop: ['topic-fan-out-queue', 'topic-fan-out-worker'],
+    drop: ['topic-fan-out-queue', 'topic-subscriber', 'topic-fan-out-worker'],
   },
   {
-    name: 'Topic already fanning into a Queue — silent on select, another Queue on drop',
+    name: 'Topic already fanning into a Queue — silent on select, another Queue first on drop',
     doc: graph([service('pub'), topic('t'), queue('q')], [['pub', 't'], ['t', 'q']]),
     anchor: 't',
     select: [],
-    drop: ['topic-fan-out-queue', 'topic-fan-out-worker'],
+    drop: ['topic-fan-out-queue', 'topic-subscriber', 'topic-fan-out-worker'],
   },
   {
-    name: 'Topic delivering straight to a Service — equivalent delivery exists, silent on select',
+    name: 'Topic with a Queue → Worker subscriber — silent on select, another whole subscriber first on drop',
+    doc: graph([service('pub'), topic('t'), queue('q'), worker('w')], [['pub', 't'], ['t', 'q'], ['q', 'w']]),
+    anchor: 't',
+    select: [],
+    drop: ['topic-subscriber', 'topic-fan-out-queue', 'topic-fan-out-worker'],
+  },
+  {
+    name: 'Topic delivering straight to a Service — silent on select, another direct subscriber first on drop',
     doc: graph([service('pub'), topic('t'), service('sub')], [['pub', 't'], ['t', 'sub']]),
     anchor: 't',
     select: [],
-    drop: ['topic-fan-out-queue', 'topic-fan-out-worker'],
+    drop: ['topic-fan-out-worker', 'topic-fan-out-queue', 'topic-subscriber'],
   },
   {
     name: 'Queue with inbound and no consumer',
@@ -113,18 +121,18 @@ const CASES: Case[] = [
     drop: ['queue-consumer'],
   },
   {
-    name: 'Queue with a Worker consumer — consumer suppressed, DLQ becomes the drop offer',
+    name: 'Queue with a Worker consumer — silent on select; on drop the DLQ outranks another consumer',
     doc: graph([service('s'), queue('q'), worker('w')], [['s', 'q'], ['q', 'w']]),
     anchor: 'q',
     select: [],
-    drop: ['queue-consumer', 'queue-dead-letter'],
+    drop: ['queue-dead-letter', 'queue-consumer'],
   },
   {
     name: 'Queue whose consumer is a plain Service — counts as consumed (compared on semantic)',
     doc: graph([service('s'), queue('q'), service('c')], [['s', 'q'], ['q', 'c']]),
     anchor: 'q',
     select: [],
-    drop: ['queue-consumer', 'queue-dead-letter'],
+    drop: ['queue-dead-letter', 'queue-consumer'],
   },
   {
     name: 'Queue with consumer and DLQ — nothing left to add',
@@ -138,7 +146,7 @@ const CASES: Case[] = [
     doc: graph([service('s'), stream('st'), worker('w')], [['s', 'st'], ['st', 'w']]),
     anchor: 'st',
     select: [],
-    drop: ['queue-consumer', 'stream-dead-letter'],
+    drop: ['stream-dead-letter', 'queue-consumer'],
   },
   {
     name: 'Stream with a consumer and a dead-letter topic already — nothing left to add',
@@ -261,6 +269,12 @@ describe('continuationsFor — rule tables', () => {
   for (const c of CASES) {
     it(`${c.name} (select)`, () => expect(ids(c.doc, c.anchor, 'select')).toEqual(c.select));
     it(`${c.name} (drop)`, () => expect(ids(c.doc, c.anchor, 'drop')).toEqual(c.drop));
+    it(`${c.name} (confidence: select is exactly the high-confidence slice of invoke)`, () => {
+      const high = continuationsFor(c.doc, c.anchor, 'invoke')
+        .filter((candidate) => candidate.confidence === 'high')
+        .map((candidate) => candidate.ruleId);
+      expect(high).toEqual(c.select);
+    });
   }
 
   it('never offers anything for a boundary, note, text, code or junction anchor', () => {
@@ -323,10 +337,18 @@ describe('continuationsFor — rule tables', () => {
     for (let i = 0; i < 3; i++) expect(continuationsFor(doc, 'q', 'drop')).toEqual(first);
   });
 
-  it('orders primaries before secondaries regardless of declaration order', () => {
-    const doc = graph([service('s'), queue('q'), worker('w')], [['s', 'q'], ['q', 'w']]);
-    const offered = continuationsFor(doc, 'q', 'drop');
-    expect(offered.map((c) => c.tier)).toEqual(['primary', 'secondary']);
+  it('with no contextual signal, orders primaries before secondaries regardless of declaration order', () => {
+    const rule = (id: string, tier: ContinuationRule['tier']): ContinuationRule => ({
+      id,
+      tier,
+      label: id,
+      reason: 'test.',
+      when: (_nb, trigger) => trigger !== 'select',
+      fragment: () => ({ nodes: [{ key: 'q', type: 'queue', queueKind: 'queue' }], edges: [{ from: 'anchor', to: 'q' }] }),
+    });
+    const doc = graph([topic('t')], []);
+    const offered = continuationsFor(doc, 't', 'drop', { rules: [rule('late', 'secondary'), rule('early', 'primary')] });
+    expect(offered.map((c) => c.id)).toEqual(['early', 'late']);
   });
 });
 
@@ -350,7 +372,7 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
     };
     expect(capabilityFor('queue', 'topic')?.status).toBe('unusual');
     const doc = graph([service('s'), queue('q')], [['s', 'q']]);
-    expect(continuationsFor(doc, 'q', 'drop', undefined, [rule])).toEqual([]);
+    expect(continuationsFor(doc, 'q', 'drop', { rules: [rule] })).toEqual([]);
   });
 
   it('drops a rule whose fragment pairing has no matrix row at all (actor → database)', () => {
@@ -360,7 +382,7 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
       fragment: () => ({ nodes: [{ key: 'db', type: 'database' }], edges: [{ from: 'anchor', to: 'db' }] }),
     };
     expect(capabilityFor('actor', 'database')).toBeUndefined();
-    expect(continuationsFor(graph([actor('u')], []), 'u', 'drop', undefined, [rule])).toEqual([]);
+    expect(continuationsFor(graph([actor('u')], []), 'u', 'drop', { rules: [rule] })).toEqual([]);
   });
 
   it('drops a rule whose fragment adds nodes but no connector', () => {
@@ -369,12 +391,21 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
       id: 'orphan',
       fragment: () => ({ nodes: [{ key: 'w', type: 'service' }], edges: [] }),
     };
-    expect(continuationsFor(graph([queue('q')], []), 'q', 'drop', undefined, [rule])).toEqual([]);
+    expect(continuationsFor(graph([queue('q')], []), 'q', 'drop', { rules: [rule] })).toEqual([]);
   });
 
   it('every shipped rule produces matrix-valid fragments from a neighborhood it fires on', () => {
     const anchors: Record<string, DraftDocument> = {
       'topic-fan-out-queue': graph([service('p'), topic('t')], [['p', 't']]),
+      'topic-subscriber': graph([service('p'), topic('t')], [['p', 't']]),
+      'service-data-store': graph([service('t')], []),
+      'service-topic': graph([service('t')], []),
+      'service-queue': graph([service('t')], []),
+      'service-service': graph([service('t')], []),
+      'service-cache': graph([service('t')], []),
+      'service-external': graph([service('t')], []),
+      'actor-gateway': graph([actor('t')], []),
+      'actor-api': graph([actor('t')], []),
       'topic-fan-out-worker': graph([service('p'), topic('t')], [['p', 't']]),
       'queue-consumer': graph([service('p'), queue('t')], [['p', 't']]),
       'queue-dead-letter': graph([service('p'), queue('t'), worker('w')], [['p', 't'], ['t', 'w']]),
@@ -425,8 +456,8 @@ describe('continuationsFor — dismissal', () => {
     const [offer] = continuationsFor(doc, 't', 'select');
     const dismissed = new Set([dismissalKey(offer!.anchorId, offer!.ruleId, offer!.neighborhoodKey)]);
     expect(ids(doc, 't', 'select', dismissed)).toEqual([]);
-    // The secondary is a different rule — still offered on drop.
-    expect(ids(doc, 't', 'drop', dismissed)).toEqual(['topic-fan-out-worker']);
+    // The secondaries are different rules — still offered on drop.
+    expect(ids(doc, 't', 'drop', dismissed)).toEqual(['topic-subscriber', 'topic-fan-out-worker']);
   });
 
   it('a dismissal stops applying once the neighborhood changes', () => {
@@ -470,7 +501,7 @@ describe('materialize', () => {
     const node = m.nodes[0]!;
     expect(node.type).toBe('queue');
     expect(node.deliveryRole).toBe('dead-letter');
-    expect(m.primaryNodeId).toBe(node.id);
+    expect(m.continueFromId).toBe(node.id);
     const edge = m.edges[0]!;
     expect(edge.source).toBe('q');
     expect(edge.target).toBe(node.id);
@@ -625,7 +656,7 @@ function resetStores(doc: DraftDocument) {
 
 function selectOffer(anchor: string): ContinuationOffer {
   const doc = useEditorStore.getState().document;
-  const [first] = continuationsFor(doc, anchor, 'select', useUiStore.getState().continuationDismissals);
+  const [first] = continuationsFor(doc, anchor, 'select', { dismissed: useUiStore.getState().continuationDismissals });
   return { ...materialize(doc, first!)!, trigger: 'select' };
 }
 
@@ -640,23 +671,46 @@ describe('editorStore.acceptContinuation', () => {
     const state = useEditorStore.getState();
     expect(state.history.past).toHaveLength(1);
     expect(state.history.past[0]!.label).toBe('Add Queue');
-    expect(state.document.nodes.map((n) => n.id)).toContain(offer.primaryNodeId);
+    expect(state.document.nodes.map((n) => n.id)).toContain(offer.continueFromId);
     expect(state.document.edges.some((e) => e.id === offer.edges[0]!.id)).toBe(true);
-    expect(state.selection).toEqual({ nodes: [offer.primaryNodeId], edges: [] });
+    expect(state.selection).toEqual({ nodes: [offer.continueFromId], edges: [] });
     expect(useUiStore.getState().continuation).toBeNull();
-    expect(useUiStore.getState().settleNodeId).toBe(offer.primaryNodeId);
+    expect(useUiStore.getState().settleNodeIds).toEqual([offer.continueFromId]);
 
     state.undo();
     expect(useEditorStore.getState().document.nodes).toHaveLength(2);
     expect(useEditorStore.getState().document.edges).toHaveLength(1);
     useEditorStore.getState().redo();
-    expect(useEditorStore.getState().document.nodes.map((n) => n.id)).toContain(offer.primaryNodeId);
+    expect(useEditorStore.getState().document.nodes.map((n) => n.id)).toContain(offer.continueFromId);
   });
 
   it('chains: after accepting the Queue, the new Queue itself has a Worker offer', () => {
     const offer = selectOffer('t');
     useEditorStore.getState().acceptContinuation(offer);
-    expect(ids(useEditorStore.getState().document, offer.primaryNodeId, 'select')).toEqual(['queue-consumer']);
+    expect(ids(useEditorStore.getState().document, offer.continueFromId, 'select')).toEqual(['queue-consumer']);
+  });
+
+  it('never touches flows: an accept adds drawing, not narration', () => {
+    const doc = useEditorStore.getState().document;
+    const flow = { ...createFlow({ title: 'Publish' }), steps: [{ id: 'st1', edgeId: doc.edges[0]!.id }] };
+    resetStores(addFlow(doc, flow));
+    const before = useEditorStore.getState().document.flows;
+    useEditorStore.getState().acceptContinuation(selectOffer('t'));
+    expect(useEditorStore.getState().document.flows).toBe(before);
+  });
+
+  it('remembers the accepted rule for ranking, newest last and capped', () => {
+    for (let i = 0; i < 14; i++) useUiStore.getState().recordContinuationAccepted(`r${i}`);
+    useEditorStore.getState().acceptContinuation(selectOffer('t'));
+    const recent = useUiStore.getState().continuationRecent;
+    expect(recent).toHaveLength(12);
+    expect(recent.at(-1)).toBe('topic-fan-out-queue');
+  });
+
+  it('settles every new node and each view clears only its own marker', () => {
+    useUiStore.getState().setSettleNodeIds(['a', 'b']);
+    useUiStore.getState().clearSettleNode('a');
+    expect(useUiStore.getState().settleNodeIds).toEqual(['b']);
   });
 
   it('ignores an offer whose anchor no longer exists', () => {
@@ -681,7 +735,7 @@ describe('uiStore continuation state', () => {
     const current = useUiStore.getState().continuation!;
     expect(current.nodes[0]!.id).toBe(a.nodes[0]!.id);
     expect(current.edges[0]!.id).toBe(a.edges[0]!.id);
-    expect(current.primaryNodeId).toBe(a.primaryNodeId);
+    expect(current.continueFromId).toBe(a.continueFromId);
   });
 
   it('re-keys a same-identity offer onto the ids already held even when its geometry moved, and remaps edge endpoints to match', () => {
@@ -693,14 +747,14 @@ describe('uiStore continuation state', () => {
       ...a,
       nodes: [{ ...a.nodes[0]!, id: 'fresh-node-id', x: a.nodes[0]!.x + 40, y: a.nodes[0]!.y + 40 }],
       edges: [{ ...a.edges[0]!, id: 'fresh-edge-id', target: 'fresh-node-id' }],
-      primaryNodeId: 'fresh-node-id',
+      continueFromId: 'fresh-node-id',
     };
     useUiStore.getState().setContinuation(b);
     const current = useUiStore.getState().continuation!;
     // Ids stay the ones the ghost already rendered with — no React remount.
     expect(current.nodes[0]!.id).toBe(a.nodes[0]!.id);
     expect(current.edges[0]!.id).toBe(a.edges[0]!.id);
-    expect(current.primaryNodeId).toBe(a.primaryNodeId);
+    expect(current.continueFromId).toBe(a.continueFromId);
     // The edge's endpoint is remapped along with the node it points at, not left dangling on the
     // fresh id `materialize` minted.
     expect(current.edges[0]!.target).toBe(a.nodes[0]!.id);
@@ -713,7 +767,7 @@ describe('uiStore continuation state', () => {
     useUiStore.getState().setContinuation(selectOffer('t'));
     const queueOffer = useUiStore.getState().continuation!;
     useEditorStore.getState().acceptContinuation(queueOffer);
-    const workerOffer = selectOffer(queueOffer.primaryNodeId);
+    const workerOffer = selectOffer(queueOffer.continueFromId);
     useUiStore.getState().setContinuation(workerOffer);
     expect(useUiStore.getState().continuation).toBe(workerOffer);
   });
@@ -728,6 +782,26 @@ describe('uiStore continuation state', () => {
     expect(useEditorStore.getState().history.past).toHaveLength(0);
     const doc = useEditorStore.getState().document;
     expect(ids(doc, 't', 'select', useUiStore.getState().continuationDismissals)).toEqual([]);
+  });
+
+  it('Escape ends continuation at the anchor — every candidate, not just the one showing — until its neighborhood changes', () => {
+    const doc = useEditorStore.getState().document;
+    const twoStrong: ContinuationRule[] = ['first', 'second'].map((id) => ({
+      id,
+      tier: 'primary',
+      label: id,
+      reason: 'test.',
+      when: () => true,
+      fragment: () => ({ nodes: [{ key: 'q', type: 'queue', queueKind: 'queue' }], edges: [{ from: 'anchor', to: 'q' }] }),
+      repeatable: () => true,
+    }));
+    const [first] = continuationsFor(doc, 't', 'select', { rules: twoStrong });
+    useUiStore.getState().setContinuation({ ...materialize(doc, first!)!, trigger: 'select' });
+    useUiStore.getState().dismissContinuation();
+    const dismissed = useUiStore.getState().continuationDismissals;
+    expect(continuationsFor(doc, 't', 'select', { rules: twoStrong, dismissed })).toEqual([]);
+    // Asking explicitly still answers — Escape means "not unprompted", never "never".
+    expect(continuationsFor(doc, 't', 'invoke', { rules: twoStrong }).map((c) => c.id)).toEqual(['first', 'second']);
   });
 
   it('turning the preference off clears the current offer; resetContinuation forgets dismissals', () => {
@@ -787,6 +861,296 @@ describe('commands: Add <label> (suggested)', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* Ranking, fragments, naming                                           */
+/* ------------------------------------------------------------------ */
+
+describe('ranking — asked-for alternatives', () => {
+  it('a plain Service is silent unprompted and in the picker, but has a short list when asked', () => {
+    const doc = graph([service('s')], []);
+    expect(ids(doc, 's', 'select')).toEqual([]);
+    expect(ids(doc, 's', 'drop')).toEqual([]);
+    expect(ids(doc, 's', 'invoke')).toEqual([
+      'service-data-store',
+      'service-topic',
+      'service-queue',
+      'service-service',
+      'service-cache',
+      'service-external',
+    ]);
+  });
+
+  it('pushes down what the anchor already does — same verb to the same kind of thing — and nothing else', () => {
+    const doc = graph([service('s'), database('db')], [['s', 'db']]);
+    const order = ids(doc, 's', 'invoke');
+    expect(order.at(-1)).toBe('service-data-store');
+    // A Cache is also `writes`, but not another Data Store: not demoted.
+    expect(order.indexOf('service-cache')).toBeLessThan(order.indexOf('service-data-store'));
+  });
+
+  it('an Actor gets where a request enters, only when asked', () => {
+    const doc = graph([actor('u')], []);
+    expect(ids(doc, 'u', 'select')).toEqual([]);
+    expect(ids(doc, 'u', 'invoke')).toEqual(['actor-gateway', 'actor-api']);
+  });
+
+  it('recently accepted rules get a nudge among optional candidates, never a promotion to unprompted', () => {
+    const doc = graph([service('s')], []);
+    const recent = ['service-cache'];
+    expect(continuationsFor(doc, 's', 'invoke', { recent })[0]!.ruleId).toBe('service-cache');
+    expect(continuationsFor(doc, 's', 'select', { recent })).toEqual([]);
+  });
+
+  it('confidence always dominates signals: the quiet suggestion stays first however the rest score', () => {
+    const doc = graph([service('pub'), topic('t')], [['pub', 't']]);
+    const offered = continuationsFor(doc, 't', 'invoke', { recent: ['topic-subscriber', 'topic-fan-out-worker'] });
+    expect(offered[0]!.confidence).toBe('high');
+    expect(offered[0]!.ruleId).toBe('topic-fan-out-queue');
+  });
+
+  it('is deterministic for the explicit trigger too', () => {
+    const doc = graph([service('pub'), topic('t'), queue('q'), worker('w')], [['pub', 't'], ['t', 'q'], ['q', 'w']]);
+    const first = continuationsFor(doc, 't', 'invoke');
+    for (let i = 0; i < 3; i++) expect(continuationsFor(doc, 't', 'invoke')).toEqual(first);
+  });
+});
+
+describe('compound fragments', () => {
+  beforeEach(() =>
+    resetStores(graph([service('pub'), topic('t'), queue('q'), worker('w')], [['pub', 't'], ['t', 'q'], ['q', 'w']])),
+  );
+
+  const subscriberOffer = (): ContinuationOffer => {
+    const doc = useEditorStore.getState().document;
+    const candidate = continuationsFor(doc, 't', 'invoke').find((c) => c.ruleId === 'topic-subscriber')!;
+    return { ...materialize(doc, candidate)!, trigger: 'select' };
+  };
+
+  it('materializes the whole chain with matrix semantics, placed outward from the anchor without overlap', () => {
+    const offer = subscriberOffer();
+    expect(offer.label).toBe('Queue → Worker');
+    expect(offer.nodes.map((n) => [n.type, n.queueKind ?? n.serviceKind])).toEqual([
+      ['queue', 'queue'],
+      ['service', 'worker'],
+    ]);
+    const [newQueue, newWorker] = offer.nodes;
+    expect(offer.edges.map((e) => [e.source, e.target, e.semantic])).toEqual([
+      ['t', newQueue!.id, 'fansOut'],
+      [newQueue!.id, newWorker!.id, 'consumes'],
+    ]);
+    const doc = useEditorStore.getState().document;
+    const rects = [...doc.nodes, ...offer.nodes].map(rectOf);
+    for (let i = 0; i < rects.length; i++) {
+      for (let j = i + 1; j < rects.length; j++) {
+        const a = rects[i]!;
+        const b = rects[j]!;
+        const overlap = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+        expect(overlap, `nodes ${i} and ${j} overlap`).toBe(false);
+      }
+    }
+  });
+
+  it('previewing persists nothing: no document write, no history', () => {
+    const before = useEditorStore.getState().document;
+    const revision = useEditorStore.getState().revision;
+    useUiStore.getState().setContinuation(subscriberOffer());
+    expect(useEditorStore.getState().document).toBe(before);
+    expect(useEditorStore.getState().revision).toBe(revision);
+    expect(useEditorStore.getState().history.past).toHaveLength(0);
+  });
+
+  it('accepts as one undo step, selects the tail so the chain can continue, and undo removes all of it', () => {
+    const offer = subscriberOffer();
+    useEditorStore.getState().acceptContinuation(offer);
+    const state = useEditorStore.getState();
+    expect(state.document.nodes).toHaveLength(6);
+    expect(state.document.edges).toHaveLength(5);
+    expect(state.history.past).toHaveLength(1);
+    expect(state.history.past[0]!.label).toBe('Add Queue → Worker');
+    expect(state.selection).toEqual({ nodes: [offer.nodes[1]!.id], edges: [] });
+    expect(useUiStore.getState().settleNodeIds).toEqual(offer.nodes.map((n) => n.id));
+
+    state.undo();
+    expect(useEditorStore.getState().document.nodes).toHaveLength(4);
+    expect(useEditorStore.getState().document.edges).toHaveLength(3);
+  });
+
+  it('keeps a whole fragment inside the anchor’s boundary when it fits', () => {
+    const doc = useEditorStore.getState().document;
+    const boundary = createNode({ id: 'b', type: 'group', x: -200, y: -400, width: 3200, height: 1200 });
+    const inside = { ...addNodes(doc, [boundary]), nodes: [...doc.nodes.map((n) => ({ ...n, parentId: 'b' })), boundary] };
+    const candidate = continuationsFor(inside, 't', 'invoke').find((c) => c.ruleId === 'topic-subscriber')!;
+    const offer = materialize(inside, candidate)!;
+    expect(offer.nodes.map((n) => n.parentId)).toEqual(['b', 'b']);
+  });
+});
+
+describe('connecting to what is already drawn', () => {
+  // Everything on one row, 300 apart: a 160-wide Service leaves a 140 gap — "right here".
+  const at = (spec: Spec, x: number, y = 0): Spec => ({ ...spec, x, y });
+  const named = (spec: Spec, text: string): Spec => ({ ...spec, text });
+
+  // Order API → Order Service, with Order Events drawn nearby but not yet wired.
+  const orderDoc = () =>
+    graph(
+      [
+        at(named(service('api', { serviceKind: 'api' }), 'Order API'), -300),
+        at(named(service('svc'), 'Order Service'), 0),
+        at(named(topic('events'), 'Order Events'), 300),
+      ],
+      [['api', 'svc']],
+    );
+
+  it('offers the nearby Order Events instead of a new topic, previews only the connector, and never duplicates it', () => {
+    const doc = orderDoc();
+    const [best] = continuationsFor(doc, 'svc', 'select');
+    expect(best!.id).toBe('connect-existing:events');
+    expect(best!.confidence).toBe('high');
+    expect(best!.actionLabel).toBe('Connect to Order Events');
+
+    const offer = materialize(doc, best!)!;
+    expect(offer.nodes).toEqual([]);
+    expect(offer.edges).toHaveLength(1);
+    expect(offer.edges[0]).toMatchObject({ source: 'svc', target: 'events', semantic: 'publishes', semanticsOrigin: 'inferred' });
+    // Routes like a hand-drawn connector to it would — nothing pinned.
+    expect(offer.edges[0]!.sourceAnchor).toBeUndefined();
+    expect(offer.continueFromId).toBe('events');
+
+    resetStores(doc);
+    useEditorStore.getState().acceptContinuation(offer);
+    const after = useEditorStore.getState();
+    expect(after.document.nodes).toHaveLength(3);
+    expect(after.document.edges).toHaveLength(2);
+    expect(after.history.past[0]!.label).toBe('Connect to Order Events');
+    // The sentence continues from the topic, which now has a publisher and nowhere to deliver.
+    expect(after.selection.nodes).toEqual(['events']);
+    expect(ids(after.document, 'events', 'select')).toEqual(['topic-fan-out-queue']);
+  });
+
+  it('two loose shapes that could each continue into the other are a coin toss: nothing unprompted', () => {
+    const loose = graph([at(named(service('svc'), 'Order Service'), 0), at(named(topic('events'), 'Order Events'), 300)], []);
+    expect(continuationsFor(loose, 'svc', 'select')).toEqual([]);
+    expect(continuationsFor(loose, 'events', 'select')).toEqual([]);
+    expect(continuationsFor(loose, 'svc', 'invoke')[0]!.id).toBe('connect-existing:events');
+  });
+
+  it('a name in common picks the right one of several: Payment Service → Payments DB, not Audit Log', () => {
+    const doc = graph(
+      [
+        at(named(service('pay'), 'Payment Service'), 0),
+        at(named(database('paydb'), 'Payments DB'), 300),
+        at(named(database('audit'), 'Audit Log'), 0, 200),
+      ],
+      [],
+    );
+    expect(continuationsFor(doc, 'pay', 'select').map((c) => c.id)).toEqual(['connect-existing:paydb']);
+    const asked = continuationsFor(doc, 'pay', 'invoke').map((c) => c.id);
+    expect(asked[0]).toBe('connect-existing:paydb');
+    expect(asked).toContain('connect-existing:audit');
+  });
+
+  it('several look-alikes and no name to tell them apart: nothing unprompted, all of them when asked', () => {
+    const doc = graph([at(service('s'), 0), at(database('a'), 300), at(database('b'), 0, 200)], []);
+    expect(continuationsFor(doc, 's', 'select')).toEqual([]);
+    expect(continuationsFor(doc, 's', 'invoke').filter((c) => c.ruleId === 'connect-existing')).toHaveLength(2);
+  });
+
+  it('skips targets that are already connected, far away, or in another boundary', () => {
+    const connected = graph([at(service('s'), 0), at(database('db'), 300)], [['s', 'db']]);
+    expect(continuationsFor(connected, 's', 'invoke').some((c) => c.ruleId === 'connect-existing')).toBe(false);
+
+    const far = graph([at(service('s'), 0), at(database('db'), 2000)], []);
+    expect(continuationsFor(far, 's', 'invoke').some((c) => c.ruleId === 'connect-existing')).toBe(false);
+
+    const boundary = createNode({ id: 'b', type: 'group', x: 250, y: -100, width: 400, height: 300 });
+    const base = graph([at(service('s'), 0), at(database('db'), 300)], []);
+    const walled = { ...base, nodes: [...base.nodes.map((n) => (n.id === 'db' ? { ...n, parentId: 'b' } : n)), boundary] };
+    expect(continuationsFor(walled, 's', 'invoke').some((c) => c.ruleId === 'connect-existing')).toBe(false);
+  });
+
+  it('skips a target already receiving that relationship from someone else', () => {
+    const doc = graph(
+      [at(named(service('s'), 'Order Service'), 0), at(named(topic('t'), 'Order Events'), 300), at(service('other'), 600)],
+      [['other', 't']],
+    );
+    expect(continuationsFor(doc, 's', 'invoke').some((c) => c.ruleId === 'connect-existing')).toBe(false);
+  });
+
+  it('never suggests closing a loop back to what feeds the anchor', () => {
+    // Service → Topic → Queue: from the Queue, the Service two hops up is not a consumer to wire.
+    const doc = graph([at(service('s'), 0), at(topic('t'), 300), at(queue('q'), 600)], [['s', 't'], ['t', 'q']]);
+    expect(continuationsFor(doc, 'q', 'invoke').some((c) => c.id === 'connect-existing:s')).toBe(false);
+  });
+
+  it('never suggests a shortcut to what the anchor already reaches two hops downstream', () => {
+    // Topic → Queue → Worker: the Worker already gets the Topic's messages through its queue.
+    const doc = graph([at(topic('t'), 0), at(queue('q'), 300), at(worker('w'), 300, 150)], [['t', 'q'], ['q', 'w']]);
+    expect(continuationsFor(doc, 't', 'invoke').some((c) => c.id === 'connect-existing:w')).toBe(false);
+  });
+
+  it('an anchor already doing the same thing to the same kind of node only gets it when asked', () => {
+    const doc = graph(
+      [
+        at(named(service('s'), 'Order Service'), 0),
+        at(named(topic('t1'), 'Order Events'), 300),
+        at(named(topic('t2'), 'Order Audit'), 0, 200),
+      ],
+      [['s', 't1']],
+    );
+    expect(continuationsFor(doc, 's', 'select')).toEqual([]);
+    const asked = continuationsFor(doc, 's', 'invoke').find((c) => c.id === 'connect-existing:t2');
+    expect(asked?.confidence).toBe('medium');
+  });
+
+  it('is never offered in the drop picker, and Escape at the anchor hides it like anything else', () => {
+    const doc = orderDoc();
+    expect(continuationsFor(doc, 'svc', 'drop')).toEqual([]);
+    const [best] = continuationsFor(doc, 'svc', 'select');
+    const dismissed = new Set([dismissalKey('svc', '*', best!.neighborhoodKey)]);
+    expect(continuationsFor(doc, 'svc', 'select', { dismissed })).toEqual([]);
+  });
+
+  it('keeps a connect-only ghost’s connector id stable across recomputes', () => {
+    const doc = orderDoc();
+    resetStores(doc);
+    const make = (): ContinuationOffer => ({ ...materialize(doc, continuationsFor(doc, 'svc', 'select')[0]!)!, trigger: 'select' });
+    const first = make();
+    useUiStore.getState().setContinuation(first);
+    useUiStore.getState().setContinuation(make());
+    expect(useUiStore.getState().continuation!.edges[0]!.id).toBe(first.edges[0]!.id);
+  });
+
+  it('accepting does nothing if the target was deleted in the meantime', () => {
+    const doc = orderDoc();
+    resetStores(doc);
+    const offer: ContinuationOffer = { ...materialize(doc, continuationsFor(doc, 'svc', 'select')[0]!)!, trigger: 'select' };
+    useEditorStore.setState({ document: { ...doc, nodes: doc.nodes.filter((n) => n.id !== 'events') } });
+    useEditorStore.getState().acceptContinuation(offer);
+    // Only the Order API → Order Service connector that was already there.
+    expect(useEditorStore.getState().document.edges).toHaveLength(1);
+    expect(useEditorStore.getState().history.past).toHaveLength(0);
+  });
+});
+
+describe('naming', () => {
+  it('a Worker after an explicitly named “Billing Queue” is “Billing Worker”, still an automatic name', () => {
+    const doc = graph([service('s'), queue('q', { text: 'Billing Queue' })], [['s', 'q']]);
+    const [offer] = continuationsFor(doc, 'q', 'select');
+    const node = materialize(doc, offer!)!.nodes[0]!;
+    expect(node.text).toBe('Billing Worker');
+    expect(node.textOrigin).toBe('auto');
+  });
+
+  it('anything else keeps the factory default — including an unnamed queue’s Worker and every queue', () => {
+    const unnamed = graph([service('s'), queue('q')], [['s', 'q']]);
+    const [consumer] = continuationsFor(unnamed, 'q', 'select');
+    expect(materialize(unnamed, consumer!)!.nodes[0]!.text).toBe('Worker');
+    const named = graph([service('s'), { id: 't', type: 'queue', queueKind: 'topic', text: 'Order Events' }], [['s', 't']]);
+    const [queueOffer] = continuationsFor(named, 't', 'select');
+    expect(materialize(named, queueOffer!)!.nodes[0]!.text).toBe('');
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* Performance — a proxy for the full profiling pass this repo's tooling  */
 /* can't automate: not a tight benchmark, just a guard against an          */
 /* accidental full-document scan creeping back in.                          */
@@ -803,12 +1167,20 @@ describe('performance — local neighborhoods, not full-graph scans', () => {
     // A genuine continuation target, unrelated to the other 150 nodes except by sharing a document.
     nodeSpecs.push(topic('t'));
     edges.push(['s149', 't']);
+    // And a crowded corner: a Service surrounded by 50 unconnected shapes it could connect to,
+    // the worst case for the nearby scan.
+    nodeSpecs.push({ ...service('hub'), x: 0, y: 5000 });
+    for (let i = 0; i < 50; i++) nodeSpecs.push({ ...database(`near${i}`), x: ((i % 10) - 5) * 90, y: 5000 + (Math.floor(i / 10) - 2) * 90 });
     const doc = graph(nodeSpecs, edges);
 
     const start = performance.now();
     for (let i = 0; i < 50; i++) {
+      // What one evaluation of the hook does: the quiet list, the alternatives, one materialize.
       const [offer] = continuationsFor(doc, 't', 'select');
+      continuationsFor(doc, 't', 'invoke');
       materialize(doc, offer!);
+      continuationsFor(doc, 'hub', 'select');
+      continuationsFor(doc, 'hub', 'invoke');
     }
     const elapsed = performance.now() - start;
     // Generous ceiling to absorb CI variance — the point is "milliseconds for 50 runs against a

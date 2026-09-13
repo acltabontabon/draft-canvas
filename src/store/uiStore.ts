@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Preset } from '../canvas/presets';
-import { dismissalKey } from '../continuation/dismissal';
-import type { ContinuationTrigger, DismissalKey, MaterializedContinuation } from '../continuation';
+import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
+import type { DismissalKey, MaterializedContinuation } from '../continuation';
 import type { Side } from '../document/types';
 import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
@@ -71,8 +71,27 @@ export interface ContextMenuState {
  * Ephemeral by construction — never persisted, never in history, never in the document.
  */
 export interface ContinuationOffer extends MaterializedContinuation {
-  trigger: ContinuationTrigger;
+  trigger: 'select' | 'drop';
+  /**
+   * Every candidate id the user could cycle to from here, best first (this offer's own `id`
+   * included). Only `'select'` offers carry it; one entry or none means there is nothing to cycle.
+   */
+  alternatives?: readonly string[];
 }
+
+/**
+ * The candidate the user cycled to (or asked for with `]`) at one anchor. Pinned to the
+ * neighborhood it was chosen in: once that changes — an accept, a new connector — the choice no
+ * longer applies and the quiet suggestion takes over again.
+ */
+export interface ContinuationCycle {
+  anchorId: string;
+  neighborhoodKey: string;
+  candidateId: string;
+}
+
+/** How many accepted continuations the session remembers for ranking. */
+const RECENT_LIMIT = 12;
 
 const CONTINUATION_PREFERENCE = 'continuation';
 const NO_MOVING_NODES: ReadonlySet<string> = new Set();
@@ -214,12 +233,18 @@ export interface UiStore {
   continuationDismissals: ReadonlySet<DismissalKey>;
   /** The device preference for Intent Continuation — on unless switched off in Canvas Settings. */
   continuationsEnabled: boolean;
+  /** The alternative the user cycled to at the selected node, if they did. */
+  continuationCycle: ContinuationCycle | null;
   /**
-   * The node an accepted continuation just created, so its view can play the one-shot "settle"
-   * (ghost → real) animation. Same shape and lifecycle as `jumpFlashId`: consumed and cleared by
-   * the view itself.
+   * Rule ids of recently accepted continuations, newest last — a light ranking hint ("you keep
+   * adding Data Stores") and nothing more. Session-only: cleared on document switch, never saved.
    */
-  settleNodeId: string | null;
+  continuationRecent: readonly string[];
+  /**
+   * The nodes an accepted continuation just created, so their views can play the one-shot "settle"
+   * (ghost → real) animation. Each view consumes and clears its own id.
+   */
+  settleNodeIds: readonly string[];
   /** "Learn Draft Canvas" mode. Deliberately not persisted: an opt-in pass a user
    *  asks for each time, never a saved setting — see `HintStrip.tsx`, which shows a hint
    *  regardless of its own retired state while this is true. */
@@ -290,12 +315,23 @@ export interface UiStore {
    *  and edge ids already held (re-keying the fresh geometry onto them), so unrelated document
    *  changes never re-mint a ghost's React keys. */
   setContinuation: (offer: ContinuationOffer | null) => void;
-  /** Waves the current offer away for as long as its anchor's neighborhood stays the same. */
+  /**
+   * Waves continuation away at the offer's anchor — every candidate, not just the one showing —
+   * for as long as that anchor's neighborhood stays the same. Asking again with `]` still works.
+   */
   dismissContinuation: () => void;
+  /** Moves the showing offer to the next (`+1`) or previous (`-1`) alternative, wrapping. */
+  cycleContinuation: (delta: 1 | -1) => void;
+  /** Pins a chosen candidate (or clears the choice with `null`). */
+  setContinuationCycle: (cycle: ContinuationCycle | null) => void;
+  /** Remembers an accepted continuation's rule for ranking. */
+  recordContinuationAccepted: (ruleId: string) => void;
   /** On document switch: nothing about the previous diagram's offers applies to the next. */
   resetContinuation: () => void;
   setContinuationsEnabled: (enabled: boolean) => void;
-  setSettleNodeId: (id: string | null) => void;
+  setSettleNodeIds: (ids: readonly string[]) => void;
+  /** Called by a node's view once its settle animation has played. */
+  clearSettleNode: (id: string) => void;
   setLibrarySearchQuery: (query: string) => void;
   setLibrarySort: (sort: UiStore['librarySort']) => void;
   setLibraryView: (view: UiStore['libraryView']) => void;
@@ -346,7 +382,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   continuation: null,
   continuationDismissals: new Set<DismissalKey>(),
   continuationsEnabled: initialContinuationsEnabled(),
-  settleNodeId: null,
+  continuationCycle: null,
+  continuationRecent: [],
+  settleNodeIds: [],
   librarySearchQuery: '',
   librarySort: 'updatedAt',
   libraryView: { kind: 'recent' },
@@ -465,15 +503,44 @@ export const useUiStore = create<UiStore>((set, get) => ({
       const offer = state.continuation;
       if (!offer) return state;
       const continuationDismissals = new Set(state.continuationDismissals);
-      continuationDismissals.add(dismissalKey(offer.anchorId, offer.ruleId, offer.neighborhoodKey));
-      return { continuation: null, continuationDismissals };
+      continuationDismissals.add(dismissalKey(offer.anchorId, ANY_CANDIDATE, offer.neighborhoodKey));
+      return { continuation: null, continuationDismissals, continuationCycle: null };
     }),
-  resetContinuation: () => set({ continuation: null, continuationDismissals: new Set<DismissalKey>(), settleNodeId: null }),
+  cycleContinuation: (delta) =>
+    set((state) => {
+      const offer = state.continuation;
+      const ids = offer?.alternatives ?? [];
+      if (!offer || offer.trigger !== 'select' || ids.length < 2) return state;
+      const index = Math.max(0, ids.indexOf(offer.id));
+      const candidateId = ids[(index + delta + ids.length) % ids.length]!;
+      return {
+        continuationCycle: { anchorId: offer.anchorId, neighborhoodKey: offer.neighborhoodKey, candidateId },
+      };
+    }),
+  setContinuationCycle: (continuationCycle) =>
+    set((state) => (sameCycle(state.continuationCycle, continuationCycle) ? state : { continuationCycle })),
+  recordContinuationAccepted: (ruleId) =>
+    set((state) => ({ continuationRecent: [...state.continuationRecent, ruleId].slice(-RECENT_LIMIT) })),
+  resetContinuation: () =>
+    set({
+      continuation: null,
+      continuationDismissals: new Set<DismissalKey>(),
+      continuationCycle: null,
+      continuationRecent: [],
+      settleNodeIds: [],
+    }),
   setContinuationsEnabled: (continuationsEnabled) => {
     writePreference(CONTINUATION_PREFERENCE, continuationsEnabled ? 'on' : 'off');
-    set((state) => ({ continuationsEnabled, continuation: continuationsEnabled ? state.continuation : null }));
+    set((state) => ({
+      continuationsEnabled,
+      continuation: continuationsEnabled ? state.continuation : null,
+      continuationCycle: continuationsEnabled ? state.continuationCycle : null,
+    }));
   },
-  setSettleNodeId: (settleNodeId) => set((state) => (state.settleNodeId === settleNodeId ? state : { settleNodeId })),
+  setSettleNodeIds: (settleNodeIds) =>
+    set((state) => (settleNodeIds.length === 0 && state.settleNodeIds.length === 0 ? state : { settleNodeIds })),
+  clearSettleNode: (id) =>
+    set((state) => (state.settleNodeIds.includes(id) ? { settleNodeIds: state.settleNodeIds.filter((n) => n !== id) } : state)),
   setLibrarySearchQuery: (librarySearchQuery) => set({ librarySearchQuery }),
   setLibrarySort: (librarySort) => set({ librarySort }),
   setLibraryView: (libraryView) => set({ libraryView }),
@@ -500,8 +567,14 @@ export const useUiStore = create<UiStore>((set, get) => ({
   },
 }));
 
+function sameCycle(a: ContinuationCycle | null, b: ContinuationCycle | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.anchorId === b.anchorId && a.neighborhoodKey === b.neighborhoodKey && a.candidateId === b.candidateId;
+}
+
 /**
- * Whether two offers are *the same suggestion* — same trigger, same rule, same anchor, same
+ * Whether two offers are *the same suggestion* — same trigger, same candidate, same anchor, same
  * neighborhood. That quadruple is already a deterministic fingerprint of "what this offer is"
  * (see `continuation/context.ts`'s `neighborhoodKey`), so it alone decides identity. Position is
  * deliberately excluded: a fresh `materialize()` can legitimately place the same logical offer a
@@ -514,7 +587,7 @@ function sameOffer(a: ContinuationOffer | null, b: ContinuationOffer | null): bo
   if (!a || !b) return false;
   return (
     a.trigger === b.trigger &&
-    a.ruleId === b.ruleId &&
+    a.id === b.id &&
     a.anchorId === b.anchorId &&
     a.neighborhoodKey === b.neighborhoodKey
   );
@@ -538,7 +611,8 @@ function reidentify(previous: ContinuationOffer, next: ContinuationOffer): Conti
     source: idMap.get(edge.source) ?? edge.source,
     target: idMap.get(edge.target) ?? edge.target,
   }));
-  return { ...next, nodes, edges, primaryNodeId: nodes[0]!.id };
+  const continueFromId = idMap.get(next.continueFromId) ?? next.continueFromId;
+  return { ...next, nodes, edges, continueFromId };
 }
 
 /**

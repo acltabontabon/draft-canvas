@@ -6,6 +6,7 @@ import type { DraftDocument, DraftEdge, DraftNode, EdgeAnchor } from '../documen
 import { chooseSides, type Rect } from '../edges/routing';
 import { FONTS } from '../render/text/fonts';
 import { getMeasurer } from '../render/text/measure';
+import { derivedName } from './naming';
 import type { Continuation, MaterializedContinuation } from './types';
 
 export interface MaterializeOptions {
@@ -30,6 +31,12 @@ export function materialize(
 ): MaterializedContinuation | undefined {
   const anchor = doc.nodes.find((n) => n.id === continuation.anchorId);
   if (!anchor) return undefined;
+  const existing = new Map<string, DraftNode>();
+  for (const ref of continuation.fragment.existing ?? []) {
+    const node = doc.nodes.find((n) => n.id === ref.nodeId);
+    if (!node) return undefined;
+    existing.set(ref.key, node);
+  }
   const parent = anchor.parentId ? doc.nodes.find((n) => n.id === anchor.parentId) : undefined;
   // Which way the diagram is already flowing at this anchor, so a continuation's placement reads
   // as "the next step in the same direction" rather than always defaulting to the right regardless
@@ -37,6 +44,7 @@ export function materialize(
   const direction = preferredDirection(doc, anchor);
 
   const byKey = new Map<string, DraftNode>();
+  const resolve = (ref: string) => (ref === 'anchor' ? anchor : (byKey.get(ref) ?? existing.get(ref)));
   const nodes: DraftNode[] = [];
   let working = doc;
   let host: DraftNode = anchor;
@@ -46,7 +54,7 @@ export function materialize(
     // The gap must clear the caption the connector *into* this node will carry — the same rule
     // `addConsumer`/`addDeadLetterQueue` follow, so "after 3 attempts" never overlaps either box.
     const inbound = continuation.fragment.edges.find((e) => e.to === spec.key);
-    const hostForGap = inbound ? (inbound.from === 'anchor' ? anchor : byKey.get(inbound.from)) : undefined;
+    const hostForGap = inbound ? resolve(inbound.from) : undefined;
     const semantic = hostForGap ? capabilityFor(categoryOf(hostForGap), categoryOf(spec))?.defaultRelation : undefined;
     const caption = semantic ? relationshipCaptionLabel(semantic, undefined, inbound?.deliveryAttempts) : undefined;
 
@@ -56,12 +64,13 @@ export function materialize(
         : tryPlaceNear(working, host, size, gapForCaption(caption), { direction, parent });
     if (!position) return undefined;
 
-    const node = createNode({
+    const derived = spec.text === undefined ? derivedName(hostForGap, spec) : undefined;
+    const created = createNode({
       type: spec.type,
       x: position.x,
       y: position.y,
       z: anchor.z,
-      text: spec.text,
+      text: spec.text ?? derived,
       accent: spec.accent,
       serviceKind: spec.serviceKind,
       databaseKind: spec.databaseKind,
@@ -73,6 +82,9 @@ export function materialize(
       // out of a boundary would silently *mean* something (membership) it visibly isn't.
       parentId: parent && containsRect(parent, { ...position, ...size }) ? parent.id : undefined,
     });
+    // A derived name is still a default: it stays `auto`, so changing the kind renames it as usual.
+    const textOrigin = spec.textOrigin ?? (derived !== undefined ? 'auto' : undefined);
+    const node = textOrigin ? { ...created, textOrigin } : created;
     byKey.set(spec.key, node);
     nodes.push(node);
     working = addNodes(working, [node]);
@@ -81,8 +93,8 @@ export function materialize(
 
   const edges: DraftEdge[] = [];
   for (const spec of continuation.fragment.edges) {
-    const from = spec.from === 'anchor' ? anchor : byKey.get(spec.from);
-    const to = spec.to === 'anchor' ? anchor : byKey.get(spec.to);
+    const from = resolve(spec.from);
+    const to = resolve(spec.to);
     if (!from || !to) return undefined;
     const relationship = inferRelationship(from, to);
     edges.push(
@@ -92,12 +104,17 @@ export function materialize(
         ...relationship,
         semanticsOrigin: relationship ? 'inferred' : undefined,
         deliveryAttempts: spec.deliveryAttempts,
-        ...anchorsForPlacement(from, to),
+        // Pinned only between nodes placed here, together. A connector to a node the user drew
+        // routes dynamically, like any connector drawn by hand to it — preview included.
+        ...(existing.has(spec.from) || existing.has(spec.to) ? {} : anchorsForPlacement(from, to)),
       }),
     );
   }
 
-  return { ...continuation, nodes, edges, primaryNodeId: nodes[0]!.id };
+  // The sentence ends where the fragment's last connector lands: a chain's tail, or the existing
+  // node a connect-only fragment reaches.
+  const continueFromId = edges.at(-1)!.target;
+  return { ...continuation, nodes, edges, continueFromId };
 }
 
 /** A plain `{x,y,width,height}` view of anything with those fields — `chooseSides` doesn't need a

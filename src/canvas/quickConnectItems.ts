@@ -27,14 +27,14 @@ export function quickConnectItems(doc: DraftDocument, state: QuickConnectState):
   const suggestions: QuickConnectItem[] = state.source
     ? continuationsFor(doc, state.source, 'drop').map((continuation) => ({
         kind: 'continuation',
-        id: continuation.ruleId,
+        id: continuation.id,
         label: continuation.label,
         continuation,
         node: continuation.fragment.nodes[0]!,
       }))
     : [];
   const presets: QuickConnectItem[] = QUICK_CONNECT_PRESETS.filter(
-    (preset) => !suggestions.some((s) => representsPreset(s.node, preset)),
+    (preset) => !suggestions.some((s) => representsPreset(s, preset)),
   ).map((preset) => ({
     kind: 'preset',
     id: `preset:${preset.id}`,
@@ -45,8 +45,11 @@ export function quickConnectItems(doc: DraftDocument, state: QuickConnectState):
   return [...suggestions, ...presets];
 }
 
-/** A suggested plain Queue *is* the Queue preset; a suggested Worker is not the Service preset. */
-function representsPreset(spec: FragmentNodeSpec, preset: Preset): boolean {
+/** A suggested plain Queue *is* the Queue preset; a suggested Worker is not the Service preset,
+ *  and a multi-node suggestion (Queue → Worker) stands in for no single preset. */
+function representsPreset(item: QuickConnectItem, preset: Preset): boolean {
+  const spec = item.node;
+  if (item.kind === 'continuation' && item.continuation.fragment.nodes.length !== 1) return false;
   if (spec.type !== preset.type || spec.deliveryRole !== undefined) return false;
   return spec.type !== 'service' || spec.serviceKind !== 'worker';
 }
@@ -67,9 +70,13 @@ export function offerFor(doc: DraftDocument, state: QuickConnectState, item: Qui
     item.kind === 'continuation'
       ? item.continuation
       : {
+          id: item.id,
           ruleId: item.id,
           tier: 'secondary',
+          confidence: 'medium',
+          score: 0,
           label: item.label,
+          actionLabel: `Add ${item.label}`,
           reason: '',
           fragment: { nodes: [item.node], edges: [{ from: 'anchor', to: item.node.key }] },
           anchorId: state.source,

@@ -250,7 +250,7 @@ from becoming separate systems.
 | Capability | Derives | The rule that keeps it honest |
 | --- | --- | --- |
 | **Starters** | opening compositions → ordinary nodes/edges/flows | Composition is authored; relationships come from the matrix; nothing sets appearance. No document records that a node came from one. |
-| **Intent Continuation** | one node + its neighbourhood → the next move | Validity is the matrix. Ranking is declaration order. The preview *is* the result, materialized once. Silence is the default. |
+| **Intent Continuation** | one node + its neighbourhood → ranked next moves | Validity is the matrix. Confidence is derived, never authored; only high confidence shows unprompted. Ranking is a few named signals over declaration order. Only the showing candidate is materialized, and the preview *is* the result. Silence is the default. |
 | **Sequence export** | every playable flow → one Mermaid/PlantUML file | An export format, not a mode. Responsibility ends at correct, deterministic text. |
 | **Commands** | selection + mode + document → what makes sense now | Re-derived, never registered. Each one calls an existing store action. |
 

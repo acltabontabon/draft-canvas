@@ -1,11 +1,15 @@
 import { categoryOf } from '../document/connectorSemantics';
-import type { DraftDocument } from '../document/types';
-import type { Neighborhood } from './types';
+import type { DraftDocument, DraftNodeType } from '../document/types';
+import type { IncidentEdge, Neighborhood } from './types';
+
+/** Node types a continuation can hang off — or connect to. Annotations, boundaries and routing
+ *  points never do. */
+export const ANCHOR_TYPES: ReadonlySet<DraftNodeType> = new Set<DraftNodeType>(['service', 'database', 'queue', 'actor', 'component']);
 
 /**
- * One node and its one-hop surroundings — the only graph context a rule is ever given. One pass
- * over the edges; nothing is indexed, memoized, or walked further, so the cost is trivially
- * bounded and there is nothing to invalidate.
+ * One node, its one-hop surroundings, and the connectors leaving its outbound neighbors — the only
+ * graph context a rule is ever given. At most two passes over the edges; nothing is indexed,
+ * memoized, or walked further, so the cost is trivially bounded and there is nothing to invalidate.
  *
  * Returns `undefined` when the node does not exist.
  */
@@ -24,8 +28,17 @@ export function neighborhoodOf(doc: DraftDocument, nodeId: string): Neighborhood
       if (other) incoming.push({ edge, other, category: categoryOf(other) });
     }
   }
+  const outOfOut = new Map<string, IncidentEdge[]>();
+  if (out.length > 0) {
+    for (const { other } of out) outOfOut.set(other.id, []);
+    for (const edge of doc.edges) {
+      const bucket = outOfOut.get(edge.source);
+      const other = bucket && edge.target !== nodeId ? byId.get(edge.target) : undefined;
+      if (bucket && other) bucket.push({ edge, other, category: categoryOf(other) });
+    }
+  }
   const category = categoryOf(node);
-  return { node, category, out, in: incoming, key: neighborhoodKey(category, out, incoming) };
+  return { node, category, out, in: incoming, outOfOut, key: neighborhoodKey(category, out, incoming) };
 }
 
 /**
@@ -44,4 +57,3 @@ function neighborhoodKey(
     .sort();
   return `${category}|${parts.join(',')}`;
 }
-
