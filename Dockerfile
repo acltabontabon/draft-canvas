@@ -2,7 +2,7 @@
 
 # Build once on the runner's own architecture: the output is plain static files,
 # so there's no reason to run npm under emulation for every target platform.
-FROM --platform=$BUILDPLATFORM node:22.14.0-bookworm-slim AS build
+FROM --platform=$BUILDPLATFORM node:26.8-bookworm-slim AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
