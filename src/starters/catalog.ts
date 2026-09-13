@@ -2014,58 +2014,81 @@ const medallion: ArchitectureStarter = {
 
 /* -------------------------------------------------------------- kappa -- */
 /**
- * One durable, append-only log is the source for both live processing and historical replay — the
- * defining idea, and the one thing that has to be unmistakable next to a plain pub/sub diagram.
- * There is no separate batch path and no second copy of the processing logic: the same processor,
- * reading the same log, is how both "the newest event" and "everything since the beginning" get
- * handled.
+ * One retained history, one processing path, and replay through that same path to rebuild derived
+ * state. The **Streaming core** is the wide base of the diagram and holds exactly one straight line
+ * — `Event Log → Stream Processor → Materialized View` — with nothing running beside it, because a
+ * second line is precisely what Kappa refuses to draw: no batch layer, no replay processor, no
+ * historical pipeline. `Producers` and `Serving` sit above its two ends, supporting context on
+ * either side of the one thing that matters.
  *
  * **What each element is, and what it is careful not to say.**
- * - `Application` and `External System` are two generic producers — enough to show the log accepts
- *   more than one kind of source without turning the front half into its own diagram.
- * - `Event Log` is a **Stream**, not a Topic or a plain Queue: Draft Canvas already draws a Stream
- *   as continuous, staggered segments rather than a row of envelopes specifically because a stream
- *   *is* the durable history, not a mailbox a worker drains and forgets. Its note says the one
- *   thing that makes this Kappa rather than an ordinary event bus: retained history can be
- *   replayed through the very same processing path.
- * - `Stream Processor` is a Worker — a continuous consumer, exactly what Worker already means, so
- *   no "stream processor" kind is needed. It reads from the log and writes derived state; nothing
- *   about its shape says "live-only."
- * - `Materialized View` is a `table` Data Store, reached by `projects` rather than a plain
- *   `writes`: it is a *derived* read model built from the log, the same relationship CQRS's own
- *   projection uses, not the system of record.
- * - `Query API` and `Analytics` both read the view and never the log directly — the point of
- *   materialising it at all.
+ * - `Application` and `External System` each publish into the log on their own arrow; Smart
+ *   Routing draws the pair as one fork, so neither reads as publishing through the other, and
+ *   neither owns the log. Two is enough to say "many producers, one history."
+ * - `Event Log` is a **Stream**: Draft Canvas's retained-history kind, not a Topic's
+ *   broadcast-and-forget. Its descriptor says "Append-only, replayable" — deliberately not
+ *   "immutable", which retention and compaction make untrue in practice.
+ * - The log's one connector into `Stream Processor` is labelled `live + replay`. That single arrow
+ *   is the Kappa idea: new events and replayed history enter the *same* processor by the *same*
+ *   path. A second "replay" arrow would draw two paths, which is the architecture this isn't.
+ * - `Stream Processor` is a plain Worker — a continuous consumer — and `Materialized View` a
+ *   `table` reached by `projects`, described as "Derived, rebuildable". The two descriptors carry
+ *   the contrast the whole pattern turns on: history on the left, current state on the right.
+ * - `Query API` and `Analytics` *read* the view, so their arrows point at it — the consumer does
+ *   the reading, the same direction CQRS's query side uses. Analytics is a plain Service: it
+ *   consumes state, it isn't an API.
+ * - Not Event Sourcing (no aggregates or commands — the log is the input to stream processing, not a
+ *   domain model's storage) and not CQRS (no write side at all — every write here is an event).
  *
- * **Replay, without a second edge.** A durable log being replayed through the *same* path is best
- * shown as the same path, not a second arrow beside it (which would draw the log as looping back
- * on itself for no real geometric reason) — so `Event Log → Stream Processor` and
- * `Stream Processor → Materialized View` are walked a second time, in a second flow, with replay
- * framed captions instead. Nothing about the connectors themselves changes.
+ * **Routing.** Both core connectors are level lines; the log is inset from the boundary so the
+ * producers' fork lands clear of the "Streaming core" title. The two top zones are centred over the
+ * log and the view, so each fork drops straight into its node's top centre and the composition
+ * overhangs the core equally on both sides.
  *
- * **Routing.** Both producers reach the log's same left-middle point, off-level, funnelling into
- * one trunk — the same technique Hexagonal's two driving adapters use. `Event Log` → `Stream
- * Processor` → `Materialized View` is one straight run; the view forks symmetrically to its two
- * consumers.
- *
- * **Flows.** "Process event" is the live path end to end. "Replay history" re-walks its middle two
- * steps — the log doesn't care which flow is walking it, which is exactly the point.
+ * **Flows.** "Live processing" walks one event end to end. "Rebuild view" re-walks the same two
+ * core connectors with replay captions — the flow system shows the second reading of the path
+ * without a second path on the canvas.
  */
-const KAP_ROW_GAP = 140;
-const KAP_ROW_A_Y = 0;
-const KAP_ROW_B_Y = KAP_ROW_A_Y + SERVICE.height + KAP_ROW_GAP;
-const KAP_ROW_A_CENTER = KAP_ROW_A_Y + SERVICE.height / 2;
-const KAP_ROW_B_CENTER = KAP_ROW_B_Y + SERVICE.height / 2;
-const KAP_SPINE_CENTER = (KAP_ROW_A_CENTER + KAP_ROW_B_CENTER) / 2;
+/** Two services side by side inside a top zone; the gap is also the fork's spread. */
+const KAP_PAIR_GAP = 40;
+const KAP_ZONE = {
+  width: BOUNDARY_PAD * 2 + SERVICE.width * 2 + KAP_PAIR_GAP,
+  height: BOUNDARY_HEADER_TITLE_ONLY + SERVICE.height + BOUNDARY_PAD,
+};
+/** Between the top zones and the core. A fork's collapsed caption sits halfway down its stem, so the
+ *  drop has to be long enough to lift that caption clear of the core's top edge. */
+const KAP_FEED_GAP = 140;
+const KAP_CORE_Y = KAP_ZONE.height + KAP_FEED_GAP;
+/** Wider than `BOUNDARY_PAD`: the producers' fork drops into the log's top centre, and that stem
+ *  has to clear the core's own title. The right side matches, so the core stays symmetric. */
+const KAP_CORE_INSET = 56;
+const KAP_SPINE = KAP_CORE_Y + BOUNDARY_HEADER_TITLE_ONLY + SERVICE.height / 2;
+const KAP_LOG_X = KAP_CORE_INSET;
+const KAP_LOG_Y = tubeCenteredAt(KAP_SPINE, NAMED_QUEUE.height);
+/** Wide enough that the `live + replay` chip, placed a little short of the midpoint, clears the log. */
+const KAP_REPLAY_GAP = 144;
+const KAP_PROCESSOR_X = KAP_LOG_X + NAMED_QUEUE.width + KAP_REPLAY_GAP;
 /** Wider than the shared `TABLE`: "Materialized View" doesn't fit the plain table card's width. */
 const KAP_VIEW = { width: 172, height: TABLE.height };
-const KAP_PRODUCER_X = 0;
-const KAP_LOG_X = KAP_PRODUCER_X + SERVICE.width + BAND;
-const KAP_PROCESSOR_X = KAP_LOG_X + NAMED_QUEUE.width + BAND;
 const KAP_VIEW_X = KAP_PROCESSOR_X + SERVICE.width + BAND;
-const KAP_CONSUMER_X = KAP_VIEW_X + KAP_VIEW.width + BAND;
-const KAP_CONSUMER_SPAN = SERVICE.height * 2 + GUTTER;
-const KAP_CONSUMER_TOP = KAP_SPINE_CENTER - KAP_CONSUMER_SPAN / 2;
+const KAP_VIEW_Y = centeredAt(KAP_SPINE, KAP_VIEW.height);
+const KAP_LOG_CX = KAP_LOG_X + NAMED_QUEUE.width / 2;
+const KAP_VIEW_CX = KAP_VIEW_X + KAP_VIEW.width / 2;
+const KAP_CORE_WIDTH = KAP_VIEW_X + KAP_VIEW.width + KAP_CORE_INSET;
+/** Annotation text is left-aligned at its own x, so each box is sized to its words to centre them. */
+const KAP_HISTORY = { width: 120, height: 24 };
+const KAP_DERIVED = { width: 104, height: 24 };
+/** One shared row under the lowest of the two nodes, so history and derived state read as a pair. */
+const KAP_DESCRIPTOR_Y = Math.max(KAP_LOG_Y + NAMED_QUEUE.height, KAP_VIEW_Y + KAP_VIEW.height) + 8;
+const KAP_CORE_HEIGHT = KAP_DESCRIPTOR_Y + KAP_HISTORY.height + BOUNDARY_PAD - KAP_CORE_Y;
+const KAP_PRODUCERS_X = centeredAt(KAP_LOG_CX, KAP_ZONE.width);
+const KAP_SERVING_X = centeredAt(KAP_VIEW_CX, KAP_ZONE.width);
+const KAP_ZONE_ROW_Y = BOUNDARY_HEADER_TITLE_ONLY;
+
+/** A top zone's two services, left and right of its centre. */
+function kappaPairX(zoneX: number, index: 0 | 1): number {
+  return zoneX + BOUNDARY_PAD + index * (SERVICE.width + KAP_PAIR_GAP);
+}
 
 const kappa: ArchitectureStarter = {
   id: 'kappa',
@@ -2075,13 +2098,23 @@ const kappa: ArchitectureStarter = {
   aliases: ['kappa', 'kappa architecture', 'durable log', 'log replay', 'materialized view', 'stream processing', 'unified log'],
   nodes: [
     {
+      key: 'producers',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'Producers',
+      x: KAP_PRODUCERS_X,
+      y: 0,
+      ...KAP_ZONE,
+    },
+    {
       key: 'application',
       type: 'service',
       serviceKind: 'generic',
       text: 'Application',
       accent: 'teal',
-      x: KAP_PRODUCER_X,
-      y: KAP_ROW_A_Y,
+      parent: 'producers',
+      x: kappaPairX(KAP_PRODUCERS_X, 0),
+      y: KAP_ZONE_ROW_Y,
       ...SERVICE,
     },
     {
@@ -2090,19 +2123,41 @@ const kappa: ArchitectureStarter = {
       serviceKind: 'external',
       text: 'External System',
       accent: 'teal',
-      x: KAP_PRODUCER_X,
-      y: KAP_ROW_B_Y,
+      parent: 'producers',
+      x: kappaPairX(KAP_PRODUCERS_X, 1),
+      y: KAP_ZONE_ROW_Y,
       ...SERVICE,
+    },
+    {
+      key: 'core',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'Streaming core',
+      x: 0,
+      y: KAP_CORE_Y,
+      width: KAP_CORE_WIDTH,
+      height: KAP_CORE_HEIGHT,
     },
     {
       key: 'log',
       type: 'queue',
       queueKind: 'stream',
       text: 'Event Log',
+      parent: 'core',
       x: KAP_LOG_X,
-      y: tubeCenteredAt(KAP_SPINE_CENTER, NAMED_QUEUE.height),
+      y: KAP_LOG_Y,
       ...NAMED_QUEUE,
-      attachments: [{ type: 'note', text: 'Retained history can be replayed through the same processing path.' }],
+      attachments: [{ type: 'note', text: 'Replay from the start through the same processor to rebuild any view.' }],
+    },
+    {
+      key: 'history',
+      type: 'text',
+      text: 'Append-only, replayable',
+      annotation: true,
+      parent: 'core',
+      x: centeredAt(KAP_LOG_CX, KAP_HISTORY.width),
+      y: KAP_DESCRIPTOR_Y,
+      ...KAP_HISTORY,
     },
     {
       key: 'processor',
@@ -2110,8 +2165,9 @@ const kappa: ArchitectureStarter = {
       serviceKind: 'worker',
       text: 'Stream Processor',
       accent: 'teal',
+      parent: 'core',
       x: KAP_PROCESSOR_X,
-      y: centeredAt(KAP_SPINE_CENTER, SERVICE.height),
+      y: centeredAt(KAP_SPINE, SERVICE.height),
       ...SERVICE,
     },
     {
@@ -2120,9 +2176,29 @@ const kappa: ArchitectureStarter = {
       databaseKind: 'table',
       text: 'Materialized View',
       accent: 'blue',
+      parent: 'core',
       x: KAP_VIEW_X,
-      y: centeredAt(KAP_SPINE_CENTER, KAP_VIEW.height),
+      y: KAP_VIEW_Y,
       ...KAP_VIEW,
+    },
+    {
+      key: 'derived',
+      type: 'text',
+      text: 'Derived, rebuildable',
+      annotation: true,
+      parent: 'core',
+      x: centeredAt(KAP_VIEW_CX, KAP_DERIVED.width),
+      y: KAP_DESCRIPTOR_Y,
+      ...KAP_DERIVED,
+    },
+    {
+      key: 'serving',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'Serving',
+      x: KAP_SERVING_X,
+      y: 0,
+      ...KAP_ZONE,
     },
     {
       key: 'query-api',
@@ -2130,46 +2206,48 @@ const kappa: ArchitectureStarter = {
       serviceKind: 'api',
       text: 'Query API',
       accent: 'teal',
-      x: KAP_CONSUMER_X,
-      y: KAP_CONSUMER_TOP,
+      parent: 'serving',
+      x: kappaPairX(KAP_SERVING_X, 0),
+      y: KAP_ZONE_ROW_Y,
       ...SERVICE,
     },
     {
       key: 'analytics',
       type: 'service',
-      serviceKind: 'api',
+      serviceKind: 'generic',
       text: 'Analytics',
       accent: 'teal',
-      x: KAP_CONSUMER_X,
-      y: KAP_CONSUMER_TOP + SERVICE.height + GUTTER,
+      parent: 'serving',
+      x: kappaPairX(KAP_SERVING_X, 1),
+      y: KAP_ZONE_ROW_Y,
       ...SERVICE,
     },
   ],
   edges: [
-    { key: 'app-publish', ...across('application', 'log') },
-    { key: 'ext-publish', ...across('external', 'log') },
-    { key: 'consume', ...across('log', 'processor') },
+    { key: 'app-publish', ...down('application', 'log') },
+    { key: 'ext-publish', ...down('external', 'log') },
+    { key: 'consume', ...across('log', 'processor'), label: 'live + replay' },
     { key: 'materialize', ...across('processor', 'view'), semantic: 'projects' },
-    { key: 'query', ...across('view', 'query-api') },
-    { key: 'analyze', ...across('view', 'analytics') },
+    { key: 'query', ...down('query-api', 'view'), semantic: 'reads' },
+    { key: 'analyze', ...down('analytics', 'view'), semantic: 'reads' },
   ],
   flows: [
     {
-      title: 'Process event',
+      title: 'Live processing',
       accent: 'teal',
       steps: [
-        { edgeKey: 'app-publish', caption: 'A producer publishes an event' },
-        { edgeKey: 'consume', caption: 'The stream processor consumes it' },
-        { edgeKey: 'materialize', caption: 'It updates the materialized view' },
-        { edgeKey: 'query', caption: 'A consumer reads the derived state' },
+        { edgeKey: 'app-publish', caption: 'Application publishes an event' },
+        { edgeKey: 'consume', caption: 'Consumed live, in log order' },
+        { edgeKey: 'materialize', caption: 'Projected into current state' },
+        { edgeKey: 'query', caption: 'Query API reads the view' },
       ],
     },
     {
-      title: 'Replay history',
+      title: 'Rebuild view',
       accent: 'violet',
       steps: [
-        { edgeKey: 'consume', caption: 'Historical events replay through the same path' },
-        { edgeKey: 'materialize', caption: 'Materialized state rebuilds from history' },
+        { edgeKey: 'consume', caption: 'Replayed from the start, same processor' },
+        { edgeKey: 'materialize', caption: 'The view rebuilds from history' },
       ],
     },
   ],
@@ -2177,54 +2255,105 @@ const kappa: ArchitectureStarter = {
 
 /* ---------------------------------------------------------------- cdc -- */
 /**
- * Changes to an operational database reach downstream systems without those systems ever polling
- * it — the whole idea, so the diagram spends its every element on the path a change actually
- * takes, and none on how any one downstream system happens to use it.
+ * Capture once, fan out to many. The application writes to one place — its own database, the
+ * source of truth — and every other system learns about that write from the database's committed
+ * changes, never from the application writing twice. Three zones say it before any label is read:
+ * the **operational system** on the left, the **CDC pipeline** as the one straight spine through the
+ * middle, and **derived views** on the right, fed from that spine and owning nothing authoritative.
  *
  * **What each element is, and what it is careful not to say.**
- * - `Application` writes to `Operational Database` — an ordinary `writes`, kept as its own
- *   connector so the diagram can never read as "a consumer produces the change." The database
- *   commits it; nothing downstream is involved in that commit.
- * - `CDC Connector` reaches the database with `cdc`, not a plain `reads` — the same log-tailing
- *   relationship a database-to-database replica already carries, now expressed toward a service.
- *   Its note names the mechanism without diagramming it: it reads the database's own change log,
- *   never the tables, and never on a poll interval.
- * - `Change Stream` is a **Topic**: captured changes broadcast to however many independent
- *   downstream systems are listening, not one queue one consumer drains.
- * - `Search Index` and `Data Warehouse` are two different, real downstream systems — not two
- *   instances of the same idea — each consuming the stream directly and never touching the
- *   database. `indexes` and `ingests` name what each one specifically does with a captured change.
+ * - `Application` sits *above* `Operational Database` inside one boundary, with exactly one
+ *   outgoing arrow (`writes`) — "no dual writes" is carried by topology, not prose. The story turns
+ *   90° at the database, which is where it has to turn: that's the one place a change becomes real.
+ *   A quiet "Source of truth" under the database is the only descriptor on the diagram.
+ * - `CDC Connector` is a Worker reaching the database with `cdc`, labelled `captures changes`
+ *   (the relationship's own caption is just "CDC", which teaches nothing). Its boundary subtitle,
+ *   "Captured once, after commit", is the pattern in five words; its note names the mechanism
+ *   without diagramming it — the database's own change log, never the tables, never a poll.
+ * - `Change Stream` is a **Stream**, not a Topic: an ordered, retained log of committed changes in
+ *   which each consumer keeps its own position and a new view can replay from the start (its note).
+ *   A Topic says "broadcast and forget"; that is not what a change feed is. Name and shape agree.
+ * - `Derived views` holds two lanes, each a consumer Worker and the store it maintains:
+ *   `Search Indexer` → `Search Index` (`indexes`), `Warehouse Loader` → `Data Warehouse`
+ *   (`projects` — a derived view, never an authoritative `writes`). The workers aren't
+ *   completeness: each one owns its read position, pace and failures, which is the consumer
+ *   independence CDC exists to buy — and because both read the stream the same way (`consumes`),
+ *   Smart Routing draws the fan as one trunk with one caption, where two direct sinks with two
+ *   different verbs could only ever be two unrelated arrows. The boundary's subtitle, "Eventually
+ *   consistent", is the one supporting concept shown, and the one that makes "derived" legible.
  *
- * **Routing.** `Application` → `Operational Database` → `CDC Connector` → `Change Stream` →
- * `Search Index` is one unbroken straight spine; `Data Warehouse` is the one node the stream
- * reaches off-level, below the spine.
+ * **Routing.** Database → connector → stream is one straight line on the spine; the two lanes sit
+ * symmetrically above and below it, so the fan is balanced and every lane is a level line. The gap
+ * before the pipeline is wide enough for the `captures changes` chip to sit between the two
+ * boundaries rather than across either edge; the gap after it holds the fan's trunk.
  *
- * **Flow.** "Propagate database change" walks the one representative downstream branch
- * (`Search Index`) end to end; `Data Warehouse` receives the identical broadcast a click away.
+ * **Flow.** "Capture and fan out" walks both branches, because one-to-many is the point: one
+ * commit, captured once, published once, read independently by each view.
  */
-const CDC_SPINE_CENTER = STORE.height / 2;
-const CDC_APP_X = 0;
-const CDC_DB_X = CDC_APP_X + SERVICE.width + BAND;
-const CDC_CONNECTOR_X = CDC_DB_X + STORE.width + BAND;
-const CDC_STREAM_X = CDC_CONNECTOR_X + SERVICE.width + BAND;
-const CDC_SINK_X = CDC_STREAM_X + NAMED_QUEUE.width + BAND;
-const CDC_WAREHOUSE_Y = STORE.height + GUTTER;
+const CDC_OPS_WIDTH = SERVICE.width + BOUNDARY_PAD * 2;
+const CDC_OPS_CX = CDC_OPS_WIDTH / 2;
+const CDC_APP_Y = BOUNDARY_HEADER_TITLE_ONLY;
+const CDC_DB_Y = CDC_APP_Y + SERVICE.height + INNER_BAND;
+/** The pipeline's spine: the database's centre line, which the connector and stream share. */
+const CDC_SPINE = CDC_DB_Y + STORE.height / 2;
+/** Annotation text is left-aligned at its own x, so the box is sized to the words to centre them. */
+const CDC_TRUTH = { width: 76, height: 24 };
+const CDC_TRUTH_Y = CDC_DB_Y + STORE.height + 8;
+const CDC_OPS_HEIGHT = CDC_TRUTH_Y + CDC_TRUTH.height + BOUNDARY_PAD;
+/** Wide enough that the `captures changes` label chip (placed a little short of the line's midpoint)
+ *  sits between the two boundaries, clear of both dashed edges. */
+const CDC_CAPTURE_GAP = 168;
+const CDC_SUBTITLE = { width: 200, height: 24 };
+const CDC_SUBTITLED_TOP = BOUNDARY_TITLE_SUBLINE_Y + CDC_SUBTITLE.height + 8;
+const CDC_PIPE_X = CDC_OPS_WIDTH + CDC_CAPTURE_GAP;
+const CDC_PIPE_Y = CDC_SPINE - SERVICE.height / 2 - CDC_SUBTITLED_TOP;
+const CDC_CONNECTOR_X = CDC_PIPE_X + BOUNDARY_PAD;
+const CDC_STREAM_X = CDC_CONNECTOR_X + SERVICE.width + GUTTER;
+const CDC_STREAM_Y = tubeCenteredAt(CDC_SPINE, NAMED_QUEUE.height);
+const CDC_PIPE_WIDTH = CDC_STREAM_X + NAMED_QUEUE.width + BOUNDARY_PAD - CDC_PIPE_X;
+const CDC_PIPE_HEIGHT =
+  Math.max(CDC_SPINE + SERVICE.height / 2, CDC_STREAM_Y + NAMED_QUEUE.height) + BOUNDARY_PAD - CDC_PIPE_Y;
+/** The fan's collapsed `consumes` caption sits midway along its stem; this gap moves the trunk far
+ *  enough out that the caption clears the pipeline boundary's edge instead of sitting on it. */
+const CDC_FAN_GAP = 128;
+const CDC_VIEWS_X = CDC_PIPE_X + CDC_PIPE_WIDTH + CDC_FAN_GAP;
+const CDC_WORKER_X = CDC_VIEWS_X + BOUNDARY_PAD;
+const CDC_STORE_X = CDC_WORKER_X + SERVICE.width + GUTTER;
+const CDC_VIEWS_WIDTH = CDC_STORE_X + STORE.width + BOUNDARY_PAD - CDC_VIEWS_X;
+const CDC_LANE_GAP = 40;
+/** Each lane's centre sits this far above/below the spine, so the fan is symmetric. */
+const CDC_LANE_OFFSET = (STORE.height + CDC_LANE_GAP) / 2;
+const CDC_SEARCH_CY = CDC_SPINE - CDC_LANE_OFFSET;
+const CDC_WAREHOUSE_CY = CDC_SPINE + CDC_LANE_OFFSET;
+const CDC_VIEWS_Y = CDC_SEARCH_CY - STORE.height / 2 - CDC_SUBTITLED_TOP;
+const CDC_VIEWS_HEIGHT = CDC_WAREHOUSE_CY + STORE.height / 2 + BOUNDARY_PAD - CDC_VIEWS_Y;
 
 const cdc: ArchitectureStarter = {
   id: 'cdc',
   category: 'data',
   name: 'Change Data Capture',
-  description: 'Propagate database changes downstream without polling',
+  description: 'Capture committed changes once, fan out to derived views',
   aliases: ['cdc', 'change data capture', 'cdc pipeline', 'change stream', 'log-based replication', 'debezium'],
   nodes: [
+    {
+      key: 'operational',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'Operational system',
+      x: 0,
+      y: 0,
+      width: CDC_OPS_WIDTH,
+      height: CDC_OPS_HEIGHT,
+    },
     {
       key: 'application',
       type: 'service',
       serviceKind: 'generic',
       text: 'Application',
       accent: 'teal',
-      x: CDC_APP_X,
-      y: centeredAt(CDC_SPINE_CENTER, SERVICE.height),
+      parent: 'operational',
+      x: centeredAt(CDC_OPS_CX, SERVICE.width),
+      y: CDC_APP_Y,
       ...SERVICE,
     },
     {
@@ -2233,9 +2362,34 @@ const cdc: ArchitectureStarter = {
       databaseKind: 'generic',
       text: 'Operational Database',
       accent: 'blue',
-      x: CDC_DB_X,
-      y: 0,
+      parent: 'operational',
+      x: centeredAt(CDC_OPS_CX, STORE.width),
+      y: CDC_DB_Y,
       ...STORE,
+    },
+    {
+      key: 'truth',
+      type: 'text',
+      text: 'Source of truth',
+      annotation: true,
+      parent: 'operational',
+      x: centeredAt(CDC_OPS_CX, CDC_TRUTH.width),
+      y: CDC_TRUTH_Y,
+      ...CDC_TRUTH,
+    },
+    {
+      key: 'pipeline',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'CDC pipeline',
+      x: CDC_PIPE_X,
+      y: CDC_PIPE_Y,
+      width: CDC_PIPE_WIDTH,
+      height: CDC_PIPE_HEIGHT,
+    },
+    {
+      ...boundarySubtitle('pipeline-subtitle', 'pipeline', CDC_PIPE_X, 'Captured once, after commit', CDC_SUBTITLE),
+      y: CDC_PIPE_Y + BOUNDARY_TITLE_SUBLINE_Y,
     },
     {
       key: 'connector',
@@ -2243,19 +2397,47 @@ const cdc: ArchitectureStarter = {
       serviceKind: 'worker',
       text: 'CDC Connector',
       accent: 'teal',
+      parent: 'pipeline',
       x: CDC_CONNECTOR_X,
-      y: centeredAt(CDC_SPINE_CENTER, SERVICE.height),
+      y: centeredAt(CDC_SPINE, SERVICE.height),
       ...SERVICE,
       attachments: [{ type: 'note', text: "Reads the database's own change log — never the tables, never on a poll interval." }],
     },
     {
       key: 'stream',
       type: 'queue',
-      queueKind: 'topic',
+      queueKind: 'stream',
       text: 'Change Stream',
+      parent: 'pipeline',
       x: CDC_STREAM_X,
-      y: tubeCenteredAt(CDC_SPINE_CENTER, NAMED_QUEUE.height),
+      y: CDC_STREAM_Y,
       ...NAMED_QUEUE,
+      attachments: [{ type: 'note', text: 'Ordered and retained — a new view can replay it from the start to build itself.' }],
+    },
+    {
+      key: 'views',
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'Derived views',
+      x: CDC_VIEWS_X,
+      y: CDC_VIEWS_Y,
+      width: CDC_VIEWS_WIDTH,
+      height: CDC_VIEWS_HEIGHT,
+    },
+    {
+      ...boundarySubtitle('views-subtitle', 'views', CDC_VIEWS_X, 'Eventually consistent', CDC_SUBTITLE),
+      y: CDC_VIEWS_Y + BOUNDARY_TITLE_SUBLINE_Y,
+    },
+    {
+      key: 'search-indexer',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Search Indexer',
+      accent: 'teal',
+      parent: 'views',
+      x: CDC_WORKER_X,
+      y: centeredAt(CDC_SEARCH_CY, SERVICE.height),
+      ...SERVICE,
     },
     {
       key: 'search-index',
@@ -2263,9 +2445,21 @@ const cdc: ArchitectureStarter = {
       databaseKind: 'search-index',
       text: 'Search Index',
       accent: 'blue',
-      x: CDC_SINK_X,
-      y: 0,
+      parent: 'views',
+      x: CDC_STORE_X,
+      y: centeredAt(CDC_SEARCH_CY, STORE.height),
       ...STORE,
+    },
+    {
+      key: 'warehouse-loader',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Warehouse Loader',
+      accent: 'teal',
+      parent: 'views',
+      x: CDC_WORKER_X,
+      y: centeredAt(CDC_WAREHOUSE_CY, SERVICE.height),
+      ...SERVICE,
     },
     {
       key: 'warehouse',
@@ -2273,27 +2467,33 @@ const cdc: ArchitectureStarter = {
       databaseKind: 'generic',
       text: 'Data Warehouse',
       accent: 'blue',
-      x: CDC_SINK_X,
-      y: CDC_WAREHOUSE_Y,
+      parent: 'views',
+      x: CDC_STORE_X,
+      y: centeredAt(CDC_WAREHOUSE_CY, STORE.height),
       ...STORE,
     },
   ],
   edges: [
-    { key: 'write', ...across('application', 'database') },
-    { key: 'capture', ...across('database', 'connector'), semantic: 'cdc' },
+    { key: 'write', ...down('application', 'database') },
+    { key: 'capture', ...across('database', 'connector'), semantic: 'cdc', label: 'captures changes' },
     { key: 'publish', ...across('connector', 'stream') },
-    { key: 'to-index', ...across('stream', 'search-index') },
-    { key: 'to-warehouse', ...across('stream', 'warehouse') },
+    { key: 'consume-search', ...across('stream', 'search-indexer') },
+    { key: 'consume-warehouse', ...across('stream', 'warehouse-loader') },
+    { key: 'index', ...across('search-indexer', 'search-index') },
+    { key: 'project', ...across('warehouse-loader', 'warehouse'), semantic: 'projects' },
   ],
   flows: [
     {
-      title: 'Propagate database change',
+      title: 'Capture and fan out',
       accent: 'teal',
       steps: [
-        { edgeKey: 'write', caption: 'The application writes a transaction, which the database commits' },
-        { edgeKey: 'capture', caption: 'CDC captures the committed change from the database’s log' },
-        { edgeKey: 'publish', caption: 'The change is published to the stream' },
-        { edgeKey: 'to-index', caption: 'The consumer receives the change and updates its own projection' },
+        { edgeKey: 'write', caption: 'One write, to its own database only' },
+        { edgeKey: 'capture', caption: 'Captured from the log once committed' },
+        { edgeKey: 'publish', caption: 'Published once, as a change event' },
+        { edgeKey: 'consume-search', caption: 'The search indexer reads it at its own pace' },
+        { edgeKey: 'index', caption: '…and updates the index' },
+        { edgeKey: 'consume-warehouse', caption: 'The same change, read independently' },
+        { edgeKey: 'project', caption: '…and loads it for analytics' },
       ],
     },
   ],
