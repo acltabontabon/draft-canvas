@@ -85,10 +85,10 @@ Microsoft recommends this for Marketplace publishing, because global Azure DevOp
 2. **Trust GitHub.** On that identity, open **Settings → Federated credentials → Add credential**
    and choose *GitHub Actions deploying Azure resources*. Enter organization `acltabontabon`,
    repository `draft-canvas`, entity type **Environment**, environment `vscode-marketplace`.
-3. **Create the GitHub environment.** In the repo, go to **Settings → Environments → New
-   environment** and name it `vscode-marketplace`. Add the variables `AZURE_CLIENT_ID` and
-   `AZURE_TENANT_ID`. Optionally add yourself as a required reviewer, so each publication waits for
-   your approval.
+3. **Point the GitHub environment at it.** The `vscode-marketplace` environment already exists, and
+   only `extension-v*` tags and `main` can deploy to it. Under **Settings → Environments →
+   vscode-marketplace**, add the variables `AZURE_CLIENT_ID` and `AZURE_TENANT_ID`. Optionally add
+   yourself as a required reviewer, so each publication waits for your approval.
 4. **Let the identity publish.** The Marketplace only recognizes the identity's Azure DevOps profile
    ID. Run the **VS Code Marketplace identity** workflow once from the Actions tab; it prints that
    ID. At <https://marketplace.visualstudio.com/manage/publishers/acltabontabon>, open **Members →
