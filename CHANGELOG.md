@@ -6,9 +6,9 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
-- Three new Data Architecture starters: Medallion Architecture (progressive data refinement),
-  Kappa Architecture (a durable event stream for both live and historical processing), and Change
-  Data Capture (propagating database changes downstream without polling), each with a built-in
+- Three new Data Architecture starters: Medallion (progressive data refinement), Kappa (a durable
+  event stream for both live and historical processing), and Change Data Capture (propagating
+  database changes downstream without polling), each with a built-in
   flow. Starters are now grouped into Architectures, Data Architectures, and Patterns.
 
 ### Fixed

@@ -1833,7 +1833,7 @@ function medallionDescriptor(key: string, tableX: number, text: string, width: n
 const medallion: ArchitectureStarter = {
   id: 'medallion',
   category: 'data',
-  name: 'Medallion Architecture',
+  name: 'Medallion',
   description: 'Refine raw data into validated, business-ready datasets',
   aliases: ['medallion', 'medallion architecture', 'bronze silver gold', 'lakehouse', 'data lake', 'etl', 'data pipeline'],
   nodes: [
@@ -2093,7 +2093,7 @@ function kappaPairX(zoneX: number, index: 0 | 1): number {
 const kappa: ArchitectureStarter = {
   id: 'kappa',
   category: 'data',
-  name: 'Kappa Architecture',
+  name: 'Kappa',
   description: 'Process live and historical data through one durable stream',
   aliases: ['kappa', 'kappa architecture', 'durable log', 'log replay', 'materialized view', 'stream processing', 'unified log'],
   nodes: [
