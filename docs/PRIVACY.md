@@ -39,9 +39,7 @@ reopen works with no internet connection after the first successful visit.
 ### localStorage
 
 Short, named UI preferences only: `draft-canvas.personality`
-(the roughness preset), `draft-canvas.last-seen-version` and `draft-canvas.feature-seen.<id>` (the
-"New" badges), `draft-canvas.hint.<id>` (which contextual hints have been learned), and — for the
-command palette's history — `draft-canvas.command-recent.<n>` (the ids of the last few commands
+(the roughness preset), and — for the command palette's history — `draft-canvas.command-recent.<n>` (the ids of the last few commands
 run) and `draft-canvas.command-use.<id>` (a per-command counter). Command ids name actions
 ("add-service", "connect-to"), never elements: nothing about a diagram's content is stored here.
 `draft-canvas.clipboard-permission` (`granted`/`denied`) remembers whether you already answered

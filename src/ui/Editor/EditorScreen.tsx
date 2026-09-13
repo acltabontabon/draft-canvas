@@ -5,6 +5,7 @@ import { Canvas, type CanvasProps } from '../../canvas/Canvas';
 import { ContextMenu } from '../../canvas/ContextMenu';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
+import { canvasBounds, canvasCenter } from '../../canvas/canvasFrame';
 import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { nearestInDirection, nextRelationshipNeighbor, type Direction } from '../../canvas/spatialNav';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
@@ -19,7 +20,7 @@ import { defaultSizeFor } from '../../document/factory';
 import { DEFAULTS } from '../../document/limits';
 import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
-import { isActivatableTarget, isEditableTarget } from '../../lib/isEditableTarget';
+import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion } from '../../lib/isEditableTarget';
 import { centerOf } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, useEditorStore } from '../../store/editorStore';
@@ -45,6 +46,9 @@ import { motionMs } from '../../lib/motion';
 // Export (its panels, previews, and exporters) is a sizeable slice of the editor that most sessions
 // never open — fetched the first time it is, then kept mounted so its in-session choices survive.
 const ExportDialog = lazy(() => import('./ExportDialog').then((module) => ({ default: module.ExportDialog })));
+// Learn and every one of its scenes arrive the first time it's opened, and stay mounted after — so
+// the editor itself carries nothing but the recipe titles its palette can search.
+const LearnDrawer = lazy(() => import('../learn/LearnDrawer').then((module) => ({ default: module.LearnDrawer })));
 
 /** Whether a modal dialog (`Modal`'s `aria-modal` panel) is up — the editor's shortcuts stand down. */
 function modalIsOpen(): boolean {
@@ -90,6 +94,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const exportOpen = useUiStore((state) => state.exportOpen);
   const [exportMounted, setExportMounted] = useState(exportOpen);
   if (exportOpen && !exportMounted) setExportMounted(true);
+  const learnOpen = useUiStore((state) => state.learnOpen);
+  const [learnMounted, setLearnMounted] = useState(learnOpen);
+  if (learnOpen && !learnMounted) setLearnMounted(true);
   const quickConnect = useUiStore((state) => state.quickConnect);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
   const reconnecting = useUiStore((state) => state.reconnectDragActive);
@@ -240,7 +247,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         ? { x: pointer.x - 88, y: pointer.y - 34 }
         : host
           ? placeNear(state.document, host, defaultSizeFor(preset.type))
-          : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+          : screenToFlowPosition(canvasCenter());
       // Both of this function's own call sites (the bare-letter shortcut, the palette's "Add
       // <type>") are keyboard/command-driven, never a mouse gesture — so unlike `createAt` itself,
       // this one always opens the new element ready to name.
@@ -338,69 +345,77 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         />
       )}
 
-      <div className="dc-editor-canvas">
-        <ErrorBoundary
-          key={canvasInstanceKey}
-          message="Something went wrong while rendering this canvas."
-          actions={[
-            { label: 'Reload canvas', onClick: () => setCanvasInstanceKey((k) => k + 1) },
-            {
-              label: 'Restore last-known-good',
-              onClick: () => {
-                void session.openDocument(session.openId!).then(() => setCanvasInstanceKey((k) => k + 1));
+      <div className="dc-editor-body">
+        <div className="dc-editor-canvas">
+          <ErrorBoundary
+            key={canvasInstanceKey}
+            message="Something went wrong while rendering this canvas."
+            actions={[
+              { label: 'Reload canvas', onClick: () => setCanvasInstanceKey((k) => k + 1) },
+              {
+                label: 'Restore last-known-good',
+                onClick: () => {
+                  void session.openDocument(session.openId!).then(() => setCanvasInstanceKey((k) => k + 1));
+                },
               },
-            },
-            { label: 'Return home', onClick: () => void session.closeDocument() },
-          ]}
-          onError={(error, componentStack) =>
-            logDiagnostic(error, { operation: 'canvas-render', documentId: session.openId }, componentStack)
-          }
-        >
-          <Canvas
-            onCreateAt={onCanvasCreateAt}
-            onQuickConnectMenu={onQuickConnectMenu}
-            onEmptyCanvasMenu={onEmptyCanvasMenu}
-          />
-        </ErrorBoundary>
-        {quickConnect && (
-          <QuickConnectMenu
-            screenPosition={quickConnect.screenPosition}
-            anchorRect={quickConnectAnchorRect}
-            items={quickConnectRows}
-            onSelect={onQuickConnectSelect}
-            onHighlight={onQuickConnectHighlight}
-            onDismiss={dismissQuickConnect}
-          />
-        )}
-        {!presenting && contextMenu && (
-          <ContextMenu
-            screenPosition={contextMenu.screenPosition}
-            entries={contextMenuEntries}
-            onSelect={runContextMenuCommand}
-            onDismiss={dismissContextMenu}
-          />
-        )}
-        {!presenting && <AttachmentPopover />}
-        {!presenting && <EdgeInspectorPopover />}
-        {!presenting && <ElementInspectorPopover buildCommandContext={buildCommandContext} />}
-        <EmptyState onInsertStarter={insertStarter} />
-        {!presenting && <ContinuationAnnouncer />}
-        {!presenting && <Inspector />}
-        {!presenting && <FlowPanel playback={playback} />}
-        <FlowBar playback={playback} />
-        <FocusIndicator />
+              { label: 'Return home', onClick: () => void session.closeDocument() },
+            ]}
+            onError={(error, componentStack) =>
+              logDiagnostic(error, { operation: 'canvas-render', documentId: session.openId }, componentStack)
+            }
+          >
+            <Canvas
+              onCreateAt={onCanvasCreateAt}
+              onQuickConnectMenu={onQuickConnectMenu}
+              onEmptyCanvasMenu={onEmptyCanvasMenu}
+            />
+          </ErrorBoundary>
+          {quickConnect && (
+            <QuickConnectMenu
+              screenPosition={quickConnect.screenPosition}
+              anchorRect={quickConnectAnchorRect}
+              items={quickConnectRows}
+              onSelect={onQuickConnectSelect}
+              onHighlight={onQuickConnectHighlight}
+              onDismiss={dismissQuickConnect}
+            />
+          )}
+          {!presenting && contextMenu && (
+            <ContextMenu
+              screenPosition={contextMenu.screenPosition}
+              entries={contextMenuEntries}
+              onSelect={runContextMenuCommand}
+              onDismiss={dismissContextMenu}
+            />
+          )}
+          {!presenting && <AttachmentPopover />}
+          {!presenting && <EdgeInspectorPopover />}
+          {!presenting && <ElementInspectorPopover buildCommandContext={buildCommandContext} />}
+          <EmptyState onInsertStarter={insertStarter} />
+          {!presenting && <ContinuationAnnouncer />}
+          {!presenting && <Inspector />}
+          {!presenting && <FlowPanel playback={playback} />}
+          <FlowBar playback={playback} />
+          <FocusIndicator />
 
-        {presenting && (
-          <div className="dc-present-exit">
-            {!playback.active && playback.canStart && (
-              <Button variant="quiet" icon="play" onClick={playback.start}>
-                Present a flow
+          {presenting && (
+            <div className="dc-present-exit">
+              {!playback.active && playback.canStart && (
+                <Button variant="quiet" icon="play" onClick={playback.start}>
+                  Present a flow
+                </Button>
+              )}
+              <Button variant="quiet" icon="close" onClick={() => setMode('edit')}>
+                Exit presentation
               </Button>
-            )}
-            <Button variant="quiet" icon="close" onClick={() => setMode('edit')}>
-              Exit presentation
-            </Button>
-          </div>
+            </div>
+          )}
+        </div>
+
+        {learnMounted && (
+          <Suspense fallback={null}>
+            <LearnDrawer />
+          </Suspense>
         )}
       </div>
 
@@ -493,11 +508,8 @@ function useKeyboard({
       const center = centerOf(target);
       const screen = flowToScreenPosition(center);
       const margin = 96; // clear of the toolbar and edges, not flush against them
-      const onScreen =
-        screen.x > margin &&
-        screen.x < window.innerWidth - margin &&
-        screen.y > margin &&
-        screen.y < window.innerHeight - margin;
+      const { right, bottom } = canvasBounds();
+      const onScreen = screen.x > margin && screen.x < right - margin && screen.y > margin && screen.y < bottom - margin;
       if (!onScreen) void setCenter(center.x, center.y, { zoom: getZoom(), duration: motionMs(200) });
     },
     [flowToScreenPosition, getZoom, setCenter],
@@ -543,7 +555,7 @@ function useKeyboard({
         ? centerOf(bounds)
         // An edges-only multi-selection has no node bounds to anchor to — the viewport center is a
         // reasonable, simple fallback; the menu's own content is correct regardless of where it opens.
-        : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+        : screenToFlowPosition(canvasCenter());
       target = { kind: 'selection' };
     }
 
@@ -577,7 +589,7 @@ function useKeyboard({
       if (text) useEditorStore.getState().applyExternalClipboardText(text);
       const target = pointer.known
         ? { x: pointer.x, y: pointer.y }
-        : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+        : screenToFlowPosition(canvasCenter());
       useEditorStore.getState().paste(target);
     };
     window.addEventListener('paste', onPaste);
@@ -591,6 +603,8 @@ function useKeyboard({
   useEffect(() => {
     const onEscapeCapture = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || isEditableTarget(event.target)) return;
+      // An Escape meant for a dialog or for Learn is theirs, not the ghost's.
+      if (isInOwnKeyboardRegion(event.target) || modalIsOpen()) return;
       const uiState = useUiStore.getState();
       if (uiState.continuation?.trigger !== 'select') return;
       if (uiState.quickConnect || uiState.contextMenu || uiState.commandPaletteOpen) return;
@@ -730,6 +744,11 @@ function useKeyboard({
         }
       }
 
+      // Focus in Learn (docked beside a live canvas): its buttons and links own the bare keys — a
+      // letter must not drop a shape behind it, nor Backspace delete the selection. ⌘ chords above
+      // still reach the canvas.
+      if (isInOwnKeyboardRegion(event.target)) return;
+
       // Matched by `event.code` (the physical key) rather than `event.key` (the character a
       // layout produces for Shift+Digit1/Shift+Slash) — on a layout where Shift+1 doesn't type
       // '!', or Shift+/ doesn't type '?', matching the produced character would silently never
@@ -839,7 +858,7 @@ function useKeyboard({
               selected.length === 1 ? state.document.nodes.find((n) => n.id === selected[0]) : undefined;
             const origin = originNode
               ? centerOf(originNode)
-              : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+              : screenToFlowPosition(canvasCenter());
             const next = nearestInDirection(state.document.nodes, origin, direction, originNode?.id);
             if (!next) return;
             selectAndReveal(next);

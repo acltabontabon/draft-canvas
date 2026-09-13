@@ -17,6 +17,7 @@ import { useOverlayPosition } from './useOverlayPosition';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { useToolbarHeight } from './useToolbarHeight';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
+import { rightClearance } from './canvasFrame';
 
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css`. */
 const POPOVER_EXIT_MS = 120;
@@ -28,7 +29,6 @@ const GAP = 14;
 const TOP_CLEARANCE = 56;
 const BOTTOM_CLEARANCE = 44;
 const LEFT_CLEARANCE = 12;
-const RIGHT_CLEARANCE_WITH_FLOW_PANEL = 312;
 
 /**
  * The contextual popover a node's attachment badge opens — anchored at the node's own rendered
@@ -70,9 +70,11 @@ export function AttachmentPopover() {
 
 function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string; closing: boolean; listening: boolean }) {
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
+  // Subscribed only so a docked Learn drawer opening or closing re-measures the right edge.
+  useUiStore((state) => state.learnOpen);
   const interactionActive = useUiStore((state) => state.interactionActive);
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
-  const rightClearance = flowPanelOpen ? RIGHT_CLEARANCE_WITH_FLOW_PANEL : LEFT_CLEARANCE;
+  const rightEdge = rightClearance(flowPanelOpen, LEFT_CLEARANCE);
   const liveHost = useEditorStore((state) => selectNode(state.document, hostId));
   const liveInternal = useInternalNode(hostId);
   const updateAttachment = useEditorStore((state) => state.updateAttachment);
@@ -125,7 +127,7 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
     top: toolbarHeight ? toolbarHeight + 10 : TOP_CLEARANCE,
     bottom: BOTTOM_CLEARANCE,
     left: LEFT_CLEARANCE,
-    right: rightClearance,
+    right: rightEdge,
   };
   const anchors = rect ? anchorsForRect(rect) : null;
 

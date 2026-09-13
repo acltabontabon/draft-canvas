@@ -27,15 +27,15 @@ import { effectiveTextRole } from '../nodes/describe';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
-import { documentHasAttachments, nodeIndex } from '../store/selectors';
+import { nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
 import { BOUNDARY_PRESET_OPTION_LABELS, NOTE_LABELS, TEXT_ROLE_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
 import { ACTOR_ICON_OPTIONS } from './actorOptions';
 import { COMPONENT_ICON_OPTIONS } from './componentOptions';
 import { DATABASE_ICON_OPTIONS } from './dataStoreOptions';
+import { rightClearance } from './canvasFrame';
 import { rectOfInternal } from './edgeGeometry';
-import { HintStrip } from './HintStrip';
 import { useToolbarHeight } from './useToolbarHeight';
 import { useOverlayPosition } from './useOverlayPosition';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
@@ -43,7 +43,6 @@ import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { QUEUE_ICON_OPTIONS } from './queueOptions';
 import { SERVICE_ICON_OPTIONS } from './serviceOptions';
-import type { HintId } from '../learning/hints';
 import {
   anchorsForRect,
   placementTransform,
@@ -107,10 +106,6 @@ const TOP_CLEARANCE = 56;
 const BOTTOM_CLEARANCE = 44;
 /** No left rail exists; just a small screen-edge margin. */
 const LEFT_CLEARANCE = 12;
-/** `FlowPanel`'s fixed 300px width + a 12px gap, only while it's actually open (`flowPanelOpen`
- *  in `uiStore` — it's dismissible, not always on screen); otherwise just the same small margin
- *  as the left edge. */
-const RIGHT_CLEARANCE_WITH_FLOW_PANEL = 312;
 
 /**
  * The contextual control for a single selected element — anchored right at its own rendered
@@ -153,11 +148,13 @@ function ElementInspectorBody({
 }) {
   const document = useEditorStore((state) => state.document);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
-  const learnModeActive = useUiStore((state) => state.learnModeActive);
+  // Subscribed only so a docked Learn drawer opening or closing re-measures the right edge.
+  useUiStore((state) => state.learnOpen);
   const interactionActive = useUiStore((state) => state.interactionActive);
   const theme = useThemeValue();
   const { flowToScreenPosition } = useReactFlow();
-  const rightClearance = flowPanelOpen ? RIGHT_CLEARANCE_WITH_FLOW_PANEL : LEFT_CLEARANCE;
+  // The Flows panel while it's open, and anything docked beside the canvas — see `canvasFrame.ts`.
+  const rightEdge = rightClearance(flowPanelOpen, LEFT_CLEARANCE);
 
   const liveNode = nodeIndex(document.nodes).get(nodeId);
   const liveInternal = useInternalNode(nodeId);
@@ -218,7 +215,7 @@ function ElementInspectorBody({
     top: toolbarClearance,
     bottom: BOTTOM_CLEARANCE,
     left: LEFT_CLEARANCE,
-    right: rightClearance,
+    right: rightEdge,
   };
   const anchors: Record<Placement, { x: number; y: number }> | null = rect ? anchorsForRect(rect) : null;
 
@@ -245,24 +242,6 @@ function ElementInspectorBody({
   });
 
   if (!displayNode || !displayInternal || !rect || !anchors || !target) return null;
-
-  // At most one hint per node, decided by its type alone (never falls through to a
-  // second, near-duplicate message once the first no longer applies): a Service node always
-  // teaches attachments via its own framing; any other non-group node with nothing attached yet
-  // gets the generic nudge. Both retire together — see `hasAnyAttachment` below —
-  // since they teach the same underlying capability.
-  const hasAnyAttachment = documentHasAttachments(document);
-  const primaryHint: HintId | null =
-    displayNode.type === 'service'
-      ? 'service-node'
-      : displayNode.type !== 'group' && !displayNode.attachments?.length
-        ? 'attachment-slot'
-        : null;
-  // Once the element's own hint is learned or dismissed (or it never had one), the
-  // palette gets a turn instead. Hints only ever surface at all while Learn Draft Canvas mode is
-  // on (`HintStrip`'s own gate) — nothing here shows outside a Learn mode review pass.
-  const hintId: HintId | null = learnModeActive ? (primaryHint ?? 'command-palette') : null;
-  const hintLearned = hintId === 'command-palette' ? false : hasAnyAttachment;
 
   // A dropdown inside this popover should open away from the element, not toward it — mirror
   // whichever side the popover itself placed on. Left/right placement has no above/below
@@ -297,7 +276,6 @@ function ElementInspectorBody({
         {/* The caret ties the popover to the element it belongs to — see `.dc-popover-caret`. */}
         <span className="dc-popover-caret" aria-hidden="true" />
         <div className="dc-popover-inner dc-element-inspector-inner">
-          {hintId && <HintStrip id={hintId} learned={hintLearned} />}
           <ElementInspectorRow
             node={displayNode}
             hasDlqEdge={hasDlqEdge}

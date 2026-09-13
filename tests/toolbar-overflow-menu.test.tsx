@@ -6,7 +6,7 @@ import { useUiStore } from '../src/store/uiStore';
 import { Toolbar } from '../src/ui/Editor/Toolbar';
 
 /**
- * Four app-level utilities fold into `More` so the right edge stops reading as an icon train.
+ * Four app-level entries fold into `More` so the right edge stops reading as an icon train.
  * Folding is only acceptable if nothing becomes unreachable — these cover the part that is easy
  * to lose in a redesign: every item still runs its real handler, and the keyboard still gets
  * there without a pointer.
@@ -31,7 +31,7 @@ beforeEach(() => {
   useEditorStore.setState({ history: { past: [], future: [] } });
   useUiStore.setState({
     armed: null,
-    learnModeActive: false,
+    learnOpen: false,
     settingsOpen: false,
     shortcutsOpen: false,
     aboutOpen: false,
@@ -46,7 +46,7 @@ describe('toolbar overflow menu', () => {
     await openMenu(user);
 
     expect(screen.getByRole('menuitem', { name: 'Canvas settings' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitemcheckbox', { name: 'Learn Draft Canvas' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Learn Draft Canvas' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'About Draft Canvas' })).toBeInTheDocument();
   });
@@ -60,22 +60,18 @@ describe('toolbar overflow menu', () => {
     expect(useUiStore.getState().settingsOpen).toBe(true);
   });
 
-  it('reports Learn Mode as a checkable row rather than losing its on-state', async () => {
-    const user = userEvent.setup();
-    useUiStore.setState({ learnModeActive: true });
-    renderToolbar();
-    await openMenu(user);
-
-    expect(screen.getByRole('menuitemcheckbox', { name: 'Learn Draft Canvas' })).toBeChecked();
-  });
-
-  it('toggles Learn Mode from the row', async () => {
+  it('opens Learn as a place, not a mode — no check state, and choosing it twice keeps it open', async () => {
     const user = userEvent.setup();
     renderToolbar();
+    expect(screen.queryByRole('menuitemcheckbox')).not.toBeInTheDocument();
     await openMenu(user);
-    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Learn Draft Canvas' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Learn Draft Canvas' }));
+    expect(useUiStore.getState().learnOpen).toBe(true);
 
-    expect(useUiStore.getState().learnModeActive).toBe(true);
+    await openMenu(user);
+    expect(screen.queryByRole('menuitemcheckbox')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Learn Draft Canvas' }));
+    expect(useUiStore.getState().learnOpen).toBe(true);
   });
 
   it('is reachable by keyboard alone, and Escape returns focus to the trigger', async () => {

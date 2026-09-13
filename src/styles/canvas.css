@@ -1313,46 +1313,6 @@
   }
 }
 
-/*
- * A single dismissible sentence folded into whichever popover selecting the element
- * already opened. Shared by `ElementInspectorPopover` and `EdgeInspectorPopover`; a soft tint
- * (not a full-strength background) is the whole visual treatment — a hint should read as a quiet
- * aside, never as an alert.
- */
-.dc-hint-strip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--dc-border);
-  background: var(--dc-selection-soft);
-  color: var(--dc-text);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.dc-hint-strip span {
-  flex: 1;
-}
-
-.dc-hint-strip-close {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--dc-text-faint);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.dc-hint-strip-close:hover {
-  background: var(--dc-surface-raised);
-  color: var(--dc-text);
-}
-
 .dc-edge-inspector-caption,
 .dc-edge-inspector-flows {
   max-width: 180px;
@@ -1936,15 +1896,6 @@
 
 .dc-toolbar-menu-item {
   gap: 8px;
-}
-
-.dc-toolbar-menu-check {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  color: var(--dc-selection);
 }
 
 .dc-toolbar-menu-item .dc-new-dot[data-inline='true'],
@@ -2814,16 +2765,6 @@
   border-radius: 4px;
   color: var(--dc-text-muted);
   font: 500 10px/1.5 var(--dc-mono);
-}
-
-/* Learn mode's second line: the rule's own one-sentence reason. */
-.dc-ghost-reason {
-  color: var(--dc-text-muted);
-  font-weight: 400;
-}
-
-.dc-ghost-pill:has(.dc-ghost-reason) {
-  border-radius: 10px;
 }
 
 /* A gesture in flight owns the canvas; the ghost yields until it ends. */

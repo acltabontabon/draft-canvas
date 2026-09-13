@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Preset } from '../../canvas/presets';
 import { rank, type RankedEntry } from '../../commands/fuzzy';
-import { commandsFor } from '../../commands/registry';
+import { commandsFor, LEARN_LIMIT, LEARN_RANK_PENALTY, learnCommands } from '../../commands/registry';
 import { frequencyBonus, recentIds, recordUse } from '../../commands/history';
 import { JUMP_LIMIT, JUMP_RANK_PENALTY, jumpCommands } from '../../commands/search';
 import {
@@ -13,7 +13,6 @@ import {
 } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
 import type { DraftNode } from '../../document/types';
-import { useHints } from '../../learning/useHints';
 import { MOD_SYMBOL } from '../../lib/platform';
 import type { FlowPlaybackController } from '../../presentation/useFlowPlayback';
 import { useEditorStore } from '../../store/editorStore';
@@ -58,7 +57,6 @@ export function CommandPalette(props: CommandPaletteProps) {
 function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPaletteProps) {
   const setOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
-  const learnModeActive = useUiStore((state) => state.learnModeActive);
   // Reactive slices only so an open palette re-lists as the world changes underneath it — the
   // rest of the store is read live at call time via `getState()` inside `buildContext`.
   const mode = useEditorStore((state) => state.mode);
@@ -67,7 +65,6 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
   const focus = useEditorStore((state) => state.focus);
   const flowPlayback = useEditorStore((state) => state.flowPlayback);
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
-  const { retire: retireHint } = useHints();
   const buildContext = useCommandContext({ createAt, createAtPointer, playback });
 
   // Whatever had focus (a toolbar button, the canvas) when ⌘K was pressed gets it back on close —
@@ -103,15 +100,22 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
     // Searching: named elements answer a typed query too, ranked alongside commands (slightly
     // handicapped, see `JUMP_RANK_PENALTY`) and capped so a big canvas never floods the list.
     // Frequently used commands get a small nudge — never enough to beat a better text match.
-    const isJump = (entry: Entry) => 'group' in entry && entry.group === 'jump';
-    const ranked = rank(query, [...commands, ...(jumpCommands(document) as Entry[])], (entry) =>
-      isJump(entry) ? -JUMP_RANK_PENALTY : frequencyBonus(entry.id),
+    // Learn recipes answer "how do I…" the same way, handicapped harder still: doing wins.
+    const groupOf = (entry: Entry) => ('group' in entry ? entry.group : undefined);
+    const ranked = rank(query, [...commands, ...(jumpCommands(document) as Entry[]), ...(learnCommands() as Entry[])], (entry) =>
+      groupOf(entry) === 'jump' ? -JUMP_RANK_PENALTY : groupOf(entry) === 'learn' ? -LEARN_RANK_PENALTY : frequencyBonus(entry.id),
     );
     let jumps = 0;
-    return ranked.filter((row) => !isJump(row.entry) || jumps++ < JUMP_LIMIT);
+    let learns = 0;
+    return ranked.filter((row) => {
+      const group = groupOf(row.entry);
+      if (group === 'jump') return jumps++ < JUMP_LIMIT;
+      if (group === 'learn') return learns++ < LEARN_LIMIT;
+      return true;
+    });
     // The reactive slices are what make this recompute; they aren't read here directly.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, query, buildContext, mode, selection, document, focus, flowPlayback, selectedFlowId, learnModeActive]);
+  }, [stage, query, buildContext, mode, selection, document, focus, flowPlayback, selectedFlowId]);
 
   // Nothing else may keep competing for the keyboard. (State starts fresh on its own: the body
   // only exists while the palette is open.)
@@ -120,9 +124,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
     // Synchronous, not deferred to a frame: a backgrounded tab may not paint a frame for a
     // while, and the first keystroke must land in this input, not on the canvas behind it.
     inputRef.current?.focus();
-    // Opening it once is the whole lesson — the "press ⌘K" hint has nothing left to say.
-    retireHint('command-palette');
-  }, [retireHint, setQuickConnect]);
+  }, [setQuickConnect]);
 
   useEffect(() => {
     highlightRef.current = highlight;

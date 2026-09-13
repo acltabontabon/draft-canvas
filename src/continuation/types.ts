@@ -108,7 +108,7 @@ export interface ContinuationRule {
   tier: ContinuationTier;
   /** What the offer is called: "Queue", "Worker", "Dead-letter queue". */
   label: string;
-  /** One authored sentence saying why — never generated. Surfaced in Learn mode and tests. */
+  /** One authored sentence saying why — never generated. Kept for tests and `docs/SEMANTICS.md`. */
   reason: string;
   when(nb: Neighborhood, trigger: ContinuationTrigger): boolean;
   fragment(nb: Neighborhood): Fragment;

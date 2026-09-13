@@ -68,13 +68,12 @@ describe('ThemeProvider', () => {
     expect(prefs.size).toBe(0);
   });
 
-  it('ignores a theme an older build pinned, and clears it', () => {
+  it('ignores a theme an older build pinned', () => {
     fakeSystem(true);
     prefs.set('theme-override', 'light');
     mount();
     // The pin loses to the OS rather than surviving as an invisible override.
     expect(screen.getByTestId('theme')).toHaveTextContent('dark');
-    expect(prefs.has('theme-override')).toBe(false);
   });
 
   it('drops the value older builds wrote on every first launch, so it can never pin anything', () => {
@@ -82,6 +81,5 @@ describe('ThemeProvider', () => {
     prefs.set('theme', 'dark');
     mount();
     expect(screen.getByTestId('theme')).toHaveTextContent('light');
-    expect(prefs.has('theme')).toBe(false);
   });
 });

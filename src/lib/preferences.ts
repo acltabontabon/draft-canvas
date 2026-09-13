@@ -28,6 +28,33 @@ export function writePreference(key: string, value: string): void {
   }
 }
 
+/**
+ * Keys earlier builds wrote and nothing reads any more, removed once at startup rather than left
+ * sitting in `localStorage` forever. Exact keys only — never a prefix sweep, so nothing current can
+ * be caught by accident.
+ */
+export const RETIRED_PREFERENCE_KEYS: readonly string[] = [
+  // A palette pinned against the OS; the app now simply follows it. `theme` is older still: it was
+  // written on every first launch, chosen or not, so its value could never be told apart from a choice.
+  'theme-override',
+  'theme',
+  // The old Learn mode: its "New" badges and the contextual hints it retired.
+  'last-seen-version',
+  'feature-seen.learn-mode',
+  'feature-seen.command-palette',
+  'hint.service-node',
+  'hint.attachment-slot',
+  'hint.connector-selected',
+  'hint.connector-attachment-slot',
+  'hint.command-palette',
+  // The palette's usage count for that mode's toggle command.
+  'command-use.learn-mode',
+];
+
+export function retirePreferences(keys: readonly string[] = RETIRED_PREFERENCE_KEYS): void {
+  for (const key of keys) removePreference(key);
+}
+
 export function removePreference(key: string): void {
   try {
     localStorage.removeItem(PREFIX + key);

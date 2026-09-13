@@ -88,7 +88,8 @@ neither React nor React Flow. That single rule is what makes the file format sur
 | `store/` | `editorStore` (the document) · `uiStore` (ephemeral UI) |
 | `storage/`, `crypto/` | persistence, autosave, encryption at rest |
 | `commands/` | one registry the palette, menu and shortcut sheet all read |
-| `starters/` `continuation/` `sequence/` `presentation/` `learning/` | capabilities derived from the model |
+| `starters/` `continuation/` `sequence/` `presentation/` | capabilities derived from the model |
+| `learn/` · `ui/learn/` | the Learn handbook: recipes, search and scene data (pure) · the drawer and scene renderer (its own lazy chunk) |
 
 Library and editor are two states of one screen (`src/App.tsx`, no router) — which is why the build
 can be served from any path.

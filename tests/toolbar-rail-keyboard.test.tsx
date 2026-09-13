@@ -27,7 +27,7 @@ const segments = () => [...rail().querySelectorAll('button')];
 
 beforeEach(() => {
   useEditorStore.setState({ history: { past: [], future: [] } });
-  useUiStore.setState({ armed: null, learnModeActive: false });
+  useUiStore.setState({ armed: null });
 });
 
 describe('create rail keyboard travel', () => {

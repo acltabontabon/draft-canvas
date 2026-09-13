@@ -36,13 +36,12 @@ const TARGET_OUTSET = 6;
  */
 export const ContinuationGhost = memo(function ContinuationGhost() {
   const offer = useUiStore((state) => state.continuation);
-  const learn = useUiStore((state) => state.learnModeActive);
   const anchor = useEditorStore((state) => (offer ? state.document.nodes.find((n) => n.id === offer.anchorId) : undefined));
   if (!offer || !anchor) return null;
-  return <GhostBody offer={offer} anchor={anchor} learn={learn} />;
+  return <GhostBody offer={offer} anchor={anchor} />;
 });
 
-function GhostBody({ offer, anchor, learn }: { offer: ContinuationOffer; anchor: DraftNode; learn: boolean }) {
+function GhostBody({ offer, anchor }: { offer: ContinuationOffer; anchor: DraftNode }) {
   const theme = useThemeValue();
   const { preset } = usePersonality();
   const showPill = offer.trigger === 'select';
@@ -118,7 +117,6 @@ function GhostBody({ offer, anchor, learn }: { offer: ContinuationOffer; anchor:
               <span>{offer.label}</span>
               <kbd>Tab</kbd>
             </span>
-            {learn && offer.reason && <span className="dc-ghost-reason">{offer.reason}</span>}
           </button>
           {position && (
             <button type="button" className="dc-ghost-pill-next" onClick={next} aria-label="Next suggestion (])">

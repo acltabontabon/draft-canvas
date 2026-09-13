@@ -51,12 +51,7 @@ const SPECS = {
   },
   export: { title: 'Export', commandId: 'export' },
   settings: { title: 'Canvas settings', commandId: 'settings' },
-  learn: {
-    title: 'Learn Draft Canvas',
-    commandId: 'learn-mode',
-    description: 'Inline hints while you draw.',
-    usageHint: 'Explains what Draft Canvas inferred — relationship types, shapes, and connector rules.',
-  },
+  learn: { title: 'Learn Draft Canvas', commandId: 'open-learn' },
   shortcuts: { title: 'Keyboard shortcuts', commandId: 'shortcuts' },
   about: { title: 'About Draft Canvas', commandId: 'about' },
   more: { title: 'More' },

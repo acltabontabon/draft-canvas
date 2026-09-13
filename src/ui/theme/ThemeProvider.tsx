@@ -1,17 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { applyThemeVariables, themeFor, type ThemeName } from '../../render/theme/tokens';
-import { removePreference } from '../../lib/preferences';
 import { ThemeContext } from './useTheme';
-
-/**
- * Keys earlier builds wrote to pin a palette against the OS. That choice no longer exists, so
- * they are removed once rather than left sitting in `localStorage` forever — otherwise someone
- * who pinned dark years ago would keep a key that nothing reads.
- *
- * `theme` is older still: it was written on every first launch, chosen or not, so its value could
- * never be told apart from a real choice.
- */
-const RETIRED_KEYS = ['theme-override', 'theme'];
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 
@@ -49,10 +38,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     applyThemeVariables(themeFor(name), document.documentElement);
   }, [name]);
-
-  useEffect(() => {
-    for (const key of RETIRED_KEYS) removePreference(key);
-  }, []);
 
   const value = useMemo(() => ({ name, theme: themeFor(name) }), [name]);
 

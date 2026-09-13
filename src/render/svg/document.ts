@@ -120,6 +120,12 @@ export interface Decoration {
 export interface SceneOptions {
   only?: ReadonlySet<string>;
   selectedFlow?: DraftFlow;
+  /** Clip-path id scope (see `beginClipScope`). Defaults to `'export'`; anything drawn into the
+   *  live page beside the canvas — Learn's scenes — needs its own. */
+  clipScope?: string;
+  /** Nodes mid-drag: connectors don't route around them, the same as on the live canvas while a
+   *  gesture is in flight (`uiStore.movingNodeIds`). */
+  movingNodeIds?: ReadonlySet<string>;
   decorateNode?: (node: DraftNode) => Decoration | undefined;
   /** `pulseTarget` picks which of a request/response connector's two lines the pulse animates —
    *  see `DescribedEdge.responseLine` in `edges/describe.ts`. Defaults to `'request'` (the primary
@@ -137,6 +143,13 @@ export interface Scene {
   edgeLines: SvgEl[];
   edgeOverlays: SvgEl[];
   arrowColors: Set<string>;
+  /**
+   * The same elements again, kept per id and in paint order, for a renderer that needs to address
+   * one node or connector at a time (Learn's scenes animate each on its own). Node children are
+   * in node-local coordinates — no `translate` — so the caller positions them.
+   */
+  nodeEntries: { node: DraftNode; els: SvgEl[] }[];
+  edgeEntries: { edge: DraftEdge; lineEls: SvgEl[]; overlayEls: SvgEl[] }[];
 }
 
 function decorateGroupAttrs(decoration: Decoration | undefined): SvgEl['attrs'] {
@@ -195,12 +208,16 @@ export function buildScene(
   // bundle's floor — rather than drawing branches off a trunk whose other
   // members aren't in the picture.
   const plan = routingPlan(nodes, edges);
+  const moving = options.movingNodeIds;
+  const obstacleNodes = moving?.size ? nodes.filter((node) => !moving.has(node.id)) : nodes;
 
-  beginClipScope('export');
+  beginClipScope(options.clipScope ?? 'export');
 
   const edgeLines: SvgEl[] = [];
   const edgeOverlays: SvgEl[] = [];
   const arrowColors = new Set<string>();
+  const nodeEntries: Scene['nodeEntries'] = [];
+  const edgeEntries: Scene['edgeEntries'] = [];
 
   for (const edge of edges) {
     const stepIndex = stepIndexOf(options.selectedFlow, edge.id);
@@ -210,7 +227,7 @@ export function buildScene(
       stepIndex,
       lane,
       spine: plan.spineFor(edge.id),
-      obstacles: obstaclesForEdge(nodes, edge.source, edge.target),
+      obstacles: obstaclesForEdge(obstacleNodes, edge.source, edge.target),
     });
     if (!described) continue;
     if (edge.directed) arrowColors.add(described.color);
@@ -230,6 +247,7 @@ export function buildScene(
 
     edgeLines.push(...(groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls));
     edgeOverlays.push(...(groupAttrs ? [el('g', groupAttrs, overlayEls)] : overlayEls));
+    edgeEntries.push({ edge, lineEls, overlayEls });
   }
 
   // Boundaries sit behind connectors so lines stay readable across a group.
@@ -240,16 +258,18 @@ export function buildScene(
   for (const node of ordered) {
     const list = describeNode(node, nodeCtx);
     const decoration = options.decorateNode?.(node);
+    const els = emitDisplayList(list);
     const group = el(
       'g',
       { transform: `translate(${n(node.x)} ${n(node.y)})`, ...decorateGroupAttrs(decoration) },
-      emitDisplayList(list),
+      els,
     );
     if (node.type === 'group') backdropEls.push(group);
     else nodeEls.push(group);
+    nodeEntries.push({ node, els });
   }
 
-  return { nodes, backdropEls, nodeEls, edgeLines, edgeOverlays, arrowColors };
+  return { nodes, backdropEls, nodeEls, edgeLines, edgeOverlays, arrowColors, nodeEntries, edgeEntries };
 }
 
 /**

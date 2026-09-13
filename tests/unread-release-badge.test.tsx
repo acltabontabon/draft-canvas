@@ -55,7 +55,6 @@ beforeEach(() => {
   useEditorStore.setState({ history: { past: [], future: [] } });
   useUiStore.setState({
     armed: null,
-    learnModeActive: false,
     librarySearchQuery: '',
     updateReady: false,
     lastSeenProductRelease: '0.1.0', // old enough that the current version's notes are unread

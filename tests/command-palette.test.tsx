@@ -21,8 +21,6 @@ vi.mock('../src/lib/preferences', () => ({
 }));
 
 const { CommandPalette } = await import('../src/ui/Editor/CommandPalette');
-const { HintsProvider } = await import('../src/learning/HintsProvider');
-const { useHints } = await import('../src/learning/useHints');
 
 function reset() {
   __resetInteraction();
@@ -40,7 +38,8 @@ function reset() {
   useUiStore.setState({
     commandPaletteOpen: true,
     quickConnect: null,
-    learnModeActive: false,
+    learnOpen: false,
+    learnRecipeId: null,
   });
   prefs.clear();
 }
@@ -228,26 +227,26 @@ describe('CommandPalette', () => {
     expect(prefs.get('command-recent.0')).toBeUndefined();
   });
 
-  it('opening it once retires the "press ⌘K" hint', () => {
-    useUiStore.setState({ commandPaletteOpen: false });
-    const playback = stubPlayback();
-    const stubs = stubContext({ playback });
-    let hints: ReturnType<typeof useHints> | undefined;
-    function Probe({ onReady }: { onReady: (api: ReturnType<typeof useHints>) => void }) {
-      onReady(useHints());
-      return null;
-    }
-    render(
-      <ReactFlowProvider>
-        <HintsProvider>
-          <CommandPalette createAt={stubs.createAt} createAtPointer={stubs.createAtPointer} playback={playback} />
-          <Probe onReady={(api) => (hints = api)} />
-        </HintsProvider>
-      </ReactFlowProvider>,
-    );
-    expect(hints!.isDismissedThisSession('command-palette')).toBe(false);
-    act(() => useUiStore.getState().setCommandPaletteOpen(true));
-    expect(hints!.isDismissedThisSession('command-palette')).toBe(true);
+  it('offers Learn recipes for a typed question, behind the commands that do the thing', () => {
+    mount();
+    fireEvent.change(input(), { target: { value: 'note' } });
+    const rows = options().map((row) => row.textContent ?? '');
+    const learnAt = rows.findIndex((text) => text.includes('Attach a note') && text.includes('Learn'));
+    const doAt = rows.findIndex((text) => text.startsWith('Add Note'));
+    expect(learnAt).toBeGreaterThanOrEqual(0);
+    expect(doAt).toBeGreaterThanOrEqual(0);
+    expect(doAt).toBeLessThan(learnAt);
+    expect(rows.filter((text) => text.endsWith('Learn')).length).toBeLessThanOrEqual(3);
+
+    fireEvent.click(options()[learnAt]!);
+    expect(useUiStore.getState().learnOpen).toBe(true);
+    expect(useUiStore.getState().learnRecipeId).toBe('attach-note');
+    expect(useUiStore.getState().commandPaletteOpen).toBe(false);
+  });
+
+  it('keeps Learn out of the list until something is typed', () => {
+    mount();
+    expect(options().some((row) => row.textContent?.includes('Attach a note'))).toBe(false);
   });
 
   it('shows "No matching commands." for a query nothing matches', () => {

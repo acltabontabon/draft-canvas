@@ -1878,9 +1878,17 @@ kbd {
   background: var(--dc-canvas);
 }
 
+.dc-editor-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Beside Learn when it's docked (`ui/learn/learn.css`), which is why it can't assume the full width. */
 .dc-editor-canvas {
   position: relative;
   flex: 1;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -2520,6 +2528,42 @@ kbd {
 .dc-flow-panel-header strong {
   flex: 1;
   font-size: 13px;
+}
+
+/* Learn's "?" — a quiet way into one recipe from a dense control (`ui/learn/LearnLink.tsx`). Styled
+   here, not in `learn.css`, because it ships with the editor rather than with the drawer. */
+.dc-learn-link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dc-text-faint);
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.dc-learn-link:hover,
+.dc-learn-link:focus-visible {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+.dc-learn-link-inline {
+  margin-left: 4px;
+  vertical-align: -5px;
+}
+
+.dc-flow-panel-header .dc-learn-link {
+  margin: 0 4px 0 0;
 }
 
 /* The empty state teaches the concept and offers the one thing to do next. */
@@ -3516,11 +3560,6 @@ kbd {
 
 .dc-shortcuts dd {
   margin: 0;
-}
-
-.dc-shortcuts-guidance {
-  padding-top: 4px;
-  border-top: 1px solid var(--dc-border);
 }
 
 /* ------------------------------------------------------------- settings -- */

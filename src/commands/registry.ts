@@ -23,6 +23,7 @@ import { MOD_SYMBOL } from '../lib/platform';
 import { ownsData } from '../store/editorStore';
 import { pointer } from '../store/uiStore';
 import { focusBounds, focusNodes } from './search';
+import { RECIPES } from '../learn/recipes';
 import { ARCHITECTURE_STARTERS } from '../starters';
 import type { StarterCategory } from '../starters';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
@@ -440,11 +441,11 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.ui.setShortcutsOpen(true),
     },
     {
-      id: 'learn-mode',
-      title: ctx.ui.learnModeActive ? 'Turn off Learn Draft Canvas mode' : 'Turn on Learn Draft Canvas mode',
+      id: 'open-learn',
+      title: 'Open Learn Draft Canvas',
       group: 'canvas',
-      keywords: ['hints', 'learn', 'guidance', 'tips', 'coach'],
-      run: (inner) => inner.ui.setLearnModeActive(!inner.ui.learnModeActive),
+      keywords: ['learn', 'help', 'docs', 'how', 'guide', 'handbook'],
+      run: (inner) => inner.ui.openLearn(),
     },
     {
       id: 'about',
@@ -1320,6 +1321,30 @@ export function starterCommands(): Command[] {
     keywords: starter.aliases,
     hint: starter.description,
     run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter))),
+  }));
+}
+
+/** How many Learn rows may join a typed query's results — a pointer to the handbook, never a flood. */
+export const LEARN_LIMIT = 3;
+/**
+ * Ranked alongside commands, a Learn row gives up more than a jump does: someone typing "note"
+ * most likely wants to add one, and "Attach a note" is there for when they want to know how.
+ */
+export const LEARN_RANK_PENALTY = 1.5;
+
+/**
+ * One row per Learn recipe, opening the drawer straight on it. Like jump rows these only join a
+ * typed query (see `CommandPalette`), and they match on the title alone: a recipe's search keywords
+ * ("service", "queue") are deliberately broad for Learn's own box, and here they'd shoulder aside
+ * the command that actually does the thing.
+ */
+export function learnCommands(): Command[] {
+  return RECIPES.map((recipe) => ({
+    id: `learn-${recipe.id}`,
+    title: recipe.title,
+    group: 'learn' as const,
+    keywords: ['learn', 'how'],
+    run: (inner) => inner.ui.openLearn(recipe.id),
   }));
 }
 

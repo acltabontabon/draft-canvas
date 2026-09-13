@@ -24,6 +24,16 @@ export function isActivatableTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest(CONTROL_SELECTOR) !== null;
 }
 
+/**
+ * Whether an event's target sits inside a surface that owns its own keys while it has focus — the
+ * Learn drawer, docked beside a canvas that is still live. The editor's bare-key shortcuts (a
+ * letter drops a shape, Backspace deletes, Escape deselects) stand down there; its ⌘ chords don't.
+ * Mark such a surface with `data-dc-keyboard-region`.
+ */
+export function isInOwnKeyboardRegion(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[data-dc-keyboard-region]') !== null;
+}
+
 /** An Enter/Escape that is part of an IME composition (confirming or cancelling a conversion). */
 export function isImeKeyEvent(event: { isComposing?: boolean; keyCode?: number; nativeEvent?: { isComposing?: boolean } }): boolean {
   return event.isComposing === true || event.nativeEvent?.isComposing === true || event.keyCode === 229;

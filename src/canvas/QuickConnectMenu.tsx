@@ -6,6 +6,7 @@ import {
   resolvePlacement,
   type PlacementPoint,
 } from './popoverPlacement';
+import { rightClearance } from './canvasFrame';
 import type { QuickConnectItem } from './quickConnectItems';
 import { ShapePreview } from './ShapePreview';
 
@@ -36,7 +37,6 @@ const identity = (point: PlacementPoint) => point;
 const TOP_CLEARANCE = 56;
 const BOTTOM_CLEARANCE = 44;
 const LEFT_CLEARANCE = 12;
-const RIGHT_CLEARANCE_WITH_FLOW_PANEL = 312;
 const GAP = 6;
 
 /**
@@ -154,7 +154,7 @@ export function QuickConnectMenu({
     top: TOP_CLEARANCE,
     bottom: BOTTOM_CLEARANCE,
     left: LEFT_CLEARANCE,
-    right: flowPanelOpen ? RIGHT_CLEARANCE_WITH_FLOW_PANEL : LEFT_CLEARANCE,
+    right: rightClearance(flowPanelOpen, LEFT_CLEARANCE),
   };
   const anchors = anchorsForRect(anchorRect ?? { x: screenPosition.x, y: screenPosition.y, width: 0, height: 0 });
   const placement = resolvePlacement('below', anchors, identity, measuredSize, clearances);

@@ -25,6 +25,7 @@ export type CommandGroup =
   | 'pattern'
   | 'flow'
   | 'jump'
+  | 'learn'
   | 'view'
   | 'canvas';
 
@@ -47,6 +48,7 @@ export const GROUP_LABELS: Record<CommandGroup, string> = {
   pattern: starterCategoryLabel('pattern'),
   flow: 'Flows',
   jump: 'Jump to',
+  learn: 'Learn',
   view: 'View',
   canvas: 'Canvas',
 };

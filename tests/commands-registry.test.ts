@@ -23,7 +23,7 @@ function reset() {
     focus: { active: false, nodeIds: [], edgeIds: [] },
     selectedFlowId: null,
   });
-  useUiStore.setState({ commandPaletteOpen: false, learnModeActive: false });
+  useUiStore.setState({ commandPaletteOpen: false });
 }
 
 const ids = (ctx: CommandContext) => commandsFor(ctx).map((command) => command.id);

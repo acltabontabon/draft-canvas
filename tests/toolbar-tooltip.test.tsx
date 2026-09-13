@@ -26,8 +26,7 @@ function renderToolbar() {
 
 beforeEach(() => {
   useEditorStore.setState({ history: { past: [], future: [] } });
-  // The default — proves tooltips aren't gated behind Learn Mode (a separate, opt-in system).
-  useUiStore.setState({ armed: null, learnModeActive: false });
+   useUiStore.setState({ armed: null });
 });
 
 const ALL_TOOLTIPS = [SELECT_TOOLTIP, ...ALL_PRESETS.map(tooltipContentFor)];

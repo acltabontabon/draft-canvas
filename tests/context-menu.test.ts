@@ -20,7 +20,7 @@ function reset() {
     focus: { active: false, nodeIds: [], edgeIds: [] },
     selectedFlowId: null,
   });
-  useUiStore.setState({ commandPaletteOpen: false, learnModeActive: false, contextMenu: null });
+  useUiStore.setState({ commandPaletteOpen: false, contextMenu: null });
 }
 
 const ids = (entries: ContextMenuEntry[]) =>

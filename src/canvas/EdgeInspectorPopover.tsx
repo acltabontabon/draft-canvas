@@ -25,10 +25,9 @@ import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
 import { labelLaneOffset, laneIndex, routeBetween, type Rect } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import { obstaclesForEdge } from '../edges/obstacles';
-import type { HintId } from '../learning/hints';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
-import { anyExplicitSemantics, documentHasAttachments, edgeIndex, nodeIndex } from '../store/selectors';
+import { edgeIndex, nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
 import {
@@ -37,12 +36,12 @@ import {
   rectOfInternal,
   type ScreenRect,
 } from './edgeGeometry';
-import { HintStrip } from './HintStrip';
 import { useToolbarHeight } from './useToolbarHeight';
 import { useOverlayPosition } from './useOverlayPosition';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
+import { LearnLink } from '../ui/learn/LearnLink';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
@@ -283,24 +282,6 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
   const sourceDraftNode = draftNodes.get(displayEdge.source);
   const targetDraftNode = draftNodes.get(displayEdge.target);
 
-  // Retires the moment any connector's semantics have been explicitly touched
-  // (`semanticsOrigin: 'explicit'`, already stamped by `setEdgeSemantic`/`setEdgeHasResponse`/
-  // `setEdgeKind`), not just on dismissal — the existing, precise signal for "the user has already
-  // worked with what a connector can mean," not a new field invented for this.
-  const hasExplicitSemantics = anyExplicitSemantics(document.edges);
-  // The same underlying capability (drag-to-attach) whichever kind of element taught
-  // it first — attaching to a node counts as much as attaching to a connector.
-  const hasAnyAttachment = documentHasAttachments(document);
-  // At most one hint per connector: semantics first (the more central concept), the
-  // drag-to-attach nudge only once semantics are out of the way — mirrors
-  // `ElementInspectorPopover`'s own service-node/attachment-slot priority.
-  const hintId: HintId | null = !hasExplicitSemantics
-    ? 'connector-selected'
-    : !hasAnyAttachment
-      ? 'connector-attachment-slot'
-      : null;
-  const hintLearned = hintId === 'connector-selected' ? hasExplicitSemantics : hasAnyAttachment;
-
   return createPortal(
       <div
         ref={panelRef}
@@ -313,7 +294,6 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
       >
         <span className="dc-popover-caret" aria-hidden="true" />
         <div className="dc-popover-inner dc-edge-inspector-inner">
-          {hintId && <HintStrip id={hintId} learned={hintLearned} />}
           {/* Keyed on the edge id: the editor below is now always mounted (no more "⋯" to
               unmount it on collapse), so switching to a different connector must remount this
               subtree fresh — otherwise `ExpandedPanel`'s own local state (the colour palette,
@@ -757,7 +737,10 @@ function ServiceInteractionSection({ edge }: { edge: DraftEdge }) {
   return (
     <>
       <section className="dc-inspector-section">
-        <span className="dc-inspector-section-label">Interaction</span>
+        <div className="dc-inspector-section-header">
+          <span className="dc-inspector-section-label">Interaction</span>
+          <LearnLink recipeId="make-async" />
+        </div>
         <div className="dc-inspector-section-row">
           <InspectorSelect
             value={edge.semantic ?? 'calls'}
@@ -1045,7 +1028,10 @@ function ExpandedPanel({
       ) : (
         <>
           <section className="dc-inspector-section">
-            <span className="dc-inspector-section-label">Interaction</span>
+            <div className="dc-inspector-section-header">
+              <span className="dc-inspector-section-label">Interaction</span>
+              <LearnLink recipeId="describe-interaction" />
+            </div>
             <div className="dc-inspector-section-row">
               <InspectorSelect
                 value={edge.semantic ?? ''}

@@ -249,10 +249,17 @@ export interface UiStore {
    * (ghost → real) animation. Each view consumes and clears its own id.
    */
   settleNodeIds: readonly string[];
-  /** "Learn Draft Canvas" mode. Deliberately not persisted: an opt-in pass a user
-   *  asks for each time, never a saved setting — see `HintStrip.tsx`, which shows a hint
-   *  regardless of its own retired state while this is true. */
-  learnModeActive: boolean;
+  /**
+   * The Learn drawer (`ui/learn/LearnDrawer.tsx`) and where it was left. Session memory only:
+   * reopening Learn returns to the recipe or search you were on, a reload starts at its home.
+   * `learnRecipeId` null means the home view; `learnCategory` is the Explore filter, if any.
+   */
+  learnOpen: boolean;
+  learnRecipeId: string | null;
+  learnQuery: string;
+  learnCategory: string | null;
+  /** Bumped by every `openLearn`, so a drawer that is already open still takes focus. */
+  learnFocusRequest: number;
 
   /** The homepage search box's current query — see `LibraryScreen.tsx`. Matches
    *  against canvas title and project name (see that file's search-filter comment
@@ -308,13 +315,18 @@ export interface UiStore {
   activateUpdate: () => void;
   /** Records that this device has now seen every currently-applicable release's notes —
    *  called only when About → What's New is actually opened, never just from having the app
-   *  open (unlike `learning/useNewFeature.ts`'s similar-looking but deliberately different
-   *  `last-seen-version`, which re-stamps on every mount). */
+   *  open. */
   markProductReleaseSeen: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
-  setLearnModeActive: (active: boolean) => void;
+  /** Opens Learn — on `recipeId` when given (a deep link always wins), else where it was left. */
+  openLearn: (recipeId?: string) => void;
+  closeLearn: () => void;
+  /** Home (`null`) or one recipe, inside the drawer. */
+  showLearnRecipe: (recipeId: string | null) => void;
+  setLearnQuery: (query: string) => void;
+  setLearnCategory: (category: string | null) => void;
   /** Identity-preserving: an offer equal in trigger, rule, anchor and neighborhood keeps the node
    *  and edge ids already held (re-keying the fresh geometry onto them), so unrelated document
    *  changes never re-mint a ghost's React keys. */
@@ -381,7 +393,11 @@ export const useUiStore = create<UiStore>((set, get) => ({
   commandPaletteOpen: false,
   exportSelectionRequested: false,
   jumpFlashId: null,
-  learnModeActive: false,
+  learnOpen: false,
+  learnRecipeId: null,
+  learnQuery: '',
+  learnCategory: null,
+  learnFocusRequest: 0,
   continuation: null,
   continuationDismissals: new Set<DismissalKey>(),
   continuationsEnabled: initialContinuationsEnabled(),
@@ -492,7 +508,16 @@ export const useUiStore = create<UiStore>((set, get) => ({
   requestExportSelection: (exportSelectionRequested) => set({ exportSelectionRequested }),
   setJumpFlashId: (jumpFlashId) =>
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
-  setLearnModeActive: (learnModeActive) => set({ learnModeActive }),
+  openLearn: (recipeId) =>
+    set((state) => ({
+      learnOpen: true,
+      learnFocusRequest: state.learnFocusRequest + 1,
+      ...(recipeId ? { learnRecipeId: recipeId } : {}),
+    })),
+  closeLearn: () => set({ learnOpen: false }),
+  showLearnRecipe: (learnRecipeId) => set({ learnRecipeId }),
+  setLearnQuery: (learnQuery) => set({ learnQuery }),
+  setLearnCategory: (learnCategory) => set({ learnCategory }),
   setContinuation: (next) =>
     set((state) => {
       const previous = state.continuation;

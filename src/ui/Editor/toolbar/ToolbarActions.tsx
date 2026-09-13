@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useEditorStore } from '../../../store/editorStore';
 import { useUiStore } from '../../../store/uiStore';
-import { useIsNewFeature } from '../../../learning/useNewFeature';
 import { PRODUCT } from '../../../product';
 import { applicableReleases, hasUnreadRelease } from '../../../releases/productReleases';
 import { Button } from '../../common/Button';
@@ -34,11 +33,8 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
   const updateReady = useUiStore((state) => state.updateReady);
   const lastSeenProductRelease = useUiStore((state) => state.lastSeenProductRelease);
   const hasUnreadNotes = hasUnreadRelease(lastSeenProductRelease, applicableReleases(PRODUCT.version));
-  const learnModeActive = useUiStore((state) => state.learnModeActive);
-  const setLearnModeActive = useUiStore((state) => state.setLearnModeActive);
-  const { isNew: learnModeIsNew, retire: retireLearnModeBadge } = useIsNewFeature('learn-mode');
+  const openLearn = useUiStore((state) => state.openLearn);
   const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
-  const { isNew: paletteIsNew, retire: retirePaletteBadge } = useIsNewFeature('command-palette');
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const past = useEditorStore((state) => state.history.past.length);
@@ -58,9 +54,9 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
 
   const aboutState = updateReady ? 'update ready' : hasUnreadNotes ? "what's new" : undefined;
   // The badges the folded-away items were carrying have to surface somewhere, or moving About
-  // into a menu would silently hide "an update is ready". Update outranks unread outranks new.
-  const escalatedDot = updateReady ? 'update' : hasUnreadNotes || learnModeIsNew ? 'new' : undefined;
-  const moreState = aboutState ?? (learnModeIsNew ? 'new' : undefined);
+  // into a menu would silently hide "an update is ready". Update outranks unread.
+  const escalatedDot = updateReady ? 'update' : hasUnreadNotes ? 'new' : undefined;
+  const moreState = aboutState;
 
   const menuItems: ToolbarMenuItem[] = [
     {
@@ -72,14 +68,11 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
       },
     },
     {
-      id: 'learn-mode',
+      id: 'learn',
       label: toolbarLabel('learn'),
-      checked: learnModeActive,
-      dot: learnModeIsNew ? 'new' : undefined,
       onSelect: () => {
         closeMenu();
-        retireLearnModeBadge();
-        setLearnModeActive(!learnModeActive);
+        openLearn();
       },
     },
     {
@@ -176,23 +169,17 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
       </div>
 
       <div className="dc-toolbar-utilities">
-        <span className="dc-badge-anchor">
-          <Tooltip content={toolbarTooltip('commands')}>
-            {(tip) => (
-              <Button
-                icon="search"
-                variant="quiet"
-                onClick={() => {
-                  retirePaletteBadge();
-                  setCommandPaletteOpen(true);
-                }}
-                aria-label={toolbarLabel('commands')}
-                {...tip}
-              />
-            )}
-          </Tooltip>
-          {paletteIsNew && <span className="dc-new-dot" aria-hidden="true" />}
-        </span>
+        <Tooltip content={toolbarTooltip('commands')}>
+          {(tip) => (
+            <Button
+              icon="search"
+              variant="quiet"
+              onClick={() => setCommandPaletteOpen(true)}
+              aria-label={toolbarLabel('commands')}
+              {...tip}
+            />
+          )}
+        </Tooltip>
         <Tooltip content={toolbarTooltip('export')}>
           {(tip) => (
             <Button
@@ -211,7 +198,7 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
                 ref={moreRef}
                 icon="more"
                 variant="quiet"
-                active={menu !== null || learnModeActive}
+                active={menu !== null}
                 aria-haspopup="menu"
                 aria-expanded={menu !== null}
                 onClick={(event) => {

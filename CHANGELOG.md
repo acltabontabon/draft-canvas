@@ -6,6 +6,11 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
+- Learn Draft Canvas is now a handbook you open beside the canvas (More → Learn Draft Canvas).
+  Search "how do I…", or browse the short version: each answer is a small animated diagram, a
+  sentence, and the keys to press. Your canvas stays live next to it.
+- Learn recipes show up in the command palette as you type, and a small "?" on the connector
+  editor, the Flows panel and the sequence diagram export opens the matching one.
 - Suggestions have alternatives: press `]` or `[` to step through them, then Tab to add the one
   showing. On a shape with no suggestion, `]` asks for some.
 - Keep pressing Tab to keep sketching. Suggestions continue after each one you add and stop when
@@ -33,8 +38,14 @@ All notable changes to Draft Canvas are documented here.
 
 ### Fixed
 
+- Escape in a dialog no longer also dismisses the suggestion behind it.
 - Opening a diagram that has exactly one flow no longer dims everything outside that flow — every
   diagram now opens showing the whole picture, and a flow is only highlighted once you pick it.
+
+### Removed
+
+- The Learn mode toggle and the hints it added to shape and connector popovers — Learn now lives in
+  its own drawer instead. The "New" dots on the Learn and Commands buttons are gone too.
 
 ## [1.3.0] - 2026-09-13
 

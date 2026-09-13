@@ -6,8 +6,8 @@ import { ErrorBoundary } from './ui/common/ErrorBoundary';
 import { Toasts } from './ui/common/Toasts';
 import { ThemeProvider } from './ui/theme/ThemeProvider';
 import { PersonalityProvider } from './ui/personality/PersonalityProvider';
-import { HintsProvider } from './learning/HintsProvider';
 import { logDiagnostic } from './lib/diagnostics';
+import { retirePreferences } from './lib/preferences';
 
 // The editor is most of the app's code, and the Library is what every visit opens on — so the
 // editor arrives as its own chunk (React Flow included), fetched in the background once the Library
@@ -25,6 +25,10 @@ const EditorRoute = lazy(() => loadEditor().then((module) => ({ default: module.
  */
 function Shell() {
   const session = useDocumentSession();
+
+  // Keys older builds left behind (a pinned theme, the old Learn mode's hints) — see
+  // `RETIRED_PREFERENCE_KEYS`. Documents are never touched: they live in IndexedDB.
+  useEffect(() => retirePreferences(), []);
 
   useEffect(() => {
     // Only a head start: a failed fetch here is retried by `lazy()` when the editor is opened.
@@ -69,9 +73,7 @@ export function App() {
   return (
     <ThemeProvider>
       <PersonalityProvider>
-        <HintsProvider>
-          <Shell />
-        </HintsProvider>
+        <Shell />
       </PersonalityProvider>
     </ThemeProvider>
   );

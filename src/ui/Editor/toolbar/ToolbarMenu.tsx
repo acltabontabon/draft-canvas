@@ -5,14 +5,11 @@ import {
   resolvePlacement,
   type PlacementPoint,
 } from '../../../canvas/popoverPlacement';
-import { Icon } from '../../common/Icon';
 
 export interface ToolbarMenuItem {
   id: string;
   label: string;
   shortcut?: string;
-  /** Present ⇒ the row is a toggle and renders its state as a check. */
-  checked?: boolean;
   /** A badge the collapsed trigger is also showing — repeated on the row so opening the menu
    *  says *which* item was asking for attention. */
   dot?: 'new' | 'update';
@@ -46,7 +43,7 @@ const GAP = 6;
  *
  * Structurally modelled on `canvas/ContextMenu.tsx` rather than extracted into a shared generic
  * Menu, following the precedent `MoveToProjectMenu` set: the two menus want the same keyboard and
- * dismissal behaviour but different rows (this one has toggle checks and badge dots, which a
+ * dismissal behaviour but different rows (this one has badge dots and key caps, which a
  * canvas right-click never needs), and a shared abstraction would have to grow both.
  */
 export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMenuProps) {
@@ -164,8 +161,7 @@ export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMe
           key={item.id}
           id={`dc-toolbar-menu-item-${index}`}
           type="button"
-          role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
-          aria-checked={item.checked}
+          role="menuitem"
           // The visible caps are decoration for the name's purposes — announcing "Keyboard
           // shortcuts question mark" helps nobody. `aria-keyshortcuts` is what conveys this.
           aria-keyshortcuts={item.shortcut}
@@ -176,9 +172,6 @@ export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMe
           }}
           onClick={item.onSelect}
         >
-          <span className="dc-toolbar-menu-check" aria-hidden="true">
-            {item.checked && <Icon name="check" size={13} />}
-          </span>
           <span className="dc-context-menu-title">{item.label}</span>
           {item.dot && (
             <span

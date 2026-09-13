@@ -63,7 +63,6 @@ function buildFixtureContext(selection: { nodes: string[]; edges: string[] }): C
     continuationsEnabled: false,
     continuation: null,
     continuationDismissals: new Set(),
-    learnModeActive: false,
   };
   return {
     editor,

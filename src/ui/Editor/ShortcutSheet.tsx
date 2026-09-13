@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { ALL_PRESETS } from '../../canvas/presets';
 import { shortcutFor, titleFor } from '../../commands/shortcutLookup';
 import { useUiStore } from '../../store/uiStore';
-import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import { isGestureRow, isMouseRow, SECTIONS, type Row } from './shortcutSections';
 
@@ -32,8 +31,6 @@ export function ShortcutSheet() {
 
 function ShortcutSheetBody() {
   const setOpen = useUiStore((state) => state.setShortcutsOpen);
-  const learnModeActive = useUiStore((state) => state.learnModeActive);
-  const setLearnModeActive = useUiStore((state) => state.setLearnModeActive);
   const [query, setQuery] = useState('');
 
   const createRows = useMemo(
@@ -121,20 +118,6 @@ function ShortcutSheetBody() {
           ))}
           {nothingMatched && <p className="dc-muted dc-shortcuts-empty">No shortcuts match “{query}”.</p>}
         </div>
-        <section className="dc-shortcuts-guidance">
-          <p className="dc-muted">
-            Turn on Learn Draft Canvas mode to see every contextual hint again, even ones you've
-            already dismissed or learned.
-          </p>
-          <Button
-            variant="quiet"
-            icon="lightbulb"
-            active={learnModeActive}
-            onClick={() => setLearnModeActive(!learnModeActive)}
-          >
-            {learnModeActive ? 'Learn Draft Canvas mode is on' : 'Turn on Learn Draft Canvas mode'}
-          </Button>
-        </section>
       </div>
     </Modal>
   );
