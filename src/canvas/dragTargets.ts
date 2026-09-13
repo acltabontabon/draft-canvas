@@ -1,5 +1,5 @@
 import { ATTACHABLE_TYPES, type DraftDocument, type DraftNode, type DraftNodeType } from '../document/types';
-import { centerOf, pointInBox } from '../lib/math';
+import { centerOf, overlapArea, pointInBox } from '../lib/math';
 import { hasAttachmentRoom } from '../document/operations';
 import type { Rect } from '../edges/routing';
 
@@ -9,12 +9,6 @@ export const ATTACH_DWELL_MS = 250;
 
 function rectArea(rect: Rect): number {
   return Math.max(0, rect.width) * Math.max(0, rect.height);
-}
-
-function overlapArea(a: Rect, b: Rect): number {
-  const width = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
-  const height = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
-  return width * height;
 }
 
 function centerInside(rect: Rect, target: Rect): boolean {

@@ -192,6 +192,13 @@ flowchart LR
 So two flows share early steps and diverge later, and one diagram carries both stories. Playback,
 the lens, step badges, GIF export and sequence export are all readings of that same ordered list.
 
+While a flow plays, the step's attachments tell the story beside it. The pipeline is derived, not
+scheduled: step → who speaks (`presentation/presentationAttachments.ts`: the step's connectors,
+spotlighted nodes, then the node a connector first arrives at) → presence (current callout plus at
+most one leaving, `canvas/presentation/useCalloutPresence.ts`) → `PresentationCallout`, which
+anchors to the chip or badge in flow space and places itself in screen space
+(`presentation/calloutPlacement.ts`) through the same `useOverlayPosition` every canvas popover uses.
+
 ### History
 
 Snapshot-based over the shared-structure model. A gesture brackets into one entry; entries in the

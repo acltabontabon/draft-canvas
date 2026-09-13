@@ -16,6 +16,13 @@ export function centerOf(box: Box): { x: number; y: number } {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+/** The area two axis-aligned boxes share — 0 when they only touch or don't meet at all. */
+export function overlapArea(a: Box, b: Box): number {
+  const width = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+  const height = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  return width * height;
+}
+
 /** Whether a point lies inside (or on the edge of) an axis-aligned box. */
 export function pointInBox(point: { x: number; y: number }, box: Box): boolean {
   return point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;

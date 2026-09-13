@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
+import { PresentationCalloutLayer } from '../../canvas/presentation/PresentationCalloutLayer';
 import { Canvas, type CanvasProps } from '../../canvas/Canvas';
 import { ContextMenu } from '../../canvas/ContextMenu';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
@@ -427,6 +428,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           {!presenting && <AttachmentPopover />}
           {!presenting && <EdgeInspectorPopover />}
           {!presenting && <ElementInspectorPopover buildCommandContext={buildCommandContext} />}
+          <PresentationCalloutLayer />
           <EmptyState onInsertStarter={insertStarter} />
           {!presenting && <ContinuationAnnouncer />}
           {!presenting && <Inspector />}

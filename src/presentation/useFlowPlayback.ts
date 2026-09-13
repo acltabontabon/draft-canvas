@@ -50,6 +50,24 @@ export function resolveFlowStep(
   return { edge, edges, extraNodes, index, step, caption: stepEntry.caption, viewport: stepEntry.viewport };
 }
 
+/**
+ * A flow's playable steps, numbered 1..n after dangling steps drop out — what `flowPlayback.step`
+ * indexes into. Shared by the hook and Presentation Mode's callout layer, which must agree on it.
+ */
+export function resolveFlowSteps(
+  flow: DraftFlow,
+  edges: readonly DraftEdge[],
+  nodes: readonly DraftNode[],
+): FlowPlaybackStep[] {
+  const edgesById = new Map(edges.map((e) => [e.id, e]));
+  const nodesById = new Map(nodes.map((n) => [n.id, n]));
+  const result: FlowPlaybackStep[] = [];
+  flow.steps.forEach((stepEntry, index) => {
+    const resolved = resolveFlowStep(stepEntry, index, result.length + 1, edgesById, nodesById);
+    if (resolved) result.push(resolved);
+  });
+  return result;
+}
 
 /**
  * The bounding box a step's playback focus fits to: the union of its edges'
@@ -144,17 +162,7 @@ export function useFlowPlayback(): FlowPlaybackController {
   const viewWidth = useStore((state) => state.width);
   const viewHeight = useStore((state) => state.height);
 
-  const steps = useMemo<FlowPlaybackStep[]>(() => {
-    if (!flow) return [];
-    const edgesById = new Map(edges.map((e) => [e.id, e]));
-    const nodesById = new Map(nodes.map((n) => [n.id, n]));
-    const result: FlowPlaybackStep[] = [];
-    flow.steps.forEach((stepEntry, index) => {
-      const resolved = resolveFlowStep(stepEntry, index, result.length + 1, edgesById, nodesById);
-      if (resolved) result.push(resolved);
-    });
-    return result;
-  }, [edges, nodes, flow]);
+  const steps = useMemo(() => (flow ? resolveFlowSteps(flow, edges, nodes) : []), [edges, nodes, flow]);
 
   const current = steps.find((entry) => entry.step === flowPlayback.step) ?? null;
 

@@ -22,9 +22,7 @@ import {
   type ConnectionCapability,
 } from '../document/connectorSemantics';
 import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
-import { labelLaneOffset, laneIndex, routeBetween, type Rect } from '../edges/routing';
-import { routingPlan } from '../edges/bundles';
-import { obstaclesForEdge } from '../edges/obstacles';
+import type { Rect } from '../edges/routing';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
@@ -33,6 +31,7 @@ import { Button } from '../ui/common/Button';
 import {
   attachmentRowBelowsSourceOrTarget,
   clampPopoverCenterX,
+  edgeLabelPoint,
   rectOfInternal,
   type ScreenRect,
 } from './edgeGeometry';
@@ -214,26 +213,12 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
   const targetRect =
     displayEdge && displayTarget ? rectOfInternal(displayTarget, draftNodes.get(displayEdge.target)?.type) : null;
 
-  // The third caller of `routeBetween`, alongside the live edge component and
-  // the exporter — and it has to route the connector the same way they do, or
-  // the panel anchors to a point the line never passes through. `lane` was
-  // already missing here (harmless while the drift was a few pixels); a shared
-  // trunk makes it matter, since an un-bundled label point sits out in open
-  // canvas far from the branch the user actually clicked.
-  // Obstacles and the label's lane nudge included, exactly as `DraftEdgeView` applies them — a
-  // parallel or detoured connector's label otherwise sits well away from where the panel points.
-  let labelPoint: { x: number; y: number } | null = null;
-  if (displayEdge && sourceRect && targetRect) {
-    const lane = laneIndex(document.edges).get(displayEdge.id)?.offset ?? 0;
-    const route = routeBetween(sourceRect, targetRect, displayEdge.routing, {
-      anchors: { source: displayEdge.sourceAnchor, target: displayEdge.targetAnchor },
-      lane,
-      obstacles: interactionActive ? undefined : obstaclesForEdge(document.nodes, displayEdge.source, displayEdge.target),
-      spine: routingPlan(document.nodes, document.edges).spineFor(displayEdge.id),
-    });
-    const labelNudge = labelLaneOffset(route.source.side, route.target.side, lane);
-    labelPoint = { x: route.labelX + labelNudge.x, y: route.labelY + labelNudge.y };
-  }
+  // Routed the same way the live edge component draws it, or the panel anchors to a point the
+  // line never passes through — see `edgeLabelPoint`.
+  const labelPoint =
+    displayEdge && sourceRect && targetRect
+      ? edgeLabelPoint(document, displayEdge, sourceRect, targetRect, { interactionActive })
+      : null;
 
   const { target, placement } = useOverlayPosition<'above' | 'below'>(panelRef, 'above', (frame) => {
     if (!labelPoint || !sourceRect || !targetRect) return null;

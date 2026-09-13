@@ -6,6 +6,11 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
+- Presenting a flow now shows notes and code attached to each step on their own. A step's
+  connector, or a shape the flow reaches for the first time, shows its attachments in a small
+  callout joined to it by a thin line, clear of the diagram and the controls. The callout moves on
+  with the step. Clicking a chip or a shape's attachment badge while presenting shows that one
+  instead.
 - Learn Draft Canvas is now a handbook you open beside the canvas (More → Learn Draft Canvas).
   Search "how do I…", or browse the short version: each answer is a small animated diagram, a
   sentence, and the keys to press. Your canvas stays live next to it.

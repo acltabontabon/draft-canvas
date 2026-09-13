@@ -4,6 +4,7 @@ import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
 import type { Side } from '../document/types';
 import type { RecipeCategory } from '../learn/types';
+import type { PresentationReveal } from '../presentation/presentationAttachments';
 import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
 import { markLastSeenRelease, readLastSeenRelease } from '../releases/productReleases';
@@ -164,16 +165,14 @@ export interface UiStore {
    */
   openAttachmentDetail: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null;
   /**
-   * The single attachment a presenter has intentionally revealed for the
-   * current step — a read-only counterpart to `openAttachmentDetail`, kept as a
-   * separate field rather than overloading that one: `openAttachmentDetail` also
-   * unlocks the attachment's edit textarea, which presentation must never
-   * do. Cleared automatically on every step change (see `FlowBar.tsx`) —
-   * there is no persistent pin across steps in this pass, so a revealed
-   * attachment never survives into an unrelated later step. Edge-only: there is no analogous
-   * "current step" reveal for a node attachment.
+   * The element a presenter clicked open while presenting — a chip on a connector, or a node's
+   * attachment badge. Presentation Mode's callout shows that element's attachments instead of
+   * whatever the step would say on its own (`resolvePresentationSubject`). A read-only counterpart
+   * to `openAttachmentDetail`, kept separate because that one also unlocks editing, which
+   * presentation must never do. Cleared on every step change (see `FlowBar.tsx`), so a reveal never
+   * survives into an unrelated later step.
    */
-  presentationReveal: { edgeId: string; attachmentId: string } | null;
+  presentationReveal: PresentationReveal | null;
   /** Whether the Flows panel — the one surface for flows (`FlowPanel.tsx`) — is visible. */
   flowPanelOpen: boolean;
   /**
@@ -298,7 +297,7 @@ export interface UiStore {
   setOpenAttachmentDetail: (
     target: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null,
   ) => void;
-  setPresentationReveal: (target: { edgeId: string; attachmentId: string } | null) => void;
+  setPresentationReveal: (target: PresentationReveal | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
   requestFlowRename: (flowId: string | null) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;

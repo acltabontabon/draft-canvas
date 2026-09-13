@@ -1,15 +1,14 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import type { Attachment } from '../document/types';
-import { NOTE_ACCENTS, NOTE_LABELS } from '../nodes/describe';
-import { LANGUAGE_LABELS, tokenizeCode } from '../render/code/highlight';
+import { tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
-import { accentOf, type Theme } from '../render/theme/tokens';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { useTheme, useThemeValue } from '../ui/theme/useTheme';
 import { Icon } from '../ui/common/Icon';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
+import { attachmentLookFor } from './attachmentLook';
 
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css` — the card
  *  stays mounted this long after `visible` goes false so the CSS fade-out has time to play
@@ -57,7 +56,7 @@ function wasLastKeydownEscape(): boolean {
  * sits above `canvas/` in this app's one-way dependency order, so this is its own small instance
  * of the same pattern, not a shared component.
  */
-function ReadOnlyCode({ language, code }: { language: Parameters<typeof tokenizeCode>[1]; code: string }) {
+export function ReadOnlyCode({ language, code }: { language: Parameters<typeof tokenizeCode>[1]; code: string }) {
   const { name } = useTheme();
   const codeTheme = CODE_THEMES[name];
   const lines = tokenizeCode(code, language);
@@ -79,33 +78,6 @@ function ReadOnlyCode({ language, code }: { language: Parameters<typeof tokenize
       </code>
     </pre>
   );
-}
-
-/** What a chip/card looks like for one attachment — matches the corresponding card type's own
- *  real styling exactly (`nodes/describe.ts`'s `note`/`codeCard`), rather than a generic box, so
- *  a Note attachment reads as a note and a Code one reads as code. */
-interface AttachmentLook {
-  fill: string;
-  border: string;
-  accent: string;
-  headerBg?: string;
-  label: string;
-}
-
-function attachmentLookFor(theme: Theme, attachment: Attachment): AttachmentLook {
-  if (attachment.type === 'code') {
-    const language = attachment.language ?? 'plaintext';
-    return {
-      fill: theme.codeBg,
-      border: theme.codeBorder,
-      accent: theme.textFaint,
-      headerBg: theme.surfaceRaised,
-      label: LANGUAGE_LABELS[language],
-    };
-  }
-  const kind = attachment.noteKind ?? 'note';
-  const palette = accentOf(theme, attachment.accent ?? NOTE_ACCENTS[kind]);
-  return { fill: palette.fill, border: palette.line, accent: palette.chip, label: NOTE_LABELS[kind] };
 }
 
 /** The mutations a chip/card can perform on its own attachment, injected by the caller so this
@@ -137,6 +109,7 @@ export function AttachmentChipRow({
   editable,
   actions,
   dimmed,
+  explainTier,
   style,
 }: {
   hostKind: 'node' | 'edge';
@@ -146,14 +119,19 @@ export function AttachmentChipRow({
   editable: boolean;
   actions: AttachmentActions;
   dimmed?: boolean;
+  /** While a flow plays, the row recedes with its connector's own step tier — see `canvas.css`. */
+  explainTier?: 'active' | 'shown' | 'hidden';
   style?: CSSProperties;
 }) {
   if (!attachments.length) return null;
   return (
     <div
       className="dc-attachment-chip-row"
+      // Presentation Mode's callout measures the row it threads back to (`presentationAnchor.ts`).
+      data-host-id={hostId}
       data-flip={cardSide === 'below' ? 'below' : undefined}
       data-lens-dimmed={dimmed ? 'true' : undefined}
+      data-explain-tier={explainTier}
       style={style}
     >
       {attachments.map((attachment, index) => (
@@ -178,7 +156,7 @@ export function AttachmentChipRow({
  * own box, flipped by `.dc-attachment-chip-row[data-flip]` in `canvas.css` — which is what keeps
  * every card opening away from the row's own anchor regardless of how many chips sit beside it.
  *
- * Visible when `pinned || revealed` — a deliberate, purely per-attachment click reveal, not hover
+ * Visible when `pinned` — a deliberate, purely per-attachment click reveal, not hover
  * and not selection: a card popping open just from resting the pointer nearby (or from every
  * attachment on the host showing at once just because the host itself got selected) read as noisy
  * on a diagram with several attachments. Each chip is a real button (Enter/Space activates it) —
@@ -187,10 +165,9 @@ export function AttachmentChipRow({
  * naming the host, its kind, and this specific attachment) is the only state that enables editing
  * — and even then, only once the pencil glyph is clicked (see `editing`, below); opening a card
  * first always shows it read-only, only when `editable` (i.e. not presenting) does the pencil
- * glyph appear at all. Presenting an edge attachment instead sets `presentationReveal`, always
- * read-only, cleared automatically on the next step — node attachments don't participate in
- * presentation reveal at all (there is no analogous "current step" for a node), so `revealed` is
- * always false for `hostKind === 'node'`.
+ * glyph appear at all. While presenting, a click never opens this card: it sets
+ * `presentationReveal`, and Presentation Mode's callout (`canvas/presentation/`) tells that
+ * element's story instead — cleared automatically on the next step.
  */
 function AttachmentChip({
   hostKind,
@@ -216,12 +193,6 @@ function AttachmentChip({
       state.openAttachmentDetail?.hostKind === hostKind &&
       state.openAttachmentDetail?.hostId === hostId &&
       state.openAttachmentDetail?.attachmentId === attachment.id,
-  );
-  const revealed = useUiStore(
-    (state) =>
-      hostKind === 'edge' &&
-      state.presentationReveal?.edgeId === hostId &&
-      state.presentationReveal?.attachmentId === attachment.id,
   );
   // A connector's chips sit out on the canvas, and the canvas is one Tab stop — so they join the Tab
   // order only once they're relevant: their connector selected (keyboard users get there through
@@ -279,7 +250,7 @@ function AttachmentChip({
   // Same precedent as the node attachment popover: a capture-phase Escape (so it preempts
   // `EditorScreen`'s own bubble-phase chain), plus a click anywhere outside the chip closes it —
   // registered a tick late so the very click that opened the card doesn't immediately close it.
-  // Covers both edit-mode pinning and a presenter's own reveal — whichever is active.
+  // Edit-mode pinning only: a presenter's reveal lives in the callout, and lasts until the step moves.
   //
   // Checked against the *whole chip* (`chipRef`), not just the card: a pointerdown on the chip's
   // own icon/label is "outside the card" too, so checking only the card used to close it here on
@@ -288,21 +259,17 @@ function AttachmentChip({
   // a no-op. Re-clicking the chip to close it is `onClick`'s job alone; this handler only needs to
   // catch a click genuinely outside the chip altogether (the pane, another chip, and so on).
   useEffect(() => {
-    if (!pinned && !revealed) return;
+    if (!pinned) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || isImeKeyEvent(event)) return;
       event.stopPropagation();
       // The actual discard-vs-commit decision for a live edit is made by the commit effect above,
       // reading `wasLastKeydownEscape()` — see its doc comment for why this handler itself often
       // loses the race to an ancestor popover's own Escape listener and never gets to decide it.
-      if (pinned) setOpenAttachmentDetail(null);
-      if (revealed) setPresentationReveal(null);
+      setOpenAttachmentDetail(null);
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (chipRef.current && !chipRef.current.contains(event.target as Node)) {
-        if (pinned) setOpenAttachmentDetail(null);
-        if (revealed) setPresentationReveal(null);
-      }
+      if (chipRef.current && !chipRef.current.contains(event.target as Node)) setOpenAttachmentDetail(null);
     };
     window.addEventListener('keydown', onKeyDown, true);
     const id = window.setTimeout(() => window.addEventListener('pointerdown', onPointerDown), 0);
@@ -311,9 +278,9 @@ function AttachmentChip({
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };
-  }, [pinned, revealed, setOpenAttachmentDetail, setPresentationReveal]);
+  }, [pinned, setOpenAttachmentDetail]);
 
-  const visible = pinned || revealed;
+  const visible = pinned;
   const kind = attachment.type === 'code' ? 'code' : 'note';
 
   // The card's own reveal animation is a CSS `animation` on mount, but hiding it is not the
@@ -362,12 +329,10 @@ function AttachmentChip({
       setOpenAttachmentDetail(pinned ? null : { hostKind, hostId, attachmentId: attachment.id });
       return;
     }
-    // Presenting: only an edge attachment participates in presentation reveal (see the
-    // component doc comment) — a click intentionally reveals the card read-only instead, the
-    // presenter's own call on when extra context is useful, not an automatic reveal.
-    // Auto-collapses on the next step change (`FlowBar.tsx`), never unlocks the textarea below
-    // (that stays gated on `pinned`, which presentation never sets).
-    if (hostKind === 'edge') setPresentationReveal(revealed ? null : { edgeId: hostId, attachmentId: attachment.id });
+    // Presenting: the presenter asks this element to speak — the callout shows it, read-only,
+    // until the step changes (`FlowBar.tsx`). Never unlocks the textarea below: that stays gated on
+    // `pinned`, which presentation never sets.
+    setPresentationReveal({ hostKind, hostId, attachmentId: attachment.id });
   };
 
   const chipVars = {
@@ -376,7 +341,7 @@ function AttachmentChip({
     ['--dc-chip-accent']: look.accent,
   } as CSSProperties;
 
-  const chipName = pinned || revealed ? 'Close attached detail' : kind === 'code' ? 'View attached code' : 'View attached note';
+  const chipName = pinned ? 'Close attached detail' : kind === 'code' ? 'View attached code' : 'View attached note';
 
   return (
     // The slot, not the chip, is what the outside-pointerdown check above measures against and what

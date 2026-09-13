@@ -74,6 +74,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       : null,
   );
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
+  const setPresentationReveal = useUiStore((state) => state.setPresentationReveal);
   const popoverOpen = useUiStore(
     (state) => state.openAttachmentDetail?.hostKind === 'node' && state.openAttachmentDetail?.hostId === id,
   );
@@ -391,11 +392,14 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
-            // Presenting never opens the popover — editing attachments mid-presentation is exactly
-            // what `AttachmentChip`'s own `editable` gate also exists to prevent; guarding here too
-            // keeps the badge's own `data-open` state from claiming "open" for a popover that
-            // `AttachmentPopover` itself refuses to render while presenting.
-            if (mode === 'present') return;
+            // Presenting never opens the editing popover (`AttachmentPopover` refuses to render
+            // then) — the presenter is asking this node to speak, and the presentation callout
+            // shows its attachments read-only until the step changes.
+            if (mode === 'present') {
+              const first = node.attachments?.[0];
+              if (first) setPresentationReveal({ hostKind: 'node', hostId: node.id, attachmentId: first.id });
+              return;
+            }
             setOpenAttachmentDetail(popoverOpen ? null : { hostKind: 'node', hostId: node.id, attachmentId: null });
           }}
         >

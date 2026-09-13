@@ -25,7 +25,7 @@ import {
 import { routingPlan } from '../edges/bundles';
 import { layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
-import { attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
+import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
 import { obstaclesForEdge, withoutNodes } from '../edges/obstacles';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
@@ -108,12 +108,9 @@ function conditionTransform(side: Side, x: number, y: number): string {
   }
 }
 
-/** Gap between the connector's own label point and the attachment chip row — small, since a chip
- *  row is compact and doesn't need the same clearance a full label chip does. Matches the gap
- *  `attachmentRowBelowsSourceOrTarget` (in `edgeGeometry.ts`) itself probes from, and the one
- *  `EdgeInspectorPopover` uses for its own row, so nothing along this edge uses a different ruler. */
-const ATTACHMENT_ROW_GAP = 12;
-
+/** The chip row hangs `ATTACHMENT_ROW_GAP` off the label point — small, since a chip row is compact
+ *  and doesn't need the clearance a full label chip does. Shared from `edgeGeometry.ts` so the probe
+ *  in `attachmentRowBelowsSourceOrTarget` and Presentation Mode's callout anchor use the same ruler. */
 function attachmentRowTransform(x: number, y: number, flipBelow: boolean): string {
   return flipBelow
     ? `translate(-50%, 0) translate(${x}px, ${y + ATTACHMENT_ROW_GAP}px)`
@@ -648,6 +645,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse, edge.deliveryAttempts);
         return (
           <text
+            className="dc-edge-caption"
             x={caption.x}
             y={caption.y}
             textAnchor={caption.textAnchor}
@@ -853,6 +851,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             editable={mode !== 'present'}
             actions={attachmentActions}
             dimmed={lensDimmed}
+            explainTier={playbackActive ? tier : undefined}
             style={{ position: 'absolute', transform: attachmentRowTransform(labelX, labelY, attachmentFlipBelow) }}
           />
         ) : null}

@@ -18,11 +18,16 @@ export interface OverlayFrame {
   screenToOverlay: (point: OverlayPoint) => OverlayPoint;
   /** The popover's own rendered size, in whole pixels (0×0 until first laid out). */
   size: OverlaySize;
+  /** The overlay's own page rect — the canvas a popover has to fit inside. */
+  root: DOMRect;
 }
 
 export interface OverlayPlacement<P extends string> {
   transform: string;
   placement: P;
+  /** CSS custom properties for anything inside the panel that follows the anchor too (a leader
+   *  line) — written alongside `transform`, so it tracks pan and zoom without a render either. */
+  vars?: Record<string, string>;
 }
 
 /**
@@ -87,11 +92,15 @@ export function useOverlayPosition<P extends string>(
           flowToScreenPosition,
           screenToOverlay: (point) => ({ x: point.x - rootRect.left, y: point.y - rootRect.top }),
           size: sizeRef.current,
+          root: rootRect,
         },
         placementRef.current,
       );
       if (!result) return;
       if (panel.style.transform !== result.transform) panel.style.transform = result.transform;
+      for (const [name, value] of Object.entries(result.vars ?? {})) {
+        if (panel.style.getPropertyValue(name) !== value) panel.style.setProperty(name, value);
+      }
       if (panel.dataset.placement !== result.placement) panel.dataset.placement = result.placement;
       if (result.placement !== placementRef.current) {
         placementRef.current = result.placement;

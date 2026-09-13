@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { displayNameFor } from '../../document/factory';
 import { isActivatableTarget, isEditableTarget } from '../../lib/isEditableTarget';
-import { nodeIndex } from '../../store/selectors';
+import { edgeIndex, nodeIndex } from '../../store/selectors';
+import { describePresentationSubject, resolvePresentationSubject } from '../../presentation/presentationAttachments';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { tokenizeCode } from '../../render/code/highlight';
@@ -18,6 +19,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
   // Only while presenting — the bar isn't shown otherwise, so it needn't follow every edit.
   const document = useEditorStore((state) => (playback.active ? state.document : null));
   const mode = useEditorStore((state) => state.mode);
+  const reveal = useUiStore((state) => (playback.active ? state.presentationReveal : null));
   const setMode = useEditorStore((state) => state.setMode);
 
   useEffect(() => {
@@ -46,13 +48,12 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [playback]);
 
-  // A presenter-revealed attachment (see `AttachmentChip`'s
-  // `presentationReveal`) is scoped to the step it was revealed on — advancing
-  // or retreating a step always collapses it, so nothing stray survives into
-  // an unrelated later step. No persistent pin across steps in this pass.
+  // A presenter's reveal (a chip or badge clicked while presenting — see `presentationReveal`) is
+  // scoped to the step it was made on, and to the presentation itself: stepping, starting or
+  // stopping a flow, or leaving presentation all let it go, so nothing stray resurfaces later.
   useEffect(() => {
     useUiStore.getState().setPresentationReveal(null);
-  }, [playback.step]);
+  }, [playback.step, playback.flow?.id, playback.active, mode]);
 
   if (!playback.active) return null;
 
@@ -91,6 +92,15 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
   const details = primary?.details;
   const caption = playback.current.caption || primary?.label;
   const condition = primary?.condition;
+  // What the step's callout shows (`PresentationCalloutLayer`), folded into the one announcement.
+  const spoken = resolvePresentationSubject({
+    flowId: playback.flow.id,
+    steps: playback.steps,
+    step: playback.step,
+    nodesById: nodes,
+    edgesById: edgeIndex(document.edges),
+    reveal,
+  });
 
   return (
     <div className="dc-explain" role="region" aria-label="Flow playback">
@@ -102,7 +112,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
           primary
             ? `${source ? displayNameFor(source) : 'Untitled'} to ${target ? displayNameFor(target) : 'Untitled'}`
             : playback.current.extraNodes.map((n) => displayNameFor(n)).join(', ')
-        }${caption ? `. ${caption}` : ''}`}
+        }${caption ? `. ${caption}` : ''}${spoken ? `. ${describePresentationSubject(spoken)}` : ''}`}
       </span>
       <div className="dc-explain-bar">
         <span className="dc-explain-flow-title">{playback.flow.title}</span>

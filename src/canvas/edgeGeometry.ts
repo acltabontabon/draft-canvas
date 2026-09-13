@@ -6,8 +6,10 @@
  */
 import type { useInternalNode } from '@xyflow/react';
 import { anchorBandOf } from '../document/queueGeometry';
-import type { DraftNodeType } from '../document/types';
-import type { Rect } from '../edges/routing';
+import type { DraftEdge, DraftNode, DraftNodeType } from '../document/types';
+import { routingPlan } from '../edges/bundles';
+import { obstaclesForEdge } from '../edges/obstacles';
+import { labelLaneOffset, laneIndex, routeBetween, type Rect } from '../edges/routing';
 import { clamp } from '../lib/math';
 
 export type InternalNode = NonNullable<ReturnType<typeof useInternalNode>>;
@@ -30,6 +32,9 @@ export function rectOfInternal(node: InternalNode, type?: DraftNodeType): Rect |
   return band ? { ...rect, anchorBand: band } : rect;
 }
 
+/** How far a connector's attachment chip row floats off its label point, in flow units. */
+export const ATTACHMENT_ROW_GAP = 12;
+
 /**
  * Whether a UI element floating above `(x, y)` at roughly `NOMINAL_REACH`
  * pixels tall would land inside the connector's own source or target node — the
@@ -39,14 +44,38 @@ export function rectOfInternal(node: InternalNode, type?: DraftNodeType): Rect |
  * decides which side reads as belonging to the connector.
  */
 const NOMINAL_REACH = 150;
-const GAP = 12;
 
 export function attachmentRowBelowsSourceOrTarget(x: number, y: number, sourceRect: Rect, targetRect: Rect): boolean {
-  const bottom = y - GAP;
+  const bottom = y - ATTACHMENT_ROW_GAP;
   const top = bottom - NOMINAL_REACH;
   const overlapsRect = (rect: Rect) =>
     x > rect.x && x < rect.x + rect.width && rect.y < bottom && rect.y + rect.height > top;
   return overlapsRect(sourceRect) || overlapsRect(targetRect);
+}
+
+/**
+ * A connector's label point, routed exactly as `DraftEdgeView` draws it — obstacles, lane, bundle
+ * spine and the label's lane nudge included — for screen-space overlays that must point at where the
+ * line really is (`EdgeInspectorPopover`, Presentation Mode's callout). A parallel or detoured
+ * connector's label otherwise sits well away from where an overlay would point. `DraftEdgeView`
+ * keeps its own cached call: it is the hot path and also routes the response half.
+ */
+export function edgeLabelPoint(
+  document: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] },
+  edge: DraftEdge,
+  sourceRect: Rect,
+  targetRect: Rect,
+  { interactionActive = false }: { interactionActive?: boolean } = {},
+): { x: number; y: number } {
+  const lane = laneIndex(document.edges).get(edge.id)?.offset ?? 0;
+  const route = routeBetween(sourceRect, targetRect, edge.routing, {
+    anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
+    lane,
+    obstacles: interactionActive ? undefined : obstaclesForEdge(document.nodes, edge.source, edge.target),
+    spine: routingPlan(document.nodes, document.edges).spineFor(edge.id),
+  });
+  const labelNudge = labelLaneOffset(route.source.side, route.target.side, lane);
+  return { x: route.labelX + labelNudge.x, y: route.labelY + labelNudge.y };
 }
 
 export interface ScreenRect {

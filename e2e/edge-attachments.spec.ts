@@ -8,8 +8,8 @@ import { expect, test, type Page } from '@playwright/test';
  * `tests/edge-attachments.test.ts`; these cover the actual drag/click interaction and the
  * type-matched visual result.
  *
- * A card is visible only when its own chip is clicked (`pinned`, or `presentationReveal` while
- * presenting) — deliberately not on hover and not just because the connector itself is selected,
+ * A card is visible only when its own chip is clicked (`pinned`; while presenting, a click shows the
+ * presentation callout instead) — deliberately not on hover and not just because the connector itself is selected,
  * per `EdgeAttachmentChip`'s own doc comment: either read as noisy on a diagram with several
  * attachments. A pinned card also opens read-only first; a second click on its own pencil glyph
  * ("Edit attached detail") is what reveals the actual textarea.
@@ -303,7 +303,7 @@ test.describe('connection-attached details', () => {
     await expect(page.locator('.dc-attachment-card')).toHaveCount(0);
   });
 
-  test('presentation mode reveals a chip\'s card on click, with no editing available', async ({ page }) => {
+  test('presentation mode tells a clicked chip\'s note in the presentation callout, with no editing available', async ({ page }) => {
     await servicePublishingToTopic(page, 'Presentation reveal');
     await create(page, 'Note', { x: 500, y: 500 });
     const chip = page.locator('.dc-attachment-chip');
@@ -318,12 +318,17 @@ test.describe('connection-attached details', () => {
 
     await expect(chip).toBeVisible();
     await chip.click();
-    const card = page.locator('.dc-attachment-card');
-    await expect(card).toBeVisible();
-    await expect(card).toContainText('present me');
-    await expect(card.locator('textarea')).toHaveCount(0);
+    // Presenting tells it in the callout (`PresentationCallout`), never the editing card.
+    const callout = page.locator('.dc-callout');
+    await expect(callout).toBeVisible();
+    await expect(callout).toContainText('present me');
+    await expect(page.locator('.dc-attachment-card')).toHaveCount(0);
+    await expect(callout.locator('textarea')).toHaveCount(0);
     // Presenting never unlocks editing — the pencil glyph itself is gone, not just its textarea.
     await expect(page.getByRole('button', { name: 'Edit attached detail' })).toHaveCount(0);
+    // Leaving presentation lets the reveal go with it.
+    await page.getByRole('button', { name: 'Exit presentation' }).click();
+    await expect(callout).toHaveCount(0);
   });
 
   test('deleting the connection removes its attachments, and undo restores them together', async ({ page }) => {
