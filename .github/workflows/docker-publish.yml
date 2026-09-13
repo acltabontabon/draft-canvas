@@ -1,0 +1,99 @@
+name: Docker
+
+# Packages an already-released version as the official image on Docker Hub.
+#
+# It isn't triggered by `release: published`: release.yml creates the GitHub
+# Release with GITHUB_TOKEN, and events caused by that token never start other
+# workflows. So release.yml calls this once the Release exists. It can also be
+# run by hand to republish an existing tag. Republishing an older *stable* tag
+# moves `latest` back to it.
+#
+# Needs the DOCKERHUB_USERNAME repository variable and the DOCKERHUB_TOKEN
+# repository secret (a Docker Hub access token, not the account password).
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to publish, e.g. v1.2.3
+        required: true
+        type: string
+    secrets:
+      DOCKERHUB_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to (re)publish, e.g. v1.2.3
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-publish-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      # The Dockerfile only runs npm on the build platform, but keep emulation
+      # available so a future RUN in the runtime stage still builds for arm64.
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # v1.2.3      -> 1.2.3, 1.2, latest
+      # v1.3.0-rc.1 -> 1.3.0-rc.1 only (metadata-action never extends a
+      #                prerelease to 1.3 or latest)
+      - id: meta
+        uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          # Take the revision from the checked-out tag, not from whatever
+          # branch a manual run was started on.
+          context: git
+          images: acltabontabon/draft-canvas
+          flavor: latest=auto
+          tags: |
+            type=semver,pattern={{version}},value=${{ inputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
+          labels: |
+            org.opencontainers.image.title=Draft Canvas
+            org.opencontainers.image.description=A local-first canvas for developers to explain software visually.
+            org.opencontainers.image.source=https://github.com/acltabontabon/draft-canvas
+            org.opencontainers.image.url=https://github.com/acltabontabon/draft-canvas
+            org.opencontainers.image.licenses=Apache-2.0
+          annotations: |
+            org.opencontainers.image.title=Draft Canvas
+            org.opencontainers.image.description=A local-first canvas for developers to explain software visually.
+            org.opencontainers.image.source=https://github.com/acltabontabon/draft-canvas
+            org.opencontainers.image.url=https://github.com/acltabontabon/draft-canvas
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          # GitHub scopes caches to the ref, so this mainly speeds up re-runs
+          # of the same release rather than the next one.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true

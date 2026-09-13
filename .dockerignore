@@ -1,0 +1,36 @@
+# Rebuilt inside the image
+node_modules
+dist
+dist-ssr
+.vite
+*.tsbuildinfo
+
+# Repo metadata and tooling that the build doesn't read
+.git
+.github
+.claude
+.idea
+.vscode
+.DS_Store
+Dockerfile
+.dockerignore
+
+# Docs, media, benchmarks, demo recordings and browser tests.
+# `tests/` stays in: `tsc -b` type-checks it as part of `npm run build`.
+docs
+benchmark
+demo
+e2e
+.playwright
+test-results
+playwright-report
+playwright-report-offline
+coverage
+
+# Secrets never belong in a build context
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.crt

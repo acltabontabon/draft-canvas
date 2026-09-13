@@ -111,6 +111,10 @@ When preparing a release:
 4. Bump the version through the normal release process, then ship. Once `package.json`'s version
    reaches what you wrote, About → What's New picks it up on its own — no other wiring needed.
 
+Pushing the `vX.Y.Z` tag does the rest. It creates the GitHub Release, deploys Pages, and, once the
+Release exists, publishes `acltabontabon/draft-canvas` to Docker Hub (see
+`.github/workflows/docker-publish.yml`).
+
 ## Keeping Draft Canvas fast and simple
 
 The whole product bets on staying lightweight. A dependency, a setting, or a new concept all cost

@@ -34,6 +34,8 @@ All notable changes to Draft Canvas are documented here.
   into a table.
 - New connector suggestions: Database → Service can be change data capture, a Topic can feed a
   search index or database directly, and Object Storage → Database defaults to "transforms".
+- An official Docker image, `acltabontabon/draft-canvas`, for running Draft Canvas yourself. It's
+  the same static app served by nginx, for amd64 and arm64, published with every release.
 
 ### Changed
 

@@ -78,6 +78,35 @@ draws the thing.
 
 ---
 
+## Running it yourself
+
+Prefer your own copy? There's an official Docker image. It's the same static app as the hosted
+version, served by nginx. No backend, nothing to configure.
+
+```bash
+docker run -d \
+  --name draft-canvas \
+  -p 8080:80 \
+  acltabontabon/draft-canvas:latest
+```
+
+Then open http://localhost:8080.
+
+`latest` follows stable releases. To stay on a specific version, pin it:
+
+```bash
+docker run -d \
+  --name draft-canvas \
+  -p 8080:80 \
+  acltabontabon/draft-canvas:1.0.0
+```
+
+Opening it from another machine? Put it behind HTTPS. Browsers only allow the encryption Draft
+Canvas stores your diagrams with on HTTPS or `localhost`. Over plain `http://192.168.x.x`, it can't
+save anything.
+
+---
+
 <!-- performance:start -->
 ## Performance
 
