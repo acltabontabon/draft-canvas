@@ -1,7 +1,10 @@
 import type { GifSpeed } from '../../export';
 
 interface AnimatedPanelProps {
+  /** Only the flows with something to play. */
   flows: { id: string; title: string }[];
+  /** Whether the canvas has flows at all, just none that would play. */
+  hasUnplayableFlows?: boolean;
   flowId: string;
   onFlowChange: (id: string) => void;
   speed: GifSpeed;
@@ -18,11 +21,14 @@ export function ExportAnimatedPanel({
   onSpeedChange,
   loop,
   onLoopChange,
+  hasUnplayableFlows = false,
 }: AnimatedPanelProps) {
   if (flows.length === 0) {
     return (
       <div className="dc-export-panel">
-        <p className="dc-export-panel-description">Add a Flow to enable this export.</p>
+        <p className="dc-export-panel-description">
+          {hasUnplayableFlows ? 'Add a step to a Flow to enable this export.' : 'Add a Flow to enable this export.'}
+        </p>
       </div>
     );
   }

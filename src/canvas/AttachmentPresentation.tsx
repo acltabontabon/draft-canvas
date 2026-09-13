@@ -9,6 +9,7 @@ import { useUiStore } from '../store/uiStore';
 import { useTheme, useThemeValue } from '../ui/theme/useTheme';
 import { Icon } from '../ui/common/Icon';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
+import { motionMs } from '../lib/motion';
 
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css` — the card
  *  stays mounted this long after `visible` goes false so the CSS fade-out has time to play
@@ -335,14 +336,13 @@ function AttachmentChip({
     }
     if (!cardMounted) return;
     setCardClosing(true);
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     hideTimer.current = window.setTimeout(
       () => {
         setCardMounted(false);
         setCardClosing(false);
         hideTimer.current = null;
       },
-      reduceMotion ? 0 : ATTACHMENT_CARD_EXIT_MS,
+      motionMs(ATTACHMENT_CARD_EXIT_MS),
     );
     return () => {
       if (hideTimer.current !== null) {
@@ -508,6 +508,7 @@ function AttachmentChip({
               attachment.type === 'code' ? (
                 <textarea
                   autoFocus
+                  aria-label="Attached code"
                   className="dc-attachment-editor dc-attachment-editor-code"
                   spellCheck={false}
                   defaultValue={attachment.code ?? ''}
@@ -523,6 +524,7 @@ function AttachmentChip({
               ) : (
                 <textarea
                   autoFocus
+                  aria-label="Attached note"
                   className="dc-attachment-editor"
                   defaultValue={attachment.text ?? ''}
                   onChange={(event) => {

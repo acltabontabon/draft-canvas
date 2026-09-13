@@ -8,6 +8,7 @@ import { clamp } from '../lib/math';
 import { nodeIndex } from '../store/selectors';
 import { useEditorStore } from '../store/editorStore';
 import { RESPONSE_PHASE_DELAY_MS } from './responsePhase';
+import { motionMs } from '../lib/motion';
 
 export interface FlowPlaybackStep {
   /** The step's primary connector, when it has one — absent for a "frame" step. */
@@ -163,7 +164,7 @@ export function useFlowPlayback(): FlowPlaybackController {
 
       // An explicit per-step viewport is shown verbatim — no bounds, no fit.
       if (target.viewport) {
-        void setViewport(target.viewport, { duration: 380 });
+        void setViewport(target.viewport, { duration: motionMs(380) });
         return;
       }
 
@@ -181,7 +182,7 @@ export function useFlowPlayback(): FlowPlaybackController {
       // directly, which is the only way to cap it.
       const next = resolveStepViewport(target, byId, viewWidth, viewHeight);
       if (!next) return;
-      void setViewport(next, { duration: 380 });
+      void setViewport(next, { duration: motionMs(380) });
     },
     [getViewport, setViewport, viewHeight, viewWidth],
   );

@@ -2,6 +2,7 @@ import { useReactFlow, useStore } from '@xyflow/react';
 import { flowFitViewNodes, useEditorStore } from '../../store/editorStore';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
+import { motionMs } from '../../lib/motion';
 
 /**
  * The save indicator is the only place the local-first promise is visible while
@@ -69,7 +70,7 @@ export function StatusBar({ durable }: { durable: boolean }) {
           type="button"
           className="dc-zoom-value"
           aria-label={`${Math.round(zoom * 100)}%, fit to view`}
-          onClick={() => void fitView({ padding: 0.2, duration: 300, nodes: flowFitViewNodes(useEditorStore.getState()) })}
+          onClick={() => void fitView({ padding: 0.2, duration: motionMs(300), nodes: flowFitViewNodes(useEditorStore.getState()) })}
           title="Fit to view"
         >
           {Math.round(zoom * 100)}%

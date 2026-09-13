@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nodeCommands } from '../src/commands/registry';
 import type { CommandContext } from '../src/commands/types';
 import { __resetClipboardSync, __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore, type ContinuationOffer } from '../src/store/uiStore';
 import {
+  continuationSets,
   continuationsFor,
   dismissalKey,
   materialize,
@@ -707,10 +708,25 @@ describe('editorStore.acceptContinuation', () => {
     expect(recent.at(-1)).toBe('topic-fan-out-queue');
   });
 
-  it('settles every new node and each view clears only its own marker', () => {
-    useUiStore.getState().setSettleNodeIds(['a', 'b']);
-    useUiStore.getState().clearSettleNode('a');
-    expect(useUiStore.getState().settleNodeIds).toEqual(['b']);
+  it('settle markers expire on their own, and a newer accept is not cut short by an older one', () => {
+    vi.useFakeTimers();
+    try {
+      useUiStore.getState().setSettleNodeIds(['a', 'b']);
+      vi.advanceTimersByTime(200);
+      useUiStore.getState().setSettleNodeIds(['c']);
+      vi.advanceTimersByTime(200);
+      expect(useUiStore.getState().settleNodeIds).toEqual(['c']);
+      vi.advanceTimersByTime(100);
+      expect(useUiStore.getState().settleNodeIds).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not remember a Quick Connect preset row as an accepted rule', () => {
+    const offer = selectOffer('t');
+    useEditorStore.getState().acceptContinuation({ ...offer, id: 'preset:queue', ruleId: 'preset:queue' });
+    expect(useUiStore.getState().continuationRecent).not.toContain('preset:queue');
   });
 
   it('ignores an offer whose anchor no longer exists', () => {
@@ -1052,6 +1068,36 @@ describe('connecting to what is already drawn', () => {
     const doc = graph([at(service('s'), 0), at(database('a'), 300), at(database('b'), 0, 200)], []);
     expect(continuationsFor(doc, 's', 'select')).toEqual([]);
     expect(continuationsFor(doc, 's', 'invoke').filter((c) => c.ruleId === 'connect-existing')).toHaveLength(2);
+  });
+
+  it('a kind word in the plural is still a kind word, not a shared name', () => {
+    const doc = graph(
+      [
+        at(named(service('s'), 'Billing Streams'), 0),
+        at(named(database('a'), 'Audit Streams'), 300),
+        at(named(database('b'), 'Ledger'), 0, 200),
+      ],
+      [],
+    );
+    expect(continuationsFor(doc, 's', 'select')).toEqual([]);
+  });
+
+  it('continuationSets answers exactly what the select and invoke calls would, in one pass', () => {
+    const fixtures = [
+      graph([service('pub'), topic('t')], [['pub', 't']]),
+      graph([at(named(service('pay'), 'Payment Service'), 0), at(named(database('paydb'), 'Payments DB'), 300), at(named(database('audit'), 'Audit Log'), 0, 200)], []),
+      graph([at(named(service('svc'), 'Order Service'), 0), at(named(topic('events'), 'Order Events'), 300)], []),
+    ];
+    for (const doc of fixtures) {
+      for (const node of doc.nodes) {
+        const first = continuationsFor(doc, node.id, 'select')[0];
+        const dismissed = new Set(first ? [dismissalKey(node.id, first.id, first.neighborhoodKey)] : []);
+        const recent = ['topic-fan-out-queue'];
+        const sets = continuationSets(doc, node.id, { dismissed, recent });
+        expect(sets.quiet).toEqual(continuationsFor(doc, node.id, 'select', { dismissed, recent }));
+        expect(sets.explicit).toEqual(continuationsFor(doc, node.id, 'invoke', { recent }));
+      }
+    }
   });
 
   it('skips targets that are already connected, far away, or in another boundary', () => {

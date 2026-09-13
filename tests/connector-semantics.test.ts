@@ -398,7 +398,7 @@ describe('capabilityFor — the capability matrix', () => {
   it('a topic never falls back to a plain queue\'s entry for an unlisted pairing — same "no fallback" rule cache already follows', () => {
     expect(capabilityFor('topic', 'topic')).toBeUndefined();
     expect(capabilityFor('database', 'topic')).toBeUndefined();
-    // topic → database IS listed now (a stream sinking into a warehouse) — see the dedicated test
+    // topic → database IS listed now (a topic sinking into a warehouse) — see the dedicated test
     // above; only its inverse stays unlisted.
   });
 

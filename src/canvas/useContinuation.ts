@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { continuationsFor, materialize } from '../continuation';
+import { continuationSets, materialize, type MaterializedContinuation } from '../continuation';
 import { lensFlow, useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 
@@ -10,14 +10,18 @@ import { useUiStore } from '../store/uiStore';
  * movement.
  *
  * What shows is, in order: the alternative the user cycled to (or asked for with `]`) while the
- * anchor's neighborhood is still the one it was chosen in; otherwise the best high-confidence
- * candidate; otherwise nothing. Only the showing candidate is materialized — the rest are ids
- * the pill counts and `]` steps through.
+ * anchor's neighborhood is still the one it was chosen in; otherwise the best placeable
+ * high-confidence candidate; otherwise nothing. Alternatives are only the candidates that can actually be placed —
+ * one with no clear spot would show nothing when cycled to — so each is materialized to find out,
+ * and the showing one reuses its result. The rest are ids the pill counts and `]` steps through.
  *
  * Every subscription is a primitive (or a store-owned object replaced only on change) so this
  * re-runs, and re-renders its host, only when one of them actually flips — the house rule from
  * `DraftNodeView.tsx`. `setContinuation` keeps the previous offer object when the answer is the
  * same, so a ghost's identity survives unrelated edits elsewhere.
+ *
+ * A drag or resize only hides the offer: the user's cycled choice is kept, and is dropped anyway
+ * if the gesture really changed the anchor's neighborhood.
  *
  * Offers made by the explicit trigger — a connector dropped on empty canvas — belong to the
  * Quick Connect menu while it is open; this hook leaves those alone.
@@ -44,26 +48,32 @@ export function useContinuation(interactive: boolean): void {
       enabled && interactive && anchorId && !focusActive && !playbackActive && !lensActive && !interactionActive && !quickConnectOpen;
     if (!quiet) {
       ui.setContinuation(null);
-      ui.setContinuationCycle(null);
+      if (!interactionActive) ui.setContinuationCycle(null);
       return;
     }
     const doc = useEditorStore.getState().document;
-    const [best] = continuationsFor(doc, anchorId, 'select', { dismissed: dismissals, recent });
+    const { quiet: suggested, explicit } = continuationSets(doc, anchorId, { dismissed: dismissals, recent });
+    const best = suggested[0];
     const wantsCycle = cycle !== null && cycle.anchorId === anchorId;
     if (!best && !wantsCycle) {
       if (cycle) ui.setContinuationCycle(null);
       ui.setContinuation(null);
       return;
     }
-    const explicit = continuationsFor(doc, anchorId, 'invoke', { recent });
-    const chosen = wantsCycle
-      ? explicit.find((c) => c.id === cycle.candidateId && c.neighborhoodKey === cycle.neighborhoodKey)
-      : undefined;
+    const placed = new Map<string, MaterializedContinuation>();
+    for (const candidate of explicit) {
+      const materialized = materialize(doc, candidate);
+      if (materialized) placed.set(candidate.id, materialized);
+    }
+    const chosen =
+      wantsCycle && explicit.some((c) => c.id === cycle.candidateId && c.neighborhoodKey === cycle.neighborhoodKey)
+        ? placed.get(cycle.candidateId)
+        : undefined;
     // A choice made in a neighborhood that has since changed no longer means anything.
     if (cycle && !chosen) ui.setContinuationCycle(null);
-    const showing = chosen ?? best;
-    const offer = showing ? materialize(doc, showing) : undefined;
-    ui.setContinuation(offer ? { ...offer, trigger: 'select', alternatives: explicit.map((c) => c.id) } : null);
+    // The best suggestion that has somewhere to go — the one a crowded canvas can't fit is skipped.
+    const offer = chosen ?? suggested.map((candidate) => placed.get(candidate.id)).find((m) => m !== undefined);
+    ui.setContinuation(offer ? { ...offer, trigger: 'select', alternatives: [...placed.keys()] } : null);
   }, [
     revision,
     anchorId,
@@ -80,20 +90,11 @@ export function useContinuation(interactive: boolean): void {
   ]);
 }
 
-/** How long a settled node keeps its one-shot marker — just past the 180 ms animation. */
-const SETTLE_MS = 240;
-
 /**
  * Whether this node is one an accepted continuation just created, so its view can play the
- * one-shot "settle" (ghost → real). Clears its own marker a beat later — the same one-shot shape
- * as `jumpFlashId`, per node so a fragment's nodes never cut each other short.
+ * one-shot "settle" (ghost → real). The store expires the marker (`setSettleNodeIds`), not the
+ * view — a node undone before its animation ends must not replay it when redone.
  */
 export function useSettle(id: string): boolean {
-  const settling = useUiStore((state) => state.settleNodeIds.includes(id));
-  useEffect(() => {
-    if (!settling) return;
-    const timeout = window.setTimeout(() => useUiStore.getState().clearSettleNode(id), SETTLE_MS);
-    return () => window.clearTimeout(timeout);
-  }, [settling, id]);
-  return settling;
+  return useUiStore((state) => state.settleNodeIds.includes(id));
 }

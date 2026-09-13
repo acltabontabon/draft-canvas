@@ -23,9 +23,13 @@ export type QuickConnectItem =
  * unprompted"; a picker the user opened by dragging a connector out is a list they asked for, and
  * the best-fitting row still belongs at the top of it.
  */
-export function quickConnectItems(doc: DraftDocument, state: QuickConnectState): QuickConnectItem[] {
+export function quickConnectItems(
+  doc: DraftDocument,
+  state: QuickConnectState,
+  recent?: readonly string[],
+): QuickConnectItem[] {
   const suggestions: QuickConnectItem[] = state.source
-    ? continuationsFor(doc, state.source, 'drop').map((continuation) => ({
+    ? continuationsFor(doc, state.source, 'drop', { recent }).map((continuation) => ({
         kind: 'continuation',
         id: continuation.id,
         label: continuation.label,

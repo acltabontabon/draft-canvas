@@ -46,10 +46,6 @@ export interface FanOutTarget {
   label: string;
   reason: string;
   node: Omit<FragmentNodeSpec, 'key'>;
-  /** Whether this target stays offered on an explicit ask once an equivalent relationship already
-   *  exists (a second Queue off a Topic is still the point). Default `true`, matching every
-   *  existing fan-out rule; set `false` for a target that should only ever appear once. */
-  repeatableOnDrop?: boolean;
 }
 
 export interface FanOutOptions {
@@ -59,20 +55,6 @@ export interface FanOutOptions {
   branches?: boolean;
 }
 
-/**
- * The single most common continuation shape in this codebase: an anchor category with real
- * evidence it needs *something* next gets one rule per possible target. Every target still goes
- * through the engine's own capability-matrix gate, so a target that isn't actually a legal
- * connection for a given source category in `sourceCategories` is silently never offered for it —
- * this is what lets one call list several targets across several source categories without
- * hand-sorting which apply to which (see `rules.ts`'s Object Storage family for a concrete case:
- * a Queue target and a Topic target are both listed once, and the matrix alone decides that an
- * Object Storage anchor gets both while a Topic anchor would only ever get the Queue one).
- *
- * `evidence` is the "has this actually started, not just theoretically could" check — `nb.in`/
- * `nb.out` shapes vary by family (a Scheduler needs no inbound; a Topic does), so it is supplied
- * by the caller rather than fixed here.
- */
 export interface ChainRecipe extends FanOutOptions {
   id: string;
   tier: ContinuationTier;
@@ -110,6 +92,20 @@ export function defineChain(recipe: ChainRecipe): ContinuationRule {
   };
 }
 
+/**
+ * The single most common continuation shape in this codebase: an anchor category with real
+ * evidence it needs *something* next gets one rule per possible target. Every target still goes
+ * through the engine's own capability-matrix gate, so a target that isn't actually a legal
+ * connection for a given source category in `sourceCategories` is silently never offered for it —
+ * this is what lets one call list several targets across several source categories without
+ * hand-sorting which apply to which (see `rules.ts`'s Object Storage family for a concrete case:
+ * a Queue target and a Topic target are both listed once, and the matrix alone decides that an
+ * Object Storage anchor gets both while a Topic anchor would only ever get the Queue one).
+ *
+ * `evidence` is the "has this actually started, not just theoretically could" check — `nb.in`/
+ * `nb.out` shapes vary by family (a Scheduler needs no inbound; a Topic does), so it is supplied
+ * by the caller rather than fixed here.
+ */
 export function defineFanOut(
   sourceCategories: readonly NodeCategory[],
   evidence: (nb: Neighborhood) => boolean,
@@ -128,7 +124,8 @@ export function defineFanOut(
       nodes: [{ key: 'target', ...target.node }],
       edges: [{ from: 'anchor', to: 'target' }],
     }),
-    repeatable: (trigger: ContinuationTrigger) => (target.repeatableOnDrop ?? true) && isExplicit(trigger),
+    // A second Queue off a Topic is still the point when asked — so every target repeats on an explicit ask.
+    repeatable: isExplicit,
     ...options,
   }));
 }

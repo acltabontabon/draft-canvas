@@ -1061,7 +1061,6 @@ kbd {
   stroke-width: 1.5;
 }
 
-/* An edge label, the way the canvas draws one: no box, just a halo of canvas behind the words. */
 /* The home's spine, one step quieter than its trunk: it organises the branches, it doesn't
    frame them. The open branch is the one drawn at full strength. */
 .dc-home .dc-wire {
@@ -1084,6 +1083,7 @@ kbd {
   stroke: var(--dc-text-muted);
 }
 
+/* An edge label, the way the canvas draws one: no box, just a halo of canvas behind the words. */
 .dc-wire-caption {
   position: absolute;
   padding: 2px 7px;
@@ -1509,11 +1509,15 @@ kbd {
 
 .dc-home-head,
 .dc-home-start,
-.dc-home .dc-shelf-label,
-.dc-home .dc-shelf-branch .dc-shelf-count,
 .dc-home .dc-starter,
 .dc-home .dc-shelf-readout {
   animation: dc-home-rise 260ms var(--dc-ease-out) both;
+}
+
+/* Backwards only: a forwards fill would hold opacity at 1 and a closed branch would never go quiet. */
+.dc-home .dc-shelf-label,
+.dc-home .dc-shelf-branch .dc-shelf-count {
+  animation: dc-home-rise 260ms var(--dc-ease-out) backwards;
 }
 
 .dc-home-start {
@@ -2131,10 +2135,6 @@ kbd {
   width: 18px;
   height: 18px;
   stroke-width: 3;
-}
-
-.dc-badge-anchor {
-  display: inline-flex;
 }
 
 /* ---- width tiers -------------------------------------------------------
@@ -2802,9 +2802,6 @@ kbd {
 
 .dc-flow-step-chip .dc-button {
   flex: none;
-}
-
-.dc-flow-step-chip .dc-button {
   width: 18px;
   height: 18px;
   padding: 0 2px;

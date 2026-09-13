@@ -93,6 +93,10 @@ export interface ContinuationCycle {
 /** How many accepted continuations the session remembers for ranking. */
 const RECENT_LIMIT = 12;
 
+/** How long accepted nodes keep their one-shot settle marker — just past the 180 ms animation. */
+const SETTLE_MS = 240;
+let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
 const CONTINUATION_PREFERENCE = 'continuation';
 const NO_MOVING_NODES: ReadonlySet<string> = new Set();
 
@@ -329,9 +333,8 @@ export interface UiStore {
   /** On document switch: nothing about the previous diagram's offers applies to the next. */
   resetContinuation: () => void;
   setContinuationsEnabled: (enabled: boolean) => void;
+  /** Marks freshly accepted nodes for their settle animation; the marker expires on its own. */
   setSettleNodeIds: (ids: readonly string[]) => void;
-  /** Called by a node's view once its settle animation has played. */
-  clearSettleNode: (id: string) => void;
   setLibrarySearchQuery: (query: string) => void;
   setLibrarySort: (sort: UiStore['librarySort']) => void;
   setLibraryView: (view: UiStore['libraryView']) => void;
@@ -521,14 +524,16 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (sameCycle(state.continuationCycle, continuationCycle) ? state : { continuationCycle })),
   recordContinuationAccepted: (ruleId) =>
     set((state) => ({ continuationRecent: [...state.continuationRecent, ruleId].slice(-RECENT_LIMIT) })),
-  resetContinuation: () =>
+  resetContinuation: () => {
+    clearTimeout(settleTimer);
     set({
       continuation: null,
       continuationDismissals: new Set<DismissalKey>(),
       continuationCycle: null,
       continuationRecent: [],
       settleNodeIds: [],
-    }),
+    });
+  },
   setContinuationsEnabled: (continuationsEnabled) => {
     writePreference(CONTINUATION_PREFERENCE, continuationsEnabled ? 'on' : 'off');
     set((state) => ({
@@ -537,10 +542,16 @@ export const useUiStore = create<UiStore>((set, get) => ({
       continuationCycle: continuationsEnabled ? state.continuationCycle : null,
     }));
   },
-  setSettleNodeIds: (settleNodeIds) =>
-    set((state) => (settleNodeIds.length === 0 && state.settleNodeIds.length === 0 ? state : { settleNodeIds })),
-  clearSettleNode: (id) =>
-    set((state) => (state.settleNodeIds.includes(id) ? { settleNodeIds: state.settleNodeIds.filter((n) => n !== id) } : state)),
+  setSettleNodeIds: (settleNodeIds) => {
+    clearTimeout(settleTimer);
+    set((state) => (settleNodeIds.length === 0 && state.settleNodeIds.length === 0 ? state : { settleNodeIds }));
+    if (settleNodeIds.length === 0) return;
+    // One expiry for the whole fragment, owned here rather than by each node's view: a node undone
+    // mid-animation unmounts without a chance to clear itself, and would replay on redo.
+    settleTimer = setTimeout(() => {
+      if (get().settleNodeIds === settleNodeIds) set({ settleNodeIds: [] });
+    }, SETTLE_MS);
+  },
   setLibrarySearchQuery: (librarySearchQuery) => set({ librarySearchQuery }),
   setLibrarySort: (librarySort) => set({ librarySort }),
   setLibraryView: (libraryView) => set({ libraryView }),
@@ -600,6 +611,10 @@ function sameOffer(a: ContinuationOffer | null, b: ContinuationOffer | null): bo
  * for a given rule, so pairing by index is safe. Falls back to `next` unmerged if the shapes ever
  * disagree — should not happen for equal `neighborhoodKey`s, but a rule's fragment must never be
  * able to crash the store.
+ *
+ * When nothing changed at all (the common case: an edit somewhere else), `previous` itself comes
+ * back, so the ghost doesn't redraw for an edit that isn't about it. Offers are a handful of small
+ * plain objects, so comparing their serialized form is cheap and exhaustive.
  */
 function reidentify(previous: ContinuationOffer, next: ContinuationOffer): ContinuationOffer {
   if (previous.nodes.length !== next.nodes.length || previous.edges.length !== next.edges.length) return next;
@@ -612,7 +627,8 @@ function reidentify(previous: ContinuationOffer, next: ContinuationOffer): Conti
     target: idMap.get(edge.target) ?? edge.target,
   }));
   const continueFromId = idMap.get(next.continueFromId) ?? next.continueFromId;
-  return { ...next, nodes, edges, continueFromId };
+  const merged = { ...next, nodes, edges, continueFromId };
+  return JSON.stringify(merged) === JSON.stringify(previous) ? previous : merged;
 }
 
 /**

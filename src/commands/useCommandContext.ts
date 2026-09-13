@@ -6,6 +6,7 @@ import type { FlowPlaybackController } from '../presentation/useFlowPlayback';
 import { flowFitViewNodes, useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import type { CommandContext } from './types';
+import { motionMs } from '../lib/motion';
 
 export interface UseCommandContextParams {
   createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode;
@@ -33,11 +34,12 @@ export function useCommandContext({ createAt, createAtPointer, playback }: UseCo
         editor,
         ui: useUiStore.getState(),
         camera: {
-          fitView: (options) => fitView({ ...options, nodes: options?.nodes ?? flowFitViewNodes(editor) }),
-          zoomIn,
-          zoomOut,
+          // Every command's camera move honours reduced motion here, once, rather than per command.
+          fitView: (options) => fitView({ ...calm(options), nodes: options?.nodes ?? flowFitViewNodes(editor) }),
+          zoomIn: (options) => zoomIn(calm(options)),
+          zoomOut: (options) => zoomOut(calm(options)),
           screenToFlowPosition,
-          setViewport,
+          setViewport: (viewport, options) => setViewport(viewport, calm(options)),
           viewWidth,
           viewHeight,
         },
@@ -59,4 +61,9 @@ export function useCommandContext({ createAt, createAtPointer, playback }: UseCo
       zoomOut,
     ],
   );
+}
+
+/** A camera move's options with its duration dropped to an instant jump under reduced motion. */
+function calm<T extends { duration?: number }>(options: T | undefined): T | undefined {
+  return options?.duration === undefined ? options : { ...options, duration: motionMs(options.duration) };
 }

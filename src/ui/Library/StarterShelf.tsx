@@ -25,8 +25,9 @@ type Landing = 'first' | { row: 'first' | 'last'; col: number };
  *
  * Keyboard, `index`: the open branch is the one tab stop of the index; ↑/↓ open the next or
  * previous branch, → or ↵ step into its tiles. Every tile is an ordinary Tab stop; arrows are a
- * shortcut on top. ←/→ walk the shelf, ↑/↓ keep the column — and past the shelf's edge they open
- * the next branch and keep going, so the whole catalog is one walk. ← or ↑ past the first tile
+ * shortcut on top. ←/→ walk the open branch's tiles and stop at its ends; ↑/↓ keep the column, and
+ * past the shelf's top or bottom row they open the previous or next branch and keep going, so the
+ * whole catalog is one walk. ← on a branch's first tile, or ↑ on the very first row of the index,
  * hands focus back via `onExitStart`, if the page has somewhere to hand it.
  */
 export function StarterShelf({
@@ -67,7 +68,11 @@ export function StarterShelf({
     const next = categories[Math.max(0, Math.min(index, categories.length - 1))];
     if (!next) return;
     if (next.id !== categories[openIndex]?.id) {
-      flushSync(() => setOpenId(next.id));
+      // The readout described a tile that is about to be hidden.
+      flushSync(() => {
+        setOpenId(next.id);
+        setActive(null);
+      });
       onActiveChange?.(categories.indexOf(next));
     }
     if (!landing) return;

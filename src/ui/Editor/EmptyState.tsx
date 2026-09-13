@@ -7,6 +7,7 @@ import { Wire } from '../common/Wire';
 import { useWireGeometry } from '../common/wireGeometry';
 import { StarterTile } from '../Library/StarterTile';
 import { StarterBrowser } from './StarterBrowser';
+import { prefersReducedMotion } from '../../lib/motion';
 
 interface EmptyStateProps {
   /** Runs the palette's own starter command — see `EditorScreen`. */
@@ -15,15 +16,6 @@ interface EmptyStateProps {
 
 /** How long the layer lingers after the canvas stops being empty, matching `canvas.css`. */
 const EXIT_MS = 170;
-
-/** Guarded the way `ThemeProvider` guards it — `matchMedia` is missing outside a real browser. */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
 
 /** Pairs, so the starters stay a composition rather than a strip of icons. */
 const ROWS = FEATURED_STARTERS.reduce<ArchitectureStarter[][]>((rows, starter, i) => {

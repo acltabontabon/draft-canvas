@@ -9,7 +9,14 @@ let loaded: StartersModule | null = null;
 let pending: Promise<StartersModule> | null = null;
 
 export function loadStarters(): Promise<StartersModule> {
-  pending ??= import('./index').then((module) => (loaded = module));
+  pending ??= import('./index').then(
+    (module) => (loaded = module),
+    (error: unknown) => {
+      // A failed chunk fetch must not be remembered: the next caller tries again.
+      pending = null;
+      throw error;
+    },
+  );
   return pending;
 }
 

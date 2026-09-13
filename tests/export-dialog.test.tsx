@@ -133,6 +133,26 @@ describe('ExportDialog — Animated panel', () => {
     expect(screen.getByText('Loop continuously')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export GIF' })).toBeEnabled();
   });
+
+  it('never offers a flow with nothing left to play — even the selected one', async () => {
+    const user = userEvent.setup();
+    const doc = withFlow();
+    const broken = createFlow({ title: 'Broken' });
+    broken.steps = [{ id: 'gone', edgeId: 'deleted-edge' }];
+    useEditorStore.setState({
+      document: { ...doc, flows: [broken, ...doc.flows] },
+      selection: { nodes: [], edges: [] },
+      selectedFlowId: broken.id,
+    });
+    renderDialog();
+    await switchMode(user, /Animated/);
+    expect(screen.queryByLabelText('Flow')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export GIF' })).toBeEnabled();
+
+    useEditorStore.setState({ document: { ...doc, flows: [broken] }, selectedFlowId: broken.id });
+    expect(await screen.findByText('Add a step to a Flow to enable this export.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export GIF' })).toBeDisabled();
+  });
 });
 
 describe('ExportDialog — Source (Sequence) panel', () => {

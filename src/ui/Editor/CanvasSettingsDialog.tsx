@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { BACKGROUND_FITS, type BackgroundFit } from '../../document/types';
 import { createId } from '../../document/ids';
+import { prepareBackgroundImage } from '../../lib/backgroundImage';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { getRepository } from '../../storage';
@@ -60,14 +61,13 @@ function CanvasSettingsBody() {
   const onFileChosen = async (file: File) => {
     setBusy(true);
     try {
-      const bitmap = await createImageBitmap(file);
-      const dims = { width: bitmap.width, height: bitmap.height };
-      bitmap.close();
+      // Oversized photos are stored downscaled — see `MAX_BACKGROUND_SIDE`.
+      const { blob, width, height } = await prepareBackgroundImage(file);
       const repository = await getRepository();
       // A fresh id per image, never an overwrite: choosing or replacing one is then a plain settings
       // change, and ⌘Z steps back to the previous image, whose bytes are still stored.
       const imageId = createId('bg');
-      await repository.saveBackgroundImage(documentId, file, dims, imageId);
+      await repository.saveBackgroundImage(documentId, blob, { width, height }, imageId);
       updateSettings({ background: { ...background, enabled: true, imageId } });
     } catch {
       notify("Couldn't use that image — try a different file.", 'error');

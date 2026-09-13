@@ -14,7 +14,9 @@ import {
   type GifSpeed,
   type SequenceFormat,
 } from '../../export';
-import { flowIsPlayable } from '../../document/flow';
+import { findFlow, flowIsPlayable } from '../../document/flow';
+import type { DraftDocument } from '../../document/types';
+import { resolveFlowStep } from '../../presentation/useFlowPlayback';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { documentWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -135,13 +137,14 @@ export function ExportDialog() {
   };
 
   // Re-derived every render rather than a `useState` default: a flow created
-  // after this dialog first mounted must still show up without a remount.
+  // after this dialog first mounted must still show up without a remount. Only a
+  // flow with something to play is offered — an empty one would just fail to export.
+  const playableFlows = document.flows.filter((flow) => flowIsPlayable(document, flow));
+  const isPlayable = (id: string | null | undefined) => Boolean(id) && playableFlows.some((flow) => flow.id === id);
   const gifFlowId =
-    (gifFlowIdChoice && document.flows.some((flow) => flow.id === gifFlowIdChoice)
-      ? gifFlowIdChoice
-      : null) ??
-    selectedFlowId ??
-    document.flows[0]?.id ??
+    (isPlayable(gifFlowIdChoice) ? gifFlowIdChoice : null) ??
+    (isPlayable(selectedFlowId) ? selectedFlowId : null) ??
+    playableFlows[0]?.id ??
     '';
 
   const only =
@@ -156,11 +159,11 @@ export function ExportDialog() {
     preset,
   };
 
-  const playableFlowCount = document.flows.filter((flow) => flowIsPlayable(document, flow)).length;
+  const playableFlowCount = playableFlows.length;
 
   const title = document.metadata.title;
   const onlyKey = only ? selection.nodes.join(',') : '';
-  const gifSteps = document.flows.find((flow) => flow.id === gifFlowId)?.steps.length ?? 0;
+  const gifSteps = playableStepCount(document, gifFlowId);
 
   const artifact: { fileName: string; visual: ArtifactVisual; empty?: boolean } =
     effectiveMode === 'document'
@@ -352,7 +355,8 @@ export function ExportDialog() {
 
           {effectiveMode === 'animated' && (
             <ExportAnimatedPanel
-              flows={document.flows.map((flow) => ({ id: flow.id, title: flow.title }))}
+              flows={playableFlows.map((flow) => ({ id: flow.id, title: flow.title }))}
+              hasUnplayableFlows={document.flows.length > 0}
               flowId={gifFlowId}
               onFlowChange={setGifFlowIdChoice}
               speed={gifSpeed}
@@ -387,4 +391,13 @@ export function ExportDialog() {
       )}
     </Modal>
   );
+}
+
+/** The steps a GIF of this flow would actually show — one whose connectors were all deleted is skipped. */
+function playableStepCount(document: DraftDocument, flowId: string): number {
+  const flow = findFlow(document, flowId);
+  if (!flow) return 0;
+  const edgesById = new Map(document.edges.map((edge) => [edge.id, edge]));
+  const nodesById = new Map(document.nodes.map((node) => [node.id, node]));
+  return flow.steps.filter((step, index) => resolveFlowStep(step, index, index + 1, edgesById, nodesById) !== null).length;
 }

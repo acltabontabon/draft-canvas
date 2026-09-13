@@ -17,8 +17,8 @@
  */
 
 export { neighborhoodOf } from './context';
-export { continuationsFor, type ContinuationOptions } from './engine';
-export { ANY_CANDIDATE, dismissalKey } from './dismissal';
+export { continuationSets, continuationsFor } from './engine';
+export { dismissalKey } from './dismissal';
 export { gapForCaption, horizontalAnchorsFor, materialize } from './materialize';
 export { RULES } from './rules';
 export type {

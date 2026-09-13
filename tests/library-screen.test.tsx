@@ -96,7 +96,7 @@ describe('LibraryScreen — first run', () => {
     expect(tabs.map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
     expect(within(group).getByRole('tab', { name: 'Architectures' })).toBe(tabs[0]);
     // Only the open branch's tiles are on the page; the others are drawn, but inert and hidden.
-    expect(within(group).queryByText(/Medallion · Kappa/)).not.toBeInTheDocument();
+    expect(group.querySelector('[aria-label="Start from Kappa"]')?.closest('[inert]')).not.toBeNull();
     const visible = () => within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'));
     expect(visible()).toEqual([
       'Start from Monolith',
@@ -192,7 +192,7 @@ describe('LibraryScreen — first run', () => {
     const data = screen.getByRole('tab', { name: 'Data Architectures' });
     expect(data).toHaveFocus();
     expect(data).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('button', { name: 'Start from Kappa' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start from Kappa' }).closest('[inert]')).toBeNull();
     await userEvent.keyboard('{End}');
     expect(screen.getByRole('tab', { name: 'Patterns' })).toHaveFocus();
     await userEvent.keyboard('{ArrowRight}');

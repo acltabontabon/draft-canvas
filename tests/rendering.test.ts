@@ -79,6 +79,13 @@ describe('text layout', () => {
     expect(layout.lines[1]!.text.endsWith('…')).toBe(true);
   });
 
+  it('never truncates in the middle of an emoji', () => {
+    // Every UTF-16 unit is 10 wide, so dropping half an emoji would be enough to fit.
+    const units = { width: (text: string) => text.length * 10, metrics: () => measurer.metrics(FONTS.nodeLabel), charWidth: () => 10 };
+    const layout = layoutText('ab🚀 cd', { font: FONTS.nodeLabel, maxWidth: 45, lineHeight: 19, maxLines: 1, measurer: units });
+    expect(layout.lines.map((line) => line.text)).toEqual(['ab…']);
+  });
+
   it('places baselines inside their line boxes and evenly apart', () => {
     const layout = layoutText('one\ntwo\nthree', {
       font: FONTS.nodeLabel,

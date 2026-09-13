@@ -88,8 +88,8 @@ unrestricted connector.
 | Service → Topic | publishes, event, dependsOn | publishes | |
 | Topic → Service | deliversTo, consumes, dependsOn | deliversTo | a topic fans out to every subscriber |
 | Topic → Queue | fansOut, deliversTo, dependsOn | fansOut | |
-| Topic → Search Index | indexes, dependsOn | indexes | a stream feeding a search index directly, the same word `Service → Search Index` uses |
-| Topic → Database | ingests, dependsOn | ingests | a warehouse sinking a stream directly; the reverse pairing stays unlisted |
+| Topic → Search Index | indexes, dependsOn | indexes | a topic sinking into a search index with no consumer drawn, the same word `Service → Search Index` uses; a Stream is a `queue` and takes the Worker path |
+| Topic → Database | ingests, dependsOn | ingests | a warehouse sinking a topic directly; the reverse pairing stays unlisted |
 | Queue → Topic | dependsOn, event | *(none)* | **`status: 'unusual'`** — see below |
 | Queue → Dead-letter queue | deadLetters, dependsOn | deadLetters | `failure` behaviour and a dashed (`async`) line — the same edge "Add DLQ" generates; `deliveryAttempts` captions it "after N attempts" |
 | Topic → Dead-letter queue | dependsOn | *(none)* | **`status: 'unusual'`** — a topic never dead-letters; retries and a DLQ belong to each consumer's own queue |

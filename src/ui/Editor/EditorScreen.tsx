@@ -40,6 +40,7 @@ import { Toolbar } from './Toolbar';
 import { Button } from '../common/Button';
 import { ClipboardPermissionDialog } from '../common/ClipboardPermissionDialog';
 import { ErrorBoundary } from '../common/ErrorBoundary';
+import { motionMs } from '../../lib/motion';
 
 // Export (its panels, previews, and exporters) is a sizeable slice of the editor that most sessions
 // never open — fetched the first time it is, then kept mounted so its in-session choices survive.
@@ -159,10 +160,14 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   /**
    * The picker's rows for the current Quick Connect state — the engine's suggestions for the
    * source node first, then the standing presets. Recomputed only when the menu opens or the
-   * document changes underneath it (same reasoning as `contextMenuEntries` below).
+   * document changes underneath it (same reasoning as `contextMenuEntries` below). The ranking
+   * hint is read as the menu opens: it only changes on an accept, which closes the menu.
    */
   const quickConnectRows = useMemo(
-    () => (quickConnect && editorDocument ? quickConnectItems(editorDocument, quickConnect) : []),
+    () =>
+      quickConnect && editorDocument
+        ? quickConnectItems(editorDocument, quickConnect, useUiStore.getState().continuationRecent)
+        : [],
     [quickConnect, editorDocument],
   );
 
@@ -293,7 +298,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     const nodes = flowFitViewNodes(useEditorStore.getState());
     setMode('present');
     if (playback.canStart) playback.start();
-    void fitView({ padding: 0.18, duration: 320, nodes });
+    void fitView({ padding: 0.18, duration: motionMs(320), nodes });
   }, [playback, fitView, setMode]);
 
   const presenting = mode === 'present';
@@ -493,7 +498,7 @@ function useKeyboard({
         screen.x < window.innerWidth - margin &&
         screen.y > margin &&
         screen.y < window.innerHeight - margin;
-      if (!onScreen) void setCenter(center.x, center.y, { zoom: getZoom(), duration: 200 });
+      if (!onScreen) void setCenter(center.x, center.y, { zoom: getZoom(), duration: motionMs(200) });
     },
     [flowToScreenPosition, getZoom, setCenter],
   );
@@ -731,7 +736,7 @@ function useKeyboard({
       // fire. Pulled out of the switch below since `switch (event.key)` can't express this.
       if (event.shiftKey && event.code === 'Digit1') {
         event.preventDefault();
-        void fitView({ padding: 0.2, duration: 320, nodes: flowFitViewNodes(state) });
+        void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
         return;
       }
       if (event.shiftKey && event.code === 'Slash') {

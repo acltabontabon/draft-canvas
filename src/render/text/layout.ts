@@ -190,7 +190,8 @@ function ellipsize(
   if (measurer.width(line + ELLIPSIS, font) <= maxWidth) return line + ELLIPSIS;
   let cut = line;
   while (cut.length > 0 && measurer.width(cut + ELLIPSIS, font) > maxWidth) {
-    cut = cut.slice(0, -1);
+    // A whole code point at a time: half an emoji renders as a replacement box.
+    cut = cut.slice(0, /[\uDC00-\uDFFF]$/.test(cut) && cut.length > 1 ? -2 : -1);
   }
   return cut + ELLIPSIS;
 }

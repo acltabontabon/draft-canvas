@@ -153,5 +153,8 @@ describe('.draftcanvas round trip', () => {
     expect(fileNameFor('Payment Flow / v2')).toBe('payment-flow-v2.draftcanvas');
     expect(fileNameFor('   ')).toBe('draft-canvas.draftcanvas');
     expect(fileNameFor('Diagram', '.svg')).toBe('diagram.svg');
+    expect(fileNameFor('Café résumé')).toBe('café-résumé.draftcanvas');
+    expect(fileNameFor('決済フロー', '.png')).toBe('決済フロー.png');
+    expect(fileNameFor('a\\b:c*d?"e<f>g|h')).toBe('a-b-c-d-e-f-g-h.draftcanvas');
   });
 });

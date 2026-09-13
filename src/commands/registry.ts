@@ -1000,7 +1000,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       id: 'edge-semantic',
       title: 'Change relationship…',
       group: 'connector',
-      keywords: ['semantic', 'http', 'event', 'reads', 'writes', 'publishes', 'consumes', 'calls', 'implements', 'implemented by', 'compensates', 'compensation', 'saga', 'projects', 'projection', 'read model', 'meaning', 'type'],
+      keywords: ['semantic', 'http', 'event', 'reads', 'writes', 'publishes', 'consumes', 'calls', 'implements', 'implemented by', 'compensates', 'compensation', 'saga', 'projects', 'projection', 'read model', 'transforms', 'refine', 'etl', 'meaning', 'type'],
       hint: semanticTitle,
       run: () => ({
         prompt: 'Relationship',
@@ -1287,10 +1287,17 @@ function selectionCommands(ctx: CommandContext): Command[] {
   return [];
 }
 
+const STARTER_CATEGORY_GROUP: Record<StarterCategory, CommandGroup> = {
+  architecture: 'starter',
+  data: 'data',
+  pattern: 'pattern',
+};
+
 /**
- * Starters — one row per composed opening diagram (`src/starters/`), under two headers:
- * *Architectures* (how the major parts of a system are organized) and *Patterns* (how one
- * recurring design problem is solved — a saga, an outbox). The split is the catalog's own
+ * Starters — one row per composed opening diagram (`src/starters/`), under three headers:
+ * *Architectures* (how the major parts of a system are organized), *Data Architectures* (how data
+ * moves and is refined — Medallion, Kappa, CDC) and *Patterns* (how one recurring design problem is
+ * solved — a saga, an outbox). The split is the catalog's own
  * `category`, kept purely for discoverability; a starter is one architectural idea at one scope,
  * and a real system composes several of them, so nothing here reads as a choice between them.
  *
@@ -1305,12 +1312,6 @@ function selectionCommands(ctx: CommandContext): Command[] {
  * every data architecture, then every pattern, which is what keeps the three headers contiguous
  * without sorting here.
  */
-const STARTER_CATEGORY_GROUP: Record<StarterCategory, CommandGroup> = {
-  architecture: 'starter',
-  data: 'data',
-  pattern: 'pattern',
-};
-
 export function starterCommands(): Command[] {
   return ARCHITECTURE_STARTERS.map((starter) => ({
     id: `starter-${starter.id}`,

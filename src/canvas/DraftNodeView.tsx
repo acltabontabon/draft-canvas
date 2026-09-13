@@ -357,14 +357,17 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
-            void navigator.clipboard.writeText(node.code ?? '').then(() => {
-              if (copiedTimeout.current !== null) window.clearTimeout(copiedTimeout.current);
-              setCopied(true);
-              copiedTimeout.current = window.setTimeout(() => {
-                copiedTimeout.current = null;
-                setCopied(false);
-              }, 1200);
-            });
+            navigator.clipboard.writeText(node.code ?? '').then(
+              () => {
+                if (copiedTimeout.current !== null) window.clearTimeout(copiedTimeout.current);
+                setCopied(true);
+                copiedTimeout.current = window.setTimeout(() => {
+                  copiedTimeout.current = null;
+                  setCopied(false);
+                }, 1200);
+              },
+              () => useUiStore.getState().notify("Couldn't copy — the browser blocked clipboard access.", 'error'),
+            );
           }}
         >
           {copied ? 'Copied' : 'Copy'}
@@ -418,6 +421,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           ref={editorRef}
           className={`dc-node-editor nodrag nowheel${isCode ? ' dc-node-editor-code' : ''}${isNote ? ' dc-node-editor-note' : ''}`}
           defaultValue={isCode ? (node.code ?? '') : (node.text ?? '')}
+          aria-label={isCode ? 'Code' : isNote ? 'Note' : isText ? 'Text' : 'Label'}
           placeholder={isNote ? 'Add a note…' : isText ? 'Type something…' : undefined}
           spellCheck={false}
           style={editorStyle(node, effectiveHeight >= NOTE_AUTO_MAX_HEIGHT)}

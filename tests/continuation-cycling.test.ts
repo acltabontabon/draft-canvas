@@ -38,6 +38,7 @@ const service = (id: string): Spec => ({ id, type: 'service' });
 const topic = (id: string): Spec => ({ id, type: 'queue', queueKind: 'topic' });
 const queue = (id: string): Spec => ({ id, type: 'queue', queueKind: 'queue' });
 const worker = (id: string): Spec => ({ id, type: 'service', serviceKind: 'worker' });
+const at = (spec: Spec, x: number): Spec => ({ ...spec, x });
 
 function open(doc: DraftDocument, selected: string) {
   __resetInteraction();
@@ -147,6 +148,30 @@ describe('cycling alternatives', () => {
     });
     expect(stepContinuation(useEditorStore.getState(), 1)).toBe(false);
     expect(showing()).toBeNull();
+  });
+
+  it('only candidates with somewhere to go are alternatives; ] skips the rest, and does nothing if none fit', () => {
+    // A note under everything: no new node fits anywhere, but connecting to the Queue already there does.
+    const crowd = createNode({ id: 'crowd', type: 'note', x: -2000, y: -2000, width: 5000, height: 5000 });
+    const doc = graph([service('pub'), topic('t'), at(queue('q'), 800)], [['pub', 't']]);
+    open({ ...doc, nodes: [crowd, ...doc.nodes] }, 't');
+    expect(showing()!.id).toBe('connect-existing:q');
+    expect(showing()!.alternatives).toEqual(['connect-existing:q']);
+
+    open({ ...doc, nodes: [crowd, ...doc.nodes.filter((n) => n.id !== 'q')] }, 't');
+    expect(showing()).toBeNull();
+    expect(stepContinuation(useEditorStore.getState(), 1)).toBe(false);
+  });
+
+  it('a drag hides the offer but keeps the chosen alternative, and ] waits it out', () => {
+    open(graph([service('pub'), topic('t')], [['pub', 't']]), 't');
+    press(1);
+    const chosen = showing()!.id;
+    act(() => useUiStore.getState().setInteractionActive(true));
+    expect(showing()).toBeNull();
+    expect(stepContinuation(useEditorStore.getState(), 1)).toBe(false);
+    act(() => useUiStore.getState().setInteractionActive(false));
+    expect(showing()!.id).toBe(chosen);
   });
 
   it('Escape ends the whole continuation — the choice too — and ] can still ask again', () => {

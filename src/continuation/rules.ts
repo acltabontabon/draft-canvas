@@ -209,7 +209,7 @@ const OBJECT_STORAGE_FAN_OUT = defineFanOut(
 /**
  * A Port already depended on but not implemented by anything — `MATRIX['port>component']`/
  * `['port>service']` (both `implementedBy`). Same "has inbound, nothing routed yet" evidence
- * `gateway-route` below already uses.
+ * `gateway-route` above already uses.
  */
 const PORT_IMPLEMENTATION = defineFanOut(
   ['port'],

@@ -27,7 +27,8 @@ function Shell() {
   const session = useDocumentSession();
 
   useEffect(() => {
-    const warm = () => void loadEditor();
+    // Only a head start: a failed fetch here is retried by `lazy()` when the editor is opened.
+    const warm = () => void loadEditor().catch(() => {});
     if (typeof requestIdleCallback === 'function') {
       const id = requestIdleCallback(warm, { timeout: 2000 });
       return () => cancelIdleCallback(id);

@@ -41,7 +41,9 @@ export function fileNameFor(title: string, extension = FILE_EXTENSION): string {
     title
       .trim()
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
+      // Any script's letters and digits survive ("café", "設計"); everything else — path separators
+      // and reserved characters included — becomes a dash.
+      .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 60) || 'draft-canvas';
   return `${base}${extension}`;

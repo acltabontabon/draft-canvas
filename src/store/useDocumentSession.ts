@@ -205,8 +205,17 @@ export function useDocumentSession(): DocumentSession {
         await refreshLibrary();
         return;
       }
-      const { useEditorStore } = await loadEditorStore();
-      useEditorStore.getState().setDocument(loaded);
+      let editorStore: EditorStoreModule;
+      try {
+        editorStore = await loadEditorStore();
+      } catch (error) {
+        // The editor's chunk didn't arrive (offline, or a deploy replaced it): say so rather than
+        // leaving the click to do nothing.
+        logDiagnostic(error, { operation: 'load-editor', documentId: id });
+        notify('The editor could not be loaded. Check your connection and try again.', 'error');
+        return;
+      }
+      editorStore.useEditorStore.getState().setDocument(loaded);
       setOpenId(loaded.metadata.id);
     },
     [notify, refreshLibrary, repository],
@@ -290,7 +299,8 @@ export function useDocumentSession(): DocumentSession {
       });
     }
     setOpenId(null);
-    await refreshLibrary();
+    // Home is already showing; a list that can't be re-read just stays as it was.
+    await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
   }, [notify, openId, refreshLibrary, repository]);
 
   const renameDocument = useCallback(

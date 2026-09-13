@@ -61,7 +61,7 @@ const recentlyAccepted: RankingSignal = (candidate, { recent }) =>
  */
 const alreadyDrawn: RankingSignal = (candidate) => ((candidate.fragment.existing?.length ?? 0) > 0 ? 1 : 0);
 
-export const SIGNALS: readonly RankingSignal[] = [siblingBranch, repeatsExisting, recentlyAccepted, alreadyDrawn];
+const SIGNALS: readonly RankingSignal[] = [siblingBranch, repeatsExisting, recentlyAccepted, alreadyDrawn];
 
 /**
  * Best first. Confidence always dominates — a medium candidate never outranks a high one, whatever

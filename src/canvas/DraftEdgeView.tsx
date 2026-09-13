@@ -714,6 +714,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             {editing ? (
               <input
                 autoFocus
+                aria-label="Connector label"
                 className="dc-edge-label-input"
                 defaultValue={edge.label ?? ''}
                 spellCheck={false}

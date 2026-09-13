@@ -19,8 +19,27 @@ export interface RasterizeOptions {
   background?: string;
 }
 
+/** Beyond these, browsers refuse to allocate a canvas — or quietly hand back a blank one. */
+const MAX_CANVAS_SIDE = 16_384;
+const MAX_CANVAS_AREA = 100_000_000;
+/** Below this the text stops being readable, so the export fails with advice instead. */
+const MIN_FITTED_SCALE = 0.5;
+
+/**
+ * The requested scale, reduced just enough for the canvas to fit the browser's limits. Still a pure
+ * function of the diagram's size, so an export stays reproducible.
+ */
+export function fittedScale(width: number, height: number, scale: number): number {
+  const w = Math.max(1, width);
+  const h = Math.max(1, height);
+  return Math.min(scale, MAX_CANVAS_SIDE / w, MAX_CANVAS_SIDE / h, Math.sqrt(MAX_CANVAS_AREA / (w * h)));
+}
+
 async function drawSvgToCanvas(svg: string, options: RasterizeOptions): Promise<HTMLCanvasElement> {
-  const scale = options.scale ?? 1;
+  const scale = fittedScale(options.width, options.height, options.scale ?? 1);
+  if (scale < Math.min(MIN_FITTED_SCALE, options.scale ?? 1)) {
+    throw new RasterizeError('The diagram is too spread out for an image this size. Try SVG, or export a selection.');
+  }
   const width = Math.max(1, Math.round(options.width * scale));
   const height = Math.max(1, Math.round(options.height * scale));
 

@@ -140,7 +140,7 @@ export interface Continuation {
   confidence: ContinuationConfidence;
   /** Ranking weight from contextual signals; only meaningful relative to its siblings. */
   score: number;
-  /** Short name on the ghost's pill: "Queue", "Queue → Worker", "Order Events". */
+  /** Short name on the ghost's pill: "Queue", "Queue → Worker", "Connect to Order Events". */
   label: string;
   /** What accepting does, as a command: "Add Queue", "Connect to Order Events". */
   actionLabel: string;

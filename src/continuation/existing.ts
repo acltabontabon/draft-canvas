@@ -5,7 +5,7 @@ import { ANCHOR_TYPES } from './context';
 import type { Continuation, Neighborhood } from './types';
 
 /** How close, edge to edge in flow units, a node must be to count as "right here". */
-export const NEARBY_GAP = 360;
+const NEARBY_GAP = 360;
 
 /** Never more than this many connect-to-existing candidates for one anchor — nearest first. */
 const MAX_CANDIDATES = 3;
@@ -103,7 +103,8 @@ export function existingTargetCandidates(doc: DraftDocument, nb: Neighborhood): 
       tier: high ? 'primary' : 'secondary',
       confidence: high ? 'high' : 'medium',
       score: 0,
-      label: 'Connect',
+      // The pill must not read like a new node called that: it says what happens.
+      label: `Connect to ${name}`,
       actionLabel: `Connect to ${name}`,
       reason: inbound === 0 ? `${name} is right here and not connected to anything yet.` : `${name} is right here.`,
       fragment: { nodes: [], edges: [{ from: 'anchor', to: 'target' }], existing: [{ key: 'target', nodeId: node.id }] },
@@ -139,8 +140,11 @@ function rectGap(a: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>, b: Pick<Dra
 function wordsOf(text: string | undefined): Set<string> {
   const words = new Set<string>();
   for (const raw of (text ?? '').toLowerCase().split(/[^a-z0-9]+/)) {
-    if (raw.length < 3 || KIND_WORDS.has(raw)) continue;
-    words.add(raw.endsWith('ies') ? `${raw.slice(0, -3)}y` : raw.endsWith('s') && !raw.endsWith('ss') ? raw.slice(0, -1) : raw);
+    if (raw.length < 3) continue;
+    // Singular first, so "Streams" is filtered as the kind word it is, not kept as a shared name.
+    const word = raw.endsWith('ies') ? `${raw.slice(0, -3)}y` : raw.endsWith('s') && !raw.endsWith('ss') ? raw.slice(0, -1) : raw;
+    if (KIND_WORDS.has(word)) continue;
+    words.add(word);
   }
   return words;
 }

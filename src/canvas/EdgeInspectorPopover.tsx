@@ -574,12 +574,15 @@ function SplitTextEditor({
   firstPlaceholder,
   restPlaceholder,
   ariaLabel,
+  firstName,
 }: {
   value: string;
   onCommit: (next: string) => void;
   firstPlaceholder: string;
   restPlaceholder: string;
   ariaLabel: string;
+  /** What the first field holds, for its accessible name: "method", "status". */
+  firstName: string;
 }) {
   const firstRef = useRef<HTMLInputElement>(null);
   const restRef = useRef<HTMLInputElement>(null);
@@ -599,9 +602,10 @@ function SplitTextEditor({
   };
 
   return (
-    <div className="dc-inspector-split" aria-label={ariaLabel}>
+    <div className="dc-inspector-split" role="group" aria-label={ariaLabel}>
       <input
         ref={firstRef}
+        aria-label={`${ariaLabel} ${firstName}`}
         className="dc-inspector-control dc-inspector-split-first"
         defaultValue={initialFirst}
         placeholder={firstPlaceholder}
@@ -611,6 +615,7 @@ function SplitTextEditor({
       />
       <input
         ref={restRef}
+        aria-label={`${ariaLabel} resource`}
         className="dc-inspector-control dc-inspector-split-rest"
         defaultValue={initialRest}
         placeholder={restPlaceholder}
@@ -683,7 +688,7 @@ function HttpRequestEditor({ value, onCommit }: { value: string; onCommit: (next
   const commit = (nextMethod: string, rest: string) => onCommit([nextMethod, rest].filter(Boolean).join(' '));
 
   return (
-    <div className="dc-inspector-split" aria-label="Request">
+    <div className="dc-inspector-split" role="group" aria-label="Request">
       <InspectorSelect
         className="dc-inspector-select-split-first"
         value={method}
@@ -693,6 +698,7 @@ function HttpRequestEditor({ value, onCommit }: { value: string; onCommit: (next
       />
       <input
         ref={restRef}
+        aria-label="Request resource"
         className="dc-inspector-control dc-inspector-split-rest"
         defaultValue={initialRest}
         placeholder="Customers"
@@ -840,6 +846,7 @@ function ServiceInteractionSection({ edge }: { edge: DraftEdge }) {
                 <SplitTextEditor
                   key={edge.response ?? ''}
                   ariaLabel="Response"
+                  firstName="status"
                   value={edge.response ?? ''}
                   firstPlaceholder="200"
                   restPlaceholder="Customers"
@@ -1082,6 +1089,7 @@ function ExpandedPanel({
                 <SplitTextEditor
                   key={edge.label ?? ''}
                   ariaLabel="Request"
+                  firstName="method"
                   value={edge.label ?? ''}
                   firstPlaceholder="GET"
                   restPlaceholder="Customer"
@@ -1108,6 +1116,7 @@ function ExpandedPanel({
                     <SplitTextEditor
                       key={edge.response ?? ''}
                       ariaLabel="Response"
+                      firstName="status"
                       value={edge.response ?? ''}
                       firstPlaceholder="200"
                       restPlaceholder="Customer"

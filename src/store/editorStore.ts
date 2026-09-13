@@ -13,7 +13,7 @@ import {
   defaultTextFor,
   type CreateNodeInput,
 } from '../document/factory';
-import { gapForCaption, horizontalAnchorsFor, type MaterializedContinuation } from '../continuation';
+import { gapForCaption, horizontalAnchorsFor, RULES, type MaterializedContinuation } from '../continuation';
 import { getMeasurer } from '../render/text/measure';
 import { naturalNoteHeight, naturalTextHeight } from '../nodes/describe';
 import {
@@ -845,7 +845,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     ui.setContinuation(null);
     ui.setContinuationCycle(null);
     ui.setSettleNodeIds(offer.nodes.map((n) => n.id));
-    ui.recordContinuationAccepted(offer.ruleId);
+    // Only what ranking can match: a Quick Connect preset row is no rule, and would just crowd real
+    // ones out of the capped list.
+    if (offer.ruleId === 'connect-existing' || RULES.some((rule) => rule.id === offer.ruleId)) {
+      ui.recordContinuationAccepted(offer.ruleId);
+    }
   },
 
   insertStarter(starter) {

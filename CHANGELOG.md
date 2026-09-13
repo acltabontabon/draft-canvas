@@ -19,6 +19,10 @@ All notable changes to Draft Canvas are documented here.
   event stream for both live and historical processing), and Change Data Capture (propagating
   database changes downstream without polling), each with a built-in
   flow. Starters are now grouped into Architectures, Data Architectures, and Patterns.
+- A new "transforms" relationship for data refined from one store into another, like raw files
+  into a table.
+- New connector suggestions: Database → Service can be change data capture, a Topic can feed a
+  search index or database directly, and Object Storage → Database defaults to "transforms".
 
 ### Changed
 

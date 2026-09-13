@@ -60,26 +60,9 @@ export function continuationsFor(
     if (rule.surfaces === 'invoke' && trigger !== 'invoke') continue;
     if (dismissed.has(dismissalKey(anchorId, rule.id, nb.key))) continue;
     if (!rule.when(nb, trigger)) continue;
-    const fragment = rule.fragment(nb);
-    if (!fragmentIsValid(doc, nb, fragment)) continue;
-    const equivalent = hasEquivalent(doc, nb, fragment);
-    if (equivalent && !(rule.repeatable?.(trigger) ?? false)) continue;
-    const confidence = rule.tier === 'primary' && !equivalent && rule.when(nb, 'select') ? 'high' : 'medium';
-    if (trigger === 'select' && confidence !== 'high') continue;
-    candidates.push({
-      id: rule.id,
-      ruleId: rule.id,
-      tier: rule.tier,
-      confidence,
-      score: 0,
-      label: rule.label,
-      actionLabel: `Add ${rule.label}`,
-      reason: rule.reason,
-      fragment,
-      branches: rule.branches,
-      anchorId,
-      neighborhoodKey: nb.key,
-    });
+    const evaluated = evaluate(doc, nb, rule);
+    if (!evaluated || !offeredFor(rule, evaluated, trigger)) continue;
+    candidates.push(evaluated.candidate);
   }
   if (trigger !== 'drop') {
     for (const candidate of existingTargetCandidates(doc, nb)) {
@@ -91,11 +74,92 @@ export function continuationsFor(
   return rank(candidates, { nb, recent });
 }
 
+export interface ContinuationSets {
+  /** What `'select'` would return — honouring `dismissed`. */
+  quiet: Continuation[];
+  /** What `'invoke'` would return — dismissals deliberately ignored: asking always answers. */
+  explicit: Continuation[];
+}
+
+/**
+ * `continuationsFor(…, 'select', options)` and `continuationsFor(…, 'invoke', { recent })` in one
+ * pass — the selected node's quiet suggestion and everything `]` can step through — for a caller
+ * that needs both on every document change. One neighborhood, one walk over the rules, one
+ * connect-to-existing scan; each rule's fragment is built and matrix-checked once.
+ */
+export function continuationSets(
+  doc: DraftDocument,
+  anchorId: string,
+  options: Omit<ContinuationOptions, 'rules'> = {},
+): ContinuationSets {
+  const nb = neighborhoodOf(doc, anchorId);
+  if (!nb || !ANCHOR_TYPES.has(nb.node.type)) return { quiet: [], explicit: [] };
+  const { dismissed = EMPTY, recent = NONE } = options;
+  const quietAllowed = !dismissed.has(dismissalKey(anchorId, ANY_CANDIDATE, nb.key));
+
+  const quiet: Continuation[] = [];
+  const explicit: Continuation[] = [];
+  for (const rule of RULES) {
+    const asked = rule.when(nb, 'invoke');
+    const quietly =
+      quietAllowed && rule.surfaces !== 'invoke' && !dismissed.has(dismissalKey(anchorId, rule.id, nb.key)) && rule.when(nb, 'select');
+    if (!asked && !quietly) continue;
+    const evaluated = evaluate(doc, nb, rule);
+    if (!evaluated) continue;
+    if (asked && offeredFor(rule, evaluated, 'invoke')) explicit.push(evaluated.candidate);
+    if (quietly && offeredFor(rule, evaluated, 'select')) quiet.push(evaluated.candidate);
+  }
+  for (const candidate of existingTargetCandidates(doc, nb)) {
+    explicit.push(candidate);
+    if (quietAllowed && candidate.confidence === 'high' && !dismissed.has(dismissalKey(anchorId, candidate.id, nb.key))) {
+      quiet.push(candidate);
+    }
+  }
+  return { quiet: rank(quiet, { nb, recent }), explicit: rank(explicit, { nb, recent }) };
+}
+
+interface Evaluated {
+  candidate: Continuation;
+  equivalent: boolean;
+}
+
+/** A rule's candidate for this neighborhood, trigger-independent — or `undefined` when the matrix
+ *  rejects its fragment. The caller has already checked `when`. */
+function evaluate(doc: DraftDocument, nb: Neighborhood, rule: ContinuationRule): Evaluated | undefined {
+  const fragment = rule.fragment(nb);
+  if (!fragmentIsValid(doc, nb, fragment)) return undefined;
+  const equivalent = hasEquivalent(doc, nb, fragment);
+  const confidence = rule.tier === 'primary' && !equivalent && rule.when(nb, 'select') ? 'high' : 'medium';
+  return {
+    equivalent,
+    candidate: {
+      id: rule.id,
+      ruleId: rule.id,
+      tier: rule.tier,
+      confidence,
+      score: 0,
+      label: rule.label,
+      actionLabel: `Add ${rule.label}`,
+      reason: rule.reason,
+      fragment,
+      branches: rule.branches,
+      anchorId: nb.node.id,
+      neighborhoodKey: nb.key,
+    },
+  };
+}
+
+/** Suppression and the quiet trigger's confidence floor, for one evaluated rule. */
+function offeredFor(rule: ContinuationRule, { candidate, equivalent }: Evaluated, trigger: ContinuationTrigger): boolean {
+  if (equivalent && !(rule.repeatable?.(trigger) ?? false)) return false;
+  return trigger !== 'select' || candidate.confidence === 'high';
+}
+
 const EMPTY: ReadonlySet<DismissalKey> = new Set();
 const NONE: readonly string[] = [];
 
 /** What a fragment edge end refers to: the anchor, a node the fragment adds, or a node already drawn. */
-export function resolveRef(
+function resolveRef(
   doc: DraftDocument,
   nb: Neighborhood,
   fragment: Fragment,

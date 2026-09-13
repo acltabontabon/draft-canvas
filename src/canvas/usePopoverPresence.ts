@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { motionMs } from '../lib/motion';
 
 /**
  * Delayed unmount for a popover's exit animation: `mounted` stays true for `exitMs` after `open`
@@ -14,8 +15,7 @@ export function usePopoverPresence(open: boolean, exitMs: number): { mounted: bo
 
   useEffect(() => {
     if (open || !lingering) return;
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const timer = window.setTimeout(() => setLingering(false), reduceMotion ? 0 : exitMs);
+    const timer = window.setTimeout(() => setLingering(false), motionMs(exitMs));
     return () => window.clearTimeout(timer);
   }, [open, lingering, exitMs]);
 

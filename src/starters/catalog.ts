@@ -1967,7 +1967,8 @@ const medallion: ArchitectureStarter = {
     {
       key: 'analytics',
       type: 'service',
-      serviceKind: 'api',
+      // A consumer, not an endpoint — the same call Kappa's Analytics makes.
+      serviceKind: 'generic',
       text: 'Analytics / BI',
       accent: 'teal',
       parent: 'serving',

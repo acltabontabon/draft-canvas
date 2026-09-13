@@ -41,12 +41,18 @@ export function CanvasBackground({ settings, documentId, extraDim = 0 }: CanvasB
     void getRepository()
       .then((repository) => repository.loadBackgroundImage(documentId, settings.imageId))
       .then((row) => {
-        if (cancelled || !row) return;
+        if (cancelled) return;
+        // The previous image's URL was revoked by the cleanup below, so never leave it showing.
+        if (!row) {
+          setImageUrl(null);
+          return;
+        }
         objectUrl = URL.createObjectURL(row.blob);
         setImageUrl(objectUrl);
       })
       .catch(() => {
         // A missing/corrupted row degrades to "no background shown," not an error.
+        if (!cancelled) setImageUrl(null);
       });
     return () => {
       cancelled = true;

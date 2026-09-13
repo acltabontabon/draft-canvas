@@ -296,12 +296,13 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // `queue>service` above which keeps 'consumes'.
   'topic>service': capability(['deliversTo', 'consumes', 'dependsOn'], 'deliversTo', [], 'event'),
   'topic>queue': capability(['fansOut', 'deliversTo', 'dependsOn'], 'fansOut', [], 'event'),
-  // A stream feeding a search index directly (real-time indexing off a change/event feed) reuses
-  // 'indexes' rather than inventing a second word for the same idea `worker>searchIndex` already
-  // names — `searchIndex` never falls back to a generic `database`/`queue` row (see the matrix's
+  // A Topic feeding a search index directly (a managed sink indexing its events, no consumer drawn)
+  // reuses 'indexes' rather than inventing a second word for the same idea `worker>searchIndex`
+  // already names. Topic only: a Stream (`queueKind: 'stream'`) folds into the `queue` category,
+  // and its consumers are drawn as Workers — see the CDC starter — `searchIndex` never falls back to a generic `database`/`queue` row (see the matrix's
   // own "no opinion beats a wrong one" rule above), so this needs its own explicit entry.
   'topic>searchIndex': capability(['indexes', 'dependsOn'], 'indexes', []),
-  // A warehouse/analytics store ingesting straight off a stream (a "sink," no separate consumer
+  // A warehouse/analytics store ingesting straight off a Topic (a "sink," no separate consumer
   // shown) reuses 'ingests' — the same word and the same default `database>database` already
   // uses for "the most common intent when a fresh connection is drawn."
   'topic>database': capability(['ingests', 'dependsOn'], 'ingests', []),
