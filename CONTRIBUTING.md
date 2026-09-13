@@ -115,6 +115,9 @@ Pushing the `vX.Y.Z` tag does the rest. It creates the GitHub Release, deploys P
 Release exists, publishes `acltabontabon/draft-canvas` to Docker Hub (see
 `.github/workflows/docker-publish.yml`).
 
+Draft Canvas for VS Code (`vscode-extension/`) is released separately, from `extension-vX.Y.Z` tags,
+with its own version and changelog — see [`vscode-extension/RELEASING.md`](vscode-extension/RELEASING.md).
+
 ## Keeping Draft Canvas fast and simple
 
 The whole product bets on staying lightweight. A dependency, a setting, or a new concept all cost

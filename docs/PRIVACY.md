@@ -119,6 +119,17 @@ Reading a file uses the `File` API on a file you chose. Nothing is uploaded. A p
 and only then feeds the same validator — a wrong passphrase fails cleanly rather than importing
 garbage.
 
+### Embedded in VS Code
+
+The VS Code extension (`vscode-extension/`) loads this same app in an editor tab, at `?host=vscode`,
+and hands it one `.draftcanvas` file. In that mode (`src/host/`) the file is the only storage:
+IndexedDB is never opened, the document lives in memory, and every edit is sent back to VS Code
+with `postMessage`. VS Code writes the file.
+
+That message goes from one frame to another inside VS Code's window, never over the network. The app
+only accepts a file from, and only sends one to, a parent frame whose origin is a VS Code webview
+(`vscode-webview://`). The one message it sends to any parent is a data-free "ready".
+
 ## What this does not protect you from
 
 Being honest about the limits:

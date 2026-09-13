@@ -46,6 +46,7 @@ import { ErrorBoundary } from '../common/ErrorBoundary';
 import { PanelBoundary } from '../common/PanelBoundary';
 import { retryableLazy } from '../common/retryableLazy';
 import { motionMs } from '../../lib/motion';
+import { embeddedHost } from '../../host/embeddedHost';
 
 // Export (its panels, previews, and exporters) is a sizeable slice of the editor that most sessions
 // never open — fetched the first time it is, then kept mounted so its in-session choices survive.
@@ -379,7 +380,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         <Toolbar
           title={title}
           onTitleChange={rename}
-          onBack={() => void session.closeDocument()}
+          onBack={embeddedHost ? undefined : () => void session.closeDocument()}
           onPresent={onPresent}
           onExport={() => setExportOpen(true)}
         />
@@ -407,7 +408,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
                   void session.openDocument(session.openId!).then(() => setCanvasInstanceKey((k) => k + 1));
                 },
               },
-              { label: 'Return home', onClick: () => void session.closeDocument() },
+              ...(embeddedHost ? [] : [{ label: 'Return home', onClick: () => void session.closeDocument() }]),
             ]}
             onError={(error, componentStack) =>
               logDiagnostic(error, { operation: 'canvas-render', documentId: session.openId }, componentStack)

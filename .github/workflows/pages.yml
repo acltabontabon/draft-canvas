@@ -3,7 +3,10 @@ name: Deploy to Pages
 on:
   push:
     tags:
-      - 'v*'
+      # Web app releases only: vX.Y.Z and prereleases like vX.Y.Z-rc.1. The VS Code extension
+      # releases from extension-vX.Y.Z tags in vscode-release.yml.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
 
 permissions:

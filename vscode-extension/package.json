@@ -1,0 +1,81 @@
+{
+  "name": "draft-canvas",
+  "displayName": "Draft Canvas",
+  "description": "Open and edit .draftcanvas diagrams in VS Code.",
+  "version": "0.1.0",
+  "publisher": "acltabontabon",
+  "license": "Apache-2.0",
+  "pricing": "Free",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#14161a",
+    "theme": "dark"
+  },
+  "homepage": "https://acltabontabon.com/draft-canvas/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/acltabontabon/draft-canvas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/acltabontabon/draft-canvas/issues"
+  },
+  "categories": [
+    "Visualization"
+  ],
+  "keywords": [
+    "architecture",
+    "diagram",
+    "system design",
+    "sequence diagram",
+    "draft canvas"
+  ],
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
+  "main": "./out/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "draftCanvas.editor",
+        "displayName": "Draft Canvas",
+        "selector": [
+          {
+            "filenamePattern": "*.draftcanvas"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "draftCanvas.newDiagram",
+        "title": "New Diagram",
+        "category": "Draft Canvas"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package",
+    "check:vsix": "node scripts/check-vsix.mjs",
+    "smoke": "node test/smoke/run.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "~20.19.0",
+    "@types/vscode": "~1.100.0",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "3.9.2",
+    "typescript": "~7.0.2"
+  }
+}

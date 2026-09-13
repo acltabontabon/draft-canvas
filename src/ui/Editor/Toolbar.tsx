@@ -8,7 +8,8 @@ import { toolbarLabel, toolbarTooltip } from './toolbar/toolbarTooltips';
 interface ToolbarProps {
   title: string;
   onTitleChange: (title: string) => void;
-  onBack: () => void;
+  /** Absent when there's nothing to go back to (an embedded host's single file). */
+  onBack?: () => void;
   onPresent: () => void;
   onExport: () => void;
 }
@@ -33,17 +34,19 @@ export function Toolbar({
           the active flow's name changes length. */}
       <header className="dc-toolbar">
         <div className="dc-toolbar-lead">
-          <Tooltip content={toolbarTooltip('back')}>
-            {(tip) => (
-              <Button
-                icon="back"
-                variant="quiet"
-                onClick={onBack}
-                aria-label={toolbarLabel('back')}
-                {...tip}
-              />
-            )}
-          </Tooltip>
+          {onBack && (
+            <Tooltip content={toolbarTooltip('back')}>
+              {(tip) => (
+                <Button
+                  icon="back"
+                  variant="quiet"
+                  onClick={onBack}
+                  aria-label={toolbarLabel('back')}
+                  {...tip}
+                />
+              )}
+            </Tooltip>
+          )}
           <DiagramTitleField title={title} onTitleChange={onTitleChange} />
         </div>
 

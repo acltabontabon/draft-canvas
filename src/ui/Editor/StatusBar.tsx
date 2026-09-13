@@ -3,6 +3,7 @@ import { flowFitViewNodes, useEditorStore } from '../../store/editorStore';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { motionMs } from '../../lib/motion';
+import { embeddedHost } from '../../host/embeddedHost';
 
 /**
  * The save indicator is the only place the local-first promise is visible while
@@ -41,21 +42,28 @@ export function StatusBar({ durable }: { durable: boolean }) {
 
   return (
     <footer className="dc-status">
-      <div className="dc-status-left">
-        <span className="dc-save" data-status={save.status}>
-          {saveLabel(save, durable)}
-        </span>
-        {/* Announced separately from the label, which cycles Unsaved → Saving… → Saved on every
-            commit and would speak three times per drag. Only a failure is news. */}
-        <span className="dc-sr-only" role="status">
-          {!durable ? 'Storage unavailable. Changes are kept in memory only.' : save.status === 'error' ? saveLabel(save, durable) : ''}
-        </span>
-        <span className="dc-muted dc-status-hint">
-          {durable
-            ? 'Your diagrams stay in this browser. Nothing you draw is uploaded.'
-            : 'This browser is blocking storage — export to keep your work.'}
-        </span>
-      </div>
+      {embeddedHost ? (
+        // The host saves the file and shows whether it's dirty; this browser's storage isn't involved.
+        <div className="dc-status-left">
+          <span className="dc-muted dc-status-hint">This diagram is the open file. Nothing you draw is uploaded.</span>
+        </div>
+      ) : (
+        <div className="dc-status-left">
+          <span className="dc-save" data-status={save.status}>
+            {saveLabel(save, durable)}
+          </span>
+          {/* Announced separately from the label, which cycles Unsaved → Saving… → Saved on every
+              commit and would speak three times per drag. Only a failure is news. */}
+          <span className="dc-sr-only" role="status">
+            {!durable ? 'Storage unavailable. Changes are kept in memory only.' : save.status === 'error' ? saveLabel(save, durable) : ''}
+          </span>
+          <span className="dc-muted dc-status-hint">
+            {durable
+              ? 'Your diagrams stay in this browser. Nothing you draw is uploaded.'
+              : 'This browser is blocking storage — export to keep your work.'}
+          </span>
+        </div>
+      )}
 
       <div className="dc-status-right">
         <span className="dc-muted">

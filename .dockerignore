@@ -21,6 +21,7 @@ docs
 benchmark
 demo
 e2e
+vscode-extension
 .playwright
 test-results
 playwright-report

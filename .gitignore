@@ -27,6 +27,13 @@ benchmark/results/
 # Editors
 .idea
 .vscode
+# ...except the VS Code extension's launch config, which is how you run it (F5)
+!/vscode-extension/.vscode/
+
+# VS Code extension build output and packages
+vscode-extension/out/
+vscode-extension/.vscode-test/
+*.vsix
 
 # Local agent tooling
 .claude/

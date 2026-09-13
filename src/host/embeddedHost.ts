@@ -1,0 +1,41 @@
+/**
+ * Set when a host editor frames the app for a single `.draftcanvas` file. Today that host is only
+ * the VS Code extension (`vscode-extension/`), which loads the app at `?host=vscode`.
+ *
+ * In that mode the file is where the document lives, not this browser. The host owns opening,
+ * saving and the tab's lifetime, so there is no Library, and IndexedDB is never opened.
+ */
+export const embeddedHost: 'vscode' | null = detectHost();
+
+function detectHost(): 'vscode' | null {
+  try {
+    const framed = window.parent !== window;
+    return framed && new URLSearchParams(window.location.search).get('host') === 'vscode' ? 'vscode' : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Messages between the app and its host. The app's protocol version travels with `ready`, so a host
+ * can tell an app that predates a message it relies on.
+ */
+export const HOST_PROTOCOL = 1;
+
+export type ToHostMessage =
+  | { type: 'draft-canvas:ready'; protocol: number }
+  | { type: 'draft-canvas:change'; text: string }
+  | { type: 'draft-canvas:save'; saveAs: boolean };
+
+export interface LoadMessage {
+  type: 'draft-canvas:load';
+  /** The file's contents. Empty means a new file, which gets a fresh document. */
+  text: string;
+  /** The file's name without its extension, used as the title of a new document. */
+  title?: string;
+}
+
+/** A VS Code webview's origin. Anything else framing the app at `?host=vscode` is not its host. */
+export function isHostOrigin(origin: string): boolean {
+  return origin.startsWith('vscode-webview://');
+}

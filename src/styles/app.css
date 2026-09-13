@@ -1958,6 +1958,15 @@ kbd {
   background: var(--dc-canvas);
 }
 
+/* Embedded in a host: waiting for its file, or saying why the file isn't a diagram. */
+.dc-host-waiting {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--dc-text-muted);
+  text-align: center;
+}
+
 .dc-editor-body {
   display: flex;
   flex: 1;

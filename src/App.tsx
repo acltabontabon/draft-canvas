@@ -1,4 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
+import { embeddedHost } from './host/embeddedHost';
+import { useHostDocument } from './host/useHostDocument';
 import { useDocumentSession } from './store/useDocumentSession';
 import { LibraryScreen } from './ui/Library/LibraryScreen';
 import { AboutDialog } from './ui/common/AboutDialog';
@@ -25,6 +27,7 @@ const EditorRoute = lazy(() => loadEditor().then((module) => ({ default: module.
  */
 function Shell() {
   const session = useDocumentSession();
+  const hostError = useHostDocument(session);
 
   // Keys older builds left behind (a pinned theme, the old Learn mode's hints) — see
   // `RETIRED_PREFERENCE_KEYS`. Documents are never touched: they live in IndexedDB.
@@ -46,7 +49,7 @@ function Shell() {
       <ErrorBoundary
         message="Something went wrong."
         actions={[
-          ...(session.openId
+          ...(session.openId && !embeddedHost
             ? [{ label: 'Return home', onClick: () => void session.closeDocument() }]
             : []),
           { label: 'Reload app', onClick: () => window.location.reload() },
@@ -59,6 +62,11 @@ function Shell() {
           <Suspense fallback={<div className="dc-editor-loading" aria-busy="true" />}>
             <EditorRoute session={session} />
           </Suspense>
+        ) : embeddedHost ? (
+          // The host's file is the only document there is, so there's no Library to fall back to.
+          <div className="dc-editor-loading dc-host-waiting" aria-busy={hostError ? undefined : true}>
+            {hostError && <p role="alert">This file couldn't be opened as a diagram. {hostError}</p>}
+          </div>
         ) : (
           <LibraryScreen session={session} />
         )}
