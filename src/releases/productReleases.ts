@@ -21,6 +21,47 @@ export type { ProductRelease, ProductReleaseHighlight } from './types';
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.4.0',
+    date: '2026-09-14',
+    highlights: [
+      {
+        title: 'Presentation callouts',
+        description:
+          "Presenting a flow now shows the notes and code attached to each step in a small callout beside it, joined by a thin line and moving with the step.",
+      },
+      {
+        title: 'Learn, as a handbook',
+        description:
+          'Learn Draft Canvas is now a handbook you open beside the canvas — search "how do I…" or browse short, animated recipes, with your diagram still live next to it.',
+      },
+      {
+        title: 'Suggestions with alternatives',
+        description:
+          'Press ] or [ to step through a suggestion\'s alternatives, keep pressing Tab to keep sketching, and a suggestion can now add a small group — like a topic and its worker — in one step.',
+      },
+      {
+        title: 'Three new Data Architecture starters',
+        description:
+          'Medallion, Kappa, and Change Data Capture join the starter list, each with a built-in flow, alongside a new "transforms" relationship for data refined from one store into another.',
+      },
+      {
+        title: 'An official Docker image',
+        description:
+          'Run Draft Canvas yourself with acltabontabon/draft-canvas — the same static app served by nginx, for amd64 and arm64, published with every release.',
+      },
+      {
+        title: 'A calmer starter shelf',
+        description:
+          "The home screen's starters are now an index, one category open at a time, and Export's shortcut moved to ⌘⇧E so browser extensions stop swallowing it.",
+      },
+      {
+        title: 'Smoother and more reliable',
+        description:
+          'Dragging and resizing large diagrams is smoother, opening a diagram with one flow no longer dims everything else, and pasting or inserting into a full diagram says so instead of quietly losing shapes.',
+      },
+    ],
+  },
+  {
     version: '1.3.0',
     date: '2026-09-13',
     highlights: [

@@ -19,11 +19,22 @@ jobs:
       # Pulls the section of CHANGELOG.md whose heading matches this tag's
       # version (e.g. tag v0.2.0 -> "## [0.2.0]") and uses it as the release
       # body, so the changelog is the single source of truth for release
-      # notes instead of writing them twice.
+      # notes instead of writing them twice. The demo gif leads the body,
+      # pinned to this tag's copy of docs/media so it can't drift from what
+      # the release actually looks like. (An .mp4 linked by URL doesn't embed
+      # as a playable video in a release body — only a gif/png/etc. renders
+      # inline — so the gif is what carries the demo here.)
       - name: Extract changelog section for this tag
         id: changelog
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          MEDIA_BASE="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/docs/media"
+
+          {
+            echo "![Draft Canvas demo](${MEDIA_BASE}/demo.gif)"
+            echo
+          } > release-notes.md
+
           awk -v ver="$VERSION" '
             /^## \[/ {
               if (found) exit
@@ -31,9 +42,10 @@ jobs:
               next
             }
             found { print }
-          ' CHANGELOG.md > release-notes.md
+          ' CHANGELOG.md > changelog-section.md
+          cat changelog-section.md >> release-notes.md
 
-          if [ -s release-notes.md ]; then
+          if [ -s changelog-section.md ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
@@ -43,7 +55,7 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
-          body_path: ${{ steps.changelog.outputs.found == 'true' && 'release-notes.md' || '' }}
+          body_path: release-notes.md
           generate_release_notes: ${{ steps.changelog.outputs.found != 'true' }}
           # v1.3.0-rc.1 and friends are marked as prereleases on GitHub too.
           prerelease: ${{ contains(github.ref_name, '-') }}
