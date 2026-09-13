@@ -8,6 +8,8 @@ queues, and databases: no account, no workspace to set up, nothing to configure 
 
 [![CI](https://github.com/acltabontabon/draft-canvas/actions/workflows/ci.yml/badge.svg)](https://github.com/acltabontabon/draft-canvas/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Docker Pulls](https://img.shields.io/docker/pulls/acltabontabon/draft-canvas.svg)](https://hub.docker.com/r/acltabontabon/draft-canvas)
+[![GitHub Release](https://img.shields.io/github/v/release/acltabontabon/draft-canvas)](https://github.com/acltabontabon/draft-canvas/releases)
 
 <img width="100%" alt="A run through Draft Canvas in five chapters: on a blank canvas, pressing a letter to drop a service under the cursor, naming it, dragging a connector into empty space to pick a queue, and accepting the suggested worker with Tab; clearing it and using the command palette to drop in a composed CQRS architecture; writing a note and dropping it onto a connector; presenting a flow step by step, with close-ups of the code sample, the dropped note threaded with the starter's own note, and the read store's note appearing on their steps; opening the Learn handbook beside the canvas, searching for dead-letter queues and watching the recipe play; and the editor following a switch to a light system theme" src="docs/media/demo.gif">
 

@@ -29,17 +29,41 @@ async function goToStep(page: Page, step: number) {
   }
 }
 
+/**
+ * The boxes of every given locator once they've all simultaneously come to rest. A callout
+ * tracks the same camera transform as the canvas element it's beside, in lockstep — but the
+ * callout is written straight to the DOM on every store update while the canvas repaints through
+ * React, so under load one can read as "settled" a frame or two before the other catches up.
+ * Polling them together, and only accepting a frame where neither moved, is what actually proves
+ * the camera (or entrance animation) has finished — settling either one alone doesn't.
+ */
+async function settledBoxes(locators: readonly Locator[]): Promise<Box[]> {
+  let previous: Box[] | null = null;
+  for (let i = 0; i < 40; i++) {
+    const boxes = await Promise.all(locators.map((locator) => locator.boundingBox()));
+    if (boxes.every((box) => box !== null)) {
+      const current = boxes as Box[];
+      const stable =
+        previous !== null &&
+        current.every(
+          (box, index) =>
+            Math.abs(previous![index]!.x - box.x) < 0.5 &&
+            Math.abs(previous![index]!.y - box.y) < 0.5 &&
+            previous![index]!.width === box.width,
+        );
+      if (stable) return current;
+      previous = current;
+    } else {
+      previous = null;
+    }
+    await locators[0]!.page().waitForTimeout(120);
+  }
+  throw new Error('boxes never settled together');
+}
+
 /** The callout's card once the camera and its entrance have both come to rest. */
 async function settledBox(card: Locator): Promise<Box> {
-  let previous: Box | null = null;
-  for (let i = 0; i < 40; i++) {
-    const box = (await card.boundingBox())!;
-    const still = previous && Math.abs(previous.x - box.x) < 0.5 && Math.abs(previous.y - box.y) < 0.5;
-    if (still && previous!.width === box.width) return box;
-    previous = box;
-    await card.page().waitForTimeout(120);
-  }
-  throw new Error('callout never settled');
+  return (await settledBoxes([card]))[0]!;
 }
 
 const overlaps = (a: Box, b: Box) =>
@@ -84,8 +108,10 @@ test.describe('Presentation callouts', () => {
     await expect(callout.locator('button, textarea')).toHaveCount(0);
     await expect(callout).not.toContainText('Write Model');
 
-    const card = await settledBox(callout.locator('.dc-callout-card'));
-    const chip = (await page.locator('.dc-attachment-chip-row').filter({ hasText: 'Note' }).boundingBox())!;
+    const [card, chip] = await settledBoxes([
+      callout.locator('.dc-callout-card'),
+      page.locator('.dc-attachment-chip-row').filter({ hasText: 'Note' }),
+    ]);
     expect(gapBetween(card, chip)).toBeLessThan(60);
     expect(overlaps(card, (await nodeNamed(page, 'Write Model').boundingBox())!)).toBe(false);
     expect(overlaps(card, (await nodeNamed(page, 'Domain Events').boundingBox())!)).toBe(false);
@@ -107,8 +133,7 @@ test.describe('Presentation callouts', () => {
 
     const callout = page.locator('.dc-callout');
     await expect(callout.locator('.dc-callout-code')).toContainText('"type": "PlaceOrder"');
-    const card = await settledBox(callout.locator('.dc-callout-card'));
-    const commandApi = (await nodeNamed(page, 'Command API').boundingBox())!;
+    const [card, commandApi] = await settledBoxes([callout.locator('.dc-callout-card'), nodeNamed(page, 'Command API')]);
     expect(overlaps(card, commandApi)).toBe(false);
     expect(gapBetween(card, commandApi)).toBeLessThan(80);
     await expectInViewAndClearOfChrome(page, card);
@@ -119,8 +144,7 @@ test.describe('Presentation callouts', () => {
 
     await goToStep(page, 6);
     await expect(callout).toContainText('Shaped for the questions asked of it');
-    const readStoreCard = await settledBox(callout.locator('.dc-callout-card'));
-    const readStore = (await nodeNamed(page, 'Read Store').boundingBox())!;
+    const [readStoreCard, readStore] = await settledBoxes([callout.locator('.dc-callout-card'), nodeNamed(page, 'Read Store')]);
     expect(overlaps(readStoreCard, readStore)).toBe(false);
     expect(gapBetween(readStoreCard, readStore)).toBeLessThan(80);
   });
@@ -151,8 +175,8 @@ test.describe('Presentation callouts', () => {
     const chip = (await chipRow.boundingBox())!;
     await page.mouse.move(chip.x + chip.width / 2, chip.y + 40);
     await page.mouse.wheel(0, 300);
-    const zoomed = await settledBox(card);
-    expect(gapBetween(zoomed, (await chipRow.boundingBox())!)).toBeLessThan(60);
+    const [zoomed, zoomedChip] = await settledBoxes([card, chipRow]);
+    expect(gapBetween(zoomed, zoomedChip)).toBeLessThan(60);
 
     await page.setViewportSize({ width: 1000, height: 720 });
     const resized = await settledBox(card);
