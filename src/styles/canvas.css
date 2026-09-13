@@ -2163,11 +2163,6 @@
   outline-offset: 3px;
 }
 
-/* The full shelf, given room to lay its categories out the way the home screen does. */
-.dc-modal-starters .dc-modal-body {
-  padding-top: 4px;
-}
-
 /* ---- arrival and exit -------------------------------------------------- */
 
 /*

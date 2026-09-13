@@ -34,9 +34,11 @@ All notable changes to Draft Canvas are documented here.
 - Export's shortcut is now ⌘⇧E (Ctrl+Shift+E), which browser extensions don't intercept. ⌘E
   still works wherever it reaches the page.
 - The home screen's starters are now an index: one category open at a time on the connector's
-  spine, the others just a name and a count, so the page stays calm as starters are added. ↑/↓
+  spine, the others just a name, so the page stays calm as starters are added. ↑/↓
   move between categories, ←/→ between starters. Starter previews are centred and their
   boundaries drawn lighter.
+- "Browse all starters" is calmer: each starter shows its description right under its name when
+  you hover or focus it, instead of in a line at the bottom. Categories read as quiet dividers.
 
 ### Fixed
 

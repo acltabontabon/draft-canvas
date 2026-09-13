@@ -12,6 +12,11 @@ import { starterShape } from './starterShapes';
  * Shared by the home screen's shelf and the editor's empty canvas so the two surfaces cannot
  * drift. The only difference between them is the patch of dot grid behind the drawing, which the
  * empty canvas turns off: there it sits on the real canvas instead.
+ *
+ * `describe` is for the Browse-all dialog, the one surface where every starter is on screen at
+ * once: the description is laid out under the name but only shown on hover or focus, so it reads
+ * as the tile answering a question rather than thirteen captions competing. Always laid out, so
+ * revealing it never moves a row.
  */
 export function StarterTile({
   starter,
@@ -19,10 +24,12 @@ export function StarterTile({
   onStart,
   onPointerEnter,
   onFocus,
+  describe = false,
 }: {
   starter: ArchitectureStarter;
   /** Position in the whole list, for the arrival stagger (`--i`). */
   index: number;
+  describe?: boolean;
   onStart: (id: StarterId) => void;
   onPointerEnter?: () => void;
   onFocus?: (event: FocusEvent<HTMLButtonElement>) => void;
@@ -57,7 +64,7 @@ export function StarterTile({
         <SelectionChrome />
       </span>
       <span className="dc-starter-name">{starter.name}</span>
-      <span id={descriptionId} className="dc-sr-only">
+      <span id={descriptionId} className={describe ? 'dc-starter-description' : 'dc-sr-only'}>
         {starter.description}
       </span>
     </button>

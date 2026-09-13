@@ -91,8 +91,8 @@ describe('LibraryScreen — first run', () => {
     // The index names every category the catalog has, in its order, and opens the first.
     const group = screen.getByRole('group', { name: 'Starters' });
     const tabs = within(group).getAllByRole('tab');
-    // A closed branch says its name and how many, and nothing else.
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Architectures7', 'Data Architectures3', 'Patterns3']);
+    // A closed branch says its name, and nothing else.
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Architectures', 'Data Architectures', 'Patterns']);
     expect(tabs.map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
     expect(within(group).getByRole('tab', { name: 'Architectures' })).toBe(tabs[0]);
     // Only the open branch's tiles are on the page; the others are drawn, but inert and hidden.

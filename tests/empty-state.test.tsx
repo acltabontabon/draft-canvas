@@ -59,8 +59,13 @@ describe('EmptyState', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Browse all starters' }));
     const dialog = screen.getByRole('dialog');
     for (const starter of ARCHITECTURE_STARTERS) {
-      expect(within(dialog).getByRole('button', { name: `Start from ${starter.name}` })).toBeInTheDocument();
+      const tile = within(dialog).getByRole('button', { name: `Start from ${starter.name}` });
+      // Each tile carries its own description — revealed in place on hover or focus, and the
+      // tile's accessible description — rather than a readout line far from the tile it is about.
+      expect(tile).toHaveAccessibleDescription(starter.description);
+      expect(within(tile).getByText(starter.description)).toHaveClass('dc-starter-description');
     }
+    expect(dialog.querySelector('.dc-shelf-readout')).toBeNull();
     // Something the blank canvas itself does not offer — the reason the link exists.
     const withheld = ARCHITECTURE_STARTERS.find((s) => !FEATURED_STARTERS.includes(s))!;
     await userEvent.click(within(dialog).getByRole('button', { name: `Start from ${withheld.name}` }));

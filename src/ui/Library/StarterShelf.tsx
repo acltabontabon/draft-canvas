@@ -4,7 +4,6 @@ import { STARTER_CATEGORIES, type ArchitectureStarter, type StarterCategory, typ
 import { StarterTile } from './StarterTile';
 
 const INDEX_READOUT = '↑↓ category · ←→ browse · ↵ start';
-const ALL_READOUT = '←→ browse · ↵ start';
 
 /** Where focus should land in a panel that has just been made active. */
 type Landing = 'first' | { row: 'first' | 'last'; col: number };
@@ -12,15 +11,16 @@ type Landing = 'first' | { row: 'first' | 'last'; col: number };
 /**
  * The starters as things you can see before you pick one: each tile is the starter's own topology
  * (derived from the catalog — see `starterShapes.ts`) on a patch of canvas, with its name under
- * it. No card, no border, no description competing for attention — the shape says what it is, and
- * the one readout line under the shelf says the rest for whichever tile is under the pointer or
- * the keyboard.
+ * it. No card, no border, no description competing for attention — the shape says what it is.
  *
  * Two layouts. `index` (the home screen) is an architecture index, not a gallery: the categories
  * are branches on the connector's spine, one branch open at a time — its tiles on a shelf that is
  * always the height of the largest category, so opening another branch moves nothing — and the
- * closed ones just a label and a count: the count says there is more, the tiles say what. `all`
- * (the Browse-all dialog) lays every category out in full.
+ * closed ones just a label: the label says there is more, the tiles say what. One
+ * readout line under the shelf describes whichever tile is under the pointer or the keyboard.
+ * `all` (the Browse-all dialog) lays every category out in full, and each tile describes itself
+ * in place on hover or focus instead — with thirteen on screen, a line along the bottom is too far
+ * from the tile it is about.
  * Either way, the catalog decides the categories and the counts; nothing here is a second list.
  *
  * Keyboard, `index`: the open branch is the one tab stop of the index; ↑/↓ open the next or
@@ -214,6 +214,7 @@ export function StarterShelf({
     target.focus();
   };
 
+  const indexed = mode === 'index';
   const tiles = (category: (typeof categories)[number]) =>
     category.starters.map((starter, i) => (
       <StarterTile
@@ -221,8 +222,9 @@ export function StarterShelf({
         starter={starter}
         index={i}
         onStart={onStart}
-        onPointerEnter={() => setActive({ starter, focused: false })}
-        onFocus={(event) => setActive({ starter, focused: isFocusVisible(event.currentTarget) })}
+        describe={!indexed}
+        onPointerEnter={indexed ? () => setActive({ starter, focused: false }) : undefined}
+        onFocus={indexed ? (event) => setActive({ starter, focused: isFocusVisible(event.currentTarget) }) : undefined}
       />
     ));
 
@@ -233,17 +235,25 @@ export function StarterShelf({
         role="group"
         aria-label="Starters"
         onKeyDown={onKeyDown}
-        onPointerLeave={(event) => {
-          // Back to whatever the keyboard is on, if anything — not blank while a tile is focused.
-          const focused = event.currentTarget.querySelector<HTMLElement>('.dc-starter:focus');
-          const starter = starters.find((candidate) => candidate.id === focused?.dataset.starter);
-          setActive(starter && focused ? { starter, focused: isFocusVisible(focused) } : null);
-        }}
-        onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActive(null);
-        }}
+        onPointerLeave={
+          indexed
+            ? (event) => {
+                // Back to whatever the keyboard is on, if anything — not blank while a tile is focused.
+                const focused = event.currentTarget.querySelector<HTMLElement>('.dc-starter:focus');
+                const starter = starters.find((candidate) => candidate.id === focused?.dataset.starter);
+                setActive(starter && focused ? { starter, focused: isFocusVisible(focused) } : null);
+              }
+            : undefined
+        }
+        onBlur={
+          indexed
+            ? (event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActive(null);
+              }
+            : undefined
+        }
       >
-        {mode === 'index' ? (
+        {indexed ? (
           <>
             <div className="dc-shelf-index" role="tablist" aria-label="Starter categories" aria-orientation="vertical">
               {categories.map((category, i) => {
@@ -262,9 +272,6 @@ export function StarterShelf({
                     onClick={(event) => open(event.currentTarget.closest<HTMLElement>('.dc-shelf-categories')!, i)}
                   >
                     <span className="dc-shelf-label">{category.label}</span>
-                    <span className="dc-shelf-count" aria-hidden="true">
-                      {category.starters.length}
-                    </span>
                   </button>
                 );
               })}
@@ -294,27 +301,26 @@ export function StarterShelf({
             <div key={category.id} className="dc-shelf-category" role="group" aria-label={category.label}>
               <span className="dc-shelf-label" aria-hidden="true">
                 {category.label}
-                <span className="dc-shelf-count">{category.starters.length}</span>
               </span>
               <div className="dc-shelf-grid">{tiles(category)}</div>
             </div>
           ))
         )}
       </div>
-      <p className="dc-shelf-readout" aria-hidden="true" data-idle={active ? undefined : 'true'}>
-        {active ? (
-          <>
-            <span className="dc-shelf-readout-name">{active.starter.name}</span>
-            <span className="dc-shelf-readout-sep">—</span>
-            {active.starter.description}
-            {active.focused && <kbd className="dc-shelf-readout-key">↵</kbd>}
-          </>
-        ) : mode === 'index' ? (
-          INDEX_READOUT
-        ) : (
-          ALL_READOUT
-        )}
-      </p>
+      {indexed && (
+        <p className="dc-shelf-readout" aria-hidden="true" data-idle={active ? undefined : 'true'}>
+          {active ? (
+            <>
+              <span className="dc-shelf-readout-name">{active.starter.name}</span>
+              <span className="dc-shelf-readout-sep">—</span>
+              {active.starter.description}
+              {active.focused && <kbd className="dc-shelf-readout-key">↵</kbd>}
+            </>
+          ) : (
+            INDEX_READOUT
+          )}
+        </p>
+      )}
     </div>
   );
 }

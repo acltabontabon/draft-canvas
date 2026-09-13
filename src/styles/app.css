@@ -1127,31 +1127,18 @@ kbd {
   transition: color 120ms ease;
 }
 
-.dc-shelf-count {
-  color: var(--dc-text-muted);
-  font-family: var(--dc-mono);
-  font-weight: 400;
-  letter-spacing: 0;
-  opacity: 0.7;
-}
-
 /*
  * The index: every category a branch on the spine, one of them open. A closed branch is its
- * label and its count, nothing more — the count says there is more, the open branch's tiles say
- * what. Counts sit in their own column, the way an index aligns its numbers. Rows keep one
- * height open or closed, so the wire's branches, which are measured once, never drift.
+ * label, nothing more — the open branch's tiles say what the rest hold. Rows keep one height open
+ * or closed, so the wire's branches, which are measured once, never drift.
  */
 .dc-shelf-index {
   display: grid;
-  grid-template-columns: max-content max-content;
   justify-content: start;
 }
 
 .dc-shelf-branch {
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: span 2;
-  column-gap: 14px;
+  display: flex;
   align-items: baseline;
   margin-left: -8px;
   padding: 5px 8px;
@@ -1168,15 +1155,8 @@ kbd {
   outline-offset: 0;
 }
 
-/* Its own column, at the label's size — secondary, never a badge. */
-.dc-shelf-branch .dc-shelf-count {
-  font-size: 11px;
-  line-height: 18px;
-}
-
 /* Closed branches a step quieter; the open one is the one whose tiles are underneath. */
-.dc-shelf-branch .dc-shelf-label,
-.dc-shelf-branch .dc-shelf-count {
+.dc-shelf-branch .dc-shelf-label {
   opacity: 0.8;
   transition:
     color 120ms ease,
@@ -1186,11 +1166,6 @@ kbd {
 .dc-shelf-branch:hover .dc-shelf-label,
 .dc-shelf-branch[data-active] .dc-shelf-label {
   color: var(--dc-text);
-  opacity: 1;
-}
-
-.dc-shelf-branch:hover .dc-shelf-count,
-.dc-shelf-branch[data-active] .dc-shelf-count {
   opacity: 1;
 }
 
@@ -1416,6 +1391,110 @@ kbd {
   line-height: 16px;
 }
 
+/*
+ * The Browse-all dialog: every starter at once, so the shelf has to stay quiet until someone
+ * shows interest. At rest a tile is a drawing and a name; hover or focus lifts the drawing, lays
+ * a faint patch of surface behind the whole tile so all of it reads as the thing you click, and
+ * reveals the description in place. The description is always laid out, only invisible, so a
+ * row is already as tall as its longest one and nothing moves when it appears.
+ */
+.dc-modal.dc-modal-starters {
+  max-height: min(880px, calc(100vh - 48px));
+}
+
+.dc-modal-starters .dc-modal-header {
+  padding-left: 20px;
+}
+
+.dc-modal-starters .dc-modal-body {
+  padding: 14px 20px 10px;
+}
+
+/* Every row already carries the invisible room its descriptions will need, so the space between
+   categories has to be clearly larger than that for the groups to still read as groups. */
+.dc-shelf[data-mode='all'] .dc-shelf-categories {
+  gap: 34px;
+}
+
+/* A divider more than a heading: the label and a hairline running out to the edge, so the eye
+   resets between groups without another block of type to read. */
+.dc-shelf[data-mode='all'] .dc-shelf-label::after {
+  content: '';
+  flex: 1;
+  align-self: center;
+  height: 1px;
+  margin-left: 4px;
+  background: var(--dc-border);
+}
+
+/* Pulled out by the tiles' own padding, so the drawings line up with the labels above them and
+   only the hover surface reaches into the margin. `auto-fill` keeps the empty tracks, so a
+   three-starter category sits on the same columns as a seven-starter one. */
+.dc-shelf[data-mode='all'] .dc-shelf-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(184px, 100%), 1fr));
+  gap: 0;
+  margin: 4px -10px 0;
+}
+
+/* Side padding is the selection frame's overhang (see `.dc-starter-swatch .dc-chrome`), so the
+   handles of the widest drawings still land inside the hover surface. */
+.dc-shelf[data-mode='all'] .dc-starter {
+  gap: 2px;
+  padding: 8px 10px 6px;
+  border-radius: var(--dc-radius);
+  transition: background-color 120ms ease;
+}
+
+.dc-shelf[data-mode='all'] .dc-starter:hover,
+.dc-shelf[data-mode='all'] .dc-starter:focus-visible {
+  background: color-mix(in srgb, var(--dc-text) 4%, transparent);
+}
+
+.dc-shelf[data-mode='all'] .dc-starter-glyph {
+  opacity: 0.78;
+  transition:
+    color 120ms ease,
+    opacity 120ms ease;
+}
+
+.dc-shelf[data-mode='all'] .dc-starter:hover .dc-starter-glyph,
+.dc-shelf[data-mode='all'] .dc-starter:focus-visible .dc-starter-glyph {
+  opacity: 1;
+}
+
+.dc-starter-description {
+  padding: 0 2px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 16px;
+  text-wrap: pretty;
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms var(--dc-ease-out);
+}
+
+.dc-starter:hover .dc-starter-description,
+.dc-starter:focus-visible .dc-starter-description {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-starter-description {
+    transform: none;
+  }
+}
+
+/* No hover to ask with: the space is reserved anyway, so the descriptions simply stay. */
+@media (hover: none) {
+  .dc-starter-description {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* No pointer, no arrow keys likely: the idle hint would be advice nobody can take. */
 @media (hover: none) {
   .dc-shelf-readout[data-idle] {
@@ -1515,8 +1594,7 @@ kbd {
 }
 
 /* Backwards only: a forwards fill would hold opacity at 1 and a closed branch would never go quiet. */
-.dc-home .dc-shelf-label,
-.dc-home .dc-shelf-branch .dc-shelf-count {
+.dc-home .dc-shelf-label {
   animation: dc-home-rise 260ms var(--dc-ease-out) backwards;
 }
 
@@ -1524,8 +1602,7 @@ kbd {
   animation-delay: 60ms;
 }
 
-.dc-home .dc-shelf-label,
-.dc-home .dc-shelf-branch .dc-shelf-count {
+.dc-home .dc-shelf-label {
   animation-delay: 200ms;
 }
 

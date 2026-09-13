@@ -106,6 +106,33 @@ test.describe('architecture starters', () => {
     await page.getByRole('button', { name: 'Browse all starters' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('group', { name: 'Starters', exact: true })).toBeVisible();
+    const tiles = dialog.locator('.dc-starter');
+    await expect(tiles).toHaveCount(13);
+
+    // Quiet until asked: a description is invisible at rest, appears in its own tile on hover, and
+    // appearing moves nothing — its room is already part of the row.
+    const outbox = dialog.getByRole('button', { name: 'Start from Transactional Outbox', exact: true });
+    const description = outbox.locator('.dc-starter-description');
+    await expect(description).toHaveCSS('opacity', '0');
+    // Scrolled first, so the comparison below measures hover and not the dialog scrolling to it.
+    await outbox.scrollIntoViewIfNeeded();
+    const boxesOf = () => tiles.evaluateAll((all) => all.map((tile) => tile.getBoundingClientRect().toJSON()));
+    const before = await boxesOf();
+    await outbox.hover();
+    await expect(description).toHaveCSS('opacity', '1');
+    expect(await boxesOf()).toEqual(before);
+
+    // Nothing clipped: every name fits, and every drawing stays inside its tile.
+    const overflow = await tiles.evaluateAll((all) =>
+      all.flatMap((tile) => {
+        const box = tile.getBoundingClientRect();
+        const name = tile.querySelector<HTMLElement>('.dc-starter-name')!;
+        const glyph = tile.querySelector('.dc-starter-glyph')!.getBoundingClientRect();
+        const clipped = name.scrollWidth > name.clientWidth || glyph.left < box.left || glyph.right > box.right;
+        return clipped ? [tile.getAttribute('data-starter')] : [];
+      }),
+    );
+    expect(overflow).toEqual([]);
 
     await dialog.getByRole('button', { name: 'Start from Transactional Outbox', exact: true }).click();
     await expect(dialog).toBeHidden();
