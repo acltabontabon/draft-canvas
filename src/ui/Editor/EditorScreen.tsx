@@ -28,6 +28,7 @@ import { flowFitViewNodes, useEditorStore } from '../../store/editorStore';
 import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
+import { presentationScope, revealIn } from '../../presentation/presentationAttachments';
 import { useThemeValue } from '../theme/useTheme';
 import { EmptyState } from './EmptyState';
 import { FlowBar } from './FlowBar';
@@ -124,6 +125,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     setExportMounted(false);
     const ui = useUiStore.getState();
     ui.setExportOpen(false);
+    // Otherwise a later plain ⌘⇧E would open still forced to "Selection only".
+    ui.requestExportSelection(false);
     ui.notify('Export couldn’t open. Check your connection and try again.', 'error');
   }, []);
   const onLearnFailed = useCallback((error: Error, componentStack: string) => {
@@ -392,6 +395,15 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               {
                 label: 'Restore last-known-good',
                 onClick: () => {
+                  // Autosave has usually already written the state that crashed, so reloading from
+                  // disk would crash again. Step back past the last change instead (redo keeps it);
+                  // only with nothing to undo does the stored copy stand in.
+                  const editor = useEditorStore.getState();
+                  if (editor.history.past.length > 0) {
+                    editor.undo();
+                    setCanvasInstanceKey((k) => k + 1);
+                    return;
+                  }
                   void session.openDocument(session.openId!).then(() => setCanvasInstanceKey((k) => k + 1));
                 },
               },
@@ -825,6 +837,14 @@ function useKeyboard({
           return;
         case 'Escape': {
           arm(null);
+          // A presenter's reveal closes first — Escape backs out one thing, not the whole presentation.
+          if (
+            state.mode === 'present' &&
+            revealIn(useUiStore.getState().presentationReveal, presentationScope(state.flowPlayback))
+          ) {
+            useUiStore.getState().setPresentationReveal(null);
+            return;
+          }
           if (state.focus.active) state.exitFocus();
           else if (playback.active) {
             playback.stop();

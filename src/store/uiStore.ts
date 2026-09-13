@@ -169,8 +169,8 @@ export interface UiStore {
    * attachment badge. Presentation Mode's callout shows that element's attachments instead of
    * whatever the step would say on its own (`resolvePresentationSubject`). A read-only counterpart
    * to `openAttachmentDetail`, kept separate because that one also unlocks editing, which
-   * presentation must never do. Cleared on every step change (see `FlowBar.tsx`), so a reveal never
-   * survives into an unrelated later step.
+   * presentation must never do. Scoped to the step it was made on (`presentationScope`), so it
+   * never speaks for an unrelated later step; clicking the same element again, or Escape, lets it go.
    */
   presentationReveal: PresentationReveal | null;
   /** Whether the Flows panel — the one surface for flows (`FlowPanel.tsx`) — is visible. */

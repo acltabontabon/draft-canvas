@@ -2,12 +2,15 @@ import { useEffect } from 'react';
 import { displayNameFor } from '../../document/factory';
 import { isActivatableTarget, isEditableTarget } from '../../lib/isEditableTarget';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
-import { describePresentationSubject, resolvePresentationSubject } from '../../presentation/presentationAttachments';
+import {
+  describePresentationSubject,
+  presentationScope,
+  resolvePresentationSubject,
+  revealIn,
+} from '../../presentation/presentationAttachments';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
-import { tokenizeCode } from '../../render/code/highlight';
-import { CODE_THEMES, colorForScope } from '../../render/code/theme';
-import { useTheme } from '../theme/useTheme';
+import { ReadOnlyCode } from '../../canvas/AttachmentPresentation';
 import type { FlowPlaybackController } from '../../presentation/useFlowPlayback';
 import { Button } from '../common/Button';
 
@@ -19,7 +22,9 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
   // Only while presenting — the bar isn't shown otherwise, so it needn't follow every edit.
   const document = useEditorStore((state) => (playback.active ? state.document : null));
   const mode = useEditorStore((state) => state.mode);
-  const reveal = useUiStore((state) => (playback.active ? state.presentationReveal : null));
+  const reveal = useUiStore((state) =>
+    playback.active ? revealIn(state.presentationReveal, presentationScope({ ...playback, flowId: playback.flow?.id ?? null })) : null,
+  );
   const setMode = useEditorStore((state) => state.setMode);
 
   useEffect(() => {
@@ -36,6 +41,8 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
       if (playback.picking) return;
       // Space on a focused bar button (Previous, Exit…) is that button's click, not "next".
       if (event.key === ' ' && isActivatableTarget(event.target)) return;
+      // Arrows and Space on a focused, scrollable callout code block scroll it.
+      if (event.target instanceof Element && event.target.closest('[data-callout-scroll]')) return;
       if (event.key === 'ArrowRight' || event.key === ' ') {
         event.preventDefault();
         playback.next();
@@ -49,8 +56,9 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
   }, [playback]);
 
   // A presenter's reveal (a chip or badge clicked while presenting — see `presentationReveal`) is
-  // scoped to the step it was made on, and to the presentation itself: stepping, starting or
-  // stopping a flow, or leaving presentation all let it go, so nothing stray resurfaces later.
+  // scoped to the step it was made on (`revealIn` ignores it elsewhere, from the very first render),
+  // and this lets it go too: stepping, starting or stopping a flow, or leaving presentation, so a
+  // stale one isn't kept around to match again by coincidence.
   useEffect(() => {
     useUiStore.getState().setPresentationReveal(null);
   }, [playback.step, playback.flow?.id, playback.active, mode]);
@@ -185,33 +193,10 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
  * block, an error. It stays out of the canvas so the diagram remains readable,
  * and appears only for the step being explained.
  */
-function DetailPanel({ language, code }: { language: Parameters<typeof tokenizeCode>[1]; code: string }) {
-  const { name } = useTheme();
-  const theme = CODE_THEMES[name];
-  const lines = tokenizeCode(code, language);
-
+function DetailPanel({ language, code }: { language: Parameters<typeof ReadOnlyCode>[0]['language']; code: string }) {
   return (
     <div className="dc-explain-detail">
-      <pre>
-        <code>
-          {lines.map((line, index) => (
-            <span className="dc-code-line" key={index}>
-              {line.length === 0 ? (
-                '\n'
-              ) : (
-                <>
-                  {line.map((token, tokenIndex) => (
-                    <span key={tokenIndex} style={{ color: colorForScope(theme, token.scope) }}>
-                      {token.text}
-                    </span>
-                  ))}
-                  {'\n'}
-                </>
-              )}
-            </span>
-          ))}
-        </code>
-      </pre>
+      <ReadOnlyCode language={language} code={code} />
     </div>
   );
 }

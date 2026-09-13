@@ -65,6 +65,35 @@ All notable changes to Draft Canvas are documented here.
 - Escape in a dialog no longer also dismisses the suggestion behind it.
 - Opening a diagram that has exactly one flow no longer dims everything outside that flow — every
   diagram now opens showing the whole picture, and a flow is only highlighted once you pick it.
+- Clicking into a connector label and away again without changing it no longer adds an undo step
+  or clears Redo.
+- Moving a connector's end onto two shapes that are already connected that way no longer stacks a
+  second, identical connector.
+- "Connect to → New …" in the command palette is one undo step, instead of leaving an unconnected
+  shape behind after the first ⌘Z.
+- A tool picked on one canvas no longer stays armed when you open another, where the first click
+  would have placed a shape.
+- Presenting closes an attachment card left open while editing.
+- Pasting or duplicating into a diagram at its size limit says nothing was added, instead of
+  claiming part of it was.
+- If a starter can't load (for example, offline after an update), choosing it says so instead of
+  doing nothing.
+- Deleting a project whose canvases can't all be moved out keeps the project and says so.
+- "Restore last-known-good" after a canvas error steps back past the last change, instead of
+  reloading the saved copy that caused it.
+- While presenting, a note or code callout you open by clicking no longer flashes onto the next
+  step. Click the same chip or badge again, or press Escape, to close it without leaving the
+  presentation.
+- A docked callout on a short window no longer covers the flow bar's Previous and Next buttons.
+- Arrow keys and Space scroll a focused code block in a callout instead of changing the step, and a
+  shape's attachment badge can be reached with Tab while presenting.
+- Leaving Presentation, Focus or a flow highlight fades the diagram back in instead of snapping.
+- The colour palette in shape and connector popovers marks the current colour.
+- The highlighted row in right-click and Quick Connect menus is easier to follow with the arrow keys
+  in the dark theme.
+- Flow rows in the Flows panel and project rows on the home screen show their hover state properly
+  in the light theme.
+- Smoother dragging and resizing on large diagrams.
 
 ### Removed
 

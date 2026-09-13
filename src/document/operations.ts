@@ -77,6 +77,15 @@ function applyPatch<T extends object>(base: T, patch: Partial<T>): T {
   return next;
 }
 
+/** Whether a patched copy carries exactly the same fields and values as the original — a label
+ *  committed unchanged, a role re-picked. Identity per field, so a rebuilt nested object counts
+ *  as a change; the point is only that a true no-op never becomes an undo step. */
+function sameFields<T extends object>(a: T, b: T): boolean {
+  const keys = Object.keys(a) as (keyof T)[];
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => Object.hasOwn(b, key) && a[key] === b[key]);
+}
+
 export function addNodes(doc: DraftDocument, nodes: DraftNode[]): DraftDocument {
   if (nodes.length === 0) return doc;
   return withNodes(doc, [...doc.nodes, ...nodes]);
@@ -106,6 +115,7 @@ export function updateNode(
     if (patch.y !== undefined) next.y = clampCoord(patch.y);
     if (patch.width !== undefined) next.width = clampSize(patch.width);
     if (patch.height !== undefined) next.height = clampSize(patch.height);
+    if (sameFields(node, next)) return node;
     changed = true;
     return next;
   });
@@ -120,8 +130,10 @@ export function updateEdge(
   let changed = false;
   const edges = doc.edges.map((edge) => {
     if (edge.id !== id) return edge;
+    const next = applyPatch<DraftEdge>(edge, patch);
+    if (sameFields(edge, next)) return edge;
     changed = true;
-    return applyPatch<DraftEdge>(edge, patch);
+    return next;
   });
   return changed ? withEdges(doc, edges) : doc;
 }
@@ -160,6 +172,11 @@ export function reconnectEdge(
     // untouched one would leave a self-loop routing/hit-testing never expects.
     const otherEndpoint = endpoint === 'source' ? edge.target : edge.source;
     if (newNodeId === otherEndpoint) return edge;
+    // Mirrors `connect()`'s duplicate guard: moving an end onto a pair another connector already
+    // joins would stack two identical arrows. Re-siding on the same node is still a reconnect.
+    const source = endpoint === 'source' ? newNodeId : edge.source;
+    const target = endpoint === 'target' ? newNodeId : edge.target;
+    if (doc.edges.some((other) => other.id !== id && other.source === source && other.target === target)) return edge;
     changed = true;
     const next: DraftEdge =
       endpoint === 'source' ? { ...edge, source: newNodeId } : { ...edge, target: newNodeId };

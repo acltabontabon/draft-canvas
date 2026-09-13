@@ -262,8 +262,8 @@ export interface EditorStore {
   /* Editing commands */
   addNode: (input: CreateNodeInput) => DraftNode;
   /** One undoable bulk add. `flows` (a starter's predefined walkthroughs) join the same entry, so
-   *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. */
-  /** False (and nothing added) when the result would pass the document limits. */
+   *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. False
+   *  (and nothing added) when the result would pass the document limits. */
   addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string, flows?: DraftFlow[]) => boolean;
   /**
    * Inserts a Starter — a composed opening diagram — as one undoable action, clear of
@@ -738,7 +738,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setDocument(document, options) {
     interaction = null;
-    useUiStore.getState().resetContinuation();
+    const ui = useUiStore.getState();
+    ui.resetContinuation();
+    // A tool armed on the canvas just closed would place a node on the next one's first click.
+    ui.arm(null);
     set((state) => ({
       document,
       history: options?.resetHistory === false ? state.history : EMPTY_HISTORY,
@@ -1182,9 +1185,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   updateEdgeLabel(id, label) {
-    get().apply('Label connection', (doc) => updateEdge(doc, id, { label }), {
-      coalesceKey: `edge-label:${id}`,
-    });
+    // An unlabeled connector committed empty is the same connector — `''` and absent both read blank.
+    get().apply(
+      'Label connection',
+      (doc) => ((doc.edges.find((e) => e.id === id)?.label ?? '') === label ? doc : updateEdge(doc, id, { label })),
+      { coalesceKey: `edge-label:${id}` },
+    );
   },
 
   setEdgeSemantic(id, semantic) {
@@ -1398,6 +1404,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (state.selection.nodes.length === 0) return;
     const fragment = extractFragment(state.document, state.selection.nodes);
     const result = pasteFragment(state.document, fragment, { x: 24, y: 24 });
+    if (result.nodeIds.length === 0) {
+      useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
+      return;
+    }
     state.apply('Duplicate', () => result.doc, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
@@ -1459,6 +1469,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       y: target.y - fragmentCenter.y + stagger,
     };
     const result = pasteFragment(state.document, fragment, offset);
+    if (result.nodeIds.length === 0) {
+      useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
+      return;
+    }
     state.apply('Paste', () => result.doc, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
@@ -1863,6 +1877,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setMode(mode) {
+    // A card left open from editing carries edit actions (Delete, Detach) that presentation must
+    // never offer — while presenting, attachments speak through the callout instead.
+    if (mode === 'present') useUiStore.getState().setOpenAttachmentDetail(null);
     set((s) => ({
       mode,
       flowPlayback: mode === 'edit' ? { active: false, flowId: null, step: 0 } : s.flowPlayback,

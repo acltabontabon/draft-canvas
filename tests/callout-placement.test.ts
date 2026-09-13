@@ -101,6 +101,17 @@ describe('placeCallout for a connector', () => {
     expect(result.placement).toBe('docked');
     expect(result.leader).toBeNull();
     expect(result.y + 90).toBeLessThanOrEqual(flowBar.y);
+    expect(result.maxHeight).toBeUndefined();
+  });
+
+  it('caps a docked callout to the room above the flow bar rather than cover it', () => {
+    const short: Box = { x: 16, y: 16, width: 400, height: 860 };
+    const bar: Box = { x: 40, y: 200, width: 340, height: 44 };
+    const result = placeCallout(edgeInput({ bounds: short, size: { width: 380, height: 300 }, dockTo: bar, exclusions: [bar] }));
+    expect(result.placement).toBe('docked');
+    expect(result.y).toBe(short.y);
+    expect(result.maxHeight).toBe(bar.y - 12 - short.y);
+    expect(result.y + result.maxHeight!).toBeLessThanOrEqual(bar.y);
   });
 });
 

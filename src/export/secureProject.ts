@@ -9,7 +9,7 @@ import type { DraftDocument } from '../document/types';
 import { downloadText } from './download';
 import { fileNameFor, readImportText } from './project';
 
-export { SECURE_EXPORT_FILE_EXTENSION, SECURE_EXPORT_MIME };
+export { SECURE_EXPORT_FILE_EXTENSION };
 
 /**
  * Writes a passphrase-protected `.dcenc` file. The passphrase never becomes,

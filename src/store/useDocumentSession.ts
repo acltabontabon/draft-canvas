@@ -203,7 +203,9 @@ export function useDocumentSession(): DocumentSession {
       }
       if (!loaded) {
         notify('That diagram could not be read from local storage.', 'error');
-        await refreshLibrary();
+        await refreshLibrary().catch((error: unknown) => {
+          logDiagnostic(error, { operation: 'open-document-refresh', documentId: id });
+        });
         return;
       }
       let editorStore: EditorStoreModule;
@@ -268,7 +270,16 @@ export function useDocumentSession(): DocumentSession {
 
   const newDocument = useCallback(
     async (title?: string, starterId?: StarterId) => {
-      const catalog = starterId ? await loadStarters() : undefined;
+      let catalog: Awaited<ReturnType<typeof loadStarters>> | undefined;
+      try {
+        catalog = starterId ? await loadStarters() : undefined;
+      } catch (error) {
+        // The starters chunk didn't arrive (offline, or a deploy replaced it) — say so, the way
+        // `openDocument` does for the editor chunk, rather than leaving the click to do nothing.
+        logDiagnostic(error, { operation: 'load-starters' });
+        notify('That starter could not be loaded. Check your connection and try again.', 'error');
+        return;
+      }
       const starter = starterId ? catalog?.starterById(starterId) : undefined;
       let document = createDocument(title ?? starter?.name ?? 'Untitled canvas');
       if (starter) {
@@ -284,7 +295,7 @@ export function useDocumentSession(): DocumentSession {
       }
       await adoptDocument(document);
     },
-    [adoptDocument],
+    [adoptDocument, notify],
   );
 
   const closeDocument = useCallback(async () => {
@@ -415,7 +426,7 @@ export function useDocumentSession(): DocumentSession {
         await repository.deleteProject(id);
       } catch (error) {
         logDiagnostic(error, { operation: 'delete-project' });
-        notify('Could not delete that project — its canvases were left where they were.', 'error');
+        notify('Some canvases couldn’t be moved out, so the project was kept.', 'error');
       }
       await Promise.all([refreshProjects(), refreshLibrary()]).catch((error: unknown) => {
         logDiagnostic(error, { operation: 'delete-project-refresh' });

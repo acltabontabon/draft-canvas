@@ -439,9 +439,17 @@ export class IndexedDbRepository implements DraftRepository {
    */
   async deleteProject(id: string): Promise<void> {
     const members = (await this.list()).filter((summary) => summary.projectId === id);
+    // Every member gets its chance: one unreadable canvas mustn't strand the rest half-moved. The
+    // project is kept (and the first failure rethrown) when any couldn't move, so none is orphaned.
+    let firstFailure: unknown = null;
     for (const member of members) {
-      await this.moveDocumentToProject(member.id, undefined);
+      try {
+        await this.moveDocumentToProject(member.id, undefined);
+      } catch (error) {
+        firstFailure ??= error;
+      }
     }
+    if (firstFailure !== null) throw firstFailure;
     await this.db.delete('projects', id);
   }
 

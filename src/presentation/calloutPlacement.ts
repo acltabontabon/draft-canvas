@@ -58,6 +58,9 @@ export interface CalloutPlacement {
   y: number;
   /** From the marker's edge to the callout's nearest edge; null when docked or touching. */
   leader: CalloutLeader | null;
+  /** Docked only: the tallest the callout may be and still clear the flow bar, when that's less
+   *  than its size — the caller caps it there (its thread scrolls) rather than cover the bar. */
+  maxHeight?: number;
 }
 
 /** Screen pixels between the marker and the callout — enough for the thread to read as one. */
@@ -179,12 +182,17 @@ function evaluate(name: CalloutPlacementName, input: CalloutPlacementInput): Eva
 function docked(input: CalloutPlacementInput): CalloutPlacement {
   const { bounds, size, dockTo } = input;
   const centerX = dockTo ? dockTo.x + dockTo.width / 2 : bounds.x + bounds.width / 2;
-  const baseY = dockTo ? dockTo.y - DOCK_GAP - size.height : bounds.y + bounds.height - size.height;
+  // Between the canvas top and the flow bar — never over the bar's Previous/Next, however short
+  // the canvas: a callout that doesn't fit there is capped to it.
+  const floor = dockTo ? dockTo.y - DOCK_GAP : bounds.y + bounds.height;
+  const room = Math.max(0, floor - bounds.y);
+  const height = Math.min(size.height, room);
   return {
     placement: 'docked',
     x: clamp(centerX - size.width / 2, bounds.x, Math.max(bounds.x, bounds.x + bounds.width - size.width)),
-    y: Math.max(bounds.y, baseY),
+    y: floor - height,
     leader: null,
+    ...(size.height > room ? { maxHeight: room } : {}),
   };
 }
 

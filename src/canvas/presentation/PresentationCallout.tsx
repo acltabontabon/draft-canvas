@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type AnimationEvent, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, type AnimationEvent, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useStoreApi } from '@xyflow/react';
 import { displayNameFor } from '../../document/factory';
@@ -72,24 +72,39 @@ export function PresentationCallout({
   const target = useInternalNode(edge?.target ?? '');
   const hostInternal = useInternalNode(hostNode?.id ?? '');
 
-  const anchor: FlowAnchor | null = edge
-    ? edgeAnchor(document, edge, source, target)
-    : hostNode
-      ? nodeAnchor(hostInternal)
-      : null;
-  // Every connector as drawn (each hit path carries its canonical route, in flow coordinates) and
-  // every label and chip row riding on one — read once per commit into flow space, so placement
-  // keeps off them on every pan/zoom frame without re-routing or re-measuring anything.
-  // Declared before `useOverlayPosition` so its layout effect sees this commit's obstacles.
-  const drawnRef = useRef<{ lines: { x: number; y: number }[][]; labels: Box[] }>({ lines: [], labels: [] });
+  // Routing the connector for its label point isn't free — only redone when what it reads changes.
+  const anchor: FlowAnchor | null = useMemo(
+    () => (edge ? edgeAnchor(document, edge, source, target) : hostNode ? nodeAnchor(hostInternal) : null),
+    [document, edge, hostNode, source, target, hostInternal],
+  );
+  // Everything placement keeps off, in flow space — every other node, every connector as drawn (each
+  // hit path carries its canonical route) and every label and chip row riding on one — read once
+  // per commit, so a pan/zoom frame only maps boxes to the screen: no walking the node lookup, no
+  // re-segmenting routes, no measuring. Declared before `useOverlayPosition` so its layout effect
+  // sees this commit's obstacles.
+  const obstaclesRef = useRef<{ nodes: { id: string; box: Box }[]; segments: Box[]; labels: Box[] }>({
+    nodes: [],
+    segments: [],
+    labels: [],
+  });
   useLayoutEffect(() => {
-    const { domNode: root, transform } = storeApi.getState();
+    const { domNode: root, transform, nodeLookup } = storeApi.getState();
     if (!root) return;
     const [tx, ty, zoom] = transform;
     const rootRect = root.getBoundingClientRect();
-    drawnRef.current = {
-      lines: [...root.querySelectorAll<SVGPathElement>('.dc-edge-hit')].map((path) =>
-        flattenPath(path.getAttribute('d') ?? ''),
+    const types = new Map(document.nodes.map((node) => [node.id, node.type]));
+    const nodes: { id: string; box: Box }[] = [];
+    for (const internal of nodeLookup.values()) {
+      // Boundaries are skipped: a callout inside a group is still "beside" what it annotates.
+      if (types.get(internal.id) === 'group') continue;
+      const rect = rectOfInternal(internal);
+      if (rect) nodes.push({ id: internal.id, box: rect });
+    }
+    obstaclesRef.current = {
+      nodes,
+      // Zero-thickness in flow space; the line's thickness is a screen size, added per frame.
+      segments: [...root.querySelectorAll<SVGPathElement>('.dc-edge-hit')].flatMap((path) =>
+        segmentBoxes(flattenPath(path.getAttribute('d') ?? ''), 0),
       ),
       labels: [...root.querySelectorAll<Element>(DRAWN_LABELS)].map((element) => {
         const rect = element.getBoundingClientRect();
@@ -101,33 +116,34 @@ export function PresentationCallout({
         };
       }),
     };
-  }, [document, storeApi]);
+  }, [document, storeApi, source, target, hostInternal]);
 
-  const types = new Map(document.nodes.map((node) => [node.id, node.type]));
+  // The tallest a docked callout may be and still clear the flow bar. Only ever tightens while this
+  // callout lives: capping shrinks its measured size, and a cap that lifted again as a result would
+  // hand placement back the size that needed it — a resize loop.
+  const roomRef = useRef(Number.POSITIVE_INFINITY);
 
   const place = (frame: OverlayFrame, current: CalloutPlacementName) => {
     if (!anchor || frame.size.width === 0) return null;
-    const { flowToScreenPosition, root, size } = frame;
-    const toScreen = (box: Box): Box => {
-      const topLeft = flowToScreenPosition({ x: box.x, y: box.y });
-      const bottomRight = flowToScreenPosition({ x: box.x + box.width, y: box.y + box.height });
-      return { x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y };
-    };
-    const rootElement = storeApi.getState().domNode;
-    const marker = toScreen(anchor.marker(rootElement));
+    const { root, size } = frame;
+    const [tx, ty, zoom] = storeApi.getState().transform;
+    // Flow → screen is one affine map; `flowToScreenPosition` per corner, per box, per frame adds up.
+    const toScreen = (box: Box): Box => ({
+      x: root.left + box.x * zoom + tx,
+      y: root.top + box.y * zoom + ty,
+      width: box.width * zoom,
+      height: box.height * zoom,
+    });
+    const marker = toScreen(anchor.marker(storeApi.getState().domNode));
 
     // Every other element on the canvas is a soft obstacle — covered only when nothing clean exists.
-    // Boundaries are skipped: a callout inside a group is still "beside" what it annotates.
+    const obstacles = obstaclesRef.current;
     const soft: Box[] = [];
-    for (const internal of storeApi.getState().nodeLookup.values()) {
-      if (anchor.exclude.includes(internal.id) || types.get(internal.id) === 'group') continue;
-      const rect = rectOfInternal(internal);
-      if (rect) soft.push(toScreen(rect));
+    for (const { id, box } of obstacles.nodes) {
+      if (!anchor.exclude.includes(id)) soft.push(toScreen(box));
     }
-    for (const line of drawnRef.current.lines) {
-      soft.push(...segmentBoxes(line.map((point) => flowToScreenPosition(point)), LINE_THICKNESS));
-    }
-    soft.push(...drawnRef.current.labels.map(toScreen));
+    for (const segment of obstacles.segments) soft.push(inflate(toScreen(segment), LINE_THICKNESS / 2));
+    for (const label of obstacles.labels) soft.push(toScreen(label));
 
     const flowBar = chromeBox('.dc-explain');
     const exitButton = chromeBox('.dc-present-exit');
@@ -152,6 +168,7 @@ export function PresentationCallout({
       current,
       dockTo: flowBar,
     });
+    if (result.maxHeight !== undefined) roomRef.current = Math.min(roomRef.current, result.maxHeight);
 
     const at = frame.screenToOverlay({ x: result.x, y: result.y });
     const leader = result.leader;
@@ -170,24 +187,40 @@ export function PresentationCallout({
         '--dc-callout-marker-y': px(marker.y - result.y),
         '--dc-callout-marker-width': px(marker.width),
         '--dc-callout-marker-height': px(marker.height),
+        '--dc-callout-room': Number.isFinite(roomRef.current) ? px(roomRef.current) : '9999px',
       },
     };
   };
 
   const { target: portalTarget } = useOverlayPosition<CalloutPlacementName>(panelRef, 'above', place);
 
-  // A code leaf that has to scroll says so with a fade, and becomes keyboard-scrollable; one that
-  // fits stays a plain, unfocusable block. Measured once per content change, not per frame.
+  // A leaf that has to scroll says so with a fade (vertically) and becomes keyboard-scrollable (either
+  // way — a long code line too); one that fits stays a plain, unfocusable block. Re-measured whenever
+  // the callout's box changes size — a window resize moves its `vh` cap — not per frame.
+  const mounted = portalTarget !== null && anchor !== null;
   useLayoutEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
-    for (const scroller of panel.querySelectorAll<HTMLElement>('[data-callout-scroll]')) {
-      const overflowing = scroller.scrollHeight > scroller.clientHeight + 1;
-      scroller.dataset.overflowing = overflowing ? 'true' : 'false';
-      if (overflowing) scroller.tabIndex = 0;
-      else scroller.removeAttribute('tabindex');
-    }
-  }, [subject.attachments]);
+    const measure = () => {
+      for (const scroller of panel.querySelectorAll<HTMLElement>('[data-callout-scroll]')) {
+        const tall = scroller.scrollHeight > scroller.clientHeight + 1;
+        const wide = scroller.scrollWidth > scroller.clientWidth + 1;
+        scroller.dataset.overflowing = tall ? 'true' : 'false';
+        if (tall || wide) scroller.tabIndex = 0;
+        else scroller.removeAttribute('tabindex');
+      }
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [subject.attachments, mounted]);
+
+  // A departing callout with nothing left to hang from never plays its exit — let it go at once.
+  useEffect(() => {
+    if (leaving && !anchor) onSettled(subject.key);
+  }, [leaving, anchor, onSettled, subject.key]);
 
   if (!portalTarget || !anchor) return null;
 
@@ -212,6 +245,8 @@ export function PresentationCallout({
       data-leaving={leaving ? 'true' : undefined}
       data-wide={hasCode ? 'true' : undefined}
       aria-hidden={leaving ? true : undefined}
+      // Nothing inside a departing callout keeps (or takes) focus.
+      inert={leaving}
       style={
         {
           '--dc-callout-fill': firstLook.fill,

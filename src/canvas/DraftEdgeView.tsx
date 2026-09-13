@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LIMITS } from '../document/limits';
 import { EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import type { DraftNode } from '../document/types';
@@ -50,8 +51,10 @@ interface EdgeRoutes {
   response: ReturnType<typeof routeBetween> | null;
 }
 
-/** Routing is pure in its inputs, so results are shared by key across every connector. */
-const ROUTES = new Lru<string, EdgeRoutes>(2048);
+/** Routing is pure in its inputs, so results are shared by key across every connector. Room for
+ *  every connector a document may hold — smaller, a render that touches them all evicts routes
+ *  still on screen and recomputes most of them. */
+const ROUTES = new Lru<string, EdgeRoutes>(LIMITS.maxEdges);
 
 /** Minimum pointer movement, in screen pixels, before an endpoint gesture
  *  counts as a drag rather than a click — see `EdgeEndpointHandle`. */
@@ -203,15 +206,18 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // untouched — so under `useShallow` a commit elsewhere on the canvas re-renders nothing here.
   // While a gesture moves nodes, a connector attached to one skips avoidance until it commits (its
   // route changes every frame anyway); every other connector keeps its detours, minus the moving
-  // nodes' own stale rects.
-  const movingNodeIds = useUiStore((state) => state.movingNodeIds);
-  const endpointMoving = edge !== undefined && (movingNodeIds.has(edge.source) || movingNodeIds.has(edge.target));
+  // nodes' own stale rects. Both read `movingNodeIds` through selectors that settle to a boolean or
+  // an unchanged list, so a gesture starting or ending re-renders only the connectors it touches —
+  // not all of them because the set is a new object.
+  const endpointMoving = useUiStore(
+    (state) => edge !== undefined && (state.movingNodeIds.has(edge.source) || state.movingNodeIds.has(edge.target)),
+  );
   const nearbyObstacles = useEditorStore(
     useShallow((state) =>
       endpointMoving || !edge ? NO_OBSTACLES : obstaclesForEdge(state.document.nodes, edge.source, edge.target),
     ),
   );
-  const obstacles = useMemo(() => withoutNodes(nearbyObstacles, movingNodeIds), [nearbyObstacles, movingNodeIds]);
+  const obstacles = useUiStore(useShallow((state) => withoutNodes(nearbyObstacles, state.movingNodeIds)));
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);

@@ -543,15 +543,17 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['day', 86_400_000],
 ];
 
+/** Built once: a formatter per row per keystroke of search adds up on a long library. */
+const RELATIVE_TIME = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+
 function relativeTime(at: number): string {
   const delta = at - Date.now();
   const absolute = Math.abs(delta);
   if (absolute < 45_000) return 'just now';
 
-  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
   for (let i = UNITS.length - 1; i >= 0; i -= 1) {
     const [unit, ms] = UNITS[i]!;
-    if (absolute >= ms) return formatter.format(Math.round(delta / ms), unit);
+    if (absolute >= ms) return RELATIVE_TIME.format(Math.round(delta / ms), unit);
   }
   return 'just now';
 }

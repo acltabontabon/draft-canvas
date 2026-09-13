@@ -31,6 +31,7 @@ import { useThemeValue } from '../ui/theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { count } from '../lib/plural';
+import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
 
 /**
  * One component renders every node type.
@@ -74,7 +75,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       : null,
   );
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
-  const setPresentationReveal = useUiStore((state) => state.setPresentationReveal);
   const popoverOpen = useUiStore(
     (state) => state.openAttachmentDetail?.hostKind === 'node' && state.openAttachmentDetail?.hostId === id,
   );
@@ -91,6 +91,19 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
    */
   const [liveHeight, setLiveHeight] = useState<number | null>(null);
   const [resizing, setResizing] = useState(false);
+  // Stable, not inline: `NodeResizer` hands these to eight resize controls whose effects rebind
+  // their drag handlers whenever a callback's identity changes — every drag or resize frame, since
+  // a selected node re-renders on each one.
+  const onResizeStart = useCallback(() => {
+    useEditorStore.getState().beginInteraction('Resize');
+    useUiStore.getState().setInteractionActive(true, [id]);
+    setResizing(true);
+  }, [id]);
+  const onResizeEnd = useCallback(() => {
+    useEditorStore.getState().endInteraction();
+    useUiStore.getState().setInteractionActive(false);
+    setResizing(false);
+  }, []);
   const [copied, setCopied] = useState(false);
   const isCode = node?.type === 'code';
   const isNote = node?.type === 'note';
@@ -329,16 +342,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           keepAspectRatio={node.type === 'ellipse'}
           lineClassName="dc-resize-line"
           handleClassName="dc-resize-handle"
-          onResizeStart={() => {
-            useEditorStore.getState().beginInteraction('Resize');
-            useUiStore.getState().setInteractionActive(true, [node.id]);
-            setResizing(true);
-          }}
-          onResizeEnd={() => {
-            useEditorStore.getState().endInteraction();
-            useUiStore.getState().setInteractionActive(false);
-            setResizing(false);
-          }}
+          onResizeStart={onResizeStart}
+          onResizeEnd={onResizeEnd}
         />
       )}
 
@@ -388,16 +393,18 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           title={count(attachmentCount, 'attachment')}
           aria-label={count(attachmentCount, 'attachment')}
           aria-expanded={popoverOpen}
-          tabIndex={selected ? 0 : -1}
+          // Presenting clears the selection, so the badge is reachable there the way edge chips are.
+          tabIndex={selected || mode === 'present' ? 0 : -1}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
             // Presenting never opens the editing popover (`AttachmentPopover` refuses to render
             // then) — the presenter is asking this node to speak, and the presentation callout
-            // shows its attachments read-only until the step changes.
+            // shows its attachments read-only for this step; asked again, it lets go.
             if (mode === 'present') {
-              const first = node.attachments?.[0];
-              if (first) setPresentationReveal({ hostKind: 'node', hostId: node.id, attachmentId: first.id });
+              const ui = useUiStore.getState();
+              const scope = presentationScope(useEditorStore.getState().flowPlayback);
+              ui.setPresentationReveal(toggledReveal(ui.presentationReveal, 'node', node.id, scope));
               return;
             }
             setOpenAttachmentDetail(popoverOpen ? null : { hostKind: 'node', hostId: node.id, attachmentId: null });

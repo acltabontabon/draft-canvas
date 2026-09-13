@@ -16,7 +16,6 @@ import {
 
 export interface FlowAnchor {
   kind: 'edge' | 'node';
-  hostId: string;
   /** The marker's flow-space box, its rendered size measured from the DOM under `root`. */
   marker: (root: HTMLElement | null) => Box;
   host: Box | null;
@@ -57,7 +56,6 @@ export function edgeAnchor(
   const box = (rect: Rect): Box => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
   return {
     kind: 'edge',
-    hostId: edge.id,
     // Mirrors `attachmentRowTransform` in `DraftEdgeView`: centred on the label point, one gap off it.
     marker: (root) => {
       const row = root?.querySelector<HTMLElement>(`.dc-attachment-chip-row[data-host-id="${CSS.escape(edge.id)}"]`);
@@ -78,7 +76,6 @@ export function nodeAnchor(node: InternalNode | undefined): FlowAnchor | null {
   const host: Box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
   return {
     kind: 'node',
-    hostId: node.id,
     marker: (root) => {
       const badge = root?.querySelector<HTMLElement>(
         `.react-flow__node[data-id="${CSS.escape(node.id)}"] .dc-attachment-badge`,

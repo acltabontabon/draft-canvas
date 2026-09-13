@@ -350,6 +350,30 @@ export function routingPlan(nodes: readonly DraftNode[], edges: readonly DraftEd
   return plan;
 }
 
+/** The last spine handed out per id. Any edit re-plans (a label change is a new `nodes` array), and
+ *  a connector subscribes to its spine by identity — so an unchanged trunk comes back as the very
+ *  same object, and only connectors whose trunk actually moved re-render. */
+const lastSpines = new Map<string, EdgeSpine>();
+const MAX_INTERNED_SPINES = 4096;
+
+function internSpine(spine: EdgeSpine): EdgeSpine {
+  const previous = lastSpines.get(spine.id);
+  if (
+    previous &&
+    previous.hub === spine.hub &&
+    previous.hubSide === spine.hubSide &&
+    previous.trunkGap === spine.trunkGap &&
+    previous.corridor === spine.corridor &&
+    previous.count === spine.count
+  ) {
+    return previous;
+  }
+  // Bounded like a cache, not a registry: ids from long-closed documents needn't be kept forever.
+  if (lastSpines.size >= MAX_INTERNED_SPINES) lastSpines.clear();
+  lastSpines.set(spine.id, spine);
+  return spine;
+}
+
 function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): RoutingPlan {
   if (edges.length < MIN_SPINE_MEMBERS) return EMPTY_PLAN;
 
@@ -449,14 +473,14 @@ function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): 
     );
     if (placed === null) continue;
 
-    const spine: EdgeSpine = {
+    const spine = internSpine({
       id: group.key,
       hub: group.hub,
       hubSide: group.hubSide,
       trunkGap: placed.gap,
       corridor: placed.corridor,
       count: free.length,
-    };
+    });
     members.set(
       spine.id,
       free

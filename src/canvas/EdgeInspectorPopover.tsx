@@ -1206,6 +1206,7 @@ function ExpandedPanel({
                 className="dc-swatch"
                 title={accent}
                 aria-label={`Colour ${accent}`}
+                aria-pressed={edge.accent === accent}
                 style={{ background: theme.accents[accent].chip }}
                 onClick={() => {
                   useEditorStore.getState().updateEdgeById(edge.id, { accent }, 'Recolour');

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { useUiStore } from '../src/store/uiStore';
 
 const store = useEditorStore;
 
@@ -41,5 +42,21 @@ describe('setDocument resets mode', () => {
 
     store.getState().setDocument(createDocument('C'));
     expect(store.getState().mode).toBe('edit');
+  });
+});
+
+describe('per-canvas UI state does not leak', () => {
+  beforeEach(reset);
+
+  it('an armed tool is disarmed when another document opens', () => {
+    useUiStore.getState().arm({ id: 'service', label: 'Service', type: 'service' } as never);
+    store.getState().setDocument(createDocument('B'));
+    expect(useUiStore.getState().armed).toBeNull();
+  });
+
+  it('presenting closes an attachment card left open from editing', () => {
+    useUiStore.getState().setOpenAttachmentDetail({ hostKind: 'node', hostId: 'n1', attachmentId: null });
+    store.getState().setMode('present');
+    expect(useUiStore.getState().openAttachmentDetail).toBeNull();
   });
 });

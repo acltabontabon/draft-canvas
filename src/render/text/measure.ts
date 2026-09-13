@@ -19,7 +19,7 @@ export interface TextMeasurer {
  * the browser: the DOM renders lines this module already decided on, so there is
  * no second layout engine that could disagree with it.
  */
-export class CanvasTextMeasurer implements TextMeasurer {
+class CanvasTextMeasurer implements TextMeasurer {
   private readonly context: CanvasRenderingContext2D;
   private readonly widths = new Lru<string, number>(8000);
   private readonly metricsCache = new Map<string, FontMetrics>();

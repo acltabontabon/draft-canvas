@@ -3,8 +3,10 @@ import type { DraftEdge, DraftFlow, DraftNode } from '../src/document/types';
 import {
   describePresentationSubject,
   presentableAttachments,
+  presentationScope,
   resolvePresentationSubject,
   revealedSubject,
+  toggledReveal,
 } from '../src/presentation/presentationAttachments';
 import { resolveFlowSteps } from '../src/presentation/useFlowPlayback';
 import { buildStarter } from '../src/starters/build';
@@ -91,18 +93,33 @@ describe('resolvePresentationSubject', () => {
       step: 1,
       nodesById,
       edgesById,
-      reveal: { hostKind: 'node', hostId: 'a', attachmentId: 'na' },
+      reveal: { hostKind: 'node', hostId: 'a', scope: 'f:1' },
     });
-    expect(revealed).toMatchObject({ hostKind: 'node', hostId: 'a', revealedId: 'na' });
+    expect(revealed).toMatchObject({ hostKind: 'node', hostId: 'a' });
     const dangling = resolvePresentationSubject({
       flowId: 'f',
       steps,
       step: 1,
       nodesById,
       edgesById,
-      reveal: { hostKind: 'node', hostId: 'gone', attachmentId: 'x' },
+      reveal: { hostKind: 'node', hostId: 'gone', scope: 'f:1' },
     });
     expect(dangling?.hostId).toBe('ab');
+  });
+
+  it('ignores a reveal made on another step, even before anything clears it', () => {
+    const nodes = [node('a', { attachments: [note('na', 'about a')] }), node('b'), node('c')];
+    const edges = [edge('ab', 'a', 'b'), edge('bc', 'b', 'c', { attachments: [note('nc', 'about bc')] })];
+    const flow: DraftFlow = { id: 'f', title: 'F', steps: [{ id: 's1', edgeId: 'ab' }, { id: 's2', edgeId: 'bc' }] };
+    const { steps, nodesById, edgesById } = playbackOf(flow, nodes, edges);
+    const scope = presentationScope({ active: true, flowId: 'f', step: 1 });
+    const reveal = toggledReveal(null, 'node', 'a', scope);
+    expect(resolvePresentationSubject({ flowId: 'f', steps, step: 1, nodesById, edgesById, reveal })?.hostId).toBe('a');
+    // Stepped on: the stale reveal no longer speaks — the step's own connector does.
+    expect(resolvePresentationSubject({ flowId: 'f', steps, step: 2, nodesById, edgesById, reveal })?.hostId).toBe('bc');
+    // Asked again on the same moment, it lets go; with no flow the moment is 'present'.
+    expect(toggledReveal(reveal, 'node', 'a', scope)).toBeNull();
+    expect(presentationScope({ active: false, flowId: null, step: 0 })).toBe('present');
   });
 
   it('stays silent for empty attachments and steps outside the flow', () => {
@@ -121,7 +138,7 @@ describe('resolvePresentationSubject', () => {
       { id: 'c', type: 'code' as const, code: '{}' },
     ];
     const nodes = [node('a', { attachments })];
-    const reveal = { hostKind: 'node' as const, hostId: 'a', attachmentId: 'd' };
+    const reveal = { hostKind: 'node' as const, hostId: 'a', scope: 'present' };
     const subject = revealedSubject('present', reveal, new Map(nodes.map((n) => [n.id, n])), new Map());
     expect(subject?.key).toBe('present:node:a');
     expect(describePresentationSubject(subject!)).toBe('Decision: Keep it. Code attached.');

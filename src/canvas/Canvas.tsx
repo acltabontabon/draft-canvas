@@ -162,13 +162,13 @@ function snapResizeChanges(
   );
   if (resizing.length === 0 || statics.length === 0) return { ...NO_SNAP, changes };
 
-  const byId = new Map(current.map((node) => [node.id, node]));
   let result = changes;
   const guides: Guide[] = [];
 
   for (const change of resizing) {
     if (change.type !== 'dimensions' || !change.dimensions) continue;
-    const node = byId.get(change.id);
+    // A resize moves one node (occasionally a few) — a lookup, not a map of every node per frame.
+    const node = current.find((candidate) => candidate.id === change.id);
     if (!node) continue;
     const posChange = changes.find(
       (c) => c.type === 'position' && c.id === change.id && c.position,
@@ -313,9 +313,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
 
   const [guides, setGuides] = useState<Guide[]>([]);
   const attachArmedTarget = useUiStore((state) => state.attachArmedTarget);
-  const attachTarget = attachArmedTarget
-    ? document.nodes.find((node) => node.id === attachArmedTarget)
-    : undefined;
+  const attachTarget = attachArmedTarget ? nodeIndex(document.nodes).get(attachArmedTarget) : undefined;
 
   /** Rectangles of everything not being dragged, rebuilt once per gesture. */
   const staticRects = useRef<Rect[]>([]);

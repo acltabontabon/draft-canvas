@@ -8,6 +8,9 @@ export interface LibraryView {
   projectId?: string;
 }
 
+/** Same order as `localeCompare`, without resolving the locale again for every comparison. */
+const TITLE_ORDER = new Intl.Collator();
+
 /**
  * Search-first, organization-second: a non-empty query searches the whole
  * library regardless of the selected sidebar view, matching canvas title or
@@ -58,7 +61,7 @@ export function visibleCanvases(
   // shows last-edited-first regardless of `sort`, unlike "All diagrams".
   const effectiveSort: LibrarySort = !searching && view.kind === 'recent' ? 'updatedAt' : sort;
   return [...base].sort((a, b) => {
-    if (effectiveSort === 'name') return a.title.localeCompare(b.title);
+    if (effectiveSort === 'name') return TITLE_ORDER.compare(a.title, b.title);
     if (effectiveSort === 'createdAt') return b.createdAt - a.createdAt;
     return b.updatedAt - a.updatedAt;
   });

@@ -46,6 +46,9 @@ export function useOverlayPosition<P extends string>(
   panelRef: RefObject<HTMLElement | null>,
   initial: P,
   place: (frame: OverlayFrame, current: P) => OverlayPlacement<P> | null,
+  /** Skip placing entirely — for a panel hidden while its element is mid-gesture. The render that
+   *  unfreezes it places it again. */
+  frozen = false,
 ): { target: HTMLDivElement | null; placement: P } {
   const target = useStore((state) => state.domNode);
   const storeApi = useStoreApi();
@@ -82,7 +85,7 @@ export function useOverlayPosition<P extends string>(
     applyRef.current = () => {
       const panel = panelRef.current;
       const root = storeApi.getState().domNode;
-      if (!panel || !root) return;
+      if (!panel || !root || frozen) return;
       if (sizeRef.current.width === 0) {
         sizeRef.current = { width: Math.round(panel.offsetWidth), height: Math.round(panel.offsetHeight) };
       }

@@ -9,6 +9,7 @@ import { Icon } from '../ui/common/Icon';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { attachmentLookFor } from './attachmentLook';
+import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
 
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css` — the card
  *  stays mounted this long after `visible` goes false so the CSS fade-out has time to play
@@ -50,11 +51,8 @@ function wasLastKeydownEscape(): boolean {
 }
 
 /**
- * Read-only, syntax-highlighted code — the same `tokenizeCode`/`colorForScope` primitives
- * `FlowBar.tsx`'s `DetailPanel` uses for a connection's legacy `details` field during playback,
- * reused here rather than duplicated. Not imported from there directly: `ui/Editor/FlowBar.tsx`
- * sits above `canvas/` in this app's one-way dependency order, so this is its own small instance
- * of the same pattern, not a shared component.
+ * Read-only, syntax-highlighted code — an attachment card's, the presentation callout's, and
+ * `FlowBar.tsx`'s `DetailPanel` for a connection's legacy `details` field during playback.
  */
 export function ReadOnlyCode({ language, code }: { language: Parameters<typeof tokenizeCode>[1]; code: string }) {
   const { name } = useTheme();
@@ -203,7 +201,6 @@ function AttachmentChip({
     (state) => hostKind === 'edge' && state.selection.edges.length === 1 && state.selection.edges[0] === hostId,
   );
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
-  const setPresentationReveal = useUiStore((state) => state.setPresentationReveal);
 
   // Spans the whole chip (icon, label, and — once open — the card itself),
   // not just the card: see the outside-pointerdown effect below for why.
@@ -330,9 +327,11 @@ function AttachmentChip({
       return;
     }
     // Presenting: the presenter asks this element to speak — the callout shows it, read-only,
-    // until the step changes (`FlowBar.tsx`). Never unlocks the textarea below: that stays gated on
-    // `pinned`, which presentation never sets.
-    setPresentationReveal({ hostKind, hostId, attachmentId: attachment.id });
+    // for this step only; asked again, it lets go. Never unlocks the textarea below: that stays
+    // gated on `pinned`, which presentation never sets.
+    const ui = useUiStore.getState();
+    const scope = presentationScope(useEditorStore.getState().flowPlayback);
+    ui.setPresentationReveal(toggledReveal(ui.presentationReveal, hostKind, hostId, scope));
   };
 
   const chipVars = {

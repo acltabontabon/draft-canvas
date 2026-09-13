@@ -359,6 +359,7 @@
    opts back into normal text selection below. */
 .dc-edge {
   user-select: none;
+  transition: opacity 180ms ease;
 }
 
 /*
@@ -449,7 +450,9 @@
   /* One halo, not four stacked blurs: every label repaints it on each zoom step, and the
      translucent chip behind the text already does most of the separating. */
   text-shadow: 0 0 3px var(--dc-canvas);
-  transition: background 120ms ease;
+  transition:
+    background 120ms ease,
+    opacity 180ms ease;
   /* Same Safari flicker note as `.dc-edge` above — `.dc-edge-label-input` (the actual editable
      text once double-clicked open) opts back in. */
   user-select: none;
@@ -513,6 +516,7 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
+  transition: opacity 180ms ease;
 }
 
 .dc-edge-step[data-active='true'] {
@@ -545,7 +549,9 @@
   pointer-events: all;
   cursor: text;
   user-select: none;
-  transition: border-color 120ms ease;
+  transition:
+    border-color 120ms ease,
+    opacity 180ms ease;
 }
 
 .dc-edge-condition:hover,
@@ -622,6 +628,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  transition: opacity 180ms ease;
 }
 
 /* One attachment, styled to match exactly what its own card type already looks like elsewhere in
@@ -735,7 +742,7 @@
   width: 220px;
   max-height: 240px;
   border: 1px solid var(--dc-chip-border);
-  border-radius: 8px;
+  border-radius: var(--dc-radius);
   background: var(--dc-chip-fill);
   box-shadow: var(--dc-shadow-panel);
   overflow: hidden;
@@ -1248,7 +1255,7 @@
    danger-coloured — never a permanently red button that shouts from every selection. */
 .dc-popover-delete:hover:not(:disabled),
 .dc-popover-delete:focus-visible {
-  background: color-mix(in srgb, var(--dc-danger) 14%, transparent);
+  background: color-mix(in srgb, var(--dc-danger) 16%, transparent);
   color: var(--dc-danger);
 }
 
@@ -1880,8 +1887,10 @@
   cursor: pointer;
 }
 
+/* The row the keyboard (or pointer) is on wears the ⌘K palette's selection tint: a hover grey alone
+   is too faint to follow with arrow keys on the dark theme. */
 .dc-context-menu-item[data-highlighted='true'] {
-  background: var(--dc-surface-hover);
+  background: var(--dc-selection-soft);
 }
 
 .dc-context-menu-item[data-destructive='true'] {
@@ -2393,6 +2402,14 @@
  * Dimming is done with one class on the container rather than by pushing a prop
  * into every node. A hundred nodes fade with zero React work.
  */
+
+/* A transition comes from the style being changed *to* — declared only on the dimmed rules, leaving
+   Presentation, Focus or a lens would snap everything back to full strength instead of fading. So
+   the resting state carries it too (and connectors, their labels, steps, meta and chip rows above). */
+.dc-canvas .react-flow__node {
+  transition: opacity 180ms ease, filter 180ms ease;
+}
+
 .dc-canvas[data-explain='on'] .react-flow__node {
   opacity: 0.3;
   filter: grayscale(0.5);
@@ -2511,7 +2528,7 @@
   position: relative;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--dc-callout-line) 75%, var(--dc-border));
-  border-radius: 10px;
+  border-radius: var(--dc-radius);
   background: color-mix(in srgb, var(--dc-callout-fill) 50%, var(--dc-surface-raised));
   color: var(--dc-text);
   box-shadow:
@@ -2522,7 +2539,9 @@
 /* The thread: one hairline runs down the leaves, each attachment knotted onto it in its own accent —
    the connector's line, continued into what it has to say. */
 .dc-callout-thread {
-  max-height: min(320px, 45vh);
+  /* `--dc-callout-room`: docked on a short canvas, the space left above the flow bar (less the
+     card's border) — set by `PresentationCallout`, so the thread scrolls instead of covering it. */
+  max-height: min(320px, 45vh, calc(var(--dc-callout-room, 9999px) - 2px));
   margin: 0;
   padding: 11px 16px 13px 13px;
   overflow-y: auto;
@@ -2622,7 +2641,7 @@
   margin-top: 6px;
   overflow: auto;
   border: 1px solid color-mix(in srgb, var(--dc-leaf-line) 80%, transparent);
-  border-radius: 6px;
+  border-radius: var(--dc-radius-sm);
   background: var(--dc-code-bg);
   scrollbar-width: thin;
   user-select: text;
@@ -3115,7 +3134,7 @@
 }
 
 .dc-quick-connect-item[data-highlighted='true'] {
-  background: var(--dc-surface-hover);
+  background: var(--dc-selection-soft);
 }
 
 .dc-quick-connect-item[data-suggested='true']::after {

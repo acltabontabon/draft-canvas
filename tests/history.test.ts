@@ -1,6 +1,7 @@
 import { DEFAULTS } from '../src/document/limits';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
+import { HISTORY_LIMIT } from '../src/history/HistoryStack';
 import { __resetClipboardSync, __resetInteraction, documentWithLiveViewport, useEditorStore } from '../src/store/editorStore';
 
 const store = useEditorStore;
@@ -289,6 +290,38 @@ describe('undo and redo', () => {
     expect(store.getState().document.edges).toHaveLength(1);
   });
 
+  it('refuses a reconnect onto a pair another connector already joins, but still re-sides one', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 300, y: 0 });
+    const c = store.getState().addNode({ type: 'service', x: 0, y: 300 });
+    store.getState().connect(a.id, b.id);
+    const cb = store.getState().connect(c.id, b.id)!;
+    const before = store.getState().history.past.length;
+
+    store.getState().reconnectEdge(cb.id, 'source', a.id, undefined);
+    expect(store.getState().document.edges.filter((e) => e.source === a.id && e.target === b.id)).toHaveLength(1);
+    expect(store.getState().history.past).toHaveLength(before);
+
+    store.getState().reconnectEdge(cb.id, 'target', b.id, 'left');
+    expect(store.getState().document.edges.find((e) => e.id === cb.id)!.targetAnchor?.side).toBe('left');
+  });
+
+  it('committing an unchanged value records nothing and keeps redo', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    const edge = store.getState().connect(a.id, b.id)!;
+    store.getState().updateEdgeLabel(edge.id, 'reads');
+    store.getState().undo();
+    const { past, future } = store.getState().history;
+    const document = store.getState().document;
+
+    store.getState().updateEdgeLabel(edge.id, edge.label ?? '');
+    store.getState().updateNodeById(a.id, { text: 'API' }, 'Rename');
+    expect(store.getState().document).toBe(document);
+    expect(store.getState().history.past).toHaveLength(past.length);
+    expect(store.getState().history.future).toHaveLength(future.length);
+  });
+
   it('duplicates a selection without touching the original', () => {
     const node = store.getState().addNode({ type: 'note', x: 10, y: 10, text: 'Idea' });
     store.getState().setSelection({ nodes: [node.id], edges: [] });
@@ -391,11 +424,11 @@ describe('undo and redo', () => {
   });
 
   it('caps history at HISTORY_LIMIT, dropping the oldest entries without corrupting the stack', () => {
-    for (let i = 0; i < 200; i += 1) {
+    for (let i = 0; i < HISTORY_LIMIT + 50; i += 1) {
       store.getState().addNode({ type: 'note', x: i, y: 0, text: String(i) });
     }
     const past = store.getState().history.past;
-    expect(past).toHaveLength(150);
+    expect(past).toHaveLength(HISTORY_LIMIT);
     // The oldest surviving entry is #50 (0-indexed nodes 0..49 fell off the front).
     expect(past[0]!.after.nodes.at(-1)!.text).toBe('50');
     expect(past.at(-1)!.after.nodes.at(-1)!.text).toBe('199');

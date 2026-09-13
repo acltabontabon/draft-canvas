@@ -29,7 +29,7 @@ const MIN_FITTED_SCALE = 0.5;
  * The requested scale, reduced just enough for the canvas to fit the browser's limits. Still a pure
  * function of the diagram's size, so an export stays reproducible.
  */
-export function fittedScale(width: number, height: number, scale: number): number {
+function fittedScale(width: number, height: number, scale: number): number {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
   return Math.min(scale, MAX_CANVAS_SIDE / w, MAX_CANVAS_SIDE / h, Math.sqrt(MAX_CANVAS_AREA / (w * h)));

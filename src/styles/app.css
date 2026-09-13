@@ -372,7 +372,11 @@ kbd {
   transform: translateY(-50%);
   display: flex;
   padding-left: 4px;
-  background: var(--dc-surface-raised);
+  border-radius: 0 var(--dc-radius-sm) var(--dc-radius-sm) 0;
+  /* Opaque (it covers the end of a long name) and painted as the row beneath it: the page, plus the
+     row's own hover or active tint layered on top — `--dc-selection-soft` is translucent. */
+  --dc-project-row-tint: transparent;
+  background: linear-gradient(var(--dc-project-row-tint), var(--dc-project-row-tint)), var(--dc-canvas);
   opacity: 0;
   pointer-events: none;
   transition: opacity 100ms ease;
@@ -382,6 +386,20 @@ kbd {
 .dc-sidebar-project-row:focus-within .dc-sidebar-project-actions {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Pointing at the actions still reads as pointing at the row. */
+.dc-sidebar-project-row:not([data-active='true']):hover .dc-sidebar-row {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+.dc-sidebar-project-row:not([data-active='true']):hover .dc-sidebar-project-actions {
+  --dc-project-row-tint: var(--dc-surface-hover);
+}
+
+.dc-sidebar-project-row[data-active='true'] .dc-sidebar-project-actions {
+  --dc-project-row-tint: var(--dc-selection-soft);
 }
 
 .dc-sidebar-action {
@@ -2702,7 +2720,7 @@ kbd {
 }
 
 .dc-flow-item-head:hover {
-  background: color-mix(in srgb, var(--dc-surface-raised) 70%, transparent);
+  background: var(--dc-surface-hover);
   border-radius: var(--dc-radius);
 }
 
@@ -4269,7 +4287,7 @@ kbd {
   border-radius: var(--dc-radius-lg);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
-  animation: dc-palette-in 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: dc-palette-in 120ms var(--dc-ease-out);
 }
 
 @keyframes dc-palette-in {

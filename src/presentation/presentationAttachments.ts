@@ -13,7 +13,30 @@ export type PresentationHostKind = 'node' | 'edge';
 export interface PresentationReveal {
   hostKind: PresentationHostKind;
   hostId: string;
-  attachmentId: string;
+  /** Where it was asked for (`presentationScope`) — a reveal from another step, or from before a
+   *  flow started, is simply not this one's, even for the render before anything clears it. */
+  scope: string;
+}
+
+/** The presentation moment a reveal belongs to: one step of one flow, or presenting with none. */
+export function presentationScope(playback: { active: boolean; flowId: string | null; step: number }): string {
+  return playback.active && playback.flowId ? `${playback.flowId}:${playback.step}` : 'present';
+}
+
+/** The reveal, if it was made for this moment. */
+export function revealIn(reveal: PresentationReveal | null, scope: string): PresentationReveal | null {
+  return reveal && reveal.scope === scope ? reveal : null;
+}
+
+/** A presenter's click on an element's chip or badge: ask it to speak, or — asked again — let it go. */
+export function toggledReveal(
+  current: PresentationReveal | null,
+  hostKind: PresentationHostKind,
+  hostId: string,
+  scope: string,
+): PresentationReveal | null {
+  const same = current?.scope === scope && current.hostKind === hostKind && current.hostId === hostId;
+  return same ? null : { hostKind, hostId, scope };
 }
 
 export interface PresentationSubject {
@@ -23,8 +46,6 @@ export interface PresentationSubject {
   hostId: string;
   /** Only attachments with something to say, in the host's own order. */
   attachments: Attachment[];
-  /** The attachment a presenter clicked to reveal this, when that's how it got here. */
-  revealedId?: string;
 }
 
 /** An attachment says something only when it has content — an empty note stays silent. */
@@ -44,10 +65,9 @@ function subjectFor(
   hostKind: PresentationHostKind,
   hostId: string,
   attachments: readonly Attachment[] | undefined,
-  revealedId?: string,
 ): PresentationSubject | null {
   const said = presentableAttachments(attachments);
-  return said.length > 0 ? { key: `${scope}:${hostKind}:${hostId}`, hostKind, hostId, attachments: said, revealedId } : null;
+  return said.length > 0 ? { key: `${scope}:${hostKind}:${hostId}`, hostKind, hostId, attachments: said } : null;
 }
 
 /**
@@ -62,7 +82,7 @@ export function revealedSubject(
   edgesById: ReadonlyMap<string, DraftEdge>,
 ): PresentationSubject | null {
   const host = reveal.hostKind === 'edge' ? edgesById.get(reveal.hostId) : nodesById.get(reveal.hostId);
-  return host ? subjectFor(scope, reveal.hostKind, reveal.hostId, host.attachments, reveal.attachmentId) : null;
+  return host ? subjectFor(scope, reveal.hostKind, reveal.hostId, host.attachments) : null;
 }
 
 export interface ResolveSubjectInput {
@@ -94,11 +114,12 @@ export function resolvePresentationSubject({
 }: ResolveSubjectInput): PresentationSubject | null {
   const current = steps.find((entry) => entry.step === step);
   if (!current) return null;
-  const scope = `${flowId}:${step}`;
+  const scope = presentationScope({ active: true, flowId, step });
   const subject = (hostKind: PresentationHostKind, hostId: string, attachments: readonly Attachment[] | undefined) =>
     subjectFor(scope, hostKind, hostId, attachments);
 
-  const revealed = reveal ? revealedSubject(scope, reveal, nodesById, edgesById) : null;
+  const asked = revealIn(reveal ?? null, scope);
+  const revealed = asked ? revealedSubject(scope, asked, nodesById, edgesById) : null;
   if (revealed) return revealed;
 
   for (const edge of current.edges) {

@@ -226,6 +226,8 @@ function ElementInspectorBody({
   // again, which can flip right back, past React's update-depth limit. Keeping the last-good side
   // while the element moves, then settling once against the final `rect` (this body re-renders as
   // `interactionActive` flips back to false), avoids that.
+  // `frozen` while hidden mid-gesture: no layout read, no transform write per frame for a popover
+  // nobody can see — it re-places on the render that ends the gesture.
   const { target, placement } = useOverlayPosition<Placement>(panelRef, 'above', (frame, current) => {
     if (!anchors) return null;
     // Read at placement time, not render time: a docked Learn drawer changes where the canvas ends
@@ -239,7 +241,7 @@ function ElementInspectorBody({
       placement: next,
       transform: placementTransform(next, anchors, frame.size, clearances, frame.flowToScreenPosition, frame.screenToOverlay),
     };
-  });
+  }, interactionActive);
 
   if (!displayNode || !displayInternal || !rect || !anchors || !target) return null;
 
@@ -252,8 +254,10 @@ function ElementInspectorBody({
   const menuDirection: 'up' | 'down' = placement === 'above' ? 'up' : 'down';
   // The element's own screen-space vertical bounds, so a dropdown can shrink/flip rather than
   // cover it even when the popover itself barely had room to fit on its preferred side.
-  const menuAvoidTop = flowToScreenPosition({ x: rect.x, y: rect.y }).y;
-  const menuAvoidBottom = flowToScreenPosition({ x: rect.x, y: rect.y + rect.height }).y;
+  // Held still mid-gesture (the popover is hidden then): values that changed every drag frame would
+  // re-render the memoized row on each one, for a menu nobody can open until the gesture ends.
+  const menuAvoidTop = interactionActive ? 0 : flowToScreenPosition({ x: rect.x, y: rect.y }).y;
+  const menuAvoidBottom = interactionActive ? 0 : flowToScreenPosition({ x: rect.x, y: rect.y + rect.height }).y;
 
   // Only a plain Queue can ever have a DLQ toggle, and the scan is skipped for every other kind.
   const hasDlqEdge =
@@ -504,6 +508,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
               className="dc-swatch"
               title={accent}
               aria-label={`Colour ${accent}`}
+              aria-pressed={node.accent === accent}
               style={{ background: theme.accents[accent].chip }}
               onClick={() => {
                 useEditorStore.getState().updateNodeById(node.id, { accent }, 'Recolour');

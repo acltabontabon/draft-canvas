@@ -52,8 +52,15 @@ const gapBetween = (a: Box, b: Box) =>
     Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height)),
   );
 
-const nodeNamed = (page: Page, name: string) =>
-  page.locator('.react-flow__node').filter({ has: page.locator('.dc-node') }).filter({ hasText: name }).last();
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** A node by its name — whole, or cut short with an ellipsis. A name is laid out to the box with
+ *  system fonts, so one that fits on macOS can be truncated on a Linux runner ("Domain…"). */
+const nodeNamed = (page: Page, name: string) => {
+  const prefixes = Array.from({ length: name.length - 1 }, (_, i) => escapeRegExp(name.slice(0, i + 1).trimEnd()));
+  const pattern = new RegExp(`(?:${escapeRegExp(name)}|(?:${prefixes.join('|')})…)`);
+  return page.locator('.react-flow__node').filter({ has: page.locator('.dc-node') }).filter({ hasText: pattern }).last();
+};
 
 async function expectInViewAndClearOfChrome(page: Page, card: Box) {
   const viewport = page.viewportSize()!;
@@ -187,5 +194,45 @@ test.describe('Presentation callouts', () => {
     await expect(page.locator('.dc-callout')).toHaveCount(0);
     await page.keyboard.press('ArrowLeft');
     await expect(page.locator('.dc-callout')).toContainText('OrderPlaced');
+  });
+
+  test('a reveal never flashes into the next step, and closes on a second click or Escape', async ({ page }) => {
+    await presentSubmitCommand(page);
+    await goToStep(page, 4);
+    const badge = nodeNamed(page, 'Read Store').locator('.dc-attachment-badge');
+    await badge.click();
+    await expect(page.locator('.dc-callout')).toHaveCount(1);
+    await expect(page.locator('.dc-callout')).toContainText('Shaped for the questions');
+    await settledBox(page.locator('.dc-callout .dc-callout-card'));
+
+    // Count every callout that mounts from here on: stepping must not mount a fresh one for the
+    // element revealed on the previous step, even for the one render before the reveal clears.
+    await page.evaluate(() => {
+      const w = window as unknown as { __calloutMounts: string[] };
+      w.__calloutMounts = [];
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const added of record.addedNodes) {
+            if (added instanceof Element && added.matches('.dc-callout')) w.__calloutMounts.push(added.getAttribute('aria-label') ?? '');
+          }
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 5 / 6');
+    await expect(page.locator('.dc-callout')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __calloutMounts: string[] }).__calloutMounts)).toEqual([]);
+
+    // Asked again on this step, then asked to let go — by the same badge, then by Escape.
+    await badge.click();
+    await expect(page.locator('.dc-callout')).toHaveCount(1);
+    await badge.click();
+    await expect(page.locator('.dc-callout')).toHaveCount(0);
+    await badge.click();
+    await expect(page.locator('.dc-callout')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-callout')).toHaveCount(0);
+    // Escape backed out of the reveal only — still presenting, still on the step.
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 5 / 6');
   });
 });
