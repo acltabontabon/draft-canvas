@@ -5,7 +5,7 @@ This repository ships two products, each on its own schedule:
 | Tag | Releases | Version | Changelog | Workflow |
 | --- | --- | --- | --- | --- |
 | `vX.Y.Z` | Draft Canvas web app: GitHub Release, Pages, Docker | root `package.json` | `CHANGELOG.md` | `release.yml`, `pages.yml` |
-| `extension-vX.Y.Z` | Draft Canvas for VS Code: Marketplace, GitHub Release with the VSIX | `vscode-extension/package.json` | `vscode-extension/CHANGELOG.md` | `vscode-release.yml` |
+| `extension-vX.Y.Z` | Draft Canvas for VS Code: GitHub Release with the VSIX, then a Marketplace upload by hand | `vscode-extension/package.json` | `vscode-extension/CHANGELOG.md` | `vscode-release.yml` |
 
 Neither tag triggers the other lane, and the two versions never need to match. Don't use a
 `vscode-v…` tag or any other tag starting with `v` for the extension.
@@ -22,7 +22,7 @@ in the editor tab, and the app's host mode (`src/host/`) takes it from there. So
   must stay backward compatible, because the site and installed extensions update at different
   times. Add messages; don't change or remove existing ones.
 
-The release workflow checks that the live site serves host mode before publishing.
+The release workflow checks that the live site serves host mode before it packages anything.
 
 ## Releasing a new version
 
@@ -43,21 +43,22 @@ The release workflow checks that the live site serves host mode before publishin
       changelog has a dated section, and the live site supports host mode.
    2. **package:** compile, package the VSIX, check its files, size and `.draftcanvas` registration,
       then install it in a fresh VS Code and run the smoke suite.
-   3. **publish:** the tested VSIX goes to the Marketplace via Microsoft Entra ID (OIDC, no stored
-      secret), in the `vscode-marketplace` environment.
-   4. **github-release:** creates "Draft Canvas for VS Code 0.1.1", with notes from the extension
-      changelog and the VSIX attached. It isn't marked Latest, which stays with the web app.
+   3. **github-release:** creates "Draft Canvas for VS Code 0.1.1", with notes from the extension
+      changelog and the tested VSIX attached. It isn't marked Latest, which stays with the web app.
+7. **Upload it to the Marketplace.** Download `draft-canvas-0.1.1.vsix` from that release (the run's
+   summary links it). Then, at <https://marketplace.visualstudio.com/manage/publishers/acltabontabon>,
+   open **Draft Canvas → ⋯ → Update** and upload it. It's listed once Marketplace verification
+   finishes, usually within minutes.
 
 Nothing is deployed to Pages or Docker, and the root changelog and version are untouched.
 
 ## If a release fails
 
-- **Before publish** (bad tag, failed check or smoke test): nothing reached the Marketplace. Fix it
-  on `main`, then move the tag: `git tag -d extension-v0.1.1 && git push origin :refs/tags/extension-v0.1.1`,
+- **Before the GitHub Release** (bad tag, failed check or smoke test): nothing was released. Fix it on
+  `main`, then move the tag: `git tag -d extension-v0.1.1 && git push origin :refs/tags/extension-v0.1.1`,
   re-tag the fixed commit, and push.
-- **At or after publish:** re-run the failed jobs from the Actions run. A version that's already on
-  the Marketplace isn't published again (so it needs no sign-in), and the GitHub Release attaches the
-  Marketplace's own package. That's also how 0.1.0, uploaded by hand, got its release.
+- **Re-running a release:** re-run the failed jobs from the Actions run. If that version is already on
+  the Marketplace, its GitHub Release attaches the package the Marketplace serves, not a rebuild.
 - A version on the Marketplace is final. Never try to replace `0.1.1` with different bits; fix
   forward with `0.1.2`.
 
@@ -73,23 +74,19 @@ node test/smoke/run.mjs draft-canvas-0.1.1.vsix   # downloads VS Code into .vsco
 code --install-extension draft-canvas-0.1.1.vsix  # or Extensions → … → Install from VSIX…
 ```
 
-## One-time setup for automated publishing
+## Why the Marketplace upload is manual
 
-The publish job signs in as a Microsoft Entra identity that GitHub vouches for through OIDC.
-Microsoft recommends this for Marketplace publishing, because global Azure DevOps PATs stop working on
-2026-12-01.
+Nothing in this repository or its GitHub settings holds Marketplace credentials: no PAT, no
+secret, no publishing identity. That's deliberate, to keep a free side project free.
 
-1. **Create the identity.** In the [Azure portal](https://portal.azure.com), create a
-   *user-assigned managed identity* (for example `draft-canvas-marketplace`). Note its **Client ID**
-   and **Tenant ID**.
-2. **Trust GitHub.** On that identity, open **Settings → Federated credentials → Add credential**
-   and choose *GitHub Actions deploying Azure resources*. Enter organization `acltabontabon`,
-   repository `draft-canvas`, entity type **Environment**, environment `vscode-marketplace`.
-3. **Point the GitHub environment at it.** The `vscode-marketplace` environment already exists, and
-   only `extension-v*` tags and `main` can deploy to it. Under **Settings → Environments →
-   vscode-marketplace**, add the variables `AZURE_CLIENT_ID` and `AZURE_TENANT_ID`. Optionally add
-   yourself as a required reviewer, so each publication waits for your approval.
-4. **Let the identity publish.** The Marketplace only recognizes the identity's Azure DevOps profile
-   ID. Run the **VS Code Marketplace identity** workflow once from the Actions tab; it prints that
-   ID. At <https://marketplace.visualstudio.com/manage/publishers/acltabontabon>, open **Members →
-   Add**, paste the ID and give it the **Contributor** role.
+- **Personal Access Tokens aren't an option.** Publishing needs a global Azure DevOps PAT, and those
+  stop working on 2026-12-01.
+- **Automation would need an Entra directory.** Microsoft's supported unattended route is
+  `vsce publish --azure-credential` after `azure/login`, signed in through GitHub OIDC as an Entra
+  app registration trusted for this repo's release environment. The federation itself is on Entra's
+  free tier. But the publisher's Microsoft account has no Entra directory, and Microsoft only creates
+  one through an Azure account signup (a Free Trial subscription with card verification).
+- **If that ever changes:** create the app registration and a federated credential for
+  `repo:acltabontabon/draft-canvas:environment:<name>`, add the identity to the publisher as a
+  **Contributor**, and add a publish job that runs `vsce verify-pat --azure-credential` then
+  `vsce publish --packagePath <vsix> --azure-credential --skip-duplicate`.
