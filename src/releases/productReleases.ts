@@ -21,6 +21,42 @@ export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './se
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.6.1',
+    date: '2026-09-14',
+    highlights: [
+      {
+        title: 'Undo survives a busy drag',
+        description:
+          'Pressing Delete or another shortcut while dragging a shape waits for the drag to end, so undo keeps working for the rest of the session.',
+      },
+      {
+        title: 'Updates never cost unsaved work',
+        description:
+          "If your latest changes couldn't be saved, Reload to update asks first so you can export them.",
+      },
+      {
+        title: 'Boundaries keep what you add',
+        description:
+          'A queue, worker or duplicate added inside a boundary now belongs to it, and moves and deletes along with it.',
+      },
+      {
+        title: 'Escape does just one thing',
+        description:
+          "Escape closes a shape's colour or text panel and keeps the suggestion beside it, and cancels a connector-end drag without deselecting the connector.",
+      },
+      {
+        title: 'Copy and paste across VS Code diagrams',
+        description:
+          'Shapes copied or cut with ⌘C or ⌘X in VS Code paste into your other diagrams and other apps.',
+      },
+      {
+        title: 'Smoother on small screens',
+        description:
+          'On a phone the canvas title stays clear of Undo and Redo, and long right-click menus scroll so every item is reachable.',
+      },
+    ],
+  },
+  {
     version: '1.6.0',
     date: '2026-09-14',
     highlights: [

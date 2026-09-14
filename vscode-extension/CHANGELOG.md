@@ -4,6 +4,8 @@ All notable changes to Draft Canvas for VS Code are documented here.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-14
+
 ### Fixed
 
 - Saving right after a quick edit includes that edit.
