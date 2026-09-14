@@ -4,6 +4,8 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-09-14
+
 ### Fixed
 
 - In VS Code, Cmd/Ctrl+C, Cmd/Ctrl+X and Cmd/Ctrl+V copy, cut and paste shapes again. Pasting into
@@ -1034,7 +1036,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.2...main
+[1.6.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.5.0...v1.5.1

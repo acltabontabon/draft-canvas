@@ -21,6 +21,21 @@ export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './se
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.6.2',
+    date: '2026-09-14',
+    highlights: [
+      {
+        title: 'Copy and paste shortcuts work in VS Code',
+        description:
+          '⌘C, ⌘X and ⌘V copy, cut and paste shapes again in VS Code, and paste into your other diagrams with the latest Draft Canvas for VS Code.',
+      },
+      {
+        title: 'Paste without the clipboard warning',
+        description: 'Paste from the right-click menu or the command palette in VS Code no longer says clipboard access is blocked.',
+      },
+    ],
+  },
+  {
     version: '1.6.1',
     date: '2026-09-14',
     highlights: [
