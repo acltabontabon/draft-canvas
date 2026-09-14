@@ -1,15 +1,16 @@
 name: VS Code extension release
 
-# Releases Draft Canvas for VS Code, and nothing else, from an `extension-vX.Y.Z` tag: checks it,
-# packages and smoke-tests the VSIX, and creates its GitHub Release with that VSIX attached. The
-# Marketplace upload itself is done by hand (vscode-extension/RELEASING.md), so this workflow holds no
-# Marketplace credentials at all. The web app releases from `vX.Y.Z` tags (release.yml, pages.yml);
-# neither lane triggers the other.
+# Releases Draft Canvas for VS Code, and nothing else, from an `extension-vX.Y.Z` tag on main: checks
+# it, packages and smoke-tests the VSIX, publishes exactly that VSIX to the Visual Studio Marketplace,
+# and creates its GitHub Release. The web app releases from `vX.Y.Z` tags (release.yml, pages.yml);
+# neither lane triggers the other. Setup and troubleshooting: vscode-extension/RELEASING.md.
 
 on:
   push:
     tags:
       - 'extension-v[0-9]+.[0-9]+.[0-9]+'
+  # To re-run a release: Run workflow, then pick the extension-vX.Y.Z tag under "Use workflow from".
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,28 +25,38 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      listed: ${{ steps.marketplace.outputs.listed }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Runs from an extension release tag
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if ! [[ "$REF" =~ ^refs/tags/extension-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::This workflow releases from an extension-vX.Y.Z tag, not $REF. When running it by hand, pick the tag under \"Use workflow from\"."
+            exit 1
+          fi
 
-      - name: Tag, package.json and changelog agree
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: The tag is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at $GITHUB_SHA, which isn't on main. Merge the release first, then tag a commit on main."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+
+      - name: Tag, package.json, metadata and changelog agree
         id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#extension-v}"
-          PACKAGE_VERSION="$(node -p 'require("./vscode-extension/package.json").version')"
-          if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME doesn't match vscode-extension/package.json version $PACKAGE_VERSION."
-            exit 1
-          fi
-          IDENTITY="$(node -p 'const p = require("./vscode-extension/package.json"); p.publisher + "." + p.name')"
-          if [ "$IDENTITY" != "acltabontabon.draft-canvas" ]; then
-            echo "::error::vscode-extension/package.json identifies as $IDENTITY, not acltabontabon.draft-canvas."
-            exit 1
-          fi
-          if ! grep -Eq "^## \[${VERSION//./\\.}\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" vscode-extension/CHANGELOG.md; then
-            echo "::error::vscode-extension/CHANGELOG.md has no dated '## [$VERSION] - YYYY-MM-DD' section."
-            exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          node vscode-extension/scripts/check-release.mjs "$GITHUB_REF_NAME"
+          echo "version=${GITHUB_REF_NAME#extension-v}" >> "$GITHUB_OUTPUT"
 
       # The extension edits files through the hosted app's host mode (src/host/). Publishing before
       # the site serves it would ship an editor that can't load.
@@ -58,12 +69,95 @@ jobs:
             exit 1
           fi
 
+      # A version already on the Marketplace is final: this release was published already (a re-run),
+      # or uploaded by hand. It's never published again. An older version than the newest listed fails here.
+      - name: Compare with the Marketplace
+        id: marketplace
+        run: node vscode-extension/scripts/check-release.mjs "$GITHUB_REF_NAME" --marketplace
+
   package:
     needs: verify
     uses: ./.github/workflows/vscode-extension.yml
 
-  github-release:
+  publish:
     needs: [verify, package]
+    if: needs.verify.outputs.listed == 'false'
+    runs-on: ubuntu-latest
+    # Holds the publishing identity's IDs, and only deploys from main and extension-v* tags. Microsoft
+    # Entra trusts this environment's OIDC token (subject repo:acltabontabon/draft-canvas:environment:vscode-marketplace)
+    # and nothing else from this repository.
+    environment:
+      name: vscode-marketplace
+      url: https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: vscode-extension
+    steps:
+      - name: The publishing identity is configured
+        env:
+          CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+        run: |
+          GUID='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+          if ! [[ "$CLIENT_ID" =~ $GUID && "$TENANT_ID" =~ $GUID ]]; then
+            echo "::error::The vscode-marketplace environment needs AZURE_CLIENT_ID and AZURE_TENANT_ID variables holding the Entra app's IDs. See vscode-extension/RELEASING.md, \"One-time setup\"."
+            exit 1
+          fi
+        working-directory: .
+
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+      # vsce comes from the extension's lockfile, the same version that packaged the VSIX.
+      - run: npm ci
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: vsix
+          path: vscode-extension
+
+      - name: The VSIX is this release
+        env:
+          VSIX: ${{ needs.package.outputs.vsix }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          IDENTITY="$(unzip -p "$VSIX" extension/package.json | jq -r '.publisher + "." + .name + "@" + .version')"
+          if [ "$IDENTITY" != "acltabontabon.draft-canvas@$VERSION" ]; then
+            echo "::error::$VSIX is $IDENTITY, not acltabontabon.draft-canvas@$VERSION."
+            exit 1
+          fi
+
+      # Short-lived: GitHub's OIDC token is exchanged for a Microsoft Entra token. No secret is stored.
+      - name: Sign in to Microsoft Entra ID
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: The identity can publish as acltabontabon
+        run: npx vsce verify-pat --azure-credential acltabontabon
+
+      - name: Publish to the Marketplace
+        env:
+          VSIX: ${{ needs.package.outputs.vsix }}
+        run: npx vsce publish --azure-credential --packagePath "$VSIX"
+
+      - name: Wait for the Marketplace listing
+        run: node scripts/check-release.mjs "$GITHUB_REF_NAME" --wait-listed
+
+  github-release:
+    needs: [verify, package, publish]
+    # After a successful publish, or with publishing skipped because the version was listed already.
+    if: >-
+      !cancelled() && needs.verify.result == 'success' && needs.package.result == 'success' &&
+      (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && needs.verify.outputs.listed == 'true'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -73,27 +167,17 @@ jobs:
         with:
           name: vsix
 
-      # A version that's already on the Marketplace is final, so its release carries exactly the package
-      # the Marketplace serves. Otherwise it carries the VSIX this run just tested, which is the file to
-      # upload.
+      # Published by this run, the release carries the VSIX that was published. Listed before this run
+      # (published by hand, or by an earlier attempt), it carries exactly the package the Marketplace serves.
       - name: Which package to attach
-        id: listed
+        if: needs.verify.outputs.listed == 'true'
         env:
           VERSION: ${{ needs.verify.outputs.version }}
           VSIX: ${{ needs.package.outputs.vsix }}
         run: |
-          VERSIONS="$(curl -fsS -X POST https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery \
-            -H 'Content-Type: application/json' -H 'Accept: application/json;api-version=7.2-preview.1' \
-            -d '{"filters":[{"criteria":[{"filterType":7,"value":"acltabontabon.draft-canvas"}]}],"flags":1}' \
-            | jq -r '.results[0].extensions[0].versions[]?.version')"
-          if grep -qx "$VERSION" <<< "$VERSIONS"; then
-            curl -fsSL --compressed -o "$VSIX" \
-              "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/acltabontabon/vsextensions/draft-canvas/$VERSION/vspackage"
-            unzip -p "$VSIX" extension/package.json | jq -e --arg v "$VERSION" '.version == $v'
-            echo "listed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "listed=false" >> "$GITHUB_OUTPUT"
-          fi
+          curl -fsSL --compressed -o "$VSIX" \
+            "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/acltabontabon/vsextensions/draft-canvas/$VERSION/vspackage"
+          unzip -p "$VSIX" extension/package.json | jq -e --arg v "$VERSION" '.version == $v'
 
       - name: Release notes from the extension's changelog
         env:
@@ -120,21 +204,19 @@ jobs:
           # "Latest" stays with the web app's releases (the README's release badge follows it).
           make_latest: false
 
-      - name: Next step
+      - name: Summary
         env:
           VERSION: ${{ needs.verify.outputs.version }}
-          VSIX: ${{ needs.package.outputs.vsix }}
-          LISTED: ${{ steps.listed.outputs.listed }}
+          LISTED: ${{ needs.verify.outputs.listed }}
           RELEASE_URL: ${{ steps.release.outputs.url }}
         run: |
-          if [ "$LISTED" = "true" ]; then
-            echo "### $VERSION is already on the Marketplace. Nothing left to do." >> "$GITHUB_STEP_SUMMARY"
-          else
-            {
-              echo "### Upload $VSIX to the Marketplace"
-              echo
-              echo "1. Download \`$VSIX\` from [the release]($RELEASE_URL)."
-              echo "2. Open <https://marketplace.visualstudio.com/manage/publishers/acltabontabon>."
-              echo "3. On **Draft Canvas**, open **⋯ → Update** and upload the file."
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            if [ "$LISTED" = "true" ]; then
+              echo "### $VERSION was already on the Marketplace, so it wasn't published again"
+            else
+              echo "### Published Draft Canvas for VS Code $VERSION"
+            fi
+            echo
+            echo "- Marketplace: <https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas>"
+            echo "- GitHub Release: <$RELEASE_URL>"
+          } >> "$GITHUB_STEP_SUMMARY"
