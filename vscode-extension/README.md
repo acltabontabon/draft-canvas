@@ -41,7 +41,6 @@ connection. After that, the app's offline cache usually lets it open without one
   and Paste from the right-click menu can't reach the system clipboard in VS Code.
 - **Background images aren't saved in the file.** A canvas background image lasts until the tab
   closes.
-- **Links in the About dialog don't open.** Use the links below instead.
 - Desktop VS Code only, for now. Not available on vscode.dev.
 
 ## About Draft Canvas

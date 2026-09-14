@@ -141,4 +141,32 @@ describe('embedded in a host', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(messages('draft-canvas:save')[0]!.message.saveAs).toBe(false);
   });
+
+  it("hands links to other sites to the host, which the frame can't open", async () => {
+    const state = mount();
+    await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
+    fromHost({ type: 'draft-canvas:load', text: serializeDocument(createDocument()) });
+    await waitFor(() => expect(state().openId).not.toBeNull());
+
+    const click = (href: string) => {
+      const link = Object.assign(document.createElement('a'), { href, target: '_blank' });
+      link.append(document.createElement('span'));
+      document.body.append(link);
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+      link.firstElementChild!.dispatchEvent(event);
+      link.remove();
+      return event;
+    };
+
+    expect(click('https://github.com/acltabontabon/draft-canvas').defaultPrevented).toBe(true);
+    expect(click('mailto:someone@example.com').defaultPrevented).toBe(true);
+    expect(click('#section').defaultPrevented).toBe(false);
+
+    const opened = messages('draft-canvas:open-external');
+    expect(opened.map((entry) => (entry.message as { url?: string }).url)).toEqual([
+      'https://github.com/acltabontabon/draft-canvas',
+      'mailto:someone@example.com',
+    ]);
+    expect(opened.every((entry) => entry.origin === HOST_ORIGIN)).toBe(true);
+  });
 });

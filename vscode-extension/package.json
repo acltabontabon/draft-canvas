@@ -43,6 +43,17 @@
   },
   "main": "./out/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "draftcanvas",
+        "aliases": [
+          "Draft Canvas"
+        ],
+        "extensions": [
+          ".draftcanvas"
+        ]
+      }
+    ],
     "customEditors": [
       {
         "viewType": "draftCanvas.editor",

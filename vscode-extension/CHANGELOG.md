@@ -4,6 +4,12 @@ All notable changes to Draft Canvas for VS Code are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Saving a diagram made with `Draft Canvas: New Diagram` now suggests a `.draftcanvas` file name
+  instead of `.json`, so it opens in Draft Canvas again.
+- Links in the About dialog now open in your browser or mail app.
+
 ## [0.1.0] - 2026-09-14
 
 ### Added

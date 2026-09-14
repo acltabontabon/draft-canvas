@@ -4,6 +4,10 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- In the VS Code extension, links in the About dialog now open.
+
 ## [1.5.0] - 2026-09-14
 
 ### Added

@@ -67,6 +67,7 @@ exports.run = async () => {
     await sleep(3000);
     const document = vscode.workspace.textDocuments.find((d) => d.uri.toString() === payments.toString());
     assert.equal(document?.isDirty ?? false, false);
+    assert.equal(document?.languageId, 'draftcanvas');
     assert.equal(fs.readFileSync(payments.fsPath, 'utf8'), before);
   });
 
@@ -89,6 +90,11 @@ exports.run = async () => {
       return current instanceof vscode.TabInputCustom && current.viewType === VIEW_TYPE && current.uri.scheme === 'untitled' ? current : null;
     });
     assert.ok(input.uri.path.endsWith('.draftcanvas'));
+    // The blank diagram the app writes is JSON; language detection must not rename it, or Save
+    // suggests `Untitled-1.json`, which doesn't reopen in Draft Canvas.
+    await sleep(3000);
+    const document = vscode.workspace.textDocuments.find((d) => d.uri.toString() === input.uri.toString());
+    assert.equal(document?.languageId, 'draftcanvas');
     // Once the hosted app has written a blank diagram into it, it's dirty; close it without asking.
     await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
   });

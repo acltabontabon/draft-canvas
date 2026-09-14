@@ -4,13 +4,16 @@ import { deserializeDocument, serializeDocument } from '../export/project';
 import type { DocumentSession } from '../store/useDocumentSession';
 import { embeddedHost, HOST_PROTOCOL, isHostOrigin, type LoadMessage, type ToHostMessage } from './embeddedHost';
 
+const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+
 /**
  * Connects the open document to the host's file when the app is embedded (see `embeddedHost`).
  *
  * The host sends the file's text; every committed edit goes straight back as the whole serialized
  * document. There's no debounce: the host can remove the frame at any moment (closing its tab never
  * blurs the frame first), so anything not already posted would be lost. ⌘S is forwarded because a
- * key pressed inside a cross-origin frame never reaches the host's own shortcuts.
+ * key pressed inside a cross-origin frame never reaches the host's own shortcuts. Links to other sites
+ * go to the host too, since the frame isn't allowed to open a window.
  *
  * Returns the reason a file couldn't be opened, if it couldn't.
  */
@@ -108,8 +111,18 @@ export function useHostDocument(session: DocumentSession): string | null {
       })();
     };
 
+    const onLinkClick = (event: MouseEvent) => {
+      if (event.button > 1 || !(event.target instanceof Element)) return;
+      const link = event.target.closest<HTMLAnchorElement>('a[href]');
+      if (!link || !EXTERNAL_PROTOCOLS.has(link.protocol) || link.origin === window.location.origin) return;
+      event.preventDefault();
+      post({ type: 'draft-canvas:open-external', url: link.href });
+    };
+
     window.addEventListener('message', onMessage);
     window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('click', onLinkClick, true);
+    window.addEventListener('auxclick', onLinkClick, true);
     // No data in it, so any parent may hear it; the document only ever goes to the host's origin.
     window.parent.postMessage({ type: 'draft-canvas:ready', protocol: HOST_PROTOCOL } satisfies ToHostMessage, '*');
 
@@ -117,6 +130,8 @@ export function useHostDocument(session: DocumentSession): string | null {
       disposed = true;
       window.removeEventListener('message', onMessage);
       window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('click', onLinkClick, true);
+      window.removeEventListener('auxclick', onLinkClick, true);
       window.clearTimeout(pending);
       unsubscribe?.();
     };

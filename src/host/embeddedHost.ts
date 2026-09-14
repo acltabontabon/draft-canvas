@@ -20,12 +20,14 @@ function detectHost(): 'vscode' | null {
  * Messages between the app and its host. The app's protocol version travels with `ready`, so a host
  * can tell an app that predates a message it relies on.
  */
-export const HOST_PROTOCOL = 1;
+export const HOST_PROTOCOL = 2;
 
 export type ToHostMessage =
   | { type: 'draft-canvas:ready'; protocol: number }
   | { type: 'draft-canvas:change'; text: string }
-  | { type: 'draft-canvas:save'; saveAs: boolean };
+  | { type: 'draft-canvas:save'; saveAs: boolean }
+  /** Since protocol 2. A link the frame can't open itself: the host's webview allows no popups. */
+  | { type: 'draft-canvas:open-external'; url: string };
 
 export interface LoadMessage {
   type: 'draft-canvas:load';

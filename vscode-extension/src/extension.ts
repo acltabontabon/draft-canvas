@@ -3,6 +3,9 @@ import * as vscode from 'vscode';
 const APP_URL = 'https://acltabontabon.com/draft-canvas/';
 const VIEW_TYPE = 'draftCanvas.editor';
 const EXTENSION = '.draftcanvas';
+const LANGUAGE_ID = 'draftcanvas';
+/** What a link in the app may open. Anything else it sends is ignored. */
+const EXTERNAL_SCHEMES = new Set(['http', 'https', 'mailto']);
 /** How long the app gets to say it loaded before the fallback is offered. */
 const READY_TIMEOUT_MS = 15_000;
 
@@ -45,7 +48,8 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
     private readonly appUrl: string,
   ) {}
 
-  resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): void {
+  resolveCustomTextEditor(initialDocument: vscode.TextDocument, panel: vscode.WebviewPanel): void {
+    let document = initialDocument;
     panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'icon.png');
     panel.webview.options = {
       // Also required for the framed app itself: without it VS Code sandboxes the webview without
@@ -91,6 +95,9 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
             // The key was pressed inside this tab, so it's the active editor the save commands act on.
             void vscode.commands.executeCommand(message.saveAs === true ? 'workbench.action.files.saveAs' : 'workbench.action.files.save');
             break;
+          case 'draft-canvas:open-external':
+            if (typeof message.url === 'string') openExternal(message.url);
+            break;
           case 'openInBrowser':
             void vscode.env.openExternal(vscode.Uri.parse(APP_URL));
             break;
@@ -101,8 +108,18 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
         if (event.document !== document || event.contentChanges.length === 0 || applying > 0) return;
         if (document.getText() !== appText) load();
       }),
+      // A language change closes and reopens the document, so keep hold of whichever one is open.
+      vscode.workspace.onDidOpenTextDocument((opened) => {
+        if (opened.uri.toString() === document.uri.toString()) document = opened;
+      }),
     ];
     panel.onDidDispose(() => subscriptions.forEach((subscription) => subscription.dispose()));
+
+    // An untitled file's contents are JSON, and VS Code's language detection would call it that. Save
+    // then names the file after the language, `Untitled-1.json`, which no longer opens in this editor.
+    if (document.isUntitled && document.languageId !== LANGUAGE_ID) {
+      void vscode.languages.setTextDocumentLanguage(document, LANGUAGE_ID);
+    }
   }
 }
 
@@ -113,6 +130,17 @@ async function replaceText(document: vscode.TextDocument, text: string): Promise
   if (!(await vscode.workspace.applyEdit(edit))) {
     void vscode.window.showErrorMessage('Draft Canvas could not update the file. Your latest change may not be in it.');
   }
+}
+
+/** A link clicked in the app. VS Code asks before opening a site the user hasn't trusted yet. */
+function openExternal(url: string): void {
+  let uri: vscode.Uri;
+  try {
+    uri = vscode.Uri.parse(url, true);
+  } catch {
+    return;
+  }
+  if (EXTERNAL_SCHEMES.has(uri.scheme)) void vscode.env.openExternal(uri);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -166,7 +194,7 @@ function html(appUrl: string): string {
   const app = document.getElementById('app');
   const fallback = document.getElementById('fallback');
   const appOrigin = ${JSON.stringify(url.origin)};
-  const fromApp = ['draft-canvas:ready', 'draft-canvas:change', 'draft-canvas:save'];
+  const fromApp = ['draft-canvas:ready', 'draft-canvas:change', 'draft-canvas:save', 'draft-canvas:open-external'];
   let timer;
 
   // A cross-origin frame fires "load" for an error page too, so only the app saying so counts.
