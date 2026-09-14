@@ -83,27 +83,23 @@ jobs:
     needs: [verify, package]
     if: needs.verify.outputs.listed == 'false'
     runs-on: ubuntu-latest
-    # Holds the publishing identity's IDs, and only deploys from main and extension-v* tags. Microsoft
-    # Entra trusts this environment's OIDC token (subject repo:acltabontabon/draft-canvas:environment:vscode-marketplace)
-    # and nothing else from this repository.
+    # Holds the VSCE_PAT secret, and only deploys from extension-v* tags, so no other workflow, branch or
+    # pull request can read it.
     environment:
       name: vscode-marketplace
       url: https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas
     permissions:
       contents: read
-      id-token: write
     defaults:
       run:
         working-directory: vscode-extension
     steps:
-      - name: The publishing identity is configured
+      - name: The Marketplace token is configured
         env:
-          CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-          TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
-          GUID='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-          if ! [[ "$CLIENT_ID" =~ $GUID && "$TENANT_ID" =~ $GUID ]]; then
-            echo "::error::The vscode-marketplace environment needs AZURE_CLIENT_ID and AZURE_TENANT_ID variables holding the Entra app's IDs. See vscode-extension/RELEASING.md, \"One-time setup\"."
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::error::The vscode-marketplace environment has no VSCE_PAT secret. See vscode-extension/RELEASING.md, \"One-time setup\"."
             exit 1
           fi
         working-directory: .
@@ -133,21 +129,17 @@ jobs:
             exit 1
           fi
 
-      # Short-lived: GitHub's OIDC token is exchanged for a Microsoft Entra token. No secret is stored.
-      - name: Sign in to Microsoft Entra ID
-        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
-
-      - name: The identity can publish as acltabontabon
-        run: npx vsce verify-pat --azure-credential acltabontabon
+      # vsce reads the token from VSCE_PAT; it's passed only to the two steps that use it.
+      - name: The token can publish as acltabontabon
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce verify-pat acltabontabon
 
       - name: Publish to the Marketplace
         env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
           VSIX: ${{ needs.package.outputs.vsix }}
-        run: npx vsce publish --azure-credential --packagePath "$VSIX"
+        run: npx vsce publish --packagePath "$VSIX"
 
       - name: Wait for the Marketplace listing
         run: node scripts/check-release.mjs "$GITHUB_REF_NAME" --wait-listed
