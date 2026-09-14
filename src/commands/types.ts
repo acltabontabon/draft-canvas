@@ -73,9 +73,9 @@ export interface CommandContext {
    *  every call reachable only through the palette/commands is keyboard-driven, so pass `true`
    *  unless the specific command has its own reason not to (matching `createAtPointer`'s own
    *  default of always passing it). */
-  createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode;
+  createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode | null;
   /** Under the pointer, or in the middle of the view — same placement the single-key shortcuts use. */
-  createAtPointer: (preset: Preset) => DraftNode;
+  createAtPointer: (preset: Preset) => DraftNode | null;
 }
 
 /**

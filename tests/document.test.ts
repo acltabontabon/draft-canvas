@@ -9,6 +9,10 @@ import {
   bringForward,
   bringToFront,
   descendantsOf,
+  reconnectEdge,
+  reverseEdge,
+  tryPlaceNear,
+  updateAttachment,
   distributeNodes,
   extractFragment,
   moveNodes,
@@ -400,6 +404,68 @@ describe('z-order', () => {
       expect(op(doc, [])).toBe(doc);
       expect(op(doc, ['does-not-exist'])).toBe(doc);
     }
+  });
+
+  it('bringing the front node forward, or sending the back node backward, changes nothing', () => {
+    const a = createNode({ type: 'service', x: 0, y: 0, z: 0 });
+    const b = createNode({ type: 'service', x: 200, y: 0, z: 1 });
+    const doc = addNodes(createDocument(), [a, b]);
+
+    expect(bringToFront(doc, [b.id])).toBe(doc);
+    expect(bringForward(doc, [b.id])).toBe(doc);
+    expect(sendToBack(doc, [a.id])).toBe(doc);
+    expect(sendBackward(doc, [a.id])).toBe(doc);
+    expect(bringToFront(doc, [a.id]).nodes[0]!.z).toBe(2);
+  });
+});
+
+describe('no-op edits and duplicate connectors', () => {
+  it('dropping a connector end back on the handle it came from changes nothing', () => {
+    const { doc, b, edge } = sample();
+    expect(reconnectEdge(doc, edge.id, 'target', b.id, undefined)).toBe(doc);
+    const anchored = reconnectEdge(doc, edge.id, 'target', b.id, 'left', 0.25);
+    expect(anchored).not.toBe(doc);
+    expect(reconnectEdge(anchored, edge.id, 'target', b.id, 'left', 0.25)).toBe(anchored);
+  });
+
+  it('reversing a connector refuses to stack it on an existing opposite one', () => {
+    const { doc, a, b, edge } = sample();
+    const both = addEdges(doc, [createEdge({ source: b.id, target: a.id })]);
+    expect(reverseEdge(both, edge.id)).toBe(both);
+    expect(reverseEdge(doc, edge.id)).not.toBe(doc);
+  });
+
+  it('an attachment edit that changes nothing returns the same document', () => {
+    const { doc, a } = sample();
+    const attachment = createAttachment({ type: 'note', text: 'Hi' });
+    const withNote = updateNode(doc, a.id, { attachments: [attachment] });
+    expect(updateAttachment(withNote, a.id, attachment.id, { text: 'Hi' })).toBe(withNote);
+    expect(updateAttachment(withNote, a.id, attachment.id, { text: 'Bye' })).not.toBe(withNote);
+  });
+
+  it("placing next to a node never lands inside a boundary it isn't in, but can stay inside its own", () => {
+    const host = createNode({ type: 'service', x: 0, y: 0 });
+    const foreign = createNode({ type: 'group', x: host.width + 20, y: -100, width: 600, height: 400 });
+    const doc = addNodes(createDocument(), [host, foreign]);
+    const spot = tryPlaceNear(doc, host, { width: 176, height: 68 })!;
+    const placed = { ...spot, width: 176, height: 68 };
+    const overlaps =
+      placed.x < foreign.x + foreign.width && placed.x + placed.width > foreign.x &&
+      placed.y < foreign.y + foreign.height && placed.y + placed.height > foreign.y;
+    expect(overlaps).toBe(false);
+
+    const own = createNode({ type: 'group', x: -200, y: -200, width: 1200, height: 800 });
+    const inside = addNodes(createDocument(), [own, { ...host, parentId: own.id }]);
+    const nearby = tryPlaceNear(inside, host, { width: 176, height: 68 }, undefined, { parent: inside.nodes[0] })!;
+    expect(nearby.x).toBeGreaterThan(host.x + host.width);
+  });
+
+  it('only a boundary can become a parent', () => {
+    const { doc, a, b } = sample();
+    expect(setParent(doc, [a.id], b.id)).toBe(doc);
+    const group = createNode({ type: 'group', x: -50, y: -50, width: 800, height: 400 });
+    const grouped = setParent(addNodes(doc, [group]), [a.id], group.id);
+    expect(grouped.nodes.find((n) => n.id === a.id)!.parentId).toBe(group.id);
   });
 });
 

@@ -16,17 +16,19 @@ const { __setRepository } = await import('../src/storage');
 
 const HOST_ORIGIN = 'vscode-webview://abc123';
 
-let posted: Array<{ message: { type: string; text?: string; saveAs?: boolean }; origin: string }>;
+let posted: Array<{ message: { type: string; text?: string; saveAs?: boolean; baseSeq?: number }; origin: string }>;
 
-function Probe({ onRender }: { onRender: (state: { openId: string | null; error: string | null }) => void }) {
+type ProbeState = { openId: string | null; error: string | null; invalidWhileOpen: boolean };
+
+function Probe({ onRender }: { onRender: (state: ProbeState) => void }) {
   const session = useDocumentSession();
-  const error = useHostDocument(session);
-  onRender({ openId: session.openId, error });
+  const host = useHostDocument(session);
+  onRender({ openId: session.openId, ...host });
   return null;
 }
 
 function mount() {
-  let latest = { openId: null as string | null, error: null as string | null };
+  let latest: ProbeState = { openId: null, error: null, invalidWhileOpen: false };
   render(<Probe onRender={(state) => (latest = state)} />);
   return () => latest;
 }
@@ -142,6 +144,52 @@ describe('embedded in a host', () => {
     expect(messages('draft-canvas:save')[0]!.message.saveAs).toBe(false);
   });
 
+  it('keeps the last valid diagram when the file stops being one, and writes nothing until it is again', async () => {
+    const state = mount();
+    await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
+    const file = createDocument('Payments');
+    fromHost({ type: 'draft-canvas:load', text: serializeDocument(file), seq: 1 });
+    await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+
+    fromHost({ type: 'draft-canvas:load', text: '{ "half typed', seq: 2 });
+    await waitFor(() => expect(state().invalidWhileOpen).toBe(true));
+    expect(useEditorStore.getState().document.metadata.title).toBe('Payments');
+
+    act(() => useEditorStore.getState().rename('Not written'));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(messages('draft-canvas:change')).toHaveLength(0);
+
+    const fixed = { ...file, metadata: { ...file.metadata, title: 'Fixed' } };
+    fromHost({ type: 'draft-canvas:load', text: serializeDocument(fixed), seq: 3 });
+    await waitFor(() => expect(state().invalidWhileOpen).toBe(false));
+    expect(useEditorStore.getState().document.metadata.title).toBe('Fixed');
+
+    act(() => useEditorStore.getState().rename('Checkout'));
+    await waitFor(() => expect(messages('draft-canvas:change')).toHaveLength(1));
+    // Made on top of the third load, and says so.
+    expect(messages('draft-canvas:change')[0]!.message.baseSeq).toBe(3);
+  });
+
+  it('⌘S while a field is still being typed in commits that text before asking the host to save', async () => {
+    const state = mount();
+    await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
+    fromHost({ type: 'draft-canvas:load', text: serializeDocument(createDocument('Before')) });
+    await waitFor(() => expect(state().openId).not.toBeNull());
+
+    const input = document.createElement('input');
+    input.addEventListener('blur', () => useEditorStore.getState().rename('Typed'));
+    document.body.append(input);
+    input.focus();
+
+    act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true, cancelable: true })));
+    await waitFor(() => expect(messages('draft-canvas:save')).toHaveLength(1));
+    input.remove();
+
+    const types = posted.map((entry) => entry.message.type);
+    expect(types.lastIndexOf('draft-canvas:change')).toBeLessThan(types.indexOf('draft-canvas:save'));
+    expect(JSON.parse(messages('draft-canvas:change').at(-1)!.message.text!).metadata.title).toBe('Typed');
+  });
+
   it("hands links to other sites to the host, which the frame can't open", async () => {
     const state = mount();
     await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
@@ -161,11 +209,14 @@ describe('embedded in a host', () => {
     expect(click('https://github.com/acltabontabon/draft-canvas').defaultPrevented).toBe(true);
     expect(click('mailto:someone@example.com').defaultPrevented).toBe(true);
     expect(click('#section').defaultPrevented).toBe(false);
+    // This site's own pages too — the frame can't open any new window.
+    expect(click(`${window.location.origin}/`).defaultPrevented).toBe(true);
 
     const opened = messages('draft-canvas:open-external');
     expect(opened.map((entry) => (entry.message as { url?: string }).url)).toEqual([
       'https://github.com/acltabontabon/draft-canvas',
       'mailto:someone@example.com',
+      `${window.location.origin}/`,
     ]);
     expect(opened.every((entry) => entry.origin === HOST_ORIGIN)).toBe(true);
   });

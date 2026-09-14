@@ -791,6 +791,12 @@
   animation: dc-attachment-card-in 120ms ease;
 }
 
+/* A description is worth reading with the pointer on it; a one-line name isn't, and stays out of
+   the way of whatever sits under it. */
+.dc-tooltip[data-density='rich'] {
+  pointer-events: auto;
+}
+
 .dc-tooltip-header {
   display: flex;
   align-items: center;

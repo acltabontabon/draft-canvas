@@ -185,6 +185,20 @@ describe('paste/duplicate respects the document size limits', () => {
     expect(useUiStore.getState().toasts).toHaveLength(1);
   });
 
+  it('grouping at the node cap is refused rather than adding a boundary a reload would drop', () => {
+    const existing = Array.from({ length: LIMITS.maxNodes }, (_, i) =>
+      createNode({ type: 'note', x: i * 200, y: 0, text: `N${i}` }),
+    );
+    store.setState({ document: addNodes(createDocument(), existing) });
+    store.getState().setSelection({ nodes: [existing[0]!.id, existing[1]!.id], edges: [] });
+
+    store.getState().groupSelection();
+
+    expect(store.getState().document.nodes).toHaveLength(LIMITS.maxNodes);
+    expect(store.getState().document.nodes.some((n) => n.type === 'group')).toBe(false);
+    expect(useUiStore.getState().toasts).toHaveLength(1);
+  });
+
   it('caps duplicateSelection the same way', () => {
     const existing = Array.from({ length: LIMITS.maxNodes - 1 }, (_, i) =>
       createNode({ type: 'note', x: i, y: 0, text: `N${i}` }),

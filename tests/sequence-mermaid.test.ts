@@ -25,10 +25,10 @@ describe('toMermaid', () => {
       ],
     });
     const out = toMermaid(m);
-    expect(out).toContain('actor Customer as "Customer"');
-    expect(out).toContain('participant OrderAPI as "Order API"');
+    expect(out).toContain('actor Customer as Customer\n');
+    expect(out).toContain('participant OrderAPI as Order API\n');
     // Mermaid has no `database` keyword — falls back to plain participant.
-    expect(out).toContain('participant OrdersDB as "Orders DB"');
+    expect(out).toContain('participant OrdersDB as Orders DB\n');
   });
 
   it('uses the sync/response/async arrow for each interaction kind, and the alias in every arrow', () => {
@@ -83,7 +83,7 @@ describe('toMermaid', () => {
     });
     const out = toMermaid(m);
     expect(out).toContain('A->>B: Map#lt;String, Order#gt; #amp; more');
-    expect(out).toContain('"Cache#lt;Order#gt;"');
+    expect(out).toContain("as Cache#lt;Order#gt;\n");
     expect(out.replace(/-+>>|-+>|-+x|-+\)/g, '')).not.toMatch(/[<>&]/);
   });
 
@@ -129,7 +129,7 @@ describe('toMermaid', () => {
     expect(toMermaid(m)).toContain(': Message');
   });
 
-  it('escapes a double quote and disambiguated duplicate names cleanly', () => {
+  it('writes quotes and disambiguated duplicate names as they are — Mermaid shows quotes literally', () => {
     const m = model({
       participants: [
         { id: 'P1', alias: 'Service', label: 'Service', category: 'service', kind: 'participant', sourceNodeId: 'a' },
@@ -138,25 +138,21 @@ describe('toMermaid', () => {
       ],
     });
     const out = toMermaid(m);
-    expect(out).toContain('participant Service as "Service"');
-    expect(out).toContain('participant Service2 as "Service (2)"');
-    expect(out).toContain('participant Gateway as "The \\"Gateway\\""');
+    expect(out).toContain('participant Service as Service\n');
+    expect(out).toContain('participant Service2 as Service (2)\n');
+    expect(out).toContain('participant Gateway as The "Gateway"\n');
   });
 
-  it('escapes a backslash before a quote without letting it swallow the closing quote', () => {
-    // Escaping `"` before `\` would turn a label ending `\"` into `\\"` — read as an escaped
-    // backslash followed by a bare, string-closing quote, which breaks out of the declaration.
-    const raw = 'C:\\Users\\"Bob"';
+  it('keeps backslashes, colons and quotes, but still guards statement-ending characters and newlines', () => {
     const m = model({
-      participants: [{ id: 'P1', alias: 'A', label: raw, category: 'service', kind: 'participant', sourceNodeId: 'a' }],
+      participants: [
+        { id: 'P1', alias: 'A', label: 'C:\\Users\\"Bob"', category: 'service', kind: 'participant', sourceNodeId: 'a' },
+        { id: 'P2', alias: 'B', label: 'Cart; #1\nsvc', category: 'service', kind: 'participant', sourceNodeId: 'b' },
+      ],
     });
-    const line = toMermaid(m).split('\n').find((l) => l.includes('participant A as'))!;
-    const match = line.match(/^\s*participant A as "(.*)"$/);
-    expect(match).not.toBeNull();
-    // Decode the same way a real parser would — unescape `\"` before `\\` — and recover the
-    // original label. A wrong escape order corrupts this round-trip.
-    const decoded = match![1]!.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-    expect(decoded).toBe(raw);
+    const out = toMermaid(m);
+    expect(out).toContain('participant A as C:\\Users\\"Bob"\n');
+    expect(out).toContain('participant B as Cart#59; #35;1 svc\n');
   });
 
   it("wraps a flow's messages in a rect block with a synthesized title Note", () => {

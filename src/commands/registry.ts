@@ -69,7 +69,7 @@ function createCommand(preset: Preset): Command {
     run: (ctx) => {
       const node = ctx.createAtPointer(preset);
       // Select what was just made, so "Add Service → Connect to…" chains without a mouse.
-      ctx.editor.setSelection({ nodes: [node.id], edges: [] });
+      if (node) ctx.editor.setSelection({ nodes: [node.id], edges: [] });
     },
   };
 }
@@ -88,7 +88,7 @@ export function createCommandAt(preset: Preset, position: { x: number; y: number
     shortcut: preset.shortcut,
     run: (ctx) => {
       const node = ctx.createAt(preset, position);
-      ctx.editor.setSelection({ nodes: [node.id], edges: [] });
+      if (node) ctx.editor.setSelection({ nodes: [node.id], edges: [] });
     },
   };
 }
@@ -380,7 +380,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
   if (ctx.editor.document.edges.some((edge) => edge.routeMode)) {
     commands.push({
       id: 'tidy-connections',
-      title: 'Tidy connections',
+      title: 'Tidy connectors',
       group: 'canvas',
       keywords: ['route', 'routing', 'clean up', 'arrange', 'straighten', 'smart'],
       hint: 'Re-route every connector automatically',
@@ -533,6 +533,7 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
           // opens ready to name, same as every other keyboard-driven creation path.
           true,
         );
+        if (!created) return;
         inner.editor.connect(source.id, created.id);
         inner.editor.setSelection({ nodes: [created.id], edges: [] });
       } finally {

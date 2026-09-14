@@ -228,7 +228,7 @@ describe('toPlantUml', () => {
     });
     const lines = toPlantUml(m).split('\n').map((line) => line.trim());
     expect(lines.filter((line) => /^end\s?note$/i.test(line))).toHaveLength(1);
-    expect(lines).toContain('~end note');
+    expect(lines).toContain('<U+0065>nd note');
     expect(lines.indexOf('after')).toBeLessThan(lines.indexOf('end note'));
   });
 
@@ -236,11 +236,20 @@ describe('toPlantUml', () => {
     const m = model({
       participants: [{ id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' }],
       elements: [
-        { kind: 'note', order: 0, participantIds: ['P1'], text: 'check\n!isValid(x)\n@enduml\nend hnote\nendrnote\ndone', sourceFlowId: 'f1' },
+        { kind: 'note', order: 0, participantIds: ['P1'], text: "check\n!isValid(x)\n@enduml\nend hnote\nendrnote\n' a SQL comment\n/' block\ndone", sourceFlowId: 'f1' },
       ],
     });
     const lines = toPlantUml(m).split('\n').map((line) => line.trim());
-    expect(lines).toEqual(expect.arrayContaining(['~!isValid(x)', '~@enduml', '~end hnote', '~endrnote']));
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        '<U+0021>isValid(x)',
+        '<U+0040>enduml',
+        '<U+0065>nd hnote',
+        '<U+0065>ndrnote',
+        "<U+0027> a SQL comment",
+        "<U+002F>' block",
+      ]),
+    );
     expect(lines.filter((line) => line === '@enduml')).toHaveLength(1);
     expect(lines.indexOf('done')).toBeLessThan(lines.indexOf('end note'));
   });

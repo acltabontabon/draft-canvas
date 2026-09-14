@@ -21,7 +21,9 @@ export interface DraftRepository {
    * rename or move made meanwhile elsewhere (another tab's Library) is kept rather than reverted;
    * resolves with the metadata actually written when that differs from the document's own.
    */
-  save(document: DraftDocument, base?: SharedMetadata): Promise<SharedMetadata | void>;
+  save(document: DraftDocument, base?: SharedMetadata, options?: SaveOptions): Promise<SharedMetadata | void>;
+  /** Whether anything is stored under `id` — readable or not. */
+  has(id: string): Promise<boolean>;
   remove(id: string): Promise<void>;
   rename(id: string, title: string): Promise<void>;
   /** Estimated bytes used, when the browser will tell us. */
@@ -55,7 +57,7 @@ export interface DraftRepository {
     imageId?: string,
   ): Promise<{ blob: Blob; width: number; height: number } | null>;
   removeBackgroundImage(documentId: string, imageId?: string): Promise<void>;
-  /** Deletes every stored image of the document except `keepImageId`'s (none, when `null`). */
+  /** Deletes every stored image of the document except `keep`'s (none, when `null`). */
   pruneBackgroundImages(documentId: string, keep: { imageId?: string } | null): Promise<void>;
 }
 
@@ -66,6 +68,31 @@ export class StorageUnavailableError extends Error {
     );
     this.name = 'StorageUnavailableError';
     this.cause = cause;
+  }
+}
+
+export interface SaveOptions {
+  /** Write even though the stored copy changed or was deleted elsewhere — the user chose to keep
+   *  this editor's version (see `DocumentConflictError`). */
+  overwrite?: boolean;
+}
+
+/**
+ * An open editor's save (one with a `base`) found the stored copy gone, or holding content another
+ * tab saved since this one last read or wrote it. Nothing was written: carrying on would bring a
+ * deleted canvas back, or replace newer work with an older copy. The user decides which wins.
+ */
+export class DocumentConflictError extends Error {
+  readonly kind: 'changed' | 'deleted';
+
+  constructor(kind: 'changed' | 'deleted') {
+    super(
+      kind === 'deleted'
+        ? 'This canvas was deleted in another tab.'
+        : 'This canvas was changed in another tab.',
+    );
+    this.name = 'DocumentConflictError';
+    this.kind = kind;
   }
 }
 

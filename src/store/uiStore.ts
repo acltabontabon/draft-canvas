@@ -364,6 +364,8 @@ export interface UiStore {
 }
 
 let toastId = 0;
+/** The most toasts on screen at once; a new one past this retires the oldest. */
+const MAX_TOASTS = 3;
 /** Remaining display time per toast, with the running timer when not paused. */
 const toastTimers = new Map<number, { remaining: number; startedAt: number; handle: ReturnType<typeof setTimeout> | null }>();
 let toastsPaused = false;
@@ -458,6 +460,12 @@ export const useUiStore = create<UiStore>((set, get) => ({
   requestEdit: (editRequestId) => set({ editRequestId }),
 
   notify(message, tone = 'info', action) {
+    // The same message again (a paste refused twice in a row) restarts the one already showing
+    // rather than stacking a copy; and only the newest few stay, so a burst can't bury the canvas.
+    const repeat = get().toasts.find((t) => t.message === message && t.tone === tone && t.action?.label === action?.label);
+    if (repeat) get().dismiss(repeat.id);
+    const overflow = get().toasts.slice(0, Math.max(0, get().toasts.length - (MAX_TOASTS - 1)));
+    for (const old of overflow) get().dismiss(old.id);
     toastId += 1;
     const toast: Toast = { id: toastId, message, tone, ...(action ? { action } : {}) };
     set((state) => ({ toasts: [...state.toasts, toast] }));

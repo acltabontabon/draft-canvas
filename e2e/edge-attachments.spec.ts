@@ -3,14 +3,14 @@ import { expect, test, type Page } from '@playwright/test';
 /**
  * Connection-attached details: dragging an existing Note/Code node onto a connector folds it into
  * that connector's attachment (mirroring `attachments.spec.ts`'s node-onto-node drag), and the
- * resulting chip/card reveal (`EdgeAttachmentRow`/`EdgeAttachmentChip` in `DraftEdgeView.tsx`).
+ * resulting chip/card reveal (`AttachmentChipRow`/`AttachmentChip` in `AttachmentPresentation.tsx`).
  * The data model, persistence, and reconnection guarantees are covered directly in
  * `tests/edge-attachments.test.ts`; these cover the actual drag/click interaction and the
  * type-matched visual result.
  *
  * A card is visible only when its own chip is clicked (`pinned`; while presenting, a click shows the
  * presentation callout instead) — deliberately not on hover and not just because the connector itself is selected,
- * per `EdgeAttachmentChip`'s own doc comment: either read as noisy on a diagram with several
+ * per `AttachmentChip`'s own doc comment: either read as noisy on a diagram with several
  * attachments. A pinned card also opens read-only first; a second click on its own pencil glyph
  * ("Edit attached detail") is what reveals the actual textarea.
  */
@@ -267,7 +267,7 @@ test.describe('connection-attached details', () => {
 
   test('clicking an open chip again closes its card', async ({ page }) => {
     // Regression test: the outside-pointerdown-close listener used to check
-    // only against the card (`cardRef`), so a pointerdown on the chip's own
+    // only against the card, so a pointerdown on the chip's own
     // label — genuinely outside the card — closed it first; then the click
     // phase's own `togglePin()` reopened it from a `pinned` closure captured
     // before that close landed, netting a no-op. Fixed by checking against
@@ -284,7 +284,7 @@ test.describe('connection-attached details', () => {
 
     // The chip's own label span specifically, not a raw offset into the
     // chip's outer box — once open, that box also contains the card (a DOM
-    // child positioned off it, per `EdgeAttachmentChip`'s own comment).
+    // child positioned off it, per `AttachmentChip`'s own comment).
     await page.locator('.dc-attachment-chip-label').click();
     await expect(card).toHaveCount(0);
   });

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from
 import { flushSync } from 'react-dom';
 import { CATEGORIES, QUICK_START, RECIPES, recipesIn, type LearnCategory } from '../../learn/recipes';
 import { searchLearn, type RecipeMatch } from '../../learn/search';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import type { LearnRecipe } from '../../learn/types';
 import type { DraftNode } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
@@ -44,7 +45,7 @@ export function LearnHome({ searchRef, returning, onOpen }: LearnHomeProps) {
 
   // The search box leads into what it found: Enter opens the best answer, ↓ walks into the list.
   const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.nativeEvent.isComposing) return;
+    if (isImeKeyEvent(event)) return;
     if (event.key === 'Enter' && searching) {
       event.preventDefault();
       const top = results.recipes[0];

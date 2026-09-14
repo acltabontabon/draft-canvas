@@ -74,6 +74,11 @@ export function pushEntry(
     entry.at - top.at < COALESCE_WINDOW_MS;
 
   if (canCoalesce) {
+    // Typed and then erased, or a slider dragged away and back, inside one burst: the burst as a
+    // whole changed nothing, so it shouldn't leave an undo step that does nothing.
+    if (sameContent(top.before, entry.after)) {
+      return { past: history.past.slice(0, -1), future: [] };
+    }
     const merged: HistoryEntry = {
       ...top,
       after: entry.after,
@@ -86,6 +91,33 @@ export function pushEntry(
   const past = [...history.past, entry];
   // Any new action invalidates the redo branch.
   return { past: past.length > HISTORY_LIMIT ? past.slice(-HISTORY_LIMIT) : past, future: [] };
+}
+
+/**
+ * Whether two documents hold the same content. Operations share structure, so almost everything
+ * compares by identity and only the few rebuilt objects are walked; the depth bound keeps a
+ * pathological document from making a keystroke expensive (deeper differences count as changes).
+ */
+function sameContent(a: DraftDocument, b: DraftDocument): boolean {
+  return (
+    a.metadata.title === b.metadata.title &&
+    a.viewport === b.viewport &&
+    equivalent(a.nodes, b.nodes, 4) &&
+    equivalent(a.edges, b.edges, 4) &&
+    equivalent(a.flows, b.flows, 4) &&
+    equivalent(a.settings, b.settings, 4)
+  );
+}
+
+function equivalent(a: unknown, b: unknown, depth: number): boolean {
+  if (Object.is(a, b)) return true;
+  if (depth === 0 || typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const aKeys = Object.keys(a);
+  if (aKeys.length !== Object.keys(b).length) return false;
+  return aKeys.every(
+    (key) => Object.hasOwn(b, key) && equivalent((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key], depth - 1),
+  );
 }
 
 export function undo(history: HistoryState): {

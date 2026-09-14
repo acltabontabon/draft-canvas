@@ -640,4 +640,8 @@ export interface DraftSummary {
   /** Absent for a canvas with no nodes, or one summarised by an older build
    *  (backfilled once at startup — see `IndexedDbRepository.backfillSummaries`). */
   shape?: LibraryShape;
+  /** Changes with every content write, and only then (a rename or move keeps it): how an open
+   *  editor tells that another tab saved different content since it last read or wrote. Absent on a
+   *  row written before it existed. */
+  contentStamp?: string;
 }

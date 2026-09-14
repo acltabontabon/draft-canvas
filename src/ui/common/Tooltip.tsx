@@ -45,6 +45,22 @@ const COLD: Warmth = { enter: () => {}, leave: () => {}, isWarm: () => false };
 const TooltipWarmthContext = createContext<Warmth>(COLD);
 
 /**
+ * Whether the latest input was a pointer press rather than a key — i.e. whether a focus happening
+ * now came from a click. Tracked on `window` in the capture phase, installed once on first use.
+ * (`:focus-visible` would say the same, but isn't reliable for focus moved by script.)
+ */
+let pointerLast = false;
+let tracking = false;
+function focusFromPointer(): boolean {
+  if (!tracking && typeof window !== 'undefined') {
+    tracking = true;
+    window.addEventListener('pointerdown', () => (pointerLast = true), true);
+    window.addEventListener('keydown', () => (pointerLast = false), true);
+  }
+  return pointerLast;
+}
+
+/**
  * Scopes "the user is reading tooltips right now" to one cluster of triggers.
  *
  * Deliberately a context and not a module-level timer: module state would be shared by every test
@@ -220,6 +236,9 @@ export function Tooltip({ content, children }: TooltipProps) {
     },
     onMouseLeave: scheduleHide,
     onFocus: (event) => {
+      // Keyboard focus only. A click focuses the button too, and the tooltip then popped up at
+      // once — skipping the hover delay, and opening again whenever a menu handed focus back.
+      if (focusFromPointer()) return;
       anchorRef.current = event.currentTarget;
       show();
     },
@@ -253,6 +272,13 @@ export function Tooltip({ content, children }: TooltipProps) {
             className="dc-tooltip"
             data-density={content.description ? 'rich' : 'compact'}
             data-placement={position?.placement ?? 'below'}
+            // Reachable: a long description can be read with the pointer resting on it (WCAG 1.4.13),
+            // rather than vanishing as the pointer crosses over from the trigger.
+            onMouseEnter={() => {
+              if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+              hideTimer.current = null;
+            }}
+            onMouseLeave={scheduleHide}
             style={{
               position: 'fixed',
               top: position?.top ?? -9999,

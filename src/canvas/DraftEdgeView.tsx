@@ -4,7 +4,7 @@ import { EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from
 import { useShallow } from 'zustand/react/shallow';
 import type { DraftNode } from '../document/types';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
-import { explainEdgeTier, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
+import { edgeTierAt, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import {
   LABEL_LINE_GAP,
@@ -520,7 +520,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       />
       {secondStrokePath && (
         <path
-          className="dc-edge-line-second"
           d={secondStrokePath}
           fill="none"
           pointerEvents="none"
@@ -534,7 +533,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )}
       {arrowPath && (
         <path
-          className="dc-edge-arrow"
           d={arrowPath}
           pointerEvents="none"
           fill={markerVariantForEdge(edge) === 'closed' ? strokeColor : 'none'}
@@ -566,7 +564,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )}
       {responseArrowPath && (
         <path
-          className="dc-edge-response-arrow"
           d={responseArrowPath}
           pointerEvents="none"
           fill="none"
@@ -907,6 +904,9 @@ function EdgeEndpointHandle({
   // pointer has actually moved past this distance.
   const dragStarted = useRef(false);
   const startClient = useRef<{ x: number; y: number } | null>(null);
+  /** The pointer driving the drag. A second finger landing mid-drag (to pinch, say) is ignored
+   *  rather than restarting the gesture from where it touched. */
+  const activePointer = useRef<number | null>(null);
 
   // A single pass tracking the highest-z match is equivalent to (and cheaper
   // than) copying + sorting the whole array on every pointer-move frame of a
@@ -935,6 +935,7 @@ function EdgeEndpointHandle({
     lastHover.current = null;
     dragStarted.current = false;
     startClient.current = null;
+    activePointer.current = null;
     onDrag(null);
   }, [onDrag]);
 
@@ -960,7 +961,8 @@ function EdgeEndpointHandle({
     (event: React.PointerEvent<HTMLDivElement>) => {
       event.stopPropagation();
       // Only the primary button repoints — a right-click here is a context-menu gesture, not a drag.
-      if (event.button !== 0) return;
+      if (event.button !== 0 || activePointer.current !== null) return;
+      activePointer.current = event.pointerId;
       cancelled.current = false;
       dragStarted.current = false;
       startClient.current = { x: event.clientX, y: event.clientY };
@@ -979,7 +981,7 @@ function EdgeEndpointHandle({
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      if (cancelled.current) return;
+      if (cancelled.current || event.pointerId !== activePointer.current) return;
       if (!dragStarted.current) {
         const start = startClient.current;
         if (!start) return;
@@ -1011,10 +1013,12 @@ function EdgeEndpointHandle({
 
   const onPointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+      if (event.pointerId !== activePointer.current) return;
       const wasCancelled = cancelled.current;
       const didDrag = dragStarted.current;
+      // Ended before capture is released, so the `lostpointercapture` that follows finds no drag.
       endDrag();
+      event.currentTarget.releasePointerCapture(event.pointerId);
       if (wasCancelled || !didDrag) return; // A plain click never reconnects anything.
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const node = findDropNode(point);
@@ -1029,10 +1033,14 @@ function EdgeEndpointHandle({
   // instead of `pointerup` — without a handler for it, nothing ever called `endDrag()`, leaving
   // the drag preview and `uiStore`'s reconnect flags stuck exactly as `onPointerUp` would if it
   // were simply never called. No commit here, same as an Escape cancel.
-  const onPointerCancel = useCallback(() => {
-    cancelled.current = true;
-    endDrag();
-  }, [endDrag]);
+  const onPointerCancel = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerId !== activePointer.current) return;
+      cancelled.current = true;
+      endDrag();
+    },
+    [endDrag],
+  );
 
   return (
     <div
@@ -1042,6 +1050,9 @@ function EdgeEndpointHandle({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
+      // Capture lost some other way (the element re-rendered away from under it, a system gesture)
+      // gets no pointer-up: without this the preview and reconnect flags would stay stuck.
+      onLostPointerCapture={onPointerCancel}
     />
   );
 }
@@ -1077,5 +1088,5 @@ function playingFlowOf(state: EditorStore) {
 /** This connector's Presentation tier — a string, so only connectors whose tier flips re-render. */
 function explainTierForEdge(state: EditorStore, id: string): ExplainTier {
   const flow = playingFlowOf(state);
-  return flow ? explainEdgeTier(stepIndexOf(flow, id), state.flowPlayback.step) : 'hidden';
+  return flow ? edgeTierAt(flow, id, state.flowPlayback.step) : 'hidden';
 }

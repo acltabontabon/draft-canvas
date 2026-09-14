@@ -235,6 +235,17 @@ describe('renderFlowFrameSvg — request/response pulse targeting', () => {
     expect(response?.hasAttribute('stroke-dashoffset')).toBe(true);
   });
 
+  it('pulses the reply line of a connector that has one but no reply text, like the live canvas', () => {
+    const fixture = responseFixture();
+    const e1 = { ...fixture.e1, hasResponse: true };
+    const doc = { ...fixture.doc, edges: [e1] };
+    const { svg } = renderFlowFrameSvg(doc, fixture.flow, 1, CENTERED, CANVAS, 0.5, 'response');
+    const teal = DARK.accents.teal.chip;
+    const paths = [...parseSvg(svg).querySelectorAll(`path[stroke="${teal}"]`)].filter((p) => !p.closest('marker'));
+    expect(paths.find((p) => p.getAttribute('stroke-width') === '1.6')?.hasAttribute('stroke-dashoffset')).toBe(false);
+    expect(paths.find((p) => p.getAttribute('stroke-width') === '1')?.hasAttribute('stroke-dashoffset')).toBe(true);
+  });
+
   it("ignores framePhase for a step whose edge has no response — always pulses the one line", () => {
     const { doc, flow } = responseFixture();
     const { svg } = renderFlowFrameSvg(doc, flow, 1, CENTERED, CANVAS, 0.5, 'response');

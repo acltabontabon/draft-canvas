@@ -16,6 +16,7 @@ function stubRepository(overrides: Partial<DraftRepository> = {}): DraftReposito
     durable: true,
     list: async () => [],
     load: async () => null,
+    has: async () => false,
     save: async () => {},
     remove: async () => {},
     rename: async () => {},
@@ -127,7 +128,7 @@ describe('useDocumentSession — adoptDocument stale projectId repair', () => {
     const local = createDocument('Local, newer');
     const saved: DraftDocument[] = [];
     const repository = stubRepository({
-      load: async (id) => (id === local.metadata.id ? local : null),
+      has: async (id) => id === local.metadata.id,
       save: async (document) => {
         saved.push(document);
       },

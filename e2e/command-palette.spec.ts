@@ -65,7 +65,7 @@ test.describe('command palette', () => {
     await newCanvas(page, 'Palette button');
     await page.getByRole('button', { name: 'Commands', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
-    await expect(page.getByRole('textbox', { name: 'Search commands' })).toBeFocused();
+    await expect(page.getByRole('combobox', { name: 'Search commands' })).toBeFocused();
   });
 
   test('closing it returns focus to whatever opened it', async ({ page }) => {

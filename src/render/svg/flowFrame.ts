@@ -7,7 +7,7 @@
  * than re-derived, so a GIF frame can never quietly drift from what
  * Presentation Mode looks like live.
  */
-import { explainEdgeTier, explainNodeTier, stepIndexOf, type ExplainTier } from '../../document/flow';
+import { edgeTierAt, explainNodeTier, type ExplainTier } from '../../document/flow';
 import type { DraftDocument, DraftEdge, DraftFlow, DraftNode, DraftViewport } from '../../document/types';
 import { themeFor, type ThemeName } from '../theme/tokens';
 import { getMeasurer } from '../text/measure';
@@ -73,10 +73,10 @@ export function renderFlowFrameSvg(
   const decorateEdge = (
     edge: DraftEdge,
   ): Decoration & { pulsePhase?: number; pulseTarget?: 'request' | 'response' } => {
-    const tier = explainEdgeTier(stepIndexOf(flow, edge.id), step);
+    const tier = edgeTierAt(flow, edge.id, step);
     const decoration = EDGE_TIER_DECORATION[tier];
     if (tier !== 'active') return decoration;
-    return { ...decoration, pulsePhase, pulseTarget: edge.response ? framePhase : 'request' };
+    return { ...decoration, pulsePhase, pulseTarget: edge.hasResponse ? framePhase : 'request' };
   };
 
   const scene = buildScene(document, nodeCtx, edgeCtx, {

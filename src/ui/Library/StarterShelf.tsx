@@ -298,7 +298,7 @@ export function StarterShelf({
           </>
         ) : (
           categories.map((category) => (
-            <div key={category.id} className="dc-shelf-category" role="group" aria-label={category.label}>
+            <div key={category.id} role="group" aria-label={category.label}>
               <span className="dc-shelf-label" aria-hidden="true">
                 {category.label}
               </span>

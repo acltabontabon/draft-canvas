@@ -132,8 +132,9 @@ export function applyThemeVariables(theme: Theme, root: HTMLElement): void {
   set('code-bg', theme.codeBg);
   set('shadow', theme.shadow);
   for (const [name, palette] of Object.entries(theme.accents)) {
+    // No `-line`: nothing in CSS draws with an accent's line colour (connectors get it from the theme
+    // object, in the display list).
     set(`accent-${name}-fill`, palette.fill);
-    set(`accent-${name}-line`, palette.line);
     set(`accent-${name}-text`, palette.text);
     set(`accent-${name}-chip`, palette.chip);
   }

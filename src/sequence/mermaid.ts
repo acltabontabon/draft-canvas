@@ -30,13 +30,11 @@ function mermaidKeyword(kind: ParticipantKind): 'actor' | 'participant' {
   return kind === 'actor' ? 'actor' : 'participant';
 }
 
-/** Mermaid documents wrapping a participant's display name in quotes as the way to include
- *  otherwise-reserved characters (colons included) in an aliased declaration — used unconditionally
- *  here rather than only when "needed," so output is deterministic regardless of content. Backslashes
- *  are escaped before quotes: escaping in the other order would let a label ending `\"` turn into
- *  `\\"` — an escaped backslash followed by a bare, string-closing quote. */
+/** Everything after `as` is the display name, verbatim to the end of the line — colons, quotes and
+ *  backslashes included (checked against Mermaid 11). Quoting it would put the quotes on screen; only
+ *  the statement-level characters `escapeMermaidText` handles, and line breaks, need care. */
 function sanitizeParticipantName(label: string): string {
-  return escapeMermaidText(label.replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"'));
+  return escapeMermaidText(label.replace(/\r?\n/g, ' ').trim()) || 'Participant';
 }
 
 /** Mermaid ends a statement at `;` and starts a comment at `#`, anywhere on the line — including
@@ -138,7 +136,7 @@ export function toMermaid(model: SequenceModel): string {
   lines.push('sequenceDiagram');
   for (const participant of model.participants) {
     lines.push(
-      `${INDENT}${mermaidKeyword(participant.kind)} ${participant.alias} as "${sanitizeParticipantName(participant.label)}"`,
+      `${INDENT}${mermaidKeyword(participant.kind)} ${participant.alias} as ${sanitizeParticipantName(participant.label)}`,
     );
   }
   if (model.elements.length > 0) {

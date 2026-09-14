@@ -79,7 +79,7 @@ describe('importing untrusted files', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.document.edges).toHaveLength(0);
-    expect(result.repairs.join(' ')).toContain('2 connection(s)');
+    expect(result.repairs.join(' ')).toContain('2 connector(s)');
   });
 
   it('drops a self-referencing connection (source equal to target)', () => {

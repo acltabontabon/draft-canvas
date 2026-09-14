@@ -797,3 +797,21 @@ describe('live resize', () => {
     }
   });
 });
+
+describe('export extent', () => {
+  it('grows to hold a connector label that reaches past every node box', () => {
+    const top = createNode({ type: 'service', x: 0, y: 0, text: 'Top' });
+    const bottom = createNode({ type: 'service', x: 0, y: 300, text: 'Bottom' });
+    const plain = createEdge({ source: top.id, target: bottom.id });
+    const labelled = {
+      ...plain,
+      label: 'A rather long request caption that is wider than the node',
+      response: 'And an equally long reply caption on the other side',
+      hasResponse: true,
+    };
+    const base = addNodes(createDocument('Extent'), [top, bottom]);
+    const without = renderDocumentSvg(addEdges(base, [plain]));
+    const withLabels = renderDocumentSvg(addEdges(base, [labelled]));
+    expect(withLabels.width).toBeGreaterThan(without.width);
+  });
+});

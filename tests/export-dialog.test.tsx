@@ -196,7 +196,9 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Copy source' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Copy as Markdown' })).not.toBeInTheDocument();
-    expect(dialog.querySelector('svg.dc-sequence-svg, .dc-sequence-preview-scroll')).toBeNull();
+    // The artifact is the file tile, never a rendered diagram.
+    expect(dialog.querySelector('.dc-export-file')).not.toBeNull();
+    expect(dialog.querySelector('.dc-export-stage img')).toBeNull();
   });
 });
 

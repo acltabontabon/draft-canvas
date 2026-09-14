@@ -22,8 +22,8 @@ import { useFocusReturn } from '../common/useFocusReturn';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 
 interface CommandPaletteProps {
-  createAt: (preset: Preset, position: { x: number; y: number }) => DraftNode;
-  createAtPointer: (preset: Preset) => DraftNode;
+  createAt: (preset: Preset, position: { x: number; y: number }) => DraftNode | null;
+  createAtPointer: (preset: Preset) => DraftNode | null;
   playback: FlowPlaybackController;
 }
 
@@ -282,6 +282,9 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
             placeholder={placeholder}
             spellCheck={false}
             autoComplete="off"
+            role="combobox"
+            aria-expanded="true"
+            aria-autocomplete="list"
             aria-label={stage ? stage.prompt : 'Search commands'}
             aria-controls="dc-palette-list"
             aria-activedescendant={rows[highlight] ? `dc-palette-row-${highlight}` : undefined}
@@ -292,19 +295,21 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
           />
         </div>
 
-        <div id="dc-palette-list" ref={listRef} className="dc-palette-list" role="listbox">
-          {rows.length === 0 && (
-            <div className="dc-palette-empty">
-              {stage ? 'No matching options.' : 'No matching commands.'}
-            </div>
-          )}
+        {/* Outside the listbox — only options belong in one — and said aloud as the query changes. */}
+        <span className="dc-sr-only" role="status">
+          {query.trim() ? `${rows.length} ${rows.length === 1 ? 'result' : 'results'}` : ''}
+        </span>
+        {rows.length === 0 && (
+          <div className="dc-palette-empty">{stage ? 'No matching options.' : 'No matching commands.'}</div>
+        )}
+        <div id="dc-palette-list" ref={listRef} className="dc-palette-list" role="listbox" hidden={rows.length === 0}>
           {rows.map(({ entry, indices }, index) => {
             const group = 'group' in entry ? entry.group : undefined;
             const previous = rows[index - 1]?.entry;
             const previousGroup = previous && 'group' in previous ? previous.group : undefined;
             const showHeader = !searching && group !== undefined && group !== previousGroup;
             return (
-              <div key={`${group ?? 'stage'}:${entry.id}`} className="dc-palette-section">
+              <div key={`${group ?? 'stage'}:${entry.id}`}>
                 {showHeader && (
                   <div className="dc-palette-group" aria-hidden="true">
                     {GROUP_LABELS[group]}
@@ -348,7 +353,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
             <kbd>↵</kbd> run
           </span>
           <span>
-            <kbd>esc</kbd> {stage ? 'back' : 'close'}
+            <kbd>Esc</kbd> {stage ? 'back' : 'close'}
           </span>
           <span className="dc-palette-footer-spacer" />
           <span>

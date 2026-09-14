@@ -5,6 +5,7 @@ import {
   resolvePlacement,
   type PlacementPoint,
 } from '../../../canvas/popoverPlacement';
+import { isEditableTarget } from '../../../lib/isEditableTarget';
 
 export interface ToolbarMenuItem {
   id: string;
@@ -75,6 +76,10 @@ export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMe
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // While it's open the menu owns bare keys, like the context menu and the palette: an arrow
+      // would otherwise also nudge the selection behind it, a letter drop a shape, and Enter start
+      // editing the selected node's label. ⌘ chords still reach the editor, and so does typing.
+      if (!event.metaKey && !event.ctrlKey && !isEditableTarget(event.target)) event.stopPropagation();
       switch (event.key) {
         case 'Escape':
           event.stopPropagation();
@@ -174,11 +179,15 @@ export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMe
         >
           <span className="dc-context-menu-title">{item.label}</span>
           {item.dot && (
-            <span
-              className={item.dot === 'update' ? 'dc-update-dot' : 'dc-new-dot'}
-              data-inline="true"
-              aria-hidden="true"
-            />
+            <>
+              <span
+                className={item.dot === 'update' ? 'dc-update-dot' : 'dc-new-dot'}
+                data-inline="true"
+                aria-hidden="true"
+              />
+              {/* The dot is the whole reason the row is flagged — said, not only shown. */}
+              <span className="dc-sr-only">{item.dot === 'update' ? ' — update ready' : ' — new'}</span>
+            </>
           )}
           {item.shortcut && (
             <span className="dc-context-menu-kbd" aria-hidden="true">

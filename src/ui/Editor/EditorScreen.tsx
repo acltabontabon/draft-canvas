@@ -24,7 +24,7 @@ import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion } from '../../lib/isEditableTarget';
 import { centerOf } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
-import { flowFitViewNodes, useEditorStore } from '../../store/editorStore';
+import { flowFitViewNodes, roomFor, useEditorStore } from '../../store/editorStore';
 import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
@@ -47,6 +47,7 @@ import { PanelBoundary } from '../common/PanelBoundary';
 import { retryableLazy } from '../common/retryableLazy';
 import { motionMs } from '../../lib/motion';
 import { embeddedHost } from '../../host/embeddedHost';
+import { PRODUCT } from '../../product';
 
 // Export (its panels, previews, and exporters) is a sizeable slice of the editor that most sessions
 // never open — fetched the first time it is, then kept mounted so its in-session choices survive.
@@ -107,6 +108,14 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const mode = useEditorStore((state) => state.mode);
   const rename = useEditorStore((state) => state.rename);
   const setMode = useEditorStore((state) => state.setMode);
+
+  // Several open canvases (tabs, history, a screen reader's page title) can be told apart.
+  useEffect(() => {
+    document.title = `${title} — ${PRODUCT.name}`;
+    return () => {
+      document.title = PRODUCT.name;
+    };
+  }, [title]);
 
   const armed = useUiStore((state) => state.armed);
   const arm = useUiStore((state) => state.arm);
@@ -178,6 +187,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           ? naturalCodeSize(code, describeContext(theme))
           : undefined;
 
+      // Refused past the node cap, with a toast — the store's `addNode` itself stays unconditional.
+      if (!roomFor(useEditorStore.getState().document, 1, 0)) return null;
       const node = useEditorStore.getState().addNode({
         type: preset.type,
         x: Math.round(position.x),
@@ -472,7 +483,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         )}
       </div>
 
-      {!presenting && <StatusBar durable={session.durable} />}
+      {!presenting && <StatusBar durable={session.durable} onResolveConflict={(choice) => void session.resolveConflict(choice)} />}
 
       <ShortcutSheet />
       {exportMounted && (
@@ -877,6 +888,7 @@ function useKeyboard({
           event.preventDefault();
           openContextMenuFromKeyboard();
           return;
+        case 'F': // Caps Lock on (Shift+F is turned away just below)
         case 'f':
           // Plain F only — Cmd/Ctrl+F already returned above via the `meta`
           // branch; Shift+F falls through unhandled rather than toggling.

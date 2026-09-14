@@ -4,6 +4,65 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Your work is safer across tabs. A canvas deleted in another tab no longer comes back when this tab
+  saves, and a tab holding an older copy no longer overwrites newer work. The status bar asks which
+  copy to keep.
+- Toasts appear below the toolbar instead of over it. A repeated message replaces the one already
+  showing, and only the three newest stay up.
+- "Reload to update" saves your work first and reloads only the tab you clicked it in. Other open
+  tabs get a message with a Reload button instead of reloading on their own.
+- The browser tab shows the name of the canvas you have open.
+- Connectors are called connectors everywhere, including the status bar, the Inspector and the
+  Library.
+- Tooltips open when you tab to a control, not when you click it. A tooltip with a description stays
+  open while you move the pointer onto it.
+- Canvas settings radios, checkboxes and sliders use the app's colours.
+- Sequence diagram exports for Mermaid show participant names without quotation marks.
+
+### Fixed
+
+- Arrow keys, letters and Enter pressed in the toolbar's More menu no longer move or create shapes
+  behind it.
+- Choosing a right-click menu item with Enter no longer also starts editing the selected shape's label.
+- Escape closes only the topmost thing: the command palette, a menu or a dialog, not an open
+  attachment card behind it too.
+- Recolouring several selected shapes is now a single undo step.
+- Dropping a connector end back where it started, bringing a shape that's already in front to the
+  front, or making an edit and then reverting it within the same moment no longer leaves an empty
+  undo step.
+- Reversing a connector no longer stacks it on top of an existing one pointing the other way.
+- Grouping, adding a dead-letter queue or companion, and detaching an attachment respect the diagram
+  size limit, so nothing is dropped the next time the canvas opens.
+- A connector used again at a later step of a flow now lights up at that step too.
+- Resizing a shape from a top or side handle snaps the edge you're dragging, and the opposite edge
+  stays exactly where it was.
+- Exported images include connector labels that extend past the shapes.
+- GIF exports pulse the reply line of a request/response connector that has no reply text.
+- PlantUML exports keep note lines starting with `'`, `!`, `@` or `end note`, and show them without
+  an extra `~`.
+- A suggested next shape is never placed inside a boundary it doesn't belong to.
+- Importing a file never replaces a local canvas whose data couldn't be read.
+- Closing a canvas no longer removes a background image another tab is using.
+- A secure import with the wrong passphrase keeps the dialog open to try again. A secure export
+  can't run twice from a quick double Enter.
+- "Return home" on the error screen now returns home.
+- The code card's Copy button shows an error when the browser has no clipboard (for example over
+  plain HTTP), instead of doing nothing.
+- The diagram title field shows the saved title after you clear it or add trailing spaces.
+- The flows shortcut, F, works with Caps Lock on.
+- Confirming a Japanese, Chinese or Korean input conversion in Learn's search no longer opens a recipe
+  in Safari.
+- Presentation callouts no longer stay squeezed after the window grows back.
+- Loading local storage for a long time now suggests closing other Draft Canvas tabs.
+- In the VS Code extension, a file whose text isn't a valid diagram no longer gets overwritten by the
+  next canvas edit. The canvas keeps its last valid version and says so.
+- In the VS Code extension, ⌘S saves text you were still typing in a label or field, and the About
+  dialog's website link opens.
+- Small buttons (About, Back, flow step actions) are easier to hit, and focus rings on the search and
+  title fields are easier to see.
+
 ## [1.5.1] - 2026-09-14
 
 ### Fixed

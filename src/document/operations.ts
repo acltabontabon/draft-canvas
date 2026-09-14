@@ -177,10 +177,14 @@ export function reconnectEdge(
     const source = endpoint === 'source' ? newNodeId : edge.source;
     const target = endpoint === 'target' ? newNodeId : edge.target;
     if (doc.edges.some((other) => other.id !== id && other.source === source && other.target === target)) return edge;
+    const anchorKey = endpoint === 'source' ? 'sourceAnchor' : 'targetAnchor';
+    // Dropped back on the handle it came from: nothing moved, so no undo step.
+    const previousAnchor = edge[anchorKey];
+    const sameNode = (endpoint === 'source' ? edge.source : edge.target) === newNodeId;
+    if (sameNode && previousAnchor?.side === anchor?.side && previousAnchor?.offset === anchor?.offset) return edge;
     changed = true;
     const next: DraftEdge =
       endpoint === 'source' ? { ...edge, source: newNodeId } : { ...edge, target: newNodeId };
-    const anchorKey = endpoint === 'source' ? 'sourceAnchor' : 'targetAnchor';
     if (anchor) next[anchorKey] = anchor;
     else delete next[anchorKey];
     return next;
@@ -199,6 +203,11 @@ export function reverseEdge(doc: DraftDocument, id: string): DraftDocument {
   let changed = false;
   const edges = doc.edges.map((edge) => {
     if (edge.id !== id) return edge;
+    // Same duplicate guard as `connect()`/`reconnectEdge`: with B→A already there, reversing A→B
+    // would stack two identical arrows.
+    if (doc.edges.some((other) => other.id !== id && other.source === edge.target && other.target === edge.source)) {
+      return edge;
+    }
     changed = true;
     const next: DraftEdge = { ...edge, source: edge.target, target: edge.source };
     // Absent stays absent — never write an `undefined` own-property a serializer would emit.
@@ -370,8 +379,17 @@ export function pasteFragment(
 
 /* ---------------------------------------------------------------- z-order -- */
 
+/** Whether every node in `set` is already in front of (or, with `back`, behind) all the others —
+ *  where pressing again would keep climbing `z` with nothing visible changing, one undo step a press. */
+function alreadyOutermost(doc: DraftDocument, set: ReadonlySet<string>, back: boolean): boolean {
+  let others = back ? Infinity : -Infinity;
+  for (const n of doc.nodes) if (!set.has(n.id)) others = back ? Math.min(others, n.z) : Math.max(others, n.z);
+  return doc.nodes.every((n) => !set.has(n.id) || (back ? n.z < others : n.z > others));
+}
+
 export function bringForward(doc: DraftDocument, ids: Iterable<string>): DraftDocument {
   const set = new Set(ids);
+  if (alreadyOutermost(doc, set, false)) return doc;
   const max = doc.nodes.reduce((m, n) => Math.max(m, n.z), 0);
   let changed = false;
   const nodes = doc.nodes.map((n) => {
@@ -384,6 +402,7 @@ export function bringForward(doc: DraftDocument, ids: Iterable<string>): DraftDo
 
 export function sendBackward(doc: DraftDocument, ids: Iterable<string>): DraftDocument {
   const set = new Set(ids);
+  if (alreadyOutermost(doc, set, true)) return doc;
   const min = doc.nodes.reduce((m, n) => Math.min(m, n.z), 0);
   let changed = false;
   const nodes = doc.nodes.map((n) => {
@@ -396,6 +415,7 @@ export function sendBackward(doc: DraftDocument, ids: Iterable<string>): DraftDo
 
 export function bringToFront(doc: DraftDocument, ids: Iterable<string>): DraftDocument {
   const set = new Set(ids);
+  if (alreadyOutermost(doc, set, false)) return doc;
   const max = doc.nodes.reduce((m, n) => Math.max(m, n.z), 0);
   let changed = false;
   const nodes = doc.nodes.map((n) => {
@@ -408,6 +428,7 @@ export function bringToFront(doc: DraftDocument, ids: Iterable<string>): DraftDo
 
 export function sendToBack(doc: DraftDocument, ids: Iterable<string>): DraftDocument {
   const set = new Set(ids);
+  if (alreadyOutermost(doc, set, true)) return doc;
   const min = doc.nodes.reduce((m, n) => Math.min(m, n.z), 0);
   let changed = false;
   const nodes = doc.nodes.map((n) => {
@@ -587,8 +608,10 @@ export function updateAttachment(
   let changed = false;
   const next = host.attachments.map((a) => {
     if (a.id !== attachmentId) return a;
+    const patched = applyPatch<Attachment>(a, patch);
+    if (sameFields(patched, a)) return a;
     changed = true;
-    return { ...a, ...patch };
+    return patched;
   });
   return changed ? withAttachments(doc, hostId, next) : doc;
 }
@@ -655,8 +678,10 @@ export function updateEdgeAttachment(
   let changed = false;
   const next = edge.attachments.map((a) => {
     if (a.id !== attachmentId) return a;
+    const patched = applyPatch<Attachment>(a, patch);
+    if (sameFields(patched, a)) return a;
     changed = true;
-    return { ...a, ...patch };
+    return patched;
   });
   return changed ? withEdgeAttachments(doc, edgeId, next) : doc;
 }
@@ -766,7 +791,7 @@ export interface PlaceNearOptions {
   direction?: CompanionDirection;
   /** When given, candidates that land fully inside this boundary are tried before ones that
    *  don't — a companion prefers to stay inside its host's boundary when there is room, without
-   *  ever being forced there (a boundary is still never an obstacle; see `tryPlaceNear`). */
+   *  ever being forced there (its own boundary is never an obstacle; see `tryPlaceNear`). */
   parent?: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>;
 }
 
@@ -791,8 +816,15 @@ export function tryPlaceNear(
   options: PlaceNearOptions = {},
 ): { x: number; y: number } | undefined {
   const obstacles = doc.nodes.filter((n) => n.id !== host.id && n.type !== 'group');
+  // A boundary the host isn't in counts as an obstacle too: a node set down inside one (or across
+  // its edge) looks like a member while not being one, and stays behind when the boundary moves.
+  const foreignBoundaries = doc.nodes.filter(
+    (n) => n.type === 'group' && n.id !== host.id && n !== options.parent && !containsRect(n, host),
+  );
   const candidates = orderCandidates(companionCandidates(host, size, gap, options.direction), options.parent);
-  const chosen = candidates.find((rect) => !obstacles.some((n) => rectsOverlap(rect, n)));
+  const chosen = candidates.find(
+    (rect) => !obstacles.some((n) => rectsOverlap(rect, n)) && !foreignBoundaries.some((n) => rectsOverlap(rect, n)),
+  );
   if (!chosen) return undefined;
   return clampCompanion(chosen, host, size);
 }
@@ -975,6 +1007,9 @@ export function setParent(
   // Walking up from the new parent is O(depth); asking for each child's whole subtree
   // (`descendantsOf`) was a full scan of the document per child.
   const byId = parentId === undefined ? null : new Map(doc.nodes.map((node) => [node.id, node]));
+  // Only a boundary can hold children — anything else would make a delete cascade into nodes the
+  // user never saw as contained, and a reload drops the link anyway.
+  if (byId && byId.get(parentId!)?.type !== 'group') return doc;
   const isAncestorOfParent = (id: string) => {
     const seen = new Set<string>();
     for (let at = byId?.get(parentId!); at && !seen.has(at.id); at = at.parentId ? byId!.get(at.parentId) : undefined) {

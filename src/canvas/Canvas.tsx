@@ -17,7 +17,7 @@ import {
   type OnSelectionChangeParams,
   type XYPosition,
 } from '@xyflow/react';
-import { defaultTextFor } from '../document/factory';
+import { defaultTextFor, maxSizeFor, minSizeFor } from '../document/factory';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
 import type { DraftDocument, Side } from '../document/types';
 import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
@@ -44,6 +44,7 @@ import {
   type DraftRfNode,
 } from './projection';
 import { computeSnap, sameGuides, type Guide } from './snapping';
+import { snapResize } from './resizeSnap';
 import { ContinuationGhost } from './ContinuationGhost';
 import { useContinuation } from './useContinuation';
 
@@ -88,13 +89,16 @@ const EMPTY_VIEW: ProjectionState = { nodes: [], edges: [], from: null };
 
 const NO_SNAP = { changes: [] as NodeChange<DraftRfNode>[], guides: [] as Guide[] };
 
+/** A React Flow node by id — its live position and measured size mid-gesture. */
+type NodeLookup = (id: string) => Pick<DraftRfNode, 'position' | 'width' | 'height' | 'measured'> | undefined;
+
 /**
  * Nudges an in-flight drag onto alignment with its neighbours, and reports the
  * guides to draw. Returns the changes untouched when nothing is close enough.
  */
 function snapChanges(
   changes: NodeChange<DraftRfNode>[],
-  current: readonly DraftRfNode[],
+  nodeById: NodeLookup,
   statics: readonly Rect[],
 ): { changes: NodeChange<DraftRfNode>[]; guides: Guide[] } {
   const moves = changes.filter(
@@ -102,14 +106,10 @@ function snapChanges(
   );
   if (moves.length === 0 || statics.length === 0) return { ...NO_SNAP, changes };
 
-  // Only the moved nodes' sizes are needed — not a map of every node, rebuilt every frame.
-  const movedIds = new Set(moves.map((change) => (change.type === 'position' ? change.id : '')));
-  const sizes = new Map<string, DraftRfNode>();
-  for (const node of current) if (movedIds.has(node.id)) sizes.set(node.id, node);
   const rects: Rect[] = [];
   for (const change of moves) {
     if (change.type !== 'position' || !change.position) continue;
-    const node = sizes.get(change.id);
+    const node = nodeById(change.id);
     rects.push({
       x: change.position.x,
       y: change.position.y,
@@ -135,17 +135,16 @@ function snapChanges(
 }
 
 /**
- * The resize counterpart to `snapChanges`, reusing the same `computeSnap`
- * math against the in-progress rect. A handle that moves the node's origin
- * (top or left) reports a `position` change alongside the `dimensions`
- * change in the same frame; when one is present, the snap delta is applied
- * to both position and (inversely) the matching dimension, so the opposite,
- * fixed edge does not drift. A handle that only grows/shrinks from the
- * bottom-right applies the delta to dimensions alone.
+ * The resize counterpart to `snapChanges` — see `snapResize` for which edges snap. The rect the node
+ * started the gesture with is the document's: nothing is written to it until the gesture ends.
+ *
+ * The terminal frame (`resizing: false`) isn't snapped again: React Flow reports its own raw,
+ * unsnapped size there, so it's replaced with the rect the last live frame actually showed —
+ * otherwise the far edge of a snapped top/left resize would commit off by the snap.
  */
 function snapResizeChanges(
   changes: NodeChange<DraftRfNode>[],
-  current: readonly DraftRfNode[],
+  nodeById: NodeLookup,
   statics: readonly Rect[],
 ): { changes: NodeChange<DraftRfNode>[]; guides: Guide[] } {
   // Snapping applies equally to the terminal (`resizing: false`) frame —
@@ -160,38 +159,50 @@ function snapResizeChanges(
   const resizing = changes.filter(
     (change) => change.type === 'dimensions' && change.dimensions && change.resizing !== undefined,
   );
-  if (resizing.length === 0 || statics.length === 0) return { ...NO_SNAP, changes };
+  if (resizing.length === 0) return { ...NO_SNAP, changes };
 
   let result = changes;
   const guides: Guide[] = [];
+  const documentNodes = nodeIndex(useEditorStore.getState().document.nodes);
 
   for (const change of resizing) {
     if (change.type !== 'dimensions' || !change.dimensions) continue;
-    // A resize moves one node (occasionally a few) — a lookup, not a map of every node per frame.
-    const node = current.find((candidate) => candidate.id === change.id);
-    if (!node) continue;
-    const posChange = changes.find(
-      (c) => c.type === 'position' && c.id === change.id && c.position,
+    const live = nodeById(change.id);
+    const node = documentNodes.get(change.id);
+    if (!live || !node) continue;
+
+    if (change.resizing === false) {
+      const width = live.width ?? live.measured?.width;
+      const height = live.height ?? live.measured?.height;
+      if (width === undefined || height === undefined) continue;
+      result = result.map((c) => (c === change ? { ...change, dimensions: { width, height } } : c));
+      continue;
+    }
+
+    // A proportional resize (a Junction stays round) would need both axes snapped together.
+    if (statics.length === 0 || node.type === 'ellipse') continue;
+    const posChange = changes.find((c) => c.type === 'position' && c.id === change.id && c.position);
+    const position = (posChange?.type === 'position' ? posChange.position : undefined) ?? live.position;
+    const min = minSizeFor(node.type);
+    const snap = snapResize(
+      { x: node.x, y: node.y, width: node.width, height: node.height },
+      { ...position, width: change.dimensions.width, height: change.dimensions.height },
+      statics,
+      { min, max: maxSizeFor(node.type) ?? { width: Infinity, height: Infinity } },
     );
-    const posChangePosition = posChange?.type === 'position' ? posChange.position : undefined;
-    const position = posChangePosition ?? node.position;
-    const rect: Rect = { ...position, width: change.dimensions.width, height: change.dimensions.height };
-
-    const snap = computeSnap(rect, statics);
     guides.push(...snap.guides);
-    if (snap.dx === 0 && snap.dy === 0) continue;
+    if (snap.guides.length === 0) continue;
 
+    const { x, y, width, height } = snap.rect;
     result = result.map((c) => {
-      if (c.type === 'dimensions' && c.id === change.id && c.dimensions) {
-        const width = posChangePosition ? c.dimensions.width - snap.dx : c.dimensions.width + snap.dx;
-        const height = posChangePosition ? c.dimensions.height - snap.dy : c.dimensions.height + snap.dy;
-        return { ...c, dimensions: { width: Math.max(1, width), height: Math.max(1, height) } };
-      }
-      if (c.type === 'position' && c.id === change.id && c.position) {
-        return { ...c, position: { x: c.position.x + snap.dx, y: c.position.y + snap.dy } };
-      }
+      if (c === change) return { ...change, dimensions: { width, height } };
+      if (c === posChange) return { ...posChange, position: { x, y } };
       return c;
     });
+    // A top or left edge that snapped moves the node even on a frame React Flow sent no position for.
+    if (!posChange && (x !== position.x || y !== position.y)) {
+      result = [...result, { type: 'position', id: change.id, position: { x, y } }];
+    }
   }
 
   return { changes: result, guides };
@@ -305,7 +316,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   // A fresh object here would defeat React Flow's own memoized renderer on every drag frame.
   const connectionLineStyle = useMemo(() => ({ stroke: theme.selection, strokeWidth: 1.8 }), [theme.selection]);
 
-  const { screenToFlowPosition, flowToScreenPosition, getNodes } = useReactFlow();
+  const { screenToFlowPosition, flowToScreenPosition, getNodes, getInternalNode } = useReactFlow<DraftRfNode>();
 
   const interactive = mode === 'edit';
   useContinuation(interactive);
@@ -407,8 +418,9 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    */
   const onNodesChange = useCallback(
     (changes: NodeChange<DraftRfNode>[]) => {
-      const liveNodes = getNodes() as DraftRfNode[];
-      const snappedMove = snapChanges(changes, liveNodes, staticRects.current);
+      // Per id, not `getNodes()`: that copies every node on every frame of a drag.
+      const nodeById: NodeLookup = (id) => getInternalNode(id);
+      const snappedMove = snapChanges(changes, nodeById, staticRects.current);
 
       // A dimensions change appears on every frame of a resize gesture,
       // including the terminal one (`resizing: false`) that commits to the
@@ -432,7 +444,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
           .document.nodes.filter((node) => node.id !== dimChange.id)
           .map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height }));
       }
-      const snapped = snapResizeChanges(snappedMove.changes, liveNodes, resizeStaticRects.current);
+      const snapped = snapResizeChanges(snappedMove.changes, nodeById, resizeStaticRects.current);
       // A move and a resize are never in progress in the same gesture, so at
       // most one side of this ever has guides to show. The terminal resize
       // frame (`resizing: false`) still reports a snap-adjusted dimensions
@@ -574,7 +586,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
             );
             const position =
               (posChange?.type === 'position' ? posChange.position : undefined) ??
-              liveNodes.find((node) => node.id === change.id)?.position;
+              nodeById(change.id)?.position;
             useEditorStore.getState().updateNodeById(
               change.id,
               {
@@ -588,7 +600,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         }
       }
     },
-    [clearDwell, flowToScreenPosition, getNodes, setNodes],
+    [clearDwell, flowToScreenPosition, getInternalNode, setNodes],
   );
 
   const setEdges = useCallback(

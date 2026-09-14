@@ -63,6 +63,21 @@ describe('Toolbar title editing', () => {
     expect(onTitleChange).toHaveBeenCalledWith('New title');
   });
 
+  it('shows the kept title after a commit the store normalised to what it already had', () => {
+    // `setTitle` trims and falls back to the default, so neither commit changes the prop.
+    const { input } = renderToolbar('Untitled canvas');
+
+    input.focus();
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    expect(input.value).toBe('Untitled canvas');
+
+    input.focus();
+    fireEvent.change(input, { target: { value: 'Untitled canvas   ' } });
+    fireEvent.blur(input);
+    expect(input.value).toBe('Untitled canvas');
+  });
+
   it('reverts to the original title on Escape without committing', () => {
     const { onTitleChange, input } = renderToolbar('Original title');
 

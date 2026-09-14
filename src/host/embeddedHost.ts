@@ -20,11 +20,12 @@ function detectHost(): 'vscode' | null {
  * Messages between the app and its host. The app's protocol version travels with `ready`, so a host
  * can tell an app that predates a message it relies on.
  */
-export const HOST_PROTOCOL = 2;
+export const HOST_PROTOCOL = 3;
 
 export type ToHostMessage =
   | { type: 'draft-canvas:ready'; protocol: number }
-  | { type: 'draft-canvas:change'; text: string }
+  /** `baseSeq` since protocol 3: the `seq` of the load this edit was made on top of. */
+  | { type: 'draft-canvas:change'; text: string; baseSeq?: number }
   | { type: 'draft-canvas:save'; saveAs: boolean }
   /** Since protocol 2. A link the frame can't open itself: the host's webview allows no popups. */
   | { type: 'draft-canvas:open-external'; url: string };
@@ -35,6 +36,13 @@ export interface LoadMessage {
   text: string;
   /** The file's name without its extension, used as the title of a new document. */
   title?: string;
+  /**
+   * Since protocol 3: counts up with every load the host sends. A change carries back the `seq` it
+   * was made on (`baseSeq`), so when the file was replaced from outside (a revert, a checkout) while
+   * an edit was on its way, the host can drop that edit instead of writing the old contents over the
+   * new ones. Absent from an older host, and then nothing is dropped.
+   */
+  seq?: number;
 }
 
 /** A VS Code webview's origin. Anything else framing the app at `?host=vscode` is not its host. */

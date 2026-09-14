@@ -64,11 +64,25 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
     // Edits are applied one at a time, always with the app's latest text; while one is being applied
     // the document can briefly differ from `appText`, and that isn't a change made elsewhere.
     let applying = 0;
+    // Changes from the app accepted but not applied yet.
+    let waiting = 0;
     let queue = Promise.resolve();
+    // Numbers every load. An app that sends `baseSeq` back says which load its edit was made on; an
+    // edit made before the file was last replaced from outside (a revert, a checkout) would write the
+    // old contents back over the new, so it's dropped — the app is about to show the new ones.
+    let loadSeq = 0;
     const load = () => {
       appText = document.getText();
+      loadSeq += 1;
       const title = document.uri.path.split('/').pop()?.replace(/\.draftcanvas$/i, '');
-      void panel.webview.postMessage({ type: 'draft-canvas:load', text: appText, title });
+      void panel.webview.postMessage({ type: 'draft-canvas:load', text: appText, title, seq: loadSeq });
+    };
+    /** Runs after every edit already on its way. One that fails is reported, and the rest still run. */
+    const enqueue = (task: () => Promise<unknown>) => {
+      queue = queue.then(task).then(
+        () => undefined,
+        (error: unknown) => console.error('[draft-canvas]', error),
+      );
     };
 
     const subscriptions = [
@@ -76,24 +90,36 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
         if (!isRecord(message)) return;
         switch (message.type) {
           case 'draft-canvas:ready':
-            load();
+            // After any edit still being applied (the app reloaded right after one), so the load
+            // carries it rather than the text from before it.
+            enqueue(async () => load());
             break;
           case 'draft-canvas:change':
-            if (typeof message.text === 'string') {
-              appText = message.text;
-              queue = queue.then(async () => {
-                applying++;
-                try {
-                  await replaceText(document, appText ?? '');
-                } finally {
-                  applying--;
-                }
-              });
-            }
+            if (typeof message.text !== 'string') break;
+            if (typeof message.baseSeq === 'number' && message.baseSeq < loadSeq) break;
+            appText = message.text;
+            waiting++;
+            enqueue(async () => {
+              applying++;
+              try {
+                await replaceText(document, appText ?? '');
+              } finally {
+                applying--;
+                waiting--;
+              }
+              // A change from elsewhere that landed while this was applying was skipped by the
+              // listener below; catch it now — once no newer edit from the app is still to come.
+              if (waiting === 0 && document.getText() !== appText) load();
+            });
             break;
           case 'draft-canvas:save':
-            // The key was pressed inside this tab, so it's the active editor the save commands act on.
-            void vscode.commands.executeCommand(message.saveAs === true ? 'workbench.action.files.saveAs' : 'workbench.action.files.save');
+            // Queued behind the edits it's meant to save. The key was pressed inside this tab, so
+            // it's the active editor the save commands act on.
+            enqueue(() =>
+              Promise.resolve(
+                vscode.commands.executeCommand(message.saveAs === true ? 'workbench.action.files.saveAs' : 'workbench.action.files.save'),
+              ),
+            );
             break;
           case 'draft-canvas:open-external':
             if (typeof message.url === 'string') openExternal(message.url);

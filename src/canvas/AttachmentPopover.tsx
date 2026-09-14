@@ -16,7 +16,7 @@ import {
 import { useOverlayPosition } from './useOverlayPosition';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { useToolbarHeight } from './useToolbarHeight';
-import { isImeKeyEvent } from '../lib/isEditableTarget';
+import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 import { rightClearance } from './canvasFrame';
 
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css`. */
@@ -96,7 +96,7 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
   useEffect(() => {
     if (!listening) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isImeKeyEvent(event)) {
+      if (event.key === 'Escape' && !isImeKeyEvent(event) && !overlayAboveCanvasIsOpen()) {
         event.stopPropagation();
         setOpenAttachmentDetail(null);
       }

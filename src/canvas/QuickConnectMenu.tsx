@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useToolbarHeight } from './useToolbarHeight';
 import { useUiStore } from '../store/uiStore';
 import {
   anchorsForRect,
@@ -149,9 +150,13 @@ export function QuickConnectMenu({
     };
   }, [onDismiss, onSelect]);
 
+  // The toolbar wraps to two rows on a narrow window, and isn't there at all while presenting — so
+  // its real height, with `TOP_CLEARANCE` only until it's been measured (same as the inspectors).
+  const measuredToolbarHeight = useToolbarHeight(true);
+  const toolbarClearance = measuredToolbarHeight !== undefined ? measuredToolbarHeight + 10 : TOP_CLEARANCE;
   const clearances = {
     gap: GAP,
-    top: TOP_CLEARANCE,
+    top: toolbarClearance,
     bottom: BOTTOM_CLEARANCE,
     left: LEFT_CLEARANCE,
     right: rightClearance(flowPanelOpen, LEFT_CLEARANCE),

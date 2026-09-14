@@ -22,16 +22,21 @@ describe('initServiceWorker', () => {
     if (!hadServiceWorker) delete (navigator as unknown as { serviceWorker?: unknown }).serviceWorker;
   });
 
-  it('registers without activating, and forwards onNeedRefresh', () => {
+  it('registers without activating, forwards onNeedRefresh, and saves before activating', async () => {
     Object.defineProperty(navigator, 'serviceWorker', { value: {}, configurable: true });
     const updateSW = vi.fn();
     registerSWMock.mockReturnValue(updateSW);
     const onUpdateReady = vi.fn();
+    const order: string[] = [];
+    const beforeReload = vi.fn(async () => {
+      order.push('saved');
+    });
+    updateSW.mockImplementation(() => order.push('activated'));
 
-    const activate = initServiceWorker(onUpdateReady);
+    const activate = initServiceWorker({ onUpdateReady, onUpdatedElsewhere: () => {} }, beforeReload);
 
     expect(registerSWMock).toHaveBeenCalledWith(
-      expect.objectContaining({ immediate: false, onNeedRefresh: expect.any(Function) }),
+      expect.objectContaining({ immediate: false, onNeedRefresh: expect.any(Function), onNeedReload: expect.any(Function) }),
     );
     expect(onUpdateReady).not.toHaveBeenCalled();
 
@@ -39,12 +44,23 @@ describe('initServiceWorker', () => {
     expect(onUpdateReady).toHaveBeenCalledOnce();
 
     activate?.();
-    expect(updateSW).toHaveBeenCalledWith(true);
+    await vi.waitFor(() => expect(updateSW).toHaveBeenCalledWith(true));
+    expect(order).toEqual(['saved', 'activated']);
+  });
+
+  it('tells a tab that another tab activated the update, instead of reloading it', () => {
+    Object.defineProperty(navigator, 'serviceWorker', { value: {}, configurable: true });
+    registerSWMock.mockReturnValue(vi.fn());
+    const onUpdatedElsewhere = vi.fn();
+    initServiceWorker({ onUpdateReady: () => {}, onUpdatedElsewhere });
+
+    registerSWMock.mock.calls[0]![0].onNeedReload();
+    expect(onUpdatedElsewhere).toHaveBeenCalledOnce();
   });
 
   it('is a no-op in a browser without Service Worker support', () => {
     delete (navigator as unknown as { serviceWorker?: unknown }).serviceWorker;
-    expect(initServiceWorker(() => {})).toBeNull();
+    expect(initServiceWorker({ onUpdateReady: () => {}, onUpdatedElsewhere: () => {} })).toBeNull();
     expect(registerSWMock).not.toHaveBeenCalled();
   });
 });

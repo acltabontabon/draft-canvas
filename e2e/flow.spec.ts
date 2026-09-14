@@ -288,7 +288,7 @@ test.describe('Flows', () => {
     await expect(steps.nth(1)).toContainText('API → Payment');
 
     // Move the second step earlier.
-    await steps.nth(1).getByRole('button', { name: 'Move earlier' }).click();
+    await steps.nth(1).getByRole('button', { name: 'Move step 2 earlier' }).click();
     await expect(page.locator('.dc-flow-step-row').nth(0)).toContainText('API → Payment');
 
     // Remove one step.

@@ -276,9 +276,9 @@ function AboutDialogBody() {
                 type="button"
                 className="dc-about-version-action dc-about-version-action--update"
                 onClick={activateUpdate}
-                title="Reload to finish updating"
+                title="Saves your work, then reloads this tab with the new version"
               >
-                Update ready ↑
+                Reload to update ↑
               </button>
             ) : (
               <button type="button" className="dc-about-version-action" onClick={openWhatsNew}>
@@ -302,7 +302,7 @@ function AboutDialogBody() {
                 href={PRODUCT.links.github}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="GitHub"
+                aria-label="GitHub (opens in a new tab)"
                 title="GitHub"
               >
                 <Icon name="github" size={15} />
@@ -312,7 +312,7 @@ function AboutDialogBody() {
                 href={PRODUCT.links.linkedin}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="LinkedIn"
+                aria-label="LinkedIn (opens in a new tab)"
                 title="LinkedIn"
               >
                 <Icon name="linkedin" size={15} />
@@ -322,7 +322,7 @@ function AboutDialogBody() {
                 href={PRODUCT.links.website}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="Personal site"
+                aria-label="Personal site (opens in a new tab)"
                 title="Personal site"
               >
                 <Icon name="globe" size={15} />

@@ -66,11 +66,18 @@ export function Inspector() {
   // land here exactly as before.
   if (nodes.length === 1 && edges.length === 0) return null;
 
-  const setAccent = (accent: Accent) => {
+  // One undo step for the whole selection, not one per element.
+  const recolour = (label: string, accent: Accent | undefined, includeNodes: boolean) => {
     const state = useEditorStore.getState();
-    for (const node of nodes) state.updateNodeById(node.id, { accent }, 'Recolour');
-    for (const edge of edges) state.updateEdgeById(edge.id, { accent }, 'Recolour');
+    state.beginInteraction(label);
+    try {
+      if (includeNodes) for (const node of nodes) state.updateNodeById(node.id, { accent }, label);
+      for (const edge of edges) state.updateEdgeById(edge.id, { accent }, label);
+    } finally {
+      state.endInteraction();
+    }
   };
+  const setAccent = (accent: Accent) => recolour('Recolour', accent, true);
 
   const accents = new Set([...nodes, ...edges].map((element) => element.accent));
   const sharedAccent = accents.size === 1 ? [...accents][0] : undefined;
@@ -81,7 +88,7 @@ export function Inspector() {
         {nodes.length > 0 && `${nodes.length} ${nodes.length === 1 ? 'element' : 'elements'}`}
         {nodes.length > 0 && edges.length > 0 && ' · '}
         {edges.length > 0 &&
-          `${edges.length} ${edges.length === 1 ? 'connection' : 'connections'}`}
+          `${edges.length} ${edges.length === 1 ? 'connector' : 'connectors'}`}
       </span>
 
       <span className="dc-inspector-divider" />
@@ -102,11 +109,8 @@ export function Inspector() {
         {nodes.length === 0 && edges.some((edge) => edge.accent !== undefined) && (
           <Button
             variant="ghost"
-            title="Derive this connection's colour from its source node instead of a fixed one"
-            onClick={() => {
-              const state = useEditorStore.getState();
-              for (const edge of edges) state.updateEdgeById(edge.id, { accent: undefined }, 'Reset colour');
-            }}
+            title="Derive this connector's colour from its source node instead of a fixed one"
+            onClick={() => recolour('Reset colour', undefined, false)}
           >
             Auto
           </Button>

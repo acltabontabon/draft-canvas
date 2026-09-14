@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from './Button';
+import { trapTab } from './focusTrap';
 import { useFocusReturn } from './useFocusReturn';
 
 /**
  * The small, contextual ask shown before the very first `navigator.clipboard.readText()` call —
  * only ever triggered by an explicit clipboard action (context-menu/palette Paste; see
  * `lib/clipboardPermission.ts`), never on mount or on tab focus. Deliberately lighter than
- * `Modal.tsx`: no dimmed backdrop, no focus trap — a quiet fixed card, not a legal-document
- * moment. It does take focus and mark itself modal, so the editor's shortcuts wait for the answer.
+ * `Modal.tsx`: no dimmed backdrop — a quiet fixed card, not a legal-document moment. It does take
+ * focus, keep Tab inside, and mark itself modal, so the editor's shortcuts wait for the answer (and a
+ * screen reader, told the rest of the page is inert, isn't left tabbing into it).
  */
 export function ClipboardPermissionDialog() {
   const request = useUiStore((state) => state.clipboardPermissionRequest);
@@ -27,7 +29,9 @@ export function ClipboardPermissionDialog() {
       if (event.key === 'Escape') {
         event.stopPropagation();
         resolve(false);
+        return;
       }
+      if (card.current) trapTab(event, card.current);
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
@@ -42,12 +46,13 @@ export function ClipboardPermissionDialog() {
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="dc-clipboard-permission-title"
+      aria-describedby="dc-clipboard-permission-body"
       tabIndex={-1}
     >
       <p id="dc-clipboard-permission-title" className="dc-clipboard-permission-title">
         Paste from your clipboard?
       </p>
-      <p>Draft Canvas can read your clipboard when you paste content onto the canvas — for example, text or copied images.</p>
+      <p id="dc-clipboard-permission-body">Draft Canvas can read your clipboard when you paste content onto the canvas — for example, text or copied images.</p>
       <p className="dc-clipboard-permission-note">Your clipboard stays in your browser and isn't uploaded anywhere.</p>
       <div className="dc-clipboard-permission-actions">
         <Button variant="ghost" onClick={() => resolve(false)}>

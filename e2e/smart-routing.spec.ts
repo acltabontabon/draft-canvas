@@ -71,7 +71,7 @@ test.describe('Smart Routing — fan-out on the live canvas', () => {
     // The semantic graph is untouched: five connectors in, five out. Nothing
     // was collapsed into a junction to make the picture tidy.
     await expect(page.locator('.dc-edge')).toHaveCount(5);
-    await expect(page.locator('.dc-statusbar, .dc-status').first()).toContainText('5 connections');
+    await expect(page.locator('.dc-status')).toContainText('5 connectors');
 
     // Every member turns onto the same vertical trunk, so each path contains
     // the same x twice — once entering it, once leaving.

@@ -47,6 +47,10 @@ export function DiagramTitleField({ title, onTitleChange }: DiagramTitleFieldPro
       onBlur={() => {
         editingTitleRef.current = false;
         onTitleChange(localTitleRef.current);
+        // Show what was kept, not what was typed: `setTitle` trims, and an emptied title falls back
+        // to the default. When that leaves the stored title unchanged the effect above never runs,
+        // so reset here; when it did change, that effect then lands the new title over this.
+        setLocalTitleValue(title);
       }}
       onKeyDown={(event) => {
         // Without this, typing "s" in the title arms the Service tool: the editor's global

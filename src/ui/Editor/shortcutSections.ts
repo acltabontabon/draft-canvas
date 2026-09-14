@@ -75,8 +75,8 @@ export const SECTIONS: Section[] = [
     rows: [
       { keys: ['Tab'], label: 'Move to the canvas — Shift+Tab moves back through the toolbar' },
       { keys: [alt, 'Arrow'], label: 'Select the nearest element in that direction' },
-      { keys: [alt, 'Shift', '→'], label: 'Follow an outgoing connection' },
-      { keys: [alt, 'Shift', '←'], label: 'Follow an incoming connection' },
+      { keys: [alt, 'Shift', '→'], label: 'Follow an outgoing connector' },
+      { keys: [alt, 'Shift', '←'], label: 'Follow an incoming connector' },
       { commandId: 'edit-text', label: 'Open the selected element' },
       { keys: ['Shift', 'F10'], label: 'Context menu for the selection (or the Menu key)' },
       { keys: ['Esc'], label: 'Step back — out of editing, then a popover, then presenting, then the selection' },

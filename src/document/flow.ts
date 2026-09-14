@@ -87,15 +87,22 @@ function memoLevel<K extends object, V>(cache: WeakMap<K, V>, key: K, create: ()
   return value;
 }
 
-/** First 1-based step position of every connector a flow's steps reference — see `stepIndexOf`. */
-const edgeStepCache = new WeakMap<readonly DraftFlowStep[], Map<string, number>>();
+/** Every 1-based step position of each connector a flow's steps reference, in order. A connector
+ *  can come back at a later step (as that step's main connector or an extra one), and it's active
+ *  there too. */
+const edgePositionsCache = new WeakMap<readonly DraftFlowStep[], Map<string, number[]>>();
 
-function edgeStepsOf(steps: readonly DraftFlowStep[]): Map<string, number> {
-  return memoLevel(edgeStepCache, steps, () => {
-    const positions = new Map<string, number>();
+function edgePositionsOf(steps: readonly DraftFlowStep[]): Map<string, number[]> {
+  return memoLevel(edgePositionsCache, steps, () => {
+    const positions = new Map<string, number[]>();
+    const add = (id: string, position: number) => {
+      const list = positions.get(id);
+      if (!list) positions.set(id, [position]);
+      else if (list[list.length - 1] !== position) list.push(position);
+    };
     steps.forEach((step, index) => {
-      if (step.edgeId !== undefined && !positions.has(step.edgeId)) positions.set(step.edgeId, index + 1);
-      for (const id of step.extraEdgeIds ?? []) if (!positions.has(id)) positions.set(id, index + 1);
+      if (step.edgeId !== undefined) add(step.edgeId, index + 1);
+      for (const id of step.extraEdgeIds ?? []) add(id, index + 1);
     });
     return positions;
   });
@@ -117,12 +124,12 @@ function nodeStepsOf(steps: readonly DraftFlowStep[], edges: readonly DraftEdge[
       if (list) list.push(position);
       else positions.set(nodeId, [position]);
     };
-    const edgeSteps = edgeStepsOf(steps);
+    const edgePositions = edgePositionsOf(steps);
     for (const edge of edges) {
-      const position = edgeSteps.get(edge.id);
-      if (position === undefined) continue;
-      add(edge.source, position);
-      if (edge.target !== edge.source) add(edge.target, position);
+      for (const position of edgePositions.get(edge.id) ?? []) {
+        add(edge.source, position);
+        if (edge.target !== edge.source) add(edge.target, position);
+      }
     }
     steps.forEach((step, index) => {
       for (const id of step.extraNodeIds ?? []) add(id, index + 1);
@@ -147,7 +154,18 @@ export function flowIsPlayable(doc: DraftDocument, flow: DraftFlow): boolean {
  */
 export function stepIndexOf(flow: DraftFlow | undefined, edgeId: string): number | undefined {
   if (!flow) return undefined;
-  return edgeStepsOf(flow.steps).get(edgeId);
+  return edgePositionsOf(flow.steps).get(edgeId)?.[0];
+}
+
+/** An edge's tier at `step`, counting every step it appears in — see `explainEdgeTier`. */
+export function edgeTierAt(flow: DraftFlow | undefined, edgeId: string, step: number): ExplainTier {
+  let best: ExplainTier = 'hidden';
+  for (const position of (flow && edgePositionsOf(flow.steps).get(edgeId)) ?? []) {
+    const tier = explainEdgeTier(position, step);
+    if (tier === 'active') return 'active';
+    if (tier === 'shown') best = 'shown';
+  }
+  return best;
 }
 
 /**
@@ -473,7 +491,8 @@ export function spliceEdgeInFlows(
       if (step.extraEdgeIds?.includes(edgeId)) {
         const extraEdgeIds = step.extraEdgeIds
           .flatMap((id) => (id === edgeId ? replacementEdgeIds : [id]))
-          .filter((id, index, all) => all.indexOf(id) === index)
+          // Not the step's own main connector again — it's already what the step shows.
+          .filter((id, index, all) => id !== step.edgeId && all.indexOf(id) === index)
           .slice(0, LIMITS.maxExtraMembersPerStep);
         steps.push({ ...step, extraEdgeIds });
         continue;

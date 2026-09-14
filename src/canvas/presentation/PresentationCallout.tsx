@@ -26,6 +26,8 @@ const EDGE_MARGIN = 16;
 const CHROME_MARGIN = 10;
 /** How thick a connector's line counts as, when keeping the callout off it. */
 const LINE_THICKNESS = 10;
+/** The shortest a docked callout is capped to — a couple of lines, scrolling past that. */
+const MIN_ROOM = 72;
 /** Everything riding on a connector that a callout would hide: labels, captions, chips. */
 const DRAWN_LABELS = '.dc-edge-label, .dc-edge-caption, .dc-edge-meta, .dc-attachment-chip-row';
 /** Must match `@keyframes dc-callout-out` in `canvas.css`. */
@@ -122,10 +124,15 @@ export function PresentationCallout({
   // callout lives: capping shrinks its measured size, and a cap that lifted again as a result would
   // hand placement back the size that needed it — a resize loop.
   const roomRef = useRef(Number.POSITIVE_INFINITY);
+  // …except when the canvas itself grows (a window resized taller, the flow bar shrinking back): that
+  // room is real, not something capping caused, so the cap starts over.
+  const rootHeightRef = useRef(0);
 
   const place = (frame: OverlayFrame, current: CalloutPlacementName) => {
     if (!anchor || frame.size.width === 0) return null;
     const { root, size } = frame;
+    if (root.height > rootHeightRef.current + 1) roomRef.current = Number.POSITIVE_INFINITY;
+    rootHeightRef.current = root.height;
     const [tx, ty, zoom] = storeApi.getState().transform;
     // Flow → screen is one affine map; `flowToScreenPosition` per corner, per box, per frame adds up.
     const toScreen = (box: Box): Box => ({
@@ -187,7 +194,9 @@ export function PresentationCallout({
         '--dc-callout-marker-y': px(marker.y - result.y),
         '--dc-callout-marker-width': px(marker.width),
         '--dc-callout-marker-height': px(marker.height),
-        '--dc-callout-room': Number.isFinite(roomRef.current) ? px(roomRef.current) : '9999px',
+        // Never below a few readable lines (it scrolls past that): a canvas squeezed to nothing for a
+        // moment must not leave the callout a zero-height strip for the rest of the step.
+        '--dc-callout-room': Number.isFinite(roomRef.current) ? px(Math.max(MIN_ROOM, roomRef.current)) : '9999px',
       },
     };
   };

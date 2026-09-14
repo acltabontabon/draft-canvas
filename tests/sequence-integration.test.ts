@@ -83,7 +83,7 @@ describe('Canvas -> SequenceModel -> Mermaid/PlantUML — Saga (Happy Path + Com
     const out = toMermaid(buildSequenceModel(buildSagaDocument()));
 
     expect(out).toContain('sequenceDiagram');
-    expect(out).toContain('actor Customer as "Customer"');
+    expect(out).toContain('actor Customer as Customer\n');
     expect(out.match(/rect rgb\(240, 240, 240\)/g)).toHaveLength(2);
     expect(out).toContain('Place Order');
     expect(out).toContain('Charge Card');

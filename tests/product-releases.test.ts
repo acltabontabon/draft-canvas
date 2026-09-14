@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Same in-memory fake `tests/new-feature-badge.test.tsx` uses for the same module.
+// An in-memory fake of the preferences module, cleared per test (see the house rule on mocking it).
 const store = new Map<string, string>();
 vi.mock('../src/lib/preferences', () => ({
   readPreference: (key: string) => store.get(key) ?? null,

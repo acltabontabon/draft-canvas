@@ -178,11 +178,11 @@ function CanvasSettingsBody() {
         </section>
 
         <section>
-          <h3>Personality</h3>
+          <h3 id="dc-settings-personality-heading">Personality</h3>
           <p className="dc-muted">
             How the canvas draws its lines — a device preference, not part of this document.
           </p>
-          <div className="dc-settings-personality">
+          <div className="dc-settings-personality" role="radiogroup" aria-labelledby="dc-settings-personality-heading">
             {PERSONALITY_PRESETS.map((p) => (
               <label key={p} className="dc-check dc-check-personality">
                 <input

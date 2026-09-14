@@ -1,6 +1,7 @@
 import type { DraftDocument } from '../document/types';
 import { clamp } from '../lib/math';
 import {
+  DocumentConflictError,
   QuotaExceededError,
   reconcileMetadata,
   sharedMetadataOf,
@@ -14,6 +15,8 @@ export interface SaveState {
   status: SaveStatus;
   message?: string;
   lastSavedAt?: number;
+  /** Saving is paused until the user picks a copy — see `Autosave.resolveConflict`. */
+  conflict?: DocumentConflictError['kind'];
 }
 
 export interface AutosaveOptions {
@@ -25,6 +28,8 @@ export interface AutosaveOptions {
   maxWaitMs?: number;
   /** A save kept a rename or move made elsewhere; the open document should take it on too. */
   onMetadataAdopted?: (documentId: string, metadata: SharedMetadata) => void;
+  /** A save found the stored copy deleted or changed elsewhere; saving waits for `resolveConflict`. */
+  onConflict?: (documentId: string, kind: DocumentConflictError['kind']) => void;
 }
 
 const DEBOUNCE_MS = 700;
@@ -42,12 +47,22 @@ const HOLD_SAVED_MS = 1400;
  * lost to a closed tab. A write is never allowed to overlap another: a change
  * arriving mid-write is recorded and written once the current one lands.
  */
+/** Every controller alive in this tab, so leaving the page on purpose (reloading for an update) can
+ *  finish what's queued first — `pagehide` alone doesn't wait for IndexedDB. */
+const live = new Set<Autosave>();
+
+/** Writes everything queued in this tab; resolves once it's on disk (or has failed). */
+export async function flushAllAutosaves(): Promise<void> {
+  await Promise.all([...live].map((controller) => controller.flush()));
+}
+
 export class Autosave {
   private readonly repository: DraftRepository;
   private readonly onStateChange: (state: SaveState) => void;
   private readonly debounceMs: number;
   private readonly maxWaitMs: number;
   private readonly onMetadataAdopted: AutosaveOptions['onMetadataAdopted'];
+  private readonly onConflict: AutosaveOptions['onConflict'];
   /** Per document, the title/project last loaded or written — see `DraftRepository.save`. */
   private readonly baselines = new Map<string, SharedMetadata>();
 
@@ -60,6 +75,10 @@ export class Autosave {
   private savedHold: ReturnType<typeof setTimeout> | null = null;
   private firstDirtyAt = 0;
   private disposed = false;
+  /** Set while the stored copy was deleted or changed elsewhere: nothing is written until resolved. */
+  private conflict: DocumentConflictError['kind'] | null = null;
+  /** The next write replaces whatever is stored — the user chose this editor's copy. */
+  private overwriteNext = false;
   private state: SaveState = { status: 'idle' };
 
   constructor(options: AutosaveOptions) {
@@ -68,6 +87,8 @@ export class Autosave {
     this.debounceMs = options.debounceMs ?? DEBOUNCE_MS;
     this.maxWaitMs = options.maxWaitMs ?? MAX_WAIT_MS;
     this.onMetadataAdopted = options.onMetadataAdopted;
+    this.onConflict = options.onConflict;
+    live.add(this);
   }
 
   /** Records the metadata of a document as it is on disk right now (just opened or created). */
@@ -85,6 +106,8 @@ export class Autosave {
   schedule(document: DraftDocument): void {
     if (this.disposed) return;
     this.pending = document;
+    // Kept, not written: the conflict (and its message) stays up until the user resolves it.
+    if (this.conflict) return;
     if (this.firstDirtyAt === 0) this.firstDirtyAt = Date.now();
     this.emit({ status: 'dirty' });
 
@@ -110,6 +133,7 @@ export class Autosave {
     // arrived meanwhile.
     while (this.current) await this.current;
     if (this.disposed) return this.pending === null;
+    if (this.conflict) return false;
     if (!this.pending) return !this.lastFailed;
     this.current = this.write();
     try {
@@ -133,7 +157,8 @@ export class Autosave {
     try {
       const id = document.metadata.id;
       const base = this.baselines.get(id);
-      const adopted = await this.repository.save(document, base);
+      const adopted = await this.repository.save(document, base, this.overwriteNext ? { overwrite: true } : undefined);
+      this.overwriteNext = false;
       this.baselines.set(id, adopted ?? sharedMetadataOf(document.metadata));
       if (adopted && base) {
         // An edit queued during this write still carries the old values, and would read as this
@@ -145,7 +170,7 @@ export class Autosave {
       }
       this.lastFailed = false;
       this.clearSavingIndicator();
-      this.emit({ status: 'saved', lastSavedAt: Date.now() });
+      this.emit({ status: 'saved', lastSavedAt: Date.now(), message: undefined, conflict: undefined });
       if (this.savedHold) clearTimeout(this.savedHold);
       this.savedHold = setTimeout(() => {
         if (this.state.status === 'saved') this.emit({ status: 'idle', lastSavedAt: Date.now() });
@@ -157,6 +182,12 @@ export class Autosave {
       // since a full disk would only fail again in a tight loop.
       this.pending ??= document;
       this.clearSavingIndicator();
+      if (error instanceof DocumentConflictError) {
+        this.conflict = error.kind;
+        this.emit({ status: 'error', message: error.message, conflict: error.kind });
+        this.onConflict?.(document.metadata.id, error.kind);
+        return;
+      }
       // The in-memory document is untouched, so the user can still export it.
       this.emit({
         status: 'error',
@@ -174,7 +205,26 @@ export class Autosave {
     }
   }
 
+  /**
+   * Ends a conflict. `keep` writes this editor's copy over whatever is stored now (bringing a deleted
+   * canvas back); `discard` drops the unsaved version, for a caller about to reload or close it.
+   */
+  async resolveConflict(choice: 'keep' | 'discard', document?: DraftDocument): Promise<boolean> {
+    if (!this.conflict) return true;
+    this.conflict = null;
+    this.lastFailed = false;
+    if (choice === 'discard') {
+      this.pending = null;
+      this.emit({ status: 'idle', message: undefined, conflict: undefined });
+      return true;
+    }
+    this.pending ??= document ?? null;
+    this.overwriteNext = true;
+    return this.flush();
+  }
+
   dispose(): void {
+    live.delete(this);
     this.disposed = true;
     if (this.timer) clearTimeout(this.timer);
     this.clearSavingIndicator();

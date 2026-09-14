@@ -46,6 +46,23 @@ describe('ErrorBoundary', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it('shows its children again once resetKey changes (the crashed screen was left)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { getByText, queryByText, rerender } = render(
+      <ErrorBoundary message="Something went wrong." actions={[]} resetKey="doc-1">
+        <Bomb />
+      </ErrorBoundary>,
+    );
+    expect(getByText('Something went wrong.')).toBeTruthy();
+    rerender(
+      <ErrorBoundary message="Something went wrong." actions={[]} resetKey={null}>
+        <p>home</p>
+      </ErrorBoundary>,
+    );
+    expect(queryByText('Something went wrong.')).toBeNull();
+    expect(getByText('home')).toBeTruthy();
+  });
+
   it('calls onError exactly once with the thrown error', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const onError = vi.fn();

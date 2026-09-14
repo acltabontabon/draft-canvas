@@ -39,6 +39,11 @@ export interface DocumentSession {
   newDocument: (title?: string, starterId?: StarterId) => Promise<void>;
   adoptDocument: (document: DraftDocument) => Promise<void>;
   closeDocument: () => Promise<void>;
+  /**
+   * After another tab deleted or changed the open canvas: `keep` saves this tab's copy over it;
+   * `discard` reloads the stored copy, or closes the canvas when it was deleted.
+   */
+  resolveConflict: (choice: 'keep' | 'discard') => Promise<void>;
   renameDocument: (id: string, title: string) => Promise<void>;
   duplicateDocument: (id: string) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
@@ -136,13 +141,21 @@ export function useDocumentSession(): DocumentSession {
       // Saves only ever run for an open canvas, so the store is loaded by the time one reports.
       onStateChange: (state) => editorStoreModule?.useEditorStore.getState().setSaveState(state),
       onMetadataAdopted: (id, metadata) => editorStoreModule?.useEditorStore.getState().adoptStoredMetadata(id, metadata),
+      // The status bar keeps the choice on screen; this makes sure it's noticed.
+      onConflict: (_id, kind) =>
+        notify(
+          kind === 'deleted'
+            ? 'This canvas was deleted in another tab. Your changes here aren’t saved — keep them from the status bar, or export.'
+            : 'This canvas was changed in another tab. Choose which copy to keep from the status bar.',
+          'error',
+        ),
     });
     autosave.current = controller;
     return () => {
       controller.dispose();
       autosave.current = null;
     };
-  }, [repository]);
+  }, [notify, repository]);
 
   /**
    * Watches the document revision rather than the document itself, so a save is
@@ -220,6 +233,9 @@ export function useDocumentSession(): DocumentSession {
         return;
       }
       editorStore.useEditorStore.getState().setDocument(loaded);
+      // Reopening the canvas already open (taking another tab's copy) keeps `openId`, so the effect
+      // that tracks a newly opened document doesn't run again.
+      autosave.current?.track(loaded);
       setOpenId(loaded.metadata.id);
     },
     [notify, refreshLibrary, repository],
@@ -245,11 +261,9 @@ export function useDocumentSession(): DocumentSession {
         // An imported file keeps the id it was exported with, so re-importing an
         // older export of a canvas that still lives here would `put` straight
         // over the newer local copy. Keep both instead: the import becomes a new
-        // canvas. An unreadable existing row counts as taken, never as free.
-        const taken = await repository.load(document.metadata.id).then(
-          (existing) => existing !== null,
-          () => true,
-        );
+        // canvas. An unreadable existing row counts as taken, never as free — so this asks whether
+        // anything is stored under the id, not whether it can be read.
+        const taken = await repository.has(document.metadata.id).catch(() => true);
         if (taken) document = cloneDocumentAsNew(document, document.metadata.title);
         await repository.save(document);
         const { useEditorStore } = await loadEditorStore();
@@ -308,18 +322,48 @@ export function useDocumentSession(): DocumentSession {
       return;
     }
     // Replaced and removed backgrounds kept their images only so undo could bring them back. Undo
-    // history ends here, so everything but the image actually showing goes.
+    // history ends here, so everything but the image actually showing goes — the one the *stored*
+    // copy shows, which another tab may have changed since this one last looked.
     const closing = (await loadEditorStore()).useEditorStore.getState().document;
     if (repository && closing.metadata.id === openId) {
-      const { background } = closing.settings;
-      void repository.pruneBackgroundImages(closing.metadata.id, background.enabled ? background : null).catch((error: unknown) => {
-        logDiagnostic(error, { operation: 'remove-background-image', documentId: closing.metadata.id });
-      });
+      const id = closing.metadata.id;
+      void repository
+        .load(id)
+        .then((stored) => {
+          if (!stored) return;
+          const { background } = stored.settings;
+          return repository.pruneBackgroundImages(id, background.enabled ? background : null);
+        })
+        .catch((error: unknown) => {
+          logDiagnostic(error, { operation: 'remove-background-image', documentId: id });
+        });
     }
     setOpenId(null);
     // Home is already showing; a list that can't be re-read just stays as it was.
     await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
   }, [notify, openId, refreshLibrary, repository]);
+
+  const resolveConflict = useCallback(
+    async (choice: 'keep' | 'discard') => {
+      const controller = autosave.current;
+      if (!controller || !openId) return;
+      const { useEditorStore, documentWithLiveViewport } = await loadEditorStore();
+      if (choice === 'keep') {
+        const saved = await controller.resolveConflict('keep', documentWithLiveViewport(useEditorStore.getState()));
+        if (!saved) notify('Your changes still could not be saved to this browser. Export the diagram to keep a copy.', 'error');
+        return;
+      }
+      await controller.resolveConflict('discard');
+      const stillStored = await repository?.has(openId).catch(() => false);
+      if (stillStored) {
+        await openDocument(openId);
+        return;
+      }
+      setOpenId(null);
+      await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
+    },
+    [notify, openDocument, openId, refreshLibrary, repository],
+  );
 
   const renameDocument = useCallback(
     async (id: string, title: string) => {
@@ -475,6 +519,7 @@ export function useDocumentSession(): DocumentSession {
     newDocument,
     adoptDocument,
     closeDocument,
+    resolveConflict,
     renameDocument,
     duplicateDocument,
     deleteDocument,

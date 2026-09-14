@@ -33,7 +33,13 @@ function saveLabel(save: { status: string; message?: string }, durable: boolean)
   }
 }
 
-export function StatusBar({ durable }: { durable: boolean }) {
+interface StatusBarProps {
+  durable: boolean;
+  /** See `DocumentSession.resolveConflict`. */
+  onResolveConflict?: (choice: 'keep' | 'discard') => void;
+}
+
+export function StatusBar({ durable, onResolveConflict }: StatusBarProps) {
   const save = useEditorStore((state) => state.save);
   const nodeCount = useEditorStore((state) => state.document.nodes.length);
   const edgeCount = useEditorStore((state) => state.document.edges.length);
@@ -52,12 +58,23 @@ export function StatusBar({ durable }: { durable: boolean }) {
           <span className="dc-save" data-status={save.status}>
             {saveLabel(save, durable)}
           </span>
+          {save.conflict && onResolveConflict && (
+            // Saving waits here until one copy is chosen, so the choice stays on screen, not in a toast.
+            <span className="dc-save-conflict" role="group" aria-label="Choose which copy to keep">
+              <Button variant="quiet" onClick={() => onResolveConflict('keep')}>
+                {save.conflict === 'deleted' ? 'Keep this canvas' : 'Keep mine'}
+              </Button>
+              <Button variant="quiet" onClick={() => onResolveConflict('discard')}>
+                {save.conflict === 'deleted' ? 'Close it' : 'Load the other tab’s'}
+              </Button>
+            </span>
+          )}
           {/* Announced separately from the label, which cycles Unsaved → Saving… → Saved on every
               commit and would speak three times per drag. Only a failure is news. */}
           <span className="dc-sr-only" role="status">
             {!durable ? 'Storage unavailable. Changes are kept in memory only.' : save.status === 'error' ? saveLabel(save, durable) : ''}
           </span>
-          <span className="dc-muted dc-status-hint">
+          <span className="dc-muted dc-status-hint" hidden={Boolean(save.conflict)}>
             {durable
               ? 'Your diagrams stay in this browser. Nothing you draw is uploaded.'
               : 'This browser is blocking storage — export to keep your work.'}
@@ -68,7 +85,7 @@ export function StatusBar({ durable }: { durable: boolean }) {
       <div className="dc-status-right">
         <span className="dc-muted">
           {nodeCount} {nodeCount === 1 ? 'element' : 'elements'} · {edgeCount}{' '}
-          {edgeCount === 1 ? 'connection' : 'connections'}
+          {edgeCount === 1 ? 'connector' : 'connectors'}
         </span>
         <span className="dc-inspector-divider" />
         <Button variant="quiet" onClick={() => void zoomOut()} aria-label="Zoom out">

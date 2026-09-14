@@ -26,6 +26,7 @@ function stubSession(overrides: Partial<DocumentSession> = {}): DocumentSession 
     newDocument: vi.fn(async () => {}),
     adoptDocument: async () => {},
     closeDocument: async () => {},
+    resolveConflict: async () => {},
     renameDocument: async () => {},
     duplicateDocument: async () => {},
     deleteDocument: async () => {},

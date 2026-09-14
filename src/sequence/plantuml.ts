@@ -70,6 +70,13 @@ const NOTE_PREFIX: Partial<Record<NoteKind, string>> = {
  * if any, lands on the first content line. No colon-guarding needed — PlantUML's block form has
  * no `:` delimiter to protect, unlike a single-line Mermaid note.
  */
+/** `end note` → `<U+0065>nd note`: the same text on screen, no longer a command to the parser. */
+function unicodeFirst(line: string): string {
+  const first = line.codePointAt(0)!;
+  const rest = line.slice(first > 0xffff ? 2 : 1);
+  return `<U+${first.toString(16).toUpperCase().padStart(4, '0')}>${rest}`;
+}
+
 function noteBlock(
   participantIds: readonly string[],
   text: string,
@@ -84,9 +91,13 @@ function noteBlock(
   while (rawLines.length > 0 && rawLines[rawLines.length - 1] === '') rawLines.pop();
   // Some content lines are still read as commands inside a note block: `end note` (and its
   // `hnote`/`rnote` spellings) closes the block early, `@enduml` ends the diagram, and a leading `!`
-  // is a preprocessor directive (`!include` would even run). PlantUML's `~` escape keeps each literal.
+  // is a preprocessor directive (`!include` would even run). A leading `'` is a comment (the line
+  // vanishes) and `/'` opens a block comment that swallows `end note` and everything after it — a
+  // SQL or shell snippet can start either way. Writing the first character as a `<U+XXXX>` code keeps
+  // each literal and renders as just that character — the `~` escape doesn't: checked against the
+  // PlantUML server, `~end note` keeps its tilde on screen and `~@enduml` renders as a lone `~`.
   const contentLines = (rawLines.length > 0 ? rawLines : ['Note']).map((line) =>
-    /^\s*(?:!|@|end\s*[hr]?note\b)/i.test(line) ? `~${line.trimStart()}` : line,
+    /^\s*(?:!|@|'|\/'|end\s*[hr]?note\b)/i.test(line) ? unicodeFirst(line.trimStart()) : line,
   );
   const prefix = noteKind ? (NOTE_PREFIX[noteKind] ?? '') : '';
 

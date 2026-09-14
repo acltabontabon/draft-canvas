@@ -87,7 +87,8 @@ function Thumbnail({
     [rendered],
   );
 
-  const meta = rendered ? describe(rendered.width * scale, rendered.height * scale) : 'No Flow yet';
+  // Nothing rendered: for an animation that means no flow to play; for an image, the render failed.
+  const meta = rendered ? describe(rendered.width * scale, rendered.height * scale) : motion ? 'No Flow yet' : 'Preview unavailable';
 
   return (
     <>
@@ -106,7 +107,7 @@ function Thumbnail({
             draggable={false}
           />
         ) : (
-          <Icon name="play" size={20} />
+          <Icon name={motion ? 'play' : 'image'} size={20} />
         )}
         {motion && src && (
           <>

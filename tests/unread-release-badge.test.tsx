@@ -25,6 +25,7 @@ function stubSession(overrides: Partial<DocumentSession> = {}): DocumentSession 
     newDocument: vi.fn(async () => {}),
     adoptDocument: async () => {},
     closeDocument: async () => {},
+    resolveConflict: async () => {},
     renameDocument: async () => {},
     duplicateDocument: async () => {},
     deleteDocument: async () => {},
@@ -78,7 +79,8 @@ describe('unread release indicator', () => {
     const user = userEvent.setup();
     renderToolbar();
     await user.click(screen.getByRole('button', { name: /^More/ }));
-    expect(screen.getByRole('menuitem', { name: 'About Draft Canvas' })).toBeInTheDocument();
+    // The row names its own flag too, not only the collapsed trigger.
+    expect(screen.getByRole('menuitem', { name: /^About Draft Canvas\s*— new$/ })).toBeInTheDocument();
     expect(screen.getByRole('menu', { name: 'More' })).toBeInTheDocument();
   });
 

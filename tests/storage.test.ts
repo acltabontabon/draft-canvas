@@ -5,7 +5,7 @@ import { addNodes } from '../src/document/operations';
 import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
 import { Autosave } from '../src/storage/autosave';
-import { QuotaExceededError } from '../src/storage/DraftRepository';
+import { DocumentConflictError, QuotaExceededError } from '../src/storage/DraftRepository';
 import { decryptDocument } from '../src/crypto/documentCipher';
 import * as documentCipher from '../src/crypto/documentCipher';
 import { getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/keyStore';
@@ -105,6 +105,50 @@ describe('local persistence', () => {
 
     expect(await repository.load(doc.metadata.id)).toBeNull();
     expect(await repository.list()).toHaveLength(0);
+  });
+
+  it('an open editor never brings back a canvas another tab deleted, unless told to keep it', async () => {
+    const tabA = await IndexedDbRepository.open();
+    const tabB = await IndexedDbRepository.open();
+    const doc = documentWith('Shared');
+    await tabA.save(doc);
+    const base = { title: 'Shared' };
+
+    await tabB.remove(doc.metadata.id);
+    const edited = addNodes(doc, [createNode({ type: 'note', x: 0, y: 400 })]);
+    await expect(tabA.save(edited, base)).rejects.toMatchObject({ kind: 'deleted' });
+    expect(await tabB.list()).toHaveLength(0);
+
+    await tabA.save(edited, base, { overwrite: true });
+    expect((await tabB.load(doc.metadata.id))!.nodes).toHaveLength(3);
+  });
+
+  it("an open editor's save refuses to replace content another tab saved since, but a rename there isn't a conflict", async () => {
+    const tabA = await IndexedDbRepository.open();
+    const tabB = await IndexedDbRepository.open();
+    const doc = documentWith('Shared');
+    await tabA.save(doc);
+    const base = { title: 'Shared' };
+
+    await tabB.rename(doc.metadata.id, 'Renamed in B');
+    const editedA = addNodes(doc, [createNode({ type: 'note', x: 0, y: 400 })]);
+    expect(await tabA.save(editedA, base)).toEqual({ title: 'Renamed in B' });
+
+    const inB = (await tabB.load(doc.metadata.id))!;
+    await tabB.save(addNodes(inB, [createNode({ type: 'note', x: 400, y: 400 })]), { title: 'Renamed in B' });
+    const error = await tabA.save(editedA, { title: 'Renamed in B' }).catch((thrown: unknown) => thrown);
+    expect(error).toBeInstanceOf(DocumentConflictError);
+    expect((error as DocumentConflictError).kind).toBe('changed');
+    expect((await tabB.load(doc.metadata.id))!.nodes).toHaveLength(4);
+  });
+
+  it('has() reports a stored id even when its body cannot be read', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Present');
+    await writeLegacyPlaintextRow({ not: 'a document', metadata: doc.metadata });
+    expect(await repository.load(doc.metadata.id)).toBeNull();
+    expect(await repository.has(doc.metadata.id)).toBe(true);
+    expect(await repository.has('missing')).toBe(false);
   });
 
   it('an open editor\'s save keeps a rename and move made in another tab, but still writes its own rename', async () => {
@@ -568,6 +612,37 @@ describe('autosave', () => {
 
     expect(adopted).toEqual(['Renamed elsewhere']);
     expect((await repository.load(doc.metadata.id))!.metadata.title).toBe('Renamed elsewhere');
+    autosave.dispose();
+  });
+
+  it('pauses on a conflict — later edits wait — until the user keeps this copy', async () => {
+    const repository = new MemoryRepository();
+    const doc = documentWith('Doomed');
+    await repository.save(doc);
+    const conflicts: string[] = [];
+    const states: { status: string; conflict?: string }[] = [];
+    const autosave = new Autosave({
+      repository,
+      onStateChange: (state) => states.push({ status: state.status, conflict: state.conflict }),
+      onConflict: (_id, kind) => conflicts.push(kind),
+    });
+    autosave.track(doc);
+
+    await repository.remove(doc.metadata.id);
+    autosave.schedule(addNodes(doc, [createNode({ type: 'note', x: 0, y: 400 })]));
+    expect(await autosave.flush()).toBe(false);
+    expect(conflicts).toEqual(['deleted']);
+    expect(states.at(-1)).toEqual({ status: 'error', conflict: 'deleted' });
+
+    const later = addNodes(doc, [createNode({ type: 'note', x: 0, y: 800 }), createNode({ type: 'note', x: 0, y: 1200 })]);
+    autosave.schedule(later);
+    expect(await autosave.flush()).toBe(false);
+    expect(await repository.load(doc.metadata.id)).toBeNull();
+    expect(conflicts).toHaveLength(1);
+
+    expect(await autosave.resolveConflict('keep')).toBe(true);
+    expect((await repository.load(doc.metadata.id))!.nodes).toHaveLength(4);
+    expect(states.at(-1)!.conflict).toBeUndefined();
     autosave.dispose();
   });
 

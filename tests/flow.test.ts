@@ -7,6 +7,7 @@ import {
   addStepToFlow,
   createFlow,
   deleteFlow,
+  edgeTierAt,
   explainEdgeTier,
   explainNodeTier,
   flowHasMembers,
@@ -68,6 +69,22 @@ describe('flow.ts pure functions', () => {
     expect(stepIndexOf(flow, 'e2')).toBe(2);
     expect(stepIndexOf(flow, 'missing')).toBeUndefined();
     expect(stepIndexOf(undefined, 'e1')).toBeUndefined();
+  });
+
+  it('a connector that comes back at a later step is active there too, and lights its ends', () => {
+    const edge = createEdge({ source: 'x', target: 'y' });
+    const flow = createFlow({ title: 'X' });
+    flow.steps = [
+      { id: 's1', edgeId: edge.id },
+      { id: 's2', edgeId: 'pad' },
+      { id: 's3', edgeId: 'other', extraEdgeIds: [edge.id] },
+    ];
+    expect(stepIndexOf(flow, edge.id)).toBe(1);
+    expect(edgeTierAt(flow, edge.id, 1)).toBe('active');
+    expect(edgeTierAt(flow, edge.id, 2)).toBe('shown');
+    expect(edgeTierAt(flow, edge.id, 3)).toBe('active');
+    expect(edgeTierAt(undefined, edge.id, 3)).toBe('hidden');
+    expect(explainNodeTier(flow, [edge], 'y', 3)).toBe('active');
   });
 
   it('classifies an edge as active, shown, or hidden relative to the current step', () => {

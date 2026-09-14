@@ -9,6 +9,7 @@ import { edgeIndex, nodeIndex } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
 import type { FlowPlaybackController } from '../../presentation/useFlowPlayback';
 import { Button } from '../common/Button';
+import { Icon } from '../common/Icon';
 import { LearnLink } from '../learn/LearnLink';
 
 /**
@@ -229,7 +230,7 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                       setExpandedId(expanded ? null : flow.id);
                     }}
                   >
-                    {expanded ? '▾' : '▸'}
+                    <Icon name={expanded ? 'down' : 'forward'} size={12} />
                   </button>
                   {renaming === flow.id ? (
                     <FlowTitleInput
@@ -459,17 +460,21 @@ function StepRow({
           )}
         </button>
         <span className="dc-flow-step-actions">
+          {/* Steps run down the list, so up and down — and each label names its step, since every row
+              repeats the same buttons. */}
           <Button
-            icon="back"
+            icon="up"
             variant="quiet"
-            aria-label="Move earlier"
+            aria-label={`Move step ${index + 1} earlier`}
+            title="Move earlier"
             disabled={index === 0}
             onClick={() => useEditorStore.getState().moveFlowStep(flow.id, step.id, -1)}
           />
           <Button
-            icon="forward"
+            icon="down"
             variant="quiet"
-            aria-label="Move later"
+            aria-label={`Move step ${index + 1} later`}
+            title="Move later"
             disabled={index === flow.steps.length - 1}
             onClick={() => useEditorStore.getState().moveFlowStep(flow.id, step.id, 1)}
           />
@@ -478,14 +483,15 @@ function StepRow({
             variant="quiet"
             active={toolsOpen}
             aria-expanded={toolsOpen}
-            aria-label="More for this step"
+            aria-label={`More for step ${index + 1}`}
             title="Spotlight extra shapes, or pin the camera for this step"
             onClick={onToggleTools}
           />
           <Button
             icon="close"
             variant="quiet"
-            aria-label="Remove step"
+            aria-label={`Remove step ${index + 1}`}
+            title="Remove step"
             onClick={() => useEditorStore.getState().removeFlowStep(flow.id, step.id)}
           />
         </span>

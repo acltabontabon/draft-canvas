@@ -14,6 +14,7 @@ import { beginClipScope, emitDisplayList, emitShape, shadowFilter } from './emit
 import { markerDefs } from './markers';
 import { PERSONALITY_PROFILES } from '../roughness/presets';
 import type { PersonalityPreset } from '../../ui/personality/usePersonality';
+import type { Shape } from '../displayList';
 
 const BACKGROUND_BLUR_FILTER_ID = 'dc-bg-blur';
 
@@ -150,6 +151,22 @@ export interface Scene {
    */
   nodeEntries: { node: DraftNode; els: SvgEl[] }[];
   edgeEntries: { edge: DraftEdge; lineEls: SvgEl[]; overlayEls: SvgEl[] }[];
+  /** Where connector labels and chips sit — they can reach past every node box (a reply label on
+   *  the outer side of the leftmost column), so an export's extent has to include them. */
+  overlayRects: Rect[];
+}
+
+type Rect = { x: number; y: number; width: number; height: number };
+
+/** The boxes a display list's filled shapes cover. Lines and text are left out: text always sits
+ *  on a chip, and a line's ends are at nodes the extent already includes. */
+function shapeRects(shapes: readonly Shape[], dx = 0, dy = 0, out: Rect[] = []): Rect[] {
+  for (const shape of shapes) {
+    if (shape.t === 'rect') out.push({ x: shape.x + dx, y: shape.y + dy, width: shape.w, height: shape.h });
+    else if (shape.t === 'ellipse') out.push({ x: shape.cx - shape.rx + dx, y: shape.cy - shape.ry + dy, width: shape.rx * 2, height: shape.ry * 2 });
+    else if (shape.t === 'group') shapeRects(shape.children, dx + (shape.translate?.x ?? 0), dy + (shape.translate?.y ?? 0), out);
+  }
+  return out;
 }
 
 function decorateGroupAttrs(decoration: Decoration | undefined): SvgEl['attrs'] {
@@ -218,6 +235,7 @@ export function buildScene(
   const arrowColors = new Set<string>();
   const nodeEntries: Scene['nodeEntries'] = [];
   const edgeEntries: Scene['edgeEntries'] = [];
+  const overlayRects: Rect[] = [];
 
   for (const edge of edges) {
     const stepIndex = stepIndexOf(options.selectedFlow, edge.id);
@@ -243,6 +261,7 @@ export function buildScene(
     }
     const lineEls = [...primaryEls, ...responseEls];
     const overlayEls = described.overlay.flatMap(emitShape);
+    shapeRects(described.overlay, 0, 0, overlayRects);
     const groupAttrs = decorateGroupAttrs(decoration);
 
     edgeLines.push(...(groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls));
@@ -269,7 +288,7 @@ export function buildScene(
     nodeEntries.push({ node, els });
   }
 
-  return { nodes, backdropEls, nodeEls, edgeLines, edgeOverlays, arrowColors, nodeEntries, edgeEntries };
+  return { nodes, backdropEls, nodeEls, edgeLines, edgeOverlays, arrowColors, nodeEntries, edgeEntries, overlayRects };
 }
 
 /**
@@ -294,7 +313,7 @@ export function renderDocumentSvg(
 
   const scene = buildScene(document, nodeCtx, edgeCtx, { only: options.only, selectedFlow });
 
-  const bounds = boundsOf(scene.nodes) ?? { x: 0, y: 0, width: 320, height: 160 };
+  const bounds = boundsOf([...scene.nodes, ...scene.overlayRects]) ?? { x: 0, y: 0, width: 320, height: 160 };
   const width = Math.max(1, Math.round(bounds.width + padding * 2));
   const height = Math.max(1, Math.round(bounds.height + padding * 2));
   const originX = bounds.x - padding;

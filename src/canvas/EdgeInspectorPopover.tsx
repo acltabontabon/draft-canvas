@@ -43,7 +43,7 @@ import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import { LearnLink } from '../ui/learn/LearnLink';
-import { isImeKeyEvent } from '../lib/isEditableTarget';
+import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   http: 'HTTP',
@@ -187,7 +187,7 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
       // checklist, is what a single Escape press should do there.
       // `window.document`, not the bare global: this component's own top-level `document` is
       // the store's `DraftDocument`, shadowing it.
-      if (window.document.querySelector('.dc-inspector-select-menu')) return;
+      if (window.document.querySelector('.dc-inspector-select-menu') || overlayAboveCanvasIsOpen()) return;
       event.stopPropagation();
       setMembershipOpen(false);
     };
@@ -289,7 +289,7 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
         onPointerDown={(event) => event.stopPropagation()}
       >
         <span className="dc-popover-caret" aria-hidden="true" />
-        <div className="dc-popover-inner dc-edge-inspector-inner">
+        <div className="dc-popover-inner">
           {/* Keyed on the edge id: the editor below is now always mounted (no more "⋯" to
               unmount it on collapse), so switching to a different connector must remount this
               subtree fresh — otherwise `ExpandedPanel`'s own local state (the colour palette,
@@ -343,7 +343,7 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
 
   return (
     <>
-      <div className="dc-popover-row dc-edge-inspector-row">
+      <div className="dc-popover-row">
         {editingLabel ? (
           <input
             autoFocus

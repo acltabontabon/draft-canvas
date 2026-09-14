@@ -96,6 +96,7 @@ export function ExportDialog() {
   const [gifProgress, setGifProgress] = useState<number | null>(null);
   const gifAbort = useRef<AbortController | null>(null);
   const [securePromptOpen, setSecurePromptOpen] = useState(false);
+  const running = useRef(false);
   const [gifFlowIdChoice, setGifFlowIdChoice] = useState<string | null>(null);
   const [gifSpeed, setGifSpeed] = useState<GifSpeed>('normal');
   const [gifLoop, setGifLoop] = useState(true);
@@ -174,7 +175,7 @@ export function ExportDialog() {
               type: 'file',
               icon: 'pencil',
               badge: 'DRAFTCANVAS',
-              meta: `${count(document.nodes.length, 'element')} · ${count(document.edges.length, 'connection')}`,
+              meta: `${count(document.nodes.length, 'element')} · ${count(document.edges.length, 'connector')}`,
             },
           }
         : {
@@ -223,6 +224,10 @@ export function ExportDialog() {
             };
 
   const run = async (task: () => void | Promise<void>, what: string) => {
+    // `busy` only lands on the next render: a second Enter in the same moment would run it again
+    // (for a secure export, a second 600k-iteration derivation and a second download).
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     try {
       await task();
@@ -234,6 +239,7 @@ export function ExportDialog() {
         'error',
       );
     } finally {
+      running.current = false;
       setBusy(false);
     }
   };

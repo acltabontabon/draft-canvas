@@ -142,7 +142,7 @@ test.describe('context menu — empty canvas', () => {
   test('the native menu is preserved inside the command palette search box', async ({ page }) => {
     await newCanvas(page, 'Context menu native preserved');
     await page.keyboard.press('ControlOrMeta+k');
-    const input = page.getByRole('textbox', { name: 'Search commands' });
+    const input = page.getByRole('combobox', { name: 'Search commands' });
     await expect(input).toBeVisible();
     await input.click({ button: 'right' });
     await expect(menu(page)).toHaveCount(0);
@@ -471,6 +471,44 @@ test.describe('context menu — keyboard-only operation', () => {
     await page.keyboard.press('Enter');
     await expect(menu(page)).toBeHidden();
     await expect(page.locator('.dc-attachment-chip[data-kind="code"]')).toHaveCount(1);
+  });
+
+  test('Enter that runs an item does not also start editing the node', async ({ page }) => {
+    await newCanvas(page, 'Context menu enter leak');
+    await create(page, 'Service', { x: 400, y: 300 });
+    await page.locator('.dc-node').first().click();
+
+    await page.keyboard.press('Shift+F10');
+    await expect(menuItem(page, 'Duplicate')).toBeVisible();
+    const highlighted = menu(page).locator('[data-highlighted="true"]');
+    for (let i = 0; i < 20 && !(await highlighted.textContent())?.includes('Duplicate'); i++) {
+      await page.keyboard.press('ArrowDown');
+    }
+    await expect(highlighted).toContainText('Duplicate');
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+    await expect(page.locator('.dc-node-editor')).toHaveCount(0);
+  });
+
+  test("keys pressed in the toolbar's More menu stay in the menu", async ({ page }) => {
+    await newCanvas(page, 'Toolbar menu key leak');
+    await create(page, 'Service', { x: 400, y: 300 });
+    const node = page.locator('.dc-node').first();
+    await node.click();
+    const before = await page.locator('.react-flow__node').first().evaluate((el) => (el as HTMLElement).style.transform);
+
+    await page.getByRole('button', { name: /^More/ }).click();
+    await expect(page.locator('.dc-toolbar-menu')).toBeVisible();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('s');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-toolbar-menu')).toBeHidden();
+
+    const after = await page.locator('.react-flow__node').first().evaluate((el) => (el as HTMLElement).style.transform);
+    expect(after).toBe(before);
+    await expect(page.locator('.dc-node')).toHaveCount(1);
   });
 
   test('the Menu/ContextMenu key does the same as Shift+F10', async ({ page }) => {

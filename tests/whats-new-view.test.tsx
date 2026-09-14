@@ -24,13 +24,13 @@ describe('AboutDialog — What\'s New', () => {
   it('shows a "What\'s New" action in the version row when no update is pending', () => {
     render(<AboutDialog />);
     expect(screen.getByRole('button', { name: /What's New/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Update ready/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Reload to update/i })).not.toBeInTheDocument();
   });
 
-  it('shows "Update ready" instead of "What\'s New" when an update is staged — never both', () => {
+  it('shows "Reload to update" instead of "What\'s New" when an update is staged — never both', () => {
     useUiStore.setState({ updateReady: true });
     render(<AboutDialog />);
-    expect(screen.getByRole('button', { name: /Update ready/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Reload to update/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /What's New/i })).not.toBeInTheDocument();
   });
 

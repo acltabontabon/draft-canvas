@@ -109,6 +109,8 @@ function isSecureExportEnvelope(value: unknown): value is SecureExportEnvelope {
   return (
     v.format === SECURE_EXPORT_FORMAT &&
     typeof v.cryptoVersion === 'number' &&
+    Number.isInteger(v.cryptoVersion) &&
+    v.cryptoVersion >= 1 &&
     v.kdf === 'PBKDF2' &&
     typeof v.iterations === 'number' &&
     Number.isInteger(v.iterations) &&
@@ -144,11 +146,23 @@ export async function decryptFromExport(text: string, passphrase: string): Promi
       error: `This file was encrypted by a newer version of Draft Canvas (encryption format v${envelope.cryptoVersion}, this app reads up to v${SECURE_EXPORT_CRYPTO_VERSION}).`,
     };
   }
+  // Checked before the (deliberately slow) key derivation: a file whose salt or IV can't be what
+  // `encryptForExport` wrote is damaged whatever the passphrase, and saying so is no hint about it.
+  let salt: Uint8Array<ArrayBuffer>;
+  let iv: Uint8Array<ArrayBuffer>;
+  let ciphertext: Uint8Array<ArrayBuffer>;
   try {
-    const salt = fromBase64(envelope.salt);
+    salt = fromBase64(envelope.salt);
+    iv = fromBase64(envelope.iv);
+    ciphertext = fromBase64(envelope.ciphertext);
+  } catch {
+    return { ok: false, error: 'This file is corrupted.' };
+  }
+  if (salt.length < SALT_BYTES || iv.length !== IV_BYTES || ciphertext.length === 0) {
+    return { ok: false, error: 'This file is corrupted.' };
+  }
+  try {
     const key = await deriveExportKey(passphrase, salt, envelope.iterations);
-    const iv = fromBase64(envelope.iv);
-    const ciphertext = fromBase64(envelope.ciphertext);
     const plaintext = await crypto.subtle.decrypt({ name: AES_GCM, iv }, key, ciphertext);
     return { ok: true, document: JSON.parse(new TextDecoder().decode(plaintext)) };
   } catch {

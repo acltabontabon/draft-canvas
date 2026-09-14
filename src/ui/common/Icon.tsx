@@ -7,6 +7,8 @@ import { memo } from 'react';
 const PATHS = {
   back: 'M15 19l-7-7 7-7',
   forward: 'M9 5l7 7-7 7',
+  up: 'M5 15l7-7 7 7',
+  down: 'M19 9l-7 7-7-7',
   undo: 'M9 14L4 9l5-5 M4 9h11a5 5 0 0 1 0 10h-4',
   redo: 'M15 14l5-5-5-5 M20 9H9a5 5 0 0 0 0 10h4',
   present: 'M4 5h16v10H4z M9 20l3-5 3 5',

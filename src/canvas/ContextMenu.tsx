@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useToolbarHeight } from './useToolbarHeight';
 import type { ContextMenuEntry } from '../commands/contextMenu';
 import type { Command } from '../commands/types';
 import {
@@ -129,6 +130,9 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
         case 'Enter':
         case ' ': {
           event.preventDefault();
+          // Choosing clears the menu state straight away, so by the time this key bubbles to the
+          // editor its "a menu is open" guard is gone and Enter would also open the label editor.
+          event.stopPropagation();
           const entry = entriesRef.current[highlightRef.current];
           if (entry?.type === 'command') onSelect(entry.command);
           return;
@@ -157,7 +161,11 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
     };
   }, [itemIndices, onDismiss, onSelect]);
 
-  const clearances = { gap: GAP, top: TOP_CLEARANCE, bottom: BOTTOM_CLEARANCE, left: LEFT_CLEARANCE, right: RIGHT_CLEARANCE };
+  // The toolbar wraps to two rows on a narrow window, and isn't there at all while presenting — so
+  // its real height, with `TOP_CLEARANCE` only until it's been measured (same as the inspectors).
+  const measuredToolbarHeight = useToolbarHeight(true);
+  const toolbarClearance = measuredToolbarHeight !== undefined ? measuredToolbarHeight + 10 : TOP_CLEARANCE;
+  const clearances = { gap: GAP, top: toolbarClearance, bottom: BOTTOM_CLEARANCE, left: LEFT_CLEARANCE, right: RIGHT_CLEARANCE };
   const anchors = anchorsForRect({ x: screenPosition.x, y: screenPosition.y, width: 0, height: 0 });
   const placement = resolvePlacement('below', anchors, identity, measuredSize, clearances);
   const transform = placementTransform(placement, anchors, measuredSize, clearances, identity, identity);

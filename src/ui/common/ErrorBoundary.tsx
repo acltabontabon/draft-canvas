@@ -10,11 +10,16 @@ interface ErrorBoundaryProps {
   message: string;
   actions: ErrorBoundaryAction[];
   onError?: (error: Error, componentStack: string) => void;
+  /** A change to this clears the error and renders the children again — the screen they show
+   *  changed (the canvas that crashed was closed), so there's something new worth trying. */
+  resetKey?: unknown;
   children: ReactNode;
 }
 
 interface ErrorBoundaryState {
   error: Error | null;
+  /** The `resetKey` the current error happened under. */
+  resetKey: unknown;
 }
 
 /**
@@ -23,10 +28,14 @@ interface ErrorBoundaryState {
  * convention.
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { error: null };
+  state: ErrorBoundaryState = { error: null, resetKey: this.props.resetKey };
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { error };
+  }
+
+  static getDerivedStateFromProps(props: ErrorBoundaryProps, state: ErrorBoundaryState): Partial<ErrorBoundaryState> | null {
+    return props.resetKey === state.resetKey ? null : { error: null, resetKey: props.resetKey };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {

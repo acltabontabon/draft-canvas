@@ -2,6 +2,13 @@
 
 /* ------------------------------------------------------------- controls -- */
 
+/* Checkboxes, radios and sliders take the app's colour, not the browser's default blue. */
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] {
+  accent-color: var(--dc-selection);
+}
+
 .dc-button {
   display: inline-flex;
   align-items: center;
@@ -99,7 +106,8 @@
   font-size: 13px;
 }
 
-.dc-field input {
+/* Text-like fields only: a slider inside a field must not be drawn inside a text-box frame. */
+.dc-field input:not([type='range'], [type='checkbox'], [type='radio']) {
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--dc-border);
@@ -191,6 +199,7 @@ kbd {
 }
 
 .dc-brand-about {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -200,6 +209,21 @@ kbd {
   background: none;
   color: var(--dc-text-faint);
   cursor: pointer;
+}
+
+/* A 24px target around the 20px button. */
+.dc-brand-about::after,
+.dc-modal-back::after,
+.dc-flow-expand::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+
+.dc-about-version-action::after {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
 }
 
 .dc-brand-about:hover {
@@ -236,8 +260,9 @@ kbd {
 }
 
 .dc-library-search:focus-within {
-  border-color: var(--dc-border-strong);
-  /* The input itself drops its outline; a border one step darker is too faint to find in dark. */
+  /* The input itself drops its outline, and the soft halo alone is ~1:1 against a light surface —
+     the solid edge is what makes focus findable. */
+  border-color: var(--dc-selection);
   box-shadow: 0 0 0 3px var(--dc-selection-soft);
 }
 
@@ -1418,6 +1443,7 @@ kbd {
  */
 .dc-modal.dc-modal-starters {
   max-height: min(880px, calc(100vh - 48px));
+  max-height: min(880px, calc(100dvh - 48px));
 }
 
 .dc-modal-starters .dc-modal-header {
@@ -1967,6 +1993,25 @@ kbd {
   text-align: center;
 }
 
+/* Over the canvas, not in a toast: it stays true until the file is fixed. Above the status bar, clear
+   of the toasts under the toolbar. */
+.dc-host-invalid {
+  position: fixed;
+  bottom: calc(var(--dc-status-height) + 12px);
+  left: 50%;
+  z-index: var(--dc-z-toast);
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100% - 32px));
+  margin: 0;
+  padding: 9px 14px;
+  border: 1px solid color-mix(in srgb, var(--dc-danger) 45%, var(--dc-border));
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface-raised);
+  box-shadow: var(--dc-shadow-panel);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .dc-editor-body {
   display: flex;
   flex: 1;
@@ -2040,6 +2085,7 @@ kbd {
 }
 
 .dc-title-input:focus-visible {
+  border-color: var(--dc-selection);
   box-shadow: 0 0 0 3px var(--dc-selection-soft);
 }
 
@@ -2057,6 +2103,19 @@ kbd {
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-sm);
   background: var(--dc-canvas);
+}
+
+/* More tools past an end of a scrolled rail (see `CreateRail`). */
+.dc-create-rail[data-more-end='true'] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+
+.dc-create-rail[data-more-start='true'] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+}
+
+.dc-create-rail[data-more-start='true'][data-more-end='true'] {
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
 }
 
 /* Interaction | annotation | architecture. The 10px between families against 1px within one is
@@ -2340,6 +2399,19 @@ kbd {
   color: var(--dc-danger);
 }
 
+.dc-save-conflict {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.dc-save-conflict .dc-button {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
 .dc-status-hint {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2458,11 +2530,25 @@ kbd {
   transform: scale(1.14);
 }
 
-/* Every selected element already wears this colour. */
+/* Every selected element already wears this colour. The dot, not only the ring, says so: the ring
+   alone looks just like keyboard focus. */
 .dc-swatch[aria-pressed='true'] {
   box-shadow:
     0 0 0 2px var(--dc-surface),
     0 0 0 3.5px var(--dc-selection);
+}
+
+.dc-swatch[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dc-surface);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dc-text) 25%, transparent);
+  pointer-events: none;
 }
 
 /* -------------------------------------------------------------- explain -- */
@@ -2599,7 +2685,8 @@ kbd {
   transition: opacity 140ms ease;
 }
 
-.dc-present-exit:hover {
+.dc-present-exit:hover,
+.dc-present-exit:focus-within {
   opacity: 1;
 }
 
@@ -2612,7 +2699,7 @@ kbd {
   z-index: var(--dc-z-chrome);
   display: flex;
   flex-direction: column;
-  width: 300px;
+  width: min(300px, calc(100% - 24px));
   max-height: min(560px, calc(100% - 24px));
   overflow: hidden;
   border: 1px solid var(--dc-border);
@@ -2679,6 +2766,9 @@ kbd {
 
 /* The empty state teaches the concept and offers the one thing to do next. */
 .dc-flow-panel-empty {
+  /* On a short canvas the panel is capped, and the "New flow" button must still be reachable. */
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2734,6 +2824,10 @@ kbd {
 }
 
 .dc-flow-expand {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   width: 18px;
   height: 22px;
@@ -2900,8 +2994,8 @@ kbd {
 }
 
 .dc-flow-step-actions .dc-button {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0 3px;
   opacity: 0;
   transition: opacity 120ms ease, background 90ms ease, color 90ms ease;
@@ -2985,6 +3079,8 @@ kbd {
 .dc-modal {
   max-width: calc(100vw - 48px);
   max-height: 84vh;
+  /* The visible viewport: on a phone, `vh` includes the space under the browser's own bars. */
+  max-height: 84dvh;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--dc-border);
@@ -3025,6 +3121,7 @@ kbd {
 /* Sits in the stable header, not the scrolling body — reachable no matter how far a long
    release list has scrolled, and never duplicated in the content below it. */
 .dc-modal-back {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3070,6 +3167,7 @@ kbd {
    compact identity card About is — a proper document measure instead of a tall, narrow list. */
 .dc-modal-wide {
   max-height: min(720px, calc(100vh - 64px));
+  max-height: min(720px, calc(100dvh - 64px));
 }
 
 .dc-modal-body {
@@ -3152,14 +3250,15 @@ kbd {
   border-radius: 0 0 var(--dc-radius-lg) var(--dc-radius-lg);
 }
 
-.dc-modal-export input[type='checkbox'] {
-  accent-color: var(--dc-selection);
-}
-
 /* Validation messages inside the passphrase prompt (`SecureExportPrompt`). */
 .dc-export-note {
   margin: 6px 0 0;
   font-size: 12px;
+  color: var(--dc-text-muted);
+}
+
+.dc-export-note[data-invalid='true'] {
+  color: var(--dc-danger);
 }
 
 /* ---- mode cards ---------------------------------------------------------
@@ -3566,6 +3665,7 @@ kbd {
    dialog), this wrapper fills the row and takes over its own layout. */
 .dc-export-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -3705,6 +3805,10 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
 }
 
 .dc-check-personality .dc-personality-preview {
@@ -3785,6 +3889,7 @@ kbd {
 }
 
 .dc-about-version-action {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -4168,7 +4273,8 @@ kbd {
 
 .dc-toasts {
   position: fixed;
-  top: 14px;
+  /* Below the toolbar, not over its tools for the few seconds a message is up. */
+  top: calc(var(--dc-bar-height) + 10px);
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--dc-z-toast);
@@ -4193,6 +4299,9 @@ kbd {
 
 .dc-toast-message {
   align-self: center;
+  min-width: 0;
+  /* A long file name or error detail wraps instead of pushing the dismiss button off screen. */
+  overflow-wrap: anywhere;
 }
 
 .dc-toast-action {

@@ -34,6 +34,16 @@ export function isInOwnKeyboardRegion(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('[data-dc-keyboard-region]') !== null;
 }
 
+/**
+ * Whether something that stacks above the canvas's own popovers is open — a modal, the command
+ * palette, or a menu. Those popovers listen for Escape on `window` in the capture phase, and
+ * `stopPropagation` can't stop a sibling listener on that same target, so without this one Escape in
+ * ⌘K closed the palette and the attachment card behind it together.
+ */
+export function overlayAboveCanvasIsOpen(): boolean {
+  return document.querySelector('[aria-modal="true"]:not(.dc-learn), [role="menu"]') !== null;
+}
+
 /** An Enter/Escape that is part of an IME composition (confirming or cancelling a conversion). */
 export function isImeKeyEvent(event: { isComposing?: boolean; keyCode?: number; nativeEvent?: { isComposing?: boolean } }): boolean {
   return event.isComposing === true || event.nativeEvent?.isComposing === true || event.keyCode === 229;

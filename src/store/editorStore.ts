@@ -4,6 +4,7 @@ import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // duplicate are the only place a document-size limit can be hit from a trusted, in-app action
 // rather than at import, and there's no other place in the app that already surfaces that.
 import { useUiStore } from './uiStore';
+import { nodeIndex } from './selectors';
 import {
   createAttachment,
   createDocument,
@@ -617,6 +618,21 @@ const PASTE_STAGGER_STEP = 16;
  * Otherwise keep whatever the live document currently carries, so an out-of-band adoption rides
  * through time travel unaffected.
  */
+/**
+ * The selection with anything the edit removed taken out — a command that deletes elements without
+ * naming a new selection (removing a DLQ, say) must not leave the store, and every redo, holding ids
+ * that no longer exist. Only checked when something was actually removed.
+ */
+function selectionIn(next: DraftDocument, before: DraftDocument, selection: Selection): Selection {
+  if (next.nodes.length >= before.nodes.length && next.edges.length >= before.edges.length) return selection;
+  if (selection.nodes.length === 0 && selection.edges.length === 0) return selection;
+  const nodeIds = new Set(next.nodes.map((n) => n.id));
+  const edgeIds = new Set(next.edges.map((e) => e.id));
+  const nodes = selection.nodes.filter((id) => nodeIds.has(id));
+  const edges = selection.edges.filter((id) => edgeIds.has(id));
+  return nodes.length === selection.nodes.length && edges.length === selection.edges.length ? selection : { nodes, edges };
+}
+
 function carryAdoptedMetadata(
   target: DraftDocument,
   before: DraftMetadata,
@@ -716,7 +732,7 @@ export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefin
  * document (import, load) and on paste — past it, the next load would keep the first nodes and
  * silently drop the newest, so an add that doesn't fit is refused up front and said out loud.
  */
-function roomFor(doc: DraftDocument, nodeCount: number, edgeCount: number): boolean {
+export function roomFor(doc: DraftDocument, nodeCount: number, edgeCount: number): boolean {
   if (doc.nodes.length + nodeCount <= LIMITS.maxNodes && doc.edges.length + edgeCount <= LIMITS.maxEdges) return true;
   useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
   return false;
@@ -742,6 +758,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     ui.resetContinuation();
     // A tool armed on the canvas just closed would place a node on the next one's first click.
     ui.arm(null);
+    // Popovers, menus and one-shot requests aimed at the previous contents: node ids survive a
+    // reload of the same file (the VS Code host reopens it on every outside change), so an open
+    // attachment card or quick-connect menu would otherwise reattach to whatever those ids are now.
+    useUiStore.setState({
+      openAttachmentDetail: null,
+      quickConnect: null,
+      contextMenu: null,
+      presentationReveal: null,
+      flowRenameRequestId: null,
+      jumpFlashId: null,
+    });
     set((state) => ({
       document,
       history: options?.resetHistory === false ? state.history : EMPTY_HISTORY,
@@ -771,14 +798,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (interaction || options?.transient) {
       set((s) => ({
         document: next,
-        selection: options?.selection ?? s.selection,
+        selection: options?.selection ?? selectionIn(next, before, s.selection),
         revision: s.revision + 1,
         ...focusThatSurvives(next, s),
       }));
       return;
     }
 
-    const selectionAfter = options?.selection ?? state.selection;
+    const selectionAfter = options?.selection ?? selectionIn(next, before, state.selection);
     set((s) => ({
       document: next,
       selection: selectionAfter,
@@ -894,6 +921,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // e.g. a context-menu "Connect to" target picked before an intervening delete) must not return
     // a truthy edge that never actually gets persisted.
     if (!sourceNode || !targetNode) return null;
+    if (!roomFor(state.document, 0, 1)) return null;
     const relationship = inferRelationshipThroughJunctions(state.document, sourceNode, targetNode);
     const edge = createEdge({
       source,
@@ -992,7 +1020,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Delete empty text', (doc) => removeElements(doc, [id]), { selection: EMPTY_SELECTION });
   },
 
-  updateEdgeById(id, patch, label = 'Change connection') {
+  updateEdgeById(id, patch, label = 'Change connector') {
     get().apply(label, (doc) => updateEdge(doc, id, patch));
   },
 
@@ -1021,6 +1049,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const source = edge && state.document.nodes.find((n) => n.id === edge.source);
     const target = edge && state.document.nodes.find((n) => n.id === edge.target);
     if (!edge || !source || !target) return;
+    // One connector becomes two, plus the worker.
+    if (!roomFor(state.document, 1, 1)) return;
 
     // Same midpoint-of-both-centers placement `detachFromEdge` already uses for a connector's
     // own detached attachment — no independent placement heuristic invented for this.
@@ -1091,6 +1121,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     const alreadyHasDlq = state.document.edges.some((e) => e.source === queueId && e.semantic === 'deadLetters');
     if (alreadyHasDlq) return;
+    if (!roomFor(state.document, 1, 1)) return;
 
     const size = defaultSizeFor('queue');
     const caption = relationshipCaptionLabel('deadLetters', undefined, 3);
@@ -1129,6 +1160,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     const source = state.document.nodes.find((n) => n.id === sourceId);
     if (!source) return;
+    if (!roomFor(state.document, 1, 1)) return;
 
     const size = defaultSizeFor(companion.type);
     // Same capability matrix every other connection reads — it correctly differentiates a queue's
@@ -1187,7 +1219,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateEdgeLabel(id, label) {
     // An unlabeled connector committed empty is the same connector — `''` and absent both read blank.
     get().apply(
-      'Label connection',
+      'Label connector',
       (doc) => ((doc.edges.find((e) => e.id === id)?.label ?? '') === label ? doc : updateEdge(doc, id, { label })),
       { coalesceKey: `edge-label:${id}` },
     );
@@ -1209,7 +1241,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     )?.status;
     const isUnusual = status === 'unusual' || status === 'questionable';
     if (semantic && !edge.label && !isUnusual) patch.label = SEMANTIC_DEFAULTS[semantic].label;
-    state.apply('Set connection type', (doc) => updateEdge(doc, id, patch));
+    state.apply('Set connector type', (doc) => updateEdge(doc, id, patch));
   },
 
   setEdgeCondition(id, condition) {
@@ -1240,12 +1272,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     // Deliberately the *only* thing this clears. An anchor is where the user
     // dragged a connector to attach, and `docs/ARCHITECTURE.md` is explicit
-    // that routing never moves one — so "Tidy connections" stays safe to run
+    // that routing never moves one — so "Tidy connectors" stays safe to run
     // without first checking what it will do. Everything else Smart Routing
     // would tidy is derived per render and needs nothing persisted to undo.
     const manual = state.document.edges.filter((edge) => edge.routeMode);
     if (manual.length === 0) return;
-    state.apply('Tidy connections', (doc) =>
+    state.apply('Tidy connectors', (doc) =>
       manual.reduce((next, edge) => updateEdge(next, edge.id, { routeMode: undefined }), doc),
     );
   },
@@ -1264,6 +1296,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const hubId = spine.hub === 'source' ? members[0]!.source : members[0]!.target;
     const hub = state.document.nodes.find((n) => n.id === hubId);
     if (!hub) return;
+    // The junction, and a trunk connector on top of the members it re-points.
+    if (!roomFor(state.document, 1, 1)) return;
 
     // Placed exactly where the trunk already meets the stem, so materializing
     // the Junction is visually a no-op — the user gets a handle on the point
@@ -1378,9 +1412,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   nudgeSelection(dx, dy) {
     const state = get();
     if (state.selection.nodes.length === 0) return;
+    const byId = nodeIndex(state.document.nodes);
     const positions = new Map(
       state.selection.nodes
-        .map((id) => state.document.nodes.find((node) => node.id === id))
+        .map((id) => byId.get(id))
         .filter((node) => node !== undefined)
         .map((node) => [node.id, { x: node.x + dx, y: node.y + dy }] as const),
     );
@@ -1531,6 +1566,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     };
     const members = state.document.nodes.filter((n) => selected.has(n.id) && !hasSelectedAncestor(n));
     if (members.length < 2) return;
+    // Past the cap the boundary would be the node a reload drops, leaving its children orphaned.
+    if (!roomFor(state.document, 1, 0)) return;
     // Grouping inside an existing boundary keeps the new one nested there, so dragging or
     // deleting that outer boundary still carries everything it held.
     const sharedParent = members.every((n) => n.parentId === members[0]!.parentId) ? members[0]!.parentId : undefined;
@@ -1633,6 +1670,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   detachAttachment(hostId, attachmentId) {
     const state = get();
+    if (!roomFor(state.document, 1, 0)) return;
     const result = detachFromNode(state.document, hostId, attachmentId);
     if (!result.extractedNode) return;
     state.apply('Detach', () => result.doc, {
@@ -1692,6 +1730,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   detachEdgeAttachment(edgeId, attachmentId) {
     const state = get();
+    if (!roomFor(state.document, 1, 0)) return;
     const result = detachFromEdgeOp(state.document, edgeId, attachmentId);
     if (!result.extractedNode) return;
     state.apply('Detach', () => result.doc, {

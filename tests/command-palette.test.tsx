@@ -53,7 +53,7 @@ function mount(playback = stubPlayback()) {
   );
 }
 
-const input = () => screen.getByRole('textbox') as HTMLInputElement;
+const input = () => screen.getByRole('combobox') as HTMLInputElement;
 const options = () => screen.getAllByRole('option');
 const highlighted = () => screen.getByRole('option', { selected: true });
 const key = (key: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(window, { key, ...init });

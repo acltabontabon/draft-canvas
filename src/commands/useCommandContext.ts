@@ -9,8 +9,8 @@ import type { CommandContext } from './types';
 import { motionMs } from '../lib/motion';
 
 export interface UseCommandContextParams {
-  createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode;
-  createAtPointer: (preset: Preset) => DraftNode;
+  createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode | null;
+  createAtPointer: (preset: Preset) => DraftNode | null;
   playback: FlowPlaybackController;
 }
 

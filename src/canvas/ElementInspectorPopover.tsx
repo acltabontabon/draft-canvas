@@ -22,6 +22,7 @@ import {
   type TextAlign,
   type TextRole,
 } from '../document/types';
+import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 import { MOD_SYMBOL } from '../lib/platform';
 import { effectiveTextRole } from '../nodes/describe';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
@@ -181,7 +182,10 @@ function ElementInspectorBody({
   useEffect(() => {
     if (!openPanel) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || isImeKeyEvent(event)) return;
+      // An open type/role dropdown closes first (its own handler), and so does anything stacked
+      // above the canvas — same as `EdgeInspectorPopover`'s membership checklist.
+      if (window.document.querySelector('.dc-inspector-select-menu') || overlayAboveCanvasIsOpen()) return;
       event.stopPropagation();
       setOpenPanel(null);
     };
@@ -279,7 +283,7 @@ function ElementInspectorBody({
       >
         {/* The caret ties the popover to the element it belongs to — see `.dc-popover-caret`. */}
         <span className="dc-popover-caret" aria-hidden="true" />
-        <div className="dc-popover-inner dc-element-inspector-inner">
+        <div className="dc-popover-inner">
           <ElementInspectorRow
             node={displayNode}
             hasDlqEdge={hasDlqEdge}
@@ -431,7 +435,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   return (
     <>
       {primaryCommands.length > 0 && (
-        <div className="dc-popover-row dc-popover-primary dc-element-inspector-row dc-element-inspector-quickrow">
+        <div className="dc-popover-row dc-popover-primary">
           {primaryCommands.map((command) => (
             <Button
               key={command.id}
@@ -447,7 +451,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           ))}
         </div>
       )}
-      <div className="dc-popover-row dc-popover-config dc-element-inspector-row">
+      <div className="dc-popover-row dc-popover-config">
         <button
           type="button"
           className="dc-inspector-color-swatch"
@@ -500,7 +504,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
       </div>
 
       {openPanel === 'color' && (
-        <div className="dc-popover-panel dc-element-inspector-panel dc-swatches">
+        <div className="dc-popover-panel dc-swatches">
           {ACCENTS.map((accent) => (
             <button
               key={accent}
@@ -520,7 +524,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
       )}
 
       {openPanel === 'typography' && node.type === 'text' && (
-        <div className="dc-popover-panel dc-element-inspector-panel dc-typography-panel">
+        <div className="dc-popover-panel dc-typography-panel">
           <div className="dc-emphasis-group">
             <Button
               variant="quiet"

@@ -159,6 +159,34 @@ describe('undo and redo', () => {
     expect(store.getState().history.past).toHaveLength(before + 1);
   });
 
+  it('a coalesced burst that ends where it started leaves no undo step', () => {
+    const background = store.getState().document.settings.background;
+    const before = store.getState().history.past.length;
+    for (const dim of [background.dim + 0.1, background.dim + 0.2, background.dim]) {
+      store.getState().updateSettings({ background: { ...background, dim } }, { coalesceKey: 'background-dim' });
+    }
+    expect(store.getState().history.past).toHaveLength(before);
+  });
+
+  it('a multi-selection recolour through an interaction is one undo step', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 300, y: 0 });
+    const before = store.getState().history.past.length;
+    store.getState().beginInteraction('Recolour');
+    for (const node of [a, b]) store.getState().updateNodeById(node.id, { accent: 'rose' }, 'Recolour');
+    store.getState().endInteraction();
+    expect(store.getState().history.past).toHaveLength(before + 1);
+  });
+
+  it('a delete that names no new selection drops the removed ids from it', () => {
+    const queue = store.getState().addNode({ type: 'queue', x: 0, y: 0 });
+    store.getState().addDeadLetterQueue(queue.id);
+    const dlq = store.getState().document.nodes.find((n) => n.deliveryRole === 'dead-letter')!;
+    store.getState().setSelection({ nodes: [queue.id, dlq.id], edges: [] });
+    store.getState().removeDeadLetterQueue(queue.id);
+    expect(store.getState().selection.nodes).toEqual([queue.id]);
+  });
+
   it('coalesces consecutive text edits on the same node', () => {
     const node = store.getState().addNode({ type: 'note', x: 0, y: 0, text: '' });
     const before = store.getState().history.past.length;

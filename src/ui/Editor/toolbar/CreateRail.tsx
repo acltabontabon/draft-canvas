@@ -24,6 +24,33 @@ export function CreateRail() {
   const arm = useUiStore((state) => state.arm);
   const railRef = useRef<HTMLDivElement>(null);
 
+  // On a window too narrow for every tool the rail scrolls, with its scrollbar hidden — so each end
+  // that has more tools past it fades out, and a plain mouse wheel scrolls it sideways.
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const update = () => {
+      const more = rail.scrollWidth - rail.clientWidth;
+      rail.dataset.moreStart = String(more > 1 && rail.scrollLeft > 1);
+      rail.dataset.moreEnd = String(more > 1 && rail.scrollLeft < more - 1);
+    };
+    update();
+    // Absent in a test DOM; the rail's size then never changes anyway.
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    observer?.observe(rail);
+    rail.addEventListener('scroll', update, { passive: true });
+    return () => {
+      observer?.disconnect();
+      rail.removeEventListener('scroll', update);
+    };
+  }, []);
+
+  const onWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const rail = event.currentTarget;
+    if (rail.scrollWidth <= rail.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+    rail.scrollLeft += event.deltaY;
+  };
+
   const segments = () => [...(railRef.current?.querySelectorAll<HTMLButtonElement>('button') ?? [])];
 
   // One tab stop for the whole rail, per the ARIA toolbar pattern: eleven separate stops made
@@ -82,6 +109,7 @@ export function CreateRail() {
       role="toolbar"
       aria-label="Create"
       onKeyDown={onKeyDown}
+      onWheel={onWheel}
     >
       <div className="dc-create-family">
         <Tooltip content={SELECT_TOOLTIP}>

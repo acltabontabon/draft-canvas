@@ -6,7 +6,7 @@ import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { useTheme, useThemeValue } from '../ui/theme/useTheme';
 import { Icon } from '../ui/common/Icon';
-import { isImeKeyEvent } from '../lib/isEditableTarget';
+import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { attachmentLookFor } from './attachmentLook';
 import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
@@ -258,7 +258,7 @@ function AttachmentChip({
   useEffect(() => {
     if (!pinned) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || isImeKeyEvent(event)) return;
+      if (event.key !== 'Escape' || isImeKeyEvent(event) || overlayAboveCanvasIsOpen()) return;
       event.stopPropagation();
       // The actual discard-vs-commit decision for a live edit is made by the commit effect above,
       // reading `wasLastKeydownEscape()` — see its doc comment for why this handler itself often

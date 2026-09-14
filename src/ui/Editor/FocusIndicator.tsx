@@ -18,7 +18,7 @@ export function FocusIndicator() {
     parts.push(`${focus.nodeIds.length} ${focus.nodeIds.length === 1 ? 'node' : 'nodes'}`);
   }
   if (focus.edgeIds.length > 0) {
-    parts.push(`${focus.edgeIds.length} ${focus.edgeIds.length === 1 ? 'connection' : 'connections'}`);
+    parts.push(`${focus.edgeIds.length} ${focus.edgeIds.length === 1 ? 'connector' : 'connectors'}`);
   }
 
   return (

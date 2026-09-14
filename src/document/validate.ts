@@ -271,7 +271,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     repairs.push(`Document had ${rawNodes.length} nodes; kept the first ${LIMITS.maxNodes}.`);
   }
   if (rawEdges.length > LIMITS.maxEdges) {
-    repairs.push(`Document had ${rawEdges.length} connections; kept the first ${LIMITS.maxEdges}.`);
+    repairs.push(`Document had ${rawEdges.length} connectors; kept the first ${LIMITS.maxEdges}.`);
   }
 
   /* --------------------------------------------------------------- nodes -- */
@@ -556,16 +556,16 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     repairs.push(`A node had too many attachments; kept the first ${LIMITS.maxAttachmentsPerNode}.`);
   }
   if (droppedEdges > 0) {
-    repairs.push(`Dropped ${droppedEdges} connection(s) pointing at nodes that do not exist.`);
+    repairs.push(`Dropped ${droppedEdges} connector(s) pointing at nodes that do not exist.`);
   }
   if (droppedSelfLoopEdges > 0) {
-    repairs.push(`Dropped ${droppedSelfLoopEdges} connection(s) that pointed a node at itself.`);
+    repairs.push(`Dropped ${droppedSelfLoopEdges} connector(s) that pointed a node at itself.`);
   }
   if (droppedEdgeAttachments > 0) {
-    repairs.push(`Dropped ${droppedEdgeAttachments} unreadable connection attachment(s).`);
+    repairs.push(`Dropped ${droppedEdgeAttachments} unreadable connector attachment(s).`);
   }
   if (truncatedEdgeAttachments > 0) {
-    repairs.push(`A connection had too many attachments; kept the first ${LIMITS.maxAttachmentsPerEdge}.`);
+    repairs.push(`A connector had too many attachments; kept the first ${LIMITS.maxAttachmentsPerEdge}.`);
   }
 
   /* --------------------------------------------------------------- flows -- */

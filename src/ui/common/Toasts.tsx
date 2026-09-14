@@ -29,12 +29,14 @@ export function Toasts() {
   };
 
   // Always mounted, even empty: a live region that appears together with its first message is
-  // often not announced at all. An error interrupts (`alert`); anything else waits its turn.
+  // often not announced at all. An error interrupts; anything else waits its turn. That's the
+  // region's own politeness: an `alert` inside a polite region can be announced twice.
+  const interrupting = toasts.at(-1)?.tone === 'error';
   return (
     <div
       ref={root}
       className="dc-toasts"
-      aria-live="polite"
+      aria-live={interrupting ? 'assertive' : 'polite'}
       onPointerEnter={() => {
         hovered.current = true;
         pauseToasts();
@@ -49,7 +51,7 @@ export function Toasts() {
       }}
     >
       {toasts.map((toast) => (
-        <div key={toast.id} className="dc-toast" data-tone={toast.tone} role={toast.tone === 'error' ? 'alert' : undefined}>
+        <div key={toast.id} className="dc-toast" data-tone={toast.tone}>
           <span className="dc-toast-message">{toast.message}</span>
           {toast.action && (
             <Button

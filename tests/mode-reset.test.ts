@@ -54,6 +54,25 @@ describe('per-canvas UI state does not leak', () => {
     expect(useUiStore.getState().armed).toBeNull();
   });
 
+  it('popovers, menus and pending requests close when the document is replaced', () => {
+    useUiStore.setState({
+      openAttachmentDetail: { hostKind: 'node', hostId: 'n1', attachmentId: null },
+      quickConnect: { nodeId: 'n1' } as never,
+      contextMenu: { kind: 'pane' } as never,
+      presentationReveal: { attachmentId: 'a1' } as never,
+      flowRenameRequestId: 'f1',
+      jumpFlashId: 'n1',
+    });
+    store.getState().setDocument(createDocument('B'));
+    const ui = useUiStore.getState();
+    expect(ui.openAttachmentDetail).toBeNull();
+    expect(ui.quickConnect).toBeNull();
+    expect(ui.contextMenu).toBeNull();
+    expect(ui.presentationReveal).toBeNull();
+    expect(ui.flowRenameRequestId).toBeNull();
+    expect(ui.jumpFlashId).toBeNull();
+  });
+
   it('presenting closes an attachment card left open from editing', () => {
     useUiStore.getState().setOpenAttachmentDetail({ hostKind: 'node', hostId: 'n1', attachmentId: null });
     store.getState().setMode('present');

@@ -86,6 +86,16 @@ describe('encryptForExport / decryptFromExport', () => {
     }
   });
 
+  it('calls a malformed salt, IV or version damage, before spending time on key derivation', async () => {
+    const text = await encryptForExport(fixture(), 'a passphrase');
+    for (const patch of [{ iv: 'AAAA' }, { salt: '' }, { iv: '%%%not base64' }, { cryptoVersion: 0 }, { cryptoVersion: 0.5 }]) {
+      const result = await decryptFromExport(JSON.stringify({ ...JSON.parse(text), ...patch }), 'a passphrase');
+      expect(result.ok).toBe(false);
+      if (result.ok) continue;
+      expect(result.error).not.toMatch(/passphrase/i);
+    }
+  });
+
   it('rejects tampered ciphertext rather than returning partial content', async () => {
     const text = await encryptForExport(fixture(), 'a passphrase');
     const envelope = JSON.parse(text);

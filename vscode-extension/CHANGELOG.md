@@ -4,6 +4,14 @@ All notable changes to Draft Canvas for VS Code are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Saving right after a quick edit includes that edit.
+- A diagram reverted or checked out while you're editing no longer ends up different in the canvas
+  and in the file.
+- One edit that couldn't be applied no longer stops later edits from reaching the file.
+- Reloading Draft Canvas inside the tab right after an edit keeps that edit.
+
 ## [0.1.1] - 2026-09-14
 
 ### Fixed

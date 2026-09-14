@@ -363,6 +363,13 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
+            const failed = () =>
+              useUiStore.getState().notify("Couldn't copy — the browser blocked clipboard access.", 'error');
+            // Absent outside a secure context (the Docker image served over plain HTTP on a LAN).
+            if (!navigator.clipboard?.writeText) {
+              failed();
+              return;
+            }
             navigator.clipboard.writeText(node.code ?? '').then(
               () => {
                 if (copiedTimeout.current !== null) window.clearTimeout(copiedTimeout.current);
@@ -372,7 +379,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
                   setCopied(false);
                 }, 1200);
               },
-              () => useUiStore.getState().notify("Couldn't copy — the browser blocked clipboard access.", 'error'),
+              failed,
             );
           }}
         >

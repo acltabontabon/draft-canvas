@@ -1,10 +1,12 @@
 import {
+  DocumentConflictError,
   backgroundImageKey,
   isBackgroundImageKeyOf,
   reconcileMetadata,
   sharedMetadataOf,
   summarize,
   type DraftRepository,
+  type SaveOptions,
   type SharedMetadata,
 } from './DraftRepository';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
@@ -32,11 +34,24 @@ export class MemoryRepository implements DraftRepository {
 
   async load(id: string): Promise<DraftDocument | null> {
     const found = this.documents.get(id);
+    if (found) this.seen.add(id);
     return found ? structuredClone(found) : null;
   }
 
-  async save(document: DraftDocument, base?: SharedMetadata): Promise<SharedMetadata | void> {
+  /** Ids this repository has read or written. Nothing else can write here, so the only conflict is a
+   *  canvas deleted while an editor still held it — see `IndexedDbRepository.save`. */
+  private readonly seen = new Set<string>();
+
+  async has(id: string): Promise<boolean> {
+    return this.documents.has(id);
+  }
+
+  async save(document: DraftDocument, base?: SharedMetadata, options?: SaveOptions): Promise<SharedMetadata | void> {
     const stored = this.documents.get(document.metadata.id);
+    if (base && !stored && this.seen.has(document.metadata.id) && !options?.overwrite) {
+      throw new DocumentConflictError('deleted');
+    }
+    this.seen.add(document.metadata.id);
     const written = base && stored ? reconcileMetadata(document, base, stored.metadata) : document;
     this.documents.set(document.metadata.id, structuredClone(written));
     if (written !== document) return sharedMetadataOf(written.metadata);

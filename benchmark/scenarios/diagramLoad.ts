@@ -1,7 +1,7 @@
 /**
  * Diagram-load scenario — boundary is file-input change event to DOM node count matching the
  * expected count, plus two consecutive idle animation frames. Reuses one `page`/`cdp` across
- * iterations (unlike `startup.ts`, which needs a fresh context per run to measure cold navigation).
+ * iterations, since it measures loading a diagram, not a cold navigation.
  */
 
 import type { CDPSession, Page } from '@playwright/test';

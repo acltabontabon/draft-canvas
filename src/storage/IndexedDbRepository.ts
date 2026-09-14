@@ -6,6 +6,7 @@ import { getOrCreateMasterKey } from '../crypto/keyStore';
 import { isEncryptedBody, isLegacyBody, migrateLegacyRecord, type LegacyBody } from '../crypto/migrateStorage';
 import type { EncryptedBody } from '../crypto/types';
 import {
+  DocumentConflictError,
   QuotaExceededError,
   StorageUnavailableError,
   backgroundImageKey,
@@ -16,8 +17,10 @@ import {
   sharedMetadataOf,
   summarize,
   type DraftRepository,
+  type SaveOptions,
   type SharedMetadata,
 } from './DraftRepository';
+import { createId } from '../document/ids';
 import { isLibraryShape, libraryShapeOf } from '../document/shape';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { isRecord } from '../lib/isRecord';
@@ -99,6 +102,11 @@ export class IndexedDbRepository implements DraftRepository {
   readonly durable = true;
 
   private readonly db: IDBPDatabase<DraftDb>;
+  /**
+   * Per document this tab has read or written, the summary's `contentStamp` as it was then. A save
+   * from an open editor compares it with the row to catch another tab's delete or newer content.
+   */
+  private readonly stamps = new Map<string, string | undefined>();
 
   private constructor(db: IDBPDatabase<DraftDb>) {
     this.db = db;
@@ -142,6 +150,10 @@ export class IndexedDbRepository implements DraftRepository {
     }
   }
 
+  async has(id: string): Promise<boolean> {
+    return (await this.db.getKey('bodies', id)) !== undefined;
+  }
+
   async list(): Promise<DraftSummary[]> {
     const rows = await this.db.getAllFromIndex('documents', 'updatedAt');
     // The index sorts ascending; the library wants most-recent first.
@@ -164,8 +176,10 @@ export class IndexedDbRepository implements DraftRepository {
    * edge dropped) is left for the next real edit to persist, same as always.
    */
   async load(id: string): Promise<DraftDocument | null> {
+    const summary = await this.db.get('documents', id).catch(() => undefined);
     const read = await this.readBody(id);
     if (!read) return null;
+    this.stamps.set(id, summary?.contentStamp);
     const { document, wasEncrypted, priorVersion } = read;
     if (!wasEncrypted || priorVersion !== document.version) {
       // Best-effort: the caller still gets the correctly migrated in-memory
@@ -285,29 +299,49 @@ export class IndexedDbRepository implements DraftRepository {
     return { updated, failed, skipped };
   }
 
-  async save(document: DraftDocument, base?: SharedMetadata): Promise<SharedMetadata | void> {
+  /**
+   * An open editor's save (with `base`) of a document this tab has read or written is checked against
+   * the row first: gone means another tab deleted it, and a different `contentStamp` means another tab
+   * saved other content since. Either throws `DocumentConflictError` without writing — unless
+   * `options.overwrite` says the user chose this copy. A rename or move made elsewhere isn't a
+   * conflict: it keeps the stamp, and is merged in (`reconcileMetadata`).
+   */
+  async save(document: DraftDocument, base?: SharedMetadata, options?: SaveOptions): Promise<SharedMetadata | void> {
     const id = document.metadata.id;
+    const checked = base !== undefined && this.stamps.has(id) && !options?.overwrite;
+    const known = this.stamps.get(id);
+    const conflictIn = (row: DraftSummary | undefined) =>
+      !checked ? null : !row ? 'deleted' : row.contentStamp !== known ? 'changed' : null;
     try {
       const key = await getOrCreateMasterKey();
       // Encrypting can't happen inside the transaction, so a rename that lands between reading the
       // summary and writing is caught by re-reading it there, and the merge is redone.
       for (let attempt = 1; ; attempt += 1) {
         const before = base ? await this.db.get('documents', id) : undefined;
+        const early = conflictIn(before);
+        if (early) throw new DocumentConflictError(early);
         const written = base && before ? reconcileMetadata(document, base, before) : document;
         const encrypted = await encryptDocument(written, key);
         const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
-        if (before && attempt < METADATA_WRITE_ATTEMPTS) {
+        if (before || checked) {
           const current = await tx.objectStore('documents').get(id);
-          if (current && !sameSharedMetadata(current, before)) {
+          const late = conflictIn(current);
+          if (late) {
+            await tx.done;
+            throw new DocumentConflictError(late);
+          }
+          if (before && current && attempt < METADATA_WRITE_ATTEMPTS && !sameSharedMetadata(current, before)) {
             await tx.done;
             continue;
           }
         }
+        const stamp = createId('s');
         await Promise.all([
-          tx.objectStore('documents').put(summarize(written)),
+          tx.objectStore('documents').put({ ...summarize(written), contentStamp: stamp }),
           tx.objectStore('bodies').put(encrypted),
           tx.done,
         ]);
+        this.stamps.set(id, stamp);
         requestPersistenceOnce();
         if (written !== document) return sharedMetadataOf(written.metadata);
         return;
@@ -339,13 +373,17 @@ export class IndexedDbRepository implements DraftRepository {
     const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
     // Only if the row is still the one that was read: another tab may have saved real edits while
     // this one decrypted and re-encrypted, and the migrated copy of the older row must not win.
-    const current = await tx.objectStore('bodies').get(document.metadata.id);
+    const [current, summary] = await Promise.all([
+      tx.objectStore('bodies').get(document.metadata.id),
+      tx.objectStore('documents').get(document.metadata.id),
+    ]);
     if (!current || !sameBody(current, readRow)) {
       await tx.done;
       return;
     }
     await Promise.all([
-      tx.objectStore('documents').put(summarize(document)),
+      // The same content in its current shape: an editor holding this row isn't looking at stale work.
+      tx.objectStore('documents').put(withStamp(summarize(document), summary?.contentStamp)),
       tx.objectStore('bodies').put(encrypted),
       tx.done,
     ]);
@@ -388,7 +426,7 @@ export class IndexedDbRepository implements DraftRepository {
         }
         if (sameBody(current, read.row)) {
           await Promise.all([
-            tx.objectStore('documents').put(summarize(next)),
+            tx.objectStore('documents').put(withStamp(summarize(next), summary.contentStamp)),
             tx.objectStore('bodies').put(encrypted),
             tx.done,
           ]);
@@ -561,6 +599,10 @@ export class IndexedDbRepository implements DraftRepository {
     const keys = [documentId, ...(await ownedImageKeys(tx.store, documentId))];
     await Promise.all([...keys.filter((key) => key !== kept).map((key) => tx.store.delete(key)), tx.done]);
   }
+}
+
+function withStamp(summary: DraftSummary, stamp: string | undefined): DraftSummary {
+  return stamp === undefined ? summary : { ...summary, contentStamp: stamp };
 }
 
 function requestPersistenceOnce(): void {

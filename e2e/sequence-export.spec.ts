@@ -150,8 +150,9 @@ test.describe('Sequence Diagram export', () => {
 
     const dialog = await openSourceExport(page);
     await expect(dialog.getByText('Sequence diagram source generated from your Flows.')).toBeVisible();
-    // No preview surface anywhere in the dialog.
-    await expect(dialog.locator('svg.dc-sequence-svg, .dc-sequence-preview-scroll')).toHaveCount(0);
+    // No rendered preview: the artifact is the file tile, never a drawn diagram.
+    await expect(dialog.locator('.dc-export-file')).toBeVisible();
+    await expect(dialog.locator('.dc-export-stage img')).toHaveCount(0);
   });
 
   test('opens from the keyboard with ⌘⇧E — the chord extensions leave alone — and ⌘E too', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { readProjectFile } from '../../export/project';
 import { looksLikeSecureExport, readSecureProjectFile } from '../../export/secureProject';
 import type { DraftSummary } from '../../document/types';
@@ -138,9 +138,13 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
       file={securePendingFile}
       onCancel={() => setSecurePendingFile(null)}
       onSubmit={async (passphrase) => {
-        const file = securePendingFile;
+        // The prompt stays up (showing it's working) until the file opens; a wrong passphrase is said
+        // there, with the file still chosen, instead of closing it and making the user pick it again.
+        const result = await readSecureProjectFile(securePendingFile, passphrase);
+        if (!result.ok) return result.error;
         setSecurePendingFile(null);
-        await finishImport(await readSecureProjectFile(file, passphrase));
+        await finishImport(result);
+        return null;
       }}
     />
   );
@@ -154,7 +158,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
           <header className="dc-library-header">
             <LibraryBrand />
           </header>
-          <p className="dc-muted dc-library-empty">Opening local storage…</p>
+          <StorageOpening />
         </div>
       </div>
     );
@@ -172,7 +176,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
 
   return (
     <div className="dc-library">
-      <div className="dc-library-inner">
+      <main className="dc-library-inner">
         <header className="dc-library-header">
           <LibraryBrand />
           <p className="dc-lede">{PRODUCT.tagline}</p>
@@ -280,7 +284,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                         {entry.edgeCount > 0 && (
                           <>
                             <span className="dc-dot" />
-                            {entry.edgeCount} {entry.edgeCount === 1 ? 'connection' : 'connections'}
+                            {entry.edgeCount} {entry.edgeCount === 1 ? 'connector' : 'connectors'}
                           </>
                         )}
                       </span>
@@ -291,12 +295,14 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                       icon="pencil"
                       variant="quiet"
                       aria-label={`Rename ${entry.title}`}
+                      title="Rename"
                       onClick={() => setRenaming(entry)}
                     />
                     <Button
                       icon="copy"
                       variant="quiet"
                       aria-label={`Duplicate ${entry.title}`}
+                      title="Duplicate"
                       onClick={() => void session.duplicateDocument(entry.id)}
                     />
                     <span className="dc-move-menu-anchor">
@@ -304,6 +310,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                         icon="folder"
                         variant="quiet"
                         aria-label={`Move ${entry.title} to a project`}
+                        title="Move to a project"
                         aria-haspopup="menu"
                         aria-expanded={moveMenuOpenFor === entry.id}
                         onClick={() => setMoveMenuOpenFor(moveMenuOpenFor === entry.id ? null : entry.id)}
@@ -321,6 +328,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                       icon="trash"
                       variant="quiet"
                       aria-label={`Delete ${entry.title}`}
+                      title="Delete"
                       onClick={() => setConfirmDelete(entry)}
                     />
                   </div>
@@ -337,7 +345,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
           </p>
           <LocalNote durable={session.durable} repository={session.repository} />
         </footer>
-      </div>
+      </main>
 
       {confirmDelete && (
         <Modal
@@ -430,6 +438,29 @@ function useRelativeTimeTick(): void {
   }, []);
 }
 
+/** How long opening storage may take before it's worth a hint about why it hasn't. */
+const SLOW_STORAGE_MS = 4000;
+
+/**
+ * Opening normally takes a moment. When it doesn't, the usual cause is an older Draft Canvas tab
+ * holding the database open while this build needs to upgrade it — which waits, silently, until
+ * that tab closes.
+ */
+function StorageOpening() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const id = window.setTimeout(() => setSlow(true), SLOW_STORAGE_MS);
+    return () => window.clearTimeout(id);
+  }, []);
+  return (
+    <p className="dc-muted dc-library-empty" role="status">
+      {slow
+        ? 'Still opening local storage… If Draft Canvas is open in another tab, close or reload that tab.'
+        : 'Opening local storage…'}
+    </p>
+  );
+}
+
 function SecureImportPrompt({
   file,
   onCancel,
@@ -437,18 +468,31 @@ function SecureImportPrompt({
 }: {
   file: File;
   onCancel: () => void;
-  onSubmit: (passphrase: string) => void | Promise<void>;
+  /** Resolves with why the file couldn't be opened, or `null` once it has been. */
+  onSubmit: (passphrase: string) => Promise<string | null>;
 }) {
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const busyRef = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
+  const errorId = useId();
 
   const submit = async () => {
-    if (!passphrase || busy) return;
+    if (!passphrase || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
+    setError(null);
+    let failure: string | null = null;
     try {
-      await onSubmit(passphrase);
+      failure = await onSubmit(passphrase);
     } finally {
+      busyRef.current = false;
       setBusy(false);
+    }
+    if (failure) {
+      setError(failure);
+      input.current?.select();
     }
   };
 
@@ -463,7 +507,7 @@ function SecureImportPrompt({
             Cancel
           </Button>
           <Button variant="solid" icon="upload" disabled={!passphrase || busy} onClick={() => void submit()}>
-            Import
+            {busy ? 'Decrypting…' : 'Import'}
           </Button>
         </>
       }
@@ -475,16 +519,28 @@ function SecureImportPrompt({
       <label className="dc-field">
         <span>Passphrase</span>
         <input
+          ref={input}
           autoFocus
           type="password"
+          autoComplete="current-password"
           value={passphrase}
-          onChange={(event) => setPassphrase(event.target.value)}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          onChange={(event) => {
+            setPassphrase(event.target.value);
+            setError(null);
+          }}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === 'Enter' && !isImeKeyEvent(event)) void submit();
           }}
         />
       </label>
+      {error && (
+        <p id={errorId} className="dc-export-note" data-invalid="true" role="alert">
+          {error}
+        </p>
+      )}
     </Modal>
   );
 }
