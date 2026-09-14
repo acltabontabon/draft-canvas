@@ -68,21 +68,46 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      listed: ${{ steps.listed.outputs.listed }}
     steps:
+      # A version already on the Marketplace is final: published by hand (like 0.1.0), or by an earlier
+      # attempt of this release. It's left alone, and the GitHub Release attaches exactly that package.
+      - name: Already on the Marketplace?
+        id: listed
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          VERSIONS="$(curl -fsS -X POST https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery \
+            -H 'Content-Type: application/json' -H 'Accept: application/json;api-version=7.2-preview.1' \
+            -d '{"filters":[{"criteria":[{"filterType":7,"value":"acltabontabon.draft-canvas"}]}],"flags":1}' \
+            | jq -r '.results[0].extensions[0].versions[]?.version')"
+          if grep -qx "$VERSION" <<< "$VERSIONS"; then
+            echo "listed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$VERSION is already on the Marketplace; not publishing it again."
+          else
+            echo "listed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v7
+        if: steps.listed.outputs.listed != 'true'
       - uses: actions/setup-node@v7
+        if: steps.listed.outputs.listed != 'true'
         with:
           node-version: 22.14.0
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
       - run: npm ci
+        if: steps.listed.outputs.listed != 'true'
         working-directory: vscode-extension
       - uses: actions/download-artifact@v8
+        if: steps.listed.outputs.listed != 'true'
         with:
           name: vsix
           path: vscode-extension
 
       - name: Publishing identity is configured
+        if: steps.listed.outputs.listed != 'true'
         env:
           AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -94,14 +119,15 @@ jobs:
 
       # Short-lived Microsoft Entra token through GitHub's OIDC: no PAT or secret is stored anywhere.
       - uses: azure/login@v3
+        if: steps.listed.outputs.listed != 'true'
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
-      # A version already on the Marketplace is left as it is, so re-running a release that failed
-      # after publishing moves on to the GitHub Release instead of failing again.
+      # --skip-duplicate covers a version that lands between the check above and this step.
       - name: Publish to the Marketplace
+        if: steps.listed.outputs.listed != 'true'
         working-directory: vscode-extension
         run: npx vsce publish --packagePath "${{ needs.package.outputs.vsix }}" --azure-credential --skip-duplicate
 
@@ -115,6 +141,17 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: vsix
+
+      # What the Marketplace serves is what people install, so a version this run didn't publish gets
+      # the Marketplace's own package attached rather than this run's rebuild of it.
+      - name: Attach the Marketplace's package
+        if: needs.publish.outputs.listed == 'true'
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          curl -fsSL --compressed -o "${{ needs.package.outputs.vsix }}" \
+            "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/acltabontabon/vsextensions/draft-canvas/$VERSION/vspackage"
+          unzip -p "${{ needs.package.outputs.vsix }}" extension/package.json | jq -e --arg v "$VERSION" '.version == $v'
 
       - name: Release notes from the extension's changelog
         env:

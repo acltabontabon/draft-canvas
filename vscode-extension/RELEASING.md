@@ -55,9 +55,9 @@ Nothing is deployed to Pages or Docker, and the root changelog and version are u
 - **Before publish** (bad tag, failed check or smoke test): nothing reached the Marketplace. Fix it
   on `main`, then move the tag: `git tag -d extension-v0.1.1 && git push origin :refs/tags/extension-v0.1.1`,
   re-tag the fixed commit, and push.
-- **At or after publish:** re-run the failed jobs from the Actions run. Publishing uses
-  `--skip-duplicate`, so a version that already made it is left alone, and the GitHub Release step
-  just runs again.
+- **At or after publish:** re-run the failed jobs from the Actions run. A version that's already on
+  the Marketplace isn't published again (so it needs no sign-in), and the GitHub Release attaches the
+  Marketplace's own package. That's also how 0.1.0, uploaded by hand, got its release.
 - A version on the Marketplace is final. Never try to replace `0.1.1` with different bits; fix
   forward with `0.1.2`.
 
