@@ -21,6 +21,16 @@ export type { ProductRelease, ProductReleaseHighlight } from './types';
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.5.1',
+    date: '2026-09-14',
+    highlights: [
+      {
+        title: 'Links open in VS Code',
+        description: 'The links in About now open in your browser or mail app when Draft Canvas is running inside VS Code.',
+      },
+    ],
+  },
+  {
     version: '1.5.0',
     date: '2026-09-14',
     highlights: [
