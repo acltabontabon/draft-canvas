@@ -21,6 +21,42 @@ export type { ProductRelease, ProductReleaseHighlight } from './types';
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.6.0',
+    date: '2026-09-14',
+    highlights: [
+      {
+        title: 'Two tabs, one canvas, no surprises',
+        description:
+          "If another tab changed or deleted the canvas you're editing, the status bar asks which copy to keep instead of quietly overwriting either one.",
+      },
+      {
+        title: 'Updates wait for you',
+        description:
+          'Reload to update saves your work first and reloads only the tab you clicked. Other open tabs just offer a Reload button.',
+      },
+      {
+        title: 'Connectors stay on top',
+        description:
+          "A connector's label, attachments and end handles stay above shapes brought to the front, so its end can always be dragged somewhere new.",
+      },
+      {
+        title: 'Undo does what you meant',
+        description:
+          'Recolouring several shapes is one step, a change you took back leaves no empty step, and undo no longer reverts a rename made in another tab.',
+      },
+      {
+        title: 'Calmer toasts and tooltips',
+        description:
+          'Toasts sit below the toolbar and never stack up, tooltips open when you tab to a control, and the browser tab shows the canvas name.',
+      },
+      {
+        title: 'Keys go where you expect',
+        description:
+          "Keys pressed in menus and prompts stay there instead of creating or moving shapes behind them, and Escape closes only what's on top.",
+      },
+    ],
+  },
+  {
     version: '1.5.1',
     date: '2026-09-14',
     highlights: [

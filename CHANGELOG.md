@@ -4,6 +4,8 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-14
+
 ### Changed
 
 - Your work is safer across tabs. A canvas deleted in another tab no longer comes back when this tab
@@ -62,6 +64,20 @@ All notable changes to Draft Canvas are documented here.
   dialog's website link opens.
 - Small buttons (About, Back, flow step actions) are easier to hit, and focus rings on the search and
   title fields are easier to see.
+- Choosing "Discard" when another tab changed the canvas no longer makes that other tab report a
+  conflict on its next save.
+- Renaming or moving a canvas in another tab while you drag or nudge shapes here is no longer undone
+  by the next undo.
+- Connector labels, attachment chips and the handles for dragging a connector's end stay on top of
+  shapes that were brought to the front or are selected, so a connector's end can always be moved.
+- In Saga – Orchestration, a connector that shares its two shapes with another can be moved to a
+  different point on the same shape.
+- Deleting a shape or connector whose attachment card is open closes the card, so Enter, Tab and
+  `[` `]` work again afterwards.
+- The clipboard permission prompt no longer carries over to the next canvas you open. It now says
+  what it pastes: shapes copied in another Draft Canvas tab.
+- Opening a canvas while another is still loading opens the one you picked last, and double-clicking
+  New canvas creates one canvas.
 
 ## [1.5.1] - 2026-09-14
 
@@ -959,7 +975,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.5.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.0...main
+[1.6.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.3.0...v1.4.0
