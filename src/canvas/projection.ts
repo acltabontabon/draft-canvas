@@ -159,8 +159,10 @@ export function resolveSelectedEdgeIds(
 ): string[] {
   const useDerivedEdges = nodeIds.length > 1 || previousNodeIds.length > 1;
   if (!useDerivedEdges) return [...reportedEdgeIds];
+  // Runs on every marquee step: a Set keeps it one pass over the edges, not edges × selection.
+  const selected = new Set(nodeIds);
   return documentEdges
-    .filter((edge) => nodeIds.includes(edge.source) && nodeIds.includes(edge.target))
+    .filter((edge) => selected.has(edge.source) && selected.has(edge.target))
     .map((edge) => edge.id);
 }
 

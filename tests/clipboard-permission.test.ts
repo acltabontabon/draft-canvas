@@ -144,3 +144,23 @@ describe('uiStore.requestClipboardPermission', () => {
     expect(useUiStore.getState().clipboardPermissionRequest).toBeNull();
   });
 });
+
+describe('ClipboardPermissionDialog', () => {
+  it('an ask left unanswered when the editor unmounts resolves as "not now"', async () => {
+    const { createElement } = await import('react');
+    const { act, render } = await import('@testing-library/react');
+    const { useUiStore } = await import('../src/store/uiStore');
+    const { ClipboardPermissionDialog } = await import('../src/ui/common/ClipboardPermissionDialog');
+
+    const view = render(createElement(ClipboardPermissionDialog));
+    let answer: Promise<boolean>;
+    act(() => {
+      answer = useUiStore.getState().requestClipboardPermission();
+    });
+    expect(view.getByRole('alertdialog')).toBeTruthy();
+
+    view.unmount();
+    await expect(answer!).resolves.toBe(false);
+    expect(useUiStore.getState().clipboardPermissionRequest).toBeNull();
+  });
+});

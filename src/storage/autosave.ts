@@ -65,6 +65,8 @@ export class Autosave {
   private readonly onConflict: AutosaveOptions['onConflict'];
   /** Per document, the title/project last loaded or written — see `DraftRepository.save`. */
   private readonly baselines = new Map<string, SharedMetadata>();
+  /** Per document, the exact object last tracked as what's on disk — see `schedule`. */
+  private readonly loaded = new Map<string, DraftDocument>();
 
   private pending: DraftDocument | null = null;
   private inFlight = false;
@@ -94,17 +96,27 @@ export class Autosave {
   /** Records the metadata of a document as it is on disk right now (just opened or created). */
   track(document: DraftDocument): void {
     this.baselines.set(document.metadata.id, sharedMetadataOf(document.metadata));
+    this.loaded.set(document.metadata.id, document);
   }
 
   /** Drops a document's baseline once it's no longer open, so a long session spent opening many
    *  documents doesn't accumulate one entry per document forever. */
   untrack(documentId: string): void {
     this.baselines.delete(documentId);
+    this.loaded.delete(documentId);
   }
 
   /** Records a new version of the document and schedules a write. */
   schedule(document: DraftDocument): void {
     if (this.disposed) return;
+    // The very object just tracked from disk — a canvas re-opened in place (taking another tab's copy
+    // after a conflict, or restoring the stored copy) — is already stored. Writing it again would
+    // only mint a new content stamp, and the other tab's next save would then report a conflict
+    // nobody caused. Anything queued for it is superseded: the editor now shows what's stored.
+    if (this.loaded.get(document.metadata.id) === document) {
+      if (this.pending?.metadata.id === document.metadata.id) this.pending = null;
+      return;
+    }
     this.pending = document;
     // Kept, not written: the conflict (and its message) stays up until the user resolves it.
     if (this.conflict) return;

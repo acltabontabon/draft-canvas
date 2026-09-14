@@ -73,6 +73,11 @@ export function useDocumentSession(): DocumentSession {
   const [ready, setReady] = useState(false);
 
   const autosave = useRef<Autosave | null>(null);
+  /** Bumped by every open/create: an earlier one still loading when a later one started must not
+   *  land on top of it (a slow decrypt resolving after the user already opened something else). */
+  const navigation = useRef(0);
+  /** A New canvas already on its way — a double-click must not make two. */
+  const creating = useRef(false);
   const notify = useUiStore((state) => state.notify);
 
   useEffect(() => {
@@ -208,6 +213,7 @@ export function useDocumentSession(): DocumentSession {
   const openDocument = useCallback(
     async (id: string) => {
       if (!repository) return;
+      const request = (navigation.current += 1);
       let loaded: DraftDocument | null;
       try {
         loaded = await repository.load(id);
@@ -215,6 +221,7 @@ export function useDocumentSession(): DocumentSession {
         logDiagnostic(error, { operation: 'open-document', documentId: id });
         loaded = null;
       }
+      if (request !== navigation.current) return;
       if (!loaded) {
         notify('That diagram could not be read from local storage.', 'error');
         await refreshLibrary().catch((error: unknown) => {
@@ -232,10 +239,13 @@ export function useDocumentSession(): DocumentSession {
         notify('The editor could not be loaded. Check your connection and try again.', 'error');
         return;
       }
-      editorStore.useEditorStore.getState().setDocument(loaded);
+      if (request !== navigation.current) return;
       // Reopening the canvas already open (taking another tab's copy) keeps `openId`, so the effect
-      // that tracks a newly opened document doesn't run again.
+      // that tracks a newly opened document doesn't run again. Tracked before `setDocument`: the
+      // still-live autosave subscription sees that revision bump, and must recognise the copy it
+      // hands over as the stored one rather than write it again.
       autosave.current?.track(loaded);
+      editorStore.useEditorStore.getState().setDocument(loaded);
       setOpenId(loaded.metadata.id);
     },
     [notify, refreshLibrary, repository],
@@ -244,6 +254,7 @@ export function useDocumentSession(): DocumentSession {
   const adoptDocument = useCallback(
     async (incoming: DraftDocument) => {
       if (!repository) return;
+      const request = (navigation.current += 1);
       // A `projectId` from a document authored in a different browser
       // profile (or whose project was deleted here) would make the canvas
       // invisible in the Library — excluded from Unorganized, with no
@@ -267,8 +278,11 @@ export function useDocumentSession(): DocumentSession {
         if (taken) document = cloneDocumentAsNew(document, document.metadata.title);
         await repository.save(document);
         const { useEditorStore } = await loadEditorStore();
-        useEditorStore.getState().setDocument(document);
-        setOpenId(document.metadata.id);
+        // Saved either way — it's in the Library — but only the latest open/create takes the editor.
+        if (request === navigation.current) {
+          useEditorStore.getState().setDocument(document);
+          setOpenId(document.metadata.id);
+        }
         await refreshLibrary();
       } catch (error) {
         logDiagnostic(error, { operation: 'adopt-document', documentId: document.metadata.id });
@@ -285,30 +299,39 @@ export function useDocumentSession(): DocumentSession {
 
   const newDocument = useCallback(
     async (title?: string, starterId?: StarterId) => {
-      let catalog: Awaited<ReturnType<typeof loadStarters>> | undefined;
+      if (creating.current) return;
+      creating.current = true;
+      const request = (navigation.current += 1);
       try {
-        catalog = starterId ? await loadStarters() : undefined;
-      } catch (error) {
-        // The starters chunk didn't arrive (offline, or a deploy replaced it) — say so, the way
-        // `openDocument` does for the editor chunk, rather than leaving the click to do nothing.
-        logDiagnostic(error, { operation: 'load-starters' });
-        notify('That starter could not be loaded. Check your connection and try again.', 'error');
-        return;
+        let catalog: Awaited<ReturnType<typeof loadStarters>> | undefined;
+        try {
+          catalog = starterId ? await loadStarters() : undefined;
+          // Something else was opened while the starters chunk arrived.
+          if (request !== navigation.current) return;
+        } catch (error) {
+          // The starters chunk didn't arrive (offline, or a deploy replaced it) — say so, the way
+          // `openDocument` does for the editor chunk, rather than leaving the click to do nothing.
+          logDiagnostic(error, { operation: 'load-starters' });
+          notify('That starter could not be loaded. Check your connection and try again.', 'error');
+          return;
+        }
+        const starter = starterId ? catalog?.starterById(starterId) : undefined;
+        let document = createDocument(title ?? starter?.name ?? 'Untitled canvas');
+        if (starter) {
+          // The starter is the canvas's initial state, not an edit: there is
+          // nothing to undo, exactly as with an imported file. Same origin the
+          // palette uses for an empty canvas, plus a viewport that shows it —
+          // see `openingViewportFor` for why the editor won't do that itself.
+          const size = catalog!.starterSize(starter);
+          const { nodes, edges, flows } = catalog!.buildStarter(starter, freeOriginFor(document, size));
+          const screen =
+            typeof window === 'undefined' ? null : { width: window.innerWidth, height: window.innerHeight };
+          document = { ...document, nodes, edges, flows, ...(screen ? { viewport: openingViewportFor(size, screen) } : {}) };
+        }
+        await adoptDocument(document);
+      } finally {
+        creating.current = false;
       }
-      const starter = starterId ? catalog?.starterById(starterId) : undefined;
-      let document = createDocument(title ?? starter?.name ?? 'Untitled canvas');
-      if (starter) {
-        // The starter is the canvas's initial state, not an edit: there is
-        // nothing to undo, exactly as with an imported file. Same origin the
-        // palette uses for an empty canvas, plus a viewport that shows it —
-        // see `openingViewportFor` for why the editor won't do that itself.
-        const size = catalog!.starterSize(starter);
-        const { nodes, edges, flows } = catalog!.buildStarter(starter, freeOriginFor(document, size));
-        const screen =
-          typeof window === 'undefined' ? null : { width: window.innerWidth, height: window.innerHeight };
-        document = { ...document, nodes, edges, flows, ...(screen ? { viewport: openingViewportFor(size, screen) } : {}) };
-      }
-      await adoptDocument(document);
     },
     [adoptDocument, notify],
   );

@@ -646,6 +646,27 @@ describe('autosave', () => {
     autosave.dispose();
   });
 
+  it('never re-writes the copy it just loaded (reopening after a conflict mints no new stamp)', async () => {
+    const repository = new RecordingRepository();
+    const states: string[] = [];
+    const autosave = new Autosave({ repository, onStateChange: (state) => states.push(state.status) });
+    const doc = documentWith('Stored');
+
+    // An edit is queued, then the canvas is reopened in place: the store now holds the stored copy.
+    autosave.schedule(addNodes(doc, [createNode({ type: 'note', x: 0, y: 400 })]));
+    const reloaded = { ...doc };
+    autosave.track(reloaded);
+    autosave.schedule(reloaded);
+    expect(await autosave.flush()).toBe(true);
+    expect(repository.saved).toHaveLength(0);
+
+    // A real edit after that still saves.
+    autosave.schedule(addNodes(reloaded, [createNode({ type: 'note', x: 0, y: 800 })]));
+    await autosave.flush();
+    expect(repository.saved).toHaveLength(1);
+    autosave.dispose();
+  });
+
   it('untrack drops a closed document’s baseline', async () => {
     const repository = new MemoryRepository();
     const doc = documentWith('Before');

@@ -4,7 +4,7 @@ import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // duplicate are the only place a document-size limit can be hit from a trusted, in-app action
 // rather than at import, and there's no other place in the app that already surfaces that.
 import { useUiStore } from './uiStore';
-import { nodeIndex } from './selectors';
+import { edgeIndex, nodeIndex } from './selectors';
 import {
   createAttachment,
   createDocument,
@@ -122,6 +122,7 @@ import {
   redo as redoStack,
   undo as undoStack,
   type FlowSessionSnapshot,
+  type HistoryEntry,
   type HistoryState,
   type Selection,
 } from '../history/HistoryStack';
@@ -649,6 +650,54 @@ function carryAdoptedMetadata(
 }
 
 /**
+ * Closes an open attachment card whose host an edit just took away — deleted, its last attachment
+ * gone, or (for a connector's card, which names one attachment) that attachment gone. The card
+ * itself unmounts with its host, and its outside-click/Escape listeners with it, so nothing else
+ * would ever clear `openAttachmentDetail`: left set, it quietly keeps bare Enter-to-edit, Tab
+ * and `]`/`[` standing down, and pops the card back open on redo. A node's popover naming one
+ * attachment that's gone keeps showing the rest, as before.
+ */
+function closeStaleAttachmentDetail(doc: DraftDocument): void {
+  const detail = useUiStore.getState().openAttachmentDetail;
+  if (!detail) return;
+  const host =
+    detail.hostKind === 'node'
+      ? nodeIndex(doc.nodes).get(detail.hostId)
+      : edgeIndex(doc.edges).get(detail.hostId);
+  const attachments = host?.attachments ?? [];
+  const alive =
+    attachments.length > 0 &&
+    (detail.hostKind === 'node' || detail.attachmentId === null || attachments.some((a) => a.id === detail.attachmentId));
+  if (!alive) useUiStore.getState().setOpenAttachmentDetail(null);
+}
+
+/** `document` carrying a stored title/project — the one place both fields are written together. */
+function withSharedMetadata(document: DraftDocument, shared: SharedMetadata): DraftDocument {
+  const metadata = { ...document.metadata, title: shared.title };
+  if (shared.projectId) metadata.projectId = shared.projectId;
+  else delete metadata.projectId;
+  return { ...document, metadata };
+}
+
+/** The entry with an adopted title/project written into both of its snapshots, on each field it
+ *  didn't change itself — see `adoptStoredMetadata`. The same entry when there was nothing to do. */
+function rebaseEntryMetadata(entry: HistoryEntry, shared: SharedMetadata): HistoryEntry {
+  const { before, after } = entry;
+  const titleKept = before.metadata.title === after.metadata.title;
+  const projectKept = before.metadata.projectId === after.metadata.projectId;
+  const rebase = (document: DraftDocument): DraftDocument =>
+    withSharedMetadata(document, {
+      title: titleKept ? shared.title : document.metadata.title,
+      projectId: projectKept ? shared.projectId : document.metadata.projectId,
+    });
+  const unchanged = (document: DraftDocument) =>
+    (!titleKept || document.metadata.title === shared.title) &&
+    (!projectKept || document.metadata.projectId === shared.projectId);
+  if (unchanged(before) && unchanged(after)) return entry;
+  return { ...entry, before: rebase(before), after: rebase(after) };
+}
+
+/**
  * `undo`/`redo` swap `document` without going through `setDocument` (which
  * intentionally resets everything for an unrelated document) — so unlike a
  * fresh open, they need to keep whatever of `selectedFlowId`/`focus` still
@@ -823,6 +872,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         flowSessionAfter: options?.flowSessionAfter,
       }),
     }));
+    closeStaleAttachmentDetail(next);
   },
 
   beginInteraction(label) {
@@ -1878,6 +1928,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // above regardless. See `FlowSessionSnapshot`.
       ...(entry.flowSessionBefore ?? {}),
     }));
+    closeStaleAttachmentDetail(get().document);
   },
 
   redo() {
@@ -1893,6 +1944,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...reconcileSessionState(entry.after, s),
       ...(entry.flowSessionAfter ?? {}),
     }));
+    closeStaleAttachmentDetail(get().document);
   },
 
   canUndo: () => canUndo(get().history),
@@ -1903,12 +1955,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   adoptStoredMetadata(documentId, shared) {
-    const { document } = get();
+    const { document, history } = get();
     if (document.metadata.id !== documentId) return;
-    const metadata = { ...document.metadata, title: shared.title };
-    if (shared.projectId) metadata.projectId = shared.projectId;
-    else delete metadata.projectId;
-    set({ document: { ...document, metadata } });
+    // An undo step still being built — a held drag, or a burst that keeps coalescing — took its
+    // `before` ahead of this adoption, and would end with `before`/`after` disagreeing on the title,
+    // which `carryAdoptedMetadata` reads as this editor's own rename: undo would put the old title
+    // back and the next save would write it over the other tab's. So those baselines take the
+    // adopted value too, on every field the step itself didn't change. Older entries can't grow
+    // any more and already agree with themselves, so they need nothing.
+    if (interaction) interaction = { ...interaction, document: withSharedMetadata(interaction.document, shared) };
+    const top = history.past[history.past.length - 1];
+    const rebasedTop = top && rebaseEntryMetadata(top, shared);
+    set({
+      document: withSharedMetadata(document, shared),
+      ...(rebasedTop && rebasedTop !== top ? { history: { ...history, past: [...history.past.slice(0, -1), rebasedTop] } } : {}),
+    });
   },
 
   setSaveState(save) {

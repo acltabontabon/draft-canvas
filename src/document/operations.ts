@@ -172,16 +172,20 @@ export function reconnectEdge(
     // untouched one would leave a self-loop routing/hit-testing never expects.
     const otherEndpoint = endpoint === 'source' ? edge.target : edge.source;
     if (newNodeId === otherEndpoint) return edge;
-    // Mirrors `connect()`'s duplicate guard: moving an end onto a pair another connector already
-    // joins would stack two identical arrows. Re-siding on the same node is still a reconnect.
-    const source = endpoint === 'source' ? newNodeId : edge.source;
-    const target = endpoint === 'target' ? newNodeId : edge.target;
-    if (doc.edges.some((other) => other.id !== id && other.source === source && other.target === target)) return edge;
     const anchorKey = endpoint === 'source' ? 'sourceAnchor' : 'targetAnchor';
     // Dropped back on the handle it came from: nothing moved, so no undo step.
     const previousAnchor = edge[anchorKey];
     const sameNode = (endpoint === 'source' ? edge.source : edge.target) === newNodeId;
     if (sameNode && previousAnchor?.side === anchor?.side && previousAnchor?.offset === anchor?.offset) return edge;
+    // Mirrors `connect()`'s duplicate guard: moving an end onto a pair another connector already
+    // joins would stack two identical arrows. Re-siding on the same node keeps the pair it already
+    // had, so it is never refused — a twin that was already there (Saga – Orchestration ships a
+    // command and a compensation between the same two nodes) must not pin this one's anchor.
+    const source = endpoint === 'source' ? newNodeId : edge.source;
+    const target = endpoint === 'target' ? newNodeId : edge.target;
+    if (!sameNode && doc.edges.some((other) => other.id !== id && other.source === source && other.target === target)) {
+      return edge;
+    }
     changed = true;
     const next: DraftEdge =
       endpoint === 'source' ? { ...edge, source: newNodeId } : { ...edge, target: newNodeId };

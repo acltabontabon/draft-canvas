@@ -740,8 +740,9 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       draggingIds.current = moving;
 
       const swept = new Map<string, string[]>();
+      const byId = nodeIndex(state.document.nodes);
       for (const node of dragged) {
-        const doc = state.document.nodes.find((n) => n.id === node.id);
+        const doc = byId.get(node.id);
         if (doc?.type !== 'group') continue;
         const descendants = descendantsOf(state.document, doc.id).filter((id) => !moving.has(id));
         if (descendants.length > 0) {

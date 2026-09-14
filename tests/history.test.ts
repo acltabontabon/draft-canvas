@@ -334,6 +334,27 @@ describe('undo and redo', () => {
     expect(store.getState().document.edges.find((e) => e.id === cb.id)!.targetAnchor?.side).toBe('left');
   });
 
+  it('re-sides one of two connectors that already share a pair (Saga command + compensation)', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 300, y: 0 });
+    const c = store.getState().addNode({ type: 'service', x: 0, y: 300 });
+    const command = store.getState().connect(a.id, b.id)!;
+    // `connect()` refuses a twin, but documents (and the Saga – Orchestration starter) carry them.
+    const compensation = { ...command, id: 'e-compensation' };
+    store.setState((s) => ({ document: { ...s.document, edges: [...s.document.edges, compensation] } }));
+    store.getState().connect(a.id, c.id);
+    const before = store.getState().history.past.length;
+
+    store.getState().reconnectEdge(compensation.id, 'target', b.id, 'bottom', 0.25);
+    const resided = store.getState().document.edges.find((e) => e.id === compensation.id)!;
+    expect(resided.targetAnchor).toEqual({ side: 'bottom', offset: 0.25 });
+    expect(store.getState().history.past).toHaveLength(before + 1);
+
+    // Moving it onto a pair another connector already joins is still refused.
+    store.getState().reconnectEdge(compensation.id, 'target', c.id, undefined);
+    expect(store.getState().document.edges.find((e) => e.id === compensation.id)!.target).toBe(b.id);
+  });
+
   it('committing an unchanged value records nothing and keeps redo', () => {
     const a = store.getState().addNode({ type: 'service', x: 0, y: 0, text: 'API' });
     const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
@@ -482,6 +503,39 @@ describe('undo and redo', () => {
     store.getState().redo();
     expect(store.getState().document.metadata.title).toBe('Renamed elsewhere');
     expect(store.getState().document.nodes).toHaveLength(2);
+  });
+
+  it('a rename adopted mid-drag is not undone with the drag', () => {
+    const documentId = store.getState().document.metadata.id;
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0 });
+
+    store.getState().beginInteraction('Move');
+    store.getState().commitPositions(new Map([[node.id, { x: 40, y: 0 }]]));
+    // The autosave max-wait lands while the drag is still held.
+    store.getState().adoptStoredMetadata(documentId, { title: 'Renamed elsewhere', projectId: 'p1' });
+    store.getState().commitPositions(new Map([[node.id, { x: 80, y: 0 }]]));
+    store.getState().endInteraction();
+
+    store.getState().undo();
+    expect(store.getState().document.nodes[0]!.x).toBe(0);
+    expect(store.getState().document.metadata.title).toBe('Renamed elsewhere');
+    expect(store.getState().document.metadata.projectId).toBe('p1');
+    store.getState().redo();
+    expect(store.getState().document.metadata.title).toBe('Renamed elsewhere');
+  });
+
+  it('a rename adopted inside a coalescing burst is not undone with the burst', () => {
+    const documentId = store.getState().document.metadata.id;
+    const node = store.getState().addNode({ type: 'note', x: 0, y: 0 });
+    store.getState().setSelection({ nodes: [node.id], edges: [] });
+
+    store.getState().nudgeSelection(1, 0);
+    store.getState().adoptStoredMetadata(documentId, { title: 'Renamed elsewhere' });
+    store.getState().nudgeSelection(1, 0);
+
+    store.getState().undo();
+    expect(store.getState().document.nodes[0]!.x).toBe(0);
+    expect(store.getState().document.metadata.title).toBe('Renamed elsewhere');
   });
 
   it('undoing the user’s own rename still reverts the title', () => {

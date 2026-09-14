@@ -23,6 +23,11 @@ export function ClipboardPermissionDialog() {
     if (request) card.current?.focus();
   }, [request]);
 
+  // The card has no backdrop, so the toolbar's Back stays reachable while it asks. An ask left
+  // unanswered when the editor goes away is a "not now": otherwise it would reappear on the next
+  // canvas opened, and Allow would paste there at the first one's coordinates.
+  useEffect(() => () => useUiStore.getState().resolveClipboardPermissionRequest(false), []);
+
   useEffect(() => {
     if (!request) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -52,7 +57,7 @@ export function ClipboardPermissionDialog() {
       <p id="dc-clipboard-permission-title" className="dc-clipboard-permission-title">
         Paste from your clipboard?
       </p>
-      <p id="dc-clipboard-permission-body">Draft Canvas can read your clipboard when you paste content onto the canvas — for example, text or copied images.</p>
+      <p id="dc-clipboard-permission-body">Draft Canvas can read your clipboard when you paste onto the canvas — so elements copied in another Draft Canvas tab or window land here too.</p>
       <p className="dc-clipboard-permission-note">Your clipboard stays in your browser and isn't uploaded anywhere.</p>
       <div className="dc-clipboard-permission-actions">
         <Button variant="ghost" onClick={() => resolve(false)}>

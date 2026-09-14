@@ -148,6 +148,55 @@ describe('useDocumentSession — adoptDocument stale projectId repair', () => {
   });
 });
 
+describe('useDocumentSession — overlapping opens', () => {
+  it('a slow open that resolves after a later one does not replace it', async () => {
+    const slow = createDocument('Slow A');
+    const fast = createDocument('Fast B');
+    let releaseSlow: () => void = () => {};
+    const repository = stubRepository({
+      load: async (id) => {
+        if (id === slow.metadata.id) {
+          await new Promise<void>((resolve) => (releaseSlow = resolve));
+          return slow;
+        }
+        return id === fast.metadata.id ? fast : null;
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    let openingSlow!: Promise<void>;
+    await act(async () => {
+      openingSlow = session().openDocument(slow.metadata.id);
+      await session().openDocument(fast.metadata.id);
+    });
+    await act(async () => {
+      releaseSlow();
+      await openingSlow;
+    });
+
+    expect(useEditorStore.getState().document.metadata.id).toBe(fast.metadata.id);
+    expect(session().openId).toBe(fast.metadata.id);
+  });
+
+  it('a double-activated New canvas creates one canvas', async () => {
+    const saved: DraftDocument[] = [];
+    const repository = stubRepository({
+      save: async (document) => {
+        saved.push(document);
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    await act(async () => {
+      await Promise.all([session().newDocument(), session().newDocument()]);
+    });
+
+    expect(saved).toHaveLength(1);
+  });
+});
+
 describe('useDocumentSession — repository failures surface a toast, not an unhandled rejection', () => {
   it('adoptDocument names the real reason on a page the browser will not encrypt on', async () => {
     Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true });

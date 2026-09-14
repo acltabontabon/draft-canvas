@@ -421,9 +421,13 @@
   display: none;
 }
 
-/* Connector labels read over the diagram, not under it. */
+/* Connector labels, attachment chips and endpoint handles read over the diagram, not under it —
+   over *every* node: React Flow stacks each node at its own `z` (+1000 while selected), and `z`
+   is kept within ±10 000 on load, so a small value here lost to any node brought forward a few
+   times (its connection handle then took the press meant for a connector's endpoint). Everything
+   here stays inside the viewport's own stacking context, below the canvas chrome. */
 .react-flow__edgelabel-renderer {
-  z-index: 4;
+  z-index: 20000;
 }
 
 /* A canvas-toned mask plus a lightweight halo rather than a bordered chip — the label sits *on*
