@@ -775,7 +775,7 @@ function rectsOverlap(a: Bounds, b: Bounds): boolean {
 /** Whether `inner` fits entirely within `outer` — a companion that fits inside its host's own
  *  boundary stays there rather than implying it left. Shared by placement (which boundary-contained
  *  candidates to prefer) and by whoever assigns the resulting node's `parentId`. */
-export function containsRect(
+function containsRect(
   outer: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>,
   inner: Bounds,
 ): boolean {
