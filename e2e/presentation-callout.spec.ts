@@ -169,13 +169,28 @@ test.describe('Presentation callouts', () => {
     await goToStep(page, 4);
     const card = page.locator('.dc-callout .dc-callout-card');
     const chipRow = page.locator('.dc-attachment-chip-row').filter({ hasText: 'Note' });
-    await settledBox(card);
+    const resting = await settledBox(card);
 
-    // Zoom out around the connector: the callout keeps its size and follows the chip.
+    // Zoom out around the connector: the callout keeps its size and follows the chip. The wheel goes
+    // over the chip itself — a point picked relative to it lands on whatever the layout puts there
+    // (the flow bar on one machine, bare canvas on another) — and holds Control, because a plain
+    // wheel pans this canvas (`panOnScroll`). A pan that pushes the chip against the canvas edge
+    // rightly docks the callout above the flow bar, far from the chip.
     const chip = (await chipRow.boundingBox())!;
-    await page.mouse.move(chip.x + chip.width / 2, chip.y + 40);
+    const pointer = { x: chip.x + chip.width / 2, y: chip.y + chip.height / 2 };
+    expect(
+      await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.dc-attachment-chip-row'), pointer),
+    ).toBe(true);
+    const zoom = () =>
+      page.locator('.react-flow__viewport').evaluate((viewport) => new DOMMatrixReadOnly(getComputedStyle(viewport).transform).a);
+    const before = await zoom();
+    await page.mouse.move(pointer.x, pointer.y);
+    await page.keyboard.down('Control');
     await page.mouse.wheel(0, 300);
+    await page.keyboard.up('Control');
+    await expect.poll(zoom).toBeLessThan(before);
     const [zoomed, zoomedChip] = await settledBoxes([card, chipRow]);
+    expect(zoomed.width).toBeCloseTo(resting.width, 0);
     expect(gapBetween(zoomed, zoomedChip)).toBeLessThan(60);
 
     await page.setViewportSize({ width: 1000, height: 720 });
