@@ -5,9 +5,18 @@ import { logDiagnostic } from '../lib/diagnostics';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { useUiStore } from '../store/uiStore';
 import type { DocumentSession } from '../store/useDocumentSession';
-import { embeddedHost, HOST_PROTOCOL, isHostOrigin, type LoadMessage, type ToHostMessage } from './embeddedHost';
+import {
+  embeddedHost,
+  HOST_PROTOCOL,
+  isHostOrigin,
+  type ClipboardMessage,
+  type LoadMessage,
+  type ToHostMessage,
+} from './embeddedHost';
+import { hostClipboard, setHostClipboard, type HostClipboard } from './hostClipboard';
 
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+const CLIPBOARD_READ_TIMEOUT_MS = 1500;
 
 export interface HostDocumentState {
   /** Why the file couldn't be opened, if it couldn't. */
@@ -55,6 +64,25 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
 
     const post = (message: ToHostMessage) => {
       if (hostOrigin) window.parent.postMessage(message, hostOrigin);
+    };
+
+    let clipboardReadId = 0;
+    const clipboardReads = new Map<number, (text: string | null) => void>();
+    const clipboard: HostClipboard = {
+      write: (text) => post({ type: 'draft-canvas:clipboard-write', text }),
+      read: () =>
+        new Promise((resolve) => {
+          const id = ++clipboardReadId;
+          const settle = (text: string | null) => {
+            window.clearTimeout(timeout);
+            clipboardReads.delete(id);
+            resolve(text);
+          };
+          // A paste waits on this; a host that never answers mustn't hold it forever.
+          const timeout = window.setTimeout(() => settle(null), CLIPBOARD_READ_TIMEOUT_MS);
+          clipboardReads.set(id, settle);
+          post({ type: 'draft-canvas:clipboard-read', id });
+        }),
     };
 
     const postChange = async () => {
@@ -123,9 +151,15 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
 
     const onMessage = (event: MessageEvent) => {
       if (event.source !== window.parent || !isHostOrigin(event.origin)) return;
+      const reply = event.data as Partial<ClipboardMessage> | null;
+      if (reply?.type === 'draft-canvas:clipboard') {
+        if (typeof reply.id === 'number') clipboardReads.get(reply.id)?.(typeof reply.text === 'string' ? reply.text : null);
+        return;
+      }
       const data = event.data as Partial<LoadMessage> | null;
       if (data?.type !== 'draft-canvas:load' || typeof data.text !== 'string') return;
       hostOrigin = event.origin;
+      if (data.clipboard === true) setHostClipboard(clipboard);
       const seq = typeof data.seq === 'number' ? data.seq : undefined;
       if (data.text === hostText && !queued && !invalid) {
         // Already showing it (the host re-sent what it got from here): only the numbering moves on.
@@ -195,6 +229,8 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       window.removeEventListener('auxclick', onLinkClick, true);
       window.clearTimeout(pending);
       unsubscribe?.();
+      if (hostClipboard() === clipboard) setHostClipboard(null);
+      for (const settle of [...clipboardReads.values()]) settle(null);
     };
   }, [ready, repository, openDocument]);
 

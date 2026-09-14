@@ -1,6 +1,7 @@
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDocument } from '../src/document/factory';
+import { decodeClipboard, encodeClipboard } from '../src/document/clipboardCodec';
+import { createDocument, createNode } from '../src/document/factory';
 import { serializeDocument } from '../src/export/project';
 
 // Framed by VS Code: jsdom's window is its own parent, which stands in for the host's webview.
@@ -246,5 +247,67 @@ describe('embedded in a host', () => {
       `${window.location.origin}/`,
     ]);
     expect(opened.every((entry) => entry.origin === HOST_ORIGIN)).toBe(true);
+  });
+
+  describe('clipboard through the host', () => {
+    async function openWith(load: Record<string, unknown>) {
+      const state = mount();
+      await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
+      const file = createDocument('Payments');
+      fromHost({ type: 'draft-canvas:load', text: serializeDocument(file), ...load });
+      await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+    }
+
+    function selectOneNode() {
+      const node = createNode({ type: 'service', x: 0, y: 0, text: 'Orders' });
+      act(() => {
+        useEditorStore.getState().addNodesWithEdges([node], [], 'Add');
+        useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+      });
+    }
+
+    it('copy and cut go to a host that offers its clipboard', async () => {
+      await openWith({ clipboard: true });
+      selectOneNode();
+
+      act(() => void useEditorStore.getState().copySelection());
+      act(() => void useEditorStore.getState().cutSelection());
+
+      const writes = messages('draft-canvas:clipboard-write');
+      expect(writes).toHaveLength(2);
+      expect(writes.every((entry) => entry.origin === HOST_ORIGIN)).toBe(true);
+      expect(decodeClipboard(writes[0]!.message.text!)?.nodes[0]?.text).toBe('Orders');
+    });
+
+    it('a paste reads the clipboard from the host, matching its answer by id', async () => {
+      await openWith({ clipboard: true });
+      const copied = encodeClipboard({ nodes: [createNode({ type: 'note', x: 0, y: 0, text: 'From B' })], edges: [] });
+
+      let synced: Promise<boolean> = Promise.resolve(false);
+      act(() => {
+        synced = useEditorStore.getState().syncClipboardFromSystem();
+      });
+      const read = messages('draft-canvas:clipboard-read')[0]!.message as unknown as { id: number };
+      fromHost({ type: 'draft-canvas:clipboard', id: read.id + 1, text: 'another request' });
+      fromHost({ type: 'draft-canvas:clipboard', id: read.id, text: copied });
+
+      await expect(synced).resolves.toBe(true);
+      expect(useEditorStore.getState().clipboard?.nodes[0]?.text).toBe('From B');
+    });
+
+    it('an older host, which never offered its clipboard, gets no clipboard messages', async () => {
+      await openWith({});
+      selectOneNode();
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn().mockResolvedValue(undefined), readText: vi.fn().mockRejectedValue(new Error('denied')) } });
+
+      act(() => void useEditorStore.getState().copySelection());
+      await expect(useEditorStore.getState().syncClipboardFromSystem()).resolves.toBe(false);
+
+      expect(messages('draft-canvas:clipboard-write')).toHaveLength(0);
+      expect(messages('draft-canvas:clipboard-read')).toHaveLength(0);
+      // Same-tab paste still has the in-memory copy.
+      expect(useEditorStore.getState().clipboard?.nodes[0]?.text).toBe('Orders');
+      vi.unstubAllGlobals();
+    });
   });
 });

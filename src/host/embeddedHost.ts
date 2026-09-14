@@ -20,7 +20,7 @@ function detectHost(): 'vscode' | null {
  * Messages between the app and its host. The app's protocol version travels with `ready`, so a host
  * can tell an app that predates a message it relies on.
  */
-export const HOST_PROTOCOL = 3;
+export const HOST_PROTOCOL = 4;
 
 export type ToHostMessage =
   | { type: 'draft-canvas:ready'; protocol: number }
@@ -28,7 +28,18 @@ export type ToHostMessage =
   | { type: 'draft-canvas:change'; text: string; baseSeq?: number }
   | { type: 'draft-canvas:save'; saveAs: boolean }
   /** Since protocol 2. A link the frame can't open itself: the host's webview allows no popups. */
-  | { type: 'draft-canvas:open-external'; url: string };
+  | { type: 'draft-canvas:open-external'; url: string }
+  /** Since protocol 4, and only to a host whose load said `clipboard`: copied shapes for the system clipboard. */
+  | { type: 'draft-canvas:clipboard-write'; text: string }
+  /** Since protocol 4, likewise: asks for the system clipboard, answered by a `ClipboardMessage` with this `id`. */
+  | { type: 'draft-canvas:clipboard-read'; id: number };
+
+/** The host's answer to `clipboard-read`: the clipboard's text when it holds copied shapes, otherwise empty. */
+export interface ClipboardMessage {
+  type: 'draft-canvas:clipboard';
+  id: number;
+  text: string;
+}
 
 export interface LoadMessage {
   type: 'draft-canvas:load';
@@ -43,6 +54,11 @@ export interface LoadMessage {
    * new ones. Absent from an older host, and then nothing is dropped.
    */
   seq?: number;
+  /**
+   * Since protocol 4: the host reads and writes the system clipboard for the app. A key pressed in the
+   * frame never becomes the host's own Copy or Paste, and the frame is refused the Clipboard API.
+   */
+  clipboard?: boolean;
 }
 
 /** A VS Code webview's origin. Anything else framing the app at `?host=vscode` is not its host. */

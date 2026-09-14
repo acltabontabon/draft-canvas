@@ -4,6 +4,11 @@ All notable changes to Draft Canvas for VS Code are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Copying, cutting and pasting shapes with the keyboard works, including between diagrams. Only
+  Draft Canvas shapes are shared with the clipboard; nothing else you copy is passed to the app.
+
 ## [0.1.2] - 2026-09-14
 
 ### Fixed

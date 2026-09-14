@@ -1,3 +1,5 @@
+import { embeddedHost } from '../host/embeddedHost';
+import { hostClipboard } from '../host/hostClipboard';
 import { readPreference, writePreference } from './preferences';
 import type { EditorStore } from '../store/editorStore';
 import type { UiStore } from '../store/uiStore';
@@ -28,6 +30,13 @@ function getPreference(): 'granted' | 'denied' | 'unknown' {
  * is inferred instead from our own dialog's outcome and from real `readText()` results.
  */
 export async function requestClipboardRead(editor: EditorStore, ui: UiStore): Promise<void> {
+  // VS Code refuses the Clipboard API to the framed app every time, so asking would only end in the
+  // "blocked" notice. A host that offers its own clipboard needs no asking; with an older one, Paste
+  // uses what was copied in this tab.
+  if (embeddedHost) {
+    if (hostClipboard()) await editor.syncClipboardFromSystem();
+    return;
+  }
   if (!isClipboardReadAvailable()) return; // nothing to ask permission for
 
   const pref = getPreference();

@@ -4,6 +4,13 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- In VS Code, Cmd/Ctrl+C, Cmd/Ctrl+X and Cmd/Ctrl+V copy, cut and paste shapes again. Pasting into
+  another diagram needs Draft Canvas for VS Code 0.1.3 or later.
+- In VS Code, Paste from the right-click menu or command palette no longer says clipboard access is
+  blocked.
+
 ## [1.6.1] - 2026-09-14
 
 ### Fixed

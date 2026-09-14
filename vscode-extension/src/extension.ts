@@ -8,6 +8,8 @@ const LANGUAGE_ID = 'draftcanvas';
 const EXTERNAL_SCHEMES = new Set(['http', 'https', 'mailto']);
 /** How long the app gets to say it loaded before the fallback is offered. */
 const READY_TIMEOUT_MS = 15_000;
+/** The app's own ceiling for a diagram file; copied shapes are a diagram too. */
+const MAX_CLIPBOARD_BYTES = 24 * 1024 * 1024;
 
 export function activate(context: vscode.ExtensionContext): void {
   // Lets the Extension Development Host point at a local build (e.g. `vite preview`) before a web
@@ -75,7 +77,9 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
       appText = document.getText();
       loadSeq += 1;
       const title = document.uri.path.split('/').pop()?.replace(/\.draftcanvas$/i, '');
-      void panel.webview.postMessage({ type: 'draft-canvas:load', text: appText, title, seq: loadSeq });
+      // `clipboard`: keys pressed in the app's frame never reach VS Code's Copy/Paste, and the frame
+      // is refused the Clipboard API, so the app copies and pastes through here instead.
+      void panel.webview.postMessage({ type: 'draft-canvas:load', text: appText, title, seq: loadSeq, clipboard: true });
     };
     /** Runs after every edit already on its way. One that fails is reported, and the rest still run. */
     const enqueue = (task: () => Promise<unknown>) => {
@@ -124,6 +128,20 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
           case 'draft-canvas:open-external':
             if (typeof message.url === 'string') openExternal(message.url);
             break;
+          case 'draft-canvas:clipboard-write':
+            if (typeof message.text === 'string' && isCopiedShapes(message.text)) {
+              void vscode.env.clipboard.writeText(message.text);
+            }
+            break;
+          case 'draft-canvas:clipboard-read': {
+            const id = message.id;
+            if (typeof id !== 'number') break;
+            void Promise.resolve(vscode.env.clipboard.readText()).then(
+              (text) => panel.webview.postMessage({ type: 'draft-canvas:clipboard', id, text: isCopiedShapes(text) ? text : '' }),
+              () => panel.webview.postMessage({ type: 'draft-canvas:clipboard', id, text: '' }),
+            );
+            break;
+          }
           case 'openInBrowser':
             void vscode.env.openExternal(vscode.Uri.parse(APP_URL));
             break;
@@ -167,6 +185,20 @@ function openExternal(url: string): void {
     return;
   }
   if (EXTERNAL_SCHEMES.has(uri.scheme)) void vscode.env.openExternal(uri);
+}
+
+/**
+ * Only shapes copied in Draft Canvas cross between the clipboard and the app. The app is a website,
+ * and nothing else on the clipboard (a password, a token) is its business.
+ */
+function isCopiedShapes(text: string): boolean {
+  if (text.length > MAX_CLIPBOARD_BYTES || !text.trimStart().startsWith('{')) return false;
+  try {
+    const value: unknown = JSON.parse(text);
+    return isRecord(value) && value.format === 'draft-canvas';
+  } catch {
+    return false;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -220,7 +252,15 @@ function html(appUrl: string): string {
   const app = document.getElementById('app');
   const fallback = document.getElementById('fallback');
   const appOrigin = ${JSON.stringify(url.origin)};
-  const fromApp = ['draft-canvas:ready', 'draft-canvas:change', 'draft-canvas:save', 'draft-canvas:open-external'];
+  const fromApp = [
+    'draft-canvas:ready',
+    'draft-canvas:change',
+    'draft-canvas:save',
+    'draft-canvas:open-external',
+    'draft-canvas:clipboard-write',
+    'draft-canvas:clipboard-read',
+  ];
+  const toApp = ['draft-canvas:load', 'draft-canvas:clipboard'];
   let timer;
 
   // A cross-origin frame fires "load" for an error page too, so only the app saying so counts.
@@ -237,7 +277,7 @@ function html(appUrl: string): string {
         fallback.hidden = true;
       }
       vscode.postMessage(event.data);
-    } else if (type === 'draft-canvas:load') {
+    } else if (toApp.includes(type)) {
       // From the extension: VS Code delivers those to this page directly, never from a frame.
       app.contentWindow.postMessage(event.data, appOrigin);
     }

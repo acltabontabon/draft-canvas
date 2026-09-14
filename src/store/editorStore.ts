@@ -113,6 +113,7 @@ import type {
 } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
+import { hostClipboard } from '../host/hostClipboard';
 import { centerOf, clamp } from '../lib/math';
 import {
   EMPTY_HISTORY,
@@ -602,6 +603,24 @@ function applyComponentAutoLabel(doc: DraftDocument, nodeId: string, before: Dra
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node) return doc;
   return updateNode(doc, nodeId, { text: defaultTextFor('component', undefined, node.componentKind) });
+}
+
+/**
+ * Best-effort: a missing/denied Clipboard API (insecure context, an older browser, a test env) never
+ * breaks same-tab copy/paste, which the in-memory `clipboard` already covers on its own. Embedded in a
+ * host that offers its clipboard, the copy goes there instead, since the frame is refused the API.
+ */
+function writeSystemClipboard(text: string): void {
+  const host = hostClipboard();
+  if (host) {
+    host.write(text);
+    return;
+  }
+  try {
+    void navigator.clipboard?.writeText?.(text)?.catch(() => {});
+  } catch {
+    // ignore
+  }
 }
 
 let interaction: Interaction | null = null;
@@ -1532,14 +1551,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const fragment = extractFragment(state.document, state.selection.nodes);
     const text = encodeClipboard(fragment);
     set({ clipboard: fragment, pasteRepeat: 0 });
-    // Best-effort — a missing/denied Clipboard API (insecure context, an
-    // older browser, a test env, a VS Code webview) never breaks same-tab copy/paste, which
-    // the in-memory `clipboard` above already covers on its own.
-    try {
-      void navigator.clipboard?.writeText?.(text)?.catch(() => {});
-    } catch {
-      // ignore
-    }
+    writeSystemClipboard(text);
     return text;
   },
 
@@ -1555,11 +1567,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const fragment = extractFragment(state.document, selection.nodes);
       text = encodeClipboard(fragment);
       set({ clipboard: fragment, pasteRepeat: 0 });
-      try {
-        void navigator.clipboard?.writeText?.(text)?.catch(() => {});
-      } catch {
-        // ignore
-      }
+      writeSystemClipboard(text);
     }
     state.apply('Cut', (doc) => removeElements(doc, selection.nodes, selection.edges), {
       selection: EMPTY_SELECTION,
@@ -1611,6 +1619,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   async syncClipboardFromSystem() {
+    const host = hostClipboard();
+    if (host) {
+      const text = await host.read();
+      if (text === null) return false;
+      get().applyExternalClipboardText(text);
+      return true;
+    }
     try {
       const text = await navigator.clipboard?.readText?.();
       if (text === undefined) return false; // no Clipboard API, or a stub that returns nothing

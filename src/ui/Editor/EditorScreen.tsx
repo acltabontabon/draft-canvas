@@ -668,10 +668,9 @@ function useKeyboard({
     return () => window.removeEventListener('paste', onPaste);
   }, [screenToFlowPosition]);
 
-  // The same gesture's other half. A native `copy`/`cut` event can write its `clipboardData` where
-  // `navigator.clipboard` is refused — as it is inside VS Code's webview — so copying there goes
-  // through here and reaches other diagrams and other apps. Anywhere else ⌘C/⌘X are handled on
-  // keydown and never become this event, apart from a browser's own Edit menu, which lands here too.
+  // The same gesture's other half, for a copy/cut that isn't a keystroke: a browser's own Edit menu.
+  // Its event can write `clipboardData` even where `navigator.clipboard` is refused. ⌘C/⌘X are
+  // handled on keydown and never become this event.
   useEffect(() => {
     const onCopyOrCut = (event: ClipboardEvent) => {
       if (isEditableTarget(event.target)) return;
@@ -785,14 +784,25 @@ function useKeyboard({
             return;
           case 'c':
           case 'x':
-            // Framed by VS Code, the app may not write the system clipboard, so the shapes would
-            // only ever paste inside this one tab. Left alone, the keystroke becomes the native
-            // copy/cut (VS Code's Edit menu), whose event can carry them — see `onCopyOrCut`.
-            if (embeddedHost) return;
             event.preventDefault();
             if (key === 'c') state.copySelection();
             else state.cutSelection();
             return;
+          case 'v': {
+            // Framed by VS Code, a key pressed here never becomes a native paste event (nor Copy or
+            // Cut, which is why those are handled above), so ⌘V pastes from here, reading the
+            // clipboard through the host. Everywhere else the paste event does it — see `onPaste`.
+            if (!embeddedHost || event.shiftKey || presenting || modalIsOpen()) return;
+            event.preventDefault();
+            const target = pointer.known ? { x: pointer.x, y: pointer.y } : screenToFlowPosition(canvasCenter());
+            void state.syncClipboardFromSystem().then(() => {
+              // The read is async: nothing lands if a gesture, a dialog or a presentation began meanwhile.
+              if (useUiStore.getState().interactionActive || modalIsOpen()) return;
+              if (useEditorStore.getState().mode === 'present') return;
+              useEditorStore.getState().paste(target);
+            });
+            return;
+          }
           case 'd':
             event.preventDefault();
             // Held down, key repeat would stamp out a copy per repeat tick.
