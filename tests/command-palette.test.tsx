@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
-import { useUiStore } from '../src/store/uiStore';
+import { useUiStore, type ContinuationOffer } from '../src/store/uiStore';
 import { stubContext, stubPlayback } from './commandStubs';
 
 // Node's own experimental `globalThis.localStorage` shadows jsdom's in this environment — the
@@ -298,5 +298,32 @@ describe('CommandPalette', () => {
     mount();
     act(() => useUiStore.getState().setCommandPaletteOpen(true));
     expect(useUiStore.getState().quickConnect).toBeNull();
+  });
+
+  it('clears a drop-triggered continuation ghost when it opens over an abandoned quick-connect menu', () => {
+    // The menu owned that preview; it goes with the menu — same pairing `EditorScreen`'s
+    // `dismissQuickConnect` and `Canvas`'s `onMoveStart` use. Without it, dropping a connector on
+    // empty canvas and then opening ⌘K left the ghost box stuck on screen — and still clickable —
+    // for the rest of the session.
+    useUiStore.setState({
+      commandPaletteOpen: false,
+      quickConnect: { flowPosition: { x: 0, y: 0 }, screenPosition: { x: 0, y: 0 } },
+      continuation: { trigger: 'drop' } as ContinuationOffer,
+    });
+    mount();
+    act(() => useUiStore.getState().setCommandPaletteOpen(true));
+    expect(useUiStore.getState().continuation).toBeNull();
+  });
+
+  it('leaves a select-triggered continuation suggestion alone when it opens', () => {
+    // Only a Quick Connect drop-ghost is the palette's to clear — an ordinary Tab-cyclable
+    // suggestion on a selected node has nothing to do with the menu the palette just closed.
+    useUiStore.setState({
+      commandPaletteOpen: false,
+      continuation: { trigger: 'select' } as ContinuationOffer,
+    });
+    mount();
+    act(() => useUiStore.getState().setCommandPaletteOpen(true));
+    expect(useUiStore.getState().continuation).toEqual({ trigger: 'select' });
   });
 });

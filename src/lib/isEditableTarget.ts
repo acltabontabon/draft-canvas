@@ -8,11 +8,25 @@
  */
 export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+  if (target instanceof HTMLInputElement) return !NON_TEXT_INPUT_TYPES.has(target.type);
+  return target.isContentEditable || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
 }
 
+/** Inputs nobody types into. A focused checkbox (Chrome focuses one when its label is clicked) must
+ *  not switch every editor shortcut off the way a text field rightly does. (Range and radio inputs stay
+ *  editable: their arrow keys are their own.) */
+const NON_TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
+  'checkbox',
+  'color',
+  'button',
+  'submit',
+  'reset',
+  'file',
+  'image',
+]);
+
 const CONTROL_SELECTOR =
-  'button, a[href], summary, [role="button"], [role="link"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"], [role="slider"]';
+  'button, a[href], summary, input[type="checkbox"], [role="button"], [role="link"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"], [role="slider"]';
 
 /**
  * Whether an event's target is a control that Enter/Space activate on their own. A global

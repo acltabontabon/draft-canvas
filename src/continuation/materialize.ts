@@ -1,7 +1,7 @@
 import { capabilityFor, categoryOf, inferRelationship } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { createEdge, createNode, defaultSizeFor } from '../document/factory';
-import { addNodes, COMPANION_GAP, containsRect, tryPlaceNear, type CompanionDirection } from '../document/operations';
+import { addNodes, COMPANION_GAP, enclosingParentId, tryPlaceNear, type CompanionDirection } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode, EdgeAnchor } from '../document/types';
 import { chooseSides, type Rect } from '../edges/routing';
 import { FONTS } from '../render/text/fonts';
@@ -80,7 +80,7 @@ export function materialize(
       deliveryRole: spec.deliveryRole,
       // Stays inside the anchor's boundary only if it actually fits there — a companion poking
       // out of a boundary would silently *mean* something (membership) it visibly isn't.
-      parentId: parent && containsRect(parent, { ...position, ...size }) ? parent.id : undefined,
+      parentId: enclosingParentId(doc, parent?.id, { ...position, ...size }),
     });
     // A derived name is still a default: it stays `auto`, so changing the kind renames it as usual.
     const textOrigin = spec.textOrigin ?? (derived !== undefined ? 'auto' : undefined);

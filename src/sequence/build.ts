@@ -252,9 +252,14 @@ function buildFlowGroup(
     for (const stepId of chain.stepIds) messageByStepId.set(stepId, message);
 
     const participantIds: [string] | [string, string] = from.id === to.id ? [from.id] : [from.id, to.id];
-    for (const attachment of rep.attachments ?? []) {
-      const note = noteFromAttachment(attachment, participantIds, flow.id, rep.id);
-      if (note) children.push({ ...note, order: nextOrder() });
+    // A merged Junction chain can carry its attachments on a member leg rather than the shared
+    // trunk edge picked as `rep` for label/semantic, so every edge in the chain is checked here,
+    // not just `rep` — otherwise a note/code chip on a bundled connector goes missing on export.
+    for (const edge of chain.edges) {
+      for (const attachment of edge.attachments ?? []) {
+        const note = noteFromAttachment(attachment, participantIds, flow.id, edge.id);
+        if (note) children.push({ ...note, order: nextOrder() });
+      }
     }
 
     if (rep.hasResponse) {

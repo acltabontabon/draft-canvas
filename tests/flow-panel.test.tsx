@@ -195,6 +195,29 @@ describe('FlowPanel', () => {
     expect(seen).toEqual(['s']);
   });
 
+  it("row keys belong to the row: Delete on a step's own button keeps the flow, and nothing reaches the canvas", () => {
+    const edge = addConnectedPair();
+    const checkout = useEditorStore.getState().createFlow('Checkout')!;
+    useEditorStore.getState().addEdgeToFlow(checkout, edge.id);
+    mount();
+    fireEvent.keyDown(rowFor('Checkout'), { key: 'ArrowRight' });
+    const removeStep = screen.getByRole('button', { name: 'Remove step 1' });
+
+    const seen: string[] = [];
+    const listener = (event: KeyboardEvent) => seen.push(event.key);
+    window.addEventListener('keydown', listener);
+    for (const key of ['Delete', 'Backspace', 'F2', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']) {
+      fireEvent.keyDown(removeStep, { key });
+    }
+    // The Diagram row has no flow to delete — its Delete must not fall through to the canvas either.
+    fireEvent.keyDown(screen.getByText('Diagram').closest('.dc-flow-row')!, { key: 'Delete' });
+    window.removeEventListener('keydown', listener);
+
+    expect(useEditorStore.getState().document.flows.map((flow) => flow.steps.length)).toEqual([1]);
+    expect(screen.queryByLabelText('Flow name')).toBeNull();
+    expect(seen).toEqual([]);
+  });
+
   it('pluralizes step counts and only offers Present once a flow has a step', () => {
     const edge = addConnectedPair();
     const checkout = useEditorStore.getState().createFlow('Checkout')!;

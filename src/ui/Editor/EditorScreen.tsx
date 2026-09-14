@@ -483,7 +483,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         )}
       </div>
 
-      {!presenting && <StatusBar durable={session.durable} onResolveConflict={(choice) => void session.resolveConflict(choice)} />}
+      <StatusBar
+        durable={session.durable}
+        presenting={presenting}
+        onResolveConflict={(choice) => void session.resolveConflict(choice)}
+      />
 
       <ShortcutSheet />
       {exportMounted && (
@@ -693,6 +697,9 @@ function useKeyboard({
       // Escape/Arrows/Enter, but any other key (e.g. a shape shortcut) would otherwise fall
       // through to here and spawn a node behind an open menu.
       if (useUiStore.getState().contextMenu) return;
+      // …and Quick Connect, which owns only Escape/arrows/Enter/Tab: a letter would drop a shape behind
+      // it, and Backspace would delete the very node it is connecting from.
+      if (useUiStore.getState().quickConnect) return;
       // A modal (Export, Settings, Shortcuts, About) focuses its own panel, which
       // `isEditableTarget` doesn't count — without this, Backspace deleted the selection
       // behind the dialog and letter keys dropped nodes under it. Its own Escape/Tab
@@ -848,6 +855,8 @@ function useKeyboard({
           state.deleteSelection();
           return;
         case 'Escape': {
+          // Mid endpoint drag, Escape cancels that drag (the handle's own listener) — and only that.
+          if (useUiStore.getState().reconnectDragActive) return;
           arm(null);
           // A presenter's reveal closes first — Escape backs out one thing, not the whole presentation.
           if (

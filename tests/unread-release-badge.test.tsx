@@ -63,9 +63,10 @@ beforeEach(() => {
 });
 
 describe('unread release indicator', () => {
-  it('homepage About control reflects unread state via its accessible name', () => {
+  it('homepage About control reflects unread state via its accessible name', async () => {
     render(<LibraryScreen session={stubSession()} />);
-    expect(screen.getByRole('button', { name: /About Draft Canvas.*what's new/i })).toBeInTheDocument();
+    // The notes are fetched only after an upgrade, so the Library's first chunk doesn't carry them.
+    expect(await screen.findByRole('button', { name: /About Draft Canvas.*what's new/i })).toBeInTheDocument();
   });
 
   // About now lives behind the toolbar's More menu, so the state has to survive one level of

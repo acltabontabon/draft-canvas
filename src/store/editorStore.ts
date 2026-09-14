@@ -36,6 +36,7 @@ import {
   moveNodes,
   pasteFragment,
   placeNear,
+  enclosingParentId,
   reconnectEdge as reconnectEdgeOp,
   reverseEdge as reverseEdgeOp,
   removeAttachment as removeAttachmentOp,
@@ -1105,12 +1106,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Same midpoint-of-both-centers placement `detachFromEdge` already uses for a connector's
     // own detached attachment — no independent placement heuristic invented for this.
     const size = defaultSizeFor('service');
+    const at = {
+      x: Math.round((source.x + source.width / 2 + target.x + target.width / 2) / 2 - size.width / 2),
+      y: Math.round((source.y + source.height / 2 + target.y + target.height / 2) / 2 - size.height / 2),
+    };
     const worker = createNode({
       type: 'service',
       serviceKind: 'worker',
-      x: Math.round((source.x + source.width / 2 + target.x + target.width / 2) / 2 - size.width / 2),
-      y: Math.round((source.y + source.height / 2 + target.y + target.height / 2) / 2 - size.height / 2),
+      ...at,
       z: Math.max(source.z, target.z),
+      // Between two nodes in one boundary, the worker joins it — as long as it fits there.
+      parentId: enclosingParentId(state.document, source.parentId === target.parentId ? source.parentId : undefined, {
+        ...at,
+        ...size,
+      }),
     });
 
     // Both new edges' semantics come from the same capability matrix everything else reads —
@@ -1176,7 +1185,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const size = defaultSizeFor('queue');
     const caption = relationshipCaptionLabel('deadLetters', undefined, 3);
     const { x, y } = placeNear(state.document, source, size, gapForCaption(caption));
-    const dlq = createNode({ type: 'queue', queueKind: 'queue', deliveryRole: 'dead-letter', x, y, z: source.z });
+    const dlq = createNode({
+      type: 'queue',
+      queueKind: 'queue',
+      deliveryRole: 'dead-letter',
+      x,
+      y,
+      z: source.z,
+      parentId: enclosingParentId(state.document, source.parentId, { x, y, ...size }),
+    });
     // The relationship comes from the same capability matrix a hand-drawn Queue → DLQ connector
     // reads (`queue>deadLetter`: dead-letters, failure, dashed) — not restated here — and stays
     // `inferred` exactly like that hand-drawn one, so re-pointing it later re-reads it the same way.
@@ -1221,7 +1238,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const capability = capabilityFor(categoryOf(source), categoryOf(companion));
     const caption = capability?.defaultRelation ? SEMANTIC_DEFAULTS[capability.defaultRelation].label : undefined;
     const { x, y } = placeNear(state.document, source, size, gapForCaption(caption));
-    const node = createNode({ ...companion, x, y, z: source.z });
+    const node = createNode({
+      ...companion,
+      x,
+      y,
+      z: source.z,
+      parentId: enclosingParentId(state.document, source.parentId, { x, y, ...size }),
+    });
     // Not restated here, and stays `inferred` so re-pointing it later re-reads it the same way.
     const edge = createEdge({
       source: source.id,
@@ -1684,7 +1707,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           boundaryIds,
         );
       },
-      { selection: { nodes: children.map((child) => child.id), edges: [] } },
+      // A nested boundary ungrouped in the same pass is gone, so it can't stay selected.
+      { selection: { nodes: children.filter((child) => !boundaryIds.has(child.id)).map((child) => child.id), edges: [] } },
     );
   },
 
@@ -1847,7 +1871,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       flowPlayback: nextFlowPlayback,
     };
     get().apply('Delete flow', (doc) => deleteFlow(doc, flowId), { flowSessionBefore, flowSessionAfter });
-    set({ selectedFlowId: nextSelectedFlowId, flowPlayback: nextFlowPlayback });
+    // `apply` is a no-op (no history entry, nothing to undo) when `flowId` no longer exists — in
+    // that case leave selection/playback alone too, rather than clearing them with no way back.
+    if (get().document !== state.document) set({ selectedFlowId: nextSelectedFlowId, flowPlayback: nextFlowPlayback });
   },
 
   addEdgeToFlow(flowId, edgeId, caption) {
@@ -1991,12 +2017,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setFlowPlayback(playback) {
-    set((s) => ({
-      flowPlayback: { ...s.flowPlayback, ...playback },
+    set((s) => {
+      const unchanged = (Object.keys(playback) as (keyof typeof playback)[]).every(
+        (key) => playback[key] === s.flowPlayback[key],
+      );
       // Mutually exclusive with Focus — starting playback exits it, rather
       // than the two dimming systems ever needing to combine.
-      focus: playback.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
-    }));
+      const exitsFocus = playback.active === true && s.focus.active;
+      // Playback re-asserts its phase on every step (and on mount, while editing): a write that changes
+      // nothing would still hand every subscriber new objects and re-render them all.
+      if (unchanged && !exitsFocus) return s;
+      return {
+        flowPlayback: unchanged ? s.flowPlayback : { ...s.flowPlayback, ...playback },
+        focus: exitsFocus ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+      };
+    });
   },
 
   enterFocus(nodeIds, edgeIds) {

@@ -128,7 +128,8 @@ export function leaderBetween(from: Box, to: Box): CalloutLeader | null {
 
 const leaderLength = (leader: CalloutLeader | null) =>
   leader ? Math.hypot(leader.x2 - leader.x1, leader.y2 - leader.y1) : 0;
-const inflate = (box: Box, by: number): Box => ({
+/** `box` grown by `by` on every side (shrunk, for a negative `by`). */
+export const inflate = (box: Box, by: number): Box => ({
   x: box.x - by,
   y: box.y - by,
   width: box.width + by * 2,

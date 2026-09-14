@@ -381,7 +381,12 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
 
   if (
     view.from === null ||
-    view.from.document !== document ||
+    // `projectNodes`/`projectEdges` only ever read `document.nodes`/`document.edges`, so a
+    // metadata-only document swap (e.g. adopting a cross-tab rename mid-drag) must not retrigger
+    // this — it would rebuild every node/edge from their last-committed geometry, snapping a live
+    // drag back to its pre-gesture position for a frame even though nothing it renders changed.
+    view.from.document.nodes !== document.nodes ||
+    view.from.document.edges !== document.edges ||
     view.from.selectedNodes !== selectedNodes ||
     view.from.selectedEdges !== selectedEdges ||
     view.from.interactive !== interactive

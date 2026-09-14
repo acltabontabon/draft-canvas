@@ -367,7 +367,7 @@
  * line itself reads clearly at a glance in both themes and while zoomed, with
  * no extra chrome around the connector's actual path. This is `filter`, not
  * `stroke`/`stroke-width`, on purpose — `DraftEdgeView.tsx` sets those inline
- * (via `BaseEdge`'s `style` prop), and an inline style always wins over a
+ * (the line path's own `style`), and an inline style always wins over a
  * stylesheet rule, selected or not; the stroke colour/width for a selected
  * connector are decided there, not here.
  */
@@ -1848,6 +1848,9 @@
 }
 
 .dc-quick-connect-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 6px 10px;
   border: 0;
   border-radius: var(--dc-radius-sm);
@@ -1875,6 +1878,9 @@
   flex-direction: column;
   min-width: 176px;
   max-width: 260px;
+  /* max-height is set inline from the window's height (ContextMenu.tsx) */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius);
@@ -2562,6 +2568,7 @@
 
 .dc-callout-thread[data-overflowing='true'],
 .dc-callout-code[data-overflowing='true'] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
 
@@ -3074,7 +3081,7 @@
   left: 0;
   top: 0;
   border: 1.5px dashed var(--dc-selection);
-  border-radius: 12px;
+  border-radius: var(--dc-radius-lg);
   opacity: 0.6;
   pointer-events: none;
 }
@@ -3129,12 +3136,6 @@
    what the ghost previews, and a suggested row carries a small selection-coloured mark. */
 .dc-quick-connect-row {
   display: contents;
-}
-
-.dc-quick-connect-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .dc-quick-connect-item .dc-shape-preview {

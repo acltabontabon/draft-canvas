@@ -547,6 +547,33 @@ describe('buildSequenceModel — notes, questions, and code annotations', () => 
     expect(notesOf(model)[0]).toMatchObject({ noteKind: 'warning', text: 'Rate-limited' });
   });
 
+  it('a note attached to a Junction leg still exports even though the shared trunk edge is the chain\'s representative', () => {
+    // Mirrors what `convertBundleToJunction` (editorStore.ts) actually produces: the shared trunk
+    // carries the semantic that makes it `pickRepresentativeEdge`'s pick, but attachments always
+    // move onto the member's own leg, never the trunk — so the emitted note must come from
+    // whichever edge in the chain actually holds it, not just the chain's representative edge.
+    const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const b = createNode({ type: 'service', x: 400, y: 0, text: 'B' });
+    const shared = createEdge({ source: a.id, target: junction.id, semantic: 'calls' });
+    const leg = {
+      ...createEdge({ source: junction.id, target: b.id, semantic: 'calls' }),
+      attachments: [createAttachment({ type: 'code', code: 'retry()' })],
+    };
+    const model = buildOne(
+      [a, junction, b],
+      [shared, leg],
+      flow([
+        { id: 'fs1', edgeId: shared.id },
+        { id: 'fs2', edgeId: leg.id },
+      ]),
+    );
+
+    expect(messagesOf(model)).toHaveLength(1); // merged into one chain through the Junction
+    expect(notesOf(model)).toHaveLength(1);
+    expect(notesOf(model)[0]).toMatchObject({ text: 'retry()' });
+  });
+
   it('a plain Text node/attachment is never treated as an annotation', () => {
     const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
     const b = createNode({ type: 'service', x: 200, y: 0, text: 'B' });

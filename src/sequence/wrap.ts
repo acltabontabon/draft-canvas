@@ -19,7 +19,7 @@ const NOTE_WRAP_WIDTH = 60;
 export function wrapNoteLines(text: string, width: number = NOTE_WRAP_WIDTH): string[] {
   const wrapped: string[] = [];
 
-  for (const rawLine of text.split(/\r?\n/)) {
+  for (const rawLine of text.split(/\r\n?|\n/)) {
     const line = rawLine.trim();
     if (line === '') {
       wrapped.push('');

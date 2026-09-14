@@ -146,3 +146,21 @@ describe('InspectorSelect menu width', () => {
     expect(secondMenu).toHaveAttribute('data-h-align', 'end');
   });
 });
+
+describe('InspectorSelect avoid rect', () => {
+  it('reads the rect to avoid when it opens, so a canvas pan since the last render never leaves it stale', () => {
+    // The trigger sits above the element; there's room below — until the element (moved on screen by
+    // a pan, without a re-render) turns out to sit right under the trigger.
+    let element = { top: 700, bottom: 760 };
+    const getAvoidRect = vi.fn(() => element);
+    render(
+      <InspectorSelect value="api" options={SERVICE_OPTIONS} onChange={vi.fn()} ariaLabel="Service type" getAvoidRect={getAvoidRect} />,
+    );
+    element = { top: 130, bottom: 190 };
+    openMenu();
+
+    expect(getAvoidRect).toHaveBeenCalled();
+    // Down only has 130 − 124 of room before the element now, so the menu flips up instead.
+    expect(screen.getByRole('listbox')).toHaveAttribute('data-direction', 'up');
+  });
+});

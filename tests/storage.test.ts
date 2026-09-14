@@ -4,7 +4,7 @@ import { cloneDocumentAsNew, createDocument, createNode } from '../src/document/
 import { addNodes } from '../src/document/operations';
 import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
-import { Autosave } from '../src/storage/autosave';
+import { Autosave, flushAllAutosaves } from '../src/storage/autosave';
 import { DocumentConflictError, QuotaExceededError } from '../src/storage/DraftRepository';
 import { decryptDocument } from '../src/crypto/documentCipher';
 import * as documentCipher from '../src/crypto/documentCipher';
@@ -337,10 +337,35 @@ describe('local persistence', () => {
     const doc = documentWith('Unreadable row', 2);
     await repository.save(doc);
 
-    const dbField = (repository as unknown as { db: { get: (...args: unknown[]) => unknown } }).db;
-    vi.spyOn(dbField, 'get').mockRejectedValueOnce(new Error('simulated IndexedDB read failure'));
+    // `load()` reads `documents` and `bodies` from one transaction (see IndexedDbRepository.ts) so
+    // a stale content-stamp can't be paired with a fresher body; simulating the failure there,
+    // rather than on the old single-store `db.get`, matches how the read actually happens now.
+    const dbField = (repository as unknown as { db: { transaction: (...args: unknown[]) => unknown } }).db;
+    vi.spyOn(dbField, 'transaction').mockImplementationOnce(() => {
+      throw new Error('simulated IndexedDB read failure');
+    });
 
     await expect(repository.load(doc.metadata.id)).resolves.toBeNull();
+  });
+
+  it("load()'s summary and body reads happen in one transaction, so a cross-tab save can't land between them and pair a fresh body with a stale stamp", async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Atomic read');
+    await repository.save(doc);
+
+    const dbField = (repository as unknown as { db: { transaction: (...args: unknown[]) => unknown } }).db;
+    const transactionSpy = vi.spyOn(dbField, 'transaction');
+
+    await repository.load(doc.metadata.id);
+
+    const summaryAndBodyReads = transactionSpy.mock.calls.filter(
+      ([stores]) => Array.isArray(stores) && stores.includes('documents') && stores.includes('bodies'),
+    );
+    // Two separate `db.get()` calls (one per store) would let another tab's `save()` — which
+    // writes both stores together — land in between and leave this tab's `stamps` entry
+    // describing an older body than the one it actually just loaded, causing this tab's own next
+    // save to report a spurious `'changed'` conflict against content that isn't actually behind.
+    expect(summaryAndBodyReads).toHaveLength(1);
   });
 
   it('a failed self-verification during a migration resave leaves the original record on disk untouched, but load() still returns the migrated document', async () => {
@@ -665,6 +690,32 @@ describe('autosave', () => {
     await autosave.flush();
     expect(repository.saved).toHaveLength(1);
     autosave.dispose();
+  });
+
+  it('writes the loaded object again once a later save has replaced it on disk', async () => {
+    const repository = new RecordingRepository();
+    const autosave = new Autosave({ repository, onStateChange: () => {} });
+    const loaded = documentWith('Stored');
+    autosave.track(loaded);
+
+    // An edit saves; then the edit is taken back by restoring that very object (the way abandoning
+    // a just-placed Text node hands back the history entry's `before`). Disk still has the edit.
+    autosave.schedule(addNodes(loaded, [createNode({ type: 'text', x: 0, y: 400 })]));
+    await autosave.flush();
+    autosave.schedule(loaded);
+    await autosave.flush();
+
+    expect(repository.saved).toHaveLength(2);
+    expect(repository.saved.at(-1)!.nodes).toHaveLength(loaded.nodes.length);
+    autosave.dispose();
+  });
+
+  it('flushAllAutosaves reports false when a controller could not write', async () => {
+    const autosave = new Autosave({ repository: new FullRepository(), onStateChange: () => {}, debounceMs: 0 });
+    autosave.schedule(documentWith('Too big'));
+    expect(await flushAllAutosaves()).toBe(false);
+    autosave.dispose();
+    expect(await flushAllAutosaves()).toBe(true);
   });
 
   it('untrack drops a closed document’s baseline', async () => {

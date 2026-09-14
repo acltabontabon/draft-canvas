@@ -30,6 +30,7 @@ export function InspectorSelect({
   className,
   preferredDirection = 'down',
   avoidRect = null,
+  getAvoidRect,
   layout = 'list',
 }: {
   value: string;
@@ -50,6 +51,9 @@ export function InspectorSelect({
    *  direction would open toward it gets clamped as if that edge were the viewport boundary, so
    *  the menu prefers shrinking (scrollable) or flipping over actually covering it. */
   avoidRect?: { top: number; bottom: number } | null;
+  /** The same bounds, read at the moment the menu opens — for a thing that can move on screen without
+   *  this component re-rendering (a canvas element under a pan). Takes precedence over `avoidRect`. */
+  getAvoidRect?: () => { top: number; bottom: number } | null;
   /** `'grid'` switches the menu to a compact 2-column layout with room for each option's `icon` —
    *  used only by the Data Store kind picker, whose seven options are worth previewing visually.
    *  Defaults to `'list'`, today's exact behaviour, so every other picker is untouched. */
@@ -112,14 +116,14 @@ export function InspectorSelect({
     const naturalWidth = menuRect.width;
     const margin = 8;
     const gap = 4; // matches the CSS gap between trigger and menu
+    const avoid = getAvoidRect ? getAvoidRect() : avoidRect;
 
     // Clamp each direction's available space by the viewport edge and, if `avoidRect` sits on
     // that side of the trigger, its edge too — opening toward it is exactly what this avoids.
-    const topLimit =
-      avoidRect && avoidRect.bottom <= triggerRect.top ? Math.max(avoidRect.bottom, margin) : margin;
+    const topLimit = avoid && avoid.bottom <= triggerRect.top ? Math.max(avoid.bottom, margin) : margin;
     const bottomLimit =
-      avoidRect && avoidRect.top >= triggerRect.bottom
-        ? Math.min(avoidRect.top, window.innerHeight - margin)
+      avoid && avoid.top >= triggerRect.bottom
+        ? Math.min(avoid.top, window.innerHeight - margin)
         : window.innerHeight - margin;
     const space = {
       up: triggerRect.top - gap - topLimit,
@@ -168,7 +172,7 @@ export function InspectorSelect({
     // options while the menu stays open and mounted (e.g. switching selection between shape
     // types) re-measures instead of keeping a stale width from the previous option set.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, preferredDirection, avoidRect?.top, avoidRect?.bottom, options.map((o) => o.label).join('\u0000')]);
+  }, [open, preferredDirection, avoidRect?.top, avoidRect?.bottom, getAvoidRect, options.map((o) => o.label).join('\u0000')]);
 
   const commit = (index: number) => {
     const option = options[index];

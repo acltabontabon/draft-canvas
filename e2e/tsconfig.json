@@ -1,26 +1,21 @@
 {
   "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "ES2023",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    // "DOM" types the browser-context closures passed to `page.evaluate`/`page.waitForFunction`.
+    "lib": ["ES2023", "DOM"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
-    "jsx": "react-jsx",
-    "useDefineForClassFields": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "isolatedModules": true,
-    "resolveJsonModule": true,
     "noEmit": true,
     "skipLibCheck": true,
     "strict": true,
-    "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "types": ["vite/client"]
+    "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["**/*.ts"]
 }

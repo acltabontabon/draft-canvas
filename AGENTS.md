@@ -11,7 +11,7 @@ npm run build      # tsc -b && vite build
 npm run lint       # oxlint
 npm test           # vitest run
 npm run e2e        # playwright (npm run e2e:install once first)
-npm run check      # lint + build + unit tests — run this before calling work done
+npm run check      # lint + e2e/benchmark/demo typecheck + build + unit tests — run this before calling work done
 ```
 
 Single test / focused runs:
@@ -96,7 +96,8 @@ distills into "never break this"; read that file for *why* each one holds.
 ## Conventions
 
 npm. 2-space indent, single quotes, semicolons, trailing commas. oxlint, no prettier. TypeScript
-solution config with project references (`tsconfig.app.json` covers `src` and `tests`). Vitest for
+solution config with project references (`tsconfig.app.json` covers `src` with browser types only;
+`tsconfig.test.json` adds `tests` with the Vitest and Node globals, so neither can leak into app code). Vitest for
 unit tests, Playwright for the journey.
 
 Comments explain *why*, not *what*. Several of the ones in `Canvas.tsx`, `autosave.ts`,

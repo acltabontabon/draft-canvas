@@ -171,6 +171,16 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
   const transform = placementTransform(placement, anchors, measuredSize, clearances, identity, identity);
 
   const activeId = entries[highlight]?.type === 'command' ? `dc-context-menu-item-${highlight}` : undefined;
+  // A long menu (a multi-selection's) can be taller than a short window. Capped to the room between
+  // the toolbar and the bottom clearance it scrolls instead, so its last rows — Delete among them —
+  // stay reachable; no resize can invalidate this, since a resize closes the menu.
+  const maxHeight = Math.max(0, window.innerHeight - toolbarClearance - BOTTOM_CLEARANCE);
+
+  // The keyboard can move the highlight onto a row scrolled out of view.
+  useEffect(() => {
+    if (!activeId) return;
+    panel.current?.querySelector(`#${activeId}`)?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeId]);
 
   return (
     <div
@@ -180,7 +190,7 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
       aria-label="Context menu"
       aria-activedescendant={activeId}
       tabIndex={-1}
-      style={{ transform }}
+      style={{ transform, maxHeight }}
     >
       {entries.map((entry, index) =>
         entry.type === 'separator' ? (

@@ -126,10 +126,14 @@ export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMe
       if (panel.current && !panel.current.contains(target)) onDismiss();
     };
     window.addEventListener('keydown', onKeyDown, true);
+    // A menu pinned to a screen point means nothing once the page under it resizes — same as
+    // `ContextMenu` and `QuickConnectMenu`.
+    window.addEventListener('resize', onDismiss);
     // Deferred so the click that opened this menu isn't itself the outside-click that closes it.
     const id = window.setTimeout(() => window.addEventListener('pointerdown', onPointerDown), 0);
     return () => {
       window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('resize', onDismiss);
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };

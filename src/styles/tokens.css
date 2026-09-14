@@ -37,8 +37,8 @@
   --dc-radius-lg: 12px;
   --dc-radius-pill: 999px;
 
-  /* Floating layers above the canvas, lowest first. Stacking *inside* the canvas (1–4) stays local
-     to canvas.css; these are the ones that have to agree with each other across files. */
+  /* Floating layers above the canvas, lowest first. Stacking *inside* the canvas stays local to
+     canvas.css (small values, plus React Flow's edge-label layer above every node's own z); these are the ones that have to agree with each other across files. */
   --dc-z-chrome: 6; /* inspector strip, flow panel */
   --dc-z-popover: 7; /* anchored element/connector popovers */
   --dc-z-bar: 8; /* focus indicator, presentation bar, quick connect */

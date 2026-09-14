@@ -123,12 +123,13 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
         return;
       case 'ArrowDown':
       case 'ArrowUp': {
+        // Consumed even with nowhere to go: an arrow that escaped the panel would nudge the canvas
+        // selection behind it.
+        consume();
         if (!row) return;
         const rows = rowElements();
         const next = rows[rows.indexOf(row) + (event.key === 'ArrowDown' ? 1 : -1)];
-        if (!next) return;
-        consume();
-        next.focus();
+        next?.focus();
         return;
       }
       case 'Enter':
@@ -142,20 +143,21 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
       // same Right-opens / Left-closes a disclosure tree uses.
       case 'ArrowRight':
       case 'ArrowLeft':
-        if (!flow || target !== row) return;
         consume();
+        if (!flow || target !== row) return;
         setExpandedId(event.key === 'ArrowRight' ? flow.id : null);
         return;
+      // Row keys, for the focused row itself: a step's own "Remove step" button sits inside the row's
+      // `<li>`, and Delete there must not take the whole flow with it.
       case 'F2':
-        if (!flow) return;
         consume();
-        beginRename(flow.id);
+        if (flow && target === row) beginRename(flow.id);
         return;
       case 'Delete':
       case 'Backspace':
-        if (!flow) return;
+        // Consumed wherever focus is in the panel (like F2), so it never reaches the canvas selection.
         consume();
-        deleteFlowWithUndo(flow);
+        if (flow && target === row) deleteFlowWithUndo(flow);
         return;
       default:
         return;

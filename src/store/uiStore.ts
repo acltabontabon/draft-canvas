@@ -7,7 +7,7 @@ import type { RecipeCategory } from '../learn/types';
 import type { PresentationReveal } from '../presentation/presentationAttachments';
 import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
-import { markLastSeenRelease, readLastSeenRelease } from '../releases/productReleases';
+import { markLastSeenRelease, readLastSeenRelease } from '../releases/seen';
 
 /** A toast's one optional button — e.g. "Undo" for something that was just removed. */
 export type ToastAction = { label: string; run: () => void };
@@ -210,7 +210,7 @@ export interface UiStore {
    *  and `AboutDialog.tsx`'s update-ready state. */
   updateReady: boolean;
   /** The version whose About → What's New notes this device has acknowledged — see
-   *  `releases/productReleases.ts`'s `readLastSeenRelease`/`markLastSeenRelease`. */
+   *  `releases/seen.ts`'s `readLastSeenRelease`/`markLastSeenRelease`. */
   lastSeenProductRelease: string;
   /** Whether the ⌘K command palette is showing. See `CommandPalette.tsx`. */
   commandPaletteOpen: boolean;

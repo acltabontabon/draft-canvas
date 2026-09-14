@@ -384,7 +384,9 @@ function AttachmentChip({
       {cardMounted && (
         <div
           id={cardId}
-          className="dc-attachment-card"
+          // `nowheel`: on a connector this card sits inside React Flow's pan-on-scroll pane, which
+          // would otherwise take the wheel and pan the canvas instead of scrolling a long note or code.
+          className="dc-attachment-card nowheel nodrag"
           role="group"
           aria-label={`${look.label} attachment`}
           data-pinned={pinned ? 'true' : undefined}

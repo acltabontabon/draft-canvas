@@ -9,8 +9,8 @@ const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex="0"]
  * itself on open, so the canvas keeps its shortcuts until the user Tabs into the popover — and an
  * open dropdown (`InspectorSelect`'s own listbox) or a text input keeps its own arrow keys.
  *
- * Shared by `ElementInspectorPopover` and `EdgeInspectorPopover` so the two toolbars can't drift
- * apart in how they respond to the keyboard.
+ * Shared by `ElementInspectorPopover`, `EdgeInspectorPopover` and the `Inspector` strip so
+ * the toolbars can't drift apart in how they respond to the keyboard.
  */
 export function usePopoverKeyboard(rootRef: RefObject<HTMLElement | null>): void {
   useEffect(() => {

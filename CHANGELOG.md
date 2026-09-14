@@ -4,6 +4,36 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Sequence diagram exports no longer drop a note or code attachment that was on a connector merged
+  into a junction.
+- A canvas conflict from another tab can be resolved while presenting, instead of staying hidden
+  until you exit.
+- Loading a canvas and saving again right after no longer sometimes reports a conflict with
+  yourself.
+- Dropping a connector on empty canvas and then opening the command palette no longer leaves a
+  stray suggestion stuck on the canvas.
+- The toolbar's More menu now closes when the window resizes, like other menus.
+- Renaming a canvas in another tab while dragging a shape here no longer makes the shape jump for a
+  frame.
+- "Reload to update" no longer reloads when your latest changes couldn't be saved. It asks first,
+  so you can export them.
+- Clicking away from a just-placed, empty Text box now also removes it from the saved copy.
+- A DLQ, consumer, worker or duplicate added inside a boundary now belongs to it, so it moves and
+  is deleted with the boundary.
+- Keys pressed while the Quick Connect menu is open no longer create or delete shapes behind it.
+- Delete on a flow step's own button no longer deletes the whole flow.
+- A long note or code card on a connector scrolls with the wheel instead of panning the canvas.
+- Shortcuts keep working after ticking a flow checkbox in a connector's popover.
+- Escape while dragging a connector's end cancels the drag without deselecting the connector.
+- Double-clicking a shape's attachment badge or Copy button no longer opens its text editor.
+- Long right-click menus scroll on short windows, so every item stays reachable.
+- A lone carriage return in a label can no longer break a Mermaid or PlantUML export.
+- Choosing a background image while storage is full says so, and no longer undoes a Dim or Blur
+  change made while it was saving.
+- Home opens a little faster: About and the release notes load when first opened.
+
 ## [1.6.0] - 2026-09-14
 
 ### Changed

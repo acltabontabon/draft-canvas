@@ -361,6 +361,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           // The canvas is one Tab stop; only the selected node's own controls join the order after it.
           tabIndex={selected ? 0 : -1}
           onPointerDown={(event) => event.stopPropagation()}
+          // A quick second click copies again; it must not also open the card's text editor.
+          onDoubleClick={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
             const failed = () =>
@@ -403,6 +405,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           // Presenting clears the selection, so the badge is reachable there the way edge chips are.
           tabIndex={selected || mode === 'present' ? 0 : -1}
           onPointerDown={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
             // Presenting never opens the editing popover (`AttachmentPopover` refuses to render

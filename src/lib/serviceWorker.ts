@@ -9,6 +9,9 @@ export interface ServiceWorkerCallbacks {
   /** Another tab activated the new version. This page still runs the old one, and its requests for
    *  code it hasn't loaded yet may now fail — it should offer a reload rather than be reloaded. */
   onUpdatedElsewhere: () => void;
+  /** The saves before an update reload didn't all land. This tab is left running — reloading now
+   *  would throw that work away — and `reloadAnyway` is what an explicit second choice calls. */
+  onUnsavedWork?: (reloadAnyway: () => void) => void;
 }
 
 /**
@@ -23,7 +26,7 @@ export interface ServiceWorkerCallbacks {
  */
 export function initServiceWorker(
   callbacks: ServiceWorkerCallbacks,
-  beforeReload: () => Promise<void> = async () => {},
+  beforeReload: () => Promise<boolean | void> = async () => {},
 ): (() => void) | null {
   if (!('serviceWorker' in navigator)) return null;
 
@@ -43,11 +46,17 @@ export function initServiceWorker(
         setInterval(() => void registration.update().catch(() => {}), UPDATE_CHECK_MS);
       },
     });
-    return () => {
+    const reload = () => {
       requestedHere = true;
+      void updateSW(true);
+    };
+    return () => {
       void beforeReload()
-        .catch(() => {})
-        .then(() => updateSW(true));
+        .catch(() => false)
+        .then((saved) => {
+          if (saved === false && callbacks.onUnsavedWork) callbacks.onUnsavedWork(reload);
+          else reload();
+        });
     };
   } catch {
     return null;

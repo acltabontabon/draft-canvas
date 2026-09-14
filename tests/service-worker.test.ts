@@ -48,6 +48,27 @@ describe('initServiceWorker', () => {
     expect(order).toEqual(['saved', 'activated']);
   });
 
+  it('does not reload over work that failed to save — it hands the choice back instead', async () => {
+    Object.defineProperty(navigator, 'serviceWorker', { value: {}, configurable: true });
+    const updateSW = vi.fn();
+    registerSWMock.mockReturnValue(updateSW);
+    let reloadAnyway: (() => void) | undefined;
+    const onUnsavedWork = vi.fn((reload: () => void) => {
+      reloadAnyway = reload;
+    });
+    const activate = initServiceWorker(
+      { onUpdateReady: () => {}, onUpdatedElsewhere: () => {}, onUnsavedWork },
+      async () => false,
+    );
+
+    activate?.();
+    await vi.waitFor(() => expect(onUnsavedWork).toHaveBeenCalledOnce());
+    expect(updateSW).not.toHaveBeenCalled();
+
+    reloadAnyway?.();
+    expect(updateSW).toHaveBeenCalledWith(true);
+  });
+
   it('tells a tab that another tab activated the update, instead of reloading it', () => {
     Object.defineProperty(navigator, 'serviceWorker', { value: {}, configurable: true });
     registerSWMock.mockReturnValue(vi.fn());

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useReactFlow, useStore } from '@xyflow/react';
 import { primaryCommandsFor } from '../commands/registry';
@@ -151,7 +151,7 @@ function ElementInspectorBody({
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const interactionActive = useUiStore((state) => state.interactionActive);
   const theme = useThemeValue();
-  const { flowToScreenPosition } = useReactFlow();
+  const { getInternalNode, flowToScreenPosition } = useReactFlow();
 
   const liveNode = nodeIndex(document.nodes).get(nodeId);
   const liveInternal = useInternalNode(nodeId);
@@ -202,6 +202,17 @@ function ElementInspectorBody({
   }, [openPanel]);
 
   const rect = displayInternal ? rectOfInternal(displayInternal) : null;
+
+  // The element's own screen-space vertical bounds, so a dropdown can shrink/flip rather than cover it
+  // even when the popover itself barely had room on its preferred side. Read when the dropdown opens —
+  // not during render, where a pan (which moves this popover without re-rendering it) left it stale.
+  const getMenuAvoidRect = useCallback(() => {
+    const internal = getInternalNode(nodeId);
+    const box = internal ? rectOfInternal(internal) : null;
+    if (!box) return null;
+    const { x, y, height } = box;
+    return { top: flowToScreenPosition({ x, y }).y, bottom: flowToScreenPosition({ x, y: y + height }).y };
+  }, [getInternalNode, flowToScreenPosition, nodeId]);
 
   // Measured, not guessed: the toolbar wraps to two rows below 720px (see app.css's
   // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
@@ -256,12 +267,6 @@ function ElementInspectorBody({
   // dropdown uncovered/unclipped in that case, and as a backstop when the preferred side turns
   // out too cramped even for an 'above' or 'below' popover.
   const menuDirection: 'up' | 'down' = placement === 'above' ? 'up' : 'down';
-  // The element's own screen-space vertical bounds, so a dropdown can shrink/flip rather than
-  // cover it even when the popover itself barely had room to fit on its preferred side.
-  // Held still mid-gesture (the popover is hidden then): values that changed every drag frame would
-  // re-render the memoized row on each one, for a menu nobody can open until the gesture ends.
-  const menuAvoidTop = interactionActive ? 0 : flowToScreenPosition({ x: rect.x, y: rect.y }).y;
-  const menuAvoidBottom = interactionActive ? 0 : flowToScreenPosition({ x: rect.x, y: rect.y + rect.height }).y;
 
   // Only a plain Queue can ever have a DLQ toggle, and the scan is skipped for every other kind.
   const hasDlqEdge =
@@ -290,8 +295,7 @@ function ElementInspectorBody({
             openPanel={openPanel}
             setOpenPanel={setOpenPanel}
             menuDirection={menuDirection}
-            menuAvoidTop={menuAvoidTop}
-            menuAvoidBottom={menuAvoidBottom}
+            getMenuAvoidRect={getMenuAvoidRect}
             theme={theme}
             buildCommandContext={buildCommandContext}
           />
@@ -309,8 +313,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   openPanel,
   setOpenPanel,
   menuDirection,
-  menuAvoidTop,
-  menuAvoidBottom,
+  getMenuAvoidRect,
   theme,
   buildCommandContext,
 }: {
@@ -319,13 +322,11 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   openPanel: 'color' | 'typography' | null;
   setOpenPanel: (panel: 'color' | 'typography' | null) => void;
   menuDirection: 'up' | 'down';
-  menuAvoidTop: number;
-  menuAvoidBottom: number;
+  getMenuAvoidRect: () => { top: number; bottom: number } | null;
   theme: ReturnType<typeof useThemeValue>;
   buildCommandContext: () => CommandContext;
 }) {
   const currentAccentChip = node.accent !== undefined ? theme.accents[node.accent].chip : undefined;
-  const menuAvoidRect = useMemo(() => ({ top: menuAvoidTop, bottom: menuAvoidBottom }), [menuAvoidTop, menuAvoidBottom]);
 
   // The 0-3 shape-native quick actions for this node — memoized on the specific fields that can
   // change the result, never on `node` itself or `document` wholesale. `node` gets a new identity
@@ -481,7 +482,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
             options={typeControl.options}
             onChange={typeControl.onChange}
             preferredDirection={menuDirection}
-            avoidRect={menuAvoidRect}
+            getAvoidRect={getMenuAvoidRect}
             layout={typeControl.layout}
           />
         )}

@@ -5,6 +5,7 @@ import { prepareBackgroundImage } from '../../lib/backgroundImage';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { getRepository } from '../../storage';
+import { QuotaExceededError } from '../../storage/DraftRepository';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import { PERSONALITY_PRESETS, usePersonality, type PersonalityPreset } from '../personality/usePersonality';
@@ -68,9 +69,12 @@ function CanvasSettingsBody() {
       // change, and ⌘Z steps back to the previous image, whose bytes are still stored.
       const imageId = createId('bg');
       await repository.saveBackgroundImage(documentId, blob, { width, height }, imageId);
-      updateSettings({ background: { ...background, enabled: true, imageId } });
-    } catch {
-      notify("Couldn't use that image — try a different file.", 'error');
+      // Read now, not from this render: Dim or Blur may have changed while a large photo was saving.
+      const current = useEditorStore.getState().document.settings.background;
+      updateSettings({ background: { ...current, enabled: true, imageId } });
+    } catch (error) {
+      // A full disk isn't the file's fault — say what actually happened.
+      notify(error instanceof QuotaExceededError ? error.message : "Couldn't use that image — try a different file.", 'error');
     } finally {
       setBusy(false);
     }

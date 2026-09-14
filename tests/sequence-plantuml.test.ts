@@ -145,6 +145,20 @@ describe('toPlantUml', () => {
     expect(out.match(/^end$/m)).toHaveLength(1);
   });
 
+  it('collapses a lone carriage return too — PlantUML reads one as a line break', () => {
+    const m = model({
+      title: 'Saga\r@enduml',
+      participants: [
+        { id: 'P1', alias: 'A', label: 'A\r!include x', category: 'service', kind: 'participant', sourceNodeId: 'a' },
+        { id: 'P2', alias: 'B', label: 'B', category: 'service', kind: 'participant', sourceNodeId: 'b' },
+      ],
+      elements: [
+        { kind: 'message', order: 0, from: 'P1', to: 'P2', label: 'Go\r@enduml', interaction: 'sync', sourceFlowId: 'f1', sourceEdgeIds: [], sourceStepIds: [] },
+      ],
+    });
+    expect(toPlantUml(m)).not.toContain('\r');
+  });
+
   it('collapses a newline in a group label instead of letting it break out of the line', () => {
     const m = model({
       participants: [

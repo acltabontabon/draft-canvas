@@ -1,5 +1,5 @@
 import { categoryOf } from './connectorSemantics';
-import { boundsOf } from './operations';
+import { boundsOf } from './geometry';
 import { SHAPE_VERSION, type DraftEdge, type DraftNode, type LibraryShape, type ShapeKind } from './types';
 import { isFiniteNumber } from '../lib/math';
 

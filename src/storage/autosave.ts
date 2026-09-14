@@ -51,9 +51,12 @@ const HOLD_SAVED_MS = 1400;
  *  finish what's queued first — `pagehide` alone doesn't wait for IndexedDB. */
 const live = new Set<Autosave>();
 
-/** Writes everything queued in this tab; resolves once it's on disk (or has failed). */
-export async function flushAllAutosaves(): Promise<void> {
-  await Promise.all([...live].map((controller) => controller.flush()));
+/** Writes everything queued in this tab. Resolves once it's on disk — `false` when anything could
+ *  not be written (a pending conflict, a full disk, a closed connection), so a caller about to
+ *  reload knows it would be throwing that work away. */
+export async function flushAllAutosaves(): Promise<boolean> {
+  const results = await Promise.all([...live].map((controller) => controller.flush().catch(() => false)));
+  return results.every(Boolean);
 }
 
 export class Autosave {
@@ -166,8 +169,9 @@ export class Autosave {
       if (this.inFlight) this.emit({ status: 'saving' });
     }, SHOW_SAVING_AFTER_MS);
 
+    const id = document.metadata.id;
+    const trackedAtStart = this.loaded.get(id);
     try {
-      const id = document.metadata.id;
       const base = this.baselines.get(id);
       const adopted = await this.repository.save(document, base, this.overwriteNext ? { overwrite: true } : undefined);
       this.overwriteNext = false;
@@ -180,6 +184,10 @@ export class Autosave {
         if (queued?.metadata.id === id) this.pending = reconcileMetadata(queued, base, adopted);
         this.onMetadataAdopted?.(id, adopted);
       }
+      // What was tracked from disk isn't on disk any more — so an edit that restores that very object
+      // (abandoning a just-placed Text node hands back the history entry's `before`) must be written.
+      // Left alone if the canvas was re-opened in place while this write ran: that copy is the new baseline.
+      if (this.loaded.get(id) === trackedAtStart) this.loaded.delete(id);
       this.lastFailed = false;
       this.clearSavingIndicator();
       this.emit({ status: 'saved', lastSavedAt: Date.now(), message: undefined, conflict: undefined });

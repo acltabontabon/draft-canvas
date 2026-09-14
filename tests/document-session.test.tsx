@@ -250,6 +250,16 @@ describe('useDocumentSession — repository failures surface a toast, not an unh
     expect(errorToastShown()).toBe(true);
   });
 
+  it('duplicateDocument of a canvas that cannot be read says so instead of doing nothing', async () => {
+    const session = renderSession(stubRepository({ load: async () => null }));
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    await act(async () => {
+      await session().duplicateDocument('unreadable');
+    });
+    expect(useUiStore.getState().toasts.at(-1)?.message).toMatch(/Couldn't duplicate/);
+  });
+
   it('deleteDocument', async () => {
     const repository = stubRepository({
       remove: async () => {

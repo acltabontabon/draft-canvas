@@ -26,7 +26,7 @@ and go.
 | `npm run test:watch` | Vitest in watch mode |
 | `npm run e2e` | Browser tests (Playwright — run `npm run e2e:install` once first) |
 | `npm run e2e:offline` | The same suite against a built, offline-served app |
-| `npm run check` | Lint, build, and unit tests together — **run this before opening a PR** |
+| `npm run check` | Lint, type-check the e2e/benchmark/demo tooling, build, and unit tests together — **run this before opening a PR** |
 
 Focused runs, when you're iterating on one thing:
 

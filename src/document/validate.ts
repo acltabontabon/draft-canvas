@@ -310,15 +310,13 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
       type,
       x: clamp(finite(candidate.x, 0), -LIMITS.maxCoordinate, LIMITS.maxCoordinate),
       y: clamp(finite(candidate.y, 0), -LIMITS.maxCoordinate, LIMITS.maxCoordinate),
-      width: clamp(
-        finite(candidate.width, fallbackSize.width),
-        LIMITS.minNodeSize,
-        LIMITS.maxNodeSize,
+      // Whole pixels, like every size the editor writes (`clampSize`): the canvas renders rounded sizes,
+      // and a fractional one would never match them — a fresh node object on every render.
+      width: Math.round(
+        clamp(finite(candidate.width, fallbackSize.width), LIMITS.minNodeSize, LIMITS.maxNodeSize),
       ),
-      height: clamp(
-        finite(candidate.height, fallbackSize.height),
-        LIMITS.minNodeSize,
-        LIMITS.maxNodeSize,
+      height: Math.round(
+        clamp(finite(candidate.height, fallbackSize.height), LIMITS.minNodeSize, LIMITS.maxNodeSize),
       ),
       z: Math.round(clamp(finite(candidate.z, 0), -10_000, 10_000)),
     };

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { canEncryptLocally } from '../crypto/availability';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
-import { freeOriginFor, openingViewportFor } from '../document/operations';
+import { freeOriginFor, openingViewportFor } from '../document/geometry';
 import { createId } from '../document/ids';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { embeddedHost } from '../host/embeddedHost';
@@ -133,7 +133,10 @@ export function useDocumentSession(): DocumentSession {
   useEffect(
     () =>
       onStorageSuperseded(() =>
-        notify('Draft Canvas was updated in another tab. Reload this tab to keep saving your changes.', 'error'),
+        notify(
+          "Draft Canvas was updated in another tab, so this tab can't save any more. Export recent changes, then reload.",
+          'error',
+        ),
       ),
     [notify],
   );
@@ -340,8 +343,15 @@ export function useDocumentSession(): DocumentSession {
     const saved = (await autosave.current?.flush()) ?? true;
     if (!saved) {
       // Leaving now would drop the only copy of the unsaved edits — the editor
-      // still holds them, so stay there where Export can rescue them.
-      notify('Your latest changes could not be saved to this browser. Export the diagram to keep a copy.', 'error');
+      // still holds them, so stay there where Export can rescue them. A pending
+      // cross-tab conflict isn't a storage failure: it's a choice still to make.
+      const conflict = editorStoreModule?.useEditorStore.getState().save.conflict;
+      notify(
+        conflict
+          ? 'Choose which copy to keep in the status bar before leaving this canvas.'
+          : 'Your latest changes could not be saved to this browser. Export the diagram to keep a copy.',
+        'error',
+      );
       return;
     }
     // Replaced and removed backgrounds kept their images only so undo could bring them back. Undo
@@ -407,7 +417,10 @@ export function useDocumentSession(): DocumentSession {
       if (!repository) return;
       try {
         const source = await repository.load(id);
-        if (!source) return;
+        if (!source) {
+          notify("Couldn't duplicate — that canvas can't be read.", 'error');
+          return;
+        }
         const clone = cloneDocumentAsNew(source, `${source.metadata.title} copy`);
         await repository.save(clone);
         // A configured background is part of what the user set up for this

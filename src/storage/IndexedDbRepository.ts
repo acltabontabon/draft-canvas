@@ -176,8 +176,25 @@ export class IndexedDbRepository implements DraftRepository {
    * edge dropped) is left for the next real edit to persist, same as always.
    */
   async load(id: string): Promise<DraftDocument | null> {
-    const summary = await this.db.get('documents', id).catch(() => undefined);
-    const read = await this.readBody(id);
+    // Both stores are read from one transaction so the stamp recorded below always describes the
+    // exact body just decoded — two separate reads could otherwise straddle another tab's save
+    // (which writes `documents` and `bodies` together) and pair a fresh body with a stale stamp,
+    // making this tab's next save report a spurious conflict against its own just-loaded content.
+    let summary: DraftSummary | undefined;
+    let fetchedBody: EncryptedBody | LegacyBody | undefined;
+    try {
+      const tx = this.db.transaction(['documents', 'bodies'], 'readonly');
+      [summary, fetchedBody] = await Promise.all([
+        tx.objectStore('documents').get(id),
+        tx.objectStore('bodies').get(id),
+      ]);
+      await tx.done;
+    } catch (error) {
+      console.warn(`[draft-canvas] Local record ${id} could not be read from IndexedDB:`, error);
+      return null;
+    }
+    if (!fetchedBody) return null;
+    const read = await this.decodeBody(id, fetchedBody);
     if (!read) return null;
     this.stamps.set(id, summary?.contentStamp);
     const { document, wasEncrypted, priorVersion } = read;
@@ -220,13 +237,21 @@ export class IndexedDbRepository implements DraftRepository {
       return null;
     }
     if (!fetched) return null;
-    // Re-bound to a `const` here on purpose: TypeScript's aliased-condition
-    // narrowing (used below via `wasEncrypted`) only holds for a binding it
-    // can prove is never reassigned — `fetched` above is `let` only because
-    // the try/catch needs to assign it, so `row` is a plain `const` copy
-    // narrowing can actually track.
-    const row = fetched;
+    return this.decodeBody(id, fetched);
+  }
 
+  /** Decrypt (or accept a legacy plaintext row), then validate and migrate in memory — the shared
+   *  second half of `readBody()` and `load()`, which fetch the raw row differently (the latter
+   *  reads it alongside its `documents` summary in one transaction, see `load()`). */
+  private async decodeBody(
+    id: string,
+    row: EncryptedBody | LegacyBody,
+  ): Promise<{
+    document: DraftDocument;
+    wasEncrypted: boolean;
+    priorVersion: unknown;
+    row: EncryptedBody | LegacyBody;
+  } | null> {
     const wasEncrypted = isEncryptedBody(row);
     let rawDocument: unknown;
     if (wasEncrypted) {

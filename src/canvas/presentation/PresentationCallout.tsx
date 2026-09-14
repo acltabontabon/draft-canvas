@@ -4,6 +4,7 @@ import { useInternalNode, useStoreApi } from '@xyflow/react';
 import { displayNameFor } from '../../document/factory';
 import type { Attachment, DraftNode } from '../../document/types';
 import {
+  inflate,
   placeCallout,
   segmentBoxes,
   type Box,
@@ -32,13 +33,6 @@ const MIN_ROOM = 72;
 const DRAWN_LABELS = '.dc-edge-label, .dc-edge-caption, .dc-edge-meta, .dc-attachment-chip-row';
 /** Must match `@keyframes dc-callout-out` in `canvas.css`. */
 const EXIT_ANIMATION = 'dc-callout-out';
-
-const inflate = (box: Box, by: number): Box => ({
-  x: box.x - by,
-  y: box.y - by,
-  width: box.width + by * 2,
-  height: box.height + by * 2,
-});
 
 function chromeBox(selector: string): Box | null {
   const element = window.document.querySelector(selector);

@@ -3,14 +3,15 @@ import { embeddedHost } from './host/embeddedHost';
 import { useHostDocument } from './host/useHostDocument';
 import { useDocumentSession } from './store/useDocumentSession';
 import { LibraryScreen } from './ui/Library/LibraryScreen';
-import { AboutDialog } from './ui/common/AboutDialog';
 import { ErrorBoundary } from './ui/common/ErrorBoundary';
+import { PanelBoundary } from './ui/common/PanelBoundary';
 import { retryableLazy } from './ui/common/retryableLazy';
 import { Toasts } from './ui/common/Toasts';
 import { ThemeProvider } from './ui/theme/ThemeProvider';
 import { PersonalityProvider } from './ui/personality/PersonalityProvider';
 import { logDiagnostic } from './lib/diagnostics';
 import { retirePreferences } from './lib/preferences';
+import { useUiStore } from './store/uiStore';
 
 // The editor is most of the app's code, and the Library is what every visit opens on — so the
 // editor arrives as its own chunk (React Flow included), fetched in the background once the Library
@@ -20,6 +21,29 @@ const loadEditor = () => import('./ui/Editor/EditorScreen');
 // Retryable: `lazy()` alone remembers a failed fetch for good, so after one offline open (or a deploy
 // that replaced the chunk under an old tab) every later open would crash the same way.
 const EditorChunk = retryableLazy(() => loadEditor().then((module) => ({ default: module.EditorRoute })));
+// About (and every release's notes with it) is opened now and then, from Home or the editor — fetched
+// the first time, so neither screen's first chunk carries it.
+const AboutChunk = retryableLazy(() => import('./ui/common/AboutDialog').then((module) => ({ default: module.AboutDialog })));
+
+function LazyAboutDialog() {
+  const open = useUiStore((state) => state.aboutOpen);
+  if (!open) return null;
+  return (
+    <PanelBoundary
+      onError={(error, componentStack) => {
+        logDiagnostic(error, { operation: 'about-panel' }, componentStack);
+        AboutChunk.reset();
+        const ui = useUiStore.getState();
+        ui.setAboutOpen(false);
+        ui.notify('About couldn’t open. Check your connection and try again.', 'error');
+      }}
+    >
+      <Suspense fallback={null}>
+        <AboutChunk.Component />
+      </Suspense>
+    </PanelBoundary>
+  );
+}
 
 /**
  * There is no router.
@@ -84,7 +108,7 @@ function Shell() {
         </p>
       )}
       <Toasts />
-      <AboutDialog />
+      <LazyAboutDialog />
     </>
   );
 }

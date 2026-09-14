@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   anchorsForRect,
+  clampCenterX,
   placementTransform,
   resolvePlacement,
   type Placement,
@@ -114,5 +115,21 @@ describe('popoverPlacement with a screen-fixed (identity) anchor', () => {
     // be trusted to settle mid-drag, which is why the component must stop calling it while
     // `interactionActive` is true instead of relying on this function alone.
     expect(seen.size).toBeGreaterThan(1);
+  });
+});
+
+describe('clampCenterX', () => {
+  beforeEach(() => setViewport(1000, 800));
+  afterEach(() => setViewport(originalInnerWidth, originalInnerHeight));
+
+  it('keeps a centred panel inside the window minus its clearances', () => {
+    expect(clampCenterX(500, 100, 12, 12)).toBe(500);
+    expect(clampCenterX(20, 100, 12, 12)).toBe(112);
+    // The right clearance can be a whole docked panel (the Flows panel's 324px).
+    expect(clampCenterX(900, 100, 12, 324)).toBe(1000 - 324 - 100);
+  });
+
+  it('pins the left edge when the panel is wider than the room, so its first controls stay reachable', () => {
+    expect(clampCenterX(500, 400, 12, 324)).toBe(412);
   });
 });

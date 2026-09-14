@@ -126,6 +126,10 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
   // only exists while the palette is open.)
   useEffect(() => {
     setQuickConnect(null);
+    // The menu owned that preview; it goes with the menu — same pairing `EditorScreen`'s
+    // `dismissQuickConnect` and `Canvas`'s `onMoveStart` use, so a drop-ghost from an abandoned
+    // Quick Connect can't outlive the menu it belongs to just because ⌘K opened over it instead.
+    if (useUiStore.getState().continuation?.trigger === 'drop') useUiStore.getState().setContinuation(null);
     // Synchronous, not deferred to a frame: a backgrounded tab may not paint a frame for a
     // while, and the first keystroke must land in this input, not on the canvas behind it.
     inputRef.current?.focus();

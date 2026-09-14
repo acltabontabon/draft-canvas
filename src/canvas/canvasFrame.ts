@@ -4,8 +4,9 @@
  * means "the middle of the canvas" or "stay clear of its right edge" asks here instead of assuming.
  */
 
-/** `FlowPanel`'s fixed 300px width + a 12px gap, while it's open. */
-const FLOW_PANEL_CLEARANCE = 312;
+/** While it's open, `FlowPanel`'s footprint — its 12px inset from the right plus its 300px width (see
+ *  `.dc-flow-panel` in app.css) — and then the same 12px gap an overlay keeps from any other edge. */
+const FLOW_PANEL_CLEARANCE = 12 + 300 + 12;
 
 function canvasRect(): DOMRect | null {
   if (typeof document === 'undefined') return null;

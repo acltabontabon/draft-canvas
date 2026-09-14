@@ -1,7 +1,7 @@
 import { PRODUCT } from '../../product';
-import { applicableReleases, hasUnreadRelease } from '../../releases/productReleases';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../common/Icon';
+import { useUnreadReleaseNotes } from '../common/useUnreadReleaseNotes';
 
 /**
  * The product's name, its mark, and the way into About — the one row every state of the home
@@ -13,8 +13,7 @@ import { Icon } from '../common/Icon';
 export function LibraryBrand() {
   const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const updateReady = useUiStore((state) => state.updateReady);
-  const lastSeenProductRelease = useUiStore((state) => state.lastSeenProductRelease);
-  const hasUnreadNotes = hasUnreadRelease(lastSeenProductRelease, applicableReleases(PRODUCT.version));
+  const hasUnreadNotes = useUnreadReleaseNotes();
   const aboutLabel = updateReady
     ? 'About Draft Canvas — update ready'
     : hasUnreadNotes

@@ -91,6 +91,15 @@ export function resolvePlacement(
   return fits(current) ? current : (PLACEMENT_ORDER.find(fits) ?? current);
 }
 
+/**
+ * A horizontally centred popover's centre x, held so the whole panel stays within the window minus
+ * `left`/`right` clearances. One wider than that room keeps its left edge (its title and first
+ * controls) on screen. Shared with `EdgeInspectorPopover`, which places itself but must agree on this.
+ */
+export function clampCenterX(centerX: number, halfWidth: number, left: number, right: number): number {
+  return clamp(centerX, left + halfWidth, window.innerWidth - right - halfWidth);
+}
+
 /** The CSS `transform` string that positions the popover for a resolved placement, cross-axis
  *  clamped so it never clips off-screen even right at a viewport corner. The result is in the
  *  popover container's own coordinates — `screenToContainer` maps a page point into them (see
@@ -106,12 +115,7 @@ export function placementTransform(
 ): string {
   const screenAnchor = flowToScreenPosition(anchors[placement]);
   if (placement === 'above' || placement === 'below') {
-    const halfWidth = size.width / 2;
-    const clampedScreenX = clamp(
-      screenAnchor.x,
-      clearances.left + halfWidth,
-      window.innerWidth - clearances.right - halfWidth,
-    );
+    const clampedScreenX = clampCenterX(screenAnchor.x, size.width / 2, clearances.left, clearances.right);
     const at = screenToContainer({ x: clampedScreenX, y: screenAnchor.y });
     return placement === 'above'
       ? `translate(-50%, -100%) translate(${at.x}px, ${at.y - clearances.gap}px)`

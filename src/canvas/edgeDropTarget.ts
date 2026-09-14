@@ -1,8 +1,8 @@
 /**
  * Finds the connector (if any) underneath a screen point during a note/code drag.
  *
- * Reuses the exact same hit corridor a click already uses — `BaseEdge`'s invisible
- * `interactionWidth` path — rather than re-deriving routing geometry from `RoutedEdge`, so this
+ * Reuses the exact same hit corridor a click already uses — the invisible, wide
+ * `.dc-edge-hit` interaction path `DraftEdgeView.tsx` draws along each route — rather than re-deriving routing geometry from `RoutedEdge`, so this
  * stays correct for any connector shape (straight, bezier, or a bent smoothstep with a detour)
  * with no duplicated path math, and never drifts out of sync with what a user can actually click.
  * React Flow already tags each edge's own wrapper with `data-id` (the same attribute its own

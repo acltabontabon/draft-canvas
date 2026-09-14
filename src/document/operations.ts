@@ -9,6 +9,7 @@ import { defaultSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
 import { clamp } from '../lib/math';
+import { clampCoord, type Bounds } from './geometry';
 import type {
   Attachment,
   DraftDocument,
@@ -19,10 +20,8 @@ import type {
   Side,
 } from './types';
 
-const clampCoord = (n: number) =>
-  Number.isFinite(n)
-    ? clamp(Math.round(n), -LIMITS.maxCoordinate, LIMITS.maxCoordinate)
-    : 0;
+export { boundsOf, freeOriginFor, INSERT_GAP, openingViewportFor, type Bounds } from './geometry';
+
 
 /**
  * Whether the canvas holds nothing at all — the one definition of "empty" the editor's empty
@@ -314,11 +313,12 @@ function instantiateFragment(
       x: clampCoord(node.x + offset.x),
       y: clampCoord(node.y + offset.y),
     };
-    // A parent outside the fragment would dangle, so the copy is un-parented.
+    // A parent inside the fragment is re-pointed at its copy. One outside it keeps its id for now:
+    // `pasteFragment` keeps it only if that boundary is in the target document and still encloses
+    // the copy (a duplicate nudged within its boundary), and un-parents it otherwise.
     if (node.parentId) {
       const mapped = idMap.get(node.parentId);
       if (mapped) next.parentId = mapped;
-      else delete next.parentId;
     }
     // Attachments are cloned with the node, so they need fresh ids too —
     // otherwise every paste/duplicate of a node with a note or code card
@@ -360,9 +360,11 @@ export function pasteFragment(
   const keptNodeIds = new Set(instantiated.nodes.slice(0, nodeRoom).map((n) => n.id));
   const created = {
     // A boundary sits after its members in the fragment, so the cap can cut it while keeping
-    // them — a kept child must not point at a parent that never arrived.
+    // them — a kept child must not point at a parent that never arrived. A parent that was never
+    // in the fragment survives only as the target document's own boundary still drawn around it.
     nodes: instantiated.nodes.slice(0, nodeRoom).map((node) => {
       if (!node.parentId || keptNodeIds.has(node.parentId)) return node;
+      if (enclosingParentId(doc, node.parentId, node) === node.parentId) return node;
       const { parentId: _dropped, ...unparented } = node;
       return unparented;
     }),
@@ -786,6 +788,18 @@ export function containsRect(
   );
 }
 
+/**
+ * The boundary a node drawn at `rect` belongs to: `parentId`, when that boundary exists in `doc` and
+ * the rect fits entirely inside it — otherwise none. A node visibly inside a boundary but not a member
+ * would stay behind when the boundary is dragged and be orphaned when it's deleted; one poking out
+ * would *mean* membership it visibly isn't.
+ */
+export function enclosingParentId(doc: DraftDocument, parentId: string | undefined, rect: Bounds): string | undefined {
+  if (!parentId) return undefined;
+  const parent = doc.nodes.find((n) => n.id === parentId);
+  return parent?.type === 'group' && containsRect(parent, rect) ? parent.id : undefined;
+}
+
 /** Which of the two "primary" companion candidates — directly right, or directly below — a search
  *  should try first. The rest of the fixed candidate list stays in its existing order regardless. */
 export type CompanionDirection = 'right' | 'below';
@@ -890,63 +904,6 @@ function clampCompanion(
   return { x: clampCoord(x), y: clampCoord(y) };
 }
 
-/** Breathing room between a block of elements being inserted and whatever is already on the
- *  canvas — larger than `COMPANION_GAP`, because this separates two *diagrams*, not a node from
- *  the node that spawned it. */
-export const INSERT_GAP = 96;
-
-/**
- * Where to put the top-left corner of an incoming block of `size` so it lands clear of everything
- * already on the canvas — what an Architecture Starter needs, and deliberately not what
- * `placeNear` does.
- *
- * Two differences from `placeNear` matter. It never treats a boundary as transparent: dropping a
- * whole architecture inside somebody's existing boundary would silently reparent nothing but would
- * read as a mistake, so a `group` is an obstacle here even though it is a legitimate landing spot
- * for a single companion node. And it does not search: right of the existing bounds is *provably*
- * free, which is worth more than a cleverer position that has to be verified. An empty canvas gets
- * the block centred on the origin instead, so the very first thing a user inserts sits where the
- * viewport already is.
- *
- * Nothing already on the canvas is ever moved. Cost is one pass over the nodes — no global layout.
- */
-export function freeOriginFor(
-  doc: DraftDocument,
-  size: { width: number; height: number },
-  gap: number = INSERT_GAP,
-): { x: number; y: number } {
-  const bounds = boundsOf(doc.nodes);
-  if (!bounds) return { x: clampCoord(-size.width / 2), y: clampCoord(-size.height / 2) };
-  const right = bounds.x + bounds.width + gap;
-  // Only when the canvas has genuinely been dragged out to the coordinate limit does going right
-  // stop being an option; below the existing content is the same guarantee on the other axis.
-  if (right + size.width <= LIMITS.maxCoordinate) return { x: clampCoord(right), y: clampCoord(bounds.y) };
-  return { x: clampCoord(bounds.x), y: clampCoord(bounds.y + bounds.height + gap) };
-}
-
-/**
- * The viewport that shows a block of `size` centred on the origin — where
- * `freeOriginFor` puts the first thing inserted on an empty canvas.
- *
- * Needed when a canvas is *created* already holding an Architecture Starter.
- * The editor opens at `document.viewport` verbatim and never fits on open (so
- * a returning user lands exactly where they left off), which means a seeded
- * canvas has to carry the right viewport before the editor ever mounts.
- * `padding` leaves air around the block; zoom is capped at 1 so a small
- * starter is not blown up to fill a large screen.
- */
-export function openingViewportFor(
-  size: { width: number; height: number },
-  screen: { width: number; height: number },
-  padding = 0.8,
-): { x: number; y: number; zoom: number } {
-  const fit = Math.min(
-    (padding * screen.width) / Math.max(size.width, 1),
-    (padding * screen.height) / Math.max(size.height, 1),
-  );
-  const zoom = clamp(fit, 0.1, 1);
-  return { x: screen.width / 2, y: screen.height / 2, zoom };
-}
 
 /* ---------------------------------------------------------------- groups --- */
 
@@ -1063,29 +1020,4 @@ export function setSettings(doc: DraftDocument, patch: Partial<DraftSettings>): 
 
 export function touch(doc: DraftDocument, at = Date.now()): DraftDocument {
   return { ...doc, metadata: { ...doc.metadata, updatedAt: at } };
-}
-
-/* --------------------------------------------------------------- bounds ---- */
-
-export interface Bounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-/** The union box of any rects — nodes, or the live drag rects `canvas/Canvas.tsx` snaps with. */
-export function boundsOf(nodes: readonly Bounds[]): Bounds | null {
-  if (nodes.length === 0) return null;
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const node of nodes) {
-    minX = Math.min(minX, node.x);
-    minY = Math.min(minY, node.y);
-    maxX = Math.max(maxX, node.x + node.width);
-    maxY = Math.max(maxY, node.y + node.height);
-  }
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }

@@ -38,7 +38,7 @@ import {
 import { useToolbarHeight } from './useToolbarHeight';
 import { useOverlayPosition } from './useOverlayPosition';
 import { rightClearance } from './canvasFrame';
-import { clamp } from '../lib/math';
+import { clampCenterX } from './popoverPlacement';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
@@ -260,10 +260,12 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
     );
     // …and never past the canvas's own edges: React Flow's root clips, and a docked Learn drawer or the
     // Flows panel can end the visible canvas well short of the window's right edge.
-    const halfWidth = size.width / 2;
-    const minX = SCREEN_MARGIN + halfWidth;
-    const maxX = window.innerWidth - rightClearance(useUiStore.getState().flowPanelOpen, SCREEN_MARGIN) - halfWidth;
-    const onCanvasX = minX <= maxX ? clamp(clampedScreenX, minX, maxX) : clampedScreenX;
+    const onCanvasX = clampCenterX(
+      clampedScreenX,
+      size.width / 2,
+      SCREEN_MARGIN,
+      rightClearance(useUiStore.getState().flowPanelOpen, SCREEN_MARGIN),
+    );
     const labelAt = frame.screenToOverlay({ x: onCanvasX, y: screenLabelPoint.y });
     return {
       placement: flipBelow ? 'below' : 'above',
