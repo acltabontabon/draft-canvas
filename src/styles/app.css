@@ -4339,8 +4339,10 @@ kbd {
     padding: 6px 8px;
   }
 
+  /* Held to its track: sized to its content, the title's own intrinsic width ran under Undo/Redo. */
   .dc-toolbar-lead {
     grid-area: lead;
+    justify-self: stretch;
   }
 
   .dc-toolbar-trail {
@@ -4358,6 +4360,7 @@ kbd {
   }
 
   .dc-title-input {
+    min-width: 0;
     max-width: 42vw;
   }
 

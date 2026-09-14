@@ -622,7 +622,7 @@ function copyCommand(): Command {
     group: 'selection',
     keywords: ['clipboard'],
     shortcut: `${MOD_SYMBOL} C`,
-    run: (inner) => inner.editor.copySelection(),
+    run: (inner) => void inner.editor.copySelection(),
   };
 }
 
@@ -633,7 +633,7 @@ function cutCommand(): Command {
     group: 'selection',
     keywords: ['clipboard', 'remove'],
     shortcut: `${MOD_SYMBOL} X`,
-    run: (inner) => inner.editor.cutSelection(),
+    run: (inner) => void inner.editor.cutSelection(),
   };
 }
 

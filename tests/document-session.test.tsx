@@ -250,6 +250,32 @@ describe('useDocumentSession — repository failures surface a toast, not an unh
     expect(errorToastShown()).toBe(true);
   });
 
+  it('duplicateDocument that fails copying the background leaves no half-made copy behind', async () => {
+    const source = createDocument('Original');
+    source.settings = { ...source.settings, background: { ...source.settings.background, enabled: true, imageId: 'bg_1' } };
+    const saved: string[] = [];
+    const removed: string[] = [];
+    const repository = stubRepository({
+      load: async () => source,
+      save: async (document) => void saved.push(document.metadata.id),
+      remove: async (id) => void removed.push(id),
+      loadBackgroundImage: async () => ({ blob: new Blob(['x']), width: 10, height: 10 }),
+      saveBackgroundImage: async () => {
+        throw new Error('quota');
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    await act(async () => {
+      await session().duplicateDocument(source.metadata.id);
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).not.toBe(source.metadata.id);
+    expect(removed).toEqual(saved);
+    expect(errorToastShown()).toBe(true);
+  });
+
   it('duplicateDocument of a canvas that cannot be read says so instead of doing nothing', async () => {
     const session = renderSession(stubRepository({ load: async () => null }));
     await waitFor(() => expect(session().ready).toBe(true));

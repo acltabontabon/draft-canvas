@@ -233,6 +233,28 @@ describe('FlowPanel', () => {
     expect((screen.getByRole('button', { name: 'Present Checkout' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('+ Selection spotlights the whole selection in one undo step', () => {
+    const edge = addConnectedPair();
+    const extra = useEditorStore.getState().addNode({ type: 'note', x: 0, y: 200 });
+    const checkout = useEditorStore.getState().createFlow('Checkout')!;
+    useEditorStore.getState().addEdgeToFlow(checkout, edge.id);
+    const { source, target } = edge;
+    useEditorStore.getState().setSelection({ nodes: [source, target, extra.id], edges: [edge.id] });
+    mount();
+
+    fireEvent.click(screen.getByLabelText('Expand'));
+    fireEvent.click(screen.getByRole('button', { name: 'More for step 1' }));
+    const pastBefore = useEditorStore.getState().history.past.length;
+    fireEvent.click(screen.getByRole('button', { name: '+ Selection' }));
+
+    const stepOf = () => useEditorStore.getState().document.flows[0]!.steps[0]!;
+    expect(stepOf().extraNodeIds?.length).toBeGreaterThan(0);
+    expect(useEditorStore.getState().history.past.length).toBe(pastBefore + 1);
+    act(() => useEditorStore.getState().undo());
+    expect(stepOf().extraNodeIds ?? []).toEqual([]);
+    expect(stepOf().extraEdgeIds ?? []).toEqual([]);
+  });
+
   it('lists steps as Source → Target with the connector label as a quiet detail', () => {
     const edge = addConnectedPair();
     useEditorStore.getState().updateEdgeLabel(edge.id, 'calls');

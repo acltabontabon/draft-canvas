@@ -20,8 +20,7 @@ import type {
   Side,
 } from './types';
 
-export { boundsOf, freeOriginFor, INSERT_GAP, openingViewportFor, type Bounds } from './geometry';
-
+export { boundsOf, freeOriginFor, INSERT_GAP, type Bounds } from './geometry';
 
 /**
  * Whether the canvas holds nothing at all — the one definition of "empty" the editor's empty

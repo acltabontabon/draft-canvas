@@ -649,6 +649,8 @@ function useKeyboard({
       if (useUiStore.getState().contextMenu) return;
       // Nothing lands behind a dialog, and a presentation is read-only.
       if (modalIsOpen() || useEditorStore.getState().mode === 'present') return;
+      // Nor mid-drag: it would fold into the gesture's own undo step.
+      if (useUiStore.getState().interactionActive) return;
       event.preventDefault();
       // Best-effort adoption of whatever the OS clipboard actually handed us — foreign text, or
       // none at all (e.g. a blocked/failed clipboard write elsewhere), is not an error. `paste()`
@@ -666,6 +668,33 @@ function useKeyboard({
     return () => window.removeEventListener('paste', onPaste);
   }, [screenToFlowPosition]);
 
+  // The same gesture's other half. A native `copy`/`cut` event can write its `clipboardData` where
+  // `navigator.clipboard` is refused — as it is inside VS Code's webview — so copying there goes
+  // through here and reaches other diagrams and other apps. Anywhere else ⌘C/⌘X are handled on
+  // keydown and never become this event, apart from a browser's own Edit menu, which lands here too.
+  useEffect(() => {
+    const onCopyOrCut = (event: ClipboardEvent) => {
+      if (isEditableTarget(event.target)) return;
+      // Text selected on the page (a dialog, Learn) copies as text.
+      const selected = window.getSelection();
+      if (selected && !selected.isCollapsed) return;
+      const ui = useUiStore.getState();
+      if (ui.commandPaletteOpen || ui.contextMenu || ui.interactionActive || modalIsOpen()) return;
+      const state = useEditorStore.getState();
+      if (event.type === 'cut' && state.mode === 'present') return;
+      const text = event.type === 'cut' ? state.cutSelection() : state.copySelection();
+      if (text === null || !event.clipboardData) return;
+      event.preventDefault();
+      event.clipboardData.setData('text/plain', text);
+    };
+    window.addEventListener('copy', onCopyOrCut);
+    window.addEventListener('cut', onCopyOrCut);
+    return () => {
+      window.removeEventListener('copy', onCopyOrCut);
+      window.removeEventListener('cut', onCopyOrCut);
+    };
+  }, []);
+
   // Escape on a ghost, ahead of everyone else. React Flow deselects a focused node on Escape from
   // its own handler on the node element, and every popover has its own capture-phase Escape; a
   // capture-phase listener registered here runs before any of them, so one Escape means exactly
@@ -678,6 +707,10 @@ function useKeyboard({
       const uiState = useUiStore.getState();
       if (uiState.continuation?.trigger !== 'select') return;
       if (uiState.quickConnect || uiState.contextMenu || uiState.commandPaletteOpen) return;
+      // A panel open on the selected node's popover (colour, typography, a type dropdown, an
+      // attachment card) closes first. Those listen on `window` in the capture phase too, where
+      // `stopPropagation` can't hold them back, so one Escape would otherwise do both.
+      if (uiState.openAttachmentDetail || document.querySelector('.dc-popover-panel, .dc-inspector-select-menu')) return;
       event.preventDefault();
       event.stopPropagation();
       uiState.dismissContinuation();
@@ -705,6 +738,11 @@ function useKeyboard({
       // behind the dialog and letter keys dropped nodes under it. Its own Escape/Tab
       // handling is untouched. (Learn's sheet stops bare keys further down, after the ⌘ chords.)
       if (dialogIsOpen()) return;
+      // Mid-gesture (a node dragged or resized, a connector end being repointed), commands wait:
+      // Delete removes the node React Flow is dragging, which aborts the drag without its stop
+      // callback and strands the undo bracket open; Escape or ⌘A rebuild the nodes under the drag;
+      // ⌘Enter commits a move into a presentation. A repoint's own Escape has its own listener.
+      if (useUiStore.getState().interactionActive) return;
 
       const meta = event.metaKey || event.ctrlKey;
       const state = useEditorStore.getState();
@@ -746,12 +784,14 @@ function useKeyboard({
             state.redo();
             return;
           case 'c':
-            event.preventDefault();
-            state.copySelection();
-            return;
           case 'x':
+            // Framed by VS Code, the app may not write the system clipboard, so the shapes would
+            // only ever paste inside this one tab. Left alone, the keystroke becomes the native
+            // copy/cut (VS Code's Edit menu), whose event can carry them — see `onCopyOrCut`.
+            if (embeddedHost) return;
             event.preventDefault();
-            state.cutSelection();
+            if (key === 'c') state.copySelection();
+            else state.cutSelection();
             return;
           case 'd':
             event.preventDefault();

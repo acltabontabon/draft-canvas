@@ -2878,6 +2878,14 @@
   border: 1px solid var(--dc-selection);
 }
 
+/* After a box select React Flow lays a draggable rectangle over the selected nodes. It took every
+   click, double-click and right-click meant for them — no single-node pick, no label edit, no
+   selection menu — and handled arrow keys a second time. The selection rings already show what is
+   selected, and grabbing any selected node still moves them all, same as a Shift-click selection. */
+.react-flow__nodesselection {
+  display: none;
+}
+
 .react-flow__attribution {
   display: none;
 }

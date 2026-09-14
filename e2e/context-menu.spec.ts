@@ -643,3 +643,29 @@ test.describe('context menu — cross-cutting hardening', () => {
     await expect(menu(page)).toBeHidden();
   });
 });
+
+test.describe('context menu — after a box selection', () => {
+  test('right-click and double-click reach the nodes a marquee selected', async ({ page }) => {
+    await newCanvas(page, 'Context menu marquee');
+    await create(page, 'Service', { x: 300, y: 250 });
+    await create(page, 'Data Store', { x: 600, y: 250 });
+    await page.keyboard.press('Escape');
+
+    await page.mouse.move(150, 120);
+    await page.mouse.down();
+    await page.mouse.move(820, 440, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
+
+    await page.locator('.dc-node').first().click({ button: 'right' });
+    await expect(menuItem(page, 'Align left')).toBeVisible();
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
+    await page.keyboard.press('Escape');
+    await expect(menu(page)).toBeHidden();
+
+    // A double-click edits the node under the pointer, as it does for any other selection.
+    await page.locator('.dc-node').first().dblclick();
+    await expect(page.locator('textarea.dc-node-editor')).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+});

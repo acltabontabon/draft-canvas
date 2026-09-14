@@ -382,9 +382,11 @@ export interface EditorStore {
   nudgeSelection: (dx: number, dy: number) => void;
   deleteSelection: () => void;
   duplicateSelection: () => void;
-  copySelection: () => void;
-  /** Copies the selection, then deletes it — one undo entry (the delete). */
-  cutSelection: () => void;
+  /** Returns what went onto the clipboard, encoded, or `null` when nothing was copied — so a
+   *  native `copy` event can also hand it to the system clipboard (see `EditorScreen`). */
+  copySelection: () => string | null;
+  /** Copies the selection, then deletes it — one undo entry (the delete). Returns like `copySelection`. */
+  cutSelection: () => string | null;
   /** `targetCenter` is where the pasted fragment's center should land, in
    *  document coordinates — typically the pointer or current viewport
    *  center. Omitted falls back to a small offset from the fragment's own
@@ -609,18 +611,6 @@ let lastSystemClipboardText: string | null = null;
 const PASTE_STAGGER_STEP = 16;
 
 /**
- * `adoptStoredMetadata` patches `title`/`projectId` straight onto the live document, deliberately
- * bypassing `apply()` so a cross-tab rename/move doesn't create its own undo step. But `undo`/`redo`
- * swap `document` for an older/newer history snapshot taken *before* that adoption ran, so without
- * this, time-traveling past it would silently revert the adopted value — and the next autosave
- * would then write that reverted value back over the rename/move made in the other tab.
- *
- * Per field, only take the snapshot's value when this specific entry actually changed that field
- * (its `before`/`after` differ there) — that's a real Rename/Move the user is undoing or redoing.
- * Otherwise keep whatever the live document currently carries, so an out-of-band adoption rides
- * through time travel unaffected.
- */
-/**
  * The selection with anything the edit removed taken out — a command that deletes elements without
  * naming a new selection (removing a DLQ, say) must not leave the store, and every redo, holding ids
  * that no longer exist. Only checked when something was actually removed.
@@ -635,6 +625,18 @@ function selectionIn(next: DraftDocument, before: DraftDocument, selection: Sele
   return nodes.length === selection.nodes.length && edges.length === selection.edges.length ? selection : { nodes, edges };
 }
 
+/**
+ * `adoptStoredMetadata` patches `title`/`projectId` straight onto the live document, deliberately
+ * bypassing `apply()` so a cross-tab rename/move doesn't create its own undo step. But `undo`/`redo`
+ * swap `document` for an older/newer history snapshot taken *before* that adoption ran, so without
+ * this, time-traveling past it would silently revert the adopted value — and the next autosave
+ * would then write that reverted value back over the rename/move made in the other tab.
+ *
+ * Per field, only take the snapshot's value when this specific entry actually changed that field
+ * (its `before`/`after` differ there) — that's a real Rename/Move the user is undoing or redoing.
+ * Otherwise keep whatever the live document currently carries, so an out-of-band adoption rides
+ * through time travel unaffected.
+ */
 function carryAdoptedMetadata(
   target: DraftDocument,
   before: DraftMetadata,
@@ -1526,31 +1528,35 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   copySelection() {
     const state = get();
-    if (state.selection.nodes.length === 0) return;
+    if (state.selection.nodes.length === 0) return null;
     const fragment = extractFragment(state.document, state.selection.nodes);
+    const text = encodeClipboard(fragment);
     set({ clipboard: fragment, pasteRepeat: 0 });
     // Best-effort — a missing/denied Clipboard API (insecure context, an
-    // older browser, a test env) never breaks same-tab copy/paste, which
+    // older browser, a test env, a VS Code webview) never breaks same-tab copy/paste, which
     // the in-memory `clipboard` above already covers on its own.
     try {
-      void navigator.clipboard?.writeText?.(encodeClipboard(fragment))?.catch(() => {});
+      void navigator.clipboard?.writeText?.(text)?.catch(() => {});
     } catch {
       // ignore
     }
+    return text;
   },
 
   cutSelection() {
     const state = get();
     const { selection } = state;
-    if (selection.nodes.length === 0 && selection.edges.length === 0) return;
+    if (selection.nodes.length === 0 && selection.edges.length === 0) return null;
     // Only a node-bearing selection has a meaningful, self-contained
     // fragment to put on the clipboard — an edge-only cut, like an
     // edge-only copy, just removes what's selected. See `copySelection`.
+    let text: string | null = null;
     if (selection.nodes.length > 0) {
       const fragment = extractFragment(state.document, selection.nodes);
+      text = encodeClipboard(fragment);
       set({ clipboard: fragment, pasteRepeat: 0 });
       try {
-        void navigator.clipboard?.writeText?.(encodeClipboard(fragment))?.catch(() => {});
+        void navigator.clipboard?.writeText?.(text)?.catch(() => {});
       } catch {
         // ignore
       }
@@ -1558,6 +1564,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Cut', (doc) => removeElements(doc, selection.nodes, selection.edges), {
       selection: EMPTY_SELECTION,
     });
+    return text;
   },
 
   paste(targetCenter, options) {

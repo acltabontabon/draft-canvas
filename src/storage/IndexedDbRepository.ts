@@ -36,14 +36,19 @@ let persistenceRequested = false;
  *  saved the same document between its read and its write. */
 const METADATA_WRITE_ATTEMPTS = 3;
 
-const supersededListeners = new Set<() => void>();
+/** Why this tab's database connection is gone: a newer build in another tab asked for it to upgrade
+ *  the database, or the browser closed it on its own (Safari does, for a tab left in the background). */
+export type StorageLossReason = 'upgraded' | 'lost';
+
+const supersededListeners = new Set<(reason: StorageLossReason) => void>();
 
 /**
- * Called when a newer build, opened in another tab, needs this tab's connection closed to upgrade
- * the database. This tab closes it (otherwise that tab's open hangs forever) and can no longer
- * save — the listener's job is to tell the user to reload.
+ * Called when this tab's connection is gone for good. A newer build, opened in another tab, needs it
+ * closed to upgrade the database — this tab closes it (otherwise that tab's open hangs forever) — or
+ * the browser terminated it. Either way this tab can no longer save, and nothing reopens it; the
+ * listener's job is to tell the user to reload.
  */
-export function onStorageSuperseded(listener: () => void): () => void {
+export function onStorageSuperseded(listener: (reason: StorageLossReason) => void): () => void {
   supersededListeners.add(listener);
   return () => {
     supersededListeners.delete(listener);
@@ -137,10 +142,12 @@ export class IndexedDbRepository implements DraftRepository {
         },
         blocking() {
           opened?.close();
-          for (const listener of supersededListeners) listener();
+          for (const listener of supersededListeners) listener('upgraded');
         },
         terminated() {
           console.warn('[draft-canvas] The local database connection was closed unexpectedly.');
+          // Every save from here fails, and would otherwise only say storage "may be full".
+          for (const listener of supersededListeners) listener('lost');
         },
       });
       opened = db;

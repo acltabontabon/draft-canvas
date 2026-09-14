@@ -314,11 +314,14 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                         onToggleTools={() => setToolsStepId(toolsStepId === step.id ? null : step.id)}
                         canAddSelection={selection.nodes.length > 0 || selection.edges.length > 0}
                         addSelection={() => {
-                          for (const nodeId of selection.nodes) {
-                            useEditorStore.getState().addFlowStepExtraNode(flow.id, step.id, nodeId);
-                          }
-                          for (const edgeId of selection.edges) {
-                            useEditorStore.getState().addFlowStepExtraEdge(flow.id, step.id, edgeId);
+                          // One undo step for the whole selection, not one per element.
+                          const state = useEditorStore.getState();
+                          state.beginInteraction('Add to step');
+                          try {
+                            for (const nodeId of selection.nodes) state.addFlowStepExtraNode(flow.id, step.id, nodeId);
+                            for (const edgeId of selection.edges) state.addFlowStepExtraEdge(flow.id, step.id, edgeId);
+                          } finally {
+                            state.endInteraction();
                           }
                         }}
                       />

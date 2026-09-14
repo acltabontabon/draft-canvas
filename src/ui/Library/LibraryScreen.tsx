@@ -111,7 +111,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
 
   const onImport = async (file: File | undefined) => {
     if (!file) return;
-    if (looksLikeSecureExport(file)) {
+    if (await looksLikeSecureExport(file)) {
       // Reading it needs a passphrase first — hand off to the prompt below
       // rather than reading (and failing) here.
       setSecurePendingFile(file);

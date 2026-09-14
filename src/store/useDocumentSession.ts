@@ -128,13 +128,15 @@ export function useDocumentSession(): DocumentSession {
     };
   }, [notify]);
 
-  // A newer build opened in another tab is upgrading the database; this tab has let go of its
-  // connection so that can finish, and nothing here saves any more until a reload.
+  // This tab's database connection is gone — let go so a newer build in another tab can upgrade the
+  // database, or closed by the browser — and nothing here saves any more until a reload.
   useEffect(
     () =>
-      onStorageSuperseded(() =>
+      onStorageSuperseded((reason) =>
         notify(
-          "Draft Canvas was updated in another tab, so this tab can't save any more. Export recent changes, then reload.",
+          reason === 'lost'
+            ? "Lost the connection to this browser's storage, so this tab can't save any more. Export recent changes, then reload."
+            : "Draft Canvas was updated in another tab, so this tab can't save any more. Export recent changes, then reload.",
           'error',
         ),
       ),
@@ -427,14 +429,21 @@ export function useDocumentSession(): DocumentSession {
         // diagram — "Duplicate" should never silently drop it.
         if (source.settings.background.enabled) {
           const { imageId } = source.settings.background;
-          const image = await repository.loadBackgroundImage(id, imageId);
-          if (image) {
-            await repository.saveBackgroundImage(
-              clone.metadata.id,
-              image.blob,
-              { width: image.width, height: image.height },
-              imageId,
-            );
+          try {
+            const image = await repository.loadBackgroundImage(id, imageId);
+            if (image) {
+              await repository.saveBackgroundImage(
+                clone.metadata.id,
+                image.blob,
+                { width: image.width, height: image.height },
+                imageId,
+              );
+            }
+          } catch (error) {
+            // The failure below is reported as "could not duplicate", so no copy may be left behind:
+            // it would turn up in the list on the next refresh, pointing at an image that was never stored.
+            await repository.remove(clone.metadata.id).catch(() => {});
+            throw error;
           }
         }
         await refreshLibrary();

@@ -82,4 +82,22 @@ describe('Text editing — Enter is a newline, Cmd/Ctrl+Enter commits', () => {
     expect(editor()).toBeNull(); // plain Enter still commits for a label
     expect(useEditorStore.getState().document.nodes[0]!.text).toBe('Renamed');
   });
+
+  it('Escape on Text puts the box back to its stored height after typing grew it', () => {
+    const node = createNode({ type: 'text', x: 0, y: 0, text: 'Heading' });
+    const { editor, container } = mount(node);
+    const box = () => container.querySelector<HTMLElement>('.dc-node')!;
+
+    // jsdom has no layout: stand in for a textarea whose typed lines no longer fit.
+    Object.defineProperty(editor()!, 'scrollHeight', { configurable: true, value: node.height + 80 });
+    fireEvent.change(editor()!, { target: { value: 'Heading\nmore\nand more' } });
+    fireEvent.input(editor()!);
+    expect(box().style.height).toBe(`${node.height + 80}px`);
+
+    fireEvent.keyDown(editor()!, { key: 'Escape' });
+
+    expect(editor()).toBeNull();
+    expect(useEditorStore.getState().document.nodes[0]!.height).toBe(node.height);
+    expect(box().style.height).toBe(`${node.height}px`);
+  });
 });

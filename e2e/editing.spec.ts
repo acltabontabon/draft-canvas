@@ -521,6 +521,44 @@ test.describe('editing', () => {
     await expect(page.locator('.dc-node')).toHaveCount(1);
   });
 
+  test('a native copy or cut event carries the selected shapes, for hosts that refuse the Clipboard API', async ({ page }) => {
+    // VS Code's webview refuses `navigator.clipboard`, so there ⌘C/⌘X reach the app as the Edit
+    // menu's native copy/cut. Their event's own `clipboardData` is the one writable clipboard, and
+    // what another diagram (another webview) pastes from.
+    await newCanvas(page, 'Native copy event');
+    await create(page, 'Note', { x: 400, y: 300 });
+    await page.locator('.dc-node').first().click();
+
+    const fire = (type: 'copy' | 'cut') =>
+      page.evaluate((eventType) => {
+        const data = new DataTransfer();
+        const event = new ClipboardEvent(eventType, { clipboardData: data, bubbles: true, cancelable: true });
+        document.querySelector('.dc-canvas')!.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, text: data.getData('text/plain') };
+      }, type);
+
+    const copied = await fire('copy');
+    expect(copied.prevented).toBe(true);
+    expect(copied.text).toContain('"format":"draft-canvas"');
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+
+    const cut = await fire('cut');
+    expect(cut.text).toContain('"format":"draft-canvas"');
+    await expect(page.locator('.dc-node')).toHaveCount(0);
+
+    // With nothing selected the event is left to the browser.
+    const empty = await fire('copy');
+    expect(empty.prevented).toBe(false);
+
+    // And what it carried pastes back, as it would into another diagram.
+    await page.evaluate((text) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', text);
+      document.querySelector('.dc-canvas')!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    }, cut.text);
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+  });
+
   test('groups a selection into a boundary and ungroups it', async ({ page }) => {
     await newCanvas(page, 'Grouping');
     await create(page, 'Service', { x: 350, y: 280 });
@@ -1228,5 +1266,61 @@ test.describe('reconnection', () => {
 
     await expect(page.locator('.dc-edge')).toHaveCount(1);
     await expect(page.locator('.dc-edge-line')).toHaveAttribute('d', pathBefore ?? '');
+  });
+});
+
+test.describe('editing — commands during a drag', () => {
+  test('Delete pressed mid-drag waits for the drag, and undo keeps working afterwards', async ({ page }) => {
+    await newCanvas(page, 'Delete mid-drag');
+    await create(page, 'Service', { x: 400, y: 300 });
+    const node = page.locator('.dc-node').first();
+    const start = (await node.boundingBox())!;
+
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(start.x + start.width / 2 + 60, start.y + start.height / 2, { steps: 6 });
+    await page.keyboard.press('Delete');
+    await page.mouse.move(start.x + start.width / 2 + 160, start.y + start.height / 2, { steps: 6 });
+    await page.mouse.up();
+
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+    await expect.poll(async () => (await node.boundingBox())!.x - start.x).toBeGreaterThan(120);
+
+    await page.keyboard.press('Meta+z');
+    await expect.poll(async () => Math.abs((await node.boundingBox())!.x - start.x)).toBeLessThan(4);
+
+    // History is live again, not stuck inside the drag's bracket.
+    await create(page, 'Service', { x: 700, y: 500 });
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+    await page.keyboard.press('Meta+z');
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+  });
+
+  test('a drag React Flow abandons (its node removed underneath it) still closes, so undo brings the node back', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Aborted drag');
+    await create(page, 'Service', { x: 400, y: 300 });
+    const start = (await page.locator('.dc-node').first().boundingBox())!;
+
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(start.x + start.width / 2 + 60, start.y + start.height / 2, { steps: 6 });
+    // Not a key press (those now wait): the node goes some other way while the button is held.
+    await page.evaluate(async () => {
+      const mod = await import('/src/store/editorStore.ts');
+      mod.useEditorStore.getState().deleteSelection();
+    });
+    await expect(page.locator('.dc-node')).toHaveCount(0);
+    await page.mouse.move(start.x + start.width / 2 + 120, start.y + start.height / 2, { steps: 6 });
+    await page.mouse.up();
+
+    await expect
+      .poll(() =>
+        page.evaluate(async () => (await import('/src/store/uiStore.ts')).useUiStore.getState().interactionActive),
+      )
+      .toBe(false);
+    await page.keyboard.press('Meta+z');
+    await expect(page.locator('.dc-node')).toHaveCount(1);
   });
 });

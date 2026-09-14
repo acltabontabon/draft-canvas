@@ -6,4 +6,6 @@
 declare module '/src/*' {
   // oxlint-disable-next-line typescript/no-explicit-any
   export const useEditorStore: { getState(): any; setState(partial: unknown): void };
+  // oxlint-disable-next-line typescript/no-explicit-any
+  export const useUiStore: { getState(): any; setState(partial: unknown): void };
 }

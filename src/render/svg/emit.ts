@@ -23,9 +23,14 @@ let clipScope = 'g';
  * `<svg>` they appear in — so every node on the canvas would otherwise fight
  * over `#dc-clip-1`. Each render declares a scope (a node id on the canvas, a
  * constant for an export) to keep them apart.
+ *
+ * Other characters are spelled out, not dropped: an imported id can hold anything, and stripping
+ * made `api.gw` and `apigw` — or any two ids written entirely in another script — the same scope,
+ * so one card clipped to the other's rectangle. `.` never survives on its own, so the spelling
+ * can't collide with an id that happens to read like one.
  */
 export function beginClipScope(scope: string): void {
-  clipScope = scope.replace(/[^a-zA-Z0-9_-]/g, '') || 'g';
+  clipScope = scope.replace(/[^a-zA-Z0-9_-]/gu, (char) => `.${char.codePointAt(0)!.toString(36)}.`) || 'g';
   clipCounter = 0;
 }
 

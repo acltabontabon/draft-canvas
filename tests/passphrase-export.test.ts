@@ -116,3 +116,17 @@ describe('encryptForExport / decryptFromExport', () => {
     expect(result.ok).toBe(true);
   });
 });
+
+describe('looksLikeSecureExport', () => {
+  it('recognises a secure export by its extension, or by its format marker once the extension is gone', async () => {
+    const { looksLikeSecureExport } = await import('../src/export/secureProject');
+    const text = await encryptForExport(fixture(), 'renamed along the way');
+    const plain = JSON.stringify(fixture());
+
+    expect(await looksLikeSecureExport(new File([text], 'handoff.dcenc'))).toBe(true);
+    expect(await looksLikeSecureExport(new File([text], 'handoff.dcenc.json'))).toBe(true);
+    expect(await looksLikeSecureExport(new File([plain], 'handoff.draftcanvas'))).toBe(false);
+    // A plain document that merely mentions the marker somewhere inside is still a plain document.
+    expect(await looksLikeSecureExport(new File([JSON.stringify({ note: SECURE_EXPORT_FORMAT })], 'x.json'))).toBe(false);
+  });
+});

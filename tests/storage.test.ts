@@ -261,7 +261,7 @@ describe('local persistence', () => {
     });
     stop();
     upgraded.close();
-    expect(listener).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledExactlyOnceWith('upgraded');
   });
 
   it('duplicates into an independent document', async () => {

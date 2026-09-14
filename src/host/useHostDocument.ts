@@ -3,6 +3,7 @@ import { createDocument } from '../document/factory';
 import { deserializeDocument, serializeDocument } from '../export/project';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isEditableTarget } from '../lib/isEditableTarget';
+import { useUiStore } from '../store/uiStore';
 import type { DocumentSession } from '../store/useDocumentSession';
 import { embeddedHost, HOST_PROTOCOL, isHostOrigin, type LoadMessage, type ToHostMessage } from './embeddedHost';
 
@@ -97,6 +98,11 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       invalid = false;
       shownSeq = seq;
       setState({ error: null, invalidWhileOpen: false });
+      // Said out loud, as an import in the Library does: the file itself still holds the original,
+      // and the first edit writes the repaired document over it.
+      if (parsed && parsed.repairs.length > 0) {
+        useUiStore.getState().notify(`Opened with repairs, saved to the file on your next edit: ${parsed.repairs.join(' ')}`);
+      }
       // Opening normalises what it read; that alone must not dirty the file. A new file is the
       // exception: it gets its first contents now.
       hostText = blank ? null : serializeDocument(useEditorStore.getState().document);

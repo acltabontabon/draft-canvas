@@ -28,6 +28,26 @@ All notable changes to Draft Canvas are documented here.
 - Shortcuts keep working after ticking a flow checkbox in a connector's popover.
 - Escape while dragging a connector's end cancels the drag without deselecting the connector.
 - Double-clicking a shape's attachment badge or Copy button no longer opens its text editor.
+- Pressing Delete (or another shortcut) while dragging a shape no longer breaks undo for the rest of
+  the session. Shortcuts wait until the drag ends.
+- After a box selection, clicking, double-clicking and right-clicking the selected shapes work
+  again.
+- Escape with a shape's colour or text panel open closes just that panel, and keeps the suggestion
+  beside the shape.
+- Pressing Escape while editing a Text box puts the box back to its size.
+- Adding a selection to a flow step is now a single undo.
+- On a phone-width window the canvas title no longer runs under Undo and Redo.
+- In VS Code, a diagram file that needed repairs says what was repaired when it opens.
+- In VS Code, shapes copied or cut with ⌘C/⌘X (Ctrl+C/Ctrl+X) now paste into other diagrams and
+  other apps, not only back into the same diagram.
+- If the browser closes its connection to local storage, Draft Canvas now says it can't save and
+  asks you to export and reload.
+- A duplicate whose background image couldn't be copied is no longer left half-made.
+- A background image chosen just before opening another canvas stays with the canvas it was chosen
+  for.
+- Code and note cards on shapes whose ids use non-Latin characters no longer clip to each other.
+- A passphrase-protected export whose file extension changed to .json still opens with the
+  passphrase prompt.
 - Long right-click menus scroll on short windows, so every item stays reachable.
 - A lone carriage return in a label can no longer break a Mermaid or PlantUML export.
 - Choosing a background image while storage is full says so, and no longer undoes a Dim or Blur

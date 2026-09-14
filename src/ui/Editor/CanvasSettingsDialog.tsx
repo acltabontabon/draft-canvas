@@ -69,6 +69,9 @@ function CanvasSettingsBody() {
       // change, and ⌘Z steps back to the previous image, whose bytes are still stored.
       const imageId = createId('bg');
       await repository.saveBackgroundImage(documentId, blob, { width, height }, imageId);
+      // A large photo takes a moment. Should another canvas be open by now, the image belongs to the
+      // one it was chosen for, not to whichever is showing.
+      if (useEditorStore.getState().document.metadata.id !== documentId) return;
       // Read now, not from this render: Dim or Blur may have changed while a large photo was saving.
       const current = useEditorStore.getState().document.settings.background;
       updateSettings({ background: { ...current, enabled: true, imageId } });

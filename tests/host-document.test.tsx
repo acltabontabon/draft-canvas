@@ -67,6 +67,33 @@ describe('embedded in a host', () => {
     expect(messages('draft-canvas:change')).toHaveLength(0);
   });
 
+  it('says what it repaired when opening a damaged file, instead of repairing it silently', async () => {
+    const { useUiStore } = await import('../src/store/uiStore');
+    useUiStore.setState({ toasts: [] });
+    const state = mount();
+    await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
+    const file = createDocument('Payments');
+    const damaged = JSON.parse(serializeDocument(file));
+    damaged.edges = [{ id: 'e1', source: 'missing-a', target: 'missing-b' }];
+    fromHost({ type: 'draft-canvas:load', text: JSON.stringify(damaged) });
+
+    await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+    const toasts = useUiStore.getState().toasts.map((toast) => toast.message);
+    expect(toasts).toEqual([expect.stringContaining('pointing at nodes that do not exist')]);
+  });
+
+  it('opens a clean file without any repair notice', async () => {
+    const { useUiStore } = await import('../src/store/uiStore');
+    useUiStore.setState({ toasts: [] });
+    const state = mount();
+    await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
+    const file = createDocument('Payments');
+    fromHost({ type: 'draft-canvas:load', text: serializeDocument(file) });
+
+    await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+    expect(useUiStore.getState().toasts).toEqual([]);
+  });
+
   it('sends every edit back as the whole file, to the host only', async () => {
     const state = mount();
     await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));

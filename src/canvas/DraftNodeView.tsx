@@ -467,7 +467,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
               // already-committed text, not the discarded textarea value — a never-typed-into
               // Text node Escaped out of still gets cleaned up; real content Escape reverted away
               // from never does, since it's still sitting on the node untouched.
-              if (isText) useEditorStore.getState().finishTextEdit(node.id, node.text ?? '');
+              if (isText) {
+                // Nothing is committed, so the document never catches up with the height typing
+                // grew to — left set, the box and its handles would stay taller than the node.
+                setLiveHeight(null);
+                useEditorStore.getState().finishTextEdit(node.id, node.text ?? '');
+              }
               stopEditing();
               return;
             }

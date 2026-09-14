@@ -337,6 +337,16 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   /** Dragged boundary id → its descendant ids, for the current gesture only. */
   const sweptDescendants = useRef<Map<string, string[]>>(new Map());
   /**
+   * React Flow skips `onNodeDragStop` for a drag it aborts: a second touch landing mid-drag, or the
+   * node under the pointer vanishing. The gesture's undo bracket and `interactionActive` would then
+   * stay open, and every later edit would skip history until some other drag closed them. So the
+   * drag finishes itself on exactly those two conditions — React Flow's own — rather than on a
+   * release, which its drag handler swallows (`stopImmediatePropagation` on `mouseup`).
+   */
+  const grabbedId = useRef<string | null>(null);
+  const stopWatchingTouches = useRef<(() => void) | null>(null);
+  const finishDrag = useRef<() => void>(() => {});
+  /**
    * Attach-arming dwell: while the pointer sits still, React Flow fires no
    * further drag events at all, so elapsed time can't be checked from inside
    * `onNodesChange` — it must be a real timer, armed independently once a
@@ -737,9 +747,20 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    * the wrong node's position whenever those two disagree.
    */
   const onNodeDragStart = useCallback(
-    (_event: unknown, _node: DraftRfNode, dragged: DraftRfNode[]) => {
+    (_event: unknown, grabbed: DraftRfNode, dragged: DraftRfNode[]) => {
       const state = useEditorStore.getState();
       state.beginInteraction('Move');
+
+      grabbedId.current = grabbed.id;
+      stopWatchingTouches.current?.();
+      const onTouchMove = (event: TouchEvent) => {
+        if (event.touches.length > 1 && draggingIds.current.size > 0) finishDrag.current();
+      };
+      window.addEventListener('touchmove', onTouchMove, { capture: true, passive: true });
+      stopWatchingTouches.current = () => {
+        window.removeEventListener('touchmove', onTouchMove, { capture: true });
+        stopWatchingTouches.current = null;
+      };
 
       const moving = new Set(dragged.map((node) => node.id));
       draggingIds.current = moving;
@@ -784,6 +805,8 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    * restricted to a single, unambiguous node.
    */
   const onNodeDragStop = useCallback(() => {
+    stopWatchingTouches.current?.();
+    grabbedId.current = null;
     setGuides([]);
     const state = useEditorStore.getState();
     const draggedIds = draggingIds.current;
@@ -830,6 +853,17 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     useUiStore.getState().setAttachArmedTarget(null);
     useUiStore.getState().setAttachArmedEdgeTarget(null);
   }, [clearDwell, getNodes]);
+
+  useEffect(() => {
+    finishDrag.current = onNodeDragStop;
+  }, [onNodeDragStop]);
+  useEffect(() => () => stopWatchingTouches.current?.(), []);
+  // The grabbed node gone from the document mid-drag (deleted some way other than a key, which
+  // waits for the drag): React Flow abandons the gesture on its next move.
+  useEffect(() => {
+    const id = grabbedId.current;
+    if (id && draggingIds.current.size > 0 && !nodeIndex(document.nodes).has(id)) finishDrag.current();
+  }, [document.nodes]);
 
   const onConnect = useCallback(
     (connection: Connection) => {

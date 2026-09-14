@@ -5,6 +5,7 @@ import { addFlow, createFlow } from '../src/document/flow';
 import { NODE_TYPES } from '../src/document/types';
 import { describeContext, describeNode } from '../src/nodes/describe';
 import { renderDocumentSvg } from '../src/render/svg/document';
+import { beginClipScope, emitShape } from '../src/render/svg/emit';
 import { escapeXmlAttr, escapeXmlText, serialize, stripInvalidXml } from '../src/render/svg/element';
 import { tokenizeCode, flattenToLines } from '../src/render/code/highlight';
 import { layoutText, baselineOf } from '../src/render/text/layout';
@@ -526,6 +527,19 @@ describe('SVG export is safe against hostile content', () => {
     const ids = [...parsed.querySelectorAll('clipPath')].map((el) => el.id);
     expect(ids.length).toBeGreaterThan(1);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('keeps clip-path scopes apart for ids that differ only in characters an id attribute cannot hold', () => {
+    const clipIdFor = (scope: string) => {
+      beginClipScope(scope);
+      const svg = emitShape({ t: 'group', clip: { x: 0, y: 0, w: 10, h: 10 }, children: [] }).map(serialize).join('');
+      return /<clipPath id="([^"]+)"/.exec(svg)?.[1];
+    };
+    const ids = ['api.gw', 'apigw', '服务', '数据库', 'n_abc'].map(clipIdFor);
+    expect(ids.every(Boolean)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+    // Ids the app itself creates keep their plain spelling.
+    expect(ids[4]).toBe('dc-n_abc-clip-1');
   });
 });
 

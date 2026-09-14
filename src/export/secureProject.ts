@@ -3,6 +3,7 @@ import {
   decryptFromExport,
   encryptForExport,
   SECURE_EXPORT_FILE_EXTENSION,
+  SECURE_EXPORT_FORMAT,
   SECURE_EXPORT_MIME,
 } from '../crypto/passphraseExport';
 import type { DraftDocument } from '../document/types';
@@ -40,8 +41,18 @@ export async function readSecureProjectFile(file: File, passphrase: string): Pro
   return parseDocument(decrypted.document);
 }
 
-/** By extension only — routes the import flow to the passphrase prompt
- *  instead of reading the file as plain `.draftcanvas` JSON. */
-export function looksLikeSecureExport(file: File): boolean {
-  return file.name.toLowerCase().endsWith(SECURE_EXPORT_FILE_EXTENSION);
+/**
+ * Whether an import needs the passphrase prompt instead of being read as plain `.draftcanvas` JSON.
+ * The extension decides it when it's there; a file that lost it along the way (saved or mailed as
+ * `.json`) is recognised by its format marker, which leads the envelope — otherwise it would be
+ * turned away as "not a Draft Canvas document".
+ */
+export async function looksLikeSecureExport(file: File): Promise<boolean> {
+  if (file.name.toLowerCase().endsWith(SECURE_EXPORT_FILE_EXTENSION)) return true;
+  try {
+    const head = await file.slice(0, 256).text();
+    return new RegExp(`^\\s*\\{\\s*"format"\\s*:\\s*"${SECURE_EXPORT_FORMAT}"`).test(head);
+  } catch {
+    return false;
+  }
 }

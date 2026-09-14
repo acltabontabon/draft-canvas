@@ -345,4 +345,21 @@ test.describe('Intent Continuation', () => {
     await expect(page.locator('.dc-ghost')).toHaveCount(0);
     await expect(page.locator('.dc-node')).toHaveCount(2);
   });
+
+  test("Escape with the node's colour panel open closes only the panel, and the ghost stays", async ({ page }) => {
+    await newCanvas(page, 'Continuation panel escape');
+    await publisherAndTopic(page);
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Element colour' }).click();
+    await expect(page.locator('.dc-popover-panel')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-popover-panel')).toHaveCount(0);
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+
+    // The next Escape is the ghost's, as before.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-ghost')).toHaveCount(0);
+  });
 });

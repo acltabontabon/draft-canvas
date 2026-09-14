@@ -7,7 +7,7 @@ import type { DraftDocument } from './types';
  *
  * Split out of `operations.ts` so the Library — which only needs to decide where a new canvas's
  * starter goes and what viewport it opens at — doesn't carry the whole editing module in its chunk.
- * `operations.ts` re-exports all of it, so either import path reads the same functions.
+ * `operations.ts` re-exports what editing code reaches for (`boundsOf`, `freeOriginFor`, `INSERT_GAP`).
  */
 
 export const clampCoord = (n: number) =>
