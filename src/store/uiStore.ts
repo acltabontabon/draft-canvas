@@ -256,14 +256,30 @@ export interface UiStore {
    */
   settleNodeIds: readonly string[];
   /**
-   * The one-shot "the shape opened into a room" (or closed back into a shape) animation, described
-   * as the screen rectangle the room grows out of — or shrinks back into — and which way it goes.
+   * The one-shot "the shape opened into a room" (or closed back into a shape) animation: which way
+   * it goes, the shape it belongs to, and the screen rectangle it starts from — the room in the
+   * shape's depth glyph going in, the room's frame coming out (null: the room had no frame, so the
+   * canvas). Where it ends is measured live, frame by frame, since the camera is still gliding.
    *
    * Purely visual, and deliberately set *after* the navigation it illustrates: the editor is
    * already showing the new room by the time this arrives, so nothing about being in the right
    * place waits on an animation, and mashing ⌘↓/⌘↑ can only ever replace one token with the next.
    */
-  depthTransition: { id: number; direction: 'in' | 'out'; from: { x: number; y: number; width: number; height: number } } | null;
+  /**
+   * The two directions of one link between the layers panel (`DepthStack`) and the canvas.
+   * `depthPlateFocusId`: a shape whose plate is hovered or focused in the panel — the canvas shows
+   * that shape's layer, so "which one is that?" is answered on the drawing. `depthShapeHoverId`: a
+   * shape with an inside the pointer is over on the canvas — an open panel lights its plate. Both
+   * purely visual and never persisted.
+   */
+  depthPlateFocusId: string | null;
+  depthShapeHoverId: string | null;
+  depthTransition: {
+    id: number;
+    direction: 'in' | 'out';
+    nodeId: string;
+    from: { x: number; y: number; width: number; height: number } | null;
+  } | null;
   /**
    * The Learn drawer (`ui/learn/LearnDrawer.tsx`) and where it was left. Session memory only:
    * reopening Learn returns to the recipe or search you were on, a reload starts at its home.
@@ -366,6 +382,8 @@ export interface UiStore {
   /** On document switch: nothing about the previous diagram's offers applies to the next. */
   resetContinuation: () => void;
   setContinuationsEnabled: (enabled: boolean) => void;
+  setDepthPlateFocusId: (id: string | null) => void;
+  setDepthShapeHoverId: (id: string | null) => void;
   /** Plays (or clears) the depth transition — see `depthTransition`. */
   setDepthTransition: (transition: UiStore['depthTransition']) => void;
   /** Marks freshly accepted nodes for their settle animation; the marker expires on its own. */
@@ -432,6 +450,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   continuationRecent: [],
   settleNodeIds: [],
   depthTransition: null,
+  depthPlateFocusId: null,
+  depthShapeHoverId: null,
   librarySearchQuery: '',
   librarySort: 'updatedAt',
   libraryView: { kind: 'recent' },
@@ -609,6 +629,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
     }));
   },
   setDepthTransition: (depthTransition) => set({ depthTransition }),
+  setDepthPlateFocusId: (depthPlateFocusId) => set({ depthPlateFocusId }),
+  setDepthShapeHoverId: (depthShapeHoverId) => set({ depthShapeHoverId }),
   setSettleNodeIds: (settleNodeIds) => {
     clearTimeout(settleTimer);
     set((state) => (settleNodeIds.length === 0 && state.settleNodeIds.length === 0 ? state : { settleNodeIds }));

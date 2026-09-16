@@ -2493,159 +2493,311 @@ button.dc-status-level:focus-visible {
    Inert, above the canvas but below every control, and only ever on screen for a quarter second. */
 .dc-depth-sheet {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   z-index: var(--dc-z-chrome);
-  border: 1px solid var(--dc-selection);
-  border-radius: var(--dc-radius-md);
-  background: var(--dc-canvas);
   pointer-events: none;
-  will-change: transform, opacity;
+  /* Only ever seen while animated — see `DepthTransition`. */
+  opacity: 0;
+  will-change: left, top, width, height, opacity;
 }
 
-/* Where you are, when you are inside something. Two sheets peek out behind the panel so the thing
-   reads as a stack of pages rather than a path — the rooms you came through are literally under
-   the one you are looking at. Absent entirely at the top level. */
+.dc-depth-sheet-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--dc-canvas);
+  opacity: 0;
+}
+
+/* The depth glyph's room, travelling: the same corner marks the room frame is drawn with. */
+.dc-depth-sheet [data-at] {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 0 solid var(--dc-selection);
+}
+
+.dc-depth-sheet [data-at='nw'] {
+  top: 0;
+  left: 0;
+  border-top-width: 1.5px;
+  border-left-width: 1.5px;
+}
+
+.dc-depth-sheet [data-at='ne'] {
+  top: 0;
+  right: 0;
+  border-top-width: 1.5px;
+  border-right-width: 1.5px;
+}
+
+.dc-depth-sheet [data-at='se'] {
+  right: 0;
+  bottom: 0;
+  border-right-width: 1.5px;
+  border-bottom-width: 1.5px;
+}
+
+.dc-depth-sheet [data-at='sw'] {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 1.5px;
+  border-left-width: 1.5px;
+}
+
+/* Where you are, when you are inside something — the layers you came down through (see
+   `DepthStack`). At rest: a small stack and the name of the room, floating on the canvas with just
+   enough ground under it to read. Reached for: a panel that deals the stack out into an exploded
+   view, one plate per layer, top to bottom, each with a sketch of what is drawn on it. Absent
+   entirely at the top level. */
 .dc-depth {
   position: absolute;
-  top: 14px;
-  left: 14px;
+  top: 12px;
+  left: 12px;
   z-index: var(--dc-z-bar);
-  padding: 5px 12px 5px 11px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-sm);
-  background: var(--dc-surface);
-  box-shadow: var(--dc-shadow-panel);
-  font-size: 12.5px;
-  max-width: min(46vw, 420px);
-}
-
-.dc-depth::before,
-.dc-depth::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-sm);
-  background: var(--dc-surface);
-  z-index: -1;
-  transition:
-    transform 140ms var(--dc-ease-out),
-    opacity 140ms var(--dc-ease-out);
-}
-
-.dc-depth::before {
-  transform: translate(3px, 3px);
-  opacity: 0.7;
-}
-
-.dc-depth::after {
-  transform: translate(6px, 6px);
-  opacity: 0.4;
-}
-
-/* Expanded, the sheets tuck back in: the stack has been dealt out into the list itself. */
-.dc-depth:hover::before,
-.dc-depth:focus-within::before,
-.dc-depth:hover::after,
-.dc-depth:focus-within::after {
-  transform: none;
-  opacity: 0;
-}
-
-.dc-depth-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  max-width: min(46vw, 360px);
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: var(--dc-radius-md);
+  background: color-mix(in srgb, var(--dc-canvas) 72%, transparent);
+  backdrop-filter: blur(6px);
+  font-size: 12.5px;
+  transition:
+    background-color 160ms var(--dc-ease-out),
+    border-color 160ms var(--dc-ease-out),
+    box-shadow 160ms var(--dc-ease-out);
 }
 
-.dc-depth-rung {
+.dc-depth[data-open='true'] {
+  border-color: var(--dc-border);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+}
+
+.dc-depth-head {
   display: flex;
   align-items: center;
-  gap: 4px;
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition:
-    max-height 140ms var(--dc-ease-out),
-    opacity 120ms var(--dc-ease-out);
-}
-
-/* Collapsed, only the room you are in is showing — the shortest true answer. */
-.dc-depth-rung[data-nearest='true'],
-.dc-depth:hover .dc-depth-rung,
-.dc-depth:focus-within .dc-depth-rung {
-  max-height: 24px;
-  opacity: 1;
-}
-
-/* The back arrow belongs to the rung that is always showing. Opened, the indent carries the
-   hierarchy and an arrow on every line would only be noise. */
-.dc-depth-into {
-  opacity: 0;
-}
-
-.dc-depth-rung[data-nearest='true'] .dc-depth-into {
-  opacity: 1;
-  transition: opacity 120ms var(--dc-ease-out);
-}
-
-.dc-depth:hover .dc-depth-rung[data-nearest='true'] .dc-depth-into,
-.dc-depth:focus-within .dc-depth-rung[data-nearest='true'] .dc-depth-into {
-  opacity: 0;
-}
-
-/* Each room is indented under the one it sits in. */
-/* Opened, each rung sits a little further in than the one it was reached from — the indent is
-   what says which way is out, so nothing has to repeat it in words. Closed, only the last rung is
-   showing and it sits flush against the arrow. */
-.dc-depth:hover .dc-depth-rung:nth-child(2),
-.dc-depth:focus-within .dc-depth-rung:nth-child(2) { padding-left: 10px; }
-.dc-depth:hover .dc-depth-rung:nth-child(3),
-.dc-depth:focus-within .dc-depth-rung:nth-child(3) { padding-left: 20px; }
-
-.dc-depth-into {
-  color: var(--dc-text-faint, var(--dc-text-muted));
-  font-size: 11px;
-}
-
-.dc-depth-step {
-  display: block;
-  max-width: 100%;
-  padding: 1px 2px;
+  gap: 9px;
+  min-width: 0;
+  padding: 5px 10px 5px 7px;
   border: 0;
-  border-radius: var(--dc-radius-xs);
+  border-radius: calc(var(--dc-radius-md) - 2px);
   background: none;
-  color: var(--dc-text-muted);
+  color: var(--dc-text);
   font: inherit;
-  line-height: 1.5;
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-button.dc-depth-step {
   cursor: pointer;
 }
 
-button.dc-depth-step:hover {
-  color: var(--dc-text);
-  background: var(--dc-surface-hover, transparent);
+.dc-depth-head:focus-visible,
+.dc-depth-plate-step:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
-.dc-depth-rung[data-nearest='true'] .dc-depth-step {
+/* The compact stack: the whole canvas on top, the room you are in at the bottom, lit. */
+.dc-depth-glyph-stack {
+  flex: none;
+  overflow: visible;
+}
+
+.dc-depth-glyph-stack path {
+  fill: var(--dc-border-strong);
+  stroke: var(--dc-canvas);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+.dc-depth[data-open='true'] .dc-depth-glyph-stack path {
+  stroke: var(--dc-surface);
+}
+
+.dc-depth-glyph-stack path[data-current='true'] {
+  fill: currentColor;
+}
+
+.dc-depth-here {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dc-depth-level,
+.dc-depth-plate-level {
+  flex: none;
+  color: var(--dc-text-faint);
+  font-size: 11px;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* ---- the exploded view ---- */
+.dc-depth-plates {
+  position: relative;
+  margin: 2px 0 0;
+  padding: 4px 4px 6px;
+  border-top: 1px solid var(--dc-border);
+  list-style: none;
+}
+
+/* The way you came down: one line through every plate, from the canvas to where you are. */
+.dc-depth-plates::before {
+  content: '';
+  position: absolute;
+  top: 32px;
+  bottom: 32px;
+  left: 54px;
+  border-left: 1px dashed var(--dc-border-strong);
+}
+
+.dc-depth-layer {
+  position: relative;
+  animation: dc-depth-deal 240ms var(--dc-ease-out) both;
+  animation-delay: calc(var(--i) * 40ms);
+}
+
+.dc-depth-layer + .dc-depth-layer {
+  margin-top: -14px;
+}
+
+@keyframes dc-depth-deal {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--i) * -10px));
+  }
+}
+
+.dc-depth-plate-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0 10px 0 0;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.dc-depth-plate-step {
+  cursor: pointer;
+}
+
+.dc-depth-plate {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 104px;
+  height: 64px;
+}
+
+/* A layer, seen from above and a little to the side: the room's own sketch on a plate in the colour
+   of the shape it is inside, with an edge underneath for thickness. */
+.dc-depth-plate .dc-fingerprint {
+  width: 62px;
+  height: 36px;
+  padding: 5px;
+  border: 1px solid var(--dc-plate-line);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--dc-plate-fill) 92%, var(--dc-surface));
+  color: var(--dc-plate-ink);
+  opacity: 0.72;
+  box-shadow: 2px 2px 0 0 color-mix(in srgb, var(--dc-plate-line) 55%, transparent);
+  transform: rotateX(56deg) rotateZ(-38deg);
+  transition:
+    translate 160ms var(--dc-ease-out),
+    opacity 160ms var(--dc-ease-out),
+    border-color 160ms var(--dc-ease-out);
+}
+
+.dc-depth-layer[data-current='true'] .dc-fingerprint {
+  border-color: var(--dc-plate-ink);
+  opacity: 1;
+  box-shadow:
+    2px 2px 0 0 var(--dc-plate-line),
+    0 0 0 3px color-mix(in srgb, var(--dc-plate-ink) 16%, transparent);
+}
+
+button.dc-depth-plate-step:hover .dc-fingerprint,
+button.dc-depth-plate-step:focus-visible .dc-fingerprint {
+  border-color: var(--dc-plate-ink);
+  opacity: 1;
+  translate: 0 -3px;
+}
+
+.dc-depth-plate-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.dc-depth-plate-name {
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dc-depth-layer[data-current='true'] .dc-depth-plate-name,
+.dc-depth-layer[data-linked='true'] .dc-depth-plate-name,
+button.dc-depth-plate-step:hover .dc-depth-plate-name,
+button.dc-depth-plate-step:focus-visible .dc-depth-plate-name {
   color: var(--dc-text);
+}
+
+.dc-depth-layer[data-current='true'] .dc-depth-plate-name {
+  font-weight: 600;
+}
+
+/* Below where you are: the layers you could still go down into — fainter, their edges still only
+   pencilled in, until you reach for one. */
+.dc-depth-below {
+  position: relative;
+  /* In line with the names: the plate's width plus the gap after it. */
+  margin: 4px 0 -8px 114px;
+  color: var(--dc-text-faint);
+  font-size: 10.5px;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+}
+
+.dc-depth-below[data-more='true'] {
+  margin: -4px 0 2px 114px;
+}
+
+.dc-depth-layer[data-next='true'] .dc-fingerprint {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.7;
+}
+
+.dc-depth-layer[data-next='true'] .dc-depth-plate-name {
+  color: var(--dc-text-muted);
+}
+
+.dc-depth-layer[data-next='true'] button:hover .dc-fingerprint,
+.dc-depth-layer[data-next='true'] button:focus-visible .dc-fingerprint,
+.dc-depth-layer[data-linked='true'] .dc-fingerprint {
+  border-style: solid;
+  background: color-mix(in srgb, var(--dc-plate-fill) 92%, var(--dc-surface));
+  translate: 0 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dc-depth::before,
-  .dc-depth::after,
-  .dc-depth-rung,
-  .dc-depth-into {
+  .dc-depth,
+  .dc-depth-layer,
+  .dc-depth-plate .dc-fingerprint {
     transition: none;
+    animation: none;
   }
 }
 

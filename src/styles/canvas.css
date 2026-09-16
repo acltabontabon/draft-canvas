@@ -1039,52 +1039,73 @@
   border-color: var(--dc-selection);
 }
 
-/* A shape that has architecture inside it rests on a second sheet of the same paper, showing along
-   its right and lower edges. It is that shape's own outline, drawn from the same display list the
-   shape is (see `DraftNodeView`'s `sheet`), so it is right for a cylinder or a tube as much as for
-   a box and hand-drawn wherever the shape is. Deliberately not a button and not a count — it says
-   "there is more under this", and the way in is the shape itself (⌘↓, the popover, the menu).
-   Inert to the pointer so it can never eat a click meant for the node or its resize corner. */
+/* The depth glyph (`DepthGlyph`): a tiny stack of three flat layers. Colour is `currentColor`; a
+   thin ring in `--dc-depth-ground` separates each layer from the one beneath it. */
+.dc-depth-glyph {
+  display: block;
+  overflow: visible;
+}
+
+.dc-depth-glyph path {
+  fill: currentColor;
+  stroke: var(--dc-depth-ground, var(--dc-canvas));
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  transition: transform 180ms var(--dc-ease-out);
+}
+
+.dc-depth-glyph [data-layer='1'] {
+  opacity: 0.8;
+}
+
+.dc-depth-glyph [data-layer='0'] {
+  opacity: 0.6;
+}
+
+/* A shape that has architecture inside it: nothing at rest. Reached for — hovered, focused from
+   the keyboard, or named in the layers panel — a second layer of the same shape slides out from behind it, down and to the right,
+   quieter than the shape itself: "there is more below this". Inert to the pointer, so it never eats
+   a click meant for the node or its resize corner. */
 .dc-inside-mark {
   position: absolute;
   inset: 0;
-  /* Behind the node's own surface, so only the edges of the sheet show. */
   z-index: -1;
   pointer-events: none;
-  /* The tilt is the whole trick: square, a copy of a shape reads as a duplicate somebody forgot to
-     align; a shade off, it reads as a sheet somebody put down. Each one further out, further over
-     and fainter than the last, the way a short stack sits. */
-  transform-origin: 18% 18%;
+  opacity: 0;
+  transform: translate(0, 0);
   transition:
-    transform 180ms var(--dc-ease-out),
-    opacity 180ms var(--dc-ease-out);
+    transform 200ms var(--dc-ease-out),
+    opacity 160ms var(--dc-ease-out);
 }
 
-.dc-inside-mark[data-sheet='0'] {
-  transform: translate(7px, 8px) rotate(0.9deg);
-  opacity: 0.55;
-}
-
-.dc-inside-mark[data-sheet='1'] {
-  transform: translate(14px, 17px) rotate(2.1deg);
-  opacity: 0.3;
-}
-
-/* Reaching for it fans the stack, the way a thumb would. */
-.dc-node:hover .dc-inside-mark[data-sheet='0'],
-.dc-node[data-selected='true'] .dc-inside-mark[data-sheet='0'] {
-  transform: translate(11px, 13px) rotate(1.6deg);
-  opacity: 0.7;
-}
-
-.dc-node:hover .dc-inside-mark[data-sheet='1'],
-.dc-node[data-selected='true'] .dc-inside-mark[data-sheet='1'] {
-  transform: translate(21px, 26px) rotate(3.4deg);
-  opacity: 0.42;
+.dc-node:hover .dc-inside-mark,
+.react-flow__node:focus-visible .dc-inside-mark,
+.dc-node[data-plate-focus='true'] .dc-inside-mark {
+  opacity: 0.5;
+  transform: translate(7px, 7px);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dc-inside-mark {
+    transition: none;
+  }
+}
+
+/* The same glyph, beside "Look inside" in the popover. */
+.dc-popover-glyph {
+  margin-right: 7px;
+  color: var(--dc-text-muted);
+  --dc-depth-ground: var(--dc-surface);
+}
+
+.dc-popover-action:hover .dc-popover-glyph,
+.dc-popover-action:focus-visible .dc-popover-glyph {
+  color: var(--dc-selection);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-depth-glyph path {
     transition: none;
   }
 }
@@ -1302,27 +1323,6 @@
 
 /* The peek beside "Look inside": the room's own silhouette, at the size the Library draws a whole
    canvas — small enough to read as a mark on the button, honest enough to tell two rooms apart. */
-.dc-popover-peek {
-  display: inline-flex;
-  align-items: center;
-  margin-right: 6px;
-  padding: 1px 2px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-xs);
-  color: var(--dc-text-faint);
-}
-
-.dc-popover-peek .dc-fingerprint {
-  width: 30px;
-  height: 17px;
-}
-
-.dc-popover-action:hover .dc-popover-peek,
-.dc-popover-action:focus-visible .dc-popover-peek {
-  color: var(--dc-selection);
-  border-color: var(--dc-selection);
-}
-
 /* A hairline between the element's configuration (colour, kind) and its view/lifecycle actions
    (Focus, Delete). Vertical, inside the row — not a full-width rule, which would read as a
    third row. */

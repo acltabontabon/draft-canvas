@@ -2,6 +2,7 @@ import { isEditableTarget } from '../../lib/isEditableTarget';
 import { prefersReducedMotion } from '../../lib/motion';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
+import { rectOfEntrance, rectOfRoom, type ScreenRect } from './depthRects';
 
 /**
  * Stepping into or out of a shape, from wherever it is asked for — a shortcut, a command, the
@@ -25,25 +26,17 @@ async function commitEditing(): Promise<void> {
   await new Promise((resolve) => window.setTimeout(resolve, 0));
 }
 
-/** Where a node is on screen right now, if it is rendered. */
-function rectOfNode(nodeId: string): { x: number; y: number; width: number; height: number } | null {
-  const element = document.querySelector(`.react-flow__node[data-id="${CSS.escape(nodeId)}"]`);
-  if (!element) return null;
-  const { x, y, width, height } = element.getBoundingClientRect();
-  return width > 0 && height > 0 ? { x, y, width, height } : null;
-}
-
-function play(direction: 'in' | 'out', from: { x: number; y: number; width: number; height: number } | null): void {
-  if (!from || prefersReducedMotion()) return;
-  useUiStore.getState().setDepthTransition({ id: Date.now(), direction, from });
+function play(direction: 'in' | 'out', nodeId: string, from: ScreenRect | null): void {
+  if (prefersReducedMotion()) return;
+  useUiStore.getState().setDepthTransition({ id: Date.now(), direction, nodeId, from });
 }
 
 /** Step into a shape's own architecture. */
 export async function lookInside(nodeId: string): Promise<void> {
   await commitEditing();
-  const from = rectOfNode(nodeId);
+  const entrance = rectOfEntrance(nodeId);
   if (!useEditorStore.getState().enterInside(nodeId)) return;
-  play('in', from);
+  if (entrance) play('in', nodeId, entrance);
 }
 
 /** Climb back out — one room by default, or all the way out to `depth`. */
@@ -53,24 +46,13 @@ export async function backOut(depth?: number): Promise<void> {
   if (state.path.length === 0) return;
   const target = depth ?? state.path.length - 1;
   const owner = state.path[target];
+  // Measured while it is still on screen: the climb closes from this frame onto the shape.
+  const room = rectOfRoom();
   state.exitTo(target);
-  // The shape this room belongs to is back on screen; the room shrinks into it, and it is left
-  // selected so ⌘↓ goes straight back in. Its rectangle is only knowable once React has committed
-  // the outer room and the camera has been placed, which is a frame or two away — so the animation
-  // waits for the shape to actually exist rather than guessing, and gives up rather than stalling.
+  // The shape this room belongs to is back on screen, and the room closes onto it — followed frame
+  // by frame, since the camera is still on its way there. It is left selected so ⌘↓ goes straight
+  // back in.
   if (!owner) return;
   useEditorStore.getState().setSelection({ nodes: [owner], edges: [] });
-  void whenRendered(owner).then((rect) => play('out', rect));
-}
-
-/** The node's screen rectangle once it is drawn, or null if it has not appeared within a few frames. */
-function whenRendered(nodeId: string, framesLeft = 6): Promise<{ x: number; y: number; width: number; height: number } | null> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      const rect = rectOfNode(nodeId);
-      if (rect) resolve(rect);
-      else if (framesLeft <= 0) resolve(null);
-      else resolve(whenRendered(nodeId, framesLeft - 1));
-    });
-  });
+  play('out', owner, room);
 }

@@ -2,8 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useReactFlow, useStore } from '@xyflow/react';
 import { primaryCommandsFor } from '../commands/registry';
-import { libraryShapeOf } from '../document/shape';
-import { Fingerprint } from '../ui/Library/Fingerprint';
+import { DepthGlyph } from './DepthGlyph';
+import { usePersonality } from '../ui/personality/usePersonality';
 import type { CommandContext } from '../commands/types';
 import {
   ACCENTS,
@@ -329,6 +329,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   buildCommandContext: () => CommandContext;
 }) {
   const currentAccentChip = node.accent !== undefined ? theme.accents[node.accent].chip : undefined;
+  const { preset: personality } = usePersonality();
 
   // The 0-3 shape-native quick actions for this node — memoized on the specific fields that can
   // change the result, never on `node` itself or `document` wholesale. `node` gets a new identity
@@ -340,12 +341,6 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
     () => primaryCommandsFor(buildCommandContext(), node),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
     [node.id, node.type, node.queueKind, node.deliveryRole, hasDlqEdge, node.inside],
-  );
-
-  /** A glance at what is in there, at the size the Library draws a whole canvas. */
-  const insidePeek = useMemo(
-    () => (node.inside ? libraryShapeOf(node.inside.nodes, node.inside.edges) : undefined),
-    [node.inside],
   );
 
   const typeControl = ((): {
@@ -455,14 +450,9 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
               title={QUICK_ACTION_HINTS[command.id] ?? command.hint ?? command.title}
               onClick={() => command.run(buildCommandContext())}
             >
-              {/* The peek: what is in there, as the same silhouette the Library draws a whole
-                  canvas with. Cheaper and calmer than a live preview, and it answers the only
-                  question the button raises — "is there anything in there, and what shape is it?" */}
-              {command.id === 'look-inside' && insidePeek && (
-                <span className="dc-popover-peek">
-                  <Fingerprint shape={insidePeek} />
-                </span>
-              )}
+              {/* The same depth glyph the shape itself carries, so the mark on the canvas and the
+                  command that follows it are learned as one thing. */}
+              {command.id === 'look-inside' && <DepthGlyph className="dc-popover-glyph" preset={personality} seedId={node.id} />}
               {command.title}
             </Button>
           ))}

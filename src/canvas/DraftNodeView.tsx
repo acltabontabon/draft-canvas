@@ -29,20 +29,10 @@ import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { SvgSurface } from './SvgSurface';
-import type { Shape } from '../render/displayList';
+import { layerBehind } from './insideMark';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { count } from '../lib/plural';
 import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
-
-/** The same shapes with nothing written on them — see `sheets` in `DraftNodeView`. */
-function silhouette(shapes: readonly Shape[]): Shape[] {
-  const kept: Shape[] = [];
-  for (const shape of shapes) {
-    if (shape.t === 'text' || shape.t === 'code') continue;
-    kept.push(shape.t === 'group' ? { ...shape, children: silhouette(shape.children) } : shape);
-  }
-  return kept;
-}
 
 /**
  * One component renders every node type.
@@ -238,24 +228,17 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   }, [liveNode, theme, preset, editingNote]);
 
   /**
-   * The stack under a shape that has an inside.
-   *
-   * Drawn from the same `describeNode` the shape itself is drawn from, so it is that shape's own
-   * outline rather than a rectangle approximating it — right for a cylinder or a tube as much as
-   * for a box, right in every personality, right at every corner radius, and free of the seam two
-   * mismatched outlines crossing each other used to make. Every word is dropped: only a few pixels
-   * along two edges ever show, and a name or a kind caption repeating down the stack reads as a
-   * fault rather than as paper. Each sheet takes its own clip scope so ids stay unique.
+   * The layer behind a shape that has an inside, shown when the shape is reached for — the same
+   * shape again, from the same `describeNode`, so it is a card behind a card, a cylinder behind a
+   * cylinder. In its own clip scope so ids stay unique.
    */
-  const sheets = useMemo(() => {
+  // Named in the layers panel (hovered or focused there): shown the way hovering it here would.
+  const plateFocused = useUiStore((state) => state.depthPlateFocusId === id);
+  const layer = useMemo(() => {
     if (!liveNode?.inside?.nodes.length) return null;
-    // Farthest first, so plain DOM order stacks them without anyone reaching for a z-index that
-    // would have to sit behind the node's own.
-    return [1, 0].map((depth) => {
-      beginClipScope(`sheet${depth}-${liveNode.id}`);
-      const drawn = describeNode(liveNode, describeContext(theme, preset));
-      return { depth, shapes: emitDisplayList({ ...drawn, shapes: silhouette(drawn.shapes) }) };
-    });
+    beginClipScope(`layer-${liveNode.id}`);
+    const drawn = describeNode(liveNode, describeContext(theme, preset));
+    return emitDisplayList({ ...drawn, shapes: layerBehind(drawn.shapes) });
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- same clip-scope reason as `shapes`.
   }, [liveNode, theme, preset]);
 
@@ -357,6 +340,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-reconnect-target={isReconnectTarget ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-settle={settling ? 'true' : undefined}
+      data-plate-focus={plateFocused ? 'true' : undefined}
       style={
         {
           width: effectiveWidth,
@@ -365,8 +349,16 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         } as CSSProperties
       }
       onDoubleClick={beginEditing}
+      onMouseEnter={layer ? () => useUiStore.getState().setDepthShapeHoverId(id) : undefined}
+      onMouseLeave={
+        layer
+          ? () => {
+              if (useUiStore.getState().depthShapeHoverId === id) useUiStore.getState().setDepthShapeHoverId(null);
+            }
+          : undefined
+      }
     >
-      {/* A picture is all the second sheet is, so what it means is said here as well. Part of the
+      {/* A picture is all the depth glyph is, so what it means is said here as well. Part of the
           shape's own name rather than a separate thing to find: "has an inside" is a fact about
           this shape, like its kind. */}
       {insideCount > 0 && <span className="dc-sr-only">, has an inside, {count(insideCount, 'shape')}</span>}
@@ -432,24 +424,17 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         </span>
       )}
 
-      {sheets?.map(({ depth, shapes: sheet }) => (
-        // A shape with architecture inside it sits on a small stack of the same paper, showing
-        // along two edges — the one standing signal that there is more under this. Two, because
-        // one sheet reads as a shadow and three reads as a filing cabinet. Chrome, so it never
-        // reaches an export: a picture of the architecture is what was drawn, not how to move
-        // around it.
-        <span
-          key={depth}
-          className="dc-inside-mark"
-          data-sheet={depth}
-          aria-hidden
-          title={`Look inside (${count(insideCount, 'shape')})`}
-        >
+      {layer && (
+        // A shape with architecture inside it shows, when reached for, a second layer of itself
+        // tucked behind it — "there is more below this" — and nothing at all at rest, so a diagram
+        // reads as architecture. The popover's "Look inside" and the layers in the corner say the
+        // rest. Chrome, so it never reaches an export.
+        <span className="dc-inside-mark" aria-hidden="true">
           <SvgSurface className="dc-node-surface" width={effectiveWidth} height={effectiveHeight}>
-            {sheet}
+            {layer}
           </SvgSurface>
         </span>
-      ))}
+      )}
 
       {attachmentCount > 0 && (
         <button

@@ -114,10 +114,9 @@ test('the canvas says where you are, and how to get back', async ({ page }) => {
 
   await select(page, 0);
   await lookInside(page);
-  // Inside, two different questions get two different answers. Where you are is on the drawing
-  // itself; the corner is only ever about the way back out.
+  // Inside, the corner names where you are, and holds every layer back out to the whole canvas.
+  await expect(page.locator('.dc-depth-here')).toHaveText('Service');
   await expect(page.locator('.dc-depth')).toContainText('Orientation');
-  await expect(page.locator('.dc-depth')).not.toContainText('Service');
   await expect(page.getByText(/What runs inside/)).toBeVisible();
 
   await create(page, 'Component', { x: 320, y: 240 });
@@ -126,10 +125,11 @@ test('the canvas says where you are, and how to get back', async ({ page }) => {
   // Escape with nothing selected is the last step out.
   await page.locator(CANVAS).click({ position: { x: 60, y: 420 } });
   await page.keyboard.press('Escape');
-  await expect(page.locator('.dc-depth')).toHaveCount(0);
   await expect(page.locator('.dc-room')).toHaveCount(0);
+  // Back on the whole canvas, which now has somewhere to go, so the corner stays — as its layers.
+  await expect(page.locator('.dc-depth-here')).toHaveText('Layers');
 
-  // Back outside, the shape now rests on the one standing stack saying it holds something.
+  // Back outside, the shape now carries the one standing mark saying it holds something.
   await expect(page.locator('.dc-node:has(.dc-inside-mark)')).toHaveCount(1);
   // And the shape it belongs to is selected, ready to go straight back in.
   await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
