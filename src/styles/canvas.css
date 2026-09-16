@@ -1039,36 +1039,54 @@
   border-color: var(--dc-selection);
 }
 
-/* A shape that has architecture inside it: one hairline sheet, offset behind its lower-right
-   corner, like a page underneath. Deliberately not a button and not a count — it says "there is
-   more under this", and the way in is the shape itself (⌘↓, the popover, the menu). Inert to the
-   pointer so it can never eat a click meant for the node or its resize corner. */
+/* A shape that has architecture inside it rests on a second sheet of the same paper, showing along
+   its right and lower edges. It is that shape's own outline, drawn from the same display list the
+   shape is (see `DraftNodeView`'s `sheet`), so it is right for a cylinder or a tube as much as for
+   a box and hand-drawn wherever the shape is. Deliberately not a button and not a count — it says
+   "there is more under this", and the way in is the shape itself (⌘↓, the popover, the menu).
+   Inert to the pointer so it can never eat a click meant for the node or its resize corner. */
 .dc-inside-mark {
   position: absolute;
-  right: -5px;
-  bottom: -5px;
-  width: 26px;
-  height: 22px;
-  border: 1px solid var(--dc-border-strong, var(--dc-border));
-  border-radius: var(--dc-radius-xs);
-  background: var(--dc-surface);
-  opacity: 0.75;
-  pointer-events: none;
-  /* Behind the node's own surface, so only the corner of the sheet shows. */
+  inset: 0;
+  /* Behind the node's own surface, so only the edges of the sheet show. */
   z-index: -1;
+  pointer-events: none;
+  /* The tilt is the whole trick: square, a copy of a shape reads as a duplicate somebody forgot to
+     align; a shade off, it reads as a sheet somebody put down. Each one further out, further over
+     and fainter than the last, the way a short stack sits. */
+  transform-origin: 18% 18%;
   transition:
-    transform 120ms var(--dc-ease-out),
-    opacity 120ms var(--dc-ease-out);
+    transform 180ms var(--dc-ease-out),
+    opacity 180ms var(--dc-ease-out);
 }
 
-.dc-node:hover .dc-inside-mark {
-  transform: translate(2px, 2px);
-  opacity: 1;
+.dc-inside-mark[data-sheet='0'] {
+  transform: translate(7px, 8px) rotate(0.9deg);
+  opacity: 0.55;
 }
 
-.dc-node[data-selected='true'] .dc-inside-mark {
-  border-color: var(--dc-selection);
-  opacity: 1;
+.dc-inside-mark[data-sheet='1'] {
+  transform: translate(14px, 17px) rotate(2.1deg);
+  opacity: 0.3;
+}
+
+/* Reaching for it fans the stack, the way a thumb would. */
+.dc-node:hover .dc-inside-mark[data-sheet='0'],
+.dc-node[data-selected='true'] .dc-inside-mark[data-sheet='0'] {
+  transform: translate(11px, 13px) rotate(1.6deg);
+  opacity: 0.7;
+}
+
+.dc-node:hover .dc-inside-mark[data-sheet='1'],
+.dc-node[data-selected='true'] .dc-inside-mark[data-sheet='1'] {
+  transform: translate(21px, 26px) rotate(3.4deg);
+  opacity: 0.42;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-inside-mark {
+    transition: none;
+  }
 }
 
 /* Chrome-free on purpose: this now wraps the same floating chip row a connector's attachments
@@ -3359,24 +3377,6 @@
  * renderer roughens the shapes themselves; these are CSS, so they follow `data-personality`
  * instead — a little off square, a little off parallel, in the same direction the strokes go.
  */
-[data-personality='draft'] .dc-inside-mark {
-  transform: rotate(-0.8deg);
-  border-radius: 5px 3px 6px 4px;
-}
-
-[data-personality='draft'] .dc-node:hover .dc-inside-mark {
-  transform: translate(2px, 2px) rotate(-0.8deg);
-}
-
-[data-personality='sketch'] .dc-inside-mark {
-  transform: rotate(-1.6deg);
-  border-radius: 7px 4px 9px 5px;
-}
-
-[data-personality='sketch'] .dc-node:hover .dc-inside-mark {
-  transform: translate(2px, 2px) rotate(-1.6deg);
-}
-
 [data-personality='sketch'] .dc-room-mark,
 [data-personality='draft'] .dc-room-mark {
   /* Register marks stay square in every personality: they are printer's marks on the sheet, not

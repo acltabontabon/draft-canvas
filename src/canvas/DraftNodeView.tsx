@@ -29,9 +29,20 @@ import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { SvgSurface } from './SvgSurface';
+import type { Shape } from '../render/displayList';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { count } from '../lib/plural';
 import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
+
+/** The same shapes with nothing written on them — see `sheets` in `DraftNodeView`. */
+function silhouette(shapes: readonly Shape[]): Shape[] {
+  const kept: Shape[] = [];
+  for (const shape of shapes) {
+    if (shape.t === 'text' || shape.t === 'code') continue;
+    kept.push(shape.t === 'group' ? { ...shape, children: silhouette(shape.children) } : shape);
+  }
+  return kept;
+}
 
 /**
  * One component renders every node type.
@@ -226,6 +237,28 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
   }, [liveNode, theme, preset, editingNote]);
 
+  /**
+   * The stack under a shape that has an inside.
+   *
+   * Drawn from the same `describeNode` the shape itself is drawn from, so it is that shape's own
+   * outline rather than a rectangle approximating it — right for a cylinder or a tube as much as
+   * for a box, right in every personality, right at every corner radius, and free of the seam two
+   * mismatched outlines crossing each other used to make. Every word is dropped: only a few pixels
+   * along two edges ever show, and a name or a kind caption repeating down the stack reads as a
+   * fault rather than as paper. Each sheet takes its own clip scope so ids stay unique.
+   */
+  const sheets = useMemo(() => {
+    if (!liveNode?.inside?.nodes.length) return null;
+    // Farthest first, so plain DOM order stacks them without anyone reaching for a z-index that
+    // would have to sit behind the node's own.
+    return [1, 0].map((depth) => {
+      beginClipScope(`sheet${depth}-${liveNode.id}`);
+      const drawn = describeNode(liveNode, describeContext(theme, preset));
+      return { depth, shapes: emitDisplayList({ ...drawn, shapes: silhouette(drawn.shapes) }) };
+    });
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- same clip-scope reason as `shapes`.
+  }, [liveNode, theme, preset]);
+
   // Doesn't depend on `node`, so — like `shapes` above — this is computed and its effect run
   // unconditionally, ahead of the `!node` early return below.
   const readOnly = mode === 'present';
@@ -399,13 +432,24 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         </span>
       )}
 
-      {insideCount > 0 && (
-        // A shape with architecture inside it carries a second sheet behind its lower-right
-        // corner — the one standing signal that there is more under this, quiet enough that a
-        // diagram full of them still reads as a diagram. Chrome, so it never reaches an export:
-        // a picture of the architecture is what was drawn, not how to navigate it.
-        <span className="dc-inside-mark" aria-hidden title={`Look inside (${count(insideCount, 'shape')})`} />
-      )}
+      {sheets?.map(({ depth, shapes: sheet }) => (
+        // A shape with architecture inside it sits on a small stack of the same paper, showing
+        // along two edges — the one standing signal that there is more under this. Two, because
+        // one sheet reads as a shadow and three reads as a filing cabinet. Chrome, so it never
+        // reaches an export: a picture of the architecture is what was drawn, not how to move
+        // around it.
+        <span
+          key={depth}
+          className="dc-inside-mark"
+          data-sheet={depth}
+          aria-hidden
+          title={`Look inside (${count(insideCount, 'shape')})`}
+        >
+          <SvgSurface className="dc-node-surface" width={effectiveWidth} height={effectiveHeight}>
+            {sheet}
+          </SvgSurface>
+        </span>
+      ))}
 
       {attachmentCount > 0 && (
         <button

@@ -109,7 +109,7 @@ test('the canvas says where you are, and how to get back', async ({ page }) => {
   await newCanvas(page, 'Orientation');
   await create(page, 'Service', { x: 300, y: 260 });
   // Nothing on a shape that has nothing in it.
-  await expect(page.locator('.dc-inside-mark')).toHaveCount(0);
+  await expect(page.locator('.dc-node:has(.dc-inside-mark)')).toHaveCount(0);
   await expect(page.locator('.dc-depth')).toHaveCount(0);
 
   await select(page, 0);
@@ -129,8 +129,8 @@ test('the canvas says where you are, and how to get back', async ({ page }) => {
   await expect(page.locator('.dc-depth')).toHaveCount(0);
   await expect(page.locator('.dc-room')).toHaveCount(0);
 
-  // Back outside, the shape now carries the one standing mark that it holds something.
-  await expect(page.locator('.dc-inside-mark')).toHaveCount(1);
+  // Back outside, the shape now rests on the one standing stack saying it holds something.
+  await expect(page.locator('.dc-node:has(.dc-inside-mark)')).toHaveCount(1);
   // And the shape it belongs to is selected, ready to go straight back in.
   await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
 });
@@ -148,5 +148,5 @@ test('a room visited and left empty is never saved', async ({ page }) => {
   // it. (Deliberately not read out of the store — a spec that reaches into the app's modules can
   // pass against a module the app itself isn't using.)
   await expect(page.locator('.dc-node')).toHaveCount(1);
-  await expect(page.locator('.dc-inside-mark')).toHaveCount(0);
+  await expect(page.locator('.dc-node:has(.dc-inside-mark)')).toHaveCount(0);
 });
