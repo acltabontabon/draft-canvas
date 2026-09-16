@@ -24,6 +24,9 @@ To see a diagram's raw JSON, right-click its tab and choose **Reopen Editor With
 It opens `.draftcanvas` files in the Draft Canvas web app, inside an editor tab. VS Code reads and
 writes the file; the app draws it. That's it.
 
+Shapes you look inside (⌘↓) keep what you draw there in the same `.draftcanvas` file, so one file
+still holds the whole picture, from the big one down to the detail.
+
 - It doesn't scan your workspace, read other files or upload your source code.
 - It collects no telemetry.
 - The file is handed to the app inside VS Code and never sent anywhere. The app itself makes no
@@ -39,6 +42,9 @@ connection. After that, the app's offline cache usually lets it open without one
   anywhere outside the canvas first.
 - **Copy and paste stay inside Draft Canvas.** ⌘C / ⌘V between shapes work, but the "Copy code" button
   and Paste from the right-click menu can't reach the system clipboard in VS Code.
+- **A canvas with shapes drawn inside other shapes needs a current Draft Canvas.** An older copy of
+  the app, such as one left in its offline cache, won't open it and says so, rather than dropping
+  what's inside.
 - **Background images aren't saved in the file.** A canvas background image lasts until the tab
   closes.
 - Desktop VS Code only, for now. Not available on vscode.dev.
