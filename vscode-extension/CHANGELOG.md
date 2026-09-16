@@ -4,6 +4,13 @@ All notable changes to Draft Canvas for VS Code are documented here.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-17
+
+### Fixed
+
+- The README no longer says copy and paste can't reach the system clipboard — that was fixed in
+  0.1.3.
+
 ## [0.1.3] - 2026-09-14
 
 ### Fixed
