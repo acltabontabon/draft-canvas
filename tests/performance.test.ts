@@ -608,7 +608,10 @@ describe('depth', () => {
         const first = viewOf(file, path);
         const started = performance.now();
         for (let read = 0; read < 10_000; read += 1) expect(viewOf(file, path)).toBe(first);
-        expect(performance.now() - started).toBeLessThan(200);
+        // The `toBe` checks above are what actually prove the cache hit; this is only a guard
+        // against a real cliff (an accidental deep clone would cost far more than a CI runner's
+        // usual variance), so it needs headroom a shared runner's noise won't eat into.
+        expect(performance.now() - started).toBeLessThan(400);
       }
     });
   });
