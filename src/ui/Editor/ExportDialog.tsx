@@ -85,7 +85,7 @@ export function ExportDialog() {
   const [wholeCanvas, setWholeCanvas] = useState(false);
   const inRoom = useEditorStore((state) => state.path.length > 0);
   const roomName = useEditorStore((state) => {
-    const owner = state.path.length > 0 ? ownerAt(fileOf(state), state.path) : undefined;
+    const owner = open && state.path.length > 0 ? ownerAt(fileOf(state), state.path) : undefined;
     return owner ? displayNameFor(owner) : 'this shape';
   });
   const scopeIsWhole = inRoom && wholeCanvas;
