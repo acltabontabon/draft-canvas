@@ -1,8 +1,8 @@
 import { continuationsFor, materialize, type Continuation, type FragmentNodeSpec } from '../continuation';
 import { defaultSizeFor } from '../document/factory';
-import type { DraftDocument } from '../document/types';
+import type { DraftDocument, ViewLevel } from '../document/types';
 import type { ContinuationOffer, QuickConnectState } from '../store/uiStore';
-import { QUICK_CONNECT_PRESETS, type Preset } from './presets';
+import { quickConnectPresets, type Preset } from './presets';
 
 /**
  * One row of the Quick Connect picker. A `continuation` row is what Intent Continuation would
@@ -27,9 +27,11 @@ export function quickConnectItems(
   doc: DraftDocument,
   state: QuickConnectState,
   recent?: readonly string[],
+  /** What the view is showing, where that is known — orders the standing choices, never trims them. */
+  level?: ViewLevel,
 ): QuickConnectItem[] {
   const suggestions: QuickConnectItem[] = state.source
-    ? continuationsFor(doc, state.source, 'drop', { recent }).map((continuation) => ({
+    ? continuationsFor(doc, state.source, 'drop', { recent, level }).map((continuation) => ({
         kind: 'continuation',
         id: continuation.id,
         label: continuation.label,
@@ -37,7 +39,7 @@ export function quickConnectItems(
         node: continuation.fragment.nodes[0]!,
       }))
     : [];
-  const presets: QuickConnectItem[] = QUICK_CONNECT_PRESETS.filter(
+  const presets: QuickConnectItem[] = quickConnectPresets(level).filter(
     (preset) => !suggestions.some((s) => representsPreset(s, preset)),
   ).map((preset) => ({
     kind: 'preset',

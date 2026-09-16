@@ -110,6 +110,35 @@ describe('embedded in a host', () => {
     expect(JSON.parse(change.message.text!).metadata.title).toBe('Checkout');
   });
 
+  /**
+   * In VS Code the file *is* the document, so an edit made inside a shape has to travel back as
+   * the whole file — and the reload the host sends on every outside change must leave the user
+   * standing in the room they were in, not throw them back out to the top of the diagram.
+   */
+  it('sends back what was drawn inside a shape, and stays in that room when the file reloads', async () => {
+    const state = mount();
+    await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
+    const platform = createNode({ type: 'service', x: 0, y: 0, text: 'Lending Platform' });
+    const file = { ...createDocument('Lending'), nodes: [platform] };
+    fromHost({ type: 'draft-canvas:load', text: serializeDocument(file) });
+    await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+
+    act(() => {
+      useEditorStore.getState().enterInside(platform.id);
+      useEditorStore.getState().addNode({ type: 'service', x: 20, y: 20, text: 'Lending API' });
+    });
+
+    await waitFor(() => expect(messages('draft-canvas:change')).toHaveLength(1));
+    const sent = JSON.parse(messages('draft-canvas:change')[0]!.message.text!);
+    expect(sent.nodes[0].inside.nodes[0].text).toBe('Lending API');
+
+    // The host echoes the saved file back; the editor is still inside Lending Platform.
+    fromHost({ type: 'draft-canvas:load', text: JSON.stringify({ ...sent, metadata: { ...sent.metadata, title: 'Lending v2' } }) });
+    await waitFor(() => expect(useEditorStore.getState().document.metadata.title).toBe('Lending v2'));
+    expect(useEditorStore.getState().path).toEqual([platform.id]);
+    expect(useEditorStore.getState().document.nodes[0]?.text).toBe('Lending API');
+  });
+
   it('ends on the newest of two files sent back to back, without writing either back', async () => {
     const state = mount();
     await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));

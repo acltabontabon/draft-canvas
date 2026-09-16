@@ -344,3 +344,76 @@ describe('self-contained subgraph copy', () => {
     expect(store.getState().document.edges).toHaveLength(3); // original A→B, B→C, plus pasted B'→C'
   });
 });
+
+/**
+ * Copying a shape copies what is inside it, and a copy has to be a genuinely separate thing — two
+ * shapes sharing the ids of the nodes in their rooms would make every id-keyed thing in the app
+ * (selection, routing, flows, an open card) ambiguous the first time someone went inside either.
+ */
+describe('copying a shape with an inside', () => {
+  beforeEach(reset);
+
+  function platformWithRoom() {
+    const inner = createNode({ type: 'component', x: 10, y: 10, text: 'Controller' });
+    const store2 = createNode({ type: 'database', x: 200, y: 10, text: 'Loans' });
+    const link = createEdge({ source: inner.id, target: store2.id });
+    return {
+      ...createNode({ type: 'service', x: 0, y: 0, text: 'Lending Platform' }),
+      inside: {
+        nodes: [inner, store2],
+        edges: [link],
+        flows: [{ id: 'f_1', title: 'Apply', steps: [{ id: 'fs_1', edgeId: link.id }] }],
+        viewport: { x: 0, y: 0, zoom: 1 },
+      },
+    };
+  }
+
+  function innerIdsOf(index: number) {
+    const node = store.getState().document.nodes[index]!;
+    return {
+      nodes: node.inside!.nodes.map((n) => n.id),
+      edges: node.inside!.edges.map((e) => e.id),
+      steps: node.inside!.flows[0]!.steps.map((s) => s.edgeId),
+    };
+  }
+
+  it('gives every duplicate its own ids, all the way down', () => {
+    const platform = platformWithRoom();
+    store.setState({ document: addNodes(createDocument('Lending'), [platform]) });
+
+    store.getState().setSelection({ nodes: [platform.id], edges: [] });
+    store.getState().duplicateSelection();
+    store.getState().setSelection({ nodes: [platform.id], edges: [] });
+    store.getState().duplicateSelection();
+
+    const copies = [innerIdsOf(0), innerIdsOf(1), innerIdsOf(2)];
+    const everyNodeId = copies.flatMap((c) => c.nodes);
+    expect(new Set(everyNodeId).size).toBe(everyNodeId.length);
+    const everyEdgeId = copies.flatMap((c) => c.edges);
+    expect(new Set(everyEdgeId).size).toBe(everyEdgeId.length);
+
+    // A flow in the copied room still narrates that room's own connector.
+    for (const copy of copies) expect(copy.steps).toEqual(copy.edges);
+  });
+
+  it('carries the inside through the system clipboard into another canvas', () => {
+    const platform = platformWithRoom();
+    const fragment = extractFragment(addNodes(createDocument('Lending'), [platform]), [platform.id]);
+    const decoded = decodeClipboard(encodeClipboard(fragment));
+    expect(decoded?.nodes[0]?.inside?.nodes).toHaveLength(2);
+    expect(decoded?.nodes[0]?.inside?.edges).toHaveLength(1);
+  });
+
+  it('counts what a shape brings with it against the canvas limits', () => {
+    const crowd = Array.from({ length: LIMITS.maxNodes - 3 }, (_, i) =>
+      createNode({ type: 'note', x: i, y: 0 }),
+    );
+    const platform = platformWithRoom();
+    store.setState({ document: addNodes(createDocument('Full'), [...crowd, platform]) });
+
+    store.getState().setSelection({ nodes: [platform.id], edges: [] });
+    store.getState().duplicateSelection();
+    // The file already holds maxNodes - 2 + 1 inside room = the copy's three would overflow it.
+    expect(store.getState().document.nodes).toHaveLength(LIMITS.maxNodes - 2);
+  });
+});

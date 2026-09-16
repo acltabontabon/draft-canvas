@@ -177,15 +177,19 @@ export function useDocumentSession(): DocumentSession {
     let cancelled = false;
     // Already loaded — `openId` is only ever set after the document went into the store — so this
     // subscribes a microtask later, before any edit can happen.
-    void loadEditorStore().then(({ useEditorStore, documentWithLiveViewport }) => {
+    void loadEditorStore().then(({ useEditorStore, fileWithLiveViewport }) => {
       if (cancelled) return;
       // What's on disk right now, so a later save can tell a rename made here from one made in
       // another tab's Library.
-      autosave.current?.track(useEditorStore.getState().document);
+      autosave.current?.track(fileWithLiveViewport(useEditorStore.getState()));
       unsubscribe = useEditorStore.subscribe((state, previous) => {
         if (state.revision === previous.revision && state.liveViewport === previous.liveViewport) return;
+        // Stepping into or out of a shape is navigation, not an edit: it clears `liveViewport`
+        // (folding the camera into the room being left) without bumping `revision`, and saving
+        // there would rewrite the file's stamp and tell every other tab it had changed.
+        if (state.path !== previous.path) return;
         if (state.document.metadata.id !== openId) return;
-        autosave.current?.schedule(documentWithLiveViewport(state));
+        autosave.current?.schedule(fileWithLiveViewport(state));
       });
     });
     return () => {
@@ -250,7 +254,12 @@ export function useDocumentSession(): DocumentSession {
       // still-live autosave subscription sees that revision bump, and must recognise the copy it
       // hands over as the stored one rather than write it again.
       autosave.current?.track(loaded);
-      editorStore.useEditorStore.getState().setDocument(loaded);
+      // Reopening the same canvas — VS Code reloading the file after an outside edit, or taking
+      // another tab's copy — should leave you standing in the room you were in, as long as the
+      // shape you were inside is still there. Opening a *different* canvas always starts at the
+      // top, the same way it never opens into a flow.
+      const reopening = editorStore.useEditorStore.getState().document.metadata.id === loaded.metadata.id;
+      editorStore.useEditorStore.getState().setDocument(loaded, { keepPath: reopening });
       setOpenId(loaded.metadata.id);
     },
     [notify, refreshLibrary, repository],
@@ -382,9 +391,9 @@ export function useDocumentSession(): DocumentSession {
     async (choice: 'keep' | 'discard') => {
       const controller = autosave.current;
       if (!controller || !openId) return;
-      const { useEditorStore, documentWithLiveViewport } = await loadEditorStore();
+      const { useEditorStore, fileWithLiveViewport } = await loadEditorStore();
       if (choice === 'keep') {
-        const saved = await controller.resolveConflict('keep', documentWithLiveViewport(useEditorStore.getState()));
+        const saved = await controller.resolveConflict('keep', fileWithLiveViewport(useEditorStore.getState()));
         if (!saved) notify('Your changes still could not be saved to this browser. Export the diagram to keep a copy.', 'error');
         return;
       }

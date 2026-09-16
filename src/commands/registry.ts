@@ -20,7 +20,9 @@ import { requestClipboardRead } from '../lib/clipboardPermission';
 import { effectiveTextRole } from '../nodes/describe';
 import { continuationsFor, materialize } from '../continuation';
 import { MOD_SYMBOL } from '../lib/platform';
-import { ownsData } from '../store/editorStore';
+import { canCreateInside, hasInside, ownerAt } from '../depth/tree';
+import { LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
+import { fileOf, ownsData, viewLevel } from '../store/editorStore';
 import { pointer } from '../store/uiStore';
 import { focusBounds, focusNodes } from './search';
 import { RECIPES } from '../learn/recipes';
@@ -313,6 +315,7 @@ function viewCommands(ctx: CommandContext): Command[] {
       shortcut: 'Shift 1',
       run: (inner) => void inner.camera.fitView({ padding: 0.2, duration: 320 }),
     },
+    ...backOutCommands(ctx),
     {
       id: 'zoom-in',
       title: 'Zoom in',
@@ -416,6 +419,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       })();
     },
   });
+  commands.push(viewLevelCommand(ctx));
   commands.push(
     {
       id: 'export',
@@ -686,6 +690,7 @@ function continuationCommandFor(ctx: CommandContext, node: DraftNode): Command |
           const [first] = continuationsFor(ctx.editor.document, node.id, 'select', {
             dismissed: ctx.ui.continuationDismissals,
             recent: ctx.ui.continuationRecent,
+            level: viewLevel(ctx.editor),
           });
           return first ? materialize(ctx.editor.document, first) : undefined;
         })();
@@ -771,6 +776,103 @@ function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
  *  `nodeCommands` and `primaryCommandsFor`, the same single-source discipline as
  *  `queueQuickCommands`. An External System and a Scheduler are left alone: the natural
  *  continuation for those isn't a companion this command could name honestly. */
+/**
+ * "View level" — what this view is showing, said out loud.
+ *
+ * The one place a level is ever written down by hand, and deliberately a plain choice rather than
+ * anything Draft Canvas decides for itself. It matters because a level narrows what gets
+ * suggested here (see `src/continuation/`), and nothing should narrow anything on a guess the
+ * user never made and cannot see.
+ */
+function viewLevelCommand(ctx: CommandContext): Command {
+  const stored = ctx.editor.document.level;
+  const effective = viewLevel(ctx.editor);
+  return {
+    id: 'view-level',
+    title: 'View level…',
+    group: 'canvas',
+    keywords: ['c4', 'context', 'container', 'component', 'abstraction', 'altitude', 'zoom level'],
+    hint: effective && effective !== 'none' ? LEVEL_LABELS[effective] : 'Not set',
+    run: () => ({
+      prompt: 'This view shows',
+      options: [
+        ...(['context', 'container', 'component'] as const).map((level) => ({
+          id: `view-level:${level}`,
+          title: LEVEL_LABELS[level],
+          hint: stored === level ? 'Current' : LEVEL_HINTS[level],
+          run: (inner: CommandContext) => inner.editor.setViewLevel(level),
+        })),
+        {
+          id: 'view-level:none',
+          title: 'Nothing in particular',
+          hint: 'Just a drawing — no suggestions narrowed',
+          run: (inner: CommandContext) => inner.editor.setViewLevel(stored === undefined ? 'none' : undefined),
+        },
+      ],
+    }),
+  };
+}
+
+/**
+ * The way back out, one room at a time, plus a direct jump to the canvas itself once you are more
+ * than one room deep. Nothing at all at the top, where there is nowhere to go.
+ */
+function backOutCommands(ctx: CommandContext): Command[] {
+  const { path } = ctx.editor;
+  if (path.length === 0) return [];
+  const parentName = path.length > 1 ? nameOfOwner(ctx, path.slice(0, -1)) : undefined;
+  const commands: Command[] = [
+    {
+      id: 'back-out',
+      title: 'Back out',
+      group: 'view',
+      keywords: ['outside', 'up', 'leave', 'out', 'parent', 'exit inside'],
+      hint: parentName ? `Back to ${parentName}` : 'Back to the whole canvas',
+      shortcut: `${MOD_SYMBOL} ↑`,
+      run: (inner) => inner.editor.exitTo(path.length - 1),
+    },
+  ];
+  if (path.length > 1) {
+    commands.push({
+      id: 'back-out-all',
+      title: 'Back to the whole canvas',
+      group: 'view',
+      keywords: ['outside', 'top', 'root', 'overview'],
+      run: (inner) => inner.editor.exitTo(0),
+    });
+  }
+  return commands;
+}
+
+/** What the shape owning the room at `path` is called — for a hint, so a fallback is fine. */
+function nameOfOwner(ctx: CommandContext, path: readonly string[]): string {
+  const owner = ownerAt(fileOf(ctx.editor), path);
+  return owner ? displayNameFor(owner) : 'the canvas';
+}
+
+/**
+ * "Look inside" — the way into a shape's own architecture.
+ *
+ * Deliberately the same wording whether or not there is anything in there yet: stepping into an
+ * empty shape writes nothing, so the difference between "has an inside" and "could have one" is
+ * something the canvas shows (a shape with contents carries a second sheet behind it), not a
+ * different action to choose between.
+ */
+function lookInsideCommand(node: DraftNode): Command {
+  return {
+    id: 'look-inside',
+    title: 'Look inside',
+    group: 'selection',
+    keywords: ['inside', 'internals', 'deeper', 'contains', 'drill down', 'zoom in', 'c4', 'container', 'component'],
+    hint: hasInside(node) ? `What runs inside ${displayNameFor(node)}` : `Draw what runs inside ${displayNameFor(node)}`,
+    primary: hasInside(node),
+    shortcut: `${MOD_SYMBOL} ↓`,
+    run: (inner) => {
+      inner.editor.enterInside(node.id);
+    },
+  };
+}
+
 function serviceQuickCommands(node: DraftNode): Command[] {
   const commands: Command[] = [];
   if (ownsData(node)) {
@@ -822,10 +924,16 @@ function boundaryUngroupCommand(): Command {
  *  (`type`, `queueKind`, `deliveryRole`, and whether a `deadLetters` edge exists) rather than on
  *  node position, so dragging a node doesn't recompute this every animation frame. */
 export function primaryCommandsFor(ctx: CommandContext, node: DraftNode): Command[] {
-  if (node.type === 'queue') return queueQuickCommands(ctx, node);
-  if (node.type === 'service') return serviceQuickCommands(node);
+  // Offered first wherever it applies: once a shape has architecture inside it, going in is the
+  // likeliest thing anyone wants from it. A shape that merely *could* hold one still gets the
+  // action, just after whatever else it offers — nothing about it says "fill me in".
+  const inside = hasInside(node) || canCreateInside(node) ? [lookInsideCommand(node)] : [];
+  if (node.type === 'queue') return [...inside, ...queueQuickCommands(ctx, node)];
+  if (node.type === 'service') return hasInside(node)
+    ? [...inside, ...serviceQuickCommands(node)]
+    : [...serviceQuickCommands(node), ...inside];
   if (node.type === 'group') return [boundaryUngroupCommand()];
-  return [];
+  return inside;
 }
 
 export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
@@ -916,6 +1024,9 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
         };
       },
     });
+  }
+  if (hasInside(node) || canCreateInside(node)) {
+    commands.push(lookInsideCommand(node));
   }
   const attachmentCount = node.attachments?.length ?? 0;
   if (attachmentCount < LIMITS.maxAttachmentsPerNode) {

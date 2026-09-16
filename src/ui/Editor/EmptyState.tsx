@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { isCanvasEmpty } from '../../document/operations';
 import { MOD_SYMBOL } from '../../lib/platform';
 import { FEATURED_STARTERS, type ArchitectureStarter, type StarterId } from '../../starters';
-import { useEditorStore } from '../../store/editorStore';
+import { fileOf, useEditorStore } from '../../store/editorStore';
+import { ownerAt } from '../../depth/tree';
+import { displayNameFor } from '../../document/factory';
 import { Wire } from '../common/Wire';
 import { useWireGeometry } from '../common/wireGeometry';
 import { StarterTile } from '../Library/StarterTile';
@@ -46,6 +48,12 @@ export function EmptyState({ onInsertStarter }: EmptyStateProps) {
   const empty = useEditorStore((state) => isCanvasEmpty(state.document));
   const mode = useEditorStore((state) => state.mode);
   const visible = empty && mode === 'edit';
+  /** The shape whose inside this is, when the canvas is showing one. */
+  const insideOf = useEditorStore((state) => {
+    if (state.path.length === 0) return null;
+    const owner = ownerAt(fileOf(state), state.path);
+    return owner ? displayNameFor(owner) : 'this shape';
+  });
 
   /*
    * The arrival plays once, for the canvas someone just opened — never again. Both flags settle
@@ -77,9 +85,33 @@ export function EmptyState({ onInsertStarter }: EmptyStateProps) {
 
   const mounted = visible || lingering;
   if (!mounted) return null;
+  // Inside a shape the question is narrower, and so is the answer: this is one system's insides,
+  // not a blank page, and offering a whole architecture to drop in here would be answering a
+  // question nobody asked. Just the room's own name and what belongs in it.
+  if (insideOf) return <EmptyRoom name={insideOf} leaving={!visible} />;
   // A separate component, so the wire's measuring effect mounts and unmounts with the thing it
   // measures — a hook up here would run once, against refs that were null at the time.
   return <EmptyCanvas onInsertStarter={onInsertStarter} intro={!introSpent} leaving={!visible} />;
+}
+
+/** The empty inside of a shape: its name, and the one question worth answering there. */
+function EmptyRoom({ name, leaving }: { name: string; leaving: boolean }) {
+  return (
+    <div className="dc-empty dc-empty-room" data-leaving={leaving ? 'true' : undefined}>
+      <span className="dc-empty-crops" aria-hidden="true">
+        <span data-at="nw" />
+        <span data-at="ne" />
+        <span data-at="se" />
+        <span data-at="sw" />
+      </span>
+      <div className="dc-empty-room-note" aria-hidden="true">
+        <p className="dc-empty-title">What runs inside {name}?</p>
+        <p className="dc-empty-hint">
+          Draw it here. {MOD_SYMBOL}↑ goes back out.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function EmptyCanvas({

@@ -35,6 +35,7 @@ import {
   SIDES,
   TEXT_ALIGNS,
   TEXT_ROLES,
+  VIEW_LEVELS,
   type Accent,
   type ActorKind,
   type AttachableType,
@@ -62,6 +63,7 @@ import {
   type ServiceKind,
   type TextAlign,
   type TextRole,
+  type ViewLevel,
 } from './types';
 import { clamp, isFiniteNumber } from '../lib/math';
 import { isRecord } from '../lib/isRecord';
@@ -197,6 +199,90 @@ function parseAttachments(
   return { attachments, dropped, truncated: Math.max(0, raw.length - max) };
 }
 
+/** Node types that may own a room. Narrower than what the app offers "Look inside" on: a Service
+ *  retyped to a Data Store must keep its contents (`depth/tree.ts`'s `canCreateInside` is the
+ *  narrower, authoring-time rule), but a Note claiming to have an inside is a hand-edited file. */
+const CAN_HOLD_INSIDE: readonly DraftNodeType[] = ['service', 'component', 'database', 'queue', 'actor'];
+
+/**
+ * One room waiting to be validated, held over rather than recursed into on the spot.
+ *
+ * Rooms are processed a level at a time, and that ordering is the whole point: the document's
+ * limits are a budget for the *file*, and spending it breadth-first means an enormous file loses
+ * its deepest detail rather than the overview everything else hangs off.
+ */
+interface PendingInside {
+  node: DraftNode;
+  raw: unknown;
+  depth: number;
+}
+
+/** What is shared by every room in one file: id uniqueness, the remaining budget, and the queue. */
+interface FileContext {
+  depth: number;
+  nodeIds: Set<string>;
+  edgeIds: Set<string>;
+  flowIds: Set<string>;
+  budget: { nodes: number; edges: number };
+  pending: PendingInside[];
+  dropped: { deep: number; unreadable: number; overBudget: number };
+}
+
+function rootContext(): FileContext {
+  return {
+    depth: 0,
+    nodeIds: new Set(),
+    edgeIds: new Set(),
+    flowIds: new Set(),
+    budget: { nodes: LIMITS.maxNodes, edges: LIMITS.maxEdges },
+    pending: [],
+    dropped: { deep: 0, unreadable: 0, overBudget: 0 },
+  };
+}
+
+/**
+ * Validates every queued room, level by level, attaching each to the node that owns it.
+ *
+ * A room is validated by the same function as the document that contains it, so every repair the
+ * top level makes — whitelisted enums, clamped coordinates, dropped dangling references — applies
+ * identically however deep the shape sits. Two rules are enforced only here: nesting stops at
+ * `maxInsideDepth`, and an empty room is not a room (see `DraftInside`), so a file hand-edited to
+ * contain one opens without it rather than showing a shape that claims an inside it hasn't got.
+ */
+function drainInsides(ctx: FileContext, repairs: string[]): void {
+  while (ctx.pending.length > 0) {
+    const level = ctx.pending;
+    ctx.pending = [];
+    for (const { node, raw, depth } of level) {
+      if (depth > LIMITS.maxInsideDepth) {
+        ctx.dropped.deep += 1;
+        continue;
+      }
+      if (ctx.budget.nodes <= 0) {
+        ctx.dropped.overBudget += 1;
+        continue;
+      }
+      const result = normalizeDocument(raw, repairs, { ...ctx, depth });
+      if (!result.ok || result.document.nodes.length === 0) {
+        ctx.dropped.unreadable += 1;
+        continue;
+      }
+      const { nodes, edges, flows, viewport, level } = result.document;
+      node.inside = { nodes, edges, flows, viewport, ...(level === undefined ? {} : { level }) };
+    }
+  }
+
+  if (ctx.dropped.unreadable > 0) {
+    repairs.push(`Dropped what was inside ${ctx.dropped.unreadable} shape(s) — unreadable or empty.`);
+  }
+  if (ctx.dropped.deep > 0) {
+    repairs.push(`Dropped what was inside ${ctx.dropped.deep} shape(s) — nested deeper than ${LIMITS.maxInsideDepth} levels.`);
+  }
+  if (ctx.dropped.overBudget > 0) {
+    repairs.push(`Dropped what was inside ${ctx.dropped.overBudget} shape(s) — the canvas was already full.`);
+  }
+}
+
 /**
  * Parses a `.draftcanvas` payload. Accepts either a JSON string or an
  * already-parsed value so callers can reuse it for IndexedDB records.
@@ -254,8 +340,14 @@ export function parseDocument(input: unknown): NormalizeResult {
  * separately only so tests can exercise repair behaviour in isolation,
  * already at current-schema shape.
  */
-export function normalizeDocument(raw: unknown, repairs: string[] = []): NormalizeResult {
+export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?: FileContext): NormalizeResult {
   if (!isRecord(raw)) return { ok: false, error: 'That document is empty or unreadable.' };
+
+  // Rooms are validated through this same function, sharing one context: ids stay unique across
+  // the whole file, and the node/connector limits are one budget for all of it rather than a
+  // fresh allowance per room.
+  const ctx = parent ?? rootContext();
+  const isRoot = parent === undefined;
 
   const meta = isRecord(raw.metadata) ? raw.metadata : {};
   const now = Date.now();
@@ -264,30 +356,31 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   const rawNodes = Array.isArray(raw.nodes) ? raw.nodes : [];
   const rawEdges = Array.isArray(raw.edges) ? raw.edges : [];
 
-  if (!Array.isArray(raw.nodes)) {
+  if (isRoot && !Array.isArray(raw.nodes)) {
     repairs.push('Document had no node list; started an empty canvas.');
   }
-  if (rawNodes.length > LIMITS.maxNodes) {
-    repairs.push(`Document had ${rawNodes.length} nodes; kept the first ${LIMITS.maxNodes}.`);
+  if (rawNodes.length > ctx.budget.nodes) {
+    repairs.push(`Document had ${rawNodes.length} nodes; kept the first ${ctx.budget.nodes}.`);
   }
-  if (rawEdges.length > LIMITS.maxEdges) {
-    repairs.push(`Document had ${rawEdges.length} connectors; kept the first ${LIMITS.maxEdges}.`);
+  if (rawEdges.length > ctx.budget.edges) {
+    repairs.push(`Document had ${rawEdges.length} connectors; kept the first ${ctx.budget.edges}.`);
   }
 
   /* --------------------------------------------------------------- nodes -- */
 
-  const seenNodeIds = new Set<string>();
+  const seenNodeIds = ctx.nodeIds;
   const nodes: DraftNode[] = [];
   let droppedNodes = 0;
   let renamedNodes = 0;
   let droppedAttachments = 0;
   let truncatedAttachments = 0;
+  let droppedInsides = 0;
   let droppedEdgeAttachments = 0;
   let truncatedEdgeAttachments = 0;
   /** Maps the id as written in the file to the id we actually used. */
   const nodeIdRemap = new Map<string, string>();
 
-  for (const candidate of rawNodes.slice(0, LIMITS.maxNodes)) {
+  for (const candidate of rawNodes.slice(0, Math.max(0, ctx.budget.nodes))) {
     if (!isRecord(candidate)) {
       droppedNodes += 1;
       continue;
@@ -386,6 +479,15 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
     truncatedAttachments += nodeAttachments.truncated;
     if (nodeAttachments.attachments.length > 0) node.attachments = nodeAttachments.attachments;
 
+    // Held over rather than validated here — see `PendingInside`.
+    if (candidate.inside !== undefined) {
+      if (isRecord(candidate.inside) && CAN_HOLD_INSIDE.includes(type)) {
+        ctx.pending.push({ node, raw: candidate.inside, depth: ctx.depth + 1 });
+      } else {
+        droppedInsides += 1;
+      }
+    }
+
     nodes.push(node);
   }
 
@@ -423,14 +525,14 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
 
   /* --------------------------------------------------------------- edges -- */
 
-  const seenEdgeIds = new Set<string>();
+  const seenEdgeIds = ctx.edgeIds;
   const edges: DraftEdge[] = [];
   let droppedEdges = 0;
   let droppedSelfLoopEdges = 0;
   /** Maps the edge id as written in the file to the id we actually used — flows resolve through this. */
   const edgeIdRemap = new Map<string, string>();
 
-  for (const candidate of rawEdges.slice(0, LIMITS.maxEdges)) {
+  for (const candidate of rawEdges.slice(0, Math.max(0, ctx.budget.edges))) {
     if (!isRecord(candidate)) {
       droppedEdges += 1;
       continue;
@@ -553,6 +655,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   if (truncatedAttachments > 0) {
     repairs.push(`A node had too many attachments; kept the first ${LIMITS.maxAttachmentsPerNode}.`);
   }
+  if (droppedInsides > 0) {
+    repairs.push(`Dropped what was inside ${droppedInsides} shape(s) — shapes of that kind hold nothing.`);
+  }
   if (droppedEdges > 0) {
     repairs.push(`Dropped ${droppedEdges} connector(s) pointing at nodes that do not exist.`);
   }
@@ -573,7 +678,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
   let droppedFlows = 0;
   let droppedFlowSteps = 0;
   let truncatedFlowSteps = 0;
-  const seenFlowIds = new Set<string>();
+  const seenFlowIds = ctx.flowIds;
   if (rawFlows.length > LIMITS.maxFlows) {
     repairs.push(`The canvas had too many flows; kept the first ${LIMITS.maxFlows}.`);
   }
@@ -704,7 +809,18 @@ export function normalizeDocument(raw: unknown, repairs: string[] = []): Normali
       },
     },
     flows,
+    // Absent stays absent: a view with no level behaves exactly as every canvas did before
+    // levels existed, and nothing here ever invents one.
+    ...(() => {
+      const level = oneOfOptional<ViewLevel>(raw.level, VIEW_LEVELS);
+      return level === undefined ? {} : { level };
+    })(),
   };
+
+  // What this room kept comes off the file's allowance before any room inside it is looked at.
+  ctx.budget.nodes -= nodes.length;
+  ctx.budget.edges -= edges.length;
+  if (isRoot) drainInsides(ctx, repairs);
 
   return { ok: true, document, repairs };
 }

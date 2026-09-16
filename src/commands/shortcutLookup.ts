@@ -38,6 +38,12 @@ const FIXTURE_DOCUMENT = {
   flows: [],
 };
 
+/** The same fixture seen from outside, with `NODE_A` holding it as its inside — see `path` below. */
+const FIXTURE_FILE = {
+  ...FIXTURE_DOCUMENT,
+  nodes: [{ ...NODE_A, inside: { ...FIXTURE_DOCUMENT, viewport: { x: 0, y: 0, zoom: 1 } } }],
+};
+
 const NOOP = () => {};
 const NOOP_ASYNC = async () => true;
 
@@ -51,6 +57,11 @@ const NOOP_ASYNC = async () => true;
 function buildFixtureContext(selection: { nodes: string[]; edges: string[] }): CommandContext {
   const editor = {
     document: FIXTURE_DOCUMENT,
+    // One room deep, so the commands that only exist inside a shape — "Back out" and its chord —
+    // are in the catalog the help screen reads. `outer` is that same fixture with the room hung
+    // off `NODE_A`, which is what `fileOf` reassembles.
+    path: [NODE_A.id],
+    outer: FIXTURE_FILE,
     selection,
     selectedFlowId: null,
     mode: 'edit',

@@ -147,7 +147,10 @@ document never carries half-finished state.
 
 ### The document model
 
-Plain data. Closed enums. No functions. Every mutation in `document/operations.ts` is a pure
+Plain data. Closed enums. No functions. Since v12 it is a *tree* of graphs rather than one: a node
+may own the architecture that runs inside it, which is how a diagram can stay at one altitude and
+still have the detail somewhere. Owning it rather than pointing at it is what makes the reference
+unbreakable — deleting or copying a shape takes its rooms with it, and a cycle cannot be expressed. Every mutation in `document/operations.ts` is a pure
 function returning a new document that **reuses untouched nodes** — that structural sharing is what
 makes snapshot history affordable and "what changed?" answerable by identity.
 
@@ -252,7 +255,7 @@ walks one function per transition. Contract: [`SCHEMA.md`](SCHEMA.md).
 
 ### Derived capabilities
 
-Four features are best understood as **derivations of the model** — that framing is what keeps them
+Five features are best understood as **derivations of the model** — that framing is what keeps them
 from becoming separate systems.
 
 | Capability | Derives | The rule that keeps it honest |
@@ -261,6 +264,7 @@ from becoming separate systems.
 | **Intent Continuation** | one node + its neighbourhood → ranked next moves | Validity is the matrix. Confidence is derived, never authored; only high confidence shows unprompted. Ranking is a few named signals over declaration order. Only the showing candidate is materialized, and the preview *is* the result. Silence is the default. |
 | **Sequence export** | every playable flow → one Mermaid/PlantUML file | An export format, not a mode. Responsibility ends at correct, deterministic text. |
 | **Commands** | selection + mode + document → what makes sense now | Re-derived, never registered. Each one calls an existing store action. |
+| **Depth** | a node's `inside` + where you are standing → the room being edited | One seam (`depth/tree.ts` + the store's `path`): everything else still edits a plain document. A room exists exactly when it holds a shape, so navigating writes nothing. A level is stored only when someone said it; what the rooms inside show follows from it, and is never written down. |
 
 ### Keyboard model
 

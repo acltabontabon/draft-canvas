@@ -7,6 +7,7 @@ import type { DraftSummary, Project } from '../src/document/types';
 import { useUiStore } from '../src/store/uiStore';
 import type { DocumentSession } from '../src/store/useDocumentSession';
 import { LibraryScreen } from '../src/ui/Library/LibraryScreen';
+import { STARTER_IDS } from '../src/starters';
 import { loadStarters } from '../src/starters/load';
 
 /**
@@ -118,7 +119,7 @@ describe('LibraryScreen — first run', () => {
       'Start from Transactional Outbox',
     ]);
     // Every tile is still in the document: the shelf keeps the tallest branch's height.
-    expect(within(group).getAllByRole('button', { hidden: true })).toHaveLength(13);
+    expect(within(group).getAllByRole('button', { hidden: true })).toHaveLength(STARTER_IDS.length);
   });
 
   it('seeds a canvas from a starter, from the keyboard', async () => {
@@ -138,7 +139,7 @@ describe('LibraryScreen — first run', () => {
     // branch's seven on the page, all thirteen in the document.
     const group = screen.getByRole('group', { name: 'Starters' });
     expect(within(group).getAllByRole('button')).toHaveLength(7);
-    expect(within(group).getAllByRole('button', { hidden: true })).toHaveLength(13);
+    expect(within(group).getAllByRole('button', { hidden: true })).toHaveLength(STARTER_IDS.length);
   });
 
   it('starts a blank canvas on Enter when nothing on the page has focus', async () => {
@@ -194,6 +195,7 @@ describe('LibraryScreen — first run', () => {
     expect(data).toHaveFocus();
     expect(data).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('button', { name: 'Start from Kappa' }).closest('[inert]')).toBeNull();
+    // End opens the last branch, whichever it is.
     await userEvent.keyboard('{End}');
     expect(screen.getByRole('tab', { name: 'Patterns' })).toHaveFocus();
     await userEvent.keyboard('{ArrowRight}');
@@ -212,7 +214,7 @@ describe('LibraryScreen — first run', () => {
   it('draws each starter from its own topology', () => {
     const { container } = render(<LibraryScreen session={stubSession()} />);
     const tiles = container.querySelectorAll('.dc-starter');
-    expect(tiles).toHaveLength(13);
+    expect(tiles).toHaveLength(STARTER_IDS.length);
     for (const tile of tiles) {
       expect(tile.querySelector('svg.dc-starter-glyph .dc-starter-edge-line')).not.toBeNull();
     }

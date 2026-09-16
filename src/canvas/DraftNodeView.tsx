@@ -308,6 +308,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const min = minSizeFor(node.type);
   const max = maxSizeFor(node.type);
   const attachmentCount = node.attachments?.length ?? 0;
+  const insideCount = node.inside?.nodes.length ?? 0;
 
   return (
     <div
@@ -392,6 +393,18 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         <span className="dc-sr-only" aria-live="polite">
           {copied ? 'Code copied' : ''}
         </span>
+      )}
+
+      {insideCount > 0 && (
+        // A shape with architecture inside it carries a second sheet behind its lower-right
+        // corner — the one standing signal that there is more under this, quiet enough that a
+        // diagram full of them still reads as a diagram. Chrome, so it never reaches an export:
+        // a picture of the architecture is what was drawn, not how to navigate it.
+        <span
+          className="dc-inside-mark"
+          aria-hidden
+          title={`Look inside (${count(insideCount, 'shape')})`}
+        />
       )}
 
       {attachmentCount > 0 && (

@@ -634,3 +634,99 @@ describe('importing untrusted files', () => {
     expect((globalThis as Record<string, unknown>).__pwned).toBeUndefined();
   });
 });
+
+/**
+ * A room is validated by the same rules as the document holding it — these cover what only
+ * nesting can get wrong: how deep a hand-edited file may go, which shapes may hold a room at all,
+ * ids that repeat between rooms, and an allowance that has to be spent across the whole file
+ * rather than handed out afresh at every level.
+ */
+describe('importing what is inside a shape', () => {
+  const service = (id: string, inside?: unknown) => ({
+    id,
+    type: 'service',
+    x: 0,
+    y: 0,
+    width: 160,
+    height: 60,
+    z: 0,
+    ...(inside === undefined ? {} : { inside }),
+  });
+
+  const room = (nodes: unknown[]) => ({ nodes, edges: [], flows: [] });
+
+  it('keeps a room, and repairs inside it exactly as it would at the top', () => {
+    const result = parse({
+      ...base,
+      nodes: [service('outer', room([{ ...service('inner'), accent: 'chartreuse', x: 10 ** 9 }]))],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const inner = result.document.nodes[0]!.inside!.nodes[0]!;
+    expect(inner.accent).toBeUndefined();
+    expect(inner.x).toBe(LIMITS.maxCoordinate);
+  });
+
+  it('drops a room that is empty, unreadable, or on a shape that holds nothing', () => {
+    const result = parse({
+      ...base,
+      nodes: [
+        service('a', room([])),
+        service('b', 'not an object'),
+        { id: 'c', type: 'note', x: 0, y: 0, width: 100, height: 50, z: 0, inside: room([service('x')]) },
+      ],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.nodes.map((n) => n.inside)).toEqual([undefined, undefined, undefined]);
+    expect(result.repairs.join(' ')).toContain('inside');
+  });
+
+  it('stops nesting at the depth limit and says so', () => {
+    let nested: Record<string, unknown> = service('deepest');
+    for (let level = 0; level < LIMITS.maxInsideDepth + 2; level += 1) {
+      nested = service(`level-${level}`, room([nested]));
+    }
+    const result = parse({ ...base, nodes: [nested], edges: [] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    let depth = 0;
+    let cursor = result.document.nodes[0];
+    while (cursor?.inside) {
+      depth += 1;
+      cursor = cursor.inside.nodes[0];
+    }
+    expect(depth).toBe(LIMITS.maxInsideDepth);
+    expect(result.repairs.join(' ')).toContain('nested deeper');
+  });
+
+  it('gives a new id to a node that repeats one from another room', () => {
+    const result = parse({
+      ...base,
+      nodes: [service('same'), service('holder', room([service('same')]))],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [outer, holder] = result.document.nodes;
+    expect(holder!.inside!.nodes[0]!.id).not.toBe(outer!.id);
+  });
+
+  it('spends one allowance across the whole file, outermost first', () => {
+    // One slot short of the limit once the holder itself is counted.
+    const outer = Array.from({ length: LIMITS.maxNodes - 2 }, (_, i) => service(`n${i}`));
+    const result = parse({
+      ...base,
+      nodes: [...outer, service('holder', room([service('deep-a'), service('deep-b')]))],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // The overview survives whole; the room only gets what is left of the budget.
+    expect(result.document.nodes).toHaveLength(LIMITS.maxNodes - 1);
+    expect(result.document.nodes.at(-1)!.inside!.nodes).toHaveLength(1);
+  });
+});

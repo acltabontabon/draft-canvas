@@ -1,4 +1,4 @@
-import type { Accent, CodeLanguage, DraftNodeType, NoteKind } from '../document/types';
+import type { Accent, CodeLanguage, DraftNodeType, NoteKind, ViewLevel } from '../document/types';
 
 export interface Preset {
   id: string;
@@ -179,6 +179,27 @@ export const QUICK_CONNECT_PRESETS: Preset[] = [
   DEV_PRESETS.find((preset) => preset.id === 'queue')!,
   DEV_PRESETS.find((preset) => preset.id === 'actor')!,
 ];
+
+const preset = (id: string): Preset => DEV_PRESETS.find((entry) => entry.id === id)!;
+
+/**
+ * The same menu, ordered for the altitude the view is drawn at.
+ *
+ * Only the order changes, and only where the view has actually been told what it is: the full set
+ * stays on offer everywhere, because a data store in a system overview is a choice someone is
+ * allowed to make. What a known level buys is that the first thing under the cursor is usually the
+ * thing you wanted — people and systems in an overview, parts and adapters inside a component.
+ */
+export function quickConnectPresets(level: ViewLevel | undefined): Preset[] {
+  switch (level) {
+    case 'context':
+      return [preset('actor'), preset('service'), preset('database'), preset('queue')];
+    case 'component':
+      return [preset('component'), preset('database'), preset('service'), preset('queue')];
+    default:
+      return QUICK_CONNECT_PRESETS;
+  }
+}
 
 export function presetForShortcut(key: string): Preset | undefined {
   const upper = key.toUpperCase();

@@ -14,6 +14,8 @@ import type {
   Attachment,
   DraftDocument,
   DraftEdge,
+  DraftFlowStep,
+  DraftInside,
   DraftNode,
   DraftViewport,
   DraftSettings,
@@ -297,6 +299,68 @@ export function extractFragment(doc: DraftDocument, nodeIds: Iterable<string>): 
   return { nodes: structuredClone(nodes), edges: structuredClone(edges) };
 }
 
+/**
+ * A room, wholesale, with every id in it replaced — nodes, connectors, attachments, boundary
+ * membership, flows and their steps. Positions are untouched: an inside has its own space, and a
+ * copy of it opens looking exactly like the original did.
+ */
+function reidentifyInside(inside: DraftInside): DraftInside {
+  const nodeIds = new Map(inside.nodes.map((node) => [node.id, createId('n')]));
+  const edgeIds = new Map(inside.edges.map((edge) => [edge.id, createId('e')]));
+
+  const nodes = inside.nodes.map((node) => {
+    const next: DraftNode = { ...node, id: nodeIds.get(node.id)! };
+    if (node.parentId) {
+      const mapped = nodeIds.get(node.parentId);
+      if (mapped) next.parentId = mapped;
+      else delete next.parentId;
+    }
+    if (node.attachments) next.attachments = node.attachments.map((a) => ({ ...a, id: createId('a') }));
+    if (node.inside) next.inside = reidentifyInside(node.inside);
+    return next;
+  });
+
+  const edges = inside.edges.map((edge) => {
+    const next: DraftEdge = {
+      ...edge,
+      id: edgeIds.get(edge.id)!,
+      source: nodeIds.get(edge.source)!,
+      target: nodeIds.get(edge.target)!,
+    };
+    if (edge.attachments) next.attachments = edge.attachments.map((a) => ({ ...a, id: createId('a') }));
+    return next;
+  });
+
+  const flows = inside.flows.map((flow) => ({
+    ...flow,
+    id: createId('f'),
+    steps: flow.steps.map((step) => {
+      const next: DraftFlowStep = { ...step, id: createId('fs') };
+      if (step.edgeId) next.edgeId = edgeIds.get(step.edgeId) ?? step.edgeId;
+      if (step.extraEdgeIds) next.extraEdgeIds = step.extraEdgeIds.map((id) => edgeIds.get(id) ?? id);
+      if (step.extraNodeIds) next.extraNodeIds = step.extraNodeIds.map((id) => nodeIds.get(id) ?? id);
+      return next;
+    }),
+  }));
+
+  return { nodes, edges, flows, viewport: inside.viewport };
+}
+
+/** What one node costs against the document limits: itself, plus everything in its rooms. */
+function insideCost(node: DraftNode): { nodes: number; edges: number } {
+  let nodes = 1;
+  let edges = 0;
+  if (node.inside) {
+    edges += node.inside.edges.length;
+    for (const inner of node.inside.nodes) {
+      const cost = insideCost(inner);
+      nodes += cost.nodes;
+      edges += cost.edges;
+    }
+  }
+  return { nodes, edges };
+}
+
 /** Re-identifies a fragment and offsets it, so paste never collides with the original. */
 function instantiateFragment(
   fragment: Clipboard,
@@ -325,6 +389,10 @@ function instantiateFragment(
     if (node.attachments) {
       next.attachments = node.attachments.map((a) => ({ ...a, id: createId('a') }));
     }
+    // And so does everything inside it, all the way down: a copy that kept the original's inner
+    // ids would give two shapes rooms full of the same nodes, and the second copy of a copy would
+    // then be ambiguous to every id-keyed thing in the app.
+    if (node.inside) next.inside = reidentifyInside(node.inside);
     return next;
   });
 
@@ -348,20 +416,34 @@ export function pasteFragment(
   doc: DraftDocument,
   fragment: Clipboard,
   offset: { x: number; y: number },
+  /** What the whole file already holds, rooms included. Defaults to this room alone. */
+  used: { nodes: number; edges: number } = { nodes: doc.nodes.length, edges: doc.edges.length },
 ): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[]; truncated: boolean } {
   const instantiated = instantiateFragment(fragment, offset);
   // `LIMITS.maxNodes`/`maxEdges` are otherwise only enforced on a document taken as a whole (file
   // import, clipboard decode) — pasting/duplicating repeatedly into an already-open document has
   // no other choke point, so cap the *result* here rather than let a document grow without bound.
-  const nodeRoom = Math.max(0, LIMITS.maxNodes - doc.nodes.length);
-  const edgeRoom = Math.max(0, LIMITS.maxEdges - doc.edges.length);
-  const truncated = instantiated.nodes.length > nodeRoom || instantiated.edges.length > edgeRoom;
-  const keptNodeIds = new Set(instantiated.nodes.slice(0, nodeRoom).map((n) => n.id));
+  const nodeRoom = Math.max(0, LIMITS.maxNodes - used.nodes);
+  const edgeRoom = Math.max(0, LIMITS.maxEdges - used.edges);
+  // A pasted shape costs whatever it brings with it: a Service with a room full of components is
+  // not one node, and the cap has to know that or a paste could put the file over its own limit.
+  let keptCount = 0;
+  let spentNodes = 0;
+  let spentEdges = 0;
+  for (const node of instantiated.nodes) {
+    const cost = insideCost(node);
+    if (spentNodes + cost.nodes > nodeRoom || spentEdges + cost.edges > edgeRoom) break;
+    spentNodes += cost.nodes;
+    spentEdges += cost.edges;
+    keptCount += 1;
+  }
+  const truncated = keptCount < instantiated.nodes.length || instantiated.edges.length > edgeRoom - spentEdges;
+  const keptNodeIds = new Set(instantiated.nodes.slice(0, keptCount).map((n) => n.id));
   const created = {
     // A boundary sits after its members in the fragment, so the cap can cut it while keeping
     // them — a kept child must not point at a parent that never arrived. A parent that was never
     // in the fragment survives only as the target document's own boundary still drawn around it.
-    nodes: instantiated.nodes.slice(0, nodeRoom).map((node) => {
+    nodes: instantiated.nodes.slice(0, keptCount).map((node) => {
       if (!node.parentId || keptNodeIds.has(node.parentId)) return node;
       if (enclosingParentId(doc, node.parentId, node) === node.parentId) return node;
       const { parentId: _dropped, ...unparented } = node;
@@ -371,7 +453,7 @@ export function pasteFragment(
     // truncation removes — both filters collapse to one pass.
     edges: instantiated.edges
       .filter((e) => keptNodeIds.has(e.source) && keptNodeIds.has(e.target))
-      .slice(0, edgeRoom),
+      .slice(0, Math.max(0, edgeRoom - spentEdges)),
   };
   const next = addEdges(addNodes(doc, created.nodes), created.edges);
   return {

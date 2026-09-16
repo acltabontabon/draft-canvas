@@ -9,7 +9,7 @@ this drifts from it, trust the code.
 
 Every `.draftcanvas` file (and everything in IndexedDB's `bodies` store) carries a `version:
 number` and a `format: "draft-canvas"` marker. `CURRENT_VERSION` is declared in
-`src/document/types.ts`, currently **10**. A file missing the marker, or whose `version` isn't a
+`src/document/types.ts`, currently **12**. A file missing the marker, or whose `version` isn't a
 finite integer, is treated as version 1 — the oldest shape the app has ever written.
 
 ## The migration funnel
@@ -30,6 +30,8 @@ v(n+1)-shaped one:
 | v7 → v8 | `migrateHasResponse` | Introduces `hasResponse: true` for any edge that already had `response` text, so its reply line keeps rendering exactly as before. |
 | v8 → v9 | `migrateAddProjectId` | Structural no-op — absent `metadata.projectId` already means Unorganized. |
 | v9 → v10 | `migrateAddRouteMode` | Structural no-op — absent `routeMode` already means Smart Routing. Exists so a v9 file can't be confused with a pre-v9 one. |
+| v10 → v11 | `migrateBffToApi` | The `bff` Service kind is gone — a Backend for Frontend is a role, not a runtime primitive — so any `serviceKind: 'bff'` becomes `'api'`. |
+| v11 → v12 | `migrateAddInsides` | Structural no-op — a v11 node simply has no `inside`, which is what absent already means. The version still moves because a v11 build's whitelist would strip the rooms out of a v12 file and (in VS Code) write the stripped version back; refusing it by name is the only safe reading. |
 
 Several of these are deliberate **structural no-ops**: versions where the on-disk shape didn't
 actually need to change, but an entry is still required. `migrateToCurrent` walks the chain from a
@@ -37,6 +39,11 @@ file's own version up to `CURRENT_VERSION`, and a **missing** entry for any step
 (`Missing migration from document format v${v} to v${v + 1}.`) — a gap in the chain is a hard
 failure at load time, never a silent skip. This is also why bumping `CURRENT_VERSION` always means
 adding exactly one new entry, even one that does nothing yet, rather than leaving room for later.
+
+Since v12, a node may own the architecture that runs inside it (`DraftNode.inside`), so a document
+is a tree of graphs rather than one. **A migration that touches nodes, edges or flows must reach
+every room**, not just the document's own graph — `migrate.ts`'s `mapGraphs` helper walks them all
+and is there to be used.
 
 A file whose `version` is **greater than** `CURRENT_VERSION` — saved by a newer build than the one
 currently reading it — is rejected outright via `UnsupportedVersionError`, which names both
@@ -57,6 +64,11 @@ assume is well-formed. Its policy is **repair, don't reject**, applied only afte
   variants), free text is stripped of control characters and length-clamped, and numeric fields
   (`x`, `y`, `width`, `height`, `zoom`, …) are coerced to finite values via `clamp`/`finite`
   helpers — a `NaN`, `Infinity`, or wrong-typed value never reaches the live document.
+- A room (`DraftNode.inside`) is validated by these same rules, one level at a time, with three
+  additions of its own: nesting stops at `maxInsideDepth` (3 below the document), ids stay unique
+  across the whole file rather than per room, and `maxNodes`/`maxEdges` are one allowance spent
+  outermost-first — an enormous file loses its deepest detail, never the overview. A room left
+  with no shapes is dropped, since a room exists exactly when it holds something.
 - Collections over their `LIMITS` cap (`maxNodes: 5000`, `maxEdges: 10000`,
   `maxAttachmentsPerNode: 12`, `maxAttachmentsPerEdge: 4`, `maxFlows: 50`, `maxStepsPerFlow: 200`,
   `maxExtraMembersPerStep: 40`, …) are truncated, not rejected, and the truncation is reported back

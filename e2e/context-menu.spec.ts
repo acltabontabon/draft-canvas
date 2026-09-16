@@ -465,7 +465,9 @@ test.describe('context menu — keyboard-only operation', () => {
     await expect(menu(page)).toBeVisible();
     await expect(menuItem(page, 'Edit text')).toBeVisible();
 
-    // Down twice from the first item lands on Add Code (Edit text, Add Note, Add Code, …).
+    // Down three times from the first item lands on Add Code — the node menu reads Edit text,
+    // Look inside, Add Note, Add Code, …
+    await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');

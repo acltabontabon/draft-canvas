@@ -158,6 +158,8 @@ describe('contextMenuCommandsFor — a regular node', () => {
     const types = entries.map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
     expect(types).toEqual([
       'edit-text',
+      // A Service can always be looked inside, whether or not anything is in there yet.
+      'look-inside',
       'sep',
       'attach-note',
       'attach-code',

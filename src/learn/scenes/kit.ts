@@ -41,6 +41,18 @@ export const queue = (id: string, x: number, y: number, text = '', extra: Extra 
   ...extra,
 });
 
+/** A person or other outside participant — the shape a system context view is mostly made of. */
+export const actor = (id: string, x: number, y: number, text: string, extra: Extra = {}): SceneNodeSpec => ({
+  id,
+  type: 'actor',
+  x,
+  y,
+  width: 96,
+  height: 76,
+  text,
+  ...extra,
+});
+
 export const junction = (id: string, x: number, y: number): SceneNodeSpec => ({
   id,
   type: 'ellipse',

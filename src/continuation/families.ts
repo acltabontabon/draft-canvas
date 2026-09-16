@@ -1,5 +1,5 @@
 import type { NodeCategory } from '../document/connectorSemantics';
-import type { EdgeSemantic } from '../document/types';
+import type { EdgeSemantic, ViewLevel } from '../document/types';
 import type { ContinuationRule, ContinuationTier, ContinuationTrigger, FragmentNodeSpec, Neighborhood } from './types';
 
 /**
@@ -53,6 +53,10 @@ export interface FanOutOptions {
   surfaces?: 'invoke';
   /** See `ContinuationRule.branches`. */
   branches?: boolean;
+  /** See `ContinuationRule.levels`. */
+  levels?: readonly ViewLevel[];
+  /** See `ContinuationRule.silentAt`. */
+  silentAt?: readonly ViewLevel[];
 }
 
 export interface ChainRecipe extends FanOutOptions {
@@ -75,7 +79,7 @@ export interface ChainRecipe extends FanOutOptions {
  * outward from the anchor, and accepting adds the whole chain as one step.
  */
 export function defineChain(recipe: ChainRecipe): ContinuationRule {
-  const { chain, sources, evidence, surfaces, branches } = recipe;
+  const { chain, sources, evidence, surfaces, branches, levels, silentAt } = recipe;
   return {
     id: recipe.id,
     tier: recipe.tier,
@@ -89,6 +93,8 @@ export function defineChain(recipe: ChainRecipe): ContinuationRule {
     repeatable: isExplicit,
     surfaces,
     branches,
+    levels,
+    silentAt,
   };
 }
 

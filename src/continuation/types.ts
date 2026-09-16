@@ -10,6 +10,7 @@ import type {
   DraftNodeType,
   QueueKind,
   ServiceKind,
+  ViewLevel,
 } from '../document/types';
 
 /**
@@ -55,6 +56,12 @@ export interface Neighborhood {
   in: IncidentEdge[];
   /** Connectors leaving each outbound neighbor, keyed by that neighbor's id. */
   outOfOut: ReadonlyMap<string, IncidentEdge[]>;
+  /**
+   * What the view this node sits in is showing, if anything is known about that — see
+   * `src/depth/level.ts`. Almost always `undefined`, and everything behaves as it always has when
+   * it is: a level narrows what gets offered, it never adds certainty that wasn't there.
+   */
+  level?: ViewLevel;
   /** Stable fingerprint of the neighborhood — what a dismissal is pinned to. */
   key: string;
 }
@@ -123,6 +130,23 @@ export interface ContinuationRule {
    * standing presets already cover the same shapes) and never unprompted.
    */
   surfaces?: 'invoke';
+  /**
+   * The view levels where this rule is offered *at all* — for a rule that only makes sense at one
+   * altitude ("the system this person uses" is a suggestion about a System Context view and
+   * nonsense anywhere else). Strict: the level must be known and listed, so these never fire on a
+   * canvas that has said nothing about itself.
+   */
+  levels?: readonly ViewLevel[];
+  /**
+   * The view levels where this rule goes quiet — for a rule that is right almost everywhere but
+   * would be noise at one altitude (a dead-letter queue in a diagram of systems and the people who
+   * use them). Runs everywhere else, *including* where nothing is known about the view, which is
+   * what keeps every ordinary canvas behaving exactly as it always has.
+   *
+   * The asymmetry with `levels` is the whole policy: a level the user set can quieten a
+   * suggestion, and only an explicit level can introduce one.
+   */
+  silentAt?: readonly ViewLevel[];
   /**
    * The anchor fans out, so a second branch shaped like one it already has is the likeliest next
    * move — ranking boosts this rule when that sibling exists (see `rank.ts`).

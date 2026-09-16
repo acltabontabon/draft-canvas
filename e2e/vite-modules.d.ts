@@ -8,4 +8,7 @@ declare module '/src/*' {
   export const useEditorStore: { getState(): any; setState(partial: unknown): void };
   // oxlint-disable-next-line typescript/no-explicit-any
   export const useUiStore: { getState(): any; setState(partial: unknown): void };
+  /** The whole file, with the room being edited folded back into it. */
+  // oxlint-disable-next-line typescript/no-explicit-any
+  export const fileOf: (state: any) => any;
 }

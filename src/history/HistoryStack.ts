@@ -1,3 +1,4 @@
+import { viewOf } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 
 export interface Selection {
@@ -25,8 +26,16 @@ export interface FlowSessionSnapshot {
 
 export interface HistoryEntry {
   label: string;
+  /** Whole-file snapshots: an edit made inside a shape is still an edit to the one file. */
   before: DraftDocument;
   after: DraftDocument;
+  /**
+   * Which room the edit happened in (owner node ids from the file outward-in; empty at the
+   * root). Undo restores the file and stands the user where the change was, rather than silently
+   * changing something they cannot see — and two edits made in different rooms never coalesce,
+   * however close together they were.
+   */
+  path: readonly string[];
   selectionBefore: Selection;
   selectionAfter: Selection;
   at: number;
@@ -71,12 +80,13 @@ export function pushEntry(
     top !== undefined &&
     entry.coalesceKey !== undefined &&
     top.coalesceKey === entry.coalesceKey &&
+    samePath(top.path, entry.path) &&
     entry.at - top.at < COALESCE_WINDOW_MS;
 
   if (canCoalesce) {
     // Typed and then erased, or a slider dragged away and back, inside one burst: the burst as a
     // whole changed nothing, so it shouldn't leave an undo step that does nothing.
-    if (sameContent(top.before, entry.after)) {
+    if (sameContent(top.before, entry.after, entry.path)) {
       return { past: history.past.slice(0, -1), future: [] };
     }
     const merged: HistoryEntry = {
@@ -93,18 +103,29 @@ export function pushEntry(
   return { past: past.length > HISTORY_LIMIT ? past.slice(-HISTORY_LIMIT) : past, future: [] };
 }
 
+function samePath(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
 /**
- * Whether two documents hold the same content. Operations share structure, so almost everything
- * compares by identity and only the few rebuilt objects are walked; the depth bound keeps a
- * pathological document from making a keystroke expensive (deeper differences count as changes).
+ * Whether two files hold the same content, as seen from the room the burst was typed in.
+ *
+ * Operations share structure, so almost everything compares by identity and only the few rebuilt
+ * objects are walked; the depth bound keeps a pathological document from making a keystroke
+ * expensive (deeper differences count as changes). Comparing the *room* rather than the file is
+ * what keeps that bound meaningful at depth — an edit three rooms down sits below it, so two
+ * files would always look different and typing-then-erasing inside would leave a dead step.
  */
-function sameContent(a: DraftDocument, b: DraftDocument): boolean {
+function sameContent(a: DraftDocument, b: DraftDocument, path: readonly string[]): boolean {
+  const viewA = viewOf(a, path);
+  const viewB = viewOf(b, path);
+  if (!viewA || !viewB) return false;
   return (
     a.metadata.title === b.metadata.title &&
-    a.viewport === b.viewport &&
-    equivalent(a.nodes, b.nodes, 4) &&
-    equivalent(a.edges, b.edges, 4) &&
-    equivalent(a.flows, b.flows, 4) &&
+    viewA.viewport === viewB.viewport &&
+    equivalent(viewA.nodes, viewB.nodes, 4) &&
+    equivalent(viewA.edges, viewB.edges, 4) &&
+    equivalent(viewA.flows, viewB.flows, 4) &&
     equivalent(a.settings, b.settings, 4)
   );
 }

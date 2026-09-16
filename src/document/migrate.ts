@@ -254,6 +254,49 @@ function migrateBffToApi(doc: Record<string, unknown>): Record<string, unknown> 
 }
 
 /**
+ * v12 lets a node own the architecture that runs inside it (`DraftNode.inside`). Structurally a
+ * no-op — a v11 node simply has no inside, which is exactly what absent already means — but the
+ * version still has to move, and for a reason worth stating: a v11 build's validator rebuilds
+ * every node from a field whitelist, so it would silently strip the rooms out of a v12 file and,
+ * in VS Code, write the stripped version straight back over it. Refusing the file by name is the
+ * only safe reading an older build can give it.
+ *
+ * Note for whoever adds v13: a migration that touches nodes, edges or flows must now recurse into
+ * every `inside` as well — see `mapGraphs`.
+ */
+function migrateAddInsides(doc: Record<string, unknown>): Record<string, unknown> {
+  return doc;
+}
+
+/**
+ * Applies `fn` to the document's own graph and to every room nested inside it, however deep.
+ *
+ * Exists so a future migration can say what it changes once and have it reach the whole file.
+ * Rooms are plain graphs (`{nodes, edges, flows, viewport}`), so `fn` sees the same shape at
+ * every level; anything unreadable is passed through untouched for `validate.ts` to repair.
+ */
+export function mapGraphs(
+  doc: Record<string, unknown>,
+  fn: (graph: Record<string, unknown>) => Record<string, unknown>,
+): Record<string, unknown> {
+  const visit = (graph: Record<string, unknown>): Record<string, unknown> => {
+    const mapped = fn(graph);
+    const nodes = Array.isArray(mapped.nodes) ? mapped.nodes : undefined;
+    if (!nodes) return mapped;
+    return {
+      ...mapped,
+      nodes: nodes.map((raw) => {
+        if (!raw || typeof raw !== 'object') return raw;
+        const node = raw as Record<string, unknown>;
+        if (!node.inside || typeof node.inside !== 'object') return node;
+        return { ...node, inside: visit(node.inside as Record<string, unknown>) };
+      }),
+    };
+  };
+  return visit(doc);
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
@@ -267,6 +310,7 @@ const MIGRATIONS: Record<number, Migration> = {
   8: migrateAddProjectId,
   9: migrateAddRouteMode,
   10: migrateBffToApi,
+  11: migrateAddInsides,
 };
 
 export class UnsupportedVersionError extends Error {

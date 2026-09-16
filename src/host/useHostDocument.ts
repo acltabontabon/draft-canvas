@@ -88,8 +88,8 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
     const postChange = async () => {
       pending = 0;
       if (invalid) return;
-      const { useEditorStore, documentWithLiveViewport } = await import('../store/editorStore');
-      const text = serializeDocument(documentWithLiveViewport(useEditorStore.getState()));
+      const { useEditorStore, fileWithLiveViewport } = await import('../store/editorStore');
+      const text = serializeDocument(fileWithLiveViewport(useEditorStore.getState()));
       if (text === hostText) return;
       hostText = text;
       post({ type: 'draft-canvas:change', text, ...(shownSeq !== undefined ? { baseSeq: shownSeq } : {}) });
@@ -111,7 +111,7 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
         return;
       }
       const document = parsed ? parsed.document : createDocument(title || undefined);
-      const { useEditorStore } = await import('../store/editorStore');
+      const { useEditorStore, fileOf } = await import('../store/editorStore');
       if (disposed) return;
       unsubscribe ??= useEditorStore.subscribe((current, previous) => {
         // Revisions only: panning alone moves the viewport, and a file shouldn't turn dirty for that.
@@ -133,7 +133,7 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       }
       // Opening normalises what it read; that alone must not dirty the file. A new file is the
       // exception: it gets its first contents now.
-      hostText = blank ? null : serializeDocument(useEditorStore.getState().document);
+      hostText = blank ? null : serializeDocument(fileOf(useEditorStore.getState()));
       if (blank) await sendChange();
     };
 

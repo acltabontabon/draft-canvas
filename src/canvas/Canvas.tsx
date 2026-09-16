@@ -22,7 +22,9 @@ import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operatio
 import type { DraftDocument, Side } from '../document/types';
 import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
 import { isEditableTarget } from '../lib/isEditableTarget';
+import { motionMs } from '../lib/motion';
 import { centerOf, pointInBox } from '../lib/math';
+import { pathKey } from '../depth/tree';
 import { lensFlow, useEditorStore } from '../store/editorStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
@@ -316,7 +318,29 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   // A fresh object here would defeat React Flow's own memoized renderer on every drag frame.
   const connectionLineStyle = useMemo(() => ({ stroke: theme.selection, strokeWidth: 1.8 }), [theme.selection]);
 
-  const { screenToFlowPosition, flowToScreenPosition, getNodes, getInternalNode } = useReactFlow<DraftRfNode>();
+  const { screenToFlowPosition, flowToScreenPosition, getNodes, getInternalNode, setViewport, fitView } =
+    useReactFlow<DraftRfNode>();
+
+  // `defaultViewport` is read once, at mount — so stepping into or out of a shape has to move the
+  // camera itself. Each room remembers where it was left; one that has never been drawn in has no
+  // camera of its own, and is framed rather than left wherever the last room happened to be.
+  //
+  // Which room this *was* is remembered by value, not by a "first run" flag: React runs effects
+  // twice on mount in development, and a flag would spend itself on the first run and then move
+  // the camera on the second — for a move that never happened.
+  const path = useEditorStore((state) => state.path);
+  const shownPath = useRef<string | null>(null);
+  useEffect(() => {
+    const key = pathKey(path);
+    if (shownPath.current === key) return;
+    const first = shownPath.current === null;
+    shownPath.current = key;
+    if (first) return;
+    const state = useEditorStore.getState();
+    const duration = motionMs(320);
+    if (state.document.nodes.length === 0) void fitView({ padding: 0.4, duration, maxZoom: 1 });
+    else void setViewport(state.document.viewport, { duration });
+  }, [path, fitView, setViewport]);
 
   const interactive = mode === 'edit';
   useContinuation(interactive);

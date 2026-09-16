@@ -149,6 +149,40 @@ describe('.draftcanvas round trip', () => {
     expect(JSON.parse(serializeDocument(createDocument())).version).toBe(CURRENT_VERSION);
   });
 
+  it('carries what is inside a shape through a full round trip', () => {
+    const inner = createNode({ type: 'component', x: 20, y: 30, text: 'Loan Controller' });
+    const store = createNode({ type: 'database', x: 220, y: 30, text: 'Loans' });
+    const link = createEdge({ source: inner.id, target: store.id, label: 'reads' });
+    const flow = { ...createFlow({ title: 'Apply for a loan' }), steps: [{ id: 'fs_1', edgeId: link.id }] };
+    const platform = {
+      ...createNode({ type: 'service', x: 0, y: 0, text: 'Lending Platform' }),
+      inside: {
+        nodes: [inner, store],
+        edges: [link],
+        flows: [flow],
+        viewport: { x: 12, y: 34, zoom: 1.25 },
+      },
+    };
+    const document = addNodes(createDocument('Lending'), [platform]);
+
+    const result = deserializeDocument(serializeDocument(document));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.repairs).toEqual([]);
+    expect(result.document.nodes[0]!.inside).toEqual(platform.inside);
+  });
+
+  it('leaves a canvas nobody looked inside byte-identical', () => {
+    const document = addNodes(createDocument('Flat'), [createNode({ type: 'service', x: 0, y: 0 })]);
+    const text = serializeDocument(document);
+    expect(text).not.toContain('"inside"');
+
+    const result = deserializeDocument(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(serializeDocument(result.document)).toBe(text);
+  });
+
   it('derives a safe file name from the title', () => {
     expect(fileNameFor('Payment Flow / v2')).toBe('payment-flow-v2.draftcanvas');
     expect(fileNameFor('   ')).toBe('draft-canvas.draftcanvas');

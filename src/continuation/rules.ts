@@ -24,11 +24,22 @@ import type { ContinuationRule } from './types';
  * adds*, never whether the connection is legal.
  */
 
+/**
+ * Where the machinery of a running system is *not* worth suggesting.
+ *
+ * A System Context view is people, this system and the systems around it — a dead-letter queue or
+ * a cache in that picture is exactly the detail the view exists to leave out. So every rule about
+ * infrastructure goes quiet when the view has been called a system overview, and is unchanged
+ * everywhere else, which is every canvas that has never said what it is.
+ */
+const NOT_IN_AN_OVERVIEW = ['context'] as const;
+
 const TOPIC_FAN_OUT_QUEUE: ContinuationRule = {
   id: 'topic-fan-out-queue',
   tier: 'primary',
   label: 'Queue',
   reason: 'This topic has a publisher but no delivery path.',
+  silentAt: NOT_IN_AN_OVERVIEW,
   when: (nb, trigger) =>
     nb.category === 'topic' && (isExplicit(trigger) || (hasInboundEvidence(nb) && !hasOutboundSemantic(nb, ...DELIVERY_SEMANTICS))),
   fragment: () => ({
@@ -58,6 +69,7 @@ const TOPIC_SUBSCRIBER = defineChain({
     { type: 'service', serviceKind: 'worker' },
   ],
   branches: true,
+  silentAt: NOT_IN_AN_OVERVIEW,
 });
 
 const TOPIC_FAN_OUT_WORKER: ContinuationRule = {
@@ -79,6 +91,7 @@ const QUEUE_CONSUMER: ContinuationRule = {
   tier: 'primary',
   label: 'Worker',
   reason: 'This queue has no consumer.',
+  silentAt: NOT_IN_AN_OVERVIEW,
   // `categoryOf` folds a Stream into `queue` (consuming from one is the same move) and lifts a
   // dead-letter queue out of it — a DLQ with no re-drive worker is normal, not unfinished.
   when: (nb, trigger) =>
@@ -96,6 +109,7 @@ const QUEUE_DEAD_LETTER: ContinuationRule = {
   tier: 'secondary',
   label: 'Dead-letter queue',
   reason: 'This queue has a consumer but no dead-letter path.',
+  silentAt: NOT_IN_AN_OVERVIEW,
   // The literal `queueKind === 'queue'`, not `categoryOf`, for the same reason `addDeadLetterQueue`
   // uses it: a Stream's dead-letter destination is a separate topic (see `stream-dead-letter`
   // below), not a queue-shaped DLQ.
@@ -117,6 +131,7 @@ const STREAM_DEAD_LETTER: ContinuationRule = {
   tier: 'secondary',
   label: 'Dead-letter topic',
   reason: 'This stream has a consumer but no dead-letter path.',
+  silentAt: NOT_IN_AN_OVERVIEW,
   // The literal `queueKind === 'stream'`, not `categoryOf` (which folds it into `queue`) — a
   // Stream's dead-letter destination reads as a Topic, unlike a plain Queue's. The fragment below
   // still resolves to the existing, already-valid `queue>deadLetter` matrix row regardless: giving
@@ -139,6 +154,7 @@ const GATEWAY_ROUTE: ContinuationRule = {
   tier: 'primary',
   label: 'Service',
   reason: "This gateway doesn't route to anything yet.",
+  silentAt: NOT_IN_AN_OVERVIEW,
   when: (nb, trigger) => nb.category === 'gateway' && (isExplicit(trigger) || (nb.in.length > 0 && nb.out.length === 0)),
   fragment: () => ({
     nodes: [{ key: 'service', type: 'service', serviceKind: 'api' }],
@@ -174,6 +190,7 @@ const SCHEDULER_TRIGGER = defineFanOut(
       node: { type: 'service', serviceKind: 'worker' },
     },
   ],
+  { silentAt: NOT_IN_AN_OVERVIEW },
 );
 
 /**
@@ -203,7 +220,7 @@ const OBJECT_STORAGE_FAN_OUT = defineFanOut(
       node: { type: 'queue', queueKind: 'topic' },
     },
   ],
-  { branches: true },
+  { branches: true, silentAt: NOT_IN_AN_OVERVIEW },
 );
 
 /**
@@ -230,6 +247,7 @@ const PORT_IMPLEMENTATION = defineFanOut(
       node: { type: 'service' },
     },
   ],
+  { silentAt: NOT_IN_AN_OVERVIEW },
 );
 
 /**
@@ -253,6 +271,7 @@ const WORKER_INDEXES = defineFanOut(
       node: { type: 'database', databaseKind: 'search-index' },
     },
   ],
+  { silentAt: NOT_IN_AN_OVERVIEW },
 );
 
 /**
@@ -322,6 +341,73 @@ const ACTOR_NEXT = defineFanOut(
   { surfaces: 'invoke' },
 );
 
+/**
+ * What a system overview is made of: people, the system, and the systems around it.
+ *
+ * Only offered where the view has actually been called a System Context — which is what makes
+ * "System" the right word for a plain Service here, and what keeps these suggestions out of every
+ * ordinary canvas. Both are `surfaces: 'invoke'`: at this altitude the next move is a judgement
+ * about scope, not a shape the graph implies, so Draft Canvas answers when asked and not before.
+ */
+const CONTEXT_NEXT = defineFanOut(
+  ['actor'],
+  () => false,
+  [
+    {
+      id: 'person-system',
+      tier: 'secondary',
+      label: 'System',
+      reason: 'The system this person uses.',
+      node: { type: 'service', text: 'System' },
+    },
+    {
+      id: 'person-external',
+      tier: 'secondary',
+      label: 'External System',
+      reason: 'Or a system someone else runs.',
+      node: { type: 'service', serviceKind: 'external' },
+    },
+  ],
+  { surfaces: 'invoke', levels: ['context'] },
+);
+
+/**
+ * Inside one running thing: its parts, and what they keep their data in.
+ *
+ * A Component's next move is never obvious from the graph — a controller, a use case and a
+ * repository all look identical to a diagram — so like the Service family these answer only when
+ * asked. The names are placeholders in the ordinary sense (`textOrigin: 'auto'`): typing over one
+ * is the expected first thing to do with it.
+ */
+const COMPONENT_NEXT = defineFanOut(
+  ['component'],
+  () => false,
+  [
+    {
+      id: 'component-component',
+      tier: 'secondary',
+      label: 'Component',
+      reason: 'The next part of this one — a use case, a domain model, a repository.',
+      node: { type: 'component' },
+    },
+    {
+      id: 'component-adapter',
+      tier: 'secondary',
+      label: 'Adapter',
+      reason: 'Where this reaches something outside itself.',
+      node: { type: 'component', componentKind: 'adapter' },
+    },
+    {
+      id: 'component-data-store',
+      tier: 'secondary',
+      label: 'Data Store',
+      reason: 'What it reads and writes.',
+      node: { type: 'database' },
+    },
+  ],
+  { surfaces: 'invoke', levels: ['component'] },
+);
+
 export const RULES: readonly ContinuationRule[] = [
   TOPIC_FAN_OUT_QUEUE,
   TOPIC_SUBSCRIBER,
@@ -336,5 +422,7 @@ export const RULES: readonly ContinuationRule[] = [
   ...SERVICE_NEXT,
   ...WORKER_INDEXES,
   ...ACTOR_NEXT,
+  ...CONTEXT_NEXT,
+  ...COMPONENT_NEXT,
 ];
 

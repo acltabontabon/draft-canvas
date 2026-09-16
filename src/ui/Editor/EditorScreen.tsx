@@ -24,12 +24,15 @@ import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion } from '../../lib/isEditableTarget';
 import { centerOf } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
-import { flowFitViewNodes, roomFor, useEditorStore } from '../../store/editorStore';
+import { flowFitViewNodes, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
 import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { presentationScope, revealIn } from '../../presentation/presentationAttachments';
 import { useThemeValue } from '../theme/useTheme';
+import { backOut, lookInside } from './depthNavigation';
+import { DepthStack } from './DepthStack';
+import { DepthTransition } from './DepthTransition';
 import { EmptyState } from './EmptyState';
 import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
@@ -188,7 +191,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           : undefined;
 
       // Refused past the node cap, with a toast — the store's `addNode` itself stays unconditional.
-      if (!roomFor(useEditorStore.getState().document, 1, 0)) return null;
+      if (!roomFor(1, 0)) return null;
       const node = useEditorStore.getState().addNode({
         type: preset.type,
         x: Math.round(position.x),
@@ -225,7 +228,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const quickConnectRows = useMemo(
     () =>
       quickConnect && editorDocument
-        ? quickConnectItems(editorDocument, quickConnect, useUiStore.getState().continuationRecent)
+        ? quickConnectItems(editorDocument, quickConnect, useUiStore.getState().continuationRecent, viewLevel(useEditorStore.getState()))
         : [],
     [quickConnect, editorDocument],
   );
@@ -459,6 +462,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           {!presenting && <FlowPanel playback={playback} />}
           <FlowBar playback={playback} />
           <FocusIndicator />
+          <DepthStack />
+          <DepthTransition />
 
           {presenting && (
             <div className="dc-present-exit">
@@ -838,6 +843,21 @@ function useKeyboard({
             event.preventDefault();
             state.setMode(state.mode === 'present' ? 'edit' : 'present');
             return;
+          // The Finder chord, for the same two moves: open the thing you have, and go back out to
+          // what contains it. Works while presenting too — stepping into a system mid-walkthrough
+          // is the whole point.
+          case 'arrowdown': {
+            const { nodes, edges } = state.selection;
+            if (event.shiftKey || event.altKey || nodes.length !== 1 || edges.length > 0) return;
+            event.preventDefault();
+            void lookInside(nodes[0]!);
+            return;
+          }
+          case 'arrowup':
+            if (event.shiftKey || event.altKey || state.path.length === 0) return;
+            event.preventDefault();
+            void backOut();
+            return;
           case '=':
           case '+':
             event.preventDefault();
@@ -921,7 +941,12 @@ function useKeyboard({
             playback.stop();
             if (state.mode === 'present') state.setMode('edit');
           } else if (state.mode === 'present') state.setMode('edit');
-          else state.setSelection({ nodes: [], edges: [] });
+          // Last of all, and only with nothing selected: Escape steps back out of a shape, the way
+          // it steps back out of everything else. Anything still selected is what Escape means
+          // first — backing out of a room is never what someone wanted from their first press.
+          else if (state.selection.nodes.length === 0 && state.selection.edges.length === 0 && state.path.length > 0) {
+            void backOut();
+          } else state.setSelection({ nodes: [], edges: [] });
           return;
         }
         case 'Tab': {

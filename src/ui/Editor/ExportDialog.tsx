@@ -18,7 +18,7 @@ import { findFlow, flowIsPlayable } from '../../document/flow';
 import type { DraftDocument } from '../../document/types';
 import { resolveFlowStep } from '../../presentation/useFlowPlayback';
 import { readPreference, writePreference } from '../../lib/preferences';
-import { documentWithLiveViewport, useEditorStore } from '../../store/editorStore';
+import { fileWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { usePersonality } from '../personality/usePersonality';
 import { useTheme } from '../theme/useTheme';
@@ -250,7 +250,7 @@ export function ExportDialog() {
         ? {
             label: 'Export document',
             disabled: busy,
-            onClick: () => void run(() => exportProjectFile(documentWithLiveViewport(useEditorStore.getState())), 'Document export'),
+            onClick: () => void run(() => exportProjectFile(fileWithLiveViewport(useEditorStore.getState())), 'Document export'),
           }
         : { label: 'Export securely…', disabled: busy, onClick: () => setSecurePromptOpen(true) }
       : effectiveMode === 'image'
@@ -389,7 +389,7 @@ export function ExportDialog() {
           onCancel={() => setSecurePromptOpen(false)}
           onConfirm={(passphrase) =>
             void run(async () => {
-              await exportSecureProjectFile(documentWithLiveViewport(useEditorStore.getState()), passphrase);
+              await exportSecureProjectFile(fileWithLiveViewport(useEditorStore.getState()), passphrase);
               setSecurePromptOpen(false);
             }, 'Secure export')
           }

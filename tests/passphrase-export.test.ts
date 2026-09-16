@@ -12,6 +12,17 @@ import { addNodes } from '../src/document/operations';
 function fixture() {
   return addNodes(createDocument('Handoff'), [
     createNode({ type: 'note', x: 0, y: 0, text: 'TOP_SECRET_PAYMENT_SERVICE' }),
+    // A shape with its own architecture inside it — encryption has no opinion about depth, and
+    // the round trip goes through the same validation as a plain export.
+    {
+      ...createNode({ type: 'service', x: 300, y: 0, text: 'Lending Platform' }),
+      inside: {
+        nodes: [createNode({ type: 'component', x: 0, y: 0, text: 'TOP_SECRET_CONTROLLER' })],
+        edges: [],
+        flows: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+      },
+    },
   ]);
 }
 

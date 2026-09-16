@@ -1,5 +1,6 @@
 import { useReactFlow, useStore } from '@xyflow/react';
-import { flowFitViewNodes, useEditorStore } from '../../store/editorStore';
+import { flowFitViewNodes, useEditorStore, viewLevel } from '../../store/editorStore';
+import { LEVEL_HINTS, LEVEL_LABELS } from '../../depth/level';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { motionMs } from '../../lib/motion';
@@ -101,6 +102,7 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
       )}
 
       <div className="dc-status-right">
+        <LevelChip />
         <span className="dc-muted">
           {nodeCount} {nodeCount === 1 ? 'element' : 'elements'} · {edgeCount}{' '}
           {edgeCount === 1 ? 'connector' : 'connectors'}
@@ -109,6 +111,27 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
         <ZoomControls />
       </div>
     </footer>
+  );
+}
+
+/**
+ * What this view is showing, when anything is known about that — "Containers", "Components".
+ *
+ * It earns its place by being the answer to a question the suggestions would otherwise raise
+ * silently: a known level narrows what Draft Canvas offers here, so it is never narrowed without
+ * the reason being on screen. Absent entirely for a canvas nobody has said anything about, which
+ * is most of them.
+ */
+function LevelChip() {
+  const level = useEditorStore((state) => viewLevel(state));
+  if (!level || level === 'none') return null;
+  return (
+    <>
+      <span className="dc-status-level" title={LEVEL_HINTS[level]}>
+        {LEVEL_LABELS[level]}
+      </span>
+      <span className="dc-inspector-divider" />
+    </>
   );
 }
 

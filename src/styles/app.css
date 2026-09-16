@@ -2468,6 +2468,168 @@ kbd {
   border-radius: 50%;
 }
 
+/* ---------------------------------------------------------------- depth -- */
+
+/* What the view is showing, where a level is known. Quiet as the counts beside it — this is a
+   statement of fact, not a control, and it is only here at all so that a narrowed set of
+   suggestions never comes without its reason visible. */
+.dc-status-level {
+  color: var(--dc-text-muted);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.04em;
+}
+
+/* The sheet that grows out of a shape into the room inside it (and shrinks back on the way out).
+   Inert, above the canvas but below every control, and only ever on screen for a quarter second. */
+.dc-depth-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: var(--dc-z-chrome);
+  border: 1px solid var(--dc-selection);
+  border-radius: var(--dc-radius-md);
+  background: var(--dc-canvas);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* Where you are, when you are inside something. Two sheets peek out behind the panel so the thing
+   reads as a stack of pages rather than a path — the rooms you came through are literally under
+   the one you are looking at. Absent entirely at the top level. */
+.dc-depth {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: var(--dc-z-bar);
+  padding: 5px 12px 5px 11px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  font-size: 12.5px;
+  max-width: min(46vw, 420px);
+}
+
+.dc-depth::before,
+.dc-depth::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  z-index: -1;
+  transition:
+    transform 140ms var(--dc-ease-out),
+    opacity 140ms var(--dc-ease-out);
+}
+
+.dc-depth::before {
+  transform: translate(3px, 3px);
+  opacity: 0.7;
+}
+
+.dc-depth::after {
+  transform: translate(6px, 6px);
+  opacity: 0.4;
+}
+
+/* Expanded, the sheets tuck back in: the stack has been dealt out into the list itself. */
+.dc-depth:hover::before,
+.dc-depth:focus-within::before,
+.dc-depth:hover::after,
+.dc-depth:focus-within::after {
+  transform: none;
+  opacity: 0;
+}
+
+.dc-depth-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-depth-rung {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-height 140ms var(--dc-ease-out),
+    opacity 120ms var(--dc-ease-out);
+}
+
+/* Collapsed, only the room you are in is showing — the shortest true answer. */
+.dc-depth-rung[data-current='true'],
+.dc-depth:hover .dc-depth-rung,
+.dc-depth:focus-within .dc-depth-rung {
+  max-height: 24px;
+  opacity: 1;
+}
+
+.dc-depth-rung[data-current='true'] .dc-depth-into {
+  opacity: 0;
+  transition: opacity 120ms var(--dc-ease-out);
+}
+
+.dc-depth:hover .dc-depth-rung[data-current='true'] .dc-depth-into,
+.dc-depth:focus-within .dc-depth-rung[data-current='true'] .dc-depth-into {
+  opacity: 1;
+}
+
+/* Each room is indented under the one it sits in. */
+.dc-depth-rung:nth-child(2) { padding-left: 4px; }
+.dc-depth-rung:nth-child(3) { padding-left: 14px; }
+.dc-depth-rung:nth-child(4) { padding-left: 24px; }
+
+.dc-depth-into {
+  color: var(--dc-text-faint, var(--dc-text-muted));
+  font-size: 11px;
+}
+
+.dc-depth-step {
+  display: block;
+  max-width: 100%;
+  padding: 1px 2px;
+  border: 0;
+  border-radius: var(--dc-radius-xs);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  line-height: 1.5;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button.dc-depth-step {
+  cursor: pointer;
+}
+
+button.dc-depth-step:hover {
+  color: var(--dc-text);
+  background: var(--dc-surface-hover, transparent);
+}
+
+.dc-depth-rung[data-current='true'] .dc-depth-step {
+  color: var(--dc-text);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-depth::before,
+  .dc-depth::after,
+  .dc-depth-rung,
+  .dc-depth-into {
+    transition: none;
+  }
+}
+
 /* ------------------------------------------------------------ inspector -- */
 
 .dc-inspector {

@@ -1,5 +1,5 @@
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
-import type { DraftDocument, DraftNode } from '../document/types';
+import type { DraftDocument, DraftNode, ViewLevel } from '../document/types';
 import { ANCHOR_TYPES, neighborhoodOf } from './context';
 import { ANY_CANDIDATE, dismissalKey } from './dismissal';
 import { existingTargetCandidates } from './existing';
@@ -21,6 +21,25 @@ export interface ContinuationOptions {
   /** Rule ids accepted recently in this session — a light ranking hint only (`rank.ts`). */
   recent?: readonly string[];
   rules?: readonly ContinuationRule[];
+  /** What the view is showing, where that is known — see `src/depth/level.ts`. */
+  level?: ViewLevel;
+}
+
+/**
+ * Whether a rule belongs at the altitude the view is drawn at.
+ *
+ * Two ways a rule can care, and the difference between them is the policy: `silentAt` quietens a
+ * rule at an altitude where it would be noise (a dead-letter queue has no business in a diagram of
+ * systems and the people who use them) but leaves it alone everywhere else, *including* where
+ * nothing is known; `levels` restricts a rule to an altitude it only makes sense at, and requires
+ * the level to have actually been set. So a level the user chose can take a suggestion away, and
+ * only a level the user chose can introduce one — nothing ever changes on a guess.
+ */
+function fitsLevel(rule: ContinuationRule, level: ViewLevel | undefined): boolean {
+  const known = level !== undefined && level !== 'none' ? level : undefined;
+  if (rule.levels && (known === undefined || !rule.levels.includes(known))) return false;
+  if (rule.silentAt && known !== undefined && rule.silentAt.includes(known)) return false;
+  return true;
 }
 
 /**
@@ -50,14 +69,15 @@ export function continuationsFor(
   trigger: ContinuationTrigger,
   options: ContinuationOptions = {},
 ): Continuation[] {
-  const nb = neighborhoodOf(doc, anchorId);
+  const { dismissed = EMPTY, recent = NONE, rules = RULES, level } = options;
+  const nb = neighborhoodOf(doc, anchorId, level);
   if (!nb || !ANCHOR_TYPES.has(nb.node.type)) return [];
-  const { dismissed = EMPTY, recent = NONE, rules = RULES } = options;
   if (dismissed.has(dismissalKey(anchorId, ANY_CANDIDATE, nb.key))) return [];
 
   const candidates: Continuation[] = [];
   for (const rule of rules) {
     if (rule.surfaces === 'invoke' && trigger !== 'invoke') continue;
+    if (!fitsLevel(rule, nb.level)) continue;
     if (dismissed.has(dismissalKey(anchorId, rule.id, nb.key))) continue;
     if (!rule.when(nb, trigger)) continue;
     const evaluated = evaluate(doc, nb, rule);
@@ -92,14 +112,15 @@ export function continuationSets(
   anchorId: string,
   options: Omit<ContinuationOptions, 'rules'> = {},
 ): ContinuationSets {
-  const nb = neighborhoodOf(doc, anchorId);
+  const { dismissed = EMPTY, recent = NONE, level } = options;
+  const nb = neighborhoodOf(doc, anchorId, level);
   if (!nb || !ANCHOR_TYPES.has(nb.node.type)) return { quiet: [], explicit: [] };
-  const { dismissed = EMPTY, recent = NONE } = options;
   const quietAllowed = !dismissed.has(dismissalKey(anchorId, ANY_CANDIDATE, nb.key));
 
   const quiet: Continuation[] = [];
   const explicit: Continuation[] = [];
   for (const rule of RULES) {
+    if (!fitsLevel(rule, nb.level)) continue;
     const asked = rule.when(nb, 'invoke');
     const quietly =
       quietAllowed && rule.surfaces !== 'invoke' && !dismissed.has(dismissalKey(anchorId, rule.id, nb.key)) && rule.when(nb, 'select');

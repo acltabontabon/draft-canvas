@@ -27,6 +27,9 @@ export function serializeDocument(document: DraftDocument): string {
     viewport: document.viewport,
     settings: document.settings,
     flows: document.flows,
+    // Only written when the canvas actually has one, so a file from a canvas nobody said anything
+    // about is byte-identical to what this has always produced.
+    ...(document.level === undefined ? {} : { level: document.level }),
   };
   return `${JSON.stringify(payload, null, 2)}\n`;
 }

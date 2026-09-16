@@ -18,6 +18,7 @@ import { renderDocumentSvg } from '../src/render/svg/document';
 import { projectNodes, projectEdges } from '../src/canvas/projection';
 import { laneIndex, rectOf, routeEdge } from '../src/edges/routing';
 import { routingPlan } from '../src/edges/bundles';
+import { embed, totals, viewOf } from '../src/depth/tree';
 import type { DraftDocument } from '../src/document/types';
 import { ARCHITECTURE_STARTERS } from '../src/starters';
 import { freeOriginFor } from '../src/document/operations';
@@ -459,5 +460,62 @@ describe('drag hit-testing at the schema node/edge ceiling', () => {
     const started = performance.now();
     routingPlan(ceilingDoc.nodes, ceilingDoc.edges);
     expect(performance.now() - started).toBeLessThan(5_000);
+  });
+});
+
+/**
+ * Depth costs a canvas that has none exactly nothing, and a canvas that has plenty very little.
+ * Reassembling the file walks one chain of owners, so an edit three rooms down is the same work
+ * as an edit at the top plus a handful of array copies — but the identity guarantees matter as
+ * much as the milliseconds: the editor compares rooms by identity to decide whether an operation
+ * changed anything, and to skip re-rendering what it didn't.
+ */
+describe('depth', () => {
+  /** The 100-node fixture, then the same again inside three shapes of it, three rooms deep. */
+  function nestedDocument(): DraftDocument {
+    const base = largeDocument();
+    const room = (depth: number): DraftDocument['nodes'][number]['inside'] => ({
+      nodes: largeDocument().nodes.map((node, index) =>
+        index < 3 && depth > 0 ? { ...node, inside: room(depth - 1) } : node,
+      ),
+      edges: [],
+      flows: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    return { ...base, nodes: base.nodes.map((node, index) => (index < 3 ? { ...node, inside: room(2) } : node)) };
+  }
+
+  it('costs a canvas nobody looked inside nothing at all', () => {
+    const flat = largeDocument();
+    expect(viewOf(flat, [])).toBe(flat);
+    expect(embed(flat, [], flat)).toBe(flat);
+  });
+
+  it('reads and writes a room three deep well inside a frame', () => {
+    const file = nestedDocument();
+    const path = [file.nodes[0]!.id, file.nodes[0]!.inside!.nodes[0]!.id, file.nodes[0]!.inside!.nodes[0]!.inside!.nodes[0]!.id];
+    expect(viewOf(file, path)).toBeDefined();
+
+    const started = performance.now();
+    let current = file;
+    for (let edit = 0; edit < 60; edit += 1) {
+      const view = viewOf(current, path)!;
+      const nodes = view.nodes.map((node, index) => (index === 0 ? { ...node, x: node.x + 1 } : node));
+      current = embed(current, path, { ...view, nodes });
+    }
+    expect(performance.now() - started).toBeLessThan(500);
+
+    // Sixty edits deep in, the rooms nobody touched are still the same objects — which is what
+    // keeps history snapshots cheap and stops the canvas re-rendering rooms that did not change.
+    expect(current.nodes[1]).toBe(file.nodes[1]);
+    expect(current.nodes[0]!.inside!.nodes[1]).toBe(file.nodes[0]!.inside!.nodes[1]);
+  });
+
+  it('counts every room once, at any size', () => {
+    const file = nestedDocument();
+    const started = performance.now();
+    const counted = totals(file);
+    expect(performance.now() - started).toBeLessThan(100);
+    expect(counted.nodes).toBeGreaterThan(NODE_COUNT);
   });
 });

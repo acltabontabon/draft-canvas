@@ -2,6 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useReactFlow, useStore } from '@xyflow/react';
 import { primaryCommandsFor } from '../commands/registry';
+import { libraryShapeOf } from '../document/shape';
+import { Fingerprint } from '../ui/Library/Fingerprint';
 import type { CommandContext } from '../commands/types';
 import {
   ACCENTS,
@@ -337,7 +339,13 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   const primaryCommands = useMemo(
     () => primaryCommandsFor(buildCommandContext(), node),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [node.id, node.type, node.queueKind, node.deliveryRole, hasDlqEdge],
+    [node.id, node.type, node.queueKind, node.deliveryRole, hasDlqEdge, node.inside],
+  );
+
+  /** A glance at what is in there, at the size the Library draws a whole canvas. */
+  const insidePeek = useMemo(
+    () => (node.inside ? libraryShapeOf(node.inside.nodes, node.inside.edges) : undefined),
+    [node.inside],
   );
 
   const typeControl = ((): {
@@ -444,9 +452,17 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
               className="dc-popover-action"
               // An "Add …" continuation leads with a plus glyph; a toggle-off or dissolve doesn't.
               data-adds={command.id.startsWith('add-') ? 'true' : undefined}
-              title={QUICK_ACTION_HINTS[command.id] ?? command.title}
+              title={QUICK_ACTION_HINTS[command.id] ?? command.hint ?? command.title}
               onClick={() => command.run(buildCommandContext())}
             >
+              {/* The peek: what is in there, as the same silhouette the Library draws a whole
+                  canvas with. Cheaper and calmer than a live preview, and it answers the only
+                  question the button raises — "is there anything in there, and what shape is it?" */}
+              {command.id === 'look-inside' && insidePeek && (
+                <span className="dc-popover-peek">
+                  <Fingerprint shape={insidePeek} />
+                </span>
+              )}
               {command.title}
             </Button>
           ))}

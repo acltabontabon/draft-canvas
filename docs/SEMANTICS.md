@@ -207,6 +207,11 @@ appear in that picker, whose standing presets already cover those shapes.
 | `worker-indexes` | secondary | Search Index | This worker doesn't index anything yet. |
 | `actor-gateway` | secondary | Gateway | Requests usually enter through a gateway. |
 | `actor-api` | secondary | API | Or call an API directly. |
+| `person-system` | secondary | System | The system this person uses. |
+| `person-external` | secondary | External System | Or a system someone else runs. |
+| `component-component` | secondary | Component | The next part of this one — a use case, a domain model, a repository. |
+| `component-adapter` | secondary | Adapter | Where this reaches something outside itself. |
+| `component-data-store` | secondary | Data Store | What it reads and writes. |
 <!-- continuation-rules:end -->
 
 Keyboard only: the `service-*` and `actor-*` rules.
@@ -244,6 +249,26 @@ already do the same thing to the same kind of node, the names share a word ("Pay
 shapes that could each continue into the other — a Service and a Topic side by side — stay quiet
 until one of them is connected. The ghost is only the connector plus an outline on the target;
 nothing is duplicated.
+
+### What the view is showing
+
+A canvas — or one room inside it — may say what it shows: **System context**, **Containers** or
+**Components** (`ViewLevel`). It is stored only when someone actually said so, from a starter that
+declares one or the "View level" command; what the rooms *inside* it show follows from that and is
+never written down (`src/depth/level.ts`). Most canvases say nothing, and behave exactly as they
+always have.
+
+A rule can care about the level in two ways, and the asymmetry is the policy:
+
+- **`silentAt`** — quiet at an altitude where it would be noise, unchanged everywhere else,
+  *including* where nothing is known. Every infrastructure rule above is `silentAt: ['context']`: a
+  dead-letter queue has no business in a diagram of systems and the people who use them.
+- **`levels`** — offered only where the level is known to be one of them, for a rule that makes
+  sense at one altitude and nowhere else (`person-system`, `component-*`).
+
+So a level someone chose can take a suggestion away, and only a level someone chose can introduce
+one — nothing ever changes on a guess. Where a level is in force, it is on screen: the status bar
+names it, and the depth trail repeats it.
 
 Not yet: continuation does not read the active Flow (the flow lens turns it off) or which starter a
 diagram came from (documents don't record it). Accepting never changes a Flow.

@@ -15,6 +15,18 @@ import {
   type CreateNodeInput,
 } from '../document/factory';
 import { gapForCaption, horizontalAnchorsFor, RULES, type MaterializedContinuation } from '../continuation';
+import { effectiveLevel } from '../depth/level';
+import {
+  canCreateInside,
+  embed,
+  hasInside,
+  pathKey,
+  resolvePath,
+  ROOT_PATH,
+  totals,
+  viewOf,
+  type DepthPath,
+} from '../depth/tree';
 import { getMeasurer } from '../render/text/measure';
 import { naturalNoteHeight, naturalTextHeight } from '../nodes/describe';
 import {
@@ -110,6 +122,7 @@ import type {
   RouteMode,
   ServiceKind,
   Side,
+  ViewLevel,
 } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
@@ -205,6 +218,9 @@ function focusIdSets(focus: FocusState) {
 interface Interaction {
   label: string;
   document: DraftDocument;
+  /** The whole file as the gesture started, so the entry it pushes spans every room. */
+  file: DraftDocument;
+  path: DepthPath;
   selection: Selection;
 }
 
@@ -227,7 +243,17 @@ export function ownsData(node: Pick<DraftNode, 'type' | 'serviceKind'>): boolean
 }
 
 export interface EditorStore {
+  /**
+   * The room being edited — the whole file at the root (by identity), and one shape's inside
+   * when you have looked inside something. Everything downstream of the store reads this and
+   * never needs to know which: a room is an ordinary document. The whole file is reassembled by
+   * `fileOf`, and only the few places that persist or export a *file* rather than a view use it.
+   */
   document: DraftDocument;
+  /** Which room `document` is: owner node ids from the file outward-in. Empty at the root. */
+  path: DepthPath;
+  /** The file as of entering the current room; `null` at the root, where `document` is the file. */
+  outer: DraftDocument | null;
   history: HistoryState;
   selection: Selection;
   clipboard: Clipboard | null;
@@ -254,7 +280,7 @@ export interface EditorStore {
   liveViewport: DraftViewport | null;
 
   /* Document access */
-  setDocument: (document: DraftDocument, options?: { resetHistory?: boolean }) => void;
+  setDocument: (document: DraftDocument, options?: { resetHistory?: boolean; keepPath?: boolean }) => void;
   apply: (label: string, recipe: (doc: DraftDocument) => DraftDocument, options?: ApplyOptions) => void;
 
   /* Interactions (drag, resize) collapse into one undo entry */
@@ -484,6 +510,15 @@ export interface EditorStore {
   /* Focus mode */
   enterFocus: (nodeIds: string[], edgeIds: string[]) => void;
   exitFocus: () => void;
+
+  /* Depth */
+  /** Step into a shape's inside. Pure navigation: nothing is written, and an inside that does not
+   *  exist yet stays unwritten until the first shape is drawn there. `false` when it can't. */
+  enterInside: (nodeId: string) => boolean;
+  /** Climb back out to `depth` rooms below the root (0 is the document itself). */
+  exitTo: (depth: number) => void;
+  /** Says what this view is showing — or, with `undefined`, that nothing is claimed about it. */
+  setViewLevel: (level: ViewLevel | undefined) => void;
 }
 
 export interface ApplyOptions {
@@ -772,6 +807,76 @@ export function documentWithLiveViewport(state: Pick<EditorStore, 'document' | '
   return state.liveViewport ? { ...state.document, viewport: state.liveViewport } : state.document;
 }
 
+export type FileState = Pick<EditorStore, 'document' | 'path' | 'outer'>;
+
+/**
+ * Reassembling a file costs one owner chain, and everything that saves, exports or posts a
+ * document asks for it — so the result is remembered against the room it was built from. A room
+ * only ever gets a new identity when it is edited, which is exactly when the file changes too.
+ */
+const fileCache = new WeakMap<DraftDocument, { outer: DraftDocument; key: string; file: DraftDocument }>();
+
+/**
+ * The whole file, with the current room folded back into it.
+ *
+ * At the root this is `document` itself, so a canvas nobody has looked inside pays nothing.
+ * Used only where a *file* is the unit — autosave, the VS Code host, `.draftcanvas` export,
+ * conflict resolution and the document-wide limits — never for drawing.
+ */
+export function fileOf(state: FileState): DraftDocument {
+  const { document, path, outer } = state;
+  if (path.length === 0 || !outer) return document;
+  const key = pathKey(path);
+  const cached = fileCache.get(document);
+  if (cached && cached.outer === outer && cached.key === key) return cached.file;
+  const file = embed(outer, path, document);
+  fileCache.set(document, { outer, key, file });
+  return file;
+}
+
+/** The whole file as it should be saved or exported, camera included. */
+export function fileWithLiveViewport(state: FileState & Pick<EditorStore, 'liveViewport'>): DraftDocument {
+  return fileOf({ ...state, document: documentWithLiveViewport(state) });
+}
+
+/**
+ * What the room on screen is showing, if anything is known about that — its own level, or the one
+ * that follows from the room outside it. `undefined` for every canvas nobody has said anything
+ * about, which is the state in which nothing behaves differently at all.
+ */
+export function viewLevel(state: FileState): ViewLevel | undefined {
+  return effectiveLevel(fileOf(state), state.path);
+}
+
+/**
+ * Everything that was about the room you were in, cleared because you are no longer in it.
+ *
+ * Shared by `setDocument` and by depth navigation for the same reason: a popover, an armed tool,
+ * a flow lens or a half-offered suggestion all point at contents that are no longer on screen,
+ * and node ids survive both a reload of the same file and a step into another room. Deliberately
+ * leaves `mode` alone — presenting is a way of looking at any room, not a property of one.
+ */
+function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'focus' | 'selectedFlowId'> {
+  const ui = useUiStore.getState();
+  ui.resetContinuation();
+  ui.arm(null);
+  useUiStore.setState({
+    openAttachmentDetail: null,
+    quickConnect: null,
+    contextMenu: null,
+    presentationReveal: null,
+    flowRenameRequestId: null,
+    jumpFlashId: null,
+    editRequestId: null,
+  });
+  return {
+    selection: EMPTY_SELECTION,
+    flowPlayback: { active: false, flowId: null, step: 0 },
+    focus: { active: false, nodeIds: [], edgeIds: [] },
+    selectedFlowId: null,
+  };
+}
+
 /**
  * The flow currently acting as the canvas lens (members lit, everything else dimmed), or
  * `undefined` when there is none. The single source of truth for "is a lens on" — the canvas
@@ -803,14 +908,88 @@ export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefin
  * document (import, load) and on paste — past it, the next load would keep the first nodes and
  * silently drop the newest, so an add that doesn't fit is refused up front and said out loud.
  */
-export function roomFor(doc: DraftDocument, nodeCount: number, edgeCount: number): boolean {
-  if (doc.nodes.length + nodeCount <= LIMITS.maxNodes && doc.edges.length + edgeCount <= LIMITS.maxEdges) return true;
+export function roomFor(nodeCount: number, edgeCount: number): boolean {
+  // Counted across every room, not just the one being edited: the limits bound what a file can
+  // hold, and a load that kept the first 5000 nodes would silently lose whichever rooms came last.
+  const used = totals(fileOf(useEditorStore.getState()));
+  if (used.nodes + nodeCount <= LIMITS.maxNodes && used.edges + edgeCount <= LIMITS.maxEdges) return true;
   useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
   return false;
 }
 
+type SetEditorState = (
+  partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>),
+) => void;
+type GetEditorState = () => EditorStore;
+
+/**
+ * Puts a whole-file snapshot back and stands you where the change was made.
+ *
+ * Undo is linear across rooms, so the entry being restored may belong to one you are not in.
+ * Following it there is the honest behaviour: an edit undone out of sight would otherwise be a
+ * change you were told about but could not see. The path is re-resolved against the restored
+ * file, because the shape that owned the room may itself be part of what changed.
+ */
+function restoreSnapshot(
+  set: SetEditorState,
+  get: GetEditorState,
+  restored: {
+    history: HistoryState;
+    file: DraftDocument;
+    path: DepthPath;
+    selection: Selection;
+    flowSession?: FlowSessionSnapshot;
+  },
+): void {
+  const state = get();
+  const path = resolvePath(restored.file, restored.path);
+  const view = (path.length > 0 ? viewOf(restored.file, path) : restored.file) ?? restored.file;
+  const inside = view !== restored.file;
+  const moved = pathKey(inside ? path : ROOT_PATH) !== pathKey(state.path);
+  const cleared = moved ? resetViewSession() : undefined;
+  set((s) => ({
+    history: restored.history,
+    document: view,
+    path: inside ? path : ROOT_PATH,
+    outer: inside ? restored.file : null,
+    revision: s.revision + 1,
+    ...(cleared ?? reconcileSessionState(view, s)),
+    // After the reset: the entry's selection belongs to the room the entry was recorded in,
+    // which is the room we just moved to.
+    selection: restored.selection,
+    ...(restored.flowSession ?? {}),
+  }));
+  closeStaleAttachmentDetail(get().document);
+}
+
+/**
+ * Moves to another room. Navigation, not an edit: no history entry, no `revision` bump (so
+ * autosave stays quiet and no other tab is told the file changed), and no room is created for a
+ * shape you merely looked inside — `embed` only keeps a room that holds something.
+ *
+ * The one thing it writes is the camera of the room being left, folded from `liveViewport` into
+ * the file so coming back finds the view where you left it.
+ */
+function navigateTo(set: SetEditorState, get: GetEditorState, path: DepthPath): void {
+  const state = get();
+  const file = fileOf({ ...state, document: documentWithLiveViewport(state) });
+  const resolved = resolvePath(file, path);
+  const view = resolved.length > 0 ? viewOf(file, resolved) : file;
+  if (!view) return;
+  const inside = resolved.length > 0;
+  set({
+    ...resetViewSession(),
+    document: view,
+    path: inside ? resolved : ROOT_PATH,
+    outer: inside ? file : null,
+    liveViewport: null,
+  });
+}
+
 export const useEditorStore = create<EditorStore>((set, get) => ({
   document: createDocument(),
+  path: ROOT_PATH,
+  outer: null,
   history: EMPTY_HISTORY,
   selection: EMPTY_SELECTION,
   clipboard: null,
@@ -825,37 +1004,31 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setDocument(document, options) {
     interaction = null;
-    const ui = useUiStore.getState();
-    ui.resetContinuation();
-    // A tool armed on the canvas just closed would place a node on the next one's first click.
-    ui.arm(null);
     // Popovers, menus and one-shot requests aimed at the previous contents: node ids survive a
     // reload of the same file (the VS Code host reopens it on every outside change), so an open
     // attachment card or quick-connect menu would otherwise reattach to whatever those ids are now.
-    useUiStore.setState({
-      openAttachmentDetail: null,
-      quickConnect: null,
-      contextMenu: null,
-      presentationReveal: null,
-      flowRenameRequestId: null,
-      jumpFlashId: null,
+    // The armed tool goes too — one armed on the canvas just closed would place a node on the
+    // next one's first click.
+    const cleared = resetViewSession();
+    set((state) => {
+      // A reload of the same file — VS Code posts one on every outside edit — should leave you
+      // standing where you were, as long as the shape you were inside is still there.
+      const path = options?.keepPath ? resolvePath(document, state.path) : ROOT_PATH;
+      const view = path.length > 0 ? viewOf(document, path) : undefined;
+      return {
+        ...cleared,
+        document: view ?? document,
+        path: view ? path : ROOT_PATH,
+        outer: view ? document : null,
+        history: options?.resetHistory === false ? state.history : EMPTY_HISTORY,
+        // A presentation-mode selection ring or playback state from the diagram just closed has no
+        // meaning for the one being opened — without this, opening a new diagram right after
+        // presenting another lands you straight into presentation mode for it too.
+        mode: 'edit',
+        revision: state.revision + 1,
+        liveViewport: null,
+      };
     });
-    set((state) => ({
-      document,
-      history: options?.resetHistory === false ? state.history : EMPTY_HISTORY,
-      // A presentation-mode selection ring or playback state from the diagram just closed has no
-      // meaning for the one being opened — without this, opening a new diagram right after
-      // presenting another lands you straight into presentation mode for it too.
-      mode: 'edit',
-      selection: EMPTY_SELECTION,
-      flowPlayback: { active: false, flowId: null, step: 0 },
-      focus: { active: false, nodeIds: [], edgeIds: [] },
-      // Never auto-selected, however many flows the document has — the default view on open is
-      // the diagram itself, not a flow lens. The user opts into a flow explicitly.
-      selectedFlowId: null,
-      revision: state.revision + 1,
-      liveViewport: null,
-    }));
   },
 
   apply(label, recipe, options) {
@@ -877,6 +1050,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
 
     const selectionAfter = options?.selection ?? selectionIn(next, before, state.selection);
+    // History spans the whole file, not the room the edit happened in: undo has to be able to put
+    // back a shape you deleted two rooms ago, and it carries the path so it can take you there.
+    const fileBefore = fileOf(state);
+    const fileAfter = fileOf({ ...state, document: next });
     set((s) => ({
       document: next,
       selection: selectionAfter,
@@ -884,8 +1061,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...focusThatSurvives(next, s),
       history: pushEntry(s.history, {
         label,
-        before,
-        after: next,
+        before: fileBefore,
+        after: fileAfter,
+        path: state.path,
         selectionBefore: state.selection,
         selectionAfter,
         at: Date.now(),
@@ -905,7 +1083,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // entry instead of silently baking it into whatever comes next with no way to undo it alone.
     if (interaction) get().endInteraction();
     const state = get();
-    interaction = { label, document: state.document, selection: state.selection };
+    interaction = {
+      label,
+      document: state.document,
+      file: fileOf(state),
+      path: state.path,
+      selection: state.selection,
+    };
   },
 
   endInteraction(label) {
@@ -918,8 +1102,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((s) => ({
       history: pushEntry(s.history, {
         label: label ?? active.label,
-        before: active.document,
-        after: s.document,
+        before: active.file,
+        after: fileOf(s),
+        path: active.path,
         selectionBefore: active.selection,
         selectionAfter: s.selection,
         at: Date.now(),
@@ -936,7 +1121,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   addNodesWithEdges(nodes, edges, label, flows = []) {
-    if (!roomFor(get().document, nodes.length, edges.length)) return false;
+    if (!roomFor(nodes.length, edges.length)) return false;
     get().apply(
       label,
       (doc) => flows.reduce((next, flow) => addFlow(next, flow), addEdges(addNodes(doc, nodes), edges)),
@@ -952,7 +1137,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const present = new Set(state.document.nodes.map((n) => n.id));
     for (const node of offer.nodes) present.add(node.id);
     if (!present.has(offer.anchorId) || !offer.edges.every((e) => present.has(e.source) && present.has(e.target))) return;
-    if (!roomFor(state.document, offer.nodes.length, offer.edges.length)) return;
+    if (!roomFor(offer.nodes.length, offer.edges.length)) return;
     // Selects where the sentence now ends — not every node the fragment added — so the next offer
     // chains from the tail. Flows are never touched: a continuation is drawing, not narrating.
     state.apply(offer.actionLabel, (doc) => addEdges(addNodes(doc, offer.nodes), offer.edges), {
@@ -993,7 +1178,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // e.g. a context-menu "Connect to" target picked before an intervening delete) must not return
     // a truthy edge that never actually gets persisted.
     if (!sourceNode || !targetNode) return null;
-    if (!roomFor(state.document, 0, 1)) return null;
+    if (!roomFor(0, 1)) return null;
     const relationship = inferRelationshipThroughJunctions(state.document, sourceNode, targetNode);
     const edge = createEdge({
       source,
@@ -1069,19 +1254,25 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Abandoned straight after creation (nothing else happened in between): take back the "Add
     // text" step itself instead of recording a delete on top of it — otherwise one ⌘Z brings back
     // an empty, invisible node, the very thing this cleanup exists to prevent.
-    const { document, history, revision } = get();
+    const state = get();
+    const { document, history, revision } = state;
     const top = history.past[history.past.length - 1];
+    // Snapshots span the file, so the comparison does too — and the counting looks at the room
+    // that entry was recorded in, which is this one when the step is still the top of the stack.
+    const topBefore = top ? (viewOf(top.before, top.path) ?? top.before) : undefined;
     // Only when that step added this one node and nothing else — a Duplicate/Paste that merely
     // *included* an empty auto-text must not be reverted wholesale along with it.
     const topAddedOnlyThisNode =
       top !== undefined &&
-      top.after === document &&
-      top.after.nodes.length === top.before.nodes.length + 1 &&
-      top.after.edges.length === top.before.edges.length &&
-      !top.before.nodes.some((n) => n.id === id);
+      topBefore !== undefined &&
+      top.after === fileOf(state) &&
+      document.nodes.length === topBefore.nodes.length + 1 &&
+      document.edges.length === topBefore.edges.length &&
+      !topBefore.nodes.some((n) => n.id === id);
     if (topAddedOnlyThisNode) {
       set({
-        document: top.before,
+        document: topBefore,
+        outer: state.path.length > 0 ? top.before : null,
         // Redo entries were recorded on top of a document that still had this node.
         history: { past: history.past.slice(0, -1), future: [] },
         selection: EMPTY_SELECTION,
@@ -1122,7 +1313,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const target = edge && state.document.nodes.find((n) => n.id === edge.target);
     if (!edge || !source || !target) return;
     // One connector becomes two, plus the worker.
-    if (!roomFor(state.document, 1, 1)) return;
+    if (!roomFor(1, 1)) return;
 
     // Same midpoint-of-both-centers placement `detachFromEdge` already uses for a connector's
     // own detached attachment — no independent placement heuristic invented for this.
@@ -1201,7 +1392,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     const alreadyHasDlq = state.document.edges.some((e) => e.source === queueId && e.semantic === 'deadLetters');
     if (alreadyHasDlq) return;
-    if (!roomFor(state.document, 1, 1)) return;
+    if (!roomFor(1, 1)) return;
 
     const size = defaultSizeFor('queue');
     const caption = relationshipCaptionLabel('deadLetters', undefined, 3);
@@ -1248,7 +1439,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     const source = state.document.nodes.find((n) => n.id === sourceId);
     if (!source) return;
-    if (!roomFor(state.document, 1, 1)) return;
+    if (!roomFor(1, 1)) return;
 
     const size = defaultSizeFor(companion.type);
     // Same capability matrix every other connection reads — it correctly differentiates a queue's
@@ -1391,7 +1582,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const hub = state.document.nodes.find((n) => n.id === hubId);
     if (!hub) return;
     // The junction, and a trunk connector on top of the members it re-points.
-    if (!roomFor(state.document, 1, 1)) return;
+    if (!roomFor(1, 1)) return;
 
     // Placed exactly where the trunk already meets the stem, so materializing
     // the Junction is visually a no-op — the user gets a handle on the point
@@ -1532,7 +1723,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     if (state.selection.nodes.length === 0) return;
     const fragment = extractFragment(state.document, state.selection.nodes);
-    const result = pasteFragment(state.document, fragment, { x: 24, y: 24 });
+    const result = pasteFragment(state.document, fragment, { x: 24, y: 24 }, totals(fileOf(state)));
     if (result.nodeIds.length === 0) {
       useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
       return;
@@ -1591,7 +1782,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       x: target.x - fragmentCenter.x + stagger,
       y: target.y - fragmentCenter.y + stagger,
     };
-    const result = pasteFragment(state.document, fragment, offset);
+    const result = pasteFragment(state.document, fragment, offset, totals(fileOf(state)));
     if (result.nodeIds.length === 0) {
       useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
       return;
@@ -1662,7 +1853,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const members = state.document.nodes.filter((n) => selected.has(n.id) && !hasSelectedAncestor(n));
     if (members.length < 2) return;
     // Past the cap the boundary would be the node a reload drops, leaving its children orphaned.
-    if (!roomFor(state.document, 1, 0)) return;
+    if (!roomFor(1, 0)) return;
     // Grouping inside an existing boundary keeps the new one nested there, so dragging or
     // deleting that outer boundary still carries everything it held.
     const sharedParent = members.every((n) => n.parentId === members[0]!.parentId) ? members[0]!.parentId : undefined;
@@ -1766,7 +1957,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   detachAttachment(hostId, attachmentId) {
     const state = get();
-    if (!roomFor(state.document, 1, 0)) return;
+    if (!roomFor(1, 0)) return;
     const result = detachFromNode(state.document, hostId, attachmentId);
     if (!result.extractedNode) return;
     state.apply('Detach', () => result.doc, {
@@ -1826,7 +2017,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   detachEdgeAttachment(edgeId, attachmentId) {
     const state = get();
-    if (!roomFor(state.document, 1, 0)) return;
+    if (!roomFor(1, 0)) return;
     const result = detachFromEdgeOp(state.document, edgeId, attachmentId);
     if (!result.extractedNode) return;
     state.apply('Detach', () => result.doc, {
@@ -1965,18 +2156,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (interaction) return;
     const { history, entry } = undoStack(state.history);
     if (!entry) return;
-    set((s) => ({
+    restoreSnapshot(set, get, {
       history,
-      document: carryAdoptedMetadata(entry.before, entry.before.metadata, entry.after.metadata, s.document.metadata),
+      file: carryAdoptedMetadata(entry.before, entry.before.metadata, entry.after.metadata, fileOf(state).metadata),
+      path: entry.path,
       selection: entry.selectionBefore,
-      revision: s.revision + 1,
-      ...reconcileSessionState(entry.before, s),
-      // Overrides whatever reconcileSessionState just computed for selectedFlowId —
-      // focus isn't part of the snapshot and still goes through the reconciler's own pruning
-      // above regardless. See `FlowSessionSnapshot`.
-      ...(entry.flowSessionBefore ?? {}),
-    }));
-    closeStaleAttachmentDetail(get().document);
+      // Overrides whatever reconcileSessionState computes for selectedFlowId — focus isn't part
+      // of the snapshot and still goes through the reconciler's own pruning regardless.
+      // See `FlowSessionSnapshot`.
+      flowSession: entry.flowSessionBefore,
+    });
   },
 
   redo() {
@@ -1984,15 +2173,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (interaction) return;
     const { history, entry } = redoStack(state.history);
     if (!entry) return;
-    set((s) => ({
+    restoreSnapshot(set, get, {
       history,
-      document: carryAdoptedMetadata(entry.after, entry.before.metadata, entry.after.metadata, s.document.metadata),
+      file: carryAdoptedMetadata(entry.after, entry.before.metadata, entry.after.metadata, fileOf(state).metadata),
+      path: entry.path,
       selection: entry.selectionAfter,
-      revision: s.revision + 1,
-      ...reconcileSessionState(entry.after, s),
-      ...(entry.flowSessionAfter ?? {}),
-    }));
-    closeStaleAttachmentDetail(get().document);
+      flowSession: entry.flowSessionAfter,
+    });
   },
 
   canUndo: () => canUndo(get().history),
@@ -2011,11 +2198,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // back and the next save would write it over the other tab's. So those baselines take the
     // adopted value too, on every field the step itself didn't change. Older entries can't grow
     // any more and already agree with themselves, so they need nothing.
-    if (interaction) interaction = { ...interaction, document: withSharedMetadata(interaction.document, shared) };
+    if (interaction) {
+      interaction = {
+        ...interaction,
+        document: withSharedMetadata(interaction.document, shared),
+        file: withSharedMetadata(interaction.file, shared),
+      };
+    }
     const top = history.past[history.past.length - 1];
     const rebasedTop = top && rebaseEntryMetadata(top, shared);
     set({
+      // The title lives on the file, and `embed` carries a room's metadata back up to it, so
+      // patching the room is all it takes however deep the editor currently is.
       document: withSharedMetadata(document, shared),
+      ...(get().outer ? { outer: withSharedMetadata(get().outer!, shared) } : {}),
       ...(rebasedTop && rebasedTop !== top ? { history: { ...history, past: [...history.past.slice(0, -1), rebasedTop] } } : {}),
     });
   },
@@ -2066,6 +2262,41 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   exitFocus() {
     set({ focus: { active: false, nodeIds: [], edgeIds: [] } });
   },
+
+  enterInside(nodeId) {
+    const state = get();
+    // Mid-gesture the canvas is still streaming positions into a room that is about to stop
+    // being the one on screen; the gesture would end up recorded against the wrong one.
+    if (interaction) return false;
+    const node = state.document.nodes.find((n) => n.id === nodeId);
+    if (!node) return false;
+    // An inside that already exists stays reachable whatever the shape became later; only
+    // creating a new one is limited to the shapes whose internals are architecture.
+    if (!hasInside(node) && !canCreateInside(node)) return false;
+    if (state.path.length >= LIMITS.maxInsideDepth) {
+      useUiStore.getState().notify('That is as deep as a canvas goes.', 'error');
+      return false;
+    }
+    navigateTo(set, get, [...state.path, nodeId]);
+    return true;
+  },
+
+  exitTo(depth) {
+    const state = get();
+    if (interaction) return;
+    if (depth < 0 || depth >= state.path.length) return;
+    navigateTo(set, get, state.path.slice(0, depth));
+  },
+
+  setViewLevel(level) {
+    get().apply(level === undefined ? 'Clear view level' : `View level: ${level}`, (doc) => {
+      if (doc.level === level) return doc;
+      const next = { ...doc };
+      if (level === undefined) delete next.level;
+      else next.level = level;
+      return next;
+    });
+  },
 }));
 
 /**
@@ -2079,6 +2310,9 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
     a.flows === b.flows &&
     a.settings === b.settings &&
     a.viewport === b.viewport &&
+    // Saying what a view shows changes nothing else about it, so without this the one edit that
+    // only ever changes `level` would be thrown away as a no-op.
+    a.level === b.level &&
     a.metadata.title === b.metadata.title
   );
 }

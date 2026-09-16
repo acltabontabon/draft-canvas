@@ -1,5 +1,5 @@
 import type { Scene } from '../types';
-import { REST, edge, middle, queue, service, store } from './kit';
+import { REST, actor, edge, middle, queue, service, store } from './kit';
 
 const orders = queue('orders', 60, 70, 'Orders');
 const worker = service('worker', 360, 76, 'Fulfilment', { serviceKind: 'worker' });
@@ -108,6 +108,66 @@ export const starters: Scene = {
         nodes: [billingWorker, shippingWorker],
         edges: [edge('e4', 'billing', 'billing-worker'), edge('e5', 'shipping', 'shipping-worker')],
       },
+    },
+  ],
+};
+
+
+/* ------------------------------------------------------------- look inside -- */
+
+const borrower = actor('borrower', 44, 40, 'Borrower');
+const platform = service('platform', 200, 52, 'Lending Platform');
+const core = service('core', 372, 52, 'Core Banking', { serviceKind: 'external' });
+
+const app = service('app', 60, 40, 'Mobile App', { width: 128, height: 52 });
+const api = service('api', 228, 40, 'Lending API', { serviceKind: 'api', width: 128, height: 52 });
+const loans = service('loans', 228, 150, 'Loan Service', { width: 128, height: 52 });
+const loansDb = store('loans-db', 240, 256, 'Loans', { width: 104, height: 64 });
+
+export const lookInside: Scene = {
+  label:
+    'A system context diagram: a borrower, the Lending Platform and Core Banking. The platform is selected, Look inside is chosen, and the canvas becomes what runs inside it — an app, an API, a service and its data store — with a trail naming where you are.',
+  frames: [
+    {
+      ms: 900,
+      step: 'Start with the big picture',
+      add: {
+        nodes: [borrower, platform, core],
+        edges: [edge('e1', 'borrower', 'platform'), edge('e2', 'platform', 'core')],
+      },
+      cursor: { ...REST, travel: 0 },
+    },
+    { ms: 700, step: 'Ask what is inside', cursor: { ...middle(platform), click: true }, select: ['platform'] },
+    {
+      ms: 1100,
+      overlay: {
+        kind: 'popover',
+        at: { x: 176, y: 128 },
+        placement: 'below',
+        controls: [{ type: 'button', text: 'Look inside', icon: 'plus' }],
+      },
+      cursor: { x: 232, y: 162 },
+    },
+    {
+      ms: 500,
+      overlay: {
+        kind: 'popover',
+        at: { x: 176, y: 128 },
+        placement: 'below',
+        controls: [{ type: 'button', text: 'Look inside', icon: 'plus', pressed: true }],
+      },
+      cursor: { x: 232, y: 162, click: true },
+    },
+    {
+      ms: 2400,
+      step: 'Draw what runs there',
+      remove: ['borrower', 'platform', 'core'],
+      select: [],
+      add: {
+        nodes: [app, api, loans, loansDb],
+        edges: [edge('e3', 'app', 'api'), edge('e4', 'api', 'loans'), edge('e5', 'loans', 'loans-db')],
+      },
+      cursor: null,
     },
   ],
 };

@@ -1,5 +1,5 @@
 import { continuationsFor, materialize } from '../continuation';
-import { lensFlow, type EditorStore } from '../store/editorStore';
+import { lensFlow, viewLevel, type EditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 
 /**
@@ -14,7 +14,7 @@ import { useUiStore } from '../store/uiStore';
  * everything about continuation itself.
  */
 export function stepContinuation(
-  editor: Pick<EditorStore, 'document' | 'selection' | 'selectedFlowId' | 'flowPlayback' | 'focus'>,
+  editor: Pick<EditorStore, 'document' | 'selection' | 'selectedFlowId' | 'flowPlayback' | 'focus' | 'path' | 'outer'>,
   delta: 1 | -1,
 ): boolean {
   const ui = useUiStore.getState();
@@ -31,7 +31,10 @@ export function stepContinuation(
     return true;
   }
 
-  const candidates = continuationsFor(editor.document, anchorId, 'invoke', { recent: ui.continuationRecent });
+  const candidates = continuationsFor(editor.document, anchorId, 'invoke', {
+    recent: ui.continuationRecent,
+    level: viewLevel(editor),
+  });
   const pick = (delta === 1 ? candidates : candidates.toReversed()).find((c) => materialize(editor.document, c) !== undefined);
   if (!pick) return false;
   ui.setContinuationCycle({ anchorId, neighborhoodKey: pick.neighborhoodKey, candidateId: pick.id });

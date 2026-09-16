@@ -66,7 +66,17 @@ Each of these has a failure mode that is silent, delayed, or both.
   `src/learn/scenes/` (the compiler insists on the pair); `src/learn/` stays free of React so the
   palette can list recipe titles without loading Learn, and everything that draws lives in `src/ui/learn/`, loaded only when Learn
   opens. Every label a recipe names must be a label the product actually shows.
-- **`version` is read only in `src/document/migrate.ts`.** Nothing else may branch on it.
+- **`version` is read only in `src/document/migrate.ts`.** Nothing else may branch on it. Since v12 a
+  document is a *tree* of graphs (a node may own the architecture inside it), so a migration that
+  touches nodes, edges or flows has to reach every room — use `mapGraphs`, not `doc.nodes`.
+- **A room is reached only through `src/depth/tree.ts` and the store's lens.** `editorStore`'s
+  `document` is the room being edited (the whole file at the top, by identity); `fileOf` reassembles
+  the file, and only the handful of places that persist or export a *file* — autosave, the VS Code
+  host, `.draftcanvas` export, conflict resolution, the document-wide limits — may call it.
+  Everything else keeps treating `document` as the whole diagram, which is what stops depth from
+  becoming a conditional in every component. A room exists exactly when it holds at least one
+  shape: `embed` enforces that on write and `validate.ts` on read, so an empty room is never saved
+  and "create a view" is never a step the user has to take.
 - **No side effects inside React state updaters.** React runs them twice in development; doing
   this recorded every drag twice and made undo appear broken.
 - **Handles must render in every mode**, including presentation. React Flow resolves edge

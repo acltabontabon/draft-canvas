@@ -543,6 +543,60 @@ describe('v10 to v11 migration: BFF Service kind removal', () => {
  * which version is missing, rather than only surfacing as a fixture test failing for a less
  * obvious reason.
  */
+/**
+ * v11 → v12 adds `DraftNode.inside`. Nothing on disk had to change for it — a v11 node simply has
+ * no inside — but the version did, so that a v11 build refuses the file by name instead of
+ * quietly stripping the rooms out of it on the next save.
+ */
+describe('v11 to v12 migration: a shape can have an inside', () => {
+  it('opens a v11 file unchanged, with no rooms invented', () => {
+    const result = parseDocument(
+      JSON.stringify({
+        format: DRAFT_FORMAT,
+        version: 11,
+        metadata: { id: 'd1', title: 'Lending', createdAt: 1, updatedAt: 2 },
+        nodes: [{ id: 'a', type: 'service', x: 0, y: 0, width: 160, height: 60, z: 0, text: 'Platform' }],
+        edges: [],
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.version).toBe(CURRENT_VERSION);
+    expect(result.document.nodes[0]!.inside).toBeUndefined();
+  });
+
+  it('brings a room through the whole chain from v1', () => {
+    const result = parseDocument(
+      JSON.stringify({
+        format: DRAFT_FORMAT,
+        version: 1,
+        metadata: { id: 'd1', title: 'Lending', createdAt: 1, updatedAt: 2 },
+        nodes: [
+          {
+            id: 'a',
+            type: 'service',
+            x: 0,
+            y: 0,
+            width: 160,
+            height: 60,
+            z: 0,
+            inside: {
+              nodes: [{ id: 'b', type: 'component', x: 0, y: 0, width: 160, height: 60, z: 0, text: 'Controller' }],
+              edges: [],
+              flows: [],
+              viewport: { x: 0, y: 0, zoom: 1 },
+            },
+          },
+        ],
+        edges: [],
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.nodes[0]!.inside?.nodes[0]?.text).toBe('Controller');
+  });
+});
+
 describe('migration chain completeness', () => {
   it('has no gap between v1 and the current version', () => {
     const { applied } = migrateToCurrent({ version: 1 });

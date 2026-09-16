@@ -7,8 +7,16 @@
 export const LIMITS = {
   /** 24 MB of JSON. Well beyond any real diagram, small enough to parse safely. */
   maxFileBytes: 24 * 1024 * 1024,
+  /** Across every room in the file, not per room — see `depth/tree.ts`'s `totals`. */
   maxNodes: 5000,
   maxEdges: 10000,
+  /**
+   * How many rooms deep a shape's inside may nest below the document itself. Three is the whole
+   * of the abstraction ladder Draft Canvas has an opinion about (a system, what runs inside it,
+   * what those are made of) plus one, and a bound is what keeps a hostile file from recursing
+   * a validator or a renderer into the ground.
+   */
+  maxInsideDepth: 3,
   maxTitleLength: 200,
   maxTextLength: 20_000,
   maxCodeLength: 200_000,

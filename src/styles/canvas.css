@@ -1039,6 +1039,38 @@
   border-color: var(--dc-selection);
 }
 
+/* A shape that has architecture inside it: one hairline sheet, offset behind its lower-right
+   corner, like a page underneath. Deliberately not a button and not a count — it says "there is
+   more under this", and the way in is the shape itself (⌘↓, the popover, the menu). Inert to the
+   pointer so it can never eat a click meant for the node or its resize corner. */
+.dc-inside-mark {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 26px;
+  height: 22px;
+  border: 1px solid var(--dc-border-strong, var(--dc-border));
+  border-radius: var(--dc-radius-xs);
+  background: var(--dc-surface);
+  opacity: 0.75;
+  pointer-events: none;
+  /* Behind the node's own surface, so only the corner of the sheet shows. */
+  z-index: -1;
+  transition:
+    transform 120ms var(--dc-ease-out),
+    opacity 120ms var(--dc-ease-out);
+}
+
+.dc-node:hover .dc-inside-mark {
+  transform: translate(2px, 2px);
+  opacity: 1;
+}
+
+.dc-node[data-selected='true'] .dc-inside-mark {
+  border-color: var(--dc-selection);
+  opacity: 1;
+}
+
 /* Chrome-free on purpose: this now wraps the same floating chip row a connector's attachments
    use (`AttachmentChipRow`), which already carries its own border/background/shadow per chip via
    `--dc-chip-*` — an outer panel box around it would double up on that framing instead of reading
@@ -1248,6 +1280,29 @@
 .dc-popover-primary .dc-popover-action:hover::before,
 .dc-popover-primary .dc-popover-action:focus-visible::before {
   color: var(--dc-selection);
+}
+
+/* The peek beside "Look inside": the room's own silhouette, at the size the Library draws a whole
+   canvas — small enough to read as a mark on the button, honest enough to tell two rooms apart. */
+.dc-popover-peek {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  padding: 1px 2px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-xs);
+  color: var(--dc-text-faint);
+}
+
+.dc-popover-peek .dc-fingerprint {
+  width: 30px;
+  height: 17px;
+}
+
+.dc-popover-action:hover .dc-popover-peek,
+.dc-popover-action:focus-visible .dc-popover-peek {
+  color: var(--dc-selection);
+  border-color: var(--dc-selection);
 }
 
 /* A hairline between the element's configuration (colour, kind) and its view/lifecycle actions
@@ -2002,6 +2057,27 @@
   place-items: center;
   pointer-events: none;
   user-select: none;
+}
+
+/* Inside a shape: the same sheet, with one question on it. No starters — a whole architecture
+   dropped in here would be answering a question nobody asked — and no keyboard cheatsheet, which
+   by the time anyone is two rooms deep they have already used. */
+.dc-empty-room-note {
+  text-align: center;
+  animation: dc-empty-note-in 220ms var(--dc-ease-out) both;
+}
+
+@keyframes dc-empty-note-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-empty-room-note {
+    animation: none;
+  }
 }
 
 /*

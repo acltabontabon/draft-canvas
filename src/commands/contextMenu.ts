@@ -78,7 +78,7 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
   const outgoing = ctx.editor.document.edges.filter((edge) => edge.source === node.id);
   const lastGroup = outgoing.length === 1 ? ['spotlight', 'flow-start-here'] : ['spotlight'];
   return grouped([
-    pick(commands, ['edit-text']),
+    pick(commands, ['edit-text', 'look-inside']),
     pick(commands, ['attach-note', 'attach-code']),
     pick(commands, ['add-consumer', 'add-dead-letter-queue', 'remove-dead-letter-queue', 'add-subscriber']),
     pick(commands, ['duplicate', 'copy', 'cut']),

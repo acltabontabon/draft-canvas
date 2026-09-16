@@ -250,6 +250,15 @@ export interface UiStore {
    */
   settleNodeIds: readonly string[];
   /**
+   * The one-shot "the shape opened into a room" (or closed back into a shape) animation, described
+   * as the screen rectangle the room grows out of — or shrinks back into — and which way it goes.
+   *
+   * Purely visual, and deliberately set *after* the navigation it illustrates: the editor is
+   * already showing the new room by the time this arrives, so nothing about being in the right
+   * place waits on an animation, and mashing ⌘↓/⌘↑ can only ever replace one token with the next.
+   */
+  depthTransition: { id: number; direction: 'in' | 'out'; from: { x: number; y: number; width: number; height: number } } | null;
+  /**
    * The Learn drawer (`ui/learn/LearnDrawer.tsx`) and where it was left. Session memory only:
    * reopening Learn returns to the recipe or search you were on, a reload starts at its home.
    * `learnRecipeId` null means the home view; `learnCategory` is the Explore filter, if any.
@@ -350,6 +359,8 @@ export interface UiStore {
   /** On document switch: nothing about the previous diagram's offers applies to the next. */
   resetContinuation: () => void;
   setContinuationsEnabled: (enabled: boolean) => void;
+  /** Plays (or clears) the depth transition — see `depthTransition`. */
+  setDepthTransition: (transition: UiStore['depthTransition']) => void;
   /** Marks freshly accepted nodes for their settle animation; the marker expires on its own. */
   setSettleNodeIds: (ids: readonly string[]) => void;
   setLibrarySearchQuery: (query: string) => void;
@@ -412,6 +423,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   continuationCycle: null,
   continuationRecent: [],
   settleNodeIds: [],
+  depthTransition: null,
   librarySearchQuery: '',
   librarySort: 'updatedAt',
   libraryView: { kind: 'recent' },
@@ -587,6 +599,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
       continuationCycle: continuationsEnabled ? state.continuationCycle : null,
     }));
   },
+  setDepthTransition: (depthTransition) => set({ depthTransition }),
   setSettleNodeIds: (settleNodeIds) => {
     clearTimeout(settleTimer);
     set((state) => (settleNodeIds.length === 0 && state.settleNodeIds.length === 0 ? state : { settleNodeIds }));

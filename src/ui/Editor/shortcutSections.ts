@@ -78,6 +78,8 @@ export const SECTIONS: Section[] = [
       { keys: [alt, 'Shift', '→'], label: 'Follow an outgoing connector' },
       { keys: [alt, 'Shift', '←'], label: 'Follow an incoming connector' },
       { commandId: 'edit-text', label: 'Open the selected element' },
+      { commandId: 'look-inside', label: 'Look inside the selected shape' },
+      { commandId: 'back-out', label: 'Back out to what contains it' },
       { keys: ['Shift', 'F10'], label: 'Context menu for the selection (or the Menu key)' },
       { keys: ['Esc'], label: 'Step back — out of editing, then a popover, then presenting, then the selection' },
     ],

@@ -179,6 +179,47 @@ describe('useDocumentSession — overlapping opens', () => {
     expect(session().openId).toBe(fast.metadata.id);
   });
 
+  /**
+   * Stepping into or out of a shape is navigation, not an edit. Saving for it would rewrite the
+   * file's content stamp — which is how another tab is told the file changed underneath it — so
+   * merely looking around would start reporting conflicts with yourself.
+   */
+  it('saves what is inside a shape, and never saves for merely stepping into one', async () => {
+    const saved: DraftDocument[] = [];
+    const repository = stubRepository({
+      save: async (document) => {
+        saved.push(structuredClone(document));
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().newDocument('Lending');
+    });
+    const store = useEditorStore.getState();
+    const platform = store.addNode({ type: 'service', x: 0, y: 0, text: 'Lending Platform' });
+    await waitFor(() => expect(saved.length).toBeGreaterThan(0));
+
+    const before = saved.length;
+    act(() => {
+      useEditorStore.getState().enterInside(platform.id);
+    });
+    // A moment of real time, so a debounced save would have landed if one had been scheduled.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+    expect(saved).toHaveLength(before);
+
+    act(() => {
+      useEditorStore.getState().addNode({ type: 'service', x: 20, y: 20, text: 'Lending API' });
+    });
+    await waitFor(() => expect(saved.length).toBeGreaterThan(before));
+    // What is written is the whole file, from wherever in it the editor happens to be standing.
+    const last = saved.at(-1)!;
+    expect(last.nodes).toHaveLength(1);
+    expect(last.nodes[0]!.inside?.nodes[0]?.text).toBe('Lending API');
+  });
+
   it('a double-activated New canvas creates one canvas', async () => {
     const saved: DraftDocument[] = [];
     const repository = stubRepository({

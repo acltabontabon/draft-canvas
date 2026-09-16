@@ -1,5 +1,5 @@
 import { categoryOf } from '../document/connectorSemantics';
-import type { DraftDocument, DraftNodeType } from '../document/types';
+import type { DraftDocument, DraftNodeType, ViewLevel } from '../document/types';
 import type { IncidentEdge, Neighborhood } from './types';
 
 /** Node types a continuation can hang off — or connect to. Annotations, boundaries and routing
@@ -13,7 +13,14 @@ export const ANCHOR_TYPES: ReadonlySet<DraftNodeType> = new Set<DraftNodeType>([
  *
  * Returns `undefined` when the node does not exist.
  */
-export function neighborhoodOf(doc: DraftDocument, nodeId: string): Neighborhood | undefined {
+export function neighborhoodOf(
+  doc: DraftDocument,
+  nodeId: string,
+  /** What this view is showing, where that is known — see `src/depth/level.ts`. Passed in rather
+   *  than read off the document, because the level in force may be the one the room outside hands
+   *  down, which only the caller can work out. */
+  level?: ViewLevel,
+): Neighborhood | undefined {
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node) return undefined;
   const byId = new Map(doc.nodes.map((n) => [n.id, n]));
@@ -38,7 +45,7 @@ export function neighborhoodOf(doc: DraftDocument, nodeId: string): Neighborhood
     }
   }
   const category = categoryOf(node);
-  return { node, category, out, in: incoming, outOfOut, key: neighborhoodKey(category, out, incoming) };
+  return { node, category, out, in: incoming, outOfOut, level, key: neighborhoodKey(category, out, incoming) };
 }
 
 /**

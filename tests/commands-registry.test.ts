@@ -154,9 +154,10 @@ describe('commandsFor — contextual (8.2)', () => {
     const node = useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0, text: 'API' });
     useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
     const list = ids(stubContext());
-    expect(list.slice(0, 14)).toEqual([
+    expect(list.slice(0, 15)).toEqual([
       'connect-to',
       'edit-text',
+      'look-inside',
       'attach-note',
       'attach-code',
       'add-data-store',
@@ -555,19 +556,32 @@ describe('primaryCommandsFor — primary popover quick actions', () => {
     expect(primaryIds(group)).toEqual(['ungroup']);
   });
 
-  it('a Service that owns data offers Add Data Store; a Gateway offers Add Service; the rest offer nothing', () => {
+  it('a Service that owns data offers Add Data Store; a Gateway offers Add Service; every Service can be looked inside', () => {
     const state = useEditorStore.getState();
     for (const serviceKind of ['generic', 'api', 'worker'] as const) {
       const service = state.addNode({ type: 'service', serviceKind, x: 0, y: 0 });
-      expect(primaryIds(service)).toEqual(['add-data-store']);
+      // Drawing what this service talks to comes first; going inside it is the quieter move until
+      // there is actually something in there (see `primaryCommandsFor`).
+      expect(primaryIds(service)).toEqual(['add-data-store', 'look-inside']);
     }
     const gateway = state.addNode({ type: 'service', serviceKind: 'gateway', x: 0, y: 0 });
-    expect(primaryIds(gateway)).toEqual(['add-routed-service']);
+    expect(primaryIds(gateway)).toEqual(['add-routed-service', 'look-inside']);
     // An external system's storage isn't ours to draw; a scheduler fires jobs, it doesn't persist.
+    // Both can still be opened up — someone else's system has insides too.
     for (const serviceKind of ['external', 'scheduler'] as const) {
       const service = state.addNode({ type: 'service', serviceKind, x: 0, y: 0 });
-      expect(primaryIds(service)).toEqual([]);
+      expect(primaryIds(service)).toEqual(['look-inside']);
     }
+  });
+
+  it('leads with Look inside once a shape actually has something in it', () => {
+    const state = useEditorStore.getState();
+    const service = state.addNode({ type: 'service', x: 0, y: 0 });
+    state.enterInside(service.id);
+    state.addNode({ type: 'component', x: 0, y: 0 });
+    state.exitTo(0);
+    const filled = useEditorStore.getState().document.nodes.find((node) => node.id === service.id)!;
+    expect(primaryIds(filled)).toEqual(['look-inside', 'add-data-store']);
   });
 
   it('kinds with no dedicated shape-native command offer nothing — a graceful empty row', () => {

@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 11;
+export const CURRENT_VERSION = 12;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -274,6 +274,43 @@ export interface Attachment {
   height?: number;
 }
 
+/**
+ * How zoomed-out a view is, in the only sense architecture has a zoom: a system in its world, the
+ * things that run inside that system, or the parts one of those is made of. The C4 model's three
+ * useful levels, named for what they show rather than for the model — Draft Canvas never requires
+ * one, and a canvas without one behaves exactly as it always has.
+ *
+ * `'none'` is an explicit "this room is just a drawing", which stops a level being *derived* for
+ * it from the room it sits in (see `depth/level.ts`). Absent means nothing has been said either
+ * way, which is every canvas ever saved before this field existed.
+ */
+export const VIEW_LEVELS = ['context', 'container', 'component', 'none'] as const;
+export type ViewLevel = (typeof VIEW_LEVELS)[number];
+
+/**
+ * The shapes that run *inside* another shape — a Draft Canvas "room", and what the C4 model
+ * reaches by stepping from a System Context view into a Container one.
+ *
+ * Deliberately the same graph a document carries (nodes, connectors, flows, a camera) and
+ * nothing else: a room has no title of its own (it is named by the node that owns it, so a
+ * rename can never disagree with it), no settings of its own (one grid, one background per
+ * file), and no id (it is addressed by its owner). Owning the inside rather than pointing at it
+ * is what makes the reference unbreakable — deleting or copying a shape takes its rooms with it,
+ * and a cycle is impossible by construction.
+ *
+ * A room exists exactly when it holds at least one node; `depth/tree.ts` is the one place that
+ * invariant is enforced on write, and `validate.ts` the one place on read.
+ */
+export interface DraftInside {
+  nodes: DraftNode[];
+  edges: DraftEdge[];
+  flows: DraftFlow[];
+  viewport: DraftViewport;
+  /** Only ever what someone actually chose, or what a starter declared — never a guess, and never
+   *  the value a room simply inherits from the one outside it. See `depth/level.ts`. */
+  level?: ViewLevel;
+}
+
 export interface DraftNode {
   id: string;
   type: DraftNodeType;
@@ -343,6 +380,14 @@ export interface DraftNode {
   textBold?: boolean;
   /** `text` nodes only. See `textBold`. */
   textItalic?: boolean;
+  /**
+   * The architecture that runs inside this shape — see `DraftInside`. Absent on all but the few
+   * shapes someone has actually looked inside, which is every shape in every file written before
+   * this field existed. Offered on Service and (non-port) Component, but never removed from a
+   * node whose kind changed afterwards: content must not become unreachable because a Service
+   * was retyped.
+   */
+  inside?: DraftInside;
 }
 
 export interface EdgeDetails {
@@ -585,6 +630,8 @@ export interface DraftDocument {
   viewport: DraftViewport;
   settings: DraftSettings;
   flows: DraftFlow[];
+  /** The canvas's own level, when it has one — same rule as `DraftInside.level`. */
+  level?: ViewLevel;
 }
 
 /** Bump when `libraryShapeOf` changes what it records — the only lever for

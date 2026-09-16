@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { continuationSets, materialize, type MaterializedContinuation } from '../continuation';
-import { lensFlow, useEditorStore } from '../store/editorStore';
+import { lensFlow, useEditorStore, viewLevel } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 
 /**
@@ -51,8 +51,14 @@ export function useContinuation(interactive: boolean): void {
       if (!interactionActive) ui.setContinuationCycle(null);
       return;
     }
-    const doc = useEditorStore.getState().document;
-    const { quiet: suggested, explicit } = continuationSets(doc, anchorId, { dismissed: dismissals, recent });
+    const state = useEditorStore.getState();
+    const doc = state.document;
+    // What the view is showing, where that is known — a level narrows what gets offered here.
+    const { quiet: suggested, explicit } = continuationSets(doc, anchorId, {
+      dismissed: dismissals,
+      recent,
+      level: viewLevel(state),
+    });
     const best = suggested[0];
     const wantsCycle = cycle !== null && cycle.anchorId === anchorId;
     if (!best && !wantsCycle) {

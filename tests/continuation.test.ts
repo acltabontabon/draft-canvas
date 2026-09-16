@@ -21,7 +21,7 @@ import { addFlow, createFlow } from '../src/document/flow';
 import { addEdges, addNodes, placeNear } from '../src/document/operations';
 import { rectOf, routeBetween } from '../src/edges/routing';
 import type { CreateNodeInput } from '../src/document/factory';
-import type { DraftDocument, DraftNode } from '../src/document/types';
+import type { DraftDocument, DraftNode, ViewLevel } from '../src/document/types';
 
 /* ------------------------------------------------------------------ */
 /* Fixture vocabulary — real factory + operations, nothing bespoke.    */
@@ -29,7 +29,7 @@ import type { DraftDocument, DraftNode } from '../src/document/types';
 
 type Spec = Omit<CreateNodeInput, 'x' | 'y'> & { id: string; x?: number; y?: number };
 
-function graph(nodes: Spec[], edges: Array<[string, string]>): DraftDocument {
+function graph(nodes: Spec[], edges: Array<[string, string]>, level?: ViewLevel): DraftDocument {
   const built = nodes.map((spec, i) => createNode({ x: i * 480, y: 0, ...spec }));
   const byId = new Map(built.map((n) => [n.id, n]));
   let doc = addNodes(createDocument('Continuation'), built);
@@ -39,7 +39,7 @@ function graph(nodes: Spec[], edges: Array<[string, string]>): DraftDocument {
       createEdge({ source, target, ...inferRelationship(byId.get(source)!, byId.get(target)!), semanticsOrigin: 'inferred' }),
     ),
   );
-  return doc;
+  return level ? { ...doc, level } : doc;
 }
 
 const service = (id: string, extra: Partial<Spec> = {}): Spec => ({ id, type: 'service', ...extra });
@@ -54,6 +54,7 @@ const database = (id: string): Spec => ({ id, type: 'database' });
 const objectStorage = (id: string): Spec => ({ id, type: 'database', databaseKind: 'object-storage' });
 const searchIndex = (id: string): Spec => ({ id, type: 'database', databaseKind: 'search-index' });
 const port = (id: string): Spec => ({ id, type: 'component', componentKind: 'port' });
+const component = (id: string): Spec => ({ id, type: 'component' });
 const actor = (id: string): Spec => ({ id, type: 'actor' });
 
 const ids = (doc: DraftDocument, anchor: string, trigger: ContinuationTrigger, dismissed?: ReadonlySet<string>) =>
@@ -419,11 +420,18 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
       'port-implementation-component': graph([service('p'), port('t')], [['p', 't']]),
       'port-implementation-service': graph([service('p'), port('t')], [['p', 't']]),
       'worker-indexes': graph([service('p'), worker('t')], [['p', 't']]),
+      // Level-gated rules (see `ContinuationRule.levels`) only fire where the view has been said
+      // to be one — the fixture says so the same way the editor does.
+      'person-system': graph([actor('t')], [], 'context'),
+      'person-external': graph([actor('t')], [], 'context'),
+      'component-component': graph([component('t')], [], 'component'),
+      'component-adapter': graph([component('t')], [], 'component'),
+      'component-data-store': graph([component('t')], [], 'component'),
     };
     for (const rule of RULES) {
       const doc = anchors[rule.id];
       expect(doc, `no fixture for ${rule.id}`).toBeDefined();
-      const nb = neighborhoodOf(doc!, 't')!;
+      const nb = neighborhoodOf(doc!, 't', doc!.level)!;
       expect(rule.when(nb, 'drop')).toBe(true);
       const fragment = rule.fragment(nb);
       for (const edge of fragment.edges) {
