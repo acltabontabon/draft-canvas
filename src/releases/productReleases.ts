@@ -22,6 +22,7 @@ export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './se
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
     version: '1.7.0',
+    date: '2026-09-17',
     summary: 'Look inside: C4-aware depth.',
     highlights: [
       {

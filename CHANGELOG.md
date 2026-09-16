@@ -2,7 +2,7 @@
 
 All notable changes to Draft Canvas are documented here.
 
-## [Unreleased]
+## [1.7.0] - 2026-09-17
 
 ### Added
 
@@ -15,12 +15,32 @@ All notable changes to Draft Canvas are documented here.
   - Undo takes you back to where the change was made, and exporting from inside asks whether you
     want that part or the whole canvas.
   - A new Learn recipe shows how.
+  - Thanks to [@thepipeman](https://github.com/thepipeman) for the idea.
 
 ### Changed
 
 - Diagrams save in a newer file format. Older versions of Draft Canvas — an older Docker image, or
   an older tab left open — won't open a canvas saved by this one, and say so rather than losing
   what's inside it.
+
+### Fixed
+
+- Picking a plate in the Depth map with the keyboard, then pressing Enter right away, now reliably
+  goes there instead of occasionally doing nothing.
+- ⌘↑ and ⌘↓ work again right after picking a plate in the Depth map, instead of being swallowed by
+  it.
+
+### Look inside, in pictures
+
+**Draw what runs inside a shape.** Look inside a service to draw its own architecture, one level
+down, in the same canvas.
+
+![Auth Service and Token Store drawn inside Payments API](https://raw.githubusercontent.com/acltabontabon/draft-canvas/v1.7.0/docs/media/releases/v1.7.0/look-inside.png)
+
+**Always know where you are.** The Depth map in the corner shows the way back up and the rooms
+below — click any of them to go there.
+
+![The Depth map open, showing Payments Platform as the way out and Payments API as the room below](https://raw.githubusercontent.com/acltabontabon/draft-canvas/v1.7.0/docs/media/releases/v1.7.0/depth-map.png)
 
 ## [1.6.2] - 2026-09-14
 
