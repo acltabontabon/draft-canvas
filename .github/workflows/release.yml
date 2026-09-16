@@ -64,7 +64,7 @@ jobs:
                       out.append(buf)
                       buf = None
                   out.append("")
-              elif line.startswith("#") or line.startswith("- ") or not line.startswith(" "):
+              elif line.startswith("#") or line.lstrip().startswith("- ") or not line.startswith(" "):
                   if buf is not None:
                       out.append(buf)
                   buf = line
