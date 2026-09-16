@@ -126,8 +126,8 @@ test('the canvas says where you are, and how to get back', async ({ page }) => {
   await page.locator(CANVAS).click({ position: { x: 60, y: 420 } });
   await page.keyboard.press('Escape');
   await expect(page.locator('.dc-room')).toHaveCount(0);
-  // Back on the whole canvas, which now has somewhere to go, so the corner stays — as its layers.
-  await expect(page.locator('.dc-depth-here')).toHaveText('Layers');
+  // Back on the whole canvas, which now has somewhere to go, so the corner stays — as its depth.
+  await expect(page.locator('.dc-depth-here')).toHaveText('Depth');
 
   // Back outside, the shape now carries the one standing mark saying it holds something.
   await expect(page.locator('.dc-node:has(.dc-inside-mark)')).toHaveCount(1);

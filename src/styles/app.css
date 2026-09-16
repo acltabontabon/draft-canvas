@@ -2557,7 +2557,7 @@ button.dc-status-level:focus-visible {
   z-index: var(--dc-z-bar);
   display: flex;
   flex-direction: column;
-  max-width: min(46vw, 360px);
+  max-width: min(60vw, 420px);
   padding: 2px;
   border: 1px solid transparent;
   border-radius: var(--dc-radius-md);
@@ -2636,48 +2636,57 @@ button.dc-status-level:focus-visible {
   white-space: nowrap;
 }
 
-/* ---- the exploded view ---- */
-.dc-depth-plates {
-  position: relative;
-  margin: 2px 0 0;
-  padding: 4px 4px 6px;
-  border-top: 1px solid var(--dc-border);
+/* ---- the depth map ---- */
+/*
+ * One grammar, three places. The path you came down — the planes above you and the one you stand on
+ * — is a column, named to the side. Rooms that share a depth sit side by side on a row, named
+ * underneath: the rooms beside you on your row, the rooms below you on the next one. Priority is
+ * carried by restraint rather than colour: where you are is the one crisp, raised plane; the rooms
+ * below come next; then the plane directly above; then everything further off.
+ *
+ * Every measurement hangs off one plane size, so a narrow screen can shrink the whole map at once.
+ */
+.dc-depth {
+  --plane-w: 96px;
+  --plane-h: 56px;
+  --plane-cx: calc(var(--plane-w) / 2);
+  --plane-cy: calc(var(--plane-h) / 2);
+  --dc-depth-bg: color-mix(in srgb, var(--dc-canvas) 78%, var(--dc-surface));
+  --dc-depth-line: color-mix(in srgb, var(--dc-border-strong) 70%, transparent);
+}
+
+/* Opened, the map is the object: the panel around it all but disappears. */
+.dc-depth[data-open='true'] {
+  border-color: color-mix(in srgb, var(--dc-border) 55%, transparent);
+  background: var(--dc-depth-bg);
+  box-shadow: none;
+}
+
+/* Opened, the head names the instrument rather than repeating the room the raised plane names. */
+.dc-depth-here[data-quiet='true'] {
+  color: var(--dc-text-faint);
+  font-weight: 500;
+  font-size: 11.5px;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+}
+
+.dc-depth-plates,
+.dc-depth-row {
+  margin: 0;
+  padding: 0;
   list-style: none;
 }
 
-/* The way you came down: one line through every plate, from the canvas to where you are. */
-.dc-depth-plates::before {
-  content: '';
-  position: absolute;
-  top: 32px;
-  bottom: 32px;
-  left: 54px;
-  border-left: 1px dashed var(--dc-border-strong);
-}
-
-.dc-depth-layer {
-  position: relative;
-  animation: dc-depth-deal 240ms var(--dc-ease-out) both;
-  animation-delay: calc(var(--i) * 40ms);
-}
-
-.dc-depth-layer + .dc-depth-layer {
-  margin-top: -14px;
-}
-
-@keyframes dc-depth-deal {
-  from {
-    opacity: 0;
-    transform: translateY(calc(var(--i) * -10px));
-  }
+.dc-depth-plates {
+  padding: 0 6px 6px 4px;
 }
 
 .dc-depth-plate-step {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 0 10px 0 0;
+  gap: 6px;
+  padding: 0;
   border: 0;
   border-radius: var(--dc-radius-sm);
   background: none;
@@ -2694,108 +2703,336 @@ button.dc-depth-plate-step {
   display: grid;
   flex: none;
   place-items: center;
-  width: 104px;
-  height: 64px;
+  width: var(--plane-w);
+  height: var(--plane-h);
 }
 
-/* A layer, seen from above and a little to the side: the room's own sketch on a plate in the colour
-   of the shape it is inside, with an edge underneath for thickness. */
+/* How present a plane is, 0–1. Carried by its outline and its sketch rather than by `opacity`, so the
+   plane itself stays solid and the lines of the map always pass behind it. Registered so it eases. */
+@property --fade {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+/* A plane, seen from above and a little to the side, with the room's own sketch on it. */
 .dc-depth-plate .dc-fingerprint {
-  width: 62px;
-  height: 36px;
-  padding: 5px;
-  border: 1px solid var(--dc-plate-line);
+  width: calc(var(--plane-w) * 0.56);
+  height: calc(var(--plane-w) * 0.33);
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--dc-plate-line) calc(var(--fade) * 100%), var(--dc-depth-bg));
   border-radius: 4px;
-  background: color-mix(in srgb, var(--dc-plate-fill) 92%, var(--dc-surface));
+  background: color-mix(in srgb, var(--dc-plate-fill) 70%, var(--dc-depth-bg));
   color: var(--dc-plate-ink);
-  opacity: 0.72;
-  box-shadow: 2px 2px 0 0 color-mix(in srgb, var(--dc-plate-line) 55%, transparent);
   transform: rotateX(56deg) rotateZ(-38deg);
   transition:
-    translate 160ms var(--dc-ease-out),
-    opacity 160ms var(--dc-ease-out),
-    border-color 160ms var(--dc-ease-out);
+    --fade 180ms var(--dc-ease-out),
+    translate 180ms var(--dc-ease-out),
+    scale 180ms var(--dc-ease-out),
+    border-color 180ms var(--dc-ease-out),
+    background-color 180ms var(--dc-ease-out);
 }
 
-.dc-depth-layer[data-current='true'] .dc-fingerprint {
-  border-color: var(--dc-plate-ink);
-  opacity: 1;
-  box-shadow:
-    2px 2px 0 0 var(--dc-plate-line),
-    0 0 0 3px color-mix(in srgb, var(--dc-plate-ink) 16%, transparent);
+/* What is drawn on a plane clarifies as the plane is reached for. */
+.dc-depth-plate .dc-fingerprint > * {
+  opacity: var(--fade);
 }
 
-button.dc-depth-plate-step:hover .dc-fingerprint,
-button.dc-depth-plate-step:focus-visible .dc-fingerprint {
-  border-color: var(--dc-plate-ink);
-  opacity: 1;
-  translate: 0 -3px;
+/* ---- the path: planes above you ---- */
+.dc-depth-layer {
+  position: relative;
+  z-index: 1;
+  animation: dc-depth-deal 220ms var(--dc-ease-out) both;
+  animation-delay: calc(var(--i) * 35ms);
+}
+
+.dc-depth-layer + .dc-depth-layer {
+  margin-top: -10px;
+}
+
+/* The stem up to the plane above: thin, and only between planes — it resolves which is which, it
+   does not draw a diagram. */
+.dc-depth-layer + .dc-depth-layer::before,
+.dc-depth-layer + .dc-depth-tier::before,
+.dc-depth-tier + .dc-depth-tier::before {
+  content: '';
+  position: absolute;
+  left: var(--plane-cx);
+  width: 1px;
+  background: var(--dc-depth-line);
+}
+
+.dc-depth-layer + .dc-depth-layer::before {
+  top: -18px;
+  height: calc(18px + var(--plane-cy));
+}
+
+@keyframes dc-depth-deal {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--i) * -8px));
+  }
+}
+
+/* Further above you is further away: smaller, fainter, and past the plane directly above, blank. */
+.dc-depth-layer .dc-fingerprint {
+  --fade: calc(0.67 - var(--dist, 1) * 0.12);
+  scale: calc(0.94 - var(--dist, 1) * 0.06);
+  background: var(--dc-depth-bg);
 }
 
 .dc-depth-plate-text {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  padding-right: 8px;
   line-height: 1.25;
 }
 
 .dc-depth-plate-name {
+  max-width: 150px;
   overflow: hidden;
   color: var(--dc-text-muted);
+  opacity: calc(1.05 - var(--dist, 1) * 0.15);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.dc-depth-layer[data-current='true'] .dc-depth-plate-name,
-.dc-depth-layer[data-linked='true'] .dc-depth-plate-name,
-button.dc-depth-plate-step:hover .dc-depth-plate-name,
-button.dc-depth-plate-step:focus-visible .dc-depth-plate-name {
-  color: var(--dc-text);
+/* A deep path folds its middle planes down to their edges. */
+.dc-depth-layer[data-folded='true'] {
+  margin-top: -2px;
 }
 
-.dc-depth-layer[data-current='true'] .dc-depth-plate-name {
+.dc-depth-layer[data-folded='true'] .dc-depth-plate {
+  height: 20px;
+}
+
+.dc-depth-layer[data-folded='true'] .dc-depth-plate::before {
+  content: '';
+  width: calc(var(--plane-w) * 0.5);
+  height: 28px;
+  border: 1px solid var(--dc-plate-line);
+  border-radius: 4px;
+  opacity: 0.35;
+  transform: rotateX(78deg) rotateZ(-38deg);
+}
+
+.dc-depth-layer[data-folded='true']::before {
+  top: -8px !important;
+  height: 18px !important;
+}
+
+.dc-depth-layer[data-folded='true'] .dc-depth-plate-name {
+  font-size: 11.5px;
+}
+
+/* ---- rows: where you are, and below ---- */
+.dc-depth-tier {
+  position: relative;
+  animation: dc-depth-deal 220ms var(--dc-ease-out) both;
+  animation-delay: 70ms;
+  --i: 1;
+}
+
+.dc-depth-layer + .dc-depth-tier {
+  margin-top: -4px;
+}
+
+.dc-depth-layer + .dc-depth-tier::before {
+  top: -24px;
+  height: calc(24px + var(--plane-cy));
+}
+
+/* Down from where you stand to the first room below. */
+.dc-depth-tier + .dc-depth-tier {
+  margin-top: 2px;
+}
+
+.dc-depth-tier + .dc-depth-tier::before {
+  top: calc(var(--plane-cy) * -1 - 2px);
+  height: calc(var(--plane-h) + 2px);
+}
+
+.dc-depth-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* Rooms at one depth rest on one line through their planes' centres. It runs behind the planes and
+   behind the name of where you are, so it reads as a shared ground, not as links. */
+.dc-depth-row::before {
+  content: '';
+  position: absolute;
+  top: var(--plane-cy);
+  left: var(--plane-cx);
+  right: var(--plane-cx);
+  height: 1px;
+  background: var(--dc-depth-line);
+}
+
+.dc-depth-row:has(> [data-rest='true'])::before {
+  right: 20px;
+}
+
+.dc-depth-row:not(:has(> li + li))::before {
+  display: none;
+}
+
+.dc-depth-room {
+  position: relative;
+  z-index: 1;
+}
+
+.dc-depth-room .dc-depth-plate-step {
+  flex-direction: column;
+  gap: 0;
+  width: var(--plane-w);
+  padding-bottom: 2px;
+  text-align: center;
+}
+
+.dc-depth-room-name {
+  max-width: calc(var(--plane-w) - 6px);
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  line-height: 1.25;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Where you are: the one crisp plane, raised a little off its row, named beside it. */
+.dc-depth-room[data-current='true'] {
+  padding-right: 10px;
+}
+
+.dc-depth-room[data-current='true'] .dc-depth-plate-step {
+  display: grid;
+  grid-template-columns: var(--plane-w) auto;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  width: auto;
+  padding-bottom: 0;
+  text-align: left;
+}
+
+.dc-depth-room[data-current='true'] .dc-depth-plate {
+  grid-row: 1 / span 2;
+}
+
+.dc-depth-room[data-current='true'] .dc-depth-room-name,
+.dc-depth-room[data-current='true'] .dc-depth-room-caption {
+  align-self: end;
+  justify-self: start;
+  max-width: 150px;
+  /* Laid over the ground line, which passes behind the name to the rooms beside. */
+  padding-right: 4px;
+  background: var(--dc-depth-bg);
+  color: var(--dc-text);
+  font-size: 12.5px;
   font-weight: 600;
 }
 
-/* Below where you are: the layers you could still go down into — fainter, their edges still only
-   pencilled in, until you reach for one. */
-.dc-depth-below {
-  position: relative;
-  /* In line with the names: the plate's width plus the gap after it. */
-  margin: 4px 0 -8px 114px;
+.dc-depth-room[data-current='true'] .dc-depth-room-caption {
+  align-self: start;
   color: var(--dc-text-faint);
   font-size: 10.5px;
+  font-weight: 500;
   font-variant-caps: all-small-caps;
   letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 
-.dc-depth-below[data-more='true'] {
-  margin: -4px 0 2px 114px;
+.dc-depth-room[data-current='true'] .dc-fingerprint {
+  border-color: var(--dc-plate-ink);
+  background: color-mix(in srgb, var(--dc-plate-fill) 92%, var(--dc-depth-bg));
+  translate: 0 -2px;
+  box-shadow:
+    2px 2px 0 0 var(--dc-plate-line),
+    0 0 0 3px color-mix(in srgb, var(--dc-plate-ink) 14%, transparent);
 }
 
-.dc-depth-layer[data-next='true'] .dc-fingerprint {
-  border-style: dashed;
-  background: transparent;
-  box-shadow: none;
-  opacity: 0.7;
+/* Below you: available, outlined, clearly enterable — second only to where you are. */
+.dc-depth-room[data-kind='below'] .dc-fingerprint {
+  --fade: 0.88;
+  scale: 0.92;
 }
 
-.dc-depth-layer[data-next='true'] .dc-depth-plate-name {
-  color: var(--dc-text-muted);
+/* Beside you: the same depth, somewhere else — present, but the quietest thing on the row. */
+.dc-depth-room[data-kind='beside'] .dc-fingerprint {
+  --fade: 0.42;
+  scale: 0.86;
+  background: var(--dc-depth-bg);
 }
 
-.dc-depth-layer[data-next='true'] button:hover .dc-fingerprint,
-.dc-depth-layer[data-next='true'] button:focus-visible .dc-fingerprint,
-.dc-depth-layer[data-linked='true'] .dc-fingerprint {
-  border-style: solid;
-  background: color-mix(in srgb, var(--dc-plate-fill) 92%, var(--dc-surface));
-  translate: 0 2px;
+.dc-depth-room[data-kind='beside'] .dc-depth-room-name {
+  color: var(--dc-text-faint);
+}
+
+/* ---- reaching for a plane ---- */
+/* Lift and reveal, nothing more: the plane rises a few pixels towards you and what is on it comes
+   into focus. Going up or going down, the gesture is the same — the plane's place says where. */
+button.dc-depth-plate-step:hover .dc-fingerprint,
+button.dc-depth-plate-step:focus-visible .dc-fingerprint,
+.dc-depth-room[data-linked='true'] .dc-fingerprint {
+  border-color: var(--dc-plate-ink);
+  background: color-mix(in srgb, var(--dc-plate-fill) 80%, var(--dc-depth-bg));
+  --fade: 1;
+  scale: 1;
+  translate: 0 -3px;
+}
+
+button.dc-depth-plate-step:hover .dc-depth-plate-name,
+button.dc-depth-plate-step:focus-visible .dc-depth-plate-name,
+button.dc-depth-plate-step:hover .dc-depth-room-name,
+button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
+.dc-depth-room[data-linked='true'] .dc-depth-room-name {
+  color: var(--dc-text);
+  opacity: 1;
+}
+
+/* The rest of a row, folded to the edges of their planes. */
+.dc-depth-room[data-rest='true'] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 40px;
+  color: var(--dc-text-faint);
+}
+
+.dc-depth-rest-edges {
+  display: block;
+  width: 24px;
+  height: 16px;
+  margin: calc(var(--plane-cy) - 9px) 0 calc(var(--plane-cy) - 12px);
+  border: 1px solid var(--dc-border-strong);
+  border-radius: 3px;
+  background: var(--dc-depth-bg);
+  box-shadow: 3px 3px 0 -1px var(--dc-depth-bg), 3px 3px 0 0 var(--dc-border-strong);
+  transform: rotateX(56deg) rotateZ(-38deg);
+}
+
+/* A narrow screen shrinks the whole map at once rather than letting it cover the drawing. */
+@media (max-width: 560px) {
+  .dc-depth {
+    --plane-w: 76px;
+    --plane-h: 46px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .dc-depth-plate-name,
+  .dc-depth-room[data-current='true'] .dc-depth-room-name {
+    max-width: 110px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dc-depth,
   .dc-depth-layer,
-  .dc-depth-plate .dc-fingerprint {
+  .dc-depth-tier,
+  .dc-depth-plate .dc-fingerprint,
+  .dc-depth-plate .dc-fingerprint > * {
     transition: none;
     animation: none;
   }

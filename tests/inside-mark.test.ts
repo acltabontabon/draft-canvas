@@ -11,14 +11,15 @@ describe('depth glyph', () => {
     expect(depthGlyphPaths('sketch', 'n1').layers).toEqual(sketch);
   });
 
-  it('draws the layer behind a shape as its outline and fill alone, never its words or shadow', () => {
+  it('draws the plane behind a shape as its outline alone — no fill, shadow or words', () => {
     const layer = layerBehind([
-      { t: 'rect', x: 0, y: 0, w: 10, h: 10, fill: '#000', shadow: true },
+      { t: 'rect', x: 0, y: 0, w: 10, h: 10, fill: '#000', shadow: true, stroke: { color: '#fff', width: 2 } },
+      { t: 'rect', x: 0, y: 0, w: 10, h: 2, fill: '#0f0' },
       { t: 'text', x: 0, y: 0, layout: { lines: [], width: 0, height: 0 } as never, font: {} as never, fill: '#fff', align: 'middle' },
       { t: 'group', children: [{ t: 'path', d: 'M0 0', stroke: { color: '#fff', width: 1 } }] },
     ]);
     expect(layer).toHaveLength(2);
-    expect(layer[0]).toMatchObject({ t: 'rect', shadow: false });
+    expect(layer[0]).toMatchObject({ t: 'rect', fill: 'none', shadow: false, stroke: { width: 1.7 } });
     expect(layer[1]).toMatchObject({ t: 'group' });
   });
 

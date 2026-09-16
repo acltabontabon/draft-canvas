@@ -13,23 +13,23 @@ import { useUiStore } from '../../store/uiStore';
 import { backOut, lookInside } from './depthNavigation';
 
 /**
- * Where you are, when you are inside something — as the layers you came down through.
+ * Where you are in the architecture — as planes.
  *
- * A shape with an inside carries a small stack of layers (`DepthGlyph`): "there is more below this".
- * Once you have gone below, this corner is that same stack seen from the inside. At rest it is
- * just the stack — one layer for the whole canvas and one for every shape you are inside, the one
- * you are standing on lit in that shape's colour — and the name of where you are. Reached for
- * (hovered, tabbed to, clicked), it opens into an exploded view of those layers, top to bottom:
- * each one a plate with a sketch of what is drawn on it, named, with its level beside it. Pick a
- * plate to climb straight to it; the room closes back into the shape it belongs to. Below the
- * layer you are on, the way continues: every shape here that has an inside of its own, as a
- * fainter plate you can go down into. Those plates and the shapes they stand for point at each
- * other: reaching for a plate shows that shape's layer on the canvas, and hovering the shape lights
- * its plate while the view is open.
+ * A shape with an inside stands in front of a faint plane on the canvas. Once you look inside, this
+ * corner shows that plane and the ones around it. At rest it is a small stack and the name of where
+ * you are. Reached for (hovered, tabbed to, clicked), it opens into a small depth map:
  *
- * At the top level it appears only once something on the canvas has an inside — the whole canvas as
- * the one layer, and what you can go down into below it — so a canvas that has never been looked
- * inside carries no chrome for a feature it is not using.
+ * - the path you came down, as a column of planes above you, further away the further up — smaller,
+ *   fainter, and past the plane directly above, blank;
+ * - where you are, the one crisp, raised plane, on a row with the rooms beside you (the other shapes
+ *   in the room above that have an inside);
+ * - the rooms below you, on the next row down.
+ *
+ * Pick a plane to go there: up the column, across the row, or down into the row below. The rooms
+ * below are also shapes on this canvas, and the two point at each other.
+ *
+ * At the top level it appears only once something on the canvas has an inside, so a canvas that has
+ * never been looked inside carries no chrome for a feature it is not using.
  */
 export function DepthStack() {
   // A string rather than the file, so drawing inside a room does not re-render this corner: what
@@ -69,7 +69,7 @@ export function DepthStack() {
   const here = layers[layers.length - 1]!;
   const tint = (accent: Accent | null) => (accent ? accentOf(theme, accent) : null);
 
-  const plateButtons = () => [...(navRef.current?.querySelectorAll<HTMLButtonElement>('.dc-depth-plate-step') ?? [])];
+  const plateButtons = () => [...(navRef.current?.querySelectorAll<HTMLButtonElement>('button.dc-depth-plate-step') ?? [])];
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape' && open) {
       // Close the view, and only the view — Escape here must not also step out of the room.
@@ -112,136 +112,209 @@ export function DepthStack() {
         className="dc-depth-head"
         aria-expanded={open}
         aria-controls={platesId}
-        aria-label={layers.length > 1 ? `Inside ${here.name} — layers` : 'Layers'}
+        aria-label={layers.length > 1 ? `Inside ${here.name} — depth` : 'Depth'}
         onClick={() => setPinned(!pinned)}
       >
         <LayerGlyph layers={layers} tint={tint} />
         {/* At the top level the title bar already names the diagram; saying it again here would
             only repeat it. Inside a shape, the shape's name is the answer to "where am I". */}
-        <span className="dc-depth-here">{layers.length > 1 ? here.name : 'Layers'}</span>
-        {here.level && <span className="dc-depth-level">{here.level}</span>}
+        {/* Opened, the lit plate names the room, so the head stops repeating it. */}
+        <span className="dc-depth-here" data-quiet={open ? 'true' : undefined}>
+          {layers.length > 1 && !open ? here.name : 'Depth'}
+        </span>
+        {here.level && !open && <span className="dc-depth-level">{here.level}</span>}
       </button>
 
       <ol id={platesId} className="dc-depth-plates" hidden={!open}>
-        {layers.map((layer, index) => {
-          const current = index === layers.length - 1;
-          const palette = tint(layer.accent);
-          const style = {
-            '--i': index,
-            '--dc-plate-line': palette?.line ?? 'var(--dc-border-strong)',
-            '--dc-plate-ink': palette?.chip ?? 'var(--dc-text-muted)',
-            '--dc-plate-fill': palette?.fill ?? 'var(--dc-surface)',
-          } as CSSProperties;
-          const body = (
-            <>
-              <span className="dc-depth-plate" aria-hidden="true">
-                {open && <LayerSketch depth={index} />}
-              </span>
-              <span className="dc-depth-plate-text">
-                <span className="dc-depth-plate-name">{layer.name}</span>
-                {(layer.level || current) && (
-                  <span className="dc-depth-plate-level">
-                    {current ? (layer.level ? `${layer.level} · you are here` : 'You are here') : layer.level}
-                  </span>
-                )}
-              </span>
-            </>
-          );
+        {layers.slice(0, -1).map((layer, index) => {
+          // How far above you this plane is. Further away is smaller, fainter and less detailed; past
+          // three planes up, the ones in the middle fold down to their edges, so a deep path never
+          // becomes a long list.
+          const distance = layers.length - 1 - index;
+          const folded = layers.length > 4 && index > 0 && distance > 2;
           return (
-            <li key={index} className="dc-depth-layer" data-current={current ? 'true' : undefined} style={style}>
-              {current ? (
-                <span className="dc-depth-plate-step" aria-current="location">
-                  {body}
+            <li
+              key={index}
+              className="dc-depth-layer"
+              data-folded={folded ? 'true' : undefined}
+              style={plateStyle(tint(layer.accent), { '--i': index, '--dist': Math.min(distance, 3) })}
+            >
+              <button
+                type="button"
+                className="dc-depth-plate-step"
+                aria-label={index === 0 ? 'Back to the whole canvas' : `Back up to ${layer.name}`}
+                onClick={() => void backOut(index)}
+              >
+                <span className="dc-depth-plate" aria-hidden="true">
+                  {/* Only the plane directly above keeps its sketch; further away, a plane is just a plane. */}
+                  {open && !folded && (distance === 1 ? <LayerSketch depth={index} /> : <BlankPlane />)}
                 </span>
-              ) : (
-                <button
-                  type="button"
-                  className="dc-depth-plate-step"
-                  title={index === 0 ? 'Back to the whole canvas' : `Back to ${layer.name}`}
-                  onClick={() => void backOut(index)}
-                >
-                  {body}
-                </button>
-              )}
+                <span className="dc-depth-plate-text">
+                  <span className="dc-depth-plate-name">{layer.name}</span>
+                </span>
+              </button>
             </li>
           );
         })}
-        {open && <NextLayers tint={tint} />}
+
+        {/* Where you are, on the row it shares with the rooms beside it — the other shapes in the room
+            above that have an inside. They are not below you; they are next to you. */}
+        <li className="dc-depth-tier" data-here="true">
+          <ul className="dc-depth-row">
+            <li className="dc-depth-room" data-current="true" style={plateStyle(tint(here.accent), { '--i': layers.length - 1 })}>
+              <span className="dc-depth-plate-step" aria-current="location">
+                <span className="dc-depth-plate" aria-hidden="true">
+                  {open && <LayerSketch depth={layers.length - 1} />}
+                </span>
+                <span className="dc-depth-room-name" title={here.name}>
+                  {here.name}
+                </span>
+                <span className="dc-depth-room-caption">You are here</span>
+              </span>
+            </li>
+            {open && layers.length > 1 && <BesideRooms tint={tint} />}
+          </ul>
+        </li>
+
+        {open && <BelowRooms tint={tint} />}
       </ol>
     </nav>
   );
 }
 
-/** How many layers below this one are dealt out before the rest are summed up. */
-const NEXT_SHOWN = 4;
+/** How many rooms a row deals out before the rest fold into one edge. */
+const ROW_SHOWN = 3;
+
+type Tint = (accent: Accent | null) => ReturnType<typeof accentOf> | null;
+
+function plateStyle(palette: ReturnType<typeof accentOf> | null, extra: Record<string, number>): CSSProperties {
+  return {
+    ...extra,
+    '--dc-plate-line': palette?.line ?? 'var(--dc-border-strong)',
+    '--dc-plate-ink': palette?.chip ?? 'var(--dc-text-muted)',
+    '--dc-plate-fill': palette?.fill ?? 'var(--dc-surface)',
+  } as CSSProperties;
+}
 
 /**
- * The layers you could go down into from here: the shapes in this room that have an inside, in
- * the order they were drawn. Mounted only while the view is open, so drawing in the room does not
- * redraw a closed corner.
+ * The rooms beside you: the other shapes in the room above that have an inside. Going to one is
+ * the move it looks like — back out to the room above, then down into it — so it plays as exactly
+ * that. Mounted only while the view is open.
  */
-function NextLayers({ tint }: { tint: (accent: Accent | null) => ReturnType<typeof accentOf> | null }) {
-  const nodes = useEditorStore((state) => state.document.nodes);
-  const below = useMemo(() => nodes.filter(hasInside), [nodes]);
-  const hoveredOnCanvas = useUiStore((state) => state.depthShapeHoverId);
-  // Whatever this view lit on the canvas goes out with it.
-  useEffect(() => () => useUiStore.getState().setDepthPlateFocusId(null), []);
-  if (below.length === 0) return null;
-  const shown = below.slice(0, NEXT_SHOWN);
+function BesideRooms({ tint }: { tint: Tint }) {
+  const here = useEditorStore((state) => state.path[state.path.length - 1]);
+  const above = useEditorStore((state) => roomAt(state, state.path.length - 1)?.nodes ?? NO_NODES);
+  const beside = useMemo(() => above.filter((node) => node.id !== here && hasInside(node)), [above, here]);
+  const depth = useEditorStore((state) => state.path.length);
+  if (beside.length === 0) return null;
+  const shown = beside.slice(0, ROW_SHOWN - 1);
   return (
     <>
-      <li className="dc-depth-below" aria-hidden="true">
-        Inside here
-      </li>
-      {shown.map((node, index) => {
-        const palette = tint(depthMarkAccent(node));
-        const name = displayNameFor(node);
-        const style = {
-          '--i': index + 1,
-          '--dc-plate-line': palette?.line ?? 'var(--dc-border-strong)',
-          '--dc-plate-ink': palette?.chip ?? 'var(--dc-text-muted)',
-          '--dc-plate-fill': palette?.fill ?? 'var(--dc-surface)',
-        } as CSSProperties;
-        return (
-          <li
-            key={node.id}
-            className="dc-depth-layer"
-            data-next="true"
-            data-linked={hoveredOnCanvas === node.id ? 'true' : undefined}
-            style={style}
-          >
-            <button
-              type="button"
-              className="dc-depth-plate-step"
-              aria-label={`Look inside ${name}`}
-              onClick={() => void lookInside(node.id)}
-              onMouseEnter={() => showOnCanvas(node.id)}
-              onMouseLeave={() => showOnCanvas(null)}
-              onFocus={() => showOnCanvas(node.id)}
-              onBlur={() => showOnCanvas(null)}
-            >
-              <span className="dc-depth-plate" aria-hidden="true">
-                <InsideSketch node={node} />
-              </span>
-              <span className="dc-depth-plate-text">
-                <span className="dc-depth-plate-name">{name}</span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-      {below.length > shown.length && (
-        <li className="dc-depth-below" data-more="true">
-          {below.length - shown.length} more inside here
-        </li>
-      )}
+      {shown.map((node) => (
+        <RoomPlate
+          key={node.id}
+          node={node}
+          kind="beside"
+          tint={tint}
+          onGo={async () => {
+            await backOut(depth - 1);
+            // The room above has to be drawn before the shape can be looked into from it.
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            await lookInside(node.id);
+          }}
+        />
+      ))}
+      <RestOf count={beside.length - shown.length} />
     </>
   );
 }
 
-/** Lights a shape's layer on the canvas while its plate is reached for here — or puts it out. */
+/**
+ * The rooms below you: the shapes in this room that have an inside, on one row under the plane you
+ * are on — the planes you can go down into. Mounted only while the view is open, so drawing in the
+ * room does not redraw a closed corner.
+ */
+function BelowRooms({ tint }: { tint: Tint }) {
+  const nodes = useEditorStore((state) => state.document.nodes);
+  const below = useMemo(() => nodes.filter(hasInside), [nodes]);
+  // Whatever this view lit on the canvas goes out with it.
+  useEffect(() => () => useUiStore.getState().setDepthPlateFocusId(null), []);
+  if (below.length === 0) return null;
+  const shown = below.slice(0, ROW_SHOWN);
+  return (
+    <li className="dc-depth-tier" data-below="true">
+      <ul className="dc-depth-row" aria-label="Look inside">
+        {shown.map((node) => (
+          <RoomPlate key={node.id} node={node} kind="below" tint={tint} onGo={() => lookInside(node.id)} />
+        ))}
+        <RestOf count={below.length - shown.length} />
+      </ul>
+    </li>
+  );
+}
+
+function RoomPlate({
+  node,
+  kind,
+  tint,
+  onGo,
+}: {
+  node: DraftNode;
+  kind: 'below' | 'beside';
+  tint: Tint;
+  onGo: () => Promise<void> | void;
+}) {
+  const name = displayNameFor(node);
+  const below = kind === 'below';
+  // A room below is also a shape on this canvas: the two point at each other.
+  const linked = useUiStore((state) => below && state.depthShapeHoverId === node.id);
+  return (
+    <li
+      className="dc-depth-room"
+      data-kind={kind}
+      data-linked={linked ? 'true' : undefined}
+      style={plateStyle(tint(depthMarkAccent(node)), { '--i': 1 })}
+    >
+      <button
+        type="button"
+        className="dc-depth-plate-step"
+        aria-label={below ? `Look inside ${name}` : `Go to ${name}`}
+        onClick={() => void onGo()}
+        onMouseEnter={below ? () => showOnCanvas(node.id) : undefined}
+        onMouseLeave={below ? () => showOnCanvas(null) : undefined}
+        onFocus={below ? () => showOnCanvas(node.id) : undefined}
+        onBlur={below ? () => showOnCanvas(null) : undefined}
+      >
+        <span className="dc-depth-plate" aria-hidden="true">
+          <InsideSketch node={node} />
+        </span>
+        <span className="dc-depth-room-name" title={name}>
+          {name}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/** The rest of a row, folded to the edges of their planes. */
+function RestOf({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <li className="dc-depth-room" data-rest="true" aria-label={`${count} more`}>
+      <span className="dc-depth-rest-edges" aria-hidden="true" />
+      <span className="dc-depth-room-name">+{count}</span>
+    </li>
+  );
+}
+
+/** Lights a shape's plane on the canvas while its plate is reached for here — or puts it out. */
 function showOnCanvas(id: string | null) {
   useUiStore.getState().setDepthPlateFocusId(id);
+}
+
+/** A plane far enough away that what is drawn on it is no longer worth making out. */
+function BlankPlane() {
+  return <svg className="dc-fingerprint" viewBox="0 0 56 32" width="56" height="32" aria-hidden="true" />;
 }
 
 function InsideSketch({ node }: { node: DraftNode }) {

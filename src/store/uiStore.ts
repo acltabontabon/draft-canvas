@@ -266,7 +266,7 @@ export interface UiStore {
    * place waits on an animation, and mashing ⌘↓/⌘↑ can only ever replace one token with the next.
    */
   /**
-   * The two directions of one link between the layers panel (`DepthStack`) and the canvas.
+   * The two directions of one link between the depth map (`DepthStack`) and the canvas.
    * `depthPlateFocusId`: a shape whose plate is hovered or focused in the panel — the canvas shows
    * that shape's layer, so "which one is that?" is answered on the drawing. `depthShapeHoverId`: a
    * shape with an inside the pointer is over on the canvas — an open panel lights its plate. Both

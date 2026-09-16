@@ -1063,17 +1063,19 @@
   opacity: 0.6;
 }
 
-/* A shape that has architecture inside it: nothing at rest. Reached for — hovered, focused from
-   the keyboard, or named in the layers panel — a second layer of the same shape slides out from behind it, down and to the right,
-   quieter than the shape itself: "there is more below this". Inert to the pointer, so it never eats
-   a click meant for the node or its resize corner. */
+/* A shape that has architecture inside it stands just in front of a plane: its own outline, a few
+   pixels down and to the right, faint enough at rest that a diagram still reads as architecture
+   first. Only its edge ever shows past the shape. Reached for — hovered, focused from the keyboard,
+   or named in the depth map — the plane draws back a little further and comes into focus. It is the
+   same outlined plane the depth map draws for a room below you. Inert to the pointer, so it never
+   eats a click meant for the node or its resize corner. */
 .dc-inside-mark {
   position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0;
-  transform: translate(0, 0);
+  opacity: 0.32;
+  transform: translate(5px, 5px);
   transition:
     transform 200ms var(--dc-ease-out),
     opacity 160ms var(--dc-ease-out);
@@ -1082,8 +1084,8 @@
 .dc-node:hover .dc-inside-mark,
 .react-flow__node:focus-visible .dc-inside-mark,
 .dc-node[data-plate-focus='true'] .dc-inside-mark {
-  opacity: 0.5;
-  transform: translate(7px, 7px);
+  opacity: 0.8;
+  transform: translate(8px, 8px);
 }
 
 @media (prefers-reduced-motion: reduce) {

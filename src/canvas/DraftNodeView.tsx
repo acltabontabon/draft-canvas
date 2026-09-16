@@ -228,11 +228,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   }, [liveNode, theme, preset, editingNote]);
 
   /**
-   * The layer behind a shape that has an inside, shown when the shape is reached for — the same
-   * shape again, from the same `describeNode`, so it is a card behind a card, a cylinder behind a
-   * cylinder. In its own clip scope so ids stay unique.
+   * The plane behind a shape that has an inside — its own outline, from the same `describeNode`, so
+   * it is a card behind a card, a cylinder behind a cylinder. In its own clip scope so ids stay unique.
    */
-  // Named in the layers panel (hovered or focused there): shown the way hovering it here would.
+  // Named in the depth map (hovered or focused there): shown the way hovering it here would.
   const plateFocused = useUiStore((state) => state.depthPlateFocusId === id);
   const layer = useMemo(() => {
     if (!liveNode?.inside?.nodes.length) return null;
@@ -425,10 +424,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       )}
 
       {layer && (
-        // A shape with architecture inside it shows, when reached for, a second layer of itself
-        // tucked behind it — "there is more below this" — and nothing at all at rest, so a diagram
-        // reads as architecture. The popover's "Look inside" and the layers in the corner say the
-        // rest. Chrome, so it never reaches an export.
+        // A shape with architecture inside it stands just in front of a faint plane — its own outline,
+        // further back — which comes into focus when the shape is reached for. The same outlined plane
+        // the depth map draws for a room below you. Chrome, so it never reaches an export.
         <span className="dc-inside-mark" aria-hidden="true">
           <SvgSurface className="dc-node-surface" width={effectiveWidth} height={effectiveHeight}>
             {layer}

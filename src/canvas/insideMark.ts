@@ -31,19 +31,23 @@ export function depthGlyphPaths(preset: PersonalityPreset, seedId: string): Dept
 }
 
 /**
- * A shape's own drawing, as the layer behind it: every word and every shadow taken away, so what
- * is left is the same outline and fill further back — never a second label, which would read as a
- * copy rather than a layer.
+ * A shape's own drawing, as the plane behind it: its outline alone, a little lighter — no fill, no
+ * shadow, no words. The shape in front hides the part it covers, so all that ever shows is the edge
+ * of a plane further back: the same outlined plane the depth map draws for a room you can go down
+ * into. Anything that is only a fill (a service's accent bar) has no edge to give and is dropped; a
+ * label repeated behind a shape would read as a copy rather than a plane.
  */
 export function layerBehind(shapes: readonly Shape[]): Shape[] {
   const kept: Shape[] = [];
   for (const shape of shapes) {
     if (shape.t === 'text' || shape.t === 'code') continue;
     if (shape.t === 'group') {
-      kept.push({ ...shape, children: layerBehind(shape.children) });
+      const children = layerBehind(shape.children);
+      if (children.length > 0) kept.push({ ...shape, children });
       continue;
     }
-    kept.push({ ...shape, shadow: false });
+    if (!shape.stroke) continue;
+    kept.push({ ...shape, fill: 'none', shadow: false, stroke: { ...shape.stroke, width: shape.stroke.width * 0.85 } });
   }
   return kept;
 }
