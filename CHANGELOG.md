@@ -30,18 +30,6 @@ All notable changes to Draft Canvas are documented here.
 - ⌘↑ and ⌘↓ work again right after picking a plate in the Depth map, instead of being swallowed by
   it.
 
-### Look inside, in pictures
-
-**Draw what runs inside a shape.** Look inside a service to draw its own architecture, one level
-down, in the same canvas.
-
-![Auth Service and Token Store drawn inside Payments API](https://raw.githubusercontent.com/acltabontabon/draft-canvas/v1.7.0/docs/media/releases/v1.7.0/look-inside.png)
-
-**Always know where you are.** The Depth map in the corner shows the way back up and the rooms
-below — click any of them to go there.
-
-![The Depth map open, showing Payments Platform as the way out and Payments API as the room below](https://raw.githubusercontent.com/acltabontabon/draft-canvas/v1.7.0/docs/media/releases/v1.7.0/depth-map.png)
-
 ## [1.6.2] - 2026-09-14
 
 ### Fixed
