@@ -17,8 +17,12 @@ const store = useEditorStore;
 
 function reset() {
   __resetInteraction();
+  useUiStore.setState({ toasts: [] });
   store.setState({
     document: createDocument('Starters'),
+    path: [],
+    outer: null,
+    liveViewport: null,
     history: { past: [], future: [] },
     selection: { nodes: [], edges: [] },
     clipboard: null,

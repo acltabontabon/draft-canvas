@@ -19,11 +19,11 @@ import {
 } from '@xyflow/react';
 import { defaultTextFor, maxSizeFor, minSizeFor } from '../document/factory';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
-import type { DraftDocument, Side } from '../document/types';
+import type { DraftDocument, DraftViewport, Side } from '../document/types';
 import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
-import { centerOf, pointInBox } from '../lib/math';
+import { centerOf, clamp, pointInBox } from '../lib/math';
 import { pathKey } from '../depth/tree';
 import { lensFlow, useEditorStore } from '../store/editorStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
@@ -48,6 +48,7 @@ import {
 import { computeSnap, sameGuides, type Guide } from './snapping';
 import { snapResize } from './resizeSnap';
 import { ContinuationGhost } from './ContinuationGhost';
+import { RoomFrame } from './RoomFrame';
 import { useContinuation } from './useContinuation';
 
 /**
@@ -271,6 +272,52 @@ function useZoomVariable() {
   }, [storeApi]);
 }
 
+/**
+ * Whether a room's camera is one somebody actually chose.
+ *
+ * A room is made by the first shape drawn in it, or arrives whole from a starter or a paste, and
+ * none of those is anyone framing a view — so a room can perfectly well carry a camera pointing
+ * somewhere else entirely. Restoring that faithfully is worse than useless: you asked to look
+ * inside a shape and got an empty corner of it. A camera still exactly where every room's starts
+ * has never been moved, so there is nothing to restore and the room is framed instead.
+ */
+function hasACameraOfItsOwn(room: DraftDocument): boolean {
+  const { x, y, zoom } = room.viewport;
+  return x !== 0 || y !== 0 || zoom !== 1;
+}
+
+/** Breathing room around a room that is being framed on arrival, in screen pixels. */
+const FRAME_PAD = 72;
+
+/**
+ * The camera that puts a whole room on screen.
+ *
+ * Worked out from the document rather than asked of React Flow, because `fitView` measures what
+ * is currently rendered and arriving somewhere means the shapes it would measure are the ones
+ * being replaced. This also makes the landing exactly the same with the animation and without it,
+ * which is what reduced motion has to be able to promise.
+ */
+function frameFor(room: DraftDocument, width: number, height: number): DraftViewport | null {
+  const bounds = boundsOf(room.nodes);
+  if (!bounds || width <= 0 || height <= 0) return null;
+  const zoom = clamp(
+    Math.min(
+      (width - FRAME_PAD * 2) / Math.max(bounds.width, 1),
+      (height - FRAME_PAD * 2) / Math.max(bounds.height, 1),
+    ),
+    MIN_FRAME_ZOOM,
+    1,
+  );
+  return {
+    x: (width - bounds.width * zoom) / 2 - bounds.x * zoom,
+    y: (height - bounds.height * zoom) / 2 - bounds.y * zoom,
+    zoom,
+  };
+}
+
+/** Far enough out for a big room, never so far that its labels stop being readable. */
+const MIN_FRAME_ZOOM = 0.25;
+
 function truncateForAffordance(text: string): string {
   const firstLine = text.split('\n', 1)[0]!.trim();
   return firstLine.length > 40 ? `${firstLine.slice(0, 39)}…` : firstLine;
@@ -330,6 +377,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   // the camera on the second — for a move that never happened.
   const path = useEditorStore((state) => state.path);
   const shownPath = useRef<string | null>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const key = pathKey(path);
     if (shownPath.current === key) return;
@@ -338,12 +386,22 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     if (first) return;
     const state = useEditorStore.getState();
     const duration = motionMs(320);
-    if (state.document.nodes.length === 0) void fitView({ padding: 0.4, duration, maxZoom: 1 });
-    else void setViewport(state.document.viewport, { duration });
+    // Arriving somewhere should show what is there. A room nobody has panned about in carries
+    // whatever camera it was made with — a starter's rooms all start at the origin — and
+    // restoring that put the user off the side of the architecture they had just asked to see.
+    if (hasACameraOfItsOwn(state.document)) {
+      void setViewport(state.document.viewport, { duration });
+      return;
+    }
+    const pane = paneRef.current?.getBoundingClientRect();
+    const framed = pane ? frameFor(state.document, pane.width, pane.height) : null;
+    if (framed) void setViewport(framed, { duration });
+    else void fitView({ padding: 0.4, duration, maxZoom: 1 });
   }, [path, fitView, setViewport]);
 
   const interactive = mode === 'edit';
   useContinuation(interactive);
+
   useZoomVariable();
 
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -1173,7 +1231,12 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   }, []);
 
   const onMoveEnd = useCallback(
-    (_event: unknown, viewport: { x: number; y: number; zoom: number }) => {
+    (event: unknown, viewport: { x: number; y: number; zoom: number }) => {
+      // A camera the app moved is not a camera anybody chose, and storing it would make merely
+      // stepping into a shape a change to the file — a save, a new content stamp, and every other
+      // tab told the canvas changed, for looking around. React Flow reports the gesture that
+      // caused a move and nothing at all for its own, which is exactly the line to draw.
+      if (!event) return;
       // Persisted as document state, deliberately not as an undo step: nobody
       // wants Ctrl+Z to undo a scroll.
       useEditorStore.getState().persistViewport(viewport);
@@ -1185,6 +1248,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
 
   return (
     <div
+      ref={paneRef}
       className="dc-canvas"
       data-explain={explainActive ? 'on' : undefined}
       data-focus={focusActive ? 'on' : undefined}
@@ -1313,6 +1377,10 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
                 }
               />
             ))}
+
+          {/* Not gated on `interactive`: which room you are standing in is as true in a
+              walkthrough as it is while drawing, and the frame is inert either way. */}
+          <RoomFrame />
 
           {interactive && <ContinuationGhost />}
 

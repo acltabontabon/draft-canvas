@@ -6,6 +6,7 @@
  * takes a v(n) shaped object and returns a v(n+1) shaped one.
  */
 import { createId } from './ids';
+import { LIMITS } from './limits';
 import { CURRENT_VERSION } from './types';
 import { isFiniteNumber } from '../lib/math';
 
@@ -261,8 +262,9 @@ function migrateBffToApi(doc: Record<string, unknown>): Record<string, unknown> 
  * in VS Code, write the stripped version straight back over it. Refusing the file by name is the
  * only safe reading an older build can give it.
  *
- * Note for whoever adds v13: a migration that touches nodes, edges or flows must now recurse into
- * every `inside` as well — see `mapGraphs`.
+ * Note for whoever adds v13: a migration that touches nodes, edges or flows has to reach every
+ * room, not just the document's own graph. Wrap it in `everyRoom` when you add it to
+ * `MIGRATIONS`; `migrate.test.ts` checks that every wrapped migration reaches all three levels.
  */
 function migrateAddInsides(doc: Record<string, unknown>): Record<string, unknown> {
   return doc;
@@ -271,15 +273,21 @@ function migrateAddInsides(doc: Record<string, unknown>): Record<string, unknown
 /**
  * Applies `fn` to the document's own graph and to every room nested inside it, however deep.
  *
- * Exists so a future migration can say what it changes once and have it reach the whole file.
- * Rooms are plain graphs (`{nodes, edges, flows, viewport}`), so `fn` sees the same shape at
- * every level; anything unreadable is passed through untouched for `validate.ts` to repair.
+ * Exists so a migration can say what it changes once and have it reach the whole file — which
+ * since v12 every migration that touches nodes, edges or flows has to. Rooms are plain graphs
+ * (`{nodes, edges, flows, viewport}`), so `fn` sees the same shape at every level; anything
+ * unreadable is passed through untouched for `validate.ts` to repair.
+ *
+ * Bounded, because this runs *before* validation: the depth cap is enforced there, so an
+ * imported file nested a hundred thousand deep would otherwise reach a validator that never got
+ * to say no. Past the cap the room is left exactly as it came in, and validation drops it.
  */
 export function mapGraphs(
   doc: Record<string, unknown>,
   fn: (graph: Record<string, unknown>) => Record<string, unknown>,
 ): Record<string, unknown> {
-  const visit = (graph: Record<string, unknown>): Record<string, unknown> => {
+  const visit = (graph: Record<string, unknown>, depth: number): Record<string, unknown> => {
+    if (depth > LIMITS.maxInsideDepth) return graph;
     const mapped = fn(graph);
     const nodes = Array.isArray(mapped.nodes) ? mapped.nodes : undefined;
     if (!nodes) return mapped;
@@ -289,27 +297,39 @@ export function mapGraphs(
         if (!raw || typeof raw !== 'object') return raw;
         const node = raw as Record<string, unknown>;
         if (!node.inside || typeof node.inside !== 'object') return node;
-        return { ...node, inside: visit(node.inside as Record<string, unknown>) };
+        return { ...node, inside: visit(node.inside as Record<string, unknown>, depth + 1) };
       }),
     };
   };
-  return visit(doc);
+  return visit(doc, 0);
+}
+
+/**
+ * Wraps a migration so it reaches every room, not just the document's own graph.
+ *
+ * The tax `DraftNode.inside` introduced, paid in one place: anything in `MIGRATIONS` that reads
+ * or rewrites `nodes`, `edges` or `flows` goes through here, and `migrate.test.ts` proves each of
+ * them reaches the root and all three levels below it. A migration that only touches `metadata`
+ * or `settings` is document-wide and must not be wrapped.
+ */
+function everyRoom(migration: Migration): Migration {
+  return (doc) => mapGraphs(doc, migration);
 }
 
 /**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
-  1: migrateSequenceToFlows,
-  2: migrateAnchors,
+  1: everyRoom(migrateSequenceToFlows),
+  2: everyRoom(migrateAnchors),
   3: migrateFlowAccent,
   4: migrateBackground,
   5: migrateResponse,
-  6: migrateCardAndRoundedToNote,
-  7: migrateHasResponse,
+  6: everyRoom(migrateCardAndRoundedToNote),
+  7: everyRoom(migrateHasResponse),
   8: migrateAddProjectId,
   9: migrateAddRouteMode,
-  10: migrateBffToApi,
+  10: everyRoom(migrateBffToApi),
   11: migrateAddInsides,
 };
 

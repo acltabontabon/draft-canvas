@@ -729,4 +729,133 @@ describe('importing what is inside a shape', () => {
     expect(result.document.nodes).toHaveLength(LIMITS.maxNodes - 1);
     expect(result.document.nodes.at(-1)!.inside!.nodes).toHaveLength(1);
   });
+
+  /**
+   * A node id is also a path segment, and rooms are named by joining them. An id carrying the
+   * character that joins them could name the same room as two other shapes, and be handed the
+   * wrong room's contents — so it is reissued, exactly as a duplicate is, and every reference
+   * to it moves with it.
+   */
+  it('reissues a node id that could be mistaken for a path', () => {
+    const result = parse({
+      ...base,
+      nodes: [service('a\u0000b'), service('plain')],
+      edges: [{ id: 'e1', source: 'a\u0000b', target: 'plain' }],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [first, second] = result.document.nodes;
+    expect(first!.id).not.toContain('\u0000');
+    expect(second!.id).toBe('plain');
+    // The connector followed the rename rather than being dropped as dangling.
+    expect(result.document.edges).toHaveLength(1);
+    expect(result.document.edges[0]!.source).toBe(first!.id);
+  });
+
+  /**
+   * Flows were the one thing a file could hold without limit: fifty a room, and nothing counting
+   * the rooms. They come off the same file-wide allowance as shapes and connectors now.
+   */
+  it('spends the flow allowance across the whole file too', () => {
+    const flows = (count: number, prefix: string) =>
+      Array.from({ length: count }, (_, i) => ({ id: `${prefix}${i}`, title: `Flow ${i}`, steps: [] }));
+    const result = parse({
+      ...base,
+      nodes: [service('holder', { ...room([service('inner')]), flows: flows(10, 'in') })],
+      edges: [],
+      flows: flows(LIMITS.maxFlows - 2, 'out'),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.flows).toHaveLength(LIMITS.maxFlows - 2);
+    // Two left of the file's allowance, so that is all the room gets.
+    expect(result.document.nodes[0]!.inside!.flows).toHaveLength(2);
+  });
+
+  /**
+   * Shapes a hand-written or hostile file can take that the app itself never writes. The bar is
+   * the same everywhere: repair what can be repaired, drop only the part that cannot, never
+   * throw, and never leave a connector or a flow step pointing at something that was dropped.
+   */
+  describe('a room shaped in ways the app never writes', () => {
+    const cases: [string, unknown][] = [
+      ['an array', []],
+      ['a number', 7],
+      ['null', null],
+      ['nodes that are not a list', { nodes: 'lots', edges: [], flows: [] }],
+      ['nodes holding nulls', { nodes: [null, undefined, service('ok')], edges: [], flows: [] }],
+      ['edges that are not a list', { nodes: [service('ok')], edges: {}, flows: [] }],
+      ['flows that are not a list', { nodes: [service('ok')], edges: [], flows: 3 }],
+      ['a viewport of nonsense', { nodes: [service('ok')], edges: [], flows: [], viewport: { x: 'far', y: null, zoom: 0 } }],
+      ['a level nobody has heard of', { nodes: [service('ok')], edges: [], flows: [], level: 'galaxy' }],
+      ['an edge pointing outside the room', { nodes: [service('ok')], edges: [{ id: 'e', source: 'ok', target: 'elsewhere' }], flows: [] }],
+      ['a flow step naming a connector that went', { nodes: [service('ok')], edges: [], flows: [{ id: 'f', title: 'F', steps: [{ id: 's', edgeId: 'gone' }] }] }],
+      ['a prototype key', { nodes: [service('ok')], edges: [], flows: [], __proto__: { pwned: true } }],
+    ];
+
+    it.each(cases)('opens a canvas whose room is %s', (_label, inside) => {
+      const result = parse({ ...base, nodes: [service('holder', inside), service('bystander')], edges: [] });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // The canvas itself always survives whole.
+      expect(result.document.nodes).toHaveLength(2);
+      expect(({} as Record<string, unknown>).pwned).toBeUndefined();
+
+      const room = result.document.nodes[0]!.inside;
+      if (!room) return;
+      // Whatever survived is internally consistent: nothing points at something that was dropped.
+      const nodeIds = new Set(room.nodes.map((n) => n.id));
+      const edgeIds = new Set(room.edges.map((e) => e.id));
+      for (const edge of room.edges) {
+        expect(nodeIds.has(edge.source)).toBe(true);
+        expect(nodeIds.has(edge.target)).toBe(true);
+      }
+      for (const flow of room.flows) {
+        for (const step of flow.steps) {
+          if (step.edgeId) expect(edgeIds.has(step.edgeId)).toBe(true);
+        }
+      }
+      expect(Number.isFinite(room.viewport.x)).toBe(true);
+      expect(room.viewport.zoom).toBeGreaterThan(0);
+    });
+
+    it('keeps the overview when thousands of shapes each claim a room', () => {
+      const many = Array.from({ length: 4000 }, (_, i) => service(`n${i}`, room([service(`deep${i}`)])));
+      const result = parse({ ...base, nodes: many, edges: [] });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.document.nodes).toHaveLength(4000);
+      // Every shape and every room it kept is still inside one file-wide allowance.
+      const kept = result.document.nodes.reduce((n, node) => n + 1 + (node.inside?.nodes.length ?? 0), 0);
+      expect(kept).toBeLessThanOrEqual(LIMITS.maxNodes);
+    });
+
+    it('gives a shape that holds nothing no room, however it was labelled', () => {
+      const result = parse({
+        ...base,
+        nodes: [
+          { id: 'g', type: 'group', x: 0, y: 0, width: 400, height: 300, z: 0, inside: room([service('x')]) },
+          { id: 't', type: 'text', x: 0, y: 0, width: 100, height: 40, z: 0, inside: room([service('y')]) },
+        ],
+        edges: [],
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.document.nodes.every((n) => n.inside === undefined)).toBe(true);
+      expect(result.repairs.join(' ')).toContain('inside');
+    });
+  });
+
+  /** A room's own truncation must not read as a claim about the whole document. */
+  it('says which canvas it cut when a room is the thing that overflowed', () => {
+    const outer = Array.from({ length: LIMITS.maxNodes - 2 }, (_, i) => service(`n${i}`));
+    const result = parse({
+      ...base,
+      nodes: [...outer, service('holder', room([service('deep-a'), service('deep-b')]))],
+      edges: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.repairs.join(' ')).toContain('What was inside a shape had 2 nodes; kept the first 1.');
+  });
 });

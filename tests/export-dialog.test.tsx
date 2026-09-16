@@ -294,3 +294,50 @@ describe('ExportDialog — keyboard navigation', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Export Mermaid' }));
   });
 });
+
+/**
+ * A picture of "the canvas" means two different things once you are standing inside a shape, and
+ * the dialog used to answer silently — you got the room, with nothing saying so. A canvas *file*
+ * has never been ambiguous: it always carries every room.
+ */
+describe('ExportDialog — which canvas', () => {
+  function insideAShape() {
+    const platform = createNode({ type: 'service', x: 0, y: 0, text: 'Lending Platform' });
+    const inner = createNode({ type: 'component', x: 10, y: 10, text: 'Controller' });
+    useEditorStore.setState({
+      document: { ...createDocument('Lending'), nodes: [platform] },
+      path: [],
+      outer: null,
+      selection: { nodes: [], edges: [] },
+      liveViewport: null,
+    });
+    useEditorStore.getState().enterInside(platform.id);
+    useEditorStore.getState().addNode({ type: inner.type, x: 10, y: 10, text: 'Controller' });
+  }
+
+  it('asks nothing at the top level', () => {
+    useEditorStore.setState({ document: withFlow(), path: [], outer: null, liveViewport: null });
+    renderDialog();
+    expect(screen.queryByText('The whole canvas')).toBeNull();
+  });
+
+  it('offers the room or the whole canvas once you are inside one', async () => {
+    const user = userEvent.setup();
+    insideAShape();
+    renderDialog();
+
+    // The room is what you are looking at, so it is what the dialog starts on.
+    expect(screen.getByRole('radio', { name: /Inside Lending Platform/ })).toBeChecked();
+    await user.click(screen.getByRole('radio', { name: 'The whole canvas' }));
+    expect(screen.getByRole('radio', { name: 'The whole canvas' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Inside Lending Platform/ })).not.toBeChecked();
+  });
+
+  it('never asks about a canvas file, which is always all of it', async () => {
+    const user = userEvent.setup();
+    insideAShape();
+    renderDialog();
+    await switchMode(user, /Document/);
+    expect(screen.queryByText('The whole canvas')).toBeNull();
+  });
+});

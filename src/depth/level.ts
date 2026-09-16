@@ -3,10 +3,11 @@
  *
  * Two rules, and they are the whole design:
  *
- * - **Stored only when someone said so.** A level comes from a starter that declared one or from
- *   the "View level" command. Draft Canvas never writes one down because a canvas *looked* like a
- *   system overview — a guess that silently changed what the app suggests, on evidence the user
- *   never saw, is exactly the kind of clever nobody asked for.
+ * - **Stored only when someone said so.** A level comes from a starter that declared one, from the
+ *   "View level" command, or from someone answering the one question Draft Canvas ever asks about
+ *   it (`looksLikeSystemOverview`). It is never written down because a canvas merely *looked* like
+ *   a system overview: a guess that silently changed what the app suggests, on evidence the user
+ *   never saw, would be exactly the kind of clever nobody asked for. Asking is not guessing.
  * - **Derived for the rooms inside it.** If this canvas is a System Context, then what runs inside
  *   one of its systems is its Containers, and what those are made of is Components. That follows
  *   from where you are standing, so it is worked out on the spot rather than stamped on the file —
@@ -20,6 +21,35 @@
 
 import type { DraftDocument, ViewLevel } from '../document/types';
 import { ownerAt, type DepthPath } from './tree';
+
+/**
+ * Whether a view is shaped like a picture of one system among the people and systems around it.
+ *
+ * The one place Draft Canvas reads anything into a drawing, and it only ever produces a question —
+ * never a stored level, never a changed suggestion on its own. Deliberately narrow, and biased
+ * hard towards saying nothing: people, outside systems and systems of our own, and enough of them
+ * to be a picture rather than a pair. A canvas holding a database, a queue or a component is a
+ * picture of how something is built, which is a different altitude, and gets no question at all.
+ *
+ * Two shapes used to be enough, and two shapes is a sketch — "Customer → Order Service" is a thing
+ * people draw all day without meaning anything about abstraction by it. Being wrong here is worse
+ * than being quiet: a question nobody needed reads as the app trying to classify their drawing,
+ * and the cost of never asking is that someone picks the level from the palette instead.
+ */
+export function looksLikeSystemOverview(view: DraftDocument): boolean {
+  let ours = 0;
+  let theirs = 0;
+  for (const node of view.nodes) {
+    if (node.type === 'actor') {
+      theirs += 1;
+      continue;
+    }
+    if (node.type !== 'service') return false;
+    if (node.serviceKind === 'external') theirs += 1;
+    else ours += 1;
+  }
+  return ours >= 1 && theirs >= 1 && ours + theirs >= 3;
+}
 
 /** What the rooms inside a view of this level are, unless they say otherwise. */
 export function nextLevel(level: ViewLevel | undefined): ViewLevel | undefined {

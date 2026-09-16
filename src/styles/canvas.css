@@ -3251,3 +3251,135 @@
 .dc-canvas:has(.dc-node[data-editing='true']) .dc-ghost {
   visibility: hidden;
 }
+
+/**
+ * The sheet a room is drawn on — see `canvas/RoomFrame.tsx`. Register marks rather than a border:
+ * the same four the empty canvas uses, drawn in flow space so they sit around the room's contents
+ * and pan and zoom with them. Inert, and behind everything: it is the paper, not a shape on it.
+ */
+.dc-room {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dc-room-mark {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  opacity: 0.55;
+}
+
+.dc-room-mark[data-at='nw'] {
+  top: 0;
+  left: 0;
+  border-top: 1px solid var(--dc-border-strong);
+  border-left: 1px solid var(--dc-border-strong);
+}
+
+.dc-room-mark[data-at='ne'] {
+  top: 0;
+  right: 0;
+  border-top: 1px solid var(--dc-border-strong);
+  border-right: 1px solid var(--dc-border-strong);
+}
+
+.dc-room-mark[data-at='se'] {
+  right: 0;
+  bottom: 0;
+  border-right: 1px solid var(--dc-border-strong);
+  border-bottom: 1px solid var(--dc-border-strong);
+}
+
+.dc-room-mark[data-at='sw'] {
+  bottom: 0;
+  left: 0;
+  border-bottom: 1px solid var(--dc-border-strong);
+  border-left: 1px solid var(--dc-border-strong);
+}
+
+/* On the corner of the sheet, the way a drawing is labelled — not a title above a box. */
+.dc-room-name {
+  position: absolute;
+  top: -22px;
+  left: 1px;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/**
+ * The one question about what a canvas is showing — see `EmptyState.tsx`'s `ContextOffer`. Quiet
+ * enough to ignore: a line under the room's own invitation, not a dialog in the way of drawing.
+ */
+.dc-empty-offer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 5px 6px 5px 11px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  pointer-events: auto;
+}
+
+.dc-empty-offer button {
+  padding: 2px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--dc-radius-xs);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dc-empty-offer-yes {
+  border-color: var(--dc-border-strong);
+  color: var(--dc-text);
+}
+
+.dc-empty-offer button:hover,
+.dc-empty-offer button:focus-visible {
+  border-color: var(--dc-selection);
+  color: var(--dc-text);
+}
+
+/**
+ * Chrome that has to sit on a hand-drawn canvas without being the only straight thing on it. The
+ * renderer roughens the shapes themselves; these are CSS, so they follow `data-personality`
+ * instead — a little off square, a little off parallel, in the same direction the strokes go.
+ */
+[data-personality='draft'] .dc-inside-mark {
+  transform: rotate(-0.8deg);
+  border-radius: 5px 3px 6px 4px;
+}
+
+[data-personality='draft'] .dc-node:hover .dc-inside-mark {
+  transform: translate(2px, 2px) rotate(-0.8deg);
+}
+
+[data-personality='sketch'] .dc-inside-mark {
+  transform: rotate(-1.6deg);
+  border-radius: 7px 4px 9px 5px;
+}
+
+[data-personality='sketch'] .dc-node:hover .dc-inside-mark {
+  transform: translate(2px, 2px) rotate(-1.6deg);
+}
+
+[data-personality='sketch'] .dc-room-mark,
+[data-personality='draft'] .dc-room-mark {
+  /* Register marks stay square in every personality: they are printer's marks on the sheet, not
+     something drawn on it — the same four the empty canvas uses. Only the weight softens. */
+  opacity: 0.4;
+}

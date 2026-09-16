@@ -918,6 +918,27 @@ describe('library fingerprints', () => {
     expect(rows.find((row) => row.id === blank.metadata.id)!.shape).toBeUndefined();
   });
 
+  /**
+   * A canvas whose content lives one level down is not an empty canvas. Counting only the top
+   * level read it as one: the Library said "0 shapes", and the thumbnail sweep, which skips
+   * empty canvases, skipped it for good.
+   */
+  it('counts what is inside a shape as part of the canvas', async () => {
+    const { summarize } = await import('../src/storage/DraftRepository');
+    const owner = { ...createNode({ type: 'service', x: 0, y: 0 }), inside: {
+      nodes: [createNode({ type: 'component', x: 0, y: 0 }), createNode({ type: 'database', x: 80, y: 0 })],
+      edges: [],
+      flows: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    } };
+    const summary = summarize({ ...createDocument('Deep'), nodes: [owner] });
+    expect(summary.nodeCount).toBe(3);
+
+    const repository = await IndexedDbRepository.open();
+    await repository.save({ ...createDocument('Deep'), metadata: { ...createDocument('Deep').metadata, title: 'Deep' }, nodes: [owner] });
+    expect((await repository.list())[0]!.nodeCount).toBe(3);
+  });
+
   it('never clobbers a rename that lands while a body is being read', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Before', 2);

@@ -114,15 +114,20 @@ test('the canvas says where you are, and how to get back', async ({ page }) => {
 
   await select(page, 0);
   await lookInside(page);
-  // Inside: the room is named, and its emptiness asks the obvious question.
-  await expect(page.locator('.dc-depth')).toContainText('Service');
+  // Inside, two different questions get two different answers. Where you are is on the drawing
+  // itself; the corner is only ever about the way back out.
+  await expect(page.locator('.dc-depth')).toContainText('Orientation');
+  await expect(page.locator('.dc-depth')).not.toContainText('Service');
   await expect(page.getByText(/What runs inside/)).toBeVisible();
 
   await create(page, 'Component', { x: 320, y: 240 });
+  // Once the room holds something it is a sheet with a name on it.
+  await expect(page.locator('.dc-room-name')).toHaveText('Service');
   // Escape with nothing selected is the last step out.
   await page.locator(CANVAS).click({ position: { x: 60, y: 420 } });
   await page.keyboard.press('Escape');
   await expect(page.locator('.dc-depth')).toHaveCount(0);
+  await expect(page.locator('.dc-room')).toHaveCount(0);
 
   // Back outside, the shape now carries the one standing mark that it holds something.
   await expect(page.locator('.dc-inside-mark')).toHaveCount(1);

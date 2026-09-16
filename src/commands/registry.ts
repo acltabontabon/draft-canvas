@@ -14,13 +14,15 @@ import {
   type ConnectorKind,
   type DraftEdge,
   type DraftNode,
+  type ViewLevel,
 } from '../document/types';
 import { TEXT_ROLE_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
 import { requestClipboardRead } from '../lib/clipboardPermission';
 import { effectiveTextRole } from '../nodes/describe';
 import { continuationsFor, materialize } from '../continuation';
 import { MOD_SYMBOL } from '../lib/platform';
-import { canCreateInside, hasInside, ownerAt } from '../depth/tree';
+import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
+import { backOut, lookInside } from '../ui/Editor/depthNavigation';
 import { LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
 import { fileOf, ownsData, viewLevel } from '../store/editorStore';
 import { pointer } from '../store/uiStore';
@@ -281,7 +283,7 @@ function flowCommands(ctx: CommandContext): Command[] {
     });
   }
   // Not offered once the document holds `LIMITS.maxFlows` — `createFlow` would silently refuse.
-  if (ctx.editor.document.flows.length < LIMITS.maxFlows) {
+  if (flowTotal(ctx) < LIMITS.maxFlows) {
     commands.push({
       id: 'flow-new',
       title: 'New flow',
@@ -829,7 +831,7 @@ function backOutCommands(ctx: CommandContext): Command[] {
       keywords: ['outside', 'up', 'leave', 'out', 'parent', 'exit inside'],
       hint: parentName ? `Back to ${parentName}` : 'Back to the whole canvas',
       shortcut: `${MOD_SYMBOL} ↑`,
-      run: (inner) => inner.editor.exitTo(path.length - 1),
+      run: () => void backOut(),
     },
   ];
   if (path.length > 1) {
@@ -838,10 +840,15 @@ function backOutCommands(ctx: CommandContext): Command[] {
       title: 'Back to the whole canvas',
       group: 'view',
       keywords: ['outside', 'top', 'root', 'overview'],
-      run: (inner) => inner.editor.exitTo(0),
+      run: () => void backOut(0),
     });
   }
   return commands;
+}
+
+/** Flows across the whole file, since that is what the cap counts. */
+function flowTotal(ctx: CommandContext): number {
+  return totals(fileOf(ctx.editor)).flows;
 }
 
 /** What the shape owning the room at `path` is called — for a hint, so a fallback is fine. */
@@ -867,15 +874,16 @@ function lookInsideCommand(node: DraftNode): Command {
     hint: hasInside(node) ? `What runs inside ${displayNameFor(node)}` : `Draw what runs inside ${displayNameFor(node)}`,
     primary: hasInside(node),
     shortcut: `${MOD_SYMBOL} ↓`,
-    run: (inner) => {
-      inner.editor.enterInside(node.id);
-    },
+    run: () => void lookInside(node.id),
   };
 }
 
-function serviceQuickCommands(node: DraftNode): Command[] {
+function serviceQuickCommands(node: DraftNode, level?: ViewLevel): Command[] {
   const commands: Command[] = [];
-  if (ownsData(node)) {
+  // What a system keeps its data in is true, and a level down from a view that has said it is a
+  // system overview — the same reason `SERVICE_NEXT`'s data rows go quiet there. Offering it as
+  // the shape's *first* action is the loudest way to pull a picture of a business out of altitude.
+  if (ownsData(node) && level !== 'context') {
     commands.push({
       // Titled for the relationship it draws, never "Add Data Store" — that is the creation
       // command's own title, and an identical title would take the palette's "data store" query
@@ -929,9 +937,10 @@ export function primaryCommandsFor(ctx: CommandContext, node: DraftNode): Comman
   // action, just after whatever else it offers — nothing about it says "fill me in".
   const inside = hasInside(node) || canCreateInside(node) ? [lookInsideCommand(node)] : [];
   if (node.type === 'queue') return [...inside, ...queueQuickCommands(ctx, node)];
-  if (node.type === 'service') return hasInside(node)
-    ? [...inside, ...serviceQuickCommands(node)]
-    : [...serviceQuickCommands(node), ...inside];
+  if (node.type === 'service') {
+    const quick = serviceQuickCommands(node, viewLevel(ctx.editor));
+    return hasInside(node) ? [...inside, ...quick] : [...quick, ...inside];
+  }
   if (node.type === 'group') return [boundaryUngroupCommand()];
   return inside;
 }
@@ -1115,7 +1124,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   const flowsAvailable = ctx.editor.document.flows.filter(
     (flow) => !flowsContaining.includes(flow) && flow.steps.length < LIMITS.maxStepsPerFlow,
   );
-  const canStartFlow = ctx.editor.document.flows.length < LIMITS.maxFlows;
+  const canStartFlow = flowTotal(ctx) < LIMITS.maxFlows;
   const commands: Command[] = [
     {
       id: 'edge-semantic',

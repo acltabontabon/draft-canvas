@@ -20,19 +20,31 @@
  * model and nothing else.
  */
 
-import type { DraftDocument, DraftEdge, DraftFlow, DraftInside, DraftNode, DraftViewport } from '../document/types';
+import type {
+  DraftDocument,
+  DraftEdge,
+  DraftFlow,
+  DraftInside,
+  DraftNode,
+  DraftViewport,
+  ViewLevel,
+} from '../document/types';
 
 /** Owner node ids from the document outward-in: `[]` is the document itself. */
 export type DepthPath = readonly string[];
 
 export const ROOT_PATH: DepthPath = [];
 
-/** Where an empty room's camera starts before anything has been drawn in it. */
-const EMPTY_ROOM_VIEWPORT: DraftViewport = { x: 0, y: 0, zoom: 1 };
+/**
+ * Where an empty room's camera starts before anything has been drawn in it. These are handed to
+ * every empty room as its own graph, so one in-place write would reach every empty room in the
+ * process; frozen, that is a guarantee rather than a convention everyone has to keep.
+ */
+const EMPTY_ROOM_VIEWPORT: DraftViewport = Object.freeze({ x: 0, y: 0, zoom: 1 });
 
-const EMPTY_NODES: DraftNode[] = [];
-const EMPTY_EDGES: DraftEdge[] = [];
-const EMPTY_FLOWS: DraftFlow[] = [];
+const EMPTY_NODES = Object.freeze([]) as readonly DraftNode[] as DraftNode[];
+const EMPTY_EDGES = Object.freeze([]) as readonly DraftEdge[] as DraftEdge[];
+const EMPTY_FLOWS = Object.freeze([]) as readonly DraftFlow[] as DraftFlow[];
 
 /** Whether this node already has shapes inside it. */
 export function hasInside(node: DraftNode): boolean {
@@ -93,15 +105,17 @@ export function walkGraphs(file: DraftDocument, visit: (graph: Graph, path: Dept
   descend(file.nodes, ROOT_PATH);
 }
 
-/** Node and edge counts across every room — what the document limits are spent against. */
-export function totals(file: DraftDocument): { nodes: number; edges: number } {
+/** Counts across every room — what the document limits are spent against. */
+export function totals(file: DraftDocument): { nodes: number; edges: number; flows: number } {
   let nodes = 0;
   let edges = 0;
+  let flows = 0;
   walkGraphs(file, (graph) => {
     nodes += graph.nodes.length;
     edges += graph.edges.length;
+    flows += graph.flows.length;
   });
-  return { nodes, edges };
+  return { nodes, edges, flows };
 }
 
 /** The graph shape a room and a document have in common. */
@@ -170,7 +184,10 @@ export function embed(file: DraftDocument, path: DepthPath, view: DraftDocument)
   const next: DraftDocument = { ...file, nodes, metadata: view.metadata, settings: view.settings };
   // The view this file was just built from is the view it yields — recording that here keeps
   // `viewOf(embed(...))` identity-stable, which is what lets an unchanged room compare equal.
-  rememberView(next, path, view);
+  // Not when the room emptied: there is no room to be stable about, and caching the view anyway
+  // kept its camera and its level alive for the rest of the session while a reload of the same
+  // file gave a fresh empty room — the screen and the disk disagreeing about what was saved.
+  if (view.nodes.length > 0) rememberView(next, path, view);
   return next;
 }
 
@@ -203,6 +220,24 @@ function embedInto(
   const next = nodes.slice();
   next[at] = withInside(owner, inside);
   return next;
+}
+
+/**
+ * The room a graph describes, or `undefined` when it holds nothing.
+ *
+ * The invariant on write, and the only place it is decided: anything building a room — an edit
+ * through the store, a starter declaring one — asks here rather than testing the rule again.
+ */
+export function roomOf(graph: Graph & { level?: ViewLevel }): DraftInside | undefined {
+  if (graph.nodes.length === 0) return undefined;
+  const inside: DraftInside = {
+    nodes: graph.nodes,
+    edges: graph.edges,
+    flows: graph.flows,
+    viewport: graph.viewport,
+  };
+  if (graph.level !== undefined) inside.level = graph.level;
+  return inside;
 }
 
 /** The room `view` describes, or `undefined` once its last shape is gone. */
@@ -253,7 +288,17 @@ function keyOf(path: DepthPath): string {
   return path.join(' ');
 }
 
-/** Two paths are the same room when their keys match — node ids can't contain the separator. */
+/**
+ * Two paths are the same room when their keys match. The separator above is a character
+ * `validate.ts`'s `safeNodeId` refuses, which is what makes joining unambiguous: before it did,
+ * an imported id was only required to be non-empty and short, so one carrying the separator could
+ * name the same room as two others and be handed the wrong room's contents.
+ */
 export function pathKey(path: DepthPath): string {
   return keyOf(path);
+}
+
+/** Whether two paths name the same room. By value: navigation and undo both mint new arrays. */
+export function samePath(a: DepthPath, b: DepthPath): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
 }

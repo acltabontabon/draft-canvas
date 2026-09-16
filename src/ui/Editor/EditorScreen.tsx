@@ -31,7 +31,7 @@ import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { presentationScope, revealIn } from '../../presentation/presentationAttachments';
 import { useThemeValue } from '../theme/useTheme';
 import { backOut, lookInside } from './depthNavigation';
-import { DepthStack } from './DepthStack';
+import { DepthAnnouncer, DepthStack } from './DepthStack';
 import { DepthTransition } from './DepthTransition';
 import { EmptyState } from './EmptyState';
 import { FlowBar } from './FlowBar';
@@ -463,6 +463,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           <FlowBar playback={playback} />
           <FocusIndicator />
           <DepthStack />
+          <DepthAnnouncer />
           <DepthTransition />
 
           {presenting && (
@@ -848,7 +849,16 @@ function useKeyboard({
           // is the whole point.
           case 'arrowdown': {
             const { nodes, edges } = state.selection;
-            if (event.shiftKey || event.altKey || nodes.length !== 1 || edges.length > 0) return;
+            if (event.shiftKey || event.altKey) return;
+            if (nodes.length !== 1 || edges.length > 0) {
+              // Only when something was selected: with nothing chosen, ⌘↓ is someone scrolling,
+              // not someone asking to go somewhere, and a toast would be an answer to no question.
+              if (nodes.length > 1) {
+                event.preventDefault();
+                useUiStore.getState().notify('Look inside one shape at a time.');
+              }
+              return;
+            }
             event.preventDefault();
             void lookInside(nodes[0]!);
             return;

@@ -154,6 +154,22 @@ function safeId(value: unknown): string | null {
 }
 
 /**
+ * A node id, which unlike every other id is also a path segment: `depth/tree.ts` joins them with a
+ * control character to name a room. An id carrying a control character itself could name the same
+ * room as two other nodes and be handed the wrong room's contents, so only those are refused here;
+ * a refused id is reissued like a duplicate one, and every reference to it remapped.
+ */
+function safeNodeId(value: unknown): string | null {
+  const id = safeId(value);
+  if (id === null) return null;
+  for (let i = 0; i < id.length; i += 1) {
+    const code = id.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) return null;
+  }
+  return id;
+}
+
+/**
  * A host's attachment list — shared by nodes and connectors, which carry the identical shape. Keeps
  * at most `max`, gives missing or duplicate ids fresh ones, and keeps a card's size (detaching
  * restores it at the size it had, not a default). Counts what it dropped and cut so the caller can
@@ -223,9 +239,22 @@ interface FileContext {
   nodeIds: Set<string>;
   edgeIds: Set<string>;
   flowIds: Set<string>;
-  budget: { nodes: number; edges: number };
+  budget: { nodes: number; edges: number; flows: number };
   pending: PendingInside[];
   dropped: { deep: number; unreadable: number; overBudget: number };
+}
+
+/** The same file's context, one room deeper. Everything but `depth` is shared on purpose. */
+function childContext(ctx: FileContext, depth: number): FileContext {
+  return {
+    depth,
+    nodeIds: ctx.nodeIds,
+    edgeIds: ctx.edgeIds,
+    flowIds: ctx.flowIds,
+    budget: ctx.budget,
+    pending: ctx.pending,
+    dropped: ctx.dropped,
+  };
 }
 
 function rootContext(): FileContext {
@@ -234,7 +263,7 @@ function rootContext(): FileContext {
     nodeIds: new Set(),
     edgeIds: new Set(),
     flowIds: new Set(),
-    budget: { nodes: LIMITS.maxNodes, edges: LIMITS.maxEdges },
+    budget: { nodes: LIMITS.maxNodes, edges: LIMITS.maxEdges, flows: LIMITS.maxFlows },
     pending: [],
     dropped: { deep: 0, unreadable: 0, overBudget: 0 },
   };
@@ -262,7 +291,11 @@ function drainInsides(ctx: FileContext, repairs: string[]): void {
         ctx.dropped.overBudget += 1;
         continue;
       }
-      const result = normalizeDocument(raw, repairs, { ...ctx, depth });
+      // Deliberately the same context, one level down: the id sets, the remaining allowance, the
+      // queue and the tally are the *file's*, and every room has to spend and add to the same ones.
+      // Only `depth` differs, and `pending` is safe to hand on because this loop is iterating over
+      // a list it already took off `ctx`.
+      const result = normalizeDocument(raw, repairs, childContext(ctx, depth));
       if (!result.ok || result.document.nodes.length === 0) {
         ctx.dropped.unreadable += 1;
         continue;
@@ -348,6 +381,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   // fresh allowance per room.
   const ctx = parent ?? rootContext();
   const isRoot = parent === undefined;
+  // The same function validates the document and every room in it, so anything it reports has to
+  // say which one it is talking about; "Document had 800 nodes" about a room is a lie about the file.
+  const here = isRoot ? 'Document' : 'What was inside a shape';
 
   const meta = isRecord(raw.metadata) ? raw.metadata : {};
   const now = Date.now();
@@ -360,10 +396,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     repairs.push('Document had no node list; started an empty canvas.');
   }
   if (rawNodes.length > ctx.budget.nodes) {
-    repairs.push(`Document had ${rawNodes.length} nodes; kept the first ${ctx.budget.nodes}.`);
+    repairs.push(`${here} had ${rawNodes.length} nodes; kept the first ${Math.max(0, ctx.budget.nodes)}.`);
   }
   if (rawEdges.length > ctx.budget.edges) {
-    repairs.push(`Document had ${rawEdges.length} connectors; kept the first ${ctx.budget.edges}.`);
+    repairs.push(`${here} had ${rawEdges.length} connectors; kept the first ${Math.max(0, ctx.budget.edges)}.`);
   }
 
   /* --------------------------------------------------------------- nodes -- */
@@ -386,7 +422,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       continue;
     }
     const originalId = typeof candidate.id === 'string' ? candidate.id : null;
-    let id = safeId(candidate.id);
+    let id = safeNodeId(candidate.id);
     if (!id || seenNodeIds.has(id)) {
       // Missing or duplicate ids would make selection and edge routing ambiguous.
       id = createId('n');
@@ -679,11 +715,12 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   let droppedFlowSteps = 0;
   let truncatedFlowSteps = 0;
   const seenFlowIds = ctx.flowIds;
-  if (rawFlows.length > LIMITS.maxFlows) {
-    repairs.push(`The canvas had too many flows; kept the first ${LIMITS.maxFlows}.`);
+  const flowAllowance = Math.max(0, ctx.budget.flows);
+  if (rawFlows.length > flowAllowance) {
+    repairs.push(`${here} had too many flows; kept the first ${flowAllowance}.`);
   }
 
-  for (const candidateFlow of rawFlows.slice(0, LIMITS.maxFlows)) {
+  for (const candidateFlow of rawFlows.slice(0, flowAllowance)) {
     if (!isRecord(candidateFlow)) {
       droppedFlows += 1;
       continue;
@@ -820,6 +857,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   // What this room kept comes off the file's allowance before any room inside it is looked at.
   ctx.budget.nodes -= nodes.length;
   ctx.budget.edges -= edges.length;
+  ctx.budget.flows -= flows.length;
   if (isRoot) drainInsides(ctx, repairs);
 
   return { ok: true, document, repairs };

@@ -33,10 +33,19 @@ export function DepthTransition() {
     // the translation has to account for that to land exactly on the shape.
     const x = from.x - canvas.x - (canvas.width * (1 - scaleX)) / 2;
     const y = from.y - canvas.y - (canvas.height * (1 - scaleY)) / 2;
-    const shape = { transform: `translate(${x}px, ${y}px) scale(${scaleX}, ${scaleY})`, opacity: 0.85 };
-    const full = { transform: 'translate(0px, 0px) scale(1, 1)', opacity: 0 };
+    // Both directions end on nothing. Going in, the sheet starts on the shape and opens out;
+    // coming back it closes onto the shape and is gone by the time it gets there. Running the same
+    // pair backwards left the climb finishing on a solid rectangle sitting over the shape at the
+    // exact moment it came back — the one frame the move is meant to make sense in.
+    const onShape = (opacity: number) => ({
+      transform: `translate(${x}px, ${y}px) scale(${scaleX}, ${scaleY})`,
+      opacity,
+    });
+    const filling = (opacity: number) => ({ transform: 'translate(0px, 0px) scale(1, 1)', opacity });
+    const frames =
+      transition.direction === 'in' ? [onShape(0.85), filling(0)] : [filling(0.85), onShape(0)];
 
-    const animation = sheet.animate(transition.direction === 'in' ? [shape, full] : [full, shape], {
+    const animation = sheet.animate(frames, {
       duration,
       easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
       fill: 'forwards',
@@ -48,6 +57,8 @@ export function DepthTransition() {
       animation.cancel();
     };
   }, [transition]);
+
+  useEffect(() => () => useUiStore.getState().setDepthTransition(null), []);
 
   if (!transition) return null;
   return <div className="dc-depth-sheet" ref={sheetRef} aria-hidden="true" />;

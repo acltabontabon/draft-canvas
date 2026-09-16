@@ -71,7 +71,9 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
   // shared with `Modal` so the two dialogs can't drift on this.
   useFocusReturn(true);
 
-  const [query, setQuery] = useState('');
+  // Read once, on the open that carried it: the body remounts per open, so this is that open's
+  // starting point and nothing else.
+  const [query, setQuery] = useState(() => useUiStore.getState().commandPaletteQuery);
   const [stage, setStage] = useState<CommandStage | null>(null);
   // The top-level command that opened the current stage — what history records once one of its
   // options actually runs, so "Connect to… → Ledger" counts as one use of "Connect to…".

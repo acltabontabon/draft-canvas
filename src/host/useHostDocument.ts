@@ -111,7 +111,7 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
         return;
       }
       const document = parsed ? parsed.document : createDocument(title || undefined);
-      const { useEditorStore, fileOf } = await import('../store/editorStore');
+      const { useEditorStore, fileWithLiveViewport } = await import('../store/editorStore');
       if (disposed) return;
       unsubscribe ??= useEditorStore.subscribe((current, previous) => {
         // Revisions only: panning alone moves the viewport, and a file shouldn't turn dirty for that.
@@ -133,7 +133,7 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       }
       // Opening normalises what it read; that alone must not dirty the file. A new file is the
       // exception: it gets its first contents now.
-      hostText = blank ? null : serializeDocument(fileOf(useEditorStore.getState()));
+      hostText = blank ? null : serializeDocument(fileWithLiveViewport(useEditorStore.getState()));
       if (blank) await sendChange();
     };
 

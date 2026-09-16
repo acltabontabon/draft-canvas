@@ -1259,3 +1259,49 @@ describe('docs/SEMANTICS.md rules table', () => {
     expect(rows).toEqual(RULES.map((rule) => [`\`${rule.id}\``, rule.tier, rule.label, rule.reason]));
   });
 });
+
+/**
+ * What a view says it is showing changes what "what next?" means.
+ *
+ * The rule the level has to keep is that it only ever narrows, and only where somebody actually
+ * said what the view is: a canvas that has said nothing behaves exactly as it always did, which is
+ * most canvases. Where it has, the answer stays at the altitude of the conversation — answering
+ * "what comes after the Lending Platform?" with a Data Store is how a picture of a business quietly
+ * stops being one.
+ */
+describe('what a view is showing changes what comes next', () => {
+  function customerAndSystem() {
+    const customer = createNode({ type: 'actor', x: 0, y: 0, text: 'Customer' });
+    const platform = createNode({ type: 'service', x: 300, y: 0, text: 'Lending Platform' });
+    const edge = createEdge({ source: customer.id, target: platform.id });
+    return {
+      doc: addEdges(addNodes(createDocument('Lending'), [customer, platform]), [edge]),
+      customer,
+      platform,
+    };
+  }
+
+  const asked = (doc: DraftDocument, anchorId: string, level: ViewLevel | undefined) =>
+    continuationSets(doc, anchorId, { level }).explicit.map((c) => c.label);
+
+  it('offers other systems, not infrastructure, in a system overview', () => {
+    const { doc, platform } = customerAndSystem();
+    expect(asked(doc, platform.id, 'context')).toEqual(['Service', 'External System']);
+  });
+
+  it('offers the system and who else runs one, off a person in an overview', () => {
+    const { doc, customer } = customerAndSystem();
+    expect(asked(doc, customer.id, 'context')).toEqual(['System', 'External System']);
+  });
+
+  it.each([undefined, 'none'] as const)('is exactly what it always was when the view says %s', (level) => {
+    const { doc, platform, customer } = customerAndSystem();
+    expect(asked(doc, platform.id, level)).toEqual(['Data Store', 'Topic', 'Queue', 'Service', 'Cache', 'External System']);
+    expect(asked(doc, customer.id, level)).toEqual(['Gateway', 'API']);
+  });
+
+  it.each(['container', 'component'] as const)('leaves the whole vocabulary alone at %s', (level) => {
+    const { doc, platform } = customerAndSystem();
+    expect(asked(doc, platform.id, level)).toEqual(['Data Store', 'Topic', 'Queue', 'Service', 'Cache', 'External System']);
+  });
+});

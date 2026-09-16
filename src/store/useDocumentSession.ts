@@ -186,8 +186,11 @@ export function useDocumentSession(): DocumentSession {
         if (state.revision === previous.revision && state.liveViewport === previous.liveViewport) return;
         // Stepping into or out of a shape is navigation, not an edit: it clears `liveViewport`
         // (folding the camera into the room being left) without bumping `revision`, and saving
-        // there would rewrite the file's stamp and tell every other tab it had changed.
-        if (state.path !== previous.path) return;
+        // there would rewrite the file's stamp and tell every other tab it had changed. It is the
+        // move itself that must stay quiet, not every change of room: an undo of an edit made
+        // somewhere else both writes and moves you, and skipping that one left the undo on screen
+        // and absent from disk until some later edit happened to flush it.
+        if (state.navigation !== previous.navigation) return;
         if (state.document.metadata.id !== openId) return;
         autosave.current?.schedule(fileWithLiveViewport(state));
       });

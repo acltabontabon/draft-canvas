@@ -11,6 +11,9 @@ function reset() {
   __resetClipboardSync();
   store.setState({
     document: createDocument('History'),
+    path: [],
+    outer: null,
+    liveViewport: null,
     history: { past: [], future: [] },
     selection: { nodes: [], edges: [] },
     clipboard: null,

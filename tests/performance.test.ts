@@ -14,6 +14,8 @@ import { createFlow, explainEdgeTier, stepIndexOf } from '../src/document/flow';
 import { evaluateAttachCandidates, deepestBoundaryAt } from '../src/canvas/dragTargets';
 import { obstaclesForEdge, withoutNodes } from '../src/edges/obstacles';
 import { isEdgeFocused } from '../src/store/editorStore';
+import { serializeDocument } from '../src/export/project';
+import { parseDocument } from '../src/document/validate';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { projectNodes, projectEdges } from '../src/canvas/projection';
 import { laneIndex, rectOf, routeEdge } from '../src/edges/routing';
@@ -517,5 +519,97 @@ describe('depth', () => {
     const counted = totals(file);
     expect(performance.now() - started).toBeLessThan(100);
     expect(counted.nodes).toBeGreaterThan(NODE_COUNT);
+  });
+
+  /**
+   * The shapes a file can actually take, rather than one of them once. What has to hold across all
+   * of them is the same promise: reading, writing and reassembling cost what the file holds, and
+   * nothing about depth is quadratic in the number of rooms or in how deep they go.
+   */
+  describe('the shapes a nested file comes in', () => {
+    /** `owners` shapes each holding a room of `each` shapes, `deep` levels down. */
+    function spread(owners: number, each: number, deep: number): DraftDocument {
+      const graph = (level: number): DraftDocument['nodes'][number]['inside'] => ({
+        nodes: Array.from({ length: each }, (_, i) => {
+          const node = createNode({ type: 'service', x: i * 200, y: level * 200 });
+          return level > 0 ? { ...node, inside: graph(level - 1) } : node;
+        }),
+        edges: [],
+        flows: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+      });
+      const nodes = Array.from({ length: owners }, (_, i) => {
+        const node = createNode({ type: 'service', x: i * 200, y: 0 });
+        return deep > 0 ? { ...node, inside: graph(deep - 1) } : node;
+      });
+      return { ...createDocument('Spread'), nodes };
+    }
+
+    const shapes: [string, () => DraftDocument][] = [
+      ['a large canvas with nothing inside anything', () => largeDocument()],
+      ['a large canvas with a few shallow rooms', () => spread(60, 12, 1)],
+      ['three levels, spread out', () => spread(12, 6, 3)],
+      ['one very large room', () => spread(1, 400, 1)],
+      ['many owners, small rooms', () => spread(200, 3, 1)],
+    ];
+
+    it.each(shapes)('validates, serializes and counts %s within budget', (_label, build) => {
+      const file = build();
+      const text = (() => {
+        const started = performance.now();
+        const out = serializeDocument(file);
+        expect(performance.now() - started).toBeLessThan(500);
+        return out;
+      })();
+
+      const started = performance.now();
+      const parsed = parseDocument(text);
+      expect(performance.now() - started).toBeLessThan(500);
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) return;
+
+      const counting = performance.now();
+      expect(totals(parsed.document).nodes).toBe(totals(file).nodes);
+      expect(performance.now() - counting).toBeLessThan(100);
+    });
+
+    it.each(shapes)('walks into the deepest room of %s and edits it within budget', (_label, build) => {
+      const file = build();
+      // The deepest path this shape has.
+      const path: string[] = [];
+      let node = file.nodes[0];
+      while (node) {
+        path.push(node.id);
+        node = node.inside?.nodes[0];
+      }
+      if (path.length === 0) return;
+
+      const started = performance.now();
+      let current = file;
+      for (let edit = 0; edit < 100; edit += 1) {
+        const view = viewOf(current, path)!;
+        current = embed(current, path, { ...view, nodes: view.nodes.map((n, i) => (i === 0 ? { ...n, x: n.x + 1 } : n)) });
+      }
+      expect(performance.now() - started).toBeLessThan(500);
+      // Everything the edits did not touch is still the same object, however wide the file is.
+      expect(current.nodes.at(-1)).toBe(file.nodes.at(-1));
+    });
+
+    /**
+     * The one thing depth is not allowed to cost. A room is handed to the rest of the app as an
+     * ordinary document, so reading one has to be free however much file is around it — otherwise
+     * every pointer move, hover and render inside a deep room would pay for the whole tree.
+     */
+    it('hands back the same room object every time, at every size', () => {
+      for (const [, build] of shapes) {
+        const file = build();
+        const path = file.nodes[0]?.inside ? [file.nodes[0]!.id] : [];
+        if (path.length === 0) continue;
+        const first = viewOf(file, path);
+        const started = performance.now();
+        for (let read = 0; read < 10_000; read += 1) expect(viewOf(file, path)).toBe(first);
+        expect(performance.now() - started).toBeLessThan(200);
+      }
+    });
   });
 });

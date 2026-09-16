@@ -21,6 +21,11 @@ export function PersonalityProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     writePreference(STORAGE_KEY, preset);
+    // Also on the document, so the chrome drawn in CSS rather than by the renderer can follow the
+    // drawing style. Without it a hand-drawn canvas carried perfectly crisp rectangles for the one
+    // shape holding something — the only square corner on screen, on the one thing meant to blend
+    // in. `ThemeProvider` already publishes the theme the same way.
+    globalThis.document?.documentElement.setAttribute('data-personality', preset);
   }, [preset]);
 
   const setPreset = useCallback((next: PersonalityPreset) => setPresetState(next), []);

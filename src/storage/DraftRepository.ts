@@ -1,3 +1,4 @@
+import { totals } from '../depth/tree';
 import { libraryShapeOf } from '../document/shape';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 
@@ -144,13 +145,16 @@ export function reconcileMetadata(document: DraftDocument, base: SharedMetadata,
 }
 
 export function summarize(document: DraftDocument): DraftSummary {
+  const counts = totals(document);
   return {
     id: document.metadata.id,
     title: document.metadata.title,
     createdAt: document.metadata.createdAt,
     updatedAt: document.metadata.updatedAt,
-    nodeCount: document.nodes.length,
-    edgeCount: document.edges.length,
+    // Across every room: a canvas whose content lives one level down is not an empty canvas, and
+    // reading it as one showed "0 shapes" in the Library and skipped it in the thumbnail sweep.
+    nodeCount: counts.nodes,
+    edgeCount: counts.edges,
     ...(document.metadata.projectId ? { projectId: document.metadata.projectId } : {}),
     ...(document.nodes.length > 0 ? { shape: libraryShapeOf(document.nodes, document.edges) } : {}),
   };

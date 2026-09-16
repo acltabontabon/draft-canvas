@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { isCanvasEmpty } from '../../document/operations';
 import { MOD_SYMBOL } from '../../lib/platform';
 import { FEATURED_STARTERS, type ArchitectureStarter, type StarterId } from '../../starters';
-import { fileOf, useEditorStore } from '../../store/editorStore';
-import { ownerAt } from '../../depth/tree';
+import { fileOf, useEditorStore, viewLevel } from '../../store/editorStore';
+import { ownerAt, viewOf } from '../../depth/tree';
+import { looksLikeSystemOverview } from '../../depth/level';
 import { displayNameFor } from '../../document/factory';
 import { Wire } from '../common/Wire';
 import { useWireGeometry } from '../common/wireGeometry';
@@ -104,13 +105,49 @@ function EmptyRoom({ name, leaving }: { name: string; leaving: boolean }) {
         <span data-at="se" />
         <span data-at="sw" />
       </span>
-      <div className="dc-empty-room-note" aria-hidden="true">
+      <div className="dc-empty-room-note">
         <p className="dc-empty-title">What runs inside {name}?</p>
         <p className="dc-empty-hint">
           Draw it here. {MOD_SYMBOL}↑ goes back out.
         </p>
+        <ContextOffer />
       </div>
     </div>
+  );
+}
+
+/**
+ * The one question Draft Canvas ever asks about what a canvas is showing.
+ *
+ * Only here, only where the drawing outside is shaped like a system overview, and only while
+ * nothing has been said about it — so it is an offer to name what someone has already drawn, not a
+ * guess acted on behind their back. Answering yes says it of the canvas outside, which is what the
+ * claim was about; this room then derives Containers from it, and the status bar says so. Saying
+ * no puts it away for the session and nothing is written either way until someone answers.
+ */
+function ContextOffer() {
+  const [dismissed, setDismissed] = useState(false);
+  const offered = useEditorStore((state) => {
+    if (state.path.length === 0 || viewLevel(state) !== undefined) return false;
+    const outside = state.path.length === 1 ? fileOf(state) : viewOf(fileOf(state), state.path.slice(0, -1));
+    return outside ? looksLikeSystemOverview(outside) : false;
+  });
+  if (!offered || dismissed) return null;
+
+  return (
+    <p className="dc-empty-offer">
+      <span>Looks like a system overview. Treat it as C4 context?</span>
+      <button
+        type="button"
+        className="dc-empty-offer-yes"
+        onClick={() => useEditorStore.getState().setOuterViewLevel(useEditorStore.getState().path.length - 1, 'context')}
+      >
+        Yes
+      </button>
+      <button type="button" className="dc-empty-offer-no" onClick={() => setDismissed(true)}>
+        No thanks
+      </button>
+    </p>
   );
 }
 

@@ -23,6 +23,7 @@ import {
   pathKey,
   resolvePath,
   ROOT_PATH,
+  samePath,
   totals,
   viewOf,
   type DepthPath,
@@ -39,6 +40,7 @@ import {
   bringForward,
   bringToFront,
   carryDescendants,
+  costOf,
   detachFromEdge as detachFromEdgeOp,
   detachFromNode,
   distributeNodes,
@@ -270,6 +272,13 @@ export interface EditorStore {
   selectedFlowId: string | null;
   /** Bumped on every document write; autosave watches this rather than deep-diffing. */
   revision: number;
+  /**
+   * Bumped on every move between rooms, and by nothing else. Autosave needs to tell navigation
+   * (which must stay silent: no save, no new stamp, no other tab told the file changed) from an
+   * edit that happens to land you somewhere else — a cross-room undo does both. Comparing `path`
+   * cannot answer that, because undo moves you too; this can.
+   */
+  navigation: number;
   /**
    * Where the camera actually is, once the user has panned or zoomed since the document was set —
    * `null` until then. Kept out of `document` on purpose: every scroll gesture writing a new
@@ -519,13 +528,13 @@ export interface EditorStore {
   exitTo: (depth: number) => void;
   /** Says what this view is showing — or, with `undefined`, that nothing is claimed about it. */
   setViewLevel: (level: ViewLevel | undefined) => void;
+  /** Says what the room `depth` levels out from the canvas is showing. See the implementation. */
+  setOuterViewLevel: (depth: number, level: ViewLevel | undefined) => void;
 }
 
 export interface ApplyOptions {
   /** Entries with the same key merge, so text editing is one undo step. */
   coalesceKey?: string;
-  /** Skips the history entry — used for viewport and other non-editorial state. */
-  transient?: boolean;
   selection?: Selection;
   /** See `FlowSessionSnapshot` in `history/HistoryStack.ts`. Only `deleteFlow` sets these. */
   flowSessionBefore?: FlowSessionSnapshot;
@@ -908,11 +917,29 @@ export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefin
  * document (import, load) and on paste — past it, the next load would keep the first nodes and
  * silently drop the newest, so an add that doesn't fit is refused up front and said out loud.
  */
-export function roomFor(nodeCount: number, edgeCount: number): boolean {
+function labelForLevel(level: ViewLevel | undefined): string {
+  return level === undefined ? 'Clear view level' : `View level: ${level}`;
+}
+
+function withLevel(doc: DraftDocument, level: ViewLevel | undefined): DraftDocument {
+  if (doc.level === level) return doc;
+  const next = { ...doc };
+  if (level === undefined) delete next.level;
+  else next.level = level;
+  return next;
+}
+
+export function roomFor(nodeCount: number, edgeCount: number, flowCount = 0): boolean {
   // Counted across every room, not just the one being edited: the limits bound what a file can
   // hold, and a load that kept the first 5000 nodes would silently lose whichever rooms came last.
   const used = totals(fileOf(useEditorStore.getState()));
-  if (used.nodes + nodeCount <= LIMITS.maxNodes && used.edges + edgeCount <= LIMITS.maxEdges) return true;
+  if (
+    used.nodes + nodeCount <= LIMITS.maxNodes &&
+    used.edges + edgeCount <= LIMITS.maxEdges &&
+    used.flows + flowCount <= LIMITS.maxFlows
+  ) {
+    return true;
+  }
   useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
   return false;
 }
@@ -953,6 +980,10 @@ function restoreSnapshot(
     path: inside ? path : ROOT_PATH,
     outer: inside ? restored.file : null,
     revision: s.revision + 1,
+    // The camera belongs to the room it was panned in. Every other move between rooms folds it
+    // into the room being left and starts the next one clean; undo has to do the same, or the
+    // room you land in is saved with a view from the one you were standing in.
+    ...(moved ? { liveViewport: null } : {}),
     ...(cleared ?? reconcileSessionState(view, s)),
     // After the reset: the entry's selection belongs to the room the entry was recorded in,
     // which is the room we just moved to.
@@ -977,19 +1008,21 @@ function navigateTo(set: SetEditorState, get: GetEditorState, path: DepthPath): 
   const view = resolved.length > 0 ? viewOf(file, resolved) : file;
   if (!view) return;
   const inside = resolved.length > 0;
-  set({
+  set((s) => ({
     ...resetViewSession(),
     document: view,
     path: inside ? resolved : ROOT_PATH,
     outer: inside ? file : null,
     liveViewport: null,
-  });
+    navigation: s.navigation + 1,
+  }));
 }
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
   document: createDocument(),
   path: ROOT_PATH,
   outer: null,
+  navigation: 0,
   history: EMPTY_HISTORY,
   selection: EMPTY_SELECTION,
   clipboard: null,
@@ -1039,7 +1072,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // same object, so no-op commands never create a dead undo step.
     if (next === before || shallowEqualDocument(next, before)) return;
 
-    if (interaction || options?.transient) {
+    if (interaction) {
       set((s) => ({
         document: next,
         selection: options?.selection ?? selectionIn(next, before, s.selection),
@@ -1099,6 +1132,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     // A click that moved nothing leaves the document identical; no entry.
     if (state.document === active.document) return;
+    // Whatever replaced the document underneath a live gesture (an outside reload, a discarded
+    // conflict) already discarded the gesture's baseline; recording it against the room we are
+    // standing in now would write the old room's shapes at the new room's address.
+    if (!samePath(active.path, state.path)) return;
     set((s) => ({
       history: pushEntry(s.history, {
         label: label ?? active.label,
@@ -1121,7 +1158,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   addNodesWithEdges(nodes, edges, label, flows = []) {
-    if (!roomFor(nodes.length, edges.length)) return false;
+    const cost = costOf(nodes);
+    if (!roomFor(cost.nodes, cost.edges + edges.length)) return false;
     get().apply(
       label,
       (doc) => flows.reduce((next, flow) => addFlow(next, flow), addEdges(addNodes(doc, nodes), edges)),
@@ -1265,6 +1303,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const topAddedOnlyThisNode =
       top !== undefined &&
       topBefore !== undefined &&
+      // That entry has to belong to the room being edited. It always does today, because entering
+      // a room commits an open edit first — but the collapse installs the entry's room as the
+      // current document while leaving `path` alone, so if the two ever parted the file would be
+      // rebuilt with one room's contents written at another room's address.
+      samePath(top.path, state.path) &&
       top.after === fileOf(state) &&
       document.nodes.length === topBefore.nodes.length + 1 &&
       document.edges.length === topBefore.edges.length &&
@@ -1277,6 +1320,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         history: { past: history.past.slice(0, -1), future: [] },
         selection: EMPTY_SELECTION,
         revision: revision + 1,
+        // The camera belongs to the document being replaced, not the one going back in.
+        liveViewport: null,
       });
       return;
     }
@@ -2048,6 +2093,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   createFlow(title) {
+    if (totals(fileOf(get())).flows >= LIMITS.maxFlows) return null;
     const flow = createFlowEntity({ title: title?.trim() || nextFlowTitle(get().document) });
     get().apply('Create flow', (doc) => addFlow(doc, flow));
     // `addFlow` silently refuses at the cap; without this check a caller would go on to select
@@ -2272,7 +2318,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!node) return false;
     // An inside that already exists stays reachable whatever the shape became later; only
     // creating a new one is limited to the shapes whose internals are architecture.
-    if (!hasInside(node) && !canCreateInside(node)) return false;
+    if (!hasInside(node) && !canCreateInside(node)) {
+      // Said out loud, because the shortcut is the one way in that is offered on every shape: the
+      // menus simply leave it off, and silence reads as the app having missed the keystroke.
+      useUiStore.getState().notify('Only a service or a component has an inside.');
+      return false;
+    }
     if (state.path.length >= LIMITS.maxInsideDepth) {
       useUiStore.getState().notify('That is as deep as a canvas goes.', 'error');
       return false;
@@ -2289,13 +2340,43 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setViewLevel(level) {
-    get().apply(level === undefined ? 'Clear view level' : `View level: ${level}`, (doc) => {
-      if (doc.level === level) return doc;
-      const next = { ...doc };
-      if (level === undefined) delete next.level;
-      else next.level = level;
-      return next;
-    });
+    get().apply(labelForLevel(level), (doc) => withLevel(doc, level));
+  },
+
+  /**
+   * Says what an *outer* room is showing, from inside one of its shapes.
+   *
+   * The one edit in the app that is not to the room on screen, and it exists for one reason: the
+   * question "is this a system overview?" is asked in an empty room, and an empty room is not a
+   * room — there is nowhere to write the answer. So the answer goes where the claim was about,
+   * and this room derives its level from it, exactly as if it had always been there. One entry,
+   * recorded against the room it changed, so undo takes it back where it happened.
+   */
+  setOuterViewLevel(depth, level) {
+    const state = get();
+    if (depth < 0 || depth >= state.path.length) return;
+    const file = fileOf(state);
+    const at = state.path.slice(0, depth);
+    const before = at.length === 0 ? file : viewOf(file, at);
+    if (!before || before.level === level) return;
+    const after = touch(withLevel(before, level));
+    const nextFile = at.length === 0 ? after : embed(file, at, after);
+    const room = viewOf(nextFile, state.path);
+    if (!room) return;
+    set((s) => ({
+      document: room,
+      outer: nextFile,
+      revision: s.revision + 1,
+      history: pushEntry(s.history, {
+        label: labelForLevel(level),
+        before: file,
+        after: nextFile,
+        path: at,
+        selectionBefore: s.selection,
+        selectionAfter: s.selection,
+        at: Date.now(),
+      }),
+    }));
   },
 }));
 

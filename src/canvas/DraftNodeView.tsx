@@ -333,6 +333,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       }
       onDoubleClick={beginEditing}
     >
+      {/* A picture is all the second sheet is, so what it means is said here as well. Part of the
+          shape's own name rather than a separate thing to find: "has an inside" is a fact about
+          this shape, like its kind. */}
+      {insideCount > 0 && <span className="dc-sr-only">, has an inside, {count(insideCount, 'shape')}</span>}
       {!readOnly && (
         <NodeResizer
           isVisible={Boolean(selected)}
@@ -400,11 +404,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         // corner — the one standing signal that there is more under this, quiet enough that a
         // diagram full of them still reads as a diagram. Chrome, so it never reaches an export:
         // a picture of the architecture is what was drawn, not how to navigate it.
-        <span
-          className="dc-inside-mark"
-          aria-hidden
-          title={`Look inside (${count(insideCount, 'shape')})`}
-        />
+        <span className="dc-inside-mark" aria-hidden title={`Look inside (${count(insideCount, 'shape')})`} />
       )}
 
       {attachmentCount > 0 && (

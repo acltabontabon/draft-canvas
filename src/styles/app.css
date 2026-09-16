@@ -2473,10 +2473,20 @@ kbd {
 /* What the view is showing, where a level is known. Quiet as the counts beside it — this is a
    statement of fact, not a control, and it is only here at all so that a narrowed set of
    suggestions never comes without its reason visible. */
-.dc-status-level {
+button.dc-status-level {
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--dc-text-muted);
+  font: inherit;
   font-variant-caps: all-small-caps;
   letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+button.dc-status-level:hover,
+button.dc-status-level:focus-visible {
+  color: var(--dc-text);
 }
 
 /* The sheet that grows out of a shape into the room inside it (and shrinks back on the way out).
@@ -2564,27 +2574,37 @@ kbd {
 }
 
 /* Collapsed, only the room you are in is showing — the shortest true answer. */
-.dc-depth-rung[data-current='true'],
+.dc-depth-rung[data-nearest='true'],
 .dc-depth:hover .dc-depth-rung,
 .dc-depth:focus-within .dc-depth-rung {
   max-height: 24px;
   opacity: 1;
 }
 
-.dc-depth-rung[data-current='true'] .dc-depth-into {
+/* The back arrow belongs to the rung that is always showing. Opened, the indent carries the
+   hierarchy and an arrow on every line would only be noise. */
+.dc-depth-into {
   opacity: 0;
+}
+
+.dc-depth-rung[data-nearest='true'] .dc-depth-into {
+  opacity: 1;
   transition: opacity 120ms var(--dc-ease-out);
 }
 
-.dc-depth:hover .dc-depth-rung[data-current='true'] .dc-depth-into,
-.dc-depth:focus-within .dc-depth-rung[data-current='true'] .dc-depth-into {
-  opacity: 1;
+.dc-depth:hover .dc-depth-rung[data-nearest='true'] .dc-depth-into,
+.dc-depth:focus-within .dc-depth-rung[data-nearest='true'] .dc-depth-into {
+  opacity: 0;
 }
 
 /* Each room is indented under the one it sits in. */
-.dc-depth-rung:nth-child(2) { padding-left: 4px; }
-.dc-depth-rung:nth-child(3) { padding-left: 14px; }
-.dc-depth-rung:nth-child(4) { padding-left: 24px; }
+/* Opened, each rung sits a little further in than the one it was reached from — the indent is
+   what says which way is out, so nothing has to repeat it in words. Closed, only the last rung is
+   showing and it sits flush against the arrow. */
+.dc-depth:hover .dc-depth-rung:nth-child(2),
+.dc-depth:focus-within .dc-depth-rung:nth-child(2) { padding-left: 10px; }
+.dc-depth:hover .dc-depth-rung:nth-child(3),
+.dc-depth:focus-within .dc-depth-rung:nth-child(3) { padding-left: 20px; }
 
 .dc-depth-into {
   color: var(--dc-text-faint, var(--dc-text-muted));
@@ -2616,9 +2636,8 @@ button.dc-depth-step:hover {
   background: var(--dc-surface-hover, transparent);
 }
 
-.dc-depth-rung[data-current='true'] .dc-depth-step {
+.dc-depth-rung[data-nearest='true'] .dc-depth-step {
   color: var(--dc-text);
-  font-weight: 600;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4754,4 +4773,34 @@ button.dc-depth-step:hover {
   .dc-palette {
     animation: none;
   }
+}
+
+/* This room, or the whole canvas — only ever shown while standing inside a shape. */
+.dc-export-scope {
+  display: flex;
+  gap: 16px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+
+.dc-export-scope legend {
+  padding: 0;
+  color: var(--dc-text-faint);
+  font-size: 11px;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+}
+
+.dc-export-scope label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dc-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dc-export-scope input:checked + span {
+  color: var(--dc-text);
 }

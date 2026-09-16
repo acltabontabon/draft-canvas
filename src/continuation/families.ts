@@ -46,6 +46,13 @@ export interface FanOutTarget {
   label: string;
   reason: string;
   node: Omit<FragmentNodeSpec, 'key'>;
+  /**
+   * Where this one row alone is out of place, when the family as a whole is not. A Service's next
+   * move is a Data Store or another Service depending only on the altitude being drawn at, and
+   * splitting the family in two to say that would reorder what everyone else sees. See
+   * `ContinuationRule.silentAt`.
+   */
+  silentAt?: readonly ViewLevel[];
 }
 
 export interface FanOutOptions {
@@ -133,5 +140,7 @@ export function defineFanOut(
     // A second Queue off a Topic is still the point when asked — so every target repeats on an explicit ask.
     repeatable: isExplicit,
     ...options,
+    // After the family's own, so a single row can be quiet where the rest of it is not.
+    ...(target.silentAt ? { silentAt: target.silentAt } : {}),
   }));
 }

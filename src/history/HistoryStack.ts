@@ -1,4 +1,4 @@
-import { viewOf } from '../depth/tree';
+import { samePath, viewOf } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 
 export interface Selection {
@@ -103,10 +103,6 @@ export function pushEntry(
   return { past: past.length > HISTORY_LIMIT ? past.slice(-HISTORY_LIMIT) : past, future: [] };
 }
 
-function samePath(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((id, index) => id === b[index]);
-}
-
 /**
  * Whether two files hold the same content, as seen from the room the burst was typed in.
  *
@@ -122,6 +118,10 @@ function sameContent(a: DraftDocument, b: DraftDocument, path: readonly string[]
   if (!viewA || !viewB) return false;
   return (
     a.metadata.title === b.metadata.title &&
+    // What the room says it shows is content like anything else. `shallowEqualDocument` already
+    // treats it that way, and a burst that ended by changing only the level would otherwise look
+    // like a burst that changed nothing and be thrown away.
+    viewA.level === viewB.level &&
     viewA.viewport === viewB.viewport &&
     equivalent(viewA.nodes, viewB.nodes, 4) &&
     equivalent(viewA.edges, viewB.edges, 4) &&

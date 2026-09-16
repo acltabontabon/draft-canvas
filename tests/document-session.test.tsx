@@ -220,6 +220,45 @@ describe('useDocumentSession — overlapping opens', () => {
     expect(last.nodes[0]!.inside?.nodes[0]?.text).toBe('Lending API');
   });
 
+  /**
+   * An undo of something done in another room both writes and moves you. Telling navigation from
+   * an edit by watching which room you are in answered "navigation" for this, so the undo showed
+   * on screen and was never written: reload, and the change it took back was still there.
+   */
+  it('saves an undo of a change made in another room, from wherever you are standing', async () => {
+    const saved: DraftDocument[] = [];
+    const repository = stubRepository({
+      save: async (document) => {
+        saved.push(structuredClone(document));
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().newDocument('Lending');
+    });
+    const platform = useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0, text: 'Lending Platform' });
+    await waitFor(() => expect(saved.length).toBeGreaterThan(0));
+
+    act(() => {
+      useEditorStore.getState().enterInside(platform.id);
+      useEditorStore.getState().addNode({ type: 'service', x: 20, y: 20, text: 'Lending API' });
+    });
+    await waitFor(() => expect(saved.at(-1)!.nodes[0]!.inside?.nodes).toHaveLength(1));
+
+    act(() => {
+      useEditorStore.getState().exitTo(0);
+    });
+    const beforeUndo = saved.length;
+    act(() => {
+      useEditorStore.getState().undo();
+    });
+    // The undo took the room's only shape away, so the room goes with it — and that has to reach
+    // disk, not just the screen.
+    await waitFor(() => expect(saved.length).toBeGreaterThan(beforeUndo));
+    expect(saved.at(-1)!.nodes[0]!.inside).toBeUndefined();
+  });
+
   it('a double-activated New canvas creates one canvas', async () => {
     const saved: DraftDocument[] = [];
     const repository = stubRepository({

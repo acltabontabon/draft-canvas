@@ -604,3 +604,119 @@ describe('migration chain completeness', () => {
     expect(applied).toEqual(expected);
   });
 });
+
+/**
+ * The permanent tax `DraftNode.inside` introduced: since v12 a document is a tree of graphs, so a
+ * migration that rewrites nodes, edges or flows has to reach every room, not just the top one.
+ *
+ * This is the thing that makes that rule enforceable rather than advisory. Rather than trusting
+ * each migration to remember, it builds one old file whose rooms carry, at every depth, the exact
+ * data each graph-touching migration exists to rewrite — and insists that all of it came through.
+ */
+describe('a migration reaches every room, not just the top one', () => {
+  /** One graph carrying a v1 walkthrough, a v6 Card, a v7 reply and a v10 BFF, nested `depth` deep. */
+  function graph(depth: number): Record<string, unknown> {
+    const inner: Record<string, unknown> = {
+      nodes: [
+        { id: `bff-${depth}`, type: 'service', serviceKind: 'bff', x: 0, y: 0, width: 160, height: 60, z: 0 },
+        { id: `card-${depth}`, type: 'card', x: 300, y: 0, width: 160, height: 60, z: 0, text: 'Note' },
+      ],
+      edges: [
+        {
+          id: `e-${depth}`,
+          source: `bff-${depth}`,
+          target: `card-${depth}`,
+          sequence: 1,
+          response: 'ok',
+        },
+      ],
+      flows: [],
+      ...(depth === 0 ? {} : { viewport: { x: 0, y: 0, zoom: 1 } }),
+    };
+    if (depth < 3) {
+      const owner: Record<string, unknown> = {
+        id: `owner-${depth}`,
+        type: 'service',
+        x: 600,
+        y: 0,
+        width: 160,
+        height: 60,
+        z: 0,
+        inside: graph(depth + 1),
+      };
+      (inner.nodes as unknown[]).push(owner);
+    }
+    return inner;
+  }
+
+  const migrated = (() => {
+    const result = parseDocument(
+      JSON.stringify({
+        format: DRAFT_FORMAT,
+        version: 1,
+        metadata: { id: 'd1', title: 'Deep', createdAt: 1, updatedAt: 2 },
+        ...graph(0),
+      }),
+    );
+    if (!result.ok) throw new Error('fixture did not open');
+    return result.document;
+  })();
+
+  /** The graph at each of the four levels, outermost first. */
+  const levels = (() => {
+    const out: { nodes: readonly { serviceKind?: string; type: string }[]; edges: readonly { hasResponse?: boolean }[]; flows: readonly unknown[] }[] = [];
+    let graphAt: { nodes: readonly typeof migrated.nodes[number][]; edges: readonly typeof migrated.edges[number][]; flows: readonly unknown[] } = migrated;
+    for (let depth = 0; depth < 4; depth += 1) {
+      out.push(graphAt);
+      const owner = graphAt.nodes.find((n) => n.id.startsWith('owner-'));
+      if (!owner?.inside) break;
+      graphAt = owner.inside;
+    }
+    return out;
+  })();
+
+  it('built a fixture four levels deep', () => {
+    expect(levels).toHaveLength(4);
+  });
+
+  it.each([0, 1, 2, 3])('turns the BFF at depth %i into an API', (depth) => {
+    const bff = levels[depth]!.nodes.find((n) => n.type === 'service' && 'serviceKind' in n && n.serviceKind !== undefined);
+    expect(bff?.serviceKind).toBe('api');
+  });
+
+  it.each([0, 1, 2, 3])('turns the Card at depth %i into a Note', (depth) => {
+    expect(levels[depth]!.nodes.some((n) => n.type === 'card')).toBe(false);
+    expect(levels[depth]!.nodes.some((n) => n.type === 'note')).toBe(true);
+  });
+
+  it.each([0, 1, 2, 3])('gives the reply at depth %i its line', (depth) => {
+    expect(levels[depth]!.edges[0]!.hasResponse).toBe(true);
+  });
+
+  it.each([0, 1, 2, 3])('turns the numbered walkthrough at depth %i into a flow', (depth) => {
+    expect(levels[depth]!.flows).toHaveLength(1);
+  });
+
+  /**
+   * `mapGraphs` runs before validation, so it is the one place a hostile file could exhaust the
+   * stack before the depth cap ever got a say.
+   */
+  it('does not recurse into the ground on a file nested past any sane depth', () => {
+    let nested: Record<string, unknown> = { nodes: [], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+    for (let i = 0; i < 20_000; i += 1) {
+      nested = {
+        nodes: [{ id: `n${i}`, type: 'service', x: 0, y: 0, width: 160, height: 60, z: 0, inside: nested }],
+        edges: [],
+        flows: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+      };
+    }
+    expect(() =>
+      migrateToCurrent({
+        version: 1,
+        metadata: { id: 'd', title: 'Deep', createdAt: 1, updatedAt: 1 },
+        ...nested,
+      }),
+    ).not.toThrow();
+  });
+});

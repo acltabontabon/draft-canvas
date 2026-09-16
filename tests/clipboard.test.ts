@@ -5,6 +5,7 @@ import { addEdges, addNodes, extractFragment } from '../src/document/operations'
 import { LIMITS } from '../src/document/limits';
 import { __resetClipboardSync, __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
+import type { DraftNode, ViewLevel } from '../src/document/types';
 
 const store = useEditorStore;
 
@@ -353,7 +354,7 @@ describe('self-contained subgraph copy', () => {
 describe('copying a shape with an inside', () => {
   beforeEach(reset);
 
-  function platformWithRoom() {
+  function platformWithRoom(level?: ViewLevel): DraftNode {
     const inner = createNode({ type: 'component', x: 10, y: 10, text: 'Controller' });
     const store2 = createNode({ type: 'database', x: 200, y: 10, text: 'Loans' });
     const link = createEdge({ source: inner.id, target: store2.id });
@@ -364,6 +365,7 @@ describe('copying a shape with an inside', () => {
         edges: [link],
         flows: [{ id: 'f_1', title: 'Apply', steps: [{ id: 'fs_1', edgeId: link.id }] }],
         viewport: { x: 0, y: 0, zoom: 1 },
+        ...(level ? { level } : {}),
       },
     };
   }
@@ -415,5 +417,28 @@ describe('copying a shape with an inside', () => {
     store.getState().duplicateSelection();
     // The file already holds maxNodes - 2 + 1 inside room = the copy's three would overflow it.
     expect(store.getState().document.nodes).toHaveLength(LIMITS.maxNodes - 2);
+  });
+
+  /**
+   * What a room says it shows travels with it. Ids are the only thing a copy may change, and the
+   * level is not one — a copy that lost it started deriving one from wherever it was pasted, and a
+   * room deliberately marked as just a drawing quietly stopped being one.
+   */
+  it.each(['component', 'none'] as const)('keeps a room\'s own "%s" level through a duplicate', (level) => {
+    const platform = platformWithRoom(level);
+    store.setState({ document: addNodes(createDocument('Lending'), [platform]) });
+
+    store.getState().setSelection({ nodes: [platform.id], edges: [] });
+    store.getState().duplicateSelection();
+
+    const copy = store.getState().document.nodes[1]!;
+    expect(copy.id).not.toBe(platform.id);
+    expect(copy.inside!.level).toBe(level);
+  });
+
+  it('keeps a room\'s level through the system clipboard', () => {
+    const platform = platformWithRoom('none');
+    const fragment = extractFragment(addNodes(createDocument('Lending'), [platform]), [platform.id]);
+    expect(decodeClipboard(encodeClipboard(fragment))?.nodes[0]?.inside?.level).toBe('none');
   });
 });

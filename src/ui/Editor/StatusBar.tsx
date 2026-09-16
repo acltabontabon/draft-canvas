@@ -5,6 +5,7 @@ import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { motionMs } from '../../lib/motion';
 import { embeddedHost } from '../../host/embeddedHost';
+import { useUiStore } from '../../store/uiStore';
 
 /**
  * The save indicator is the only place the local-first promise is visible while
@@ -127,9 +128,16 @@ function LevelChip() {
   if (!level || level === 'none') return null;
   return (
     <>
-      <span className="dc-status-level" title={LEVEL_HINTS[level]}>
+      {/* The thing that says what this view shows is also the way to say something else — a label
+          you cannot act on is the kind of chrome that makes people go looking for a setting. */}
+      <button
+        type="button"
+        className="dc-status-level"
+        title={`${LEVEL_HINTS[level]} — change what this view shows`}
+        onClick={() => useUiStore.getState().openCommandPaletteAt('View level')}
+      >
         {LEVEL_LABELS[level]}
-      </span>
+      </button>
       <span className="dc-inspector-divider" />
     </>
   );

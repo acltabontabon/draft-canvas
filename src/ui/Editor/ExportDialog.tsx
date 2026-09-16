@@ -18,7 +18,9 @@ import { findFlow, flowIsPlayable } from '../../document/flow';
 import type { DraftDocument } from '../../document/types';
 import { resolveFlowStep } from '../../presentation/useFlowPlayback';
 import { readPreference, writePreference } from '../../lib/preferences';
-import { fileWithLiveViewport, useEditorStore } from '../../store/editorStore';
+import { fileOf, fileWithLiveViewport, useEditorStore } from '../../store/editorStore';
+import { ownerAt } from '../../depth/tree';
+import { displayNameFor } from '../../document/factory';
 import { useUiStore } from '../../store/uiStore';
 import { usePersonality } from '../personality/usePersonality';
 import { useTheme } from '../theme/useTheme';
@@ -77,7 +79,19 @@ export function ExportDialog() {
   const notify = useUiStore((state) => state.notify);
   // Stays mounted after its first open (so in-session choices survive) — but only subscribes to the
   // document while actually open, or every drag frame would re-render a hidden dialog.
-  const document = useEditorStore((state) => (open ? state.document : null));
+  // Inside a shape, a picture of "the canvas" is an ambiguous thing to ask for: the room being
+  // drawn, or the architecture it belongs to. At the top level there is no question, so there is
+  // no control — see `ExportScope` below.
+  const [wholeCanvas, setWholeCanvas] = useState(false);
+  const inRoom = useEditorStore((state) => state.path.length > 0);
+  const roomName = useEditorStore((state) => {
+    const owner = state.path.length > 0 ? ownerAt(fileOf(state), state.path) : undefined;
+    return owner ? displayNameFor(owner) : 'this shape';
+  });
+  const scopeIsWhole = inRoom && wholeCanvas;
+  const document = useEditorStore((state) =>
+    open ? (state.path.length > 0 && wholeCanvas ? fileOf(state) : state.document) : null,
+  );
   const selection = useEditorStore((state) => (open ? state.selection : null));
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const { name } = useTheme();
@@ -108,7 +122,8 @@ export function ExportDialog() {
   // rather than a stale one-time request.
   const selectionRequested = useUiStore((state) => state.exportSelectionRequested);
   const requestExportSelection = useUiStore((state) => state.requestExportSelection);
-  const effectiveSelectionOnly = selectionOnly || selectionRequested;
+  // A selection belongs to the room it was made in, so it means nothing about the whole file.
+  const effectiveSelectionOnly = (selectionOnly || selectionRequested) && !scopeIsWhole;
   const effectiveMode: ExportMode = selectionRequested ? 'image' : mode;
 
   const close = () => {
@@ -339,6 +354,10 @@ export function ExportDialog() {
             <ExportDocumentPanel format={documentFormat} onChange={setDocumentFormat} />
           )}
 
+          {inRoom && effectiveMode !== 'document' && (
+            <ExportScope whole={wholeCanvas} roomName={roomName} onChange={setWholeCanvas} />
+          )}
+
           {effectiveMode === 'image' && (
             <ExportImagePanel
               format={imageFormat}
@@ -406,4 +425,36 @@ function playableStepCount(document: DraftDocument, flowId: string): number {
   const edgesById = new Map(document.edges.map((edge) => [edge.id, edge]));
   const nodesById = new Map(document.nodes.map((node) => [node.id, node]));
   return flow.steps.filter((step, index) => resolveFlowStep(step, index, index + 1, edgesById, nodesById) !== null).length;
+}
+
+/**
+ * This room, or the whole canvas.
+ *
+ * Only ever on screen while standing inside a shape: at the top level there is one answer, and a
+ * control offering it would be a question about a thing that is not in doubt. A canvas file always
+ * carries every room, so the choice is about pictures — which is where "what you see" and "the
+ * architecture this belongs to" genuinely differ.
+ */
+function ExportScope({
+  whole,
+  roomName,
+  onChange,
+}: {
+  whole: boolean;
+  roomName: string;
+  onChange: (whole: boolean) => void;
+}) {
+  return (
+    <fieldset className="dc-export-scope">
+      <legend>What to export</legend>
+      <label>
+        <input type="radio" name="dc-export-scope" checked={!whole} onChange={() => onChange(false)} />
+        <span>Inside {roomName}</span>
+      </label>
+      <label>
+        <input type="radio" name="dc-export-scope" checked={whole} onChange={() => onChange(true)} />
+        <span>The whole canvas</span>
+      </label>
+    </fieldset>
+  );
 }

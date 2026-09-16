@@ -14,6 +14,9 @@ function reset() {
   __resetInteraction();
   useEditorStore.setState({
     document: createDocument('Commands'),
+    path: [],
+    outer: null,
+    liveViewport: null,
     history: { past: [], future: [] },
     selection: { nodes: [], edges: [] },
     clipboard: null,
@@ -731,5 +734,95 @@ describe('architecture starters', () => {
   it('is not on offer while presenting', () => {
     useEditorStore.getState().setMode('present');
     expect(ids(stubContext()).some((id) => id.startsWith('starter-'))).toBe(false);
+  });
+});
+
+/**
+ * There are four ways into a shape — the shortcut, the popover's primary row, the context menu and
+ * the palette — and they have to be the same move. They were not: only the shortcut went through
+ * the navigation primitives, so from the other three an open label was never committed (the text
+ * landed in a room nobody was looking at, or nowhere at all) and backing out left nothing
+ * selected, which meant the way you had just come could not be re-entered with the shortcut.
+ */
+describe('every way in and out is the same move', () => {
+  beforeEach(reset);
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  function platform() {
+    const node = useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0, text: 'Lending Platform' });
+    useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+    return node;
+  }
+
+  it.each(['palette', 'popover'] as const)('goes inside from the %s and comes back with the shape selected', async (surface) => {
+    const node = platform();
+    const ctx = stubContext();
+    const enter =
+      surface === 'palette'
+        ? commandsFor(ctx).find((c) => c.id === 'look-inside')!
+        : primaryCommandsFor(ctx, node).find((c) => c.id === 'look-inside')!;
+
+    enter.run(ctx);
+    await settle();
+    expect(useEditorStore.getState().path).toEqual([node.id]);
+    // Entering never selects anything in the room you arrive in.
+    expect(useEditorStore.getState().selection.nodes).toEqual([]);
+
+    useEditorStore.getState().addNode({ type: 'component', x: 0, y: 0, text: 'Controller' });
+    const leave = commandsFor(stubContext()).find((c) => c.id === 'back-out')!;
+    leave.run(stubContext());
+    await settle();
+    expect(useEditorStore.getState().path).toEqual([]);
+    // Back where you came from, with the shape you came through selected — so the shortcut works.
+    expect(useEditorStore.getState().selection.nodes).toEqual([node.id]);
+  });
+
+  it('reads where you are standing when it runs, not when the palette was opened', async () => {
+    const node = platform();
+    const ctx = stubContext();
+    commandsFor(ctx).find((c) => c.id === 'look-inside')!.run(ctx);
+    await settle();
+    expect(useEditorStore.getState().path).toEqual([node.id]);
+    useEditorStore.getState().addNode({ type: 'component', x: 0, y: 0, text: 'Controller' });
+
+    // The list was built inside the room; by the time it runs, the user is back at the top.
+    const staleCtx = stubContext();
+    const leave = commandsFor(staleCtx).find((c) => c.id === 'back-out')!;
+    useEditorStore.getState().exitTo(0);
+    leave.run(staleCtx);
+    await settle();
+    expect(useEditorStore.getState().path).toEqual([]);
+  });
+});
+
+/**
+ * A shape's first offered action follows the altitude of the view, for the same reason its
+ * suggestions do: what a system keeps its data in is a level below a picture of the business, and
+ * the popover's first row is the loudest place to say it.
+ */
+describe('what a shape offers first, at a known altitude', () => {
+  beforeEach(reset);
+
+  function service() {
+    const node = useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0, text: 'Lending Platform' });
+    useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+    return node;
+  }
+
+  it('does not lead with a data store in a system overview', () => {
+    const node = service();
+    useEditorStore.getState().setViewLevel('context');
+    const ids = primaryCommandsFor(stubContext(), useEditorStore.getState().document.nodes[0]!).map((c) => c.id);
+    expect(ids).not.toContain('add-data-store');
+    expect(ids).toContain('look-inside');
+    expect(node.type).toBe('service');
+  });
+
+  it.each([undefined, 'none', 'container', 'component'] as const)('offers it everywhere else (%s)', (level) => {
+    service();
+    useEditorStore.getState().setViewLevel(level === undefined ? undefined : level);
+    const ids = primaryCommandsFor(stubContext(), useEditorStore.getState().document.nodes[0]!).map((c) => c.id);
+    expect(ids).toContain('add-data-store');
   });
 });

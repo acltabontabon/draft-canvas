@@ -8,12 +8,17 @@ All notable changes to Draft Canvas are documented here.
 
 - Look inside a shape to draw the architecture that runs in it: ⌘↓, or Look inside from the shape
   itself, the right-click menu or ⌘K. ⌘↑ comes back out, and so does Escape.
-- A shape with something inside it carries a small second sheet at its corner. Inside, a stack of
-  sheets in the top corner names where you are; click one to go back.
+- A shape with something inside it carries a small second sheet at its corner. Inside, the drawing
+  sits on a sheet named after the shape it belongs to, and the top corner shows the way back out —
+  click any step of it to go there. Arriving somewhere always shows what is there.
 - Undo and redo work across the whole canvas: undoing something you did inside a shape takes you
   back in to show you.
-- Canvases can say what they show — System context, Containers or Components — from ⌘K. Where they
-  do, the suggestions and the connector picker follow, and the status bar names the level.
+- Canvases can say what they show — System context, Containers or Components — from ⌘K, or by
+  clicking what the status bar says. Where they do, the suggestions and the connector picker follow
+  and stay at that altitude: in a system overview, what a system stores and what it publishes are
+  offered a level down, where they belong. Draw a system and the people around it, look inside it,
+  and Draft Canvas asks once whether to treat it that way.
+- Exporting a picture from inside a shape asks whether you want that room or the whole canvas.
 - A Learn recipe for it: Look inside a shape.
 
 ### Changed

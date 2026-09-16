@@ -19,6 +19,9 @@ function withBoundary(...members: Omit<Parameters<typeof createNode>[0], 'parent
   const nodes: DraftNode[] = members.map((input) => createNode({ ...input, parentId: boundary.id }));
   store.setState({
     document: { ...createDocument('Boundaries'), nodes: [boundary, ...nodes] },
+    path: [],
+    outer: null,
+    liveViewport: null,
     history: { past: [], future: [] },
     selection: { nodes: [], edges: [] },
     clipboard: null,

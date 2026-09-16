@@ -343,22 +343,40 @@ function reidentifyInside(inside: DraftInside): DraftInside {
     }),
   }));
 
-  return { nodes, edges, flows, viewport: inside.viewport };
+  const next: DraftInside = { nodes, edges, flows, viewport: inside.viewport };
+  // What the room says it shows is part of the room, not part of its identity: a copy that lost it
+  // would start deriving a level from whatever it was pasted under, and a room deliberately marked
+  // as just a drawing would quietly stop being one.
+  if (inside.level !== undefined) next.level = inside.level;
+  return next;
 }
 
 /** What one node costs against the document limits: itself, plus everything in its rooms. */
-function insideCost(node: DraftNode): { nodes: number; edges: number } {
+export function insideCost(node: DraftNode): { nodes: number; edges: number; flows: number } {
   let nodes = 1;
   let edges = 0;
+  let flows = 0;
   if (node.inside) {
     edges += node.inside.edges.length;
+    flows += node.inside.flows.length;
     for (const inner of node.inside.nodes) {
       const cost = insideCost(inner);
       nodes += cost.nodes;
       edges += cost.edges;
+      flows += cost.flows;
     }
   }
-  return { nodes, edges };
+  return { nodes, edges, flows };
+}
+
+/** What a set of nodes costs against the document limits, rooms and all. */
+export function costOf(nodes: readonly DraftNode[]): { nodes: number; edges: number; flows: number } {
+  let total = { nodes: 0, edges: 0, flows: 0 };
+  for (const node of nodes) {
+    const cost = insideCost(node);
+    total = { nodes: total.nodes + cost.nodes, edges: total.edges + cost.edges, flows: total.flows + cost.flows };
+  }
+  return total;
 }
 
 /** Re-identifies a fragment and offsets it, so paste never collides with the original. */

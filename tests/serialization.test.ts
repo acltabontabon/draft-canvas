@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createAttachment, createDocument, createEdge, createNode } from '../src/document/factory';
-import { addEdges, addNodes } from '../src/document/operations';
+import { addEdges, addNodes, extractFragment, pasteFragment } from '../src/document/operations';
 import { addFlow, createFlow } from '../src/document/flow';
 import { deserializeDocument, serializeDocument, fileNameFor } from '../src/export/project';
 import { CURRENT_VERSION } from '../src/document/types';
@@ -191,4 +191,123 @@ describe('.draftcanvas round trip', () => {
     expect(fileNameFor('決済フロー', '.png')).toBe('決済フロー.png');
     expect(fileNameFor('a\\b:c*d?"e<f>g|h')).toBe('a-b-c-d-e-f-g-h.draftcanvas');
   });
+});
+
+/**
+ * A round trip has to be a fixed point, whatever the file holds.
+ *
+ * Two hand-built fixtures prove the shapes someone thought of. This generates nested documents
+ * instead and insists that writing one out and reading it back changes nothing — which is the
+ * check that would have caught a room quietly losing its level on the way through.
+ */
+describe('writing a nested canvas out and reading it back', () => {
+  /** A tiny deterministic PRNG, so a failure is always the same failure. */
+  function rng(seed: number) {
+    let state = seed;
+    return () => {
+      state = (state * 1_664_525 + 1_013_904_223) % 4_294_967_296;
+      return state / 4_294_967_296;
+    };
+  }
+
+  const KINDS = ['service', 'database', 'queue', 'component', 'actor', 'note'] as const;
+  const LEVELS = [undefined, 'context', 'container', 'component', 'none'] as const;
+
+  function graph(next: () => number, depth: number, tag: string) {
+    const count = 1 + Math.floor(next() * 3);
+    const nodes = Array.from({ length: count }, (_, i) =>
+      createNode({
+        type: KINDS[Math.floor(next() * KINDS.length)]!,
+        x: Math.floor(next() * 800),
+        y: Math.floor(next() * 600),
+        text: `${tag}-${i}`,
+      }),
+    );
+    const edges = nodes.length > 1 ? [createEdge({ source: nodes[0]!.id, target: nodes[1]!.id, label: `${tag} link` })] : [];
+    const flows = edges.length > 0 ? [addFlowStep(createFlow({ title: `${tag} flow` }), edges[0]!.id)] : [];
+
+    // Only the kinds that may hold one, so nothing is dropped as a repair rather than a round trip.
+    if (depth < 3) {
+      for (const node of nodes) {
+        if (node.type !== 'service' && node.type !== 'component') continue;
+        if (next() < 0.5) continue;
+        const inner = graph(next, depth + 1, `${tag}${depth}`);
+        node.inside = {
+          nodes: inner.nodes,
+          edges: inner.edges,
+          flows: inner.flows,
+          viewport: { x: Math.floor(next() * 200), y: Math.floor(next() * 200), zoom: 1 },
+          ...(inner.level === undefined ? {} : { level: inner.level }),
+        };
+      }
+    }
+    const level = LEVELS[Math.floor(next() * LEVELS.length)];
+    return { nodes, edges, flows, ...(level === undefined ? {} : { level }) };
+  }
+
+  function addFlowStep(flow: ReturnType<typeof createFlow>, edgeId: string) {
+    return { ...flow, steps: [{ id: `fs_${edgeId}`, edgeId }] };
+  }
+
+  it.each([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => [seed] as const))(
+    'is a fixed point for a generated canvas (seed %i)',
+    (seed) => {
+      const next = rng(seed);
+      const built = graph(next, 0, 'n');
+      const document = { ...createDocument('Generated'), ...built };
+
+      const once = deserializeDocument(serializeDocument(document));
+      expect(once.ok).toBe(true);
+      if (!once.ok) return;
+      expect(once.repairs).toEqual([]);
+
+      const twice = deserializeDocument(serializeDocument(once.document));
+      expect(twice.ok).toBe(true);
+      if (!twice.ok) return;
+      // Reading what was written changes nothing the second time either.
+      expect(serializeDocument(twice.document)).toBe(serializeDocument(once.document));
+      expect(twice.document.nodes).toEqual(once.document.nodes);
+    },
+  );
+
+  /**
+   * Ids are the only thing a copy may change. Anything else it changes is data loss, and the one
+   * that escaped review was a room's own level.
+   */
+  it.each([1, 2, 3, 4, 5].map((seed) => [seed] as const))(
+    'changes nothing but ids when a shape with rooms is duplicated (seed %i)',
+    (seed) => {
+      const next = rng(seed);
+      const built = graph(next, 1, 'c');
+      const owner = createNode({ type: 'service', x: 0, y: 0, text: 'Owner' });
+      owner.inside = {
+        nodes: built.nodes,
+        edges: built.edges,
+        flows: built.flows,
+        viewport: { x: 10, y: 20, zoom: 1 },
+        ...(built.level === undefined ? {} : { level: built.level }),
+      };
+
+      const document = addNodes(createDocument('Copying'), [owner]);
+      const pasted = pasteFragment(document, extractFragment(document, [owner.id]), { x: 40, y: 40 });
+      expect(pasted.truncated).toBe(false);
+      const copy = pasted.doc.nodes.find((n) => n.id !== owner.id)!;
+
+      const stripIds = (value: unknown): unknown => {
+        if (Array.isArray(value)) return value.map(stripIds);
+        if (!value || typeof value !== 'object') return value;
+        const out: Record<string, unknown> = {};
+        for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+          if (key === 'id' || key === 'parentId' || key === 'source' || key === 'target') continue;
+          if (key === 'edgeId' || key === 'extraEdgeIds' || key === 'extraNodeIds') continue;
+          // Paste offsets the copy; the room inside it is untouched.
+          if (key === 'x' || key === 'y') continue;
+          out[key] = stripIds(inner);
+        }
+        return out;
+      };
+
+      expect(stripIds(copy.inside)).toEqual(stripIds(owner.inside));
+    },
+  );
 });

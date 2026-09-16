@@ -68,7 +68,10 @@ Each of these has a failure mode that is silent, delayed, or both.
   opens. Every label a recipe names must be a label the product actually shows.
 - **`version` is read only in `src/document/migrate.ts`.** Nothing else may branch on it. Since v12 a
   document is a *tree* of graphs (a node may own the architecture inside it), so a migration that
-  touches nodes, edges or flows has to reach every room — use `mapGraphs`, not `doc.nodes`.
+  touches nodes, edges or flows has to reach every room: write it against one graph and wrap it in
+  `everyRoom` in the `MIGRATIONS` table. `migrate.test.ts` builds an old file carrying the data each
+  of those migrations exists to rewrite at all four levels and insists every level came through, so
+  forgetting is a failing test rather than a silently half-migrated file.
 - **A room is reached only through `src/depth/tree.ts` and the store's lens.** `editorStore`'s
   `document` is the room being edited (the whole file at the top, by identity); `fileOf` reassembles
   the file, and only the handful of places that persist or export a *file* — autosave, the VS Code

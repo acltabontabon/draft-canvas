@@ -215,6 +215,12 @@ export interface UiStore {
   /** Whether the ⌘K command palette is showing. See `CommandPalette.tsx`. */
   commandPaletteOpen: boolean;
   /**
+   * What the palette should already have typed in it when it opens, so a surface that knows which
+   * command it means can hand the user straight to it rather than to a blank search. Cleared by
+   * every ordinary open, so ⌘K is always a fresh start.
+   */
+  commandPaletteQuery: string;
+  /**
    * The node or edge id the palette's "Jump to" just landed on, so its view can flash
    * once. Cleared by the palette itself a moment later — the same shape as `editRequestId`: a
    * one-shot request into memoized views that have no imperative API.
@@ -330,6 +336,7 @@ export interface UiStore {
    *  open. */
   markProductReleaseSeen: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  openCommandPaletteAt: (query: string) => void;
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
   /** Opens Learn — on `recipeId` when given (a deep link always wins), else where it was left. */
@@ -409,6 +416,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   updateReady: false,
   lastSeenProductRelease: readLastSeenRelease(),
   commandPaletteOpen: false,
+  commandPaletteQuery: '',
   exportSelectionRequested: false,
   jumpFlashId: null,
   learnOpen: false,
@@ -530,7 +538,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
     markLastSeenRelease();
     set({ lastSeenProductRelease: PRODUCT.version });
   },
-  setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
+  setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen, commandPaletteQuery: '' }),
+  openCommandPaletteAt: (commandPaletteQuery) => set({ commandPaletteOpen: true, commandPaletteQuery }),
   requestExportSelection: (exportSelectionRequested) => set({ exportSelectionRequested }),
   setJumpFlashId: (jumpFlashId) =>
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),

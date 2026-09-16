@@ -282,18 +282,31 @@ const WORKER_INDEXES = defineFanOut(
  * to a Data Store gets another Data Store last, a Cache not). Every row is a plain matrix default:
  * `service>database`/`>cache` writes, `>topic`/`>queue` publishes, `>service`/`>external` calls —
  * a Worker reaches the same rows through the matrix's service fallback.
+ *
+ * Four of them go quiet in a view that has said it is a system overview. What a system stores and
+ * what it publishes are true, but they are a level down from the conversation: answering "what
+ * next?" there with a Data Store is how a picture of a business stops being one. The two that stay
+ * — another system, and a system someone else runs — are the answer at that altitude.
  */
 const SERVICE_NEXT = defineFanOut(
   ['service', 'worker'],
   () => false,
   [
-    { id: 'service-data-store', tier: 'secondary', label: 'Data Store', reason: 'Services usually own their data.', node: { type: 'database' } },
+    {
+      id: 'service-data-store',
+      tier: 'secondary',
+      label: 'Data Store',
+      reason: 'Services usually own their data.',
+      node: { type: 'database' },
+      silentAt: NOT_IN_AN_OVERVIEW,
+    },
     {
       id: 'service-topic',
       tier: 'secondary',
       label: 'Topic',
       reason: 'Publish events other parts of the system react to.',
       node: { type: 'queue', queueKind: 'topic' },
+      silentAt: NOT_IN_AN_OVERVIEW,
     },
     {
       id: 'service-queue',
@@ -301,6 +314,7 @@ const SERVICE_NEXT = defineFanOut(
       label: 'Queue',
       reason: 'Hand work off to be processed later.',
       node: { type: 'queue', queueKind: 'queue' },
+      silentAt: NOT_IN_AN_OVERVIEW,
     },
     { id: 'service-service', tier: 'secondary', label: 'Service', reason: 'Call another service.', node: { type: 'service' } },
     {
@@ -309,6 +323,7 @@ const SERVICE_NEXT = defineFanOut(
       label: 'Cache',
       reason: 'Keep hot reads close.',
       node: { type: 'database', databaseKind: 'cache' },
+      silentAt: NOT_IN_AN_OVERVIEW,
     },
     {
       id: 'service-external',
@@ -335,8 +350,16 @@ const ACTOR_NEXT = defineFanOut(
       label: 'Gateway',
       reason: 'Requests usually enter through a gateway.',
       node: { type: 'service', serviceKind: 'gateway' },
+      silentAt: NOT_IN_AN_OVERVIEW,
     },
-    { id: 'actor-api', tier: 'secondary', label: 'API', reason: 'Or call an API directly.', node: { type: 'service', serviceKind: 'api' } },
+    {
+      id: 'actor-api',
+      tier: 'secondary',
+      label: 'API',
+      reason: 'Or call an API directly.',
+      node: { type: 'service', serviceKind: 'api' },
+      silentAt: NOT_IN_AN_OVERVIEW,
+    },
   ],
   { surfaces: 'invoke' },
 );
