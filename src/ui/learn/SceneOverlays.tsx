@@ -39,7 +39,7 @@ function Control({ control }: { control: SceneControl }) {
     case 'button':
       return (
         <span className="dc-learn-ctl dc-learn-ctl-button" data-pressed={control.pressed ? 'true' : undefined}>
-          {control.icon && <Icon name={control.icon} size={12} />}
+          {control.icon === 'depth' ? <DepthMark /> : control.icon && <Icon name={control.icon} size={12} />}
           {control.text}
         </span>
       );
@@ -66,8 +66,40 @@ function Control({ control }: { control: SceneControl }) {
   }
 }
 
+/** Three stacked layers — the same mark the real "Look inside" button and depth map carry. */
+function DepthMark() {
+  return (
+    <svg className="dc-learn-depth-mark" viewBox="0 0 18 16" aria-hidden="true">
+      <path d="M9 0.5L16.5 4L9 7.5L1.5 4Z" />
+      <path d="M9 4L16.5 7.5L9 11L1.5 7.5Z" />
+      <path d="M9 7.5L16.5 11L9 14.5L1.5 11Z" data-current="true" />
+    </svg>
+  );
+}
+
 export function Overlay({ overlay }: { overlay: SceneOverlay }) {
   switch (overlay.kind) {
+    case 'depth':
+      return (
+        <div className="dc-learn-ui dc-learn-depth">
+          <span className="dc-learn-depth-head">
+            <DepthMark />
+            Depth
+          </span>
+          {overlay.trail.map((name, i) => {
+            const here = i === overlay.trail.length - 1;
+            return (
+              <span key={name} className="dc-learn-depth-row" data-current={here ? 'true' : undefined}>
+                <span className="dc-learn-depth-plane" aria-hidden="true" />
+                <span className="dc-learn-depth-name">
+                  {name}
+                  {here && <small>You are here</small>}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      );
     case 'popover':
       return (
         <div className="dc-learn-ui dc-learn-pop" data-placement={overlay.placement ?? 'above'} style={at(overlay.at)}>

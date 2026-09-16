@@ -155,7 +155,7 @@ export const RECIPES = [
       'nested',
     ],
     keys: [['mod', 'down'], ['mod', 'up']],
-    note: 'What C4 calls Context, Container and Component — one level down each time.',
+    note: 'C4-aware: System context, then Containers, then Components — one level down each time.',
     related: ['boundary', 'starters'],
   },
   {

@@ -119,14 +119,22 @@ const borrower = actor('borrower', 44, 40, 'Borrower');
 const platform = service('platform', 200, 52, 'Lending Platform');
 const core = service('core', 372, 52, 'Core Banking', { serviceKind: 'external' });
 
-const app = service('app', 60, 40, 'Mobile App', { width: 128, height: 52 });
-const api = service('api', 228, 40, 'Lending API', { serviceKind: 'api', width: 128, height: 52 });
-const loans = service('loans', 228, 150, 'Loan Service', { width: 128, height: 52 });
-const loansDb = store('loans-db', 240, 256, 'Loans', { width: 104, height: 64 });
+const app = service('app', 190, 44, 'Mobile App', { width: 128, height: 52 });
+const api = service('api', 360, 44, 'Lending API', { serviceKind: 'api', width: 128, height: 52 });
+const loans = service('loans', 360, 154, 'Loan Service', { width: 128, height: 52 });
+const loansDb = store('loans-db', 372, 260, 'Loans', { width: 104, height: 64 });
+
+const insidePopover = (pressed: boolean) =>
+  ({
+    kind: 'popover',
+    at: { x: 176, y: 128 },
+    placement: 'below',
+    controls: [{ type: 'button', text: 'Look inside', icon: 'depth', pressed }],
+  }) as const;
 
 export const lookInside: Scene = {
   label:
-    'A system context diagram: a borrower, the Lending Platform and Core Banking. The platform is selected, Look inside is chosen, and the canvas becomes what runs inside it — an app, an API, a service and its data store — with a trail naming where you are.',
+    'A system context diagram: a borrower, the Lending Platform and Core Banking. The platform is selected and Look inside is chosen: the canvas becomes what runs inside it — an app, an API, a service and its data store — while the depth map in the corner shows the whole canvas above and the platform as where you are. Command and up arrow comes back out to the big picture.',
   frames: [
     {
       ms: 900,
@@ -137,29 +145,11 @@ export const lookInside: Scene = {
       },
       cursor: { ...REST, travel: 0 },
     },
-    { ms: 700, step: 'Ask what is inside', cursor: { ...middle(platform), click: true }, select: ['platform'] },
+    { ms: 700, step: 'Look inside', cursor: { ...middle(platform), click: true }, select: ['platform'] },
+    { ms: 1100, overlay: insidePopover(false), cursor: { x: 232, y: 162 } },
+    { ms: 500, overlay: insidePopover(true), cursor: { x: 232, y: 162, click: true } },
     {
-      ms: 1100,
-      overlay: {
-        kind: 'popover',
-        at: { x: 176, y: 128 },
-        placement: 'below',
-        controls: [{ type: 'button', text: 'Look inside', icon: 'plus' }],
-      },
-      cursor: { x: 232, y: 162 },
-    },
-    {
-      ms: 500,
-      overlay: {
-        kind: 'popover',
-        at: { x: 176, y: 128 },
-        placement: 'below',
-        controls: [{ type: 'button', text: 'Look inside', icon: 'plus', pressed: true }],
-      },
-      cursor: { x: 232, y: 162, click: true },
-    },
-    {
-      ms: 2400,
+      ms: 1900,
       step: 'Draw what runs there',
       remove: ['borrower', 'platform', 'core'],
       select: [],
@@ -168,6 +158,17 @@ export const lookInside: Scene = {
         edges: [edge('e3', 'app', 'api'), edge('e4', 'api', 'loans'), edge('e5', 'loans', 'loans-db')],
       },
       cursor: null,
+    },
+    { ms: 2200, overlay: { kind: 'depth', trail: ['Lending', 'Lending Platform'] } },
+    { ms: 1000, step: 'Come back out', overlay: { kind: 'keys', keys: ['mod', 'up'] } },
+    {
+      ms: 2000,
+      remove: ['app', 'api', 'loans', 'loans-db'],
+      add: {
+        nodes: [borrower, platform, core],
+        edges: [edge('e1', 'borrower', 'platform'), edge('e2', 'platform', 'core')],
+      },
+      select: ['platform'],
     },
   ],
 };

@@ -835,6 +835,7 @@ body:has(.dc-modal-backdrop, .dc-palette-backdrop) .dc-learn-scrim {
 }
 
 .dc-learn-pop,
+.dc-learn-depth,
 .dc-learn-picker,
 .dc-learn-palette,
 .dc-learn-flowbar,
@@ -1507,4 +1508,101 @@ body:has(.dc-modal-backdrop, .dc-palette-backdrop) .dc-learn-scrim {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ---- the depth map, cut down to the path you came down ---- */
+.dc-learn-depth {
+  top: calc(12 * var(--u));
+  left: calc(12 * var(--u));
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+  padding: calc(8 * var(--u)) calc(12 * var(--u)) calc(10 * var(--u)) calc(9 * var(--u));
+  border-radius: calc(10 * var(--u));
+  transform-origin: top left;
+}
+
+.dc-learn-depth-head {
+  display: flex;
+  align-items: center;
+  gap: calc(7 * var(--u));
+  color: var(--dc-text-faint);
+  font-size: calc(10.5 * var(--u));
+  font-weight: 500;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+}
+
+.dc-learn-stage .dc-learn-depth-mark {
+  width: calc(14 * var(--u));
+  height: calc(13 * var(--u));
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.dc-learn-depth-mark [data-current='true'] {
+  fill: var(--dc-selection);
+  stroke: var(--dc-selection);
+}
+
+.dc-learn-depth-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: calc(10 * var(--u));
+}
+
+.dc-learn-depth-row + .dc-learn-depth-row::before {
+  content: '';
+  position: absolute;
+  left: calc(16 * var(--u));
+  top: calc(-12 * var(--u));
+  width: 1px;
+  height: calc(14 * var(--u));
+  background: var(--dc-border-strong);
+}
+
+.dc-learn-depth-plane {
+  width: calc(22 * var(--u));
+  height: calc(13 * var(--u));
+  margin: calc(4 * var(--u)) calc(5 * var(--u));
+  border: 1px solid var(--dc-border-strong);
+  border-radius: calc(3 * var(--u));
+  background: var(--dc-surface);
+  transform: rotateX(56deg) rotateZ(-38deg);
+}
+
+.dc-learn-depth-row[data-current='true'] .dc-learn-depth-plane {
+  border-color: var(--dc-selection);
+  background: var(--dc-selection-soft);
+  box-shadow: 0 0 0 calc(2 * var(--u)) var(--dc-selection-soft);
+}
+
+.dc-learn-depth-name {
+  display: flex;
+  flex-direction: column;
+  color: var(--dc-text-muted);
+  font-size: calc(11.5 * var(--u));
+  line-height: 1.2;
+}
+
+.dc-learn-depth-row[data-current='true'] .dc-learn-depth-name {
+  color: var(--dc-text);
+  font-weight: 600;
+}
+
+.dc-learn-depth-name small {
+  color: var(--dc-text-faint);
+  font-size: calc(9.5 * var(--u));
+  font-weight: 500;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+}
+
+.dc-learn-stage .dc-learn-ctl-button .dc-learn-depth-mark {
+  width: calc(12 * var(--u));
+  height: calc(11 * var(--u));
 }

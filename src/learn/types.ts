@@ -66,7 +66,7 @@ export interface SceneCursor extends ScenePoint {
 /** A control inside a mocked popover. Only the one or two that matter to the recipe, never the lot. */
 export type SceneControl =
   | { type: 'select'; label: string; value: string; options?: readonly string[]; highlight?: string }
-  | { type: 'button'; text: string; icon?: IconName; pressed?: boolean }
+  | { type: 'button'; text: string; icon?: IconName | 'depth'; pressed?: boolean }
   | { type: 'chip'; text: string; pressed?: boolean; accent?: boolean }
   | { type: 'toggle'; label: string; on: boolean; pressed?: boolean };
 
@@ -79,7 +79,9 @@ export type SceneOverlay =
   | { kind: 'palette'; query: string; rows: readonly { title: string; hint?: string }[]; highlight?: number }
   | { kind: 'flowbar'; step: number; total: number; caption: string }
   | { kind: 'code'; at: ScenePoint; title: string; lines: readonly string[] }
-  | { kind: 'marquee'; at: ScenePoint; width: number; height: number };
+  | { kind: 'marquee'; at: ScenePoint; width: number; height: number }
+  /** The depth map in the canvas corner: the whole canvas first, down to the room you are in. */
+  | { kind: 'depth'; trail: readonly string[] };
 
 /**
  * One beat of a scene. Frames are *patches*: nodes, edges, selection and the cursor carry over to the
