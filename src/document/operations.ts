@@ -369,6 +369,14 @@ export function insideCost(node: DraftNode): { nodes: number; edges: number; flo
   return { nodes, edges, flows };
 }
 
+/** How many rooms deep a node goes: 0 for a plain shape, 1 for one whose room holds only plain shapes. */
+export function insideHeight(node: DraftNode): number {
+  if (!node.inside) return 0;
+  let deepest = 0;
+  for (const inner of node.inside.nodes) deepest = Math.max(deepest, insideHeight(inner));
+  return 1 + deepest;
+}
+
 /** What a set of nodes costs against the document limits, rooms and all. */
 export function costOf(nodes: readonly DraftNode[]): { nodes: number; edges: number; flows: number } {
   let total = { nodes: 0, edges: 0, flows: 0 };
@@ -434,9 +442,13 @@ export function pasteFragment(
   doc: DraftDocument,
   fragment: Clipboard,
   offset: { x: number; y: number },
-  /** What the whole file already holds, rooms included. Defaults to this room alone. */
-  used: { nodes: number; edges: number } = { nodes: doc.nodes.length, edges: doc.edges.length },
-): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[]; truncated: boolean } {
+  /** What the whole file already holds, rooms included, and how deep `doc` sits. Defaults to this
+   *  room alone, at the top. */
+  used: { nodes: number; edges: number; flows?: number; depth?: number } = {
+    nodes: doc.nodes.length,
+    edges: doc.edges.length,
+  },
+): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[]; truncated: boolean; tooDeep: boolean } {
   const instantiated = instantiateFragment(fragment, offset);
   // `LIMITS.maxNodes`/`maxEdges` are otherwise only enforced on a document taken as a whole (file
   // import, clipboard decode) — pasting/duplicating repeatedly into an already-open document has
@@ -445,14 +457,26 @@ export function pasteFragment(
   const edgeRoom = Math.max(0, LIMITS.maxEdges - used.edges);
   // A pasted shape costs whatever it brings with it: a Service with a room full of components is
   // not one node, and the cap has to know that or a paste could put the file over its own limit.
+  // Flows and depth the same way: a room's flows count against the file, and a shape pasted into a
+  // room already a few levels down must not carry rooms past the deepest a file keeps — the
+  // reader would drop them on the next load.
+  const flowRoom = Math.max(0, LIMITS.maxFlows - (used.flows ?? doc.flows.length));
+  const depthRoom = LIMITS.maxInsideDepth - (used.depth ?? 0);
   let keptCount = 0;
   let spentNodes = 0;
   let spentEdges = 0;
+  let spentFlows = 0;
+  let tooDeep = false;
   for (const node of instantiated.nodes) {
+    if (insideHeight(node) > depthRoom) {
+      tooDeep = true;
+      break;
+    }
     const cost = insideCost(node);
-    if (spentNodes + cost.nodes > nodeRoom || spentEdges + cost.edges > edgeRoom) break;
+    if (spentNodes + cost.nodes > nodeRoom || spentEdges + cost.edges > edgeRoom || spentFlows + cost.flows > flowRoom) break;
     spentNodes += cost.nodes;
     spentEdges += cost.edges;
+    spentFlows += cost.flows;
     keptCount += 1;
   }
   const truncated = keptCount < instantiated.nodes.length || instantiated.edges.length > edgeRoom - spentEdges;
@@ -479,6 +503,7 @@ export function pasteFragment(
     nodeIds: created.nodes.map((n) => n.id),
     edgeIds: created.edges.map((e) => e.id),
     truncated,
+    tooDeep,
   };
 }
 

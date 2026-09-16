@@ -132,7 +132,10 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
       : null,
   );
   const measured = useStore((state) => (selectedNodeId ? state.nodeLookup.has(selectedNodeId) : false));
-  const open = selectedNodeId !== null && measured;
+  // Not while stepping between rooms: the camera is still gliding, and backing out selects the shape
+  // it lands on — the popover waits for the move to settle instead of chasing it.
+  const moving = useUiStore((state) => state.depthTransition !== null);
+  const open = selectedNodeId !== null && measured && !moving;
   const { mounted, closing } = usePopoverPresence(open, POPOVER_EXIT_MS);
   // The element it was showing, kept for the fade-out after selection has already moved on.
   const shownNodeId = useLastPresent(open ? selectedNodeId : null);

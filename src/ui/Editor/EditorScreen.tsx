@@ -865,6 +865,11 @@ function useKeyboard({
           }
           case 'arrowup':
             if (event.shiftKey || event.altKey || state.path.length === 0) return;
+            // Held down, the key would climb all the way out one room per repeat.
+            if (event.repeat) {
+              event.preventDefault();
+              return;
+            }
             event.preventDefault();
             void backOut();
             return;

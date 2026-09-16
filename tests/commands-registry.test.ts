@@ -826,3 +826,26 @@ describe('what a shape offers first, at a known altitude', () => {
     expect(ids).toContain('add-data-store');
   });
 });
+
+describe('View level… inside a shape', () => {
+  beforeEach(reset);
+
+  function chooseNone() {
+    const command = commandsFor(stubContext()).find((c) => c.id === 'view-level');
+    const stage = command?.run(stubContext());
+    if (!stage || !('options' in stage)) throw new Error('expected a stage');
+    stage.options.find((o) => o.id === 'view-level:none')!.run(stubContext());
+  }
+
+  it('says "nothing in particular" out loud under a known level, instead of inheriting it again', () => {
+    const editor = useEditorStore.getState();
+    const system = editor.addNode({ type: 'service', x: 0, y: 0 });
+    useEditorStore.getState().setViewLevel('context');
+    useEditorStore.getState().enterInside(system.id);
+    useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0 });
+    useEditorStore.getState().setViewLevel('container');
+
+    chooseNone();
+    expect(useEditorStore.getState().document.level).toBe('none');
+  });
+});

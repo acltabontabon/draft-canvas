@@ -74,13 +74,17 @@ export function nextLevel(level: ViewLevel | undefined): ViewLevel | undefined {
  * behaves exactly as it did before levels existed.
  */
 export function effectiveLevel(file: DraftDocument, path: DepthPath): ViewLevel | undefined {
-  let level = normalize(file.level);
+  let level = file.level;
   for (let depth = 1; depth <= path.length; depth += 1) {
     const owner = ownerAt(file, path.slice(0, depth));
-    const stored = normalize(owner?.inside?.level);
-    level = stored ?? nextLevel(level);
+    level = owner?.inside?.level ?? nextLevel(level);
   }
-  return level;
+  return normalize(level);
+}
+
+/** The level a room at `path` would show if it said nothing itself. Nothing at the top. */
+export function inheritedLevel(file: DraftDocument, path: DepthPath): ViewLevel | undefined {
+  return path.length === 0 ? undefined : nextLevel(effectiveLevel(file, path.slice(0, -1)));
 }
 
 /** `'none'` is a deliberate "no level here", which reads the same as not knowing — except that it

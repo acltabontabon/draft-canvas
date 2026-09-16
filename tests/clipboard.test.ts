@@ -19,6 +19,8 @@ function reset() {
     clipboard: null,
     pasteRepeat: 0,
     revision: 0,
+    path: [],
+    outer: null,
   });
 }
 
@@ -417,6 +419,33 @@ describe('copying a shape with an inside', () => {
     store.getState().duplicateSelection();
     // The file already holds maxNodes - 2 + 1 inside room = the copy's three would overflow it.
     expect(store.getState().document.nodes).toHaveLength(LIMITS.maxNodes - 2);
+  });
+
+  it('refuses to nest a pasted shape deeper than a canvas keeps', () => {
+    // A → B → C, then B (which holds C) pasted into B's own room: C's copy would sit four deep.
+    const c = platformWithRoom();
+    const b = { ...createNode({ type: 'service', x: 0, y: 0, text: 'B' }), inside: { nodes: [c], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } };
+    const a = { ...createNode({ type: 'service', x: 0, y: 0, text: 'A' }), inside: { nodes: [b], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } };
+    store.setState({ document: addNodes(createDocument('Deep'), [a]) });
+    store.getState().enterInside(a.id);
+    store.getState().setSelection({ nodes: [b.id], edges: [] });
+    store.getState().copySelection();
+    store.getState().enterInside(b.id);
+    const before = store.getState().document.nodes.length;
+    store.getState().paste();
+    expect(store.getState().document.nodes).toHaveLength(before);
+    expect(useUiStore.getState().toasts.at(-1)?.message).toMatch(/deeper than a canvas goes/);
+  });
+
+  it('counts the flows a shape brings with it against the canvas limit', () => {
+    const platform = platformWithRoom();
+    const flows = Array.from({ length: LIMITS.maxFlows - 2 }, (_, i) => ({ id: `f_top_${i}`, title: `F${i}`, steps: [] }));
+    store.setState({ document: { ...addNodes(createDocument('Flows'), [platform]), flows } });
+    store.getState().setSelection({ nodes: [platform.id], edges: [] });
+    store.getState().duplicateSelection();
+    store.getState().duplicateSelection();
+    // One more flow fits; the second copy's would be one too many.
+    expect(store.getState().document.nodes).toHaveLength(2);
   });
 
   /**

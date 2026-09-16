@@ -877,6 +877,9 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'f
     flowRenameRequestId: null,
     jumpFlashId: null,
     editRequestId: null,
+    // A shape hovered as the room changed is no longer under the pointer to say it has left.
+    depthShapeHoverId: null,
+    depthPlateFocusId: null,
   });
   return {
     selection: EMPTY_SELECTION,
@@ -927,6 +930,17 @@ function withLevel(doc: DraftDocument, level: ViewLevel | undefined): DraftDocum
   if (level === undefined) delete next.level;
   else next.level = level;
   return next;
+}
+
+function notifyNothingAdded(tooDeep: boolean): void {
+  useUiStore
+    .getState()
+    .notify(
+      tooDeep
+        ? 'Nothing added — that would nest shapes deeper than a canvas goes.'
+        : 'Nothing added — that would make this diagram too large.',
+      'error',
+    );
 }
 
 export function roomFor(nodeCount: number, edgeCount: number, flowCount = 0): boolean {
@@ -1768,16 +1782,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     if (state.selection.nodes.length === 0) return;
     const fragment = extractFragment(state.document, state.selection.nodes);
-    const result = pasteFragment(state.document, fragment, { x: 24, y: 24 }, totals(fileOf(state)));
+    const result = pasteFragment(state.document, fragment, { x: 24, y: 24 }, { ...totals(fileOf(state)), depth: state.path.length });
     if (result.nodeIds.length === 0) {
-      useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
+      notifyNothingAdded(result.tooDeep);
       return;
     }
     state.apply('Duplicate', () => result.doc, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
     if (result.truncated) {
-      useUiStore.getState().notify("Duplicated the first part — the rest would make this diagram too large.");
+      useUiStore.getState().notify(result.tooDeep
+          ? 'Duplicated the first part — the rest holds shapes nested deeper than a canvas goes.'
+          : 'Duplicated the first part — the rest would make this diagram too large.');
     }
   },
 
@@ -1827,9 +1843,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       x: target.x - fragmentCenter.x + stagger,
       y: target.y - fragmentCenter.y + stagger,
     };
-    const result = pasteFragment(state.document, fragment, offset, totals(fileOf(state)));
+    const result = pasteFragment(state.document, fragment, offset, { ...totals(fileOf(state)), depth: state.path.length });
     if (result.nodeIds.length === 0) {
-      useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
+      notifyNothingAdded(result.tooDeep);
       return;
     }
     state.apply('Paste', () => result.doc, {
@@ -1837,7 +1853,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
     set((s) => ({ pasteRepeat: s.pasteRepeat + 1 }));
     if (result.truncated) {
-      useUiStore.getState().notify("Pasted the first part — the rest would make this diagram too large.");
+      useUiStore.getState().notify(result.tooDeep
+          ? 'Pasted the first part — the rest holds shapes nested deeper than a canvas goes.'
+          : 'Pasted the first part — the rest would make this diagram too large.');
     }
   },
 
@@ -2340,7 +2358,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setViewLevel(level) {
-    get().apply(labelForLevel(level), (doc) => withLevel(doc, level));
+    const state = get();
+    // A room exists only once it holds a shape, so an empty one has nowhere to keep what it shows —
+    // writing it anyway would leave an undo step that changes nothing and a choice that vanishes on
+    // the way out.
+    if (state.path.length > 0 && state.document.nodes.length === 0) {
+      useUiStore.getState().notify('Draw something here first — then say what this view shows.');
+      return;
+    }
+    state.apply(labelForLevel(level), (doc) => withLevel(doc, level));
   },
 
   /**

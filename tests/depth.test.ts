@@ -262,6 +262,27 @@ describe('what a view is showing', () => {
     expect(viewLevel(store.getState())).toBe('container');
   });
 
+  it('lets a room say it shows nothing in particular, even under a known level', () => {
+    const { platform } = withPlatform();
+    store.getState().setViewLevel('context');
+    store.getState().enterInside(platform.id);
+    const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    store.getState().setViewLevel('none');
+    expect(viewLevel(store.getState())).toBeUndefined();
+    // …and stops handing a level further down, too.
+    store.getState().enterInside(service.id);
+    expect(viewLevel(store.getState())).toBeUndefined();
+  });
+
+  it('does not pretend to keep a level in a room with nothing in it', () => {
+    const { platform } = withPlatform();
+    store.getState().enterInside(platform.id);
+    const before = store.getState().history.past.length;
+    store.getState().setViewLevel('component');
+    expect(store.getState().history.past.length).toBe(before);
+    expect(viewLevel(store.getState())).toBeUndefined();
+  });
+
   it('survives a save and a reload', () => {
     const { platform } = withPlatform();
     store.getState().setViewLevel('context');

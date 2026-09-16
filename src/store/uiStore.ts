@@ -274,6 +274,9 @@ export interface UiStore {
    */
   depthPlateFocusId: string | null;
   depthShapeHoverId: string | null;
+  /** "No thanks" to treating a canvas as a system overview — put away for the rest of the session. */
+  overviewOfferDismissed: boolean;
+  dismissOverviewOffer: () => void;
   depthTransition: {
     id: number;
     direction: 'in' | 'out';
@@ -452,6 +455,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   depthTransition: null,
   depthPlateFocusId: null,
   depthShapeHoverId: null,
+  overviewOfferDismissed: false,
   librarySearchQuery: '',
   librarySort: 'updatedAt',
   libraryView: { kind: 'recent' },
@@ -631,6 +635,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setDepthTransition: (depthTransition) => set({ depthTransition }),
   setDepthPlateFocusId: (depthPlateFocusId) => set({ depthPlateFocusId }),
   setDepthShapeHoverId: (depthShapeHoverId) => set({ depthShapeHoverId }),
+  dismissOverviewOffer: () => set({ overviewOfferDismissed: true }),
   setSettleNodeIds: (settleNodeIds) => {
     clearTimeout(settleTimer);
     set((state) => (settleNodeIds.length === 0 && state.settleNodeIds.length === 0 ? state : { settleNodeIds }));

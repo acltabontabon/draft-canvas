@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import type { Accent, DraftEdge, DraftNode } from '../../document/types';
 import { depthMarkAccent } from '../../canvas/insideMark';
 import { effectiveLevel, LEVEL_LABELS } from '../../depth/level';
@@ -35,12 +35,24 @@ export function DepthStack() {
   // A string rather than the file, so drawing inside a room does not re-render this corner: what
   // is above you changes when you move rooms or rename a shape, and at no other time.
   const trail = useEditorStore(trailOf);
+  // Gone while presenting — a plane picked mid-walkthrough would end the walkthrough — and gone
+  // wherever there is nothing to show. Unmounting (rather than hiding) is what puts away hover and
+  // focus that the pointer or the keyboard can no longer take back.
+  const presenting = useEditorStore((state) => state.mode === 'present');
+  if (!trail || presenting) return null;
+  return <DepthMap trail={trail} />;
+}
+
+function DepthMap({ trail }: { trail: string }) {
   const theme = useThemeValue();
   // Pinned open for one room only: moving to another closes the view, since its layers are no
   // longer the ones you were looking at. Remembered by the room's key rather than reset in an effect.
   const [pinnedFor, setPinnedFor] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
+  // Closed on purpose — by the head, by Escape, or by picking a plane — which outranks the pointer
+  // still resting on it and the focus still inside it, until either is reached for again.
+  const [dismissed, setDismissed] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const headRef = useRef<HTMLButtonElement>(null);
   const platesId = useId();
@@ -49,7 +61,11 @@ export function DepthStack() {
   const setPinned = (value: boolean) => setPinnedFor(value ? roomKey : null);
 
   const layers = useMemo(() => (trail ? parseTrail(trail) : []), [trail]);
-  const open = Boolean(trail) && (pinned || hovered || focused);
+  const open = !dismissed && (pinned || hovered || focused);
+  const close = () => {
+    setPinnedFor(null);
+    setDismissed(true);
+  };
 
   // A press anywhere else puts the view away — pinned or not — so reaching for the canvas is never
   // blocked by a panel left open over it.
@@ -61,13 +77,35 @@ export function DepthStack() {
       setHovered(false);
       setFocused(false);
     };
+    // Opened by the pointer alone, the keyboard is still on the canvas — and there Escape with
+    // nothing selected steps out of the room. The view that is open is the nearer thing to close.
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || navRef.current?.contains(document.activeElement)) return;
+      const active = document.activeElement as HTMLElement | null;
+      if (active?.isContentEditable || active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setPinnedFor(null);
+      setDismissed(true);
+    };
     document.addEventListener('pointerdown', away, true);
-    return () => document.removeEventListener('pointerdown', away, true);
+    window.addEventListener('keydown', escape, true);
+    return () => {
+      document.removeEventListener('pointerdown', away, true);
+      window.removeEventListener('keydown', escape, true);
+    };
   }, [open]);
-
-  if (!trail) return null;
   const here = layers[layers.length - 1]!;
   const tint = (accent: Accent | null) => (accent ? accentOf(theme, accent) : null);
+
+  // Picking a plane moves you and puts the view away. The plate that was picked is about to
+  // disappear, so the keyboard is handed to the head rather than dropped on the page.
+  const go = (move: () => Promise<unknown> | unknown) => {
+    const fromKeyboard = navRef.current?.contains(document.activeElement) ?? false;
+    close();
+    if (fromKeyboard) headRef.current?.focus();
+    void move();
+  };
 
   const plateButtons = () => [...(navRef.current?.querySelectorAll<HTMLButtonElement>('button.dc-depth-plate-step') ?? [])];
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -75,9 +113,8 @@ export function DepthStack() {
       // Close the view, and only the view — Escape here must not also step out of the room.
       event.preventDefault();
       event.stopPropagation();
-      setPinned(false);
+      close();
       headRef.current?.focus();
-      setFocused(false);
       return;
     }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
@@ -86,6 +123,7 @@ export function DepthStack() {
     if (at === -1) return;
     event.preventDefault();
     event.stopPropagation();
+    setDismissed(false);
     setPinned(true);
     const next = event.key === 'ArrowDown' ? Math.min(buttons.length - 1, at + 1) : Math.max(0, at - 1);
     // The plates only exist once open; a frame later they are there to receive focus.
@@ -98,9 +136,16 @@ export function DepthStack() {
       className="dc-depth"
       data-open={open ? 'true' : undefined}
       aria-label="Depth"
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={() => {
+        setHovered(true);
+        setDismissed(false);
+      }}
       onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
+      onFocus={(event) => {
+        setFocused(true);
+        // Arriving from outside is reaching for it again; moving within it is not.
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDismissed(false);
+      }}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
       }}
@@ -113,7 +158,14 @@ export function DepthStack() {
         aria-expanded={open}
         aria-controls={platesId}
         aria-label={layers.length > 1 ? `Inside ${here.name} — depth` : 'Depth'}
-        onClick={() => setPinned(!pinned)}
+        onClick={() => {
+          // Hovering opens it for a look; a press keeps it open, and a press on a kept view closes it.
+          if (pinned) close();
+          else {
+            setDismissed(false);
+            setPinned(true);
+          }
+        }}
       >
         <LayerGlyph layers={layers} tint={tint} />
         {/* At the top level the title bar already names the diagram; saying it again here would
@@ -143,7 +195,7 @@ export function DepthStack() {
                 type="button"
                 className="dc-depth-plate-step"
                 aria-label={index === 0 ? 'Back to the whole canvas' : `Back up to ${layer.name}`}
-                onClick={() => void backOut(index)}
+                onClick={() => go(() => backOut(index))}
               >
                 <span className="dc-depth-plate" aria-hidden="true">
                   {/* Only the plane directly above keeps its sketch; further away, a plane is just a plane. */}
@@ -172,11 +224,11 @@ export function DepthStack() {
                 <span className="dc-depth-room-caption">You are here</span>
               </span>
             </li>
-            {open && layers.length > 1 && <BesideRooms tint={tint} />}
+            {open && layers.length > 1 && <BesideRooms tint={tint} go={go} />}
           </ul>
         </li>
 
-        {open && <BelowRooms tint={tint} />}
+        {open && <BelowRooms tint={tint} go={go} />}
       </ol>
     </nav>
   );
@@ -201,31 +253,33 @@ function plateStyle(palette: ReturnType<typeof accentOf> | null, extra: Record<s
  * the move it looks like — back out to the room above, then down into it — so it plays as exactly
  * that. Mounted only while the view is open.
  */
-function BesideRooms({ tint }: { tint: Tint }) {
+type Go = (move: () => Promise<unknown> | unknown) => void;
+
+function BesideRooms({ tint, go }: { tint: Tint; go: Go }) {
   const here = useEditorStore((state) => state.path[state.path.length - 1]);
   const above = useEditorStore((state) => roomAt(state, state.path.length - 1)?.nodes ?? NO_NODES);
   const beside = useMemo(() => above.filter((node) => node.id !== here && hasInside(node)), [above, here]);
   const depth = useEditorStore((state) => state.path.length);
   if (beside.length === 0) return null;
-  const shown = beside.slice(0, ROW_SHOWN - 1);
   return (
-    <>
-      {shown.map((node) => (
+    <Row items={beside} limit={ROW_SHOWN - 1}>
+      {(node) => (
         <RoomPlate
           key={node.id}
           node={node}
           kind="beside"
           tint={tint}
-          onGo={async () => {
-            await backOut(depth - 1);
-            // The room above has to be drawn before the shape can be looked into from it.
-            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-            await lookInside(node.id);
-          }}
+          onGo={() =>
+            go(async () => {
+              await backOut(depth - 1);
+              // The room above has to be drawn before the shape can be looked into from it.
+              await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+              await lookInside(node.id);
+            })
+          }
         />
-      ))}
-      <RestOf count={beside.length - shown.length} />
-    </>
+      )}
+    </Row>
   );
 }
 
@@ -234,22 +288,32 @@ function BesideRooms({ tint }: { tint: Tint }) {
  * are on — the planes you can go down into. Mounted only while the view is open, so drawing in the
  * room does not redraw a closed corner.
  */
-function BelowRooms({ tint }: { tint: Tint }) {
+function BelowRooms({ tint, go }: { tint: Tint; go: Go }) {
   const nodes = useEditorStore((state) => state.document.nodes);
   const below = useMemo(() => nodes.filter(hasInside), [nodes]);
   // Whatever this view lit on the canvas goes out with it.
   useEffect(() => () => useUiStore.getState().setDepthPlateFocusId(null), []);
   if (below.length === 0) return null;
-  const shown = below.slice(0, ROW_SHOWN);
   return (
     <li className="dc-depth-tier" data-below="true">
       <ul className="dc-depth-row" aria-label="Look inside">
-        {shown.map((node) => (
-          <RoomPlate key={node.id} node={node} kind="below" tint={tint} onGo={() => lookInside(node.id)} />
-        ))}
-        <RestOf count={below.length - shown.length} />
+        <Row items={below} limit={ROW_SHOWN}>
+          {(node) => <RoomPlate key={node.id} node={node} kind="below" tint={tint} onGo={() => go(() => lookInside(node.id))} />}
+        </Row>
       </ul>
     </li>
+  );
+}
+
+/** A row of rooms: the first few, then the rest folded into one edge that deals them all out. */
+function Row({ items, limit, children }: { items: DraftNode[]; limit: number; children: (node: DraftNode) => ReactNode }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? items : items.slice(0, limit);
+  return (
+    <>
+      {shown.map(children)}
+      <RestOf count={items.length - shown.length} onExpand={() => setExpanded(true)} />
+    </>
   );
 }
 
@@ -262,7 +326,7 @@ function RoomPlate({
   node: DraftNode;
   kind: 'below' | 'beside';
   tint: Tint;
-  onGo: () => Promise<void> | void;
+  onGo: () => void;
 }) {
   const name = displayNameFor(node);
   const below = kind === 'below';
@@ -279,7 +343,7 @@ function RoomPlate({
         type="button"
         className="dc-depth-plate-step"
         aria-label={below ? `Look inside ${name}` : `Go to ${name}`}
-        onClick={() => void onGo()}
+        onClick={onGo}
         onMouseEnter={below ? () => showOnCanvas(node.id) : undefined}
         onMouseLeave={below ? () => showOnCanvas(null) : undefined}
         onFocus={below ? () => showOnCanvas(node.id) : undefined}
@@ -297,12 +361,14 @@ function RoomPlate({
 }
 
 /** The rest of a row, folded to the edges of their planes. */
-function RestOf({ count }: { count: number }) {
+function RestOf({ count, onExpand }: { count: number; onExpand: () => void }) {
   if (count <= 0) return null;
   return (
-    <li className="dc-depth-room" data-rest="true" aria-label={`${count} more`}>
-      <span className="dc-depth-rest-edges" aria-hidden="true" />
-      <span className="dc-depth-room-name">+{count}</span>
+    <li className="dc-depth-room" data-rest="true">
+      <button type="button" className="dc-depth-plate-step dc-depth-rest" aria-label={`Show ${count} more`} onClick={onExpand}>
+        <span className="dc-depth-rest-edges" aria-hidden="true" />
+        <span className="dc-depth-room-name">+{count}</span>
+      </button>
     </li>
   );
 }

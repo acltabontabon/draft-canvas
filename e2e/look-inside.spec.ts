@@ -150,3 +150,37 @@ test('a room visited and left empty is never saved', async ({ page }) => {
   await expect(page.locator('.dc-node')).toHaveCount(1);
   await expect(page.locator('.dc-node:has(.dc-inside-mark)')).toHaveCount(0);
 });
+
+test('the depth map opens and closes when asked, and Escape closes it before leaving the room', async ({ page }) => {
+  await newCanvas(page, 'Map');
+  await create(page, 'Service', { x: 300, y: 260 });
+  await select(page, 0);
+  await lookInside(page);
+  await create(page, 'Component', { x: 320, y: 240 });
+
+  const map = page.locator('.dc-depth');
+  const head = page.locator('.dc-depth-head');
+  // A press keeps it open; a second press closes it, even with the pointer still resting on it.
+  await head.click();
+  await expect(map).toHaveAttribute('data-open', 'true');
+  await head.click();
+  await expect(map).not.toHaveAttribute('data-open', 'true');
+  await expect(head).toHaveAttribute('aria-expanded', 'false');
+
+  // Opened by the pointer alone, with the keyboard still on the canvas: Escape puts the map away
+  // and leaves you where you are.
+  await page.locator(CANVAS).click({ position: { x: 700, y: 520 } });
+  await head.hover();
+  await expect(map).toHaveAttribute('data-open', 'true');
+  await page.keyboard.press('Escape');
+  await expect(map).not.toHaveAttribute('data-open', 'true');
+  await expect(page.locator('.dc-room')).toHaveCount(1);
+
+  // Picking a plane from the keyboard moves you, closes the map, and keeps the keyboard on it.
+  await head.focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.dc-room')).toHaveCount(0);
+  await expect(head).toBeFocused();
+  await expect(map).not.toHaveAttribute('data-open', 'true');
+});

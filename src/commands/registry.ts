@@ -23,7 +23,7 @@ import { continuationsFor, materialize } from '../continuation';
 import { MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from '../ui/Editor/depthNavigation';
-import { LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
+import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
 import { fileOf, ownsData, viewLevel } from '../store/editorStore';
 import { pointer } from '../store/uiStore';
 import { focusBounds, focusNodes } from './search';
@@ -789,6 +789,9 @@ function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
 function viewLevelCommand(ctx: CommandContext): Command {
   const stored = ctx.editor.document.level;
   const effective = viewLevel(ctx.editor);
+  // Clearing a room's own level would hand it the one outside again, so under a known level
+  // "nothing in particular" has to be said out loud.
+  const inherited = inheritedLevel(fileOf(ctx.editor), ctx.editor.path);
   return {
     id: 'view-level',
     title: 'View level…',
@@ -801,14 +804,15 @@ function viewLevelCommand(ctx: CommandContext): Command {
         ...(['context', 'container', 'component'] as const).map((level) => ({
           id: `view-level:${level}`,
           title: LEVEL_LABELS[level],
-          hint: stored === level ? 'Current' : LEVEL_HINTS[level],
+          hint: effective === level ? 'Current' : LEVEL_HINTS[level],
           run: (inner: CommandContext) => inner.editor.setViewLevel(level),
         })),
         {
           id: 'view-level:none',
           title: 'Nothing in particular',
           hint: 'Just a drawing — no suggestions narrowed',
-          run: (inner: CommandContext) => inner.editor.setViewLevel(stored === undefined ? 'none' : undefined),
+          run: (inner: CommandContext) =>
+            inner.editor.setViewLevel(stored === undefined || inherited !== undefined ? 'none' : undefined),
         },
       ],
     }),
@@ -862,9 +866,15 @@ function nameOfOwner(ctx: CommandContext, path: readonly string[]): string {
  *
  * Deliberately the same wording whether or not there is anything in there yet: stepping into an
  * empty shape writes nothing, so the difference between "has an inside" and "could have one" is
- * something the canvas shows (a shape with contents carries a second sheet behind it), not a
+ * something the canvas shows (a shape with contents stands in front of a faint plane), not a
  * different action to choose between.
  */
+/** Whether stepping into `node` from where you stand can succeed — not at the deepest a canvas goes. */
+function canLookInside(ctx: CommandContext, node: DraftNode): boolean {
+  if (ctx.editor.path.length >= LIMITS.maxInsideDepth) return false;
+  return hasInside(node) || canCreateInside(node);
+}
+
 function lookInsideCommand(node: DraftNode): Command {
   return {
     id: 'look-inside',
@@ -935,7 +945,7 @@ export function primaryCommandsFor(ctx: CommandContext, node: DraftNode): Comman
   // Offered first wherever it applies: once a shape has architecture inside it, going in is the
   // likeliest thing anyone wants from it. A shape that merely *could* hold one still gets the
   // action, just after whatever else it offers — nothing about it says "fill me in".
-  const inside = hasInside(node) || canCreateInside(node) ? [lookInsideCommand(node)] : [];
+  const inside = canLookInside(ctx, node) ? [lookInsideCommand(node)] : [];
   if (node.type === 'queue') return [...inside, ...queueQuickCommands(ctx, node)];
   if (node.type === 'service') {
     const quick = serviceQuickCommands(node, viewLevel(ctx.editor));
@@ -1034,7 +1044,7 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       },
     });
   }
-  if (hasInside(node) || canCreateInside(node)) {
+  if (canLookInside(ctx, node)) {
     commands.push(lookInsideCommand(node));
   }
   const attachmentCount = node.attachments?.length ?? 0;

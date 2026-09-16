@@ -49,10 +49,12 @@ export async function backOut(depth?: number): Promise<void> {
   // Measured while it is still on screen: the climb closes from this frame onto the shape.
   const room = rectOfRoom();
   state.exitTo(target);
+  // Refused (a drag or a resize is still under way): nothing moved, so nothing is selected or played.
+  const after = useEditorStore.getState();
+  if (!owner || after.path.length !== target) return;
   // The shape this room belongs to is back on screen, and the room closes onto it — followed frame
   // by frame, since the camera is still on its way there. It is left selected so ⌘↓ goes straight
-  // back in.
-  if (!owner) return;
-  useEditorStore.getState().setSelection({ nodes: [owner], edges: [] });
+  // back in — except while presenting, where a selection ring is not part of the picture.
+  if (after.mode !== 'present') after.setSelection({ nodes: [owner], edges: [] });
   play('out', owner, room);
 }

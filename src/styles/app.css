@@ -2776,7 +2776,7 @@ button.dc-depth-plate-step {
 
 /* Further above you is further away: smaller, fainter, and past the plane directly above, blank. */
 .dc-depth-layer .dc-fingerprint {
-  --fade: calc(0.67 - var(--dist, 1) * 0.12);
+  --fade: calc(0.74 - var(--dist, 1) * 0.1);
   scale: calc(0.94 - var(--dist, 1) * 0.06);
   background: var(--dc-depth-bg);
 }
@@ -3011,6 +3011,55 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   background: var(--dc-depth-bg);
   box-shadow: 3px 3px 0 -1px var(--dc-depth-bg), 3px 3px 0 0 var(--dc-border-strong);
   transform: rotateX(56deg) rotateZ(-38deg);
+}
+
+/* Folded rooms deal out on a press, like any other plane in the map. */
+.dc-depth-room[data-rest='true'] .dc-depth-plate-step {
+  width: 40px;
+  color: inherit;
+}
+
+.dc-depth-room[data-rest='true'] button.dc-depth-plate-step:hover .dc-depth-rest-edges,
+.dc-depth-room[data-rest='true'] button.dc-depth-plate-step:focus-visible .dc-depth-rest-edges {
+  border-color: var(--dc-text-muted);
+}
+
+/* A short window or a long row of rooms scrolls the map rather than running it off the canvas. A
+   row never wraps: a room dealt onto the next line would read as one a level further down. */
+.dc-depth[data-open='true'] {
+  max-width: min(calc(100% - 24px), 560px);
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/*
+ * On a light canvas the same restraint all but erases the map: a plane mixed three-quarters of the
+ * way into near-white is no longer a plane. Distance still fades, from a higher floor, and the
+ * lines the planes rest on are drawn at full strength.
+ */
+:where(:root[data-theme='light']) .dc-depth {
+  --dc-depth-line: var(--dc-border-strong);
+}
+
+:where(:root[data-theme='light']) .dc-depth-plate .dc-fingerprint {
+  border-color: color-mix(in srgb, var(--dc-plate-line) calc(var(--fade) * 100%), var(--dc-text-muted));
+}
+
+:where(:root[data-theme='light']) .dc-depth-layer .dc-fingerprint {
+  --fade: calc(0.95 - var(--dist, 1) * 0.1);
+}
+
+:where(:root[data-theme='light']) .dc-depth-plate-name {
+  opacity: calc(1.08 - var(--dist, 1) * 0.08);
+}
+
+:where(:root[data-theme='light']) .dc-depth-room[data-kind='beside'] .dc-fingerprint {
+  --fade: 0.75;
+}
+
+:where(:root[data-theme='light']) .dc-depth-room[data-kind='beside'] .dc-depth-room-name {
+  color: var(--dc-text-muted);
 }
 
 /* A narrow screen shrinks the whole map at once rather than letting it cover the drawing. */

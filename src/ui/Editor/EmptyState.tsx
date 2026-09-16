@@ -3,6 +3,7 @@ import { isCanvasEmpty } from '../../document/operations';
 import { MOD_SYMBOL } from '../../lib/platform';
 import { FEATURED_STARTERS, type ArchitectureStarter, type StarterId } from '../../starters';
 import { fileOf, useEditorStore, viewLevel } from '../../store/editorStore';
+import { useUiStore } from '../../store/uiStore';
 import { ownerAt, viewOf } from '../../depth/tree';
 import { looksLikeSystemOverview } from '../../depth/level';
 import { displayNameFor } from '../../document/factory';
@@ -126,7 +127,7 @@ function EmptyRoom({ name, leaving }: { name: string; leaving: boolean }) {
  * no puts it away for the session and nothing is written either way until someone answers.
  */
 function ContextOffer() {
-  const [dismissed, setDismissed] = useState(false);
+  const dismissed = useUiStore((state) => state.overviewOfferDismissed);
   const offered = useEditorStore((state) => {
     if (state.path.length === 0 || viewLevel(state) !== undefined) return false;
     const outside = state.path.length === 1 ? fileOf(state) : viewOf(fileOf(state), state.path.slice(0, -1));
@@ -144,7 +145,7 @@ function ContextOffer() {
       >
         Yes
       </button>
-      <button type="button" className="dc-empty-offer-no" onClick={() => setDismissed(true)}>
+      <button type="button" className="dc-empty-offer-no" onClick={() => useUiStore.getState().dismissOverviewOffer()}>
         No thanks
       </button>
     </p>
