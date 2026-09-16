@@ -184,3 +184,21 @@ test('the depth map opens and closes when asked, and Escape closes it before lea
   await expect(head).toBeFocused();
   await expect(map).not.toHaveAttribute('data-open', 'true');
 });
+
+test('⌘↑ still backs out right after the mouse picks a plate to go in', async ({ page }) => {
+  await newCanvas(page, 'Mouse map pick');
+  await create(page, 'Service', { x: 300, y: 260 });
+  await select(page, 0);
+  await lookInside(page);
+  await create(page, 'Component', { x: 320, y: 240 });
+  await backOut(page);
+  await expect(page.locator('.dc-room')).toHaveCount(0);
+
+  // The map's own plain-arrow plate cycling must not also swallow the chorded shortcut once
+  // picking a plate hands the keyboard to the head — ⌘↑ is a different key, not another plate step.
+  await page.locator('.dc-depth-head').click();
+  await page.getByRole('button', { name: 'Look inside Service' }).click();
+  await expect(page.locator('.dc-room')).toHaveCount(1);
+  await backOut(page);
+  await expect(page.locator('.dc-room')).toHaveCount(0);
+});

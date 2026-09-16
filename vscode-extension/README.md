@@ -40,8 +40,6 @@ connection. After that, the app's offline cache usually lets it open without one
 - **VS Code shortcuts don't work while the canvas has focus.** Keys pressed inside the canvas go to
   Draft Canvas, so ⌘P, ⌘⇧P and ⌘W do nothing there. ⌘S is passed through. Click the tab title or
   anywhere outside the canvas first.
-- **Copy and paste stay inside Draft Canvas.** ⌘C / ⌘V between shapes work, but the "Copy code" button
-  and Paste from the right-click menu can't reach the system clipboard in VS Code.
 - **A canvas with shapes drawn inside other shapes needs a current Draft Canvas.** An older copy of
   the app, such as one left in its offline cache, won't open it and says so, rather than dropping
   what's inside.

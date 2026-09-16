@@ -118,6 +118,10 @@ function DepthMap({ trail }: { trail: string }) {
       return;
     }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    // ⌘↓/⌘↑ (or Ctrl on other platforms) are the global look-inside/back-out shortcuts, reachable
+    // from anywhere — including a plate or the head, right after picking one moved focus there. A
+    // plain arrow cycles plates; a chorded one must fall through to that shortcut untouched.
+    if (event.metaKey || event.ctrlKey) return;
     const buttons = [headRef.current!, ...plateButtons()];
     const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
     if (at === -1) return;
@@ -126,8 +130,12 @@ function DepthMap({ trail }: { trail: string }) {
     setDismissed(false);
     setPinned(true);
     const next = event.key === 'ArrowDown' ? Math.min(buttons.length - 1, at + 1) : Math.max(0, at - 1);
-    // The plates only exist once open; a frame later they are there to receive focus.
-    requestAnimationFrame(() => [headRef.current!, ...plateButtons()][next]?.focus());
+    // Already open, the target plate is already focusable — moving now, in the same tick, is what
+    // keeps this reliable under a fast next keystroke. Only a view that was still closed (the plates
+    // still `hidden`) needs the frame this used to always wait for.
+    const focusNext = () => [headRef.current!, ...plateButtons()][next]?.focus();
+    focusNext();
+    if (document.activeElement !== buttons[next]) requestAnimationFrame(focusNext);
   };
 
   return (
