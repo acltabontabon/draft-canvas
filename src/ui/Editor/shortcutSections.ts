@@ -81,7 +81,7 @@ export const SECTIONS: Section[] = [
       { commandId: 'look-inside', label: 'Look inside the selected shape' },
       { commandId: 'back-out', label: 'Back out to what contains it' },
       { keys: ['Shift', 'F10'], label: 'Context menu for the selection (or the Menu key)' },
-      { keys: ['Esc'], label: 'Step back — out of editing, then a popover, then presenting, then the selection' },
+      { keys: ['Esc'], label: 'Step back — out of editing, then a popover, then presenting, then the selection, then out of a shape' },
     ],
   },
   {

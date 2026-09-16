@@ -101,7 +101,9 @@ no router) — that's what lets `dist/` be served from any path (`base: './'`).
 
 `src/starters/` sits beside `document/` (it imports only that, and is not part of the file format);
 `store/` and `commands/` consume it. `src/continuation/` sits there too (it imports `document/` and
-`render/text` only) — the deterministic next-move rules; `store/`, `commands/` and `canvas/` consume it. The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
+`render/text` only) — the deterministic next-move rules; `store/`, `commands/` and `canvas/` consume it.
+`src/depth/` sits there as well (it imports `document/` only) — the tree of rooms inside shapes and
+the view levels they show; `store/`, `commands/`, `canvas/`, `history/`, `storage/` and `ui/` consume it. The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
 persistence, the crypto boundary, untrusted input, schema evolution — lives in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The rules above are the invariants that document
 distills into "never break this"; read that file for *why* each one holds.

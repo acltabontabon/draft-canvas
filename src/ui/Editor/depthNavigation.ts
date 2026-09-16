@@ -6,7 +6,7 @@ import { rectOfEntrance, rectOfRoom, type ScreenRect } from './depthRects';
 
 /**
  * Stepping into or out of a shape, from wherever it is asked for — a shortcut, a command, the
- * context menu, the trail.
+ * context menu, the depth map.
  *
  * Two things happen here that the store deliberately does not do. First, whatever is being typed
  * is let go of: a label only reaches the document when its field blurs, and navigating swaps the

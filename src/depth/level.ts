@@ -14,7 +14,7 @@
  *   change the outer level and every room inside it follows, unless it was given one of its own.
  *
  * A level is only ever allowed to *narrow* what Draft Canvas offers where the level is known, and
- * where it is known it is also shown (the status bar says it, the trail repeats it). Nothing here
+ * where it is known it is also shown (the status bar says it, the depth map repeats it). Nothing here
  * ever refuses a shape or a connection: the vocabulary of a view is a suggestion about what is
  * usually drawn at that altitude, not a rule about what may be.
  */

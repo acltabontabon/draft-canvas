@@ -56,6 +56,9 @@ draws the thing.
 - It knows what a Queue, a Service, a Datastore, and a Boundary are. Relationships like `calls`,
   `publishes`, `projects`, and `compensates` carry actual meaning, not just an arrow, and that's
   what drives the suggestions above.
+- **Look inside** any service or component (`⌘↓`) to draw what runs there, and come back out with
+  `⌘↑`. It's C4-aware: say a view is System context, Containers or Components, and the suggestions
+  stay at that level. A Depth map in the corner shows where you are.
 
 **Flows and presentations**
 - Group connectors into a **Flow** and walk through it one step at a time with **Present**,
@@ -64,8 +67,9 @@ draws the thing.
   afterward.
 
 **Keyboard-first**
-- `Alt+Arrow` jumps between neighboring elements, `Alt+Shift+Arrow` follows a connection, and
-  anything you create from the keyboard opens ready to name.
+- `Alt+Arrow` jumps between neighboring elements, `Alt+Shift+Arrow` follows a connection, `⌘↓` /
+  `⌘↑` look inside a shape and back out, and anything you create from the keyboard opens ready to
+  name.
 - Palette, right-click menu, and keyboard shortcut for any given action all go through the same
   command. Nothing is palette-only or menu-only.
 

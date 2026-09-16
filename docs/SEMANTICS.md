@@ -268,7 +268,7 @@ A rule can care about the level in two ways, and the asymmetry is the policy:
 
 So a level someone chose can take a suggestion away, and only a level someone chose can introduce
 one — nothing ever changes on a guess. Where a level is in force, it is on screen: the status bar
-names it, and the depth trail repeats it.
+names it, and the depth map's corner repeats it.
 
 Not yet: continuation does not read the active Flow (the flow lens turns it off) or which starter a
 diagram came from (documents don't record it). Accepting never changes a Flow.

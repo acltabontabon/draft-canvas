@@ -473,7 +473,7 @@ function parseTrail(trail: string): Layer[] {
 /**
  * What a screen reader is told when the canvas becomes a different one.
  *
- * Mounted at every depth rather than alongside the trail, because arriving back at the top level
+ * Mounted at every depth rather than alongside the map, because arriving back at the top level
  * is a move like any other and was the one that announced nothing at all. It speaks only when the
  * room changes: the shape count used to be in here, which meant it spoke again on every single
  * thing drawn.

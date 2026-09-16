@@ -21,6 +21,32 @@ export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './se
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.7.0',
+    summary: 'Look inside: C4-aware depth.',
+    highlights: [
+      {
+        title: 'Look inside a shape',
+        description: 'Keep the big picture big and draw what runs inside a service or component one level down, in the same canvas.',
+      },
+      {
+        title: 'Always know where you are',
+        description: '⌘↓ goes in and ⌘↑ comes back out. The Depth map in the corner shows the way up, the shapes beside you and the ones below.',
+      },
+      {
+        title: 'C4-aware suggestions',
+        description: 'Say a view shows System context, Containers or Components, and suggestions stay at that altitude.',
+      },
+      {
+        title: 'Undo follows you in',
+        description: 'Undoing something you changed inside a shape takes you back in to show you.',
+      },
+      {
+        title: 'Learn it in ten seconds',
+        description: 'The Look inside recipe in Learn plays the whole move, there and back.',
+      },
+    ],
+  },
+  {
     version: '1.6.2',
     date: '2026-09-14',
     highlights: [

@@ -8,7 +8,7 @@ import { fileOf, useEditorStore } from '../store/editorStore';
  * The sheet a room is drawn on.
  *
  * Inside a shape, every other signal that you are somewhere else is momentary — the dive settles,
- * the trail is a line of text in a corner — and the canvas itself looks exactly like the canvas
+ * the depth map is a small stack in a corner — and the canvas itself looks exactly like the canvas
  * you came from. This is the part that stays: register marks hugging what the room holds, with
  * the name of the shape it belongs to written on the corner, so "I am inside Loan Service" is a
  * fact about the drawing rather than a label somewhere else on screen.

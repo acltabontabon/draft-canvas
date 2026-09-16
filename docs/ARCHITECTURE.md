@@ -88,6 +88,7 @@ neither React nor React Flow. That single rule is what makes the file format sur
 | `store/` | `editorStore` (the document) · `uiStore` (ephemeral UI) |
 | `storage/`, `crypto/` | persistence, autosave, encryption at rest |
 | `commands/` | one registry the palette, menu and shortcut sheet all read |
+| `depth/` | the tree of rooms a shape can hold (`tree.ts`) and the view level each one shows (`level.ts`) |
 | `starters/` `continuation/` `sequence/` `presentation/` | capabilities derived from the model |
 | `learn/` · `ui/learn/` | the Learn handbook: recipes, search and scene data (pure) · the drawer and scene renderer (its own lazy chunk) |
 
