@@ -2033,9 +2033,28 @@ kbd {
 
    `.dc-toolbar` stays the single outer element: `ElementInspectorPopover` and its sibling measure
    this box's height to know how much room they have. */
+/*
+ * Three tracks, and the sizing is what keeps them from ever overlapping.
+ *
+ * The side tracks are `minmax(max-content, 1fr)`: never narrower than their own cluster, and
+ * sharing any spare room equally. The rail's is `minmax(0, auto)`: as wide as its tools when there
+ * is room, down to nothing when there isn't — at which point it scrolls (see `.dc-create-rail`).
+ *
+ * That gives the rail three honest states from one rule, with no breakpoint to get wrong:
+ *   - plenty of room: both side tracks grow to the same width, so the rail sits dead centre;
+ *   - less room: the wider cluster keeps its own width and the narrower one takes the rest, so the
+ *     rail drifts off centre rather than being overlapped;
+ *   - not enough room for the rail's tools: the rail narrows and scrolls.
+ *
+ * The previous version was `minmax(0, 1fr) auto minmax(0, 1fr)`, with breakpoints to fold labels
+ * before the side tracks got too small. Those were measured against one trailing cluster, but its
+ * width really depends on the active flow's name (up to 150px) — so at common laptop widths the
+ * trailing cluster outgrew a `minmax(0, …)` track that was allowed to be narrower than it, and,
+ * being `justify-self: end`, spilled out of its left edge on top of the rail.
+ */
 .dc-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   align-items: center;
   gap: 22px;
   height: var(--dc-bar-height);
@@ -2094,6 +2113,14 @@ kbd {
 /* A recess, borrowed from `.dc-segmented`. In dark themes the `--dc-canvas` fill does the work;
    in light it is barely a shade off `--dc-surface`, so the hairline border is what actually draws
    the trough. Both have to read, which is why the border is not optional here. */
+/* `overflow-x` belongs here, not only in a narrow breakpoint. The rail used to become scrollable
+   at `max-width: 1259px` on the reasoning that the trailing cluster has folded its labels by then
+   and everything fits above it — but folding starts at 1319px, so between roughly 1320px and
+   1400px the cluster is still worded *and* the rail still can't scroll, and the rail's buttons
+   simply painted out of their column and over it ("Component" landing on top of "Flows · <the
+   active flow>"). A flex container that isn't overflowing lays out identically whether or not it
+   can scroll, so containing it at every width costs nothing and removes the whole class of bug
+   rather than moving the breakpoint that happens to expose it. */
 .dc-create-rail {
   display: flex;
   align-items: center;
@@ -2103,6 +2130,13 @@ kbd {
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-sm);
   background: var(--dc-canvas);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.dc-create-rail::-webkit-scrollbar {
+  display: none;
 }
 
 /* More tools past an end of a scrolled rail (see `CreateRail`). */
@@ -2332,25 +2366,16 @@ kbd {
   }
 }
 
-/* Measured: with the mode labels folded the trailing cluster is ~236px and the rail ~689px, so a
-   centred middle track stops fitting just under 1260. Past that the rail gives up the centre,
-   takes whatever space is left and scrolls — honest about running out of room, rather than
-   silently overlapping its neighbours, which is exactly what an untested breakpoint did here. */
+/* Genuinely narrow: tighten the rail and the title so more of the rail stays on screen before it
+   has to scroll. Cosmetic only — the toolbar's own track sizing is what prevents overlap. */
 @media (max-width: 1259px) {
   .dc-toolbar {
-    grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 14px;
   }
 
   .dc-create-rail {
     justify-self: stretch;
     gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .dc-create-rail::-webkit-scrollbar {
-    display: none;
   }
 
   .dc-create-rail .dc-button {
@@ -4970,12 +4995,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
   .dc-create-rail {
     grid-area: rail;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .dc-create-rail::-webkit-scrollbar {
-    display: none;
   }
 
   .dc-title-input {
