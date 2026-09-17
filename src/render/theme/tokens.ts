@@ -53,21 +53,30 @@ export const DARK: Theme = {
   text: '#e6e9ee',
   textMuted: '#98a1b0',
   textFaint: '#808998',
-  selection: '#5fd6c9',
-  selectionSoft: 'rgba(95, 214, 201, 0.16)',
+  selection: '#6cb3aa',
+  selectionSoft: 'rgba(108, 179, 170, 0.16)',
   edge: '#6d7885',
   edgeLabelBg: '#12151a',
   codeBg: '#12151a',
   codeBorder: '#2c333d',
   shadow: 'rgba(0, 0, 0, 0.45)',
   accents: {
-    neutral: { fill: '#181b21', line: '#3d4653', text: '#e6e9ee', chip: '#98a1b0' },
-    teal: { fill: '#12211f', line: '#3e8f85', text: '#8ee6db', chip: '#5fd6c9' },
-    blue: { fill: '#141b28', line: '#4172a8', text: '#93c0f0', chip: '#6aa9f0' },
-    violet: { fill: '#1a1727', line: '#7059b0', text: '#c0abf2', chip: '#9c83ea' },
-    amber: { fill: '#221c11', line: '#9b7326', text: '#ecc46f', chip: '#e0aa3e' },
-    rose: { fill: '#241419', line: '#a04b5e', text: '#f0a1b0', chip: '#e2687f' },
-    green: { fill: '#13201a', line: '#418a5f', text: '#8fdda8', chip: '#5cc47d' },
+    // Not a chrome-token alias: a shape with no explicit accent should read as
+    // an intentional slate surface sitting *on* the canvas, not flush with it —
+    // `fill` lifts to `surfaceRaised` rather than `surface`, and `line`/`chip`
+    // carry a faint cool lean of their own instead of reusing UI-chrome grays.
+    neutral: { fill: '#1e222a', line: '#4b5563', text: '#e6e9ee', chip: '#9aa4b2' },
+    // Low-chroma, deeper hues — pigments rather than highlighter. The previous set led with a mint
+    // `#5fd6c9` and a sky `#6aa9f0`, which at full saturation across a whole diagram read as
+    // playful; the identifying work a colour does here is done by *hue*, and hue survives having
+    // most of the saturation taken out of it. Each stays a recognisably distinct family while
+    // sitting quietly next to the neutral slate the default shapes wear.
+    teal: { fill: '#15201f', line: '#3d7a74', text: '#9ccbc4', chip: '#5ba49c' },
+    blue: { fill: '#161c25', line: '#456b96', text: '#a6c1dc', chip: '#6390bf' },
+    violet: { fill: '#1b1926', line: '#61578f', text: '#b6aed4', chip: '#8479b8' },
+    amber: { fill: '#211d15', line: '#8a6f3c', text: '#d6bf95', chip: '#b89a5f' },
+    rose: { fill: '#211719', line: '#8c5a62', text: '#d3a7ad', chip: '#b87d85' },
+    green: { fill: '#171e18', line: '#4f7a4f', text: '#a8c7a4', chip: '#6f9b69' },
   },
 };
 
@@ -82,21 +91,27 @@ export const LIGHT: Theme = {
   text: '#1a1d23',
   textMuted: '#59606d',
   textFaint: '#6a7280',
-  selection: '#0a746b',
-  selectionSoft: 'rgba(15, 143, 132, 0.12)',
+  selection: '#2c6f68',
+  selectionSoft: 'rgba(44, 111, 104, 0.12)',
   edge: '#7c8492',
   edgeLabelBg: '#ffffff',
   codeBg: '#f7f8fa',
   codeBorder: '#e2e6eb',
   shadow: 'rgba(19, 24, 32, 0.10)',
   accents: {
-    neutral: { fill: '#ffffff', line: '#b9c0ca', text: '#1a1d23', chip: '#59606d' },
-    teal: { fill: '#f0faf8', line: '#3f9d92', text: '#0d5f57', chip: '#0f8f84' },
-    blue: { fill: '#f1f6fd', line: '#5089c9', text: '#1b4f88', chip: '#2f76c4' },
-    violet: { fill: '#f6f3fd', line: '#8570c9', text: '#4a3690', chip: '#6f55c9' },
-    amber: { fill: '#fdf7ec', line: '#c08f2c', text: '#7a5610', chip: '#b3801f' },
-    rose: { fill: '#fdf2f4', line: '#c46e80', text: '#8c2c41', chip: '#c2455f' },
-    green: { fill: '#f1faf3', line: '#4d9a68', text: '#1f6237', chip: '#2f8a51' },
+    // Same reasoning as DARK.neutral, tuned independently rather than inverted:
+    // a hair warmer than pure white, and a line/chip with a touch more presence
+    // than the plain UI-chrome border/muted-text grays they used to alias.
+    neutral: { fill: '#fdfcfa', line: '#a9b1bd', text: '#1a1d23', chip: '#5b6472' },
+    // The same pigments read from the other side: tinted-paper surfaces, and a line/chip deep
+    // enough to hold its own against near-white without turning fluorescent. Text is darker than
+    // the chip it belongs to, so a name stays the most legible thing in its own shape.
+    teal: { fill: '#f4f8f7', line: '#4e8c85', text: '#1f5650', chip: '#357a72' },
+    blue: { fill: '#f4f7fb', line: '#5a83aa', text: '#254a70', chip: '#3d6890' },
+    violet: { fill: '#f7f5fb', line: '#7b71a8', text: '#413a68', chip: '#5d5387' },
+    amber: { fill: '#faf7f0', line: '#a4844b', text: '#644f20', chip: '#876c37' },
+    rose: { fill: '#fbf5f6', line: '#ac7981', text: '#733e46', chip: '#8f545c' },
+    green: { fill: '#f5f8f4', line: '#5f8759', text: '#2d522e', chip: '#497043' },
   },
 };
 

@@ -227,7 +227,7 @@ describe('Component — visual family: distinct but related silhouettes', () => 
     expect('stroke' in generic && generic.stroke?.dash).toBeUndefined();
   });
 
-  it('a small Port fits a one-word name and its centred PORT tag inside its own box', () => {
+  it('a small Port fits a one-word name and its PORT tag inside its own box', () => {
     const port = createNode({ type: 'component', componentKind: 'port', text: 'Persistence', x: 0, y: 0, width: 120, height: 44 });
     const texts = describeNode(port, ctx).shapes.filter((s) => s.t === 'text');
     expect(texts.map((s) => s.layout.lines.map((l) => l.text).join(''))).toEqual(['Persistence', 'PORT']);
@@ -235,10 +235,14 @@ describe('Component — visual family: distinct but related silhouettes', () => 
       expect(shape.layout.truncated).toBe(false);
       expect(shape.y).toBeGreaterThanOrEqual(0);
       expect(shape.y + shape.layout.height).toBeLessThanOrEqual(port.height);
-      expect(shape.align).toBe('middle');
     }
     const name = texts[0]!;
     const tag = texts[1]!;
+    // The name centres; the tag sits bottom-right, in the same corner every other captioned
+    // Component kind uses — a Port used to centre its tag and read as the one shape whose caption
+    // had slipped out of place.
+    expect(name.align).toBe('middle');
+    expect(tag.align).toBe('end');
     expect(name.y + name.layout.height).toBeLessThanOrEqual(tag.y);
   });
 
@@ -423,6 +427,8 @@ describe('Component — rendering across themes and personalities', () => {
         return colors;
       });
     for (const color of walk(list.shapes)) {
+      // `none` is the absence of a paint, not a colour that could be off-theme.
+      if (color === 'none') continue;
       expect(themeColors.has(color), `${color} is not a theme token`).toBe(true);
     }
   });

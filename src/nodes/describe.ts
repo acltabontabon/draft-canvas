@@ -16,7 +16,7 @@ import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
-import { accentOf, type Theme } from '../render/theme/tokens';
+import { accentOf, type AccentPalette, type Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS, TEXT_SIZES, type FontSpec } from '../render/text/fonts';
 import { fitLabel, layoutText } from '../render/text/layout';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
@@ -165,74 +165,10 @@ function variantCaption(
 }
 
 /**
- * Name + kind, stacked as two lines and centered as one block in a window
- * `top`..`node.height - bottom` — the same treatment `database()`'s cylinder
- * has always given SQL/NoSQL/Cache, factored out so the Data Store family's
- * other "silhouette fills the box, label sits in whatever quiet space is
- * left" kinds (File System, Object Storage) can share it instead of
- * duplicating the layout math a third and fourth time. Renders nothing when
- * the node has no name — matching the cylinder's own existing behaviour,
- * which in practice only applies to a hand-cleared name (a fresh Data Store
- * node is never created blank).
- */
-function centeredStackedCaption(
-  node: DraftNode,
-  ctx: DescribeContext,
-  options: { top: number; bottom: number; kindLabel: string; nameColor: string },
-): Shape[] {
-  const text = node.text ?? '';
-  if (!text.trim()) return [];
-  const maxWidth = Math.max(16, node.width - PADDING * 2);
-  // The kind line never shrinks or wraps — a fixed-vocabulary, all-caps badge (SQL, TABLE, …),
-  // not user-authored text — so it's measured first and the name gets whatever room is left.
-  const kindFont = FONTS.variantTag;
-  const kindLayout = layoutText(options.kindLabel, {
-    font: kindFont,
-    maxWidth,
-    lineHeight: kindFont.size * LINE_HEIGHTS.label,
-    maxLines: 1,
-    measurer: ctx.measurer,
-  });
-  const nameGap = 2;
-  const available = node.height - options.top - options.bottom;
-  const { layout: nameLayout, font: nameFont } = fitLabel(text, {
-    font: FONTS.nodeLabel,
-    minFontSize: TEXT_SIZES.nodeLabelMin,
-    maxWidth,
-    maxHeight: Math.max(0, available - nameGap - kindLayout.height),
-    lineHeightRatio: LINE_HEIGHTS.label,
-    measurer: ctx.measurer,
-  });
-  const groupHeight = nameLayout.height + nameGap + kindLayout.height;
-  const groupTop = options.top + (available - groupHeight) / 2;
-  return [
-    {
-      t: 'text',
-      x: node.width / 2,
-      y: groupTop,
-      layout: nameLayout,
-      font: nameFont,
-      fill: options.nameColor,
-      align: 'middle',
-      role: 'label',
-    },
-    {
-      t: 'text',
-      x: node.width / 2,
-      y: groupTop + nameLayout.height + nameGap,
-      layout: kindLayout,
-      font: kindFont,
-      fill: ctx.theme.textMuted,
-      align: 'middle',
-    },
-  ];
-}
-
-/**
  * Name + kind, stacked as two lines pinned a fixed gap under a compact glyph
  * — the same treatment `queue()` has always given Queue/Topic/Stream,
  * factored out so the Data Store family's own compact-glyph kinds (NoSQL,
- * Cache, Search/Index) can share it. Unlike `centeredStackedCaption`, a
+ * Cache, Search/Index) can share it. Unlike a band-centred caption, a
  * missing name still shows the kind alone — every one of this pattern's
  * kinds is "equally specific" the way Queue's three are, with no "generic,
  * unspecified" placeholder to fall back to.
@@ -340,7 +276,7 @@ function shapesFor(node: DraftNode, ctx: DescribeContext): Shape[] {
 function centredLabel(
   node: DraftNode,
   ctx: DescribeContext,
-  options: { top: number; bottom: number; color: string } = {
+  options: { top: number; bottom: number; color: string; left?: number; right?: number } = {
     top: 0,
     bottom: 0,
     color: '',
@@ -350,7 +286,12 @@ function centredLabel(
   if (!text.trim()) return [];
 
   const palette = accentOf(ctx.theme, node.accent);
-  const maxWidth = Math.max(16, node.width - PADDING * 2);
+  // `left`/`right` carve horizontal room out of the label's band without moving the node's own
+  // geometry — what a kind with a left-hand glyph (Service's cube, Component's plug) needs so the
+  // name centres in the space *beside* the icon rather than sliding underneath it.
+  const left = options.left ?? 0;
+  const right = options.right ?? 0;
+  const maxWidth = Math.max(16, node.width - PADDING * 2 - left - right);
   const available = node.height - options.top - options.bottom;
 
   const { layout, font } = fitLabel(text, {
@@ -365,7 +306,7 @@ function centredLabel(
   return [
     {
       t: 'text',
-      x: node.width / 2,
+      x: left + (node.width - left - right) / 2,
       y: options.top + (available - layout.height) / 2,
       layout,
       font,
@@ -471,6 +412,36 @@ function ellipse(node: DraftNode, ctx: DescribeContext): Shape[] {
   ];
 }
 
+/* ----------------------------------------------------------- shape marks -- */
+
+/** How far a corner mark sits in from a card's own edge. */
+const MARK_INSET = 12;
+
+/**
+ * A short row of dots in a card's top-right corner — the window-chrome cue that says "a running
+ * thing," and the one mark the Service and Component families share. Filled, not stroked: at this
+ * size a hairline ring reads as mush.
+ *
+ * This is deliberately all that is left of a larger experiment. Every kind used to carry a
+ * left-hand line-art glyph as well (a cube for a Service, a gear for a Worker, a plug for an
+ * Adapter); they were dropped because the silhouettes already do that work — a notch is an API, a
+ * double card is a Worker, a dashed outline is a Port — and a row of icon-and-label cards read as
+ * a stock icon set rather than as this library.
+ */
+function dotsGlyph(rightX: number, cy: number, count: number, color: string): Shape {
+  const r = 1.7;
+  const gap = 5;
+  const dots: Shape[] = Array.from({ length: count }, (_, i) => ({
+    t: 'ellipse',
+    cx: rightX - i * gap,
+    cy,
+    rx: r,
+    ry: r,
+    fill: color,
+  }));
+  return { t: 'group', children: dots };
+}
+
 /* ----------------------------------------------------------- dev presets -- */
 
 /**
@@ -501,7 +472,7 @@ function service(node: DraftNode, ctx: DescribeContext): Shape[] {
  *  cap. Every other kind's silhouette is a deliberate departure from this
  *  one, so its own shape never changes once a kind gets its own function. */
 function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const capHeight = 4;
   return [
     outlineShape(
@@ -528,6 +499,10 @@ function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
         },
       ],
     },
+    // Window-chrome dots, top-right: the family's "this is a running thing" cue. Generic gets the
+    // full three; Worker gets two, so the two kinds stay distinguishable by the mark as well as
+    // by the silhouette.
+    dotsGlyph(node.width - MARK_INSET, capHeight + 9, 3, palette.chip),
     ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
   ];
 }
@@ -540,7 +515,7 @@ function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
  * is identical to Generic's and stays a plain clipped rect.
  */
 function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const capHeight = 4;
   const w = node.width - 1.5;
   const h = node.height - 1.5;
@@ -579,6 +554,9 @@ function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
       clip: { x, y, w, h, r },
       children: [{ t: 'rect', x, y, w, h: capHeight, fill: palette.chip }],
     },
+    // No glyph, deliberately: API's whole identity is the socket cut into its own outline, and the
+    // reference sheet leaves this one card iconless for exactly that reason — the silhouette has
+    // already said it.
     ...centredLabel(node, ctx, { top: capHeight, bottom: tagRow(), color: palette.text }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.api!, ctx.theme.textMuted),
   ];
@@ -592,7 +570,7 @@ function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
  * *which* async work it does — nothing here implies queue-only consumption.
  */
 function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const capHeight = 4;
   const offset = 6;
   const stroke: Stroke = { color: palette.line, width: 1.5 };
@@ -606,7 +584,16 @@ function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
       clip: { x: front.x, y: front.y, w: front.w, h: capHeight, r: front.r },
       children: [{ t: 'rect', x: front.x, y: front.y, w: front.w, h: capHeight, fill: palette.chip }],
     },
-    ...centredLabel(node, ctx, { top: capHeight, bottom: Math.max(offset, tagRow()), color: palette.text }),
+    // Two dots rather than Generic's three, so the mark itself distinguishes the two kinds. Kept
+    // in the top-right corner: the bottom-right is where this kind's own `WORKER` caption sits,
+    // and a dot cluster there would land on top of it.
+    dotsGlyph(front.x + front.w - MARK_INSET, front.y + capHeight + 9, 2, palette.chip),
+    ...centredLabel(node, ctx, {
+      top: capHeight,
+      bottom: Math.max(offset, tagRow()),
+      color: palette.text,
+      right: offset,
+    }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.worker!, ctx.theme.textMuted),
   ];
 }
@@ -619,7 +606,7 @@ function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
  * caption.
  */
 function serviceExternal(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const capHeight = 4;
   const inset = 6;
   const outer = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
@@ -641,64 +628,71 @@ function serviceExternal(node: DraftNode, ctx: DescribeContext): Shape[] {
       clip: { x: inner.x, y: inner.y, w: inner.w, h: capHeight, r: inner.r },
       children: [{ t: 'rect', x: inner.x, y: inner.y, w: inner.w, h: capHeight, fill: palette.chip }],
     },
-    ...centredLabel(node, ctx, { top: inset + capHeight, bottom: Math.max(inset, tagRow()), color: palette.text }),
+    ...centredLabel(node, ctx, {
+      top: inset + capHeight,
+      bottom: Math.max(inset, tagRow()),
+      color: palette.text,
+      left: inset,
+      right: inset,
+    }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.external!, ctx.theme.textMuted),
   ];
 }
 
 /**
- * Scheduler: instead of Generic's one continuous cap, a short cluster of three ticks sits near
- * the top-left corner — a compact "pulse," not a border. Deliberately clustered and short rather
- * than evenly spaced across the full width: five evenly-spaced dashes spanning the whole top edge
- * reads as a perforation (spiral-notebook binding, tear-off ticket), which is exactly the
- * calendar/notebook association the silhouette needs to avoid. A few marks confined to one
- * corner, with plain outline for the rest of the top edge, reads as a rhythm accent instead.
+ * Scheduler: a calendar glyph on the left, and — instead of Generic's one continuous cap — a short
+ * cluster of three ticks hanging off the top-right corner, like the binding of a torn-off page.
+ * Deliberately clustered and short rather than evenly spaced across the full width: five
+ * evenly-spaced dashes spanning the whole top edge reads as a perforation (spiral-notebook
+ * binding, tear-off ticket). A few marks confined to one corner reads as a rhythm accent instead,
+ * and sitting opposite the glyph keeps the two details from crowding each other.
  */
 function serviceScheduler(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const capHeight = 4;
   const outer = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
   const tickCount = 3;
-  const tickW = 4;
+  const tickW = 3;
   const gap = 4;
-  const startX = outer.x + 10;
+  const tickH = 9;
+  // Right-aligned: the cluster ends a fixed inset from the card's right edge and grows leftward,
+  // so it stays pinned to that corner at every node width.
+  const endX = outer.x + outer.w - MARK_INSET;
   const ticks: Shape[] = Array.from({ length: tickCount }, (_, i) => ({
     t: 'rect',
-    x: startX + i * (tickW + gap),
+    x: endX - tickW - i * (tickW + gap),
     y: outer.y,
     w: tickW,
-    h: capHeight,
+    h: tickH,
+    r: 1.5,
     fill: palette.chip,
   }));
   return [
     outlineShape(node.id, ctx, outer, { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true }),
-    // Grouped (with no clip — the cluster already sits clear of the rounded corner) so the three
-    // ticks read as one cohesive mark, the same way Generic's cap is one grouped unit.
-    { t: 'group', children: ticks },
+    // Clipped to the card so the ticks stop at its own top edge rather than overhanging it.
+    { t: 'group', clip: outer, children: ticks },
     ...centredLabel(node, ctx, { top: capHeight, bottom: tagRow(), color: palette.text }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.scheduler!, ctx.theme.textMuted),
   ];
 }
 
 /**
- * Gateway: a normal rounded-rect service body — same silhouette as Generic — with one
- * directional chevron notch cut into the left edge, pointing inward. A full trapezoid (the
- * previous design) reads as a generic flowchart "merge/extract" primitive; a small arrowhead
- * marking a single entry point reads specifically as "traffic enters here and is routed onward"
- * without turning the whole node into an unfamiliar shape. The notch sits at vertical mid-height,
- * clear of the top band, so — like API's rectangular notch — Gateway keeps the ordinary shared
- * cap instead of needing its own cap-less treatment.
+ * Gateway: Generic's card with its whole left edge folded into one deep chevron pointing inward —
+ * a banner, not a nicked rectangle. An earlier revision cut a small arrowhead at mid-height only;
+ * at a glance across a full diagram that read as a blemish on a plain card rather than a direction.
+ * Taken to full height it becomes the silhouette: everything arrives on this edge and is routed
+ * onward. Its cap is dropped for the same reason — a chevron with a straight band pinned across
+ * its top fights itself — so the top edge stays clean and the glyph carries the accent instead.
  */
 function serviceGateway(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'teal');
-  const capHeight = 4;
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const w = node.width - 1.5;
   const h = node.height - 1.5;
   const x = 0.75;
   const y = 0.75;
   const r = 8;
-  const notchDepth = Math.min(14, w * 0.14);
-  const notchHalf = h * 0.2;
+  // Deep enough to read as a chevron at a glance, capped so a narrow node doesn't lose its body.
+  const chevron = Math.min(22, w * 0.18);
   const midY = y + h / 2;
 
   const d = [
@@ -709,9 +703,11 @@ function serviceGateway(node: DraftNode, ctx: DescribeContext): Shape[] {
     `Q${x + w},${y + h} ${x + w - r},${y + h}`,
     `L${x + r},${y + h}`,
     `Q${x},${y + h} ${x},${y + h - r}`,
-    `L${x},${midY + notchHalf}`,
-    `L${x + notchDepth},${midY}`,
-    `L${x},${midY - notchHalf}`,
+    // The notch is cut *into* the left edge: both outer corners stay at the card's own left edge
+    // and the apex pushes inward, to the right. (Putting the apex on the outside instead turns the
+    // card into a pennant pointing away from the traffic it receives — which is backwards.)
+    `L${x + chevron},${midY + 1.5}`,
+    `Q${x + chevron + 1.5},${midY} ${x + chevron},${midY - 1.5}`,
     `L${x},${y + r}`,
     `Q${x},${y} ${x + r},${y}`,
     'Z',
@@ -719,12 +715,8 @@ function serviceGateway(node: DraftNode, ctx: DescribeContext): Shape[] {
 
   return [
     { t: 'path', d, fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
-    {
-      t: 'group',
-      clip: { x, y, w, h, r },
-      children: [{ t: 'rect', x, y, w, h: capHeight, fill: palette.chip }],
-    },
-    ...centredLabel(node, ctx, { top: capHeight, bottom: tagRow(), color: palette.text }),
+    // The label clears the chevron cut into the left edge.
+    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: palette.text, left: chevron }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.gateway!, ctx.theme.textMuted),
   ];
 }
@@ -782,32 +774,19 @@ function component(node: DraftNode, ctx: DescribeContext): Shape[] {
  */
 function componentPort(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const tagFont = FONTS.variantTag;
-  const tagInset = 6;
-  const tagLayout = layoutText(COMPONENT_KIND_LABELS.port!, {
-    font: tagFont,
-    maxWidth: Math.max(16, node.width - PADDING * 2),
-    lineHeight: tagFont.size * LINE_HEIGHTS.label,
-    maxLines: 1,
-    measurer: ctx.measurer,
-  });
+  const portRect = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
   return [
-    outlineShape(
-      node.id,
-      ctx,
-      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
-      { fill: palette.fill, stroke: { ...componentStroke(ctx, node), dash: PORT_DASH }, shadow: true },
-    ),
-    ...centredLabel(node, ctx, { top: 0, bottom: tagLayout.height + tagInset + 2, color: '' }),
-    {
-      t: 'text',
-      x: node.width / 2,
-      y: node.height - tagLayout.height - tagInset,
-      layout: tagLayout,
-      font: tagFont,
-      fill: ctx.theme.textMuted,
-      align: 'middle',
-    },
+    outlineShape(node.id, ctx, portRect, {
+      fill: palette.fill,
+      stroke: { ...componentStroke(ctx, node), dash: PORT_DASH },
+      shadow: true,
+    }),
+    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '' }),
+    // The shared bottom-right tag, like every other captioned kind. This used to centre its tag
+    // under the name instead, on the reasoning that a Port is an agreement rather than a component
+    // and could afford its own arrangement; sitting beside an Adapter or a Module it just looked
+    // like the one shape whose caption had slipped out of place.
+    ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.port!, ctx.theme.textMuted),
   ];
 }
 
@@ -816,13 +795,10 @@ function componentPort(node: DraftNode, ctx: DescribeContext): Shape[] {
  *  from this one. */
 function componentGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const rect = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
   return [
-    outlineShape(
-      node.id,
-      ctx,
-      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
-      { fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
-    ),
+    outlineShape(node.id, ctx, rect, { fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true }),
+    dotsGlyph(node.width - MARK_INSET, 10, 3, palette.chip),
     ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
   ];
 }
@@ -940,7 +916,8 @@ function componentAdapter(node: DraftNode, ctx: DescribeContext): Shape[] {
 
   return [
     { t: 'path', d, fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
-    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '' }),
+    // The label clears the sockets cut into both vertical edges.
+    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '', left: notchDepth, right: notchDepth }),
     ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.adapter!, ctx.theme.textMuted, captionInset),
   ];
 }
@@ -1038,73 +1015,68 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
 }
 
 /**
- * Table: a flat card with a header band split into a few columns — a logical table (or
- * collection) *inside* a database, not a database. Deliberately nothing like the cylinder: two
- * tables placed in one boundary must read as two tables of one store, never as two physical
- * stores in a distributed transaction. The name and the TABLE tag stack under the header band.
+ * Every Data Store kind is drawn the same way: one compact glyph anchored to the top of the node,
+ * its name and kind stacked underneath — the Queue family's arrangement, applied here too.
+ *
+ * The alternative (which several of these kinds used to use) was to stretch the silhouette to the
+ * node's full box and put the name *inside* it. That reads fine for a cylinder and badly for
+ * everything else: a folder, a bucket and a card stack all have interior detail of their own, and
+ * a name laid over it collides with the very thing that identifies the kind. Anchoring every kind
+ * the same way is also what lets eight quite different silhouettes still read as one family.
  */
-function dataStoreTable(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const r = 6;
-  const bandH = Math.min(11, h * 0.18);
-  const columns = 3;
+const DS_GLYPH_TOP = 9;
+const DS_GLYPH_HEIGHT = 42;
+const DS_GLYPH_BOTTOM = DS_GLYPH_TOP + DS_GLYPH_HEIGHT;
+const DS_CAPTION_GAP = 5;
 
-  const dividers = Array.from({ length: columns - 1 }, (_, i) => {
-    const cx = x + (w * (i + 1)) / columns;
-    return `M${cx},${y} L${cx},${y + bandH}`;
-  }).join(' ');
-
+/** The caption under a Data Store's glyph. `generic` has no kind label of its own — it's the
+ *  family's baseline, so it carries just the name. */
+function dataStoreCaption(node: DraftNode, ctx: DescribeContext, palette: AccentPalette): Shape[] {
+  const kindLabel = DATABASE_KIND_LABELS[node.databaseKind ?? 'generic'];
+  const top = DS_GLYPH_BOTTOM + DS_CAPTION_GAP;
+  if (kindLabel) {
+    return pinnedCaption(node, ctx, { top, kindLabel, nameColor: palette.text });
+  }
+  const text = node.text ?? '';
+  if (!text.trim()) return [];
+  const { layout, font } = fitLabel(text, {
+    font: FONTS.nodeLabel,
+    minFontSize: TEXT_SIZES.nodeLabelMin,
+    maxWidth: Math.max(16, node.width - PADDING * 2),
+    maxHeight: Math.max(0, node.height - top - 4),
+    lineHeightRatio: LINE_HEIGHTS.label,
+    measurer: ctx.measurer,
+  });
   return [
-    outlineShape(
-      node.id,
-      ctx,
-      { x, y, w, h, r },
-      { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
-    ),
-    // Header band, clipped to the card's rounded top like a service's cap.
-    {
-      t: 'group',
-      clip: { x, y, w, h, r },
-      children: [{ t: 'rect', x, y, w, h: bandH, fill: palette.chip }],
-    },
-    { t: 'path', d: `M${x},${y + bandH} L${x + w},${y + bandH} ${dividers}`, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.55 },
-    ...centeredStackedCaption(node, ctx, {
-      top: bandH + 2,
-      bottom: 4,
-      kindLabel: DATABASE_KIND_LABELS.table!,
-      nameColor: palette.text,
-    }),
+    { t: 'text', x: node.width / 2, y: top, layout, font, fill: palette.text, align: 'middle', role: 'label' },
   ];
 }
 
+/**
+ * Generic and SQL: a vertical cylinder.
+ *
+ * Generic adds three dots down the right of the barrel — "there is something in here" without
+ * committing to what. SQL stacks two disc seams across it instead, the classic layered-database
+ * read. SQL's reference sheet also hangs a small "SQL" badge off the barrel; that word is already
+ * the caption directly underneath, so the seams carry the kind here and the badge is left off
+ * rather than printing "SQL" twice in one node.
+ */
 function dataStoreCylinder(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  // Shallower than a "stretched database icon" cap — flatter top/bottom curves leave more of
-  // the box as usable body for the two-line label underneath.
-  const ry = Math.min(10, h * 0.16);
-  const x = 0.75;
-  const y = 0.75;
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const w = Math.min(54, node.width - PADDING * 2);
+  const x = node.width / 2 - w / 2;
+  const y = DS_GLYPH_TOP;
+  const h = DS_GLYPH_HEIGHT;
+  const ry = Math.min(8, h * 0.19);
   const profile = PERSONALITY_PROFILES[ctx.preset];
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
 
   const { body, lid } = cylinderPaths(x, y, w, h, ry, node.id, profile.outline, profile.bow);
-  const kindLabel = DATABASE_KIND_LABELS[node.databaseKind ?? 'generic'];
-  const innerTop = ry * 2;
-  const innerBottom = ry;
-
   const shapes: Shape[] = [
-    { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
-    { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5 } },
+    { t: 'path', d: body, fill: palette.fill, stroke },
+    { t: 'path', d: lid, fill: 'none', stroke },
   ];
 
-  // The "special opportunity" primitive — a second, independently-seeded pass over the same
-  // cylinder, Sketch only, reusing the same body/lid coordinates the primary already stayed
-  // aligned on (see the module doc comment on `cylinderPaths`).
   if (profile.retrace) {
     const retrace = cylinderPaths(x, y, w, h, ry, `${node.id}:retrace`, profile.outline, profile.bow);
     shapes.push(
@@ -1113,266 +1085,309 @@ function dataStoreCylinder(node: DraftNode, ctx: DescribeContext): Shape[] {
     );
   }
 
-  // SQL's one differentiator from Generic: a subtle table/row hint in the cylinder's own cap
-  // band — still unmistakably a database, specifically a relational one, without a new
-  // silhouette. Deliberately independent of the roughness preset (draws at every preset).
   if (node.databaseKind === 'sql') {
-    const inset = w * 0.28;
-    const rowY1 = y + ry * 0.9;
-    const rowY2 = y + ry * 1.5;
+    // Two more disc seams, evenly down the barrel and drawn as the same ellipse arc the lid is,
+    // so the whole thing reads as discs stacked in a housing rather than a tube with rings on it.
+    for (const t of [0.42, 0.68]) {
+      const seamY = y + ry + (h - ry * 2) * t;
+      shapes.push({
+        t: 'path',
+        d: `M${x},${seamY} a${w / 2},${ry} 0 0 0 ${w},0`,
+        fill: 'none',
+        stroke: { color: palette.line, width: 1.2 },
+        opacity: 0.75,
+      });
+    }
+  } else {
+    // Generic's three dots, down the right of the barrel. One path of three discs rather than
+    // three `ellipse` shapes: the cylinder families are built entirely from paths (it's what lets
+    // the Sketch retrace pass stay a clean body+lid pair), and this keeps that true.
+    const dotX = x + w * 0.74;
+    const midY = y + h / 2 + ry * 0.3;
+    const dotR = 1.7;
+    const disc = (cy: number) =>
+      `M${dotX - dotR},${cy} a${dotR},${dotR} 0 1 0 ${dotR * 2},0 a${dotR},${dotR} 0 1 0 ${-dotR * 2},0`;
     shapes.push({
       t: 'path',
-      d: `M${x + inset},${rowY1} L${x + w - inset},${rowY1} M${x + inset},${rowY2} L${x + w - inset},${rowY2}`,
-      fill: 'none',
-      stroke: { color: palette.line, width: 1 },
-      opacity: 0.5,
+      d: [-7, 0, 7].map((dy) => disc(midY + dy)).join(' '),
+      fill: palette.chip,
     });
   }
 
-  // A named kind (SQL/NoSQL/Cache) reads as a quiet second line directly under the primary
-  // label — not a corner badge like Service's, which has a real corner to badge; a cylinder
-  // doesn't. The pair is centred as one block in the cylinder's inner window so it stays
-  // balanced regardless of node height. The default ("generic") kind keeps the single-line
-  // `centredLabel` path exactly as before — untouched, since there's nothing to stack.
-  if (kindLabel) {
-    shapes.push(
-      ...centeredStackedCaption(node, ctx, { top: innerTop, bottom: innerBottom, kindLabel, nameColor: palette.text }),
-    );
-  } else {
-    shapes.push(...centredLabel(node, ctx, { top: innerTop, bottom: innerBottom, color: palette.text }));
-  }
-
+  shapes.push(...dataStoreCaption(node, ctx, palette));
   return shapes;
 }
 
 /**
- * NoSQL: a loose, offset cluster of three blocks, cascading diagonally and
- * drawn back-to-front so the front one visually overlaps the ones behind it
- * — "scattered, flexible records," deliberately not a neat aligned stack
- * (that's Cache's motif, drawn to feel like the opposite of this one).
- * Abstract on purpose: this communicates "a non-relational persistent
- * store," not any one specific NoSQL data model.
- */
-function dataStoreNoSql(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const stroke: Stroke = { color: palette.line, width: 1.5 };
-
-  const clusterTop = y + h * 0.06;
-  const dx = w * 0.1;
-  const dy = h * 0.14;
-  const blocks = [0, 1, 2].map((i) => ({
-    x: x + dx * i,
-    y: clusterTop + dy * i,
-    w: w * (0.62 - i * 0.1),
-    h: h * (0.3 - i * 0.03),
-  }));
-  const clusterBottom = Math.max(...blocks.map((b) => b.y + b.h));
-
-  const shapes: Shape[] = blocks.map((b) => ({ t: 'rect', x: b.x, y: b.y, w: b.w, h: b.h, r: 6, fill: palette.fill, stroke }));
-  shapes.push(
-    ...pinnedCaption(node, ctx, { top: clusterBottom + 4, kindLabel: DATABASE_KIND_LABELS.nosql!, nameColor: palette.text }),
-  );
-  return shapes;
-}
-
-/**
- * Cache: neat, tightly-stacked, equal-width slabs — the deliberate opposite
- * of NoSQL's scattered cluster above. Flatter and more compact than every
- * other kind's glyph on purpose: a cache should not visually carry the same
- * architectural weight as a system of record.
- */
-function dataStoreCache(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const stroke: Stroke = { color: palette.line, width: 1.5 };
-
-  const slabW = w * 0.74;
-  const slabH = Math.min(10, h * 0.14);
-  const gap = Math.min(5, h * 0.05);
-  const slabX = x + (w - slabW) / 2;
-  const groupTop = y + h * 0.1;
-  const slabs = [0, 1, 2].map((i) => ({ x: slabX, y: groupTop + i * (slabH + gap), w: slabW, h: slabH }));
-  const groupBottom = slabs[slabs.length - 1]!.y + slabH;
-
-  const shapes: Shape[] = slabs.map((s) => ({ t: 'rect', x: s.x, y: s.y, w: s.w, h: s.h, r: 3, fill: palette.fill, stroke }));
-  shapes.push(
-    ...pinnedCaption(node, ctx, { top: groupBottom + 4, kindLabel: DATABASE_KIND_LABELS.cache!, nameColor: palette.text }),
-  );
-  return shapes;
-}
-
-/**
- * File System: a folder silhouette — a tab merging into a full-width body —
- * as the *entire* node outline (one closed path, not a body+lid pair), the
- * same "the silhouette fills the box" treatment the cylinder gets. Kept
- * architectural/abstract rather than a literal desktop Finder folder: no
- * dog-ear, no shading, just the tab-and-body shape.
+ * File System: a folder — a tab stepping up from the top-left of a body, with two ruled lines
+ * inside it. One closed outline, not a body plus a separate tab, so the silhouette stays a single
+ * shape at every roughness preset.
  */
 function dataStoreFileSystem(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const r = 6;
-  const tabW = w * 0.42;
-  const tabH = Math.min(12, h * 0.18);
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const w = Math.min(56, node.width - PADDING * 2);
+  const x = node.width / 2 - w / 2;
+  const h = DS_GLYPH_HEIGHT;
+  const r = 5;
+  const tabW = w * 0.44;
+  const tabH = 8;
+  const y = DS_GLYPH_TOP + tabH;
 
   const d = [
-    `M${x + r},${y}`,
-    `L${x + tabW},${y}`,
-    `L${x + tabW},${y + tabH}`,
-    `L${x + w - r},${y + tabH}`,
-    `Q${x + w},${y + tabH} ${x + w},${y + tabH + r}`,
-    `L${x + w},${y + h - r}`,
-    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
-    `L${x + r},${y + h}`,
-    `Q${x},${y + h} ${x},${y + h - r}`,
-    `L${x},${y + r}`,
-    `Q${x},${y} ${x + r},${y}`,
+    `M${x + r},${y - tabH}`,
+    `L${x + tabW - r},${y - tabH}`,
+    `Q${x + tabW},${y - tabH} ${x + tabW + 2},${y - tabH + 3}`,
+    `L${x + tabW + 5},${y}`,
+    `L${x + w - r},${y}`,
+    `Q${x + w},${y} ${x + w},${y + r}`,
+    `L${x + w},${y + h - tabH - r}`,
+    `Q${x + w},${y + h - tabH} ${x + w - r},${y + h - tabH}`,
+    `L${x + r},${y + h - tabH}`,
+    `Q${x},${y + h - tabH} ${x},${y + h - tabH - r}`,
+    `L${x},${y - tabH + r}`,
+    `Q${x},${y - tabH} ${x + r},${y - tabH}`,
     'Z',
   ].join(' ');
 
-  const shapes: Shape[] = [{ t: 'path', d, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } }];
-  shapes.push(
-    ...centeredStackedCaption(node, ctx, {
-      top: tabH + 4,
-      bottom: 6,
-      kindLabel: DATABASE_KIND_LABELS['file-system']!,
-      nameColor: palette.text,
-    }),
-  );
-  return shapes;
-}
-
-/**
- * Object Storage: an open-top vessel — wider at the rim than at the base,
- * with a rim line (the cylinder's "lid" convention, reused) and two small
- * object blocks nested near the base. Deliberately not the AWS S3 icon: no
- * handle, no lid flap — an abstract storage vessel, not a vendor logo.
- */
-function dataStoreObjectStorage(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const topW = w * 0.92;
-  const bottomW = w * 0.68;
-  const cornerR = 5;
-  const topLeft = x + (w - topW) / 2;
-  const topRight = topLeft + topW;
-  const bottomLeft = x + (w - bottomW) / 2;
-  const bottomRight = bottomLeft + bottomW;
-  const bottomY = y + h;
-
-  const d = [
-    `M${topLeft},${y}`,
-    `L${topRight},${y}`,
-    `L${bottomRight},${bottomY - cornerR}`,
-    `Q${bottomRight},${bottomY} ${bottomRight - cornerR},${bottomY}`,
-    `L${bottomLeft + cornerR},${bottomY}`,
-    `Q${bottomLeft},${bottomY} ${bottomLeft},${bottomY - cornerR}`,
-    'Z',
-  ].join(' ');
-
-  const rimY = y + 5;
-  const rimInset = topW * 0.05;
-  const rim = `M${topLeft + rimInset},${rimY} L${topRight - rimInset},${rimY}`;
-
-  const objW = 9;
-  const objH = 7;
-  const objGap = 5;
-  const objY = bottomY - objH - 8;
-  const objStartX = x + (w - (objW * 2 + objGap)) / 2;
-  const objStroke: Stroke = { color: palette.line, width: 1.2 };
-
-  const shapes: Shape[] = [
+  const bodyMid = y + (h - tabH) / 2;
+  const lineX = x + 11;
+  return [
     { t: 'path', d, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
-    { t: 'path', d: rim, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.6 },
-    { t: 'rect', x: objStartX, y: objY, w: objW, h: objH, r: 2, fill: 'none', stroke: objStroke },
-    { t: 'rect', x: objStartX + objW + objGap, y: objY, w: objW, h: objH, r: 2, fill: 'none', stroke: objStroke },
+    {
+      t: 'path',
+      d: `M${lineX},${bodyMid - 4} h${w - 22} M${lineX},${bodyMid + 3} h${w - 30}`,
+      fill: 'none',
+      stroke: { color: palette.chip, width: 1.4, linecap: 'round' },
+    },
+    ...dataStoreCaption(node, ctx, palette),
   ];
-
-  shapes.push(
-    ...centeredStackedCaption(node, ctx, {
-      top: rimY + 8,
-      bottom: bottomY - objY + 4,
-      kindLabel: DATABASE_KIND_LABELS['object-storage']!,
-      nameColor: palette.text,
-    }),
-  );
-  return shapes;
 }
 
 /**
- * Search / Index: three stacked "index cards," each with a small tab notch
- * on its right edge, staggered vertically per card — a card-catalog cue,
- * not a magnifying glass. Card + tab are one closed path per card, the same
- * "merge two rounded pieces into one outline" technique the folder uses.
+ * NoSQL: two document cards, the front one offset down-right of the back one, with a small field
+ * of dots in its corner — "stacked documents, shape not fixed." Deliberately the opposite of
+ * Cache's neat aligned stack.
  */
-function dataStoreSearchIndex(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'blue');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const cardW = w * 0.8;
-  const cardH = Math.min(14, h * 0.16);
-  const gap = Math.min(4, h * 0.04);
-  const tabW = cardW * 0.18;
-  const tabH = cardH * 0.5;
-  const r = 3;
-  const cardX = x + (w - cardW) / 2;
-  const groupTop = y + h * 0.06;
+function dataStoreNoSql(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
+  const cardW = Math.min(44, (node.width - PADDING * 2) * 0.8);
+  const cardH = 27;
+  const offset = 9;
+  const totalW = cardW + offset;
+  const x = node.width / 2 - totalW / 2;
+  const y = DS_GLYPH_TOP + (DS_GLYPH_HEIGHT - (cardH + offset)) / 2;
 
-  function cardPath(cardY: number, tabY: number): string {
-    return [
-      `M${cardX + r},${cardY}`,
-      `L${cardX + cardW - r},${cardY}`,
-      `Q${cardX + cardW},${cardY} ${cardX + cardW},${cardY + r}`,
-      `L${cardX + cardW},${tabY}`,
-      `L${cardX + cardW + tabW},${tabY}`,
-      `L${cardX + cardW + tabW},${tabY + tabH}`,
-      `L${cardX + cardW},${tabY + tabH}`,
-      `L${cardX + cardW},${cardY + cardH - r}`,
-      `Q${cardX + cardW},${cardY + cardH} ${cardX + cardW - r},${cardY + cardH}`,
-      `L${cardX + r},${cardY + cardH}`,
-      `Q${cardX},${cardY + cardH} ${cardX},${cardY + cardH - r}`,
-      `L${cardX},${cardY + r}`,
-      `Q${cardX},${cardY} ${cardX + r},${cardY}`,
-      'Z',
-    ].join(' ');
+  const back = { x, y, w: cardW, h: cardH, r: 5 };
+  const front = { x: x + offset, y: y + offset, w: cardW, h: cardH, r: 5 };
+
+  const dots: Shape[] = [];
+  for (let row = 0; row < 2; row += 1) {
+    for (let col = 0; col < 3; col += 1) {
+      dots.push({
+        t: 'ellipse',
+        cx: front.x + front.w - 20 + col * 6,
+        cy: front.y + front.h - 12 + row * 6,
+        rx: 1.5,
+        ry: 1.5,
+        fill: palette.chip,
+      });
+    }
   }
 
-  const cards = [0, 1, 2].map((i) => {
-    const cardY = groupTop + i * (cardH + gap);
-    const tabY = i === 0 ? cardY : i === 1 ? cardY + (cardH - tabH) / 2 : cardY + cardH - tabH;
-    return { cardY, d: cardPath(cardY, tabY) };
-  });
-  const groupBottom = cards[cards.length - 1]!.cardY + cardH;
+  return [
+    outlineShape(`${node.id}:back`, ctx, back, { fill: palette.fill, stroke }),
+    outlineShape(node.id, ctx, front, { fill: palette.fill, stroke }),
+    { t: 'group', children: dots },
+    ...dataStoreCaption(node, ctx, palette),
+  ];
+}
 
-  const shapes: Shape[] = cards.map((c) => ({
+/**
+ * Cache: three isometric chips stacked with air between them — layers you can drop and rebuild,
+ * which is the whole point of a cache. Rhombuses rather than the flat slabs this used to draw:
+ * flat bars read as Search Index's rows, and these need to be unmistakably a different family of
+ * mark from those.
+ */
+function dataStoreCache(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
+  const chipW = Math.min(48, node.width - PADDING * 2);
+  const chipH = 15;
+  const gap = 5;
+  const cx = node.width / 2;
+  const stackH = chipH + (chipH + gap - chipH) + (chipH / 2) * 2 + gap * 2;
+  const top = DS_GLYPH_TOP + (DS_GLYPH_HEIGHT - stackH) / 2 + chipH / 2;
+
+  const chip = (cy: number): Shape => ({
     t: 'path',
-    d: c.d,
+    d: [
+      `M${cx},${cy - chipH / 2}`,
+      `L${cx + chipW / 2},${cy}`,
+      `L${cx},${cy + chipH / 2}`,
+      `L${cx - chipW / 2},${cy}`,
+      'Z',
+    ].join(' '),
     fill: palette.fill,
-    stroke: { color: palette.line, width: 1.5 },
+    stroke,
+  });
+
+  // Back to front, so each chip's outline sits cleanly on the one below it.
+  const step = chipH / 2 + gap;
+  return [
+    chip(top + step * 2),
+    chip(top + step),
+    chip(top),
+    ...dataStoreCaption(node, ctx, palette),
+  ];
+}
+
+/**
+ * Object Storage: a bucket — an elliptical rim over a body that tapers to a smaller base, a
+ * handle on one side, and a few loose geometric objects inside. Abstract on purpose: objects of
+ * whatever shape, dropped in a container, with no vendor's logo anywhere near it.
+ */
+function dataStoreObjectStorage(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
+  const topW = Math.min(50, node.width - PADDING * 2);
+  const bottomW = topW * 0.66;
+  const cx = node.width / 2;
+  const y = DS_GLYPH_TOP + 3;
+  const h = DS_GLYPH_HEIGHT - 6;
+  const ry = 6;
+  const topLeft = cx - topW / 2;
+  const topRight = cx + topW / 2;
+  const bottomLeft = cx - bottomW / 2;
+  const bottomRight = cx + bottomW / 2;
+  const bottomY = y + h;
+  const cornerR = 4;
+
+  const body = [
+    `M${topLeft},${y}`,
+    `L${bottomLeft + cornerR * 0.4},${bottomY - cornerR}`,
+    `Q${bottomLeft + cornerR * 0.6},${bottomY} ${bottomLeft + cornerR + 1},${bottomY}`,
+    `L${bottomRight - cornerR - 1},${bottomY}`,
+    `Q${bottomRight - cornerR * 0.6},${bottomY} ${bottomRight - cornerR * 0.4},${bottomY - cornerR}`,
+    `L${topRight},${y}`,
+  ].join(' ');
+
+  // The rim is the cylinder family's "lid" convention, reused — an open container, seen slightly
+  // from above.
+  const rim = `M${topLeft},${y} a${topW / 2},${ry} 0 0 0 ${topW},0 a${topW / 2},${ry} 0 0 0 ${-topW},0`;
+  // One small handle, so the silhouette isn't symmetrical and reads as a pail rather than a cup.
+  const handle = `M${topRight - 2},${y + 9} q6,3 4,10`;
+
+  const markY = bottomY - 13;
+  const tri = (mx: number, my: number, s: number) =>
+    `M${mx},${my - s} L${mx + s},${my + s * 0.8} L${mx - s},${my + s * 0.8} Z`;
+
+  return [
+    { t: 'path', d: body, fill: palette.fill, stroke },
+    { t: 'path', d: rim, fill: 'none', stroke },
+    { t: 'path', d: handle, fill: 'none', stroke: { color: palette.line, width: 1.3 } },
+    {
+      t: 'path',
+      d: `${tri(cx - 1, markY - 7, 3.4)} ${tri(cx - 6, markY, 3.4)}`,
+      fill: palette.chip,
+    },
+    { t: 'rect', x: cx + 2, y: markY - 3, w: 6, h: 6, r: 1.5, fill: palette.chip },
+    ...dataStoreCaption(node, ctx, palette),
+  ];
+}
+
+/**
+ * Search / Index: rows with a lens over them.
+ *
+ * An earlier revision drew tabbed catalogue cards and explicitly refused a magnifying glass, on
+ * the grounds that a lens says "search the UI" rather than "a search index." Between a card
+ * catalogue nobody under forty has used and the universal mark for looking something up, the lens
+ * wins: the rows underneath are what say "an index," and the lens says what is done to them.
+ */
+function dataStoreSearchIndex(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
+  const rowW = Math.min(48, node.width - PADDING * 2);
+  const rowH = 8;
+  const gap = 5;
+  const x = node.width / 2 - rowW / 2;
+  const stackH = rowH * 3 + gap * 2;
+  const y = DS_GLYPH_TOP + (DS_GLYPH_HEIGHT - stackH) / 2;
+
+  const rows: Shape[] = [0, 1, 2].map((i) => ({
+    t: 'rect',
+    x,
+    y: y + i * (rowH + gap),
+    w: rowW,
+    h: rowH,
+    r: 3,
+    fill: palette.fill,
+    stroke,
   }));
-  shapes.push(
-    ...pinnedCaption(node, ctx, {
-      top: groupBottom + 4,
-      kindLabel: DATABASE_KIND_LABELS['search-index']!,
-      nameColor: palette.text,
-    }),
-  );
-  return shapes;
+
+  // Bottom-right, overlapping the last row — the lens sits *on* the index it searches.
+  const lensR = 7.5;
+  const lensCx = x + rowW - 4;
+  const lensCy = y + stackH - 2;
+  return [
+    ...rows,
+    // Filled with the shape's own surface colour, not the canvas colour: the lens overlaps the
+    // bottom row and has to hide it, but a Data Store often sits on a tinted Boundary, where a
+    // canvas-coloured disc would read as a hole punched through the shape.
+    { t: 'ellipse', cx: lensCx, cy: lensCy, rx: lensR, ry: lensR, fill: palette.fill, stroke },
+    {
+      t: 'path',
+      d: `M${lensCx + lensR * 0.7},${lensCy + lensR * 0.7} l4,4`,
+      fill: 'none',
+      stroke: { color: palette.line, width: 1.8, linecap: 'round' },
+    },
+    ...dataStoreCaption(node, ctx, palette),
+  ];
+}
+
+/**
+ * Table: a grid — a card with a filled header row and ruled columns. A logical table (or
+ * collection) *inside* a store, not a store: two of these in one boundary must read as two tables
+ * of one database, never as two physical stores in a distributed transaction.
+ */
+function dataStoreTable(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const w = Math.min(54, node.width - PADDING * 2);
+  const x = node.width / 2 - w / 2;
+  const y = DS_GLYPH_TOP + 2;
+  const h = DS_GLYPH_HEIGHT - 4;
+  const r = 4;
+  const headerH = 9;
+  const cols = 3;
+  const rows = 3;
+
+  const rules: string[] = [];
+  for (let i = 1; i < cols; i += 1) {
+    const gx = x + (w * i) / cols;
+    rules.push(`M${gx},${y} L${gx},${y + h}`);
+  }
+  for (let i = 1; i < rows; i += 1) {
+    const gy = y + headerH + ((h - headerH) * i) / rows;
+    rules.push(`M${x},${gy} L${x + w},${gy}`);
+  }
+
+  return [
+    outlineShape(node.id, ctx, { x, y, w, h, r }, { fill: palette.fill, stroke: { color: palette.line, width: 1.5 } }),
+    // Header row, clipped to the card's own rounded top the same way a Service's cap is.
+    {
+      t: 'group',
+      clip: { x, y, w, h, r },
+      children: [{ t: 'rect', x, y, w, h: headerH, fill: palette.chip }],
+    },
+    {
+      t: 'group',
+      clip: { x, y, w, h, r },
+      children: [
+        { t: 'path', d: rules.join(' '), fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.6 },
+      ],
+    },
+    ...dataStoreCaption(node, ctx, palette),
+  ];
 }
 
 /**
@@ -1445,7 +1460,7 @@ const DLQ_OPACITY = 0.75;
 
 function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   const isDlq = node.deliveryRole === 'dead-letter';
-  const palette = accentOf(ctx.theme, node.accent ?? 'violet');
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const w = node.width - 1.5;
   const h = node.height - 1.5;
   const x = 0.75;
@@ -1517,29 +1532,45 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
     return [envelope(startX, iconY, iconW, iconH), fanArc(4), fanArc(outerArcR)].join(' ');
   }
 
-  // Stream: small plain segments (no envelope fold — reads as data, not mail), gently staggered
-  // to suggest continuous motion rather than a neat, stationary row.
+  // Stream: records rather than envelopes — three small document tiles, each ruled with two short
+  // lines, separated by chevrons showing the direction of travel. A plain stack of blank blocks
+  // (the previous glyph) read as "three things"; ruled tiles read as "structured records moving
+  // through," which is what distinguishes a stream from a queue of messages.
   function streamIcons(): string {
     const segCount = 3;
-    const segW = 14;
-    const segH = 10;
-    const segGap = 7;
-    const stagger = 3;
-    const offsets = [-stagger, stagger, -stagger];
+    const segW = 15;
+    const segH = 15;
+    const segGap = 9;
     const baseY = y + tubeH / 2 - segH / 2;
     const startX = x + (w - (segW * segCount + segGap * (segCount - 1))) / 2;
-    return Array.from(
-      { length: segCount },
-      (_, i) => `M${startX + i * (segW + segGap)},${baseY + offsets[i]!} h${segW} v${segH} h${-segW} Z`,
-    ).join(' ');
+    const parts: string[] = [];
+    for (let i = 0; i < segCount; i += 1) {
+      const sx = startX + i * (segW + segGap);
+      parts.push(`M${sx},${baseY} h${segW} v${segH} h${-segW} Z`);
+      // Two rules inside each tile, inset so they never touch its border.
+      parts.push(`M${sx + 3},${baseY + segH * 0.36} h${segW - 6}`);
+      parts.push(`M${sx + 3},${baseY + segH * 0.64} h${segW - 7}`);
+      if (i < segCount - 1) {
+        const gx = sx + segW + segGap / 2;
+        const gy = y + tubeH / 2;
+        parts.push(`M${gx - 1.8},${gy - 2.6} L${gx + 1.4},${gy} L${gx - 1.8},${gy + 2.6}`);
+      }
+    }
+    return parts.join(' ');
   }
 
-  // DLQ: a single, lonely envelope — "one message that didn't make it through," not a queue of
-  // things waiting their turn — centred exactly where the other kinds' icon clusters sit.
+  /** Where the DLQ's envelope pair starts, so the solid one here and the dashed one added after
+   *  the icon path is built stay centred as a single group. */
+  const DLQ_ICON_W = 17;
+  const DLQ_ICON_H = 13;
+  const DLQ_ICON_GAP = 7;
+  const dlqStartX = x + (w - (DLQ_ICON_W * 2 + DLQ_ICON_GAP)) / 2;
+
+  // DLQ: one delivered envelope and, trailing it, one that didn't make it (dashed, added
+  // separately since a single path can't carry two dash patterns) — not a queue of things waiting
+  // their turn. Centred as a pair exactly where the other kinds' icon clusters sit.
   function dlqIcon(): string {
-    const iconW = 17;
-    const iconH = 13;
-    return envelope(x + (w - iconW) / 2, y + tubeH / 2 - iconH / 2, iconW, iconH);
+    return envelope(dlqStartX, y + tubeH / 2 - DLQ_ICON_H / 2, DLQ_ICON_W, DLQ_ICON_H);
   }
 
   const icons = isDlq
@@ -1550,21 +1581,34 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
         ? streamIcons()
         : queueIcons();
 
-  const dlqStroke = isDlq ? { dash: DLQ_DASH } : undefined;
   const dlqOpacity = isDlq ? DLQ_OPACITY : undefined;
   const shapes: Shape[] = [
-    { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5, ...dlqStroke }, opacity: dlqOpacity },
-    { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5, ...dlqStroke }, opacity: dlqOpacity },
+    { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, opacity: dlqOpacity },
+    { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5 }, opacity: dlqOpacity },
     { t: 'path', d: icons, fill: 'none', stroke: { color: palette.line, width: 1.2 }, opacity: dlqOpacity },
   ];
+  // A DLQ's dash belongs on the undelivered message, not on the pipe: the queue itself is a real,
+  // working queue, and what's exceptional about it is the message sitting in it. So the tube stays
+  // solid (only slightly dimmed) and a second, dashed envelope trails the solid one — "one that
+  // made it, one that didn't." The whole-tube dash this used to carry said the infrastructure was
+  // hypothetical, which was never the intent.
+  if (isDlq) {
+    shapes.push({
+      t: 'path',
+      d: envelope(dlqStartX + DLQ_ICON_W + DLQ_ICON_GAP, y + tubeH / 2 - DLQ_ICON_H / 2, DLQ_ICON_W, DLQ_ICON_H),
+      fill: 'none',
+      stroke: { color: palette.line, width: 1.2, dash: DLQ_DASH },
+      opacity: dlqOpacity,
+    });
+  }
 
   // Same "special opportunity" retrace pass as `database()` — Sketch only, independently
   // seeded. The icon glyphs above never retrace; they're small, identifying, and text-adjacent.
   if (profile.retrace) {
     const retrace = tubePaths(x, y, w, tubeH, rx, `${node.id}:retrace`, profile.outline, profile.bow);
     shapes.push(
-      { t: 'path', d: retrace.body, fill: 'none', stroke: { color: palette.line, width: 1, ...dlqStroke }, opacity: 0.5 },
-      { t: 'path', d: retrace.lid, fill: 'none', stroke: { color: palette.line, width: 1, ...dlqStroke }, opacity: 0.5 },
+      { t: 'path', d: retrace.body, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
+      { t: 'path', d: retrace.lid, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
     );
   }
 
@@ -1704,11 +1748,12 @@ function humanGlyph(
 }
 
 /**
- * System: an external-system/window glyph — a plain outline frame with a title-bar line and one
- * quieter content line beneath it, just enough internal structure to read as an application
- * window rather than a blank box. Deliberately not Service's shape (a full accent-filled card):
- * the point is that this is something *outside* the architecture being modelled, not a component
- * of it. Technology-neutral on purpose — no vendor chrome.
+ * System: an ID badge — a card on a clip, carrying a tiny portrait and two detail lines.
+ *
+ * This is the participant that isn't a person: a service account, a machine identity, an
+ * integration acting on someone's behalf. A plain window frame (the previous glyph) said "an
+ * application," which is Service's job; a badge says "an identity that isn't human," which is
+ * precisely what this kind is for, and it stays technology-neutral — no vendor chrome.
  */
 function systemGlyph(
   node: DraftNode,
@@ -1716,16 +1761,21 @@ function systemGlyph(
   stroke: Stroke,
   ctx: DescribeContext,
 ): { shapes: Shape[]; glyphBottom: number } {
-  const rectW = 58;
-  const rectH = GLYPH_SLOT;
-  const rectX = cx - rectW / 2;
-  const rectY = GLYPH_TOP;
-  const headerY = rectY + 10;
-  const contentW = rectW * 0.6;
-  const contentX = cx - contentW / 2;
-  const contentY = headerY + 12;
-  // These are 1px reference lines, not the silhouette — a small bow only, restrained relative to
-  // the container's own, and never jittered at their endpoints (they stay flush with the frame).
+  const clipH = 6;
+  const cardW = 56;
+  const cardH = GLYPH_SLOT - clipH;
+  const cardX = cx - cardW / 2;
+  const cardY = GLYPH_TOP + clipH;
+  // The clip sits above the card, centred — the one piece that makes a rounded rect read as a
+  // badge on a lanyard rather than another window.
+  const clipW = 14;
+  const portraitCx = cardX + 15;
+  const portraitCy = cardY + cardH / 2;
+  const headR = 4.4;
+  const lineX = cardX + 26;
+  const lineW = cardW - 34;
+  // These are reference lines inside a glyph, not the silhouette — a restrained bow only, and
+  // never jittered at their endpoints so they stay parallel to the card they sit in.
   const hairlineBow = PERSONALITY_PROFILES[ctx.preset].bow * 0.5;
   const hairline = (seedSuffix: string, y: number, x0: number, w: number) => {
     if (hairlineBow === 0) return `M${x0},${y} h${w}`;
@@ -1735,11 +1785,20 @@ function systemGlyph(
 
   return {
     shapes: [
-      outlineShape(`${node.id}:actor-glyph`, ctx, { x: rectX, y: rectY, w: rectW, h: rectH, r: 4 }, { fill: 'none', stroke }),
-      { t: 'path', d: hairline('header-line', headerY, rectX, rectW), fill: 'none', stroke },
-      { t: 'path', d: hairline('content-line', contentY, contentX, contentW), fill: 'none', stroke },
+      { t: 'rect', x: cx - clipW / 2, y: GLYPH_TOP, w: clipW, h: clipH + 2, r: 2, fill: 'none', stroke },
+      outlineShape(`${node.id}:actor-glyph`, ctx, { x: cardX, y: cardY, w: cardW, h: cardH, r: 4 }, { fill: 'none', stroke }),
+      // A miniature of Human's own head-and-shoulders, so the badge reads as "an identity."
+      { t: 'ellipse', cx: portraitCx, cy: portraitCy - 4, rx: headR, ry: headR, fill: 'none', stroke },
+      {
+        t: 'path',
+        d: `M${portraitCx - 6.5},${portraitCy + 7} a6.5,5.5 0 0 1 13,0`,
+        fill: 'none',
+        stroke,
+      },
+      { t: 'path', d: hairline('badge-line-1', portraitCy - 3, lineX, lineW), fill: 'none', stroke },
+      { t: 'path', d: hairline('badge-line-2', portraitCy + 3, lineX, lineW * 0.66), fill: 'none', stroke },
     ],
-    glyphBottom: rectY + rectH,
+    glyphBottom: cardY + cardH,
   };
 }
 
@@ -1782,6 +1841,123 @@ function deviceGlyph(
 }
 
 /**
+ * Group: three of Human's own bust silhouettes at reduced scale, overlapping — several people
+ * acting together, not a new pictogram. The centre bust is drawn last (full size, full strength)
+ * on top of two smaller, partially-hidden ones behind it, the same "who's in front" layering every
+ * people-group icon uses. Deliberately reuses Human's construction (head + closed-shoulder torso)
+ * rather than inventing a second body shape, so Group reads as "Human, but several" at a glance.
+ */
+function groupGlyph(
+  node: DraftNode,
+  cx: number,
+  stroke: Stroke,
+  ctx: DescribeContext,
+): { shapes: Shape[]; glyphBottom: number } {
+  const bottom = GLYPH_BOTTOM;
+  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const outlineAmp = profile.outline;
+  const bowAmp = profile.bow;
+  const bodyFill = 0.12;
+
+  const bust = (seedSuffix: string, bustCx: number, headR: number, torsoRx: number, capRy: number, opacity: number): Shape[] => {
+    const headCy = GLYPH_TOP + headR + (13 - headR);
+    const peakY = headCy + headR - 2;
+    const shoulderTopY = peakY + capRy;
+    const left = bustCx - torsoRx;
+    const right = bustCx + torsoRx;
+    let torso: string;
+    if (outlineAmp === 0 && bowAmp === 0) {
+      torso = [
+        `M${left},${bottom}`,
+        `L${left},${shoulderTopY}`,
+        `A${torsoRx},${capRy} 0 0 1 ${right},${shoulderTopY}`,
+        `L${right},${bottom}`,
+        'Z',
+      ].join(' ');
+    } else {
+      const j = (i: number) => jitter(`${node.id}:${seedSuffix}`, i, outlineAmp);
+      const lb = { x: left + j(0), y: bottom + j(1) };
+      const lt = { x: left + j(2), y: shoulderTopY + j(3) };
+      const rt = { x: right + j(4), y: shoulderTopY + j(5) };
+      const rb = { x: right + j(6), y: bottom + j(7) };
+      const wall = (a: { x: number; y: number }, b: { x: number; y: number }, index: number) => {
+        if (bowAmp === 0) return `L${b.x},${b.y}`;
+        const c = bowControlPoint(a, b, `${node.id}:${seedSuffix}`, index, bowAmp);
+        return `Q${c.x},${c.y} ${b.x},${b.y}`;
+      };
+      torso = [`M${lb.x},${lb.y}`, wall(lb, lt, 20), `A${(rt.x - lt.x) / 2},${capRy} 0 0 1 ${rt.x},${rt.y}`, wall(rt, rb, 22), 'Z'].join(' ');
+    }
+    const headOutline: Shape =
+      outlineAmp === 0 && bowAmp === 0
+        ? { t: 'ellipse', cx: bustCx, cy: headCy, rx: headR, ry: headR, fill: 'none', stroke, opacity }
+        : {
+            t: 'path',
+            d: roughEllipsePath(bustCx, headCy, headR, headR, `${node.id}:${seedSuffix}:head`, outlineAmp, bowAmp),
+            fill: 'none',
+            stroke,
+            opacity,
+          };
+    return [
+      { t: 'path', d: torso, fill: stroke.color, opacity: bodyFill * (opacity === 1 ? 1 : 0.8) },
+      { t: 'path', d: torso, fill: 'none', stroke, opacity },
+      headOutline,
+    ];
+  };
+
+  // Back two are smaller and dimmer, side two are drawn first so the centre bust's outline sits
+  // cleanly on top of their overlap.
+  const shapes: Shape[] = [
+    ...bust('left', cx - 19, 9, 15, 6, 0.55),
+    ...bust('right', cx + 19, 9, 15, 6, 0.55),
+    ...bust('centre', cx, 12, 22, 7, 1),
+  ];
+  return { shapes, glyphBottom: bottom };
+}
+
+/**
+ * Third Party: Human's bust wearing a collar and tie — a person representing an organisation.
+ *
+ * The collar is what separates this from plain Human at a glance: two short lapel strokes cutting
+ * down from the neck, and a narrow tie between them. A dashed version of the plain bust was the
+ * alternative (reusing this file's "dashed = not ours" grammar) but it read as a *tentative*
+ * person rather than a formal one, and dashes already carry three other meanings here.
+ */
+function thirdPartyGlyph(
+  node: DraftNode,
+  cx: number,
+  stroke: Stroke,
+  ctx: DescribeContext,
+): { shapes: Shape[]; glyphBottom: number } {
+  const { shapes, glyphBottom } = humanGlyph(node, cx, stroke, ctx);
+  // Positioned off the same constants `humanGlyph` builds its head from, so the collar always
+  // lands on the neck regardless of preset jitter underneath it.
+  const neckY = GLYPH_TOP + 13 * 2 - 3;
+  const lapelDrop = 11;
+  const lapelSpread = 7;
+  const tieTop = neckY + 2;
+  const tieLen = 13;
+  const tieHalf = 2.6;
+  return {
+    shapes: [
+      ...shapes,
+      {
+        t: 'path',
+        d: `M${cx - lapelSpread},${neckY} L${cx},${neckY + lapelDrop} L${cx + lapelSpread},${neckY}`,
+        fill: 'none',
+        stroke,
+      },
+      {
+        t: 'path',
+        d: `M${cx - tieHalf},${tieTop} L${cx + tieHalf},${tieTop} L${cx},${tieTop + tieLen} Z`,
+        fill: stroke.color,
+        opacity: 0.55,
+      },
+    ],
+    glyphBottom,
+  };
+}
+
+/**
  * Actor gets its own light outline container — unlike Service's filled, capped, shadowed card,
  * this is a plain unfilled rounded rect (a touch softer at the corners, too) so the hierarchy
  * reads through composition and treatment rather than through being tiny: a real participant
@@ -1795,21 +1971,36 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
   const stroke: Stroke = { color: palette.line, width: 1.5 };
   const kind = node.actorKind ?? 'human';
 
-  const container = outlineShape(
-    node.id,
-    ctx,
-    { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 10 },
-    { fill: 'none', stroke },
-  );
+  const card = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 10 };
+  const container = outlineShape(node.id, ctx, card, { fill: palette.fill, stroke });
+
+  // The family's signature: one short bar straddling the top edge, near the left corner. It is
+  // the whole Actor family's shared mark — every kind carries it, at the same size and offset, so
+  // a row of participants reads as a set even when their glyphs are as different as a bust and a
+  // phone. Drawn over the outline rather than inside it, so it reads as part of the edge.
+  const barW = Math.min(34, card.w * 0.26);
+  const topBar: Shape = {
+    t: 'rect',
+    x: card.x + 13,
+    y: card.y - 1.5,
+    w: barW,
+    h: 3,
+    r: 1.5,
+    fill: palette.chip,
+  };
 
   const { shapes: glyphShapes, glyphBottom } =
     kind === 'system'
       ? systemGlyph(node, cx, stroke, ctx)
       : kind === 'device'
         ? deviceGlyph(node, cx, stroke, ctx)
-        : humanGlyph(node, cx, stroke, ctx);
+        : kind === 'group'
+          ? groupGlyph(node, cx, stroke, ctx)
+          : kind === 'thirdParty'
+            ? thirdPartyGlyph(node, cx, stroke, ctx)
+            : humanGlyph(node, cx, stroke, ctx);
 
-  const shapes: Shape[] = [container, ...glyphShapes];
+  const shapes: Shape[] = [container, topBar, ...glyphShapes];
 
   // No on-shape kind caption ("HUMAN"/"SYSTEM"/"DEVICE") — unlike Service/Data Store/Queue, whose
   // silhouette is shared across every sub-kind, Actor's three kinds are already visually distinct
@@ -1916,6 +2107,8 @@ function note(node: DraftNode, ctx: DescribeContext): Shape[] {
       node.id,
       ctx,
       { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 6 },
+      // Flat, not the accent gradient the architecture families wear: a note is an annotation
+      // sitting on the canvas, and the gradient is part of what says "this is a system element."
       { fill: palette.fill, stroke: { color: palette.line, width: 1 } },
     ),
     // A colour bar rather than a sticky-note skeuomorph.

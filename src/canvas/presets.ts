@@ -109,7 +109,6 @@ export const DEV_PRESETS: Preset[] = [
     hint: 'An application or service',
     description: 'A deployable or independently running capability.',
     usageHint: 'Use for APIs, workers, background processes, or external systems.',
-    accent: 'teal',
   },
   {
     id: 'database',
@@ -119,7 +118,6 @@ export const DEV_PRESETS: Preset[] = [
     hint: 'A data store',
     description: 'Stores or serves persistent or temporary data.',
     usageHint: 'Use for databases, caches, object stores, indexes, or similar data infrastructure.',
-    accent: 'blue',
     text: 'Data Store',
   },
   {
@@ -130,7 +128,6 @@ export const DEV_PRESETS: Preset[] = [
     hint: 'A queue, topic, or event stream',
     description: 'Asynchronous communication infrastructure between parts of the system.',
     usageHint: 'The base primitive for queues, topics, and streams — pick a kind for the specific pattern.',
-    accent: 'violet',
   },
   {
     id: 'actor',

@@ -628,17 +628,18 @@ describe('live resize', () => {
       );
       const results = variants.map((node) => fillsAndCaptions(ctx, node));
 
-      // Every kind draws with the same accent-driven silhouette colour —
-      // the *set* of distinct filled colours used is identical across every
-      // kind of the same type, even though the new Data Store and Service
-      // silhouettes (unlike the shared cylinder/cap every kind used before
-      // this) legitimately differ in how many shapes carry that fill. Every
-      // kind's cap (or cap-equivalent — Scheduler's tick cluster) stays
-      // grouped, the same way Generic's always has, so its `chip` fill never
-      // surfaces as an extra top-level entry here.
-      const [first, ...rest] = results;
-      const paletteOf = (fills: string[]) => new Set(fills.filter((fill) => fill !== 'none'));
-      for (const result of rest) expect(paletteOf(result.fills)).toEqual(paletteOf(first!.fills));
+      // Every kind draws its surface in the same accent-driven colour, and paints nothing from
+      // outside that accent's own palette. Deliberately not an exact set comparison across kinds:
+      // the silhouettes legitimately differ in their interior detail (Generic's three dots, a
+      // folder's ruled lines, a table's header row), so which of `fill`/`chip` a given kind
+      // happens to use is its own business — what must not drift is the *accent*.
+      const accent = LIGHT.accents.neutral;
+      const allowed = new Set<string>([accent.fill, accent.line, accent.chip, accent.text]);
+      for (const result of results) {
+        const fills = result.fills.filter((fill) => fill !== 'none');
+        expect(fills).toContain(accent.fill);
+        for (const fill of fills) expect(allowed.has(fill), `${fill} is outside the accent palette`).toBe(true);
+      }
 
       // The default ("generic") kind renders no extra caption; every named
       // kind adds exactly one distinguishing caption on top of the label.
@@ -693,11 +694,13 @@ describe('live resize', () => {
     expect(queueShapes.some((s) => s.t === 'rect')).toBe(false);
     expect(queueShapes.some((s) => s.t === 'group')).toBe(false);
 
-    // Not a box+cap (service) or a vertical-cylinder path count (database) —
-    // both build a recognisable cylinder from paths, but a different count.
+    // Not a box+cap (service). A Data Store is the other cylinder in the library, and it is also
+    // built from paths — body, lid, and its own three dots — so the two are separated here by
+    // comparing the geometry rather than counting shapes, which is what actually has to differ.
     expect(serviceShapes.some((s) => s.t === 'group')).toBe(true);
-    expect(databaseShapes.filter((s) => s.t === 'path').length).toBe(2);
-    expect(queuePaths.length).not.toBe(databaseShapes.filter((s) => s.t === 'path').length);
+    expect(databaseShapes.filter((s) => s.t === 'path').length).toBe(3);
+    const geometry = (shapes: typeof queueShapes) => JSON.stringify(shapes.filter((s) => s.t !== 'text'));
+    expect(geometry(queueShapes)).not.toBe(geometry(databaseShapes));
   });
 
   it('gives each new Service subtype a genuinely different silhouette, not just a different caption', () => {
@@ -742,28 +745,45 @@ describe('live resize', () => {
 
     const schedulerShapes = describeNode(scheduler, ctx).shapes;
     const schedulerGroups = schedulerShapes.filter((s): s is Extract<typeof s, { t: 'group' }> => s.t === 'group');
-    // One group for the tick cluster (no clip needed) plus none for a solid cap.
+    // One group, for the tick cluster — a single cohesive mark, the way Generic's cap is one.
     expect(schedulerGroups.length).toBe(1);
     const ticks = schedulerGroups[0]!.children;
     expect(ticks.length).toBe(3);
-    // The cluster stays well clear of the node's right edge — this is a compact accent, not a
-    // rail spanning the full top (which is what would risk the calendar/notebook read).
-    const rightmostTickEdge = Math.max(
-      ...ticks.map((t) => (t.t === 'rect' ? t.x + t.w : 0)),
-    );
-    expect(rightmostTickEdge).toBeLessThan(scheduler.width * 0.5);
+    const edges = ticks.map((t) => (t.t === 'rect' ? { left: t.x, right: t.x + t.w } : { left: 0, right: 0 }));
+    const clusterLeft = Math.min(...edges.map((e) => e.left));
+    const clusterRight = Math.max(...edges.map((e) => e.right));
+    // Compact, not a rail spanning the full top edge — a full-width run of evenly spaced dashes is
+    // what would risk reading as a perforation rather than a rhythm accent.
+    expect(clusterRight - clusterLeft).toBeLessThan(scheduler.width * 0.25);
+    // Pinned to the top-right corner, opposite the calendar glyph on the left, so the two details
+    // read as two marks rather than crowding each other.
+    expect(clusterLeft).toBeGreaterThan(scheduler.width * 0.5);
+    expect(clusterRight).toBeLessThanOrEqual(scheduler.width);
   });
 
-  it('gives Gateway a normal rounded-rect body (with the shared cap) plus one directional entry notch', () => {
+  it('gives Gateway a capless body whose whole left edge is one inward chevron', () => {
     const ctx = describeContext(LIGHT);
     const gateway = createNode({ type: 'service', x: 0, y: 0, width: 176, height: 68, text: 'Edge', serviceKind: 'gateway' });
     const gatewayShapes = describeNode(gateway, ctx).shapes;
 
-    // Gateway now shares Generic's cap convention (a grouped, clipped chip rect) rather than
-    // going capless — the notch alone carries the distinction.
-    expect(gatewayShapes.some((s) => s.t === 'group')).toBe(true);
-    // Its outline is still a hand-built path (the notch rules out the plain-rect `outlineShape`).
-    expect(gatewayShapes.some((s) => s.t === 'path')).toBe(true);
+    // Its outline is a hand-built path (the chevron rules out the plain-rect `outlineShape`).
+    const body = gatewayShapes.find((s) => s.t === 'path');
+    expect(body).toBeDefined();
+    // No cap: a straight accent band pinned across the top of a chevron fights the silhouette, so
+    // this is the one Service kind that goes capless.
+    expect(gatewayShapes.some((s) => s.t === 'group')).toBe(false);
+
+    // The chevron is concave — both outer corners sit on the card's own left edge and the apex
+    // pushes inward. An apex to the *left* of them would make it a pennant pointing away from the
+    // traffic it receives, which is the bug this guards.
+    const xs = [...(body!.t === 'path' ? body!.d : '').matchAll(/[ML](-?[\d.]+),(-?[\d.]+)/g)].map((m) => ({
+      x: Number(m[1]),
+      y: Number(m[2]),
+    }));
+    const leftEdge = Math.min(...xs.map((p) => p.x));
+    const midY = gateway.height / 2;
+    const apex = xs.reduce((best, p) => (Math.abs(p.y - midY) < Math.abs(best.y - midY) ? p : best), xs[0]!);
+    expect(apex.x).toBeGreaterThan(leftEdge);
   });
 
   it('gives Human/System/Device distinct silhouettes while keeping the same label and stroke weight', () => {
@@ -773,9 +793,8 @@ describe('live resize', () => {
     const results = variants.map((node) => describeNode(node, ctx).shapes);
 
     for (const shapes of results) {
-      // Every variant keeps Actor's family stroke weight. Every shape stays unfilled except
-      // Human's torso, which carries a deliberately very light wash (not a filled architecture
-      // shape) — the thing that keeps Actor visually lighter than Service/Data Store either way.
+      // Every variant keeps Actor's family stroke weight, and the only things carrying a fill are
+      // the card's own flat surface, the family's top-edge bar, and Human's torso wash.
       const glyphShapes = shapes.filter((s) => s.t !== 'text');
       expect(glyphShapes.length).toBeGreaterThan(0);
       for (const shape of glyphShapes) {
@@ -783,8 +802,18 @@ describe('live resize', () => {
         if (strokeWidth !== undefined) expect(strokeWidth).toBe(1.5);
         const fill = 'fill' in shape ? shape.fill : undefined;
         if (fill === 'none' || fill === undefined) continue;
-        // The one exception: Human's torso wash — a fill-only shape (no stroke of its own) at a
-        // deliberately very light opacity, layered under its own full-strength outline shape.
+        // The card's surface: one flat accent fill, on the shape that also draws the outline.
+        if (fill === LIGHT.accents.neutral.fill) {
+          expect(strokeWidth).toBe(1.5);
+          continue;
+        }
+        // The top-edge bar: a small solid chip-coloured mark with no stroke of its own.
+        if (fill === LIGHT.accents.neutral.chip) {
+          expect(strokeWidth).toBeUndefined();
+          continue;
+        }
+        // Human's torso wash — a fill-only shape at a deliberately very light opacity, layered
+        // under its own full-strength outline shape.
         expect(strokeWidth).toBeUndefined();
         expect('opacity' in shape ? shape.opacity : undefined).toBeLessThan(0.2);
       }

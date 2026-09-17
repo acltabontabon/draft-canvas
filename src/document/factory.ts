@@ -149,7 +149,13 @@ const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = {
   'search-index': 'Search index',
   table: 'Table',
 };
-const ACTOR_KIND_NAMES: Record<ActorKind, string> = { human: 'Human', system: 'System', device: 'Device' };
+const ACTOR_KIND_NAMES: Record<ActorKind, string> = {
+  human: 'Human',
+  system: 'System',
+  device: 'Device',
+  group: 'Group',
+  thirdParty: 'Third Party',
+};
 /** Doubles as the fallback display name and the auto-generated label a fresh Component starts
  *  with — same one-table discipline as `SERVICE_KIND_NAMES`. */
 const COMPONENT_KIND_NAMES: Record<ComponentKind, string> = {

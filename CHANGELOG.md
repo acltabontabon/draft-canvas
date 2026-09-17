@@ -2,6 +2,49 @@
 
 All notable changes to Draft Canvas are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Two new Actor kinds: Group (several people acting together) and Third Party (a person
+  representing an organization outside your own system).
+
+### Changed
+
+- A long name typed into a shape now wraps onto more lines, and shrinks a little if it still
+  doesn't fit, before it's ever cut short with an ellipsis — so the name you typed usually stays
+  fully visible.
+- Shapes are neutral by default now, instead of Service, Data Store, and Queue always starting out
+  teal, blue, or violet. Colour is still yours to apply — and when you do, it shows up on the
+  border, the cap and the small edge details rather than flooding the whole shape.
+- The colour palette has been reworked to be quieter and more grown-up: deeper, lower-saturation
+  pigments in place of the old mint, sky and gold, in both themes. Every colour is still as easy to
+  tell apart, and the selection highlight has come down to match.
+- An Actor card now carries a short bar on its top edge, shared across the whole family, so
+  people, systems and devices read as one set.
+- Gateway is now a full chevron rather than a rectangle with a small nick taken out of its side.
+- A dead-letter queue now draws as a normal queue holding one delivered and one undelivered
+  message, instead of the whole queue being dashed.
+- A Stream's messages are now ruled record tiles with arrows between them, so a stream is easier to
+  tell apart from a queue at a glance.
+- A System actor is now an ID badge rather than an application window, which reads more clearly as
+  "an identity that isn't a person."
+- Every Data Store kind has been redrawn and now reads at a glance: a cylinder with three dots for
+  a plain store, stacked discs for SQL, offset documents for NoSQL, layered chips for a Cache, a
+  folder for a File System, a bucket for Object Storage, rows under a lens for a Search Index, and
+  a grid with a header row for a Table. All eight are laid out the same way — the shape on top,
+  the name and kind beneath it — so the family reads as a set.
+- Service and Component shapes stay flat and icon-free: their kinds are told apart by silhouette —
+  a notch for an API, a double card for a Worker, a dashed outline for a Port — which stays
+  readable when a diagram is zoomed out, as a small icon does not.
+- A Port's PORT tag now sits in the bottom-right corner, the same place every other kind keeps
+  its tag.
+
+### Fixed
+
+- On a laptop-width window, the toolbar's shapes no longer run underneath the Flows button when a
+  flow is selected. The row of shapes now scrolls when it runs out of room instead.
+
 ## [1.7.0] - 2026-09-17
 
 ### Added
@@ -1062,7 +1105,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.2...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.7.0...main
+[1.7.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.5.1...v1.6.0

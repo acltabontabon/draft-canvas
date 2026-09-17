@@ -150,8 +150,10 @@ export const DELIVERY_ROLES = ['dead-letter'] as const;
 export type DeliveryRole = (typeof DELIVERY_ROLES)[number];
 
 /** An Actor is any external participant interacting with the system being modelled — not
- *  human-only. */
-export const ACTOR_KINDS = ['human', 'system', 'device'] as const;
+ *  human-only. `group` and `thirdParty` are both still people, not systems: a `group` is several
+ *  of them acting together (a team, a user segment), and `thirdParty` is one person or org outside
+ *  this system's own ownership (a vendor, a partner) — distinct from `system`, which is a machine. */
+export const ACTOR_KINDS = ['human', 'system', 'device', 'group', 'thirdParty'] as const;
 export type ActorKind = (typeof ACTOR_KINDS)[number];
 
 /**
