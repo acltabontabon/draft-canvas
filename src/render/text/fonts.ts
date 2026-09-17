@@ -36,8 +36,12 @@ export function cssFont(font: FontSpec): string {
   return `${style}${font.weight} ${font.size}px ${familyOf(font.stack)}`;
 }
 
-const TEXT_SIZES = {
+export const TEXT_SIZES = {
   nodeLabel: 14,
+  /** Floor of the node-label shrink ladder (`fitLabel` in `render/text/layout.ts`) — the size a
+   *  long name is allowed to shrink to before wrapping gives way to ellipsis. Below this, a name
+   *  stops being comfortably legible at a glance across a meeting room. */
+  nodeLabelMin: 12,
   nodeLabelLarge: 15,
   nodeSubtitle: 11,
   presetTag: 10,
@@ -54,6 +58,9 @@ const TEXT_SIZES = {
   edgeLabel: 11.5,
   sequenceBadge: 11,
   groupTitle: 12,
+  /** A Boundary title only ever shrinks this one step — see the `group()` doc comment on why it
+   *  doesn't also wrap. */
+  groupTitleMin: 11,
   connectorCaption: 9.5,
 } as const;
 

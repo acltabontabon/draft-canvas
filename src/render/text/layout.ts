@@ -160,6 +160,62 @@ export function layoutText(text: string, options: LayoutOptions): TextLayout {
   return layoutCache.set(key, layout);
 }
 
+export interface FitLabelOptions {
+  /** The preferred size and the family/weight to shrink within — every step of the ladder keeps
+   *  the same stack/weight/italic, only `size` changes. */
+  font: FontSpec;
+  /** Floor of the shrink ladder. Never shrinks below this even if the text still doesn't fit —
+   *  `layoutText`'s own ellipsis takes over at that point. */
+  minFontSize: number;
+  maxWidth: number;
+  /** Vertical room available for the label. How many lines fit at a given size is derived from
+   *  this, not passed in — a smaller font naturally earns room for one more line. */
+  maxHeight: number;
+  /** `LINE_HEIGHTS.label`/`.body`/etc. — line height is `size * lineHeightRatio` at every step of
+   *  the ladder, so it shrinks in lockstep with the font. */
+  lineHeightRatio: number;
+  /** A hard line-count ceiling independent of `maxHeight` — e.g. 1, for a caption that must stay
+   *  single-line even in a tall box. */
+  maxLines?: number;
+  measurer?: TextMeasurer;
+}
+
+export interface FitLabelResult {
+  layout: TextLayout;
+  /** The font actually used — `options.font` unless shrinking was needed. */
+  font: FontSpec;
+  lineHeight: number;
+}
+
+/**
+ * Wrap → shrink → ellipsize, in that order — the graceful-degradation hierarchy every node label
+ * goes through instead of jumping straight to truncation. Tries the preferred size first (where
+ * `layoutText` already wraps to however many lines `maxHeight` allows); only steps the font size
+ * down, one integer pixel at a time, when that still doesn't fit. Draft Canvas's label sizes are
+ * small (a handful of px between preferred and minimum), so this bounded ladder is cheap and every
+ * step is a `layoutText` call, which is itself cached — there is no per-frame measurement loop.
+ */
+export function fitLabel(text: string, options: FitLabelOptions): FitLabelResult {
+  const measurer = options.measurer ?? getMeasurer();
+  const preferred = options.font.size;
+  const min = Math.min(options.minFontSize, preferred);
+
+  let attempt: FitLabelResult | null = null;
+  for (let size = preferred; size >= min; size -= 1) {
+    const font: FontSpec = { ...options.font, size };
+    const lineHeight = size * options.lineHeightRatio;
+    const linesFromHeight = Math.max(1, Math.floor(options.maxHeight / lineHeight));
+    const maxLines = options.maxLines === undefined ? linesFromHeight : Math.min(options.maxLines, linesFromHeight);
+    const layout = layoutText(text, { font, maxWidth: options.maxWidth, lineHeight, maxLines, measurer });
+    attempt = { layout, font, lineHeight };
+    if (!layout.truncated) return attempt;
+  }
+  // Nothing fit, not even at `minFontSize` — `attempt` is that minimum-size try, whose own last
+  // line `layoutText` already ellipsized. The loop always runs at least once (`min <= preferred`),
+  // so `attempt` is never null here.
+  return attempt!;
+}
+
 function breakLongToken(
   token: string,
   font: FontSpec,

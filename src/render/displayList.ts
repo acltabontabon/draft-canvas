@@ -78,6 +78,11 @@ export interface TextShape {
   fill: Paint;
   align: TextAlign;
   opacity?: number;
+  /** Marks the node's own primary, user-typed label (as opposed to a kind badge, preset tag, or
+   *  other decorative caption). Purely a lookup aid for chrome outside the display list — the
+   *  inline editor reads it back off `describeNode`'s output to size itself at the same font the
+   *  fitted label actually rendered at, rather than guessing. Never affects emitted SVG/PNG output. */
+  role?: 'label';
 }
 
 export interface CodeShape {

@@ -17,8 +17,8 @@ import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
 import { accentOf, type Theme } from '../render/theme/tokens';
-import { FONTS, LINE_HEIGHTS, type FontSpec } from '../render/text/fonts';
-import { layoutText } from '../render/text/layout';
+import { FONTS, LINE_HEIGHTS, TEXT_SIZES, type FontSpec } from '../render/text/fonts';
+import { fitLabel, layoutText } from '../render/text/layout';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../ui/personality/usePersonality';
 import { clamp } from '../lib/math';
@@ -182,24 +182,27 @@ function centeredStackedCaption(
 ): Shape[] {
   const text = node.text ?? '';
   if (!text.trim()) return [];
-  const nameLineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
-  const nameLayout = layoutText(text, {
-    font: FONTS.nodeLabel,
-    maxWidth: Math.max(16, node.width - PADDING * 2),
-    lineHeight: nameLineHeight,
-    maxLines: 1,
-    measurer: ctx.measurer,
-  });
+  const maxWidth = Math.max(16, node.width - PADDING * 2);
+  // The kind line never shrinks or wraps — a fixed-vocabulary, all-caps badge (SQL, TABLE, …),
+  // not user-authored text — so it's measured first and the name gets whatever room is left.
   const kindFont = FONTS.variantTag;
   const kindLayout = layoutText(options.kindLabel, {
     font: kindFont,
-    maxWidth: Math.max(16, node.width - PADDING * 2),
+    maxWidth,
     lineHeight: kindFont.size * LINE_HEIGHTS.label,
     maxLines: 1,
     measurer: ctx.measurer,
   });
   const nameGap = 2;
   const available = node.height - options.top - options.bottom;
+  const { layout: nameLayout, font: nameFont } = fitLabel(text, {
+    font: FONTS.nodeLabel,
+    minFontSize: TEXT_SIZES.nodeLabelMin,
+    maxWidth,
+    maxHeight: Math.max(0, available - nameGap - kindLayout.height),
+    lineHeightRatio: LINE_HEIGHTS.label,
+    measurer: ctx.measurer,
+  });
   const groupHeight = nameLayout.height + nameGap + kindLayout.height;
   const groupTop = options.top + (available - groupHeight) / 2;
   return [
@@ -208,9 +211,10 @@ function centeredStackedCaption(
       x: node.width / 2,
       y: groupTop,
       layout: nameLayout,
-      font: FONTS.nodeLabel,
+      font: nameFont,
       fill: options.nameColor,
       align: 'middle',
+      role: 'label',
     },
     {
       t: 'text',
@@ -238,10 +242,11 @@ function pinnedCaption(
   ctx: DescribeContext,
   options: { top: number; kindLabel: string; nameColor: string },
 ): Shape[] {
+  const maxWidth = Math.max(16, node.width - PADDING * 2);
   const kindFont = FONTS.variantTag;
   const kindLayout = layoutText(options.kindLabel, {
     font: kindFont,
-    maxWidth: Math.max(16, node.width - PADDING * 2),
+    maxWidth,
     lineHeight: kindFont.size * LINE_HEIGHTS.label,
     maxLines: 1,
     measurer: ctx.measurer,
@@ -261,12 +266,16 @@ function pinnedCaption(
       },
     ];
   }
-  const nameLineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
-  const nameLayout = layoutText(text, {
+  // Pinned, not centred: the caption grows down from `top` rather than filling a band with a
+  // known bottom, so the fit ceiling is simply whatever room is left to the node's own edge.
+  const bottomMargin = 4;
+  const available = Math.max(0, node.height - options.top - bottomMargin);
+  const { layout: nameLayout, font: nameFont } = fitLabel(text, {
     font: FONTS.nodeLabel,
-    maxWidth: Math.max(16, node.width - PADDING * 2),
-    lineHeight: nameLineHeight,
-    maxLines: 1,
+    minFontSize: TEXT_SIZES.nodeLabelMin,
+    maxWidth,
+    maxHeight: Math.max(0, available - nameGap - kindLayout.height),
+    lineHeightRatio: LINE_HEIGHTS.label,
     measurer: ctx.measurer,
   });
   return [
@@ -275,9 +284,10 @@ function pinnedCaption(
       x: node.width / 2,
       y: options.top,
       layout: nameLayout,
-      font: FONTS.nodeLabel,
+      font: nameFont,
       fill: options.nameColor,
       align: 'middle',
+      role: 'label',
     },
     {
       t: 'text',
@@ -342,13 +352,13 @@ function centredLabel(
   const palette = accentOf(ctx.theme, node.accent);
   const maxWidth = Math.max(16, node.width - PADDING * 2);
   const available = node.height - options.top - options.bottom;
-  const lineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
 
-  const layout = layoutText(text, {
+  const { layout, font } = fitLabel(text, {
     font: FONTS.nodeLabel,
+    minFontSize: TEXT_SIZES.nodeLabelMin,
     maxWidth,
-    lineHeight,
-    maxLines: Math.max(1, Math.floor(available / lineHeight)),
+    maxHeight: available,
+    lineHeightRatio: LINE_HEIGHTS.label,
     measurer: ctx.measurer,
   });
 
@@ -358,9 +368,10 @@ function centredLabel(
       x: node.width / 2,
       y: options.top + (available - layout.height) / 2,
       layout,
-      font: FONTS.nodeLabel,
+      font,
       fill: options.color || palette.text,
       align: 'middle',
+      role: 'label',
     },
   ];
 }
@@ -1124,50 +1135,9 @@ function dataStoreCylinder(node: DraftNode, ctx: DescribeContext): Shape[] {
   // balanced regardless of node height. The default ("generic") kind keeps the single-line
   // `centredLabel` path exactly as before — untouched, since there's nothing to stack.
   if (kindLabel) {
-    const text = node.text ?? '';
-    if (text.trim()) {
-      const nameLineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
-      const nameLayout = layoutText(text, {
-        font: FONTS.nodeLabel,
-        maxWidth: Math.max(16, node.width - PADDING * 2),
-        lineHeight: nameLineHeight,
-        maxLines: 1,
-        measurer: ctx.measurer,
-      });
-      const kindFont = FONTS.variantTag;
-      const kindLineHeight = kindFont.size * LINE_HEIGHTS.label;
-      const kindLayout = layoutText(kindLabel, {
-        font: kindFont,
-        maxWidth: Math.max(16, node.width - PADDING * 2),
-        lineHeight: kindLineHeight,
-        maxLines: 1,
-        measurer: ctx.measurer,
-      });
-      const nameGap = 2;
-      const available = node.height - innerTop - innerBottom;
-      const groupHeight = nameLayout.height + nameGap + kindLayout.height;
-      const groupTop = innerTop + (available - groupHeight) / 2;
-      shapes.push(
-        {
-          t: 'text',
-          x: node.width / 2,
-          y: groupTop,
-          layout: nameLayout,
-          font: FONTS.nodeLabel,
-          fill: palette.text,
-          align: 'middle',
-        },
-        {
-          t: 'text',
-          x: node.width / 2,
-          y: groupTop + nameLayout.height + nameGap,
-          layout: kindLayout,
-          font: kindFont,
-          fill: ctx.theme.textMuted,
-          align: 'middle',
-        },
-      );
-    }
+    shapes.push(
+      ...centeredStackedCaption(node, ctx, { top: innerTop, bottom: innerBottom, kindLabel, nameColor: palette.text }),
+    );
   } else {
     shapes.push(...centredLabel(node, ctx, { top: innerTop, bottom: innerBottom, color: palette.text }));
   }
@@ -1607,15 +1577,6 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // case: changing a generated DLQ's queue-kind dropdown doesn't clear `deliveryRole`) still reads
   // as "DLQ" rather than reverting to a generic kind caption.
   const kindLabel = isDlq ? 'DLQ' : QUEUE_KIND_LABELS[node.queueKind ?? 'queue'];
-  const kindFont = FONTS.variantTag;
-  const kindLineHeight = kindFont.size * LINE_HEIGHTS.label;
-  const kindLayout = layoutText(kindLabel, {
-    font: kindFont,
-    maxWidth: Math.max(16, node.width - PADDING * 2),
-    lineHeight: kindLineHeight,
-    maxLines: 1,
-    measurer: ctx.measurer,
-  });
 
   // Anchored right under the tube (not centred in whatever height the node
   // happens to be) — the tube is a small fixed-size glyph, not something that
@@ -1624,52 +1585,7 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // tight (not a generic paragraph gap) so the icon and its caption read as
   // one element, not an icon plus a detached line of text underneath it.
   const top = tubeH + 2;
-  const text = node.text ?? '';
-  const nameGap = 2;
-
-  if (text.trim()) {
-    const nameLineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
-    const nameLayout = layoutText(text, {
-      font: FONTS.nodeLabel,
-      maxWidth: Math.max(16, node.width - PADDING * 2),
-      lineHeight: nameLineHeight,
-      maxLines: 1,
-      measurer: ctx.measurer,
-    });
-
-    shapes.push(
-      {
-        t: 'text',
-        x: node.width / 2,
-        y: top,
-        layout: nameLayout,
-        font: FONTS.nodeLabel,
-        fill: palette.text,
-        align: 'middle',
-      },
-      {
-        t: 'text',
-        x: node.width / 2,
-        y: top + nameLayout.height + nameGap,
-        layout: kindLayout,
-        font: kindFont,
-        fill: ctx.theme.textMuted,
-        align: 'middle',
-      },
-    );
-  } else {
-    // No name (the default for a queue-family node — one is optional, never
-    // prefilled), so the kind is the only label, sitting right under the tube.
-    shapes.push({
-      t: 'text',
-      x: node.width / 2,
-      y: top,
-      layout: kindLayout,
-      font: kindFont,
-      fill: ctx.theme.textMuted,
-      align: 'middle',
-    });
-  }
+  shapes.push(...pinnedCaption(node, ctx, { top, kindLabel, nameColor: palette.text }));
 
   return shapes;
 }
@@ -1901,12 +1817,12 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
   const text = node.text ?? '';
   if (text.trim()) {
     const top = glyphBottom + GLYPH_LABEL_GAP;
-    const lineHeight = FONTS.nodeLabel.size * LINE_HEIGHTS.label;
-    const layout = layoutText(text, {
+    const { layout, font } = fitLabel(text, {
       font: FONTS.nodeLabel,
+      minFontSize: TEXT_SIZES.nodeLabelMin,
       maxWidth: Math.max(16, node.width - PADDING),
-      lineHeight,
-      maxLines: Math.max(1, Math.floor((node.height - top) / lineHeight)),
+      maxHeight: Math.max(0, node.height - top),
+      lineHeightRatio: LINE_HEIGHTS.label,
       measurer: ctx.measurer,
     });
     shapes.push({
@@ -1914,9 +1830,10 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
       x: cx,
       y: top,
       layout,
-      font: FONTS.nodeLabel,
+      font,
       fill: palette.text,
       align: 'middle',
+      role: 'label',
     });
   }
   return shapes;
@@ -2257,10 +2174,15 @@ function group(node: DraftNode, ctx: DescribeContext): Shape[] {
 
   const title = node.text ?? '';
   if (title.trim()) {
-    const layout = layoutText(title, {
+    // Shrinks (one step) but never wraps: the title sits above whatever children the boundary
+    // contains, positioned independently of it, so a second line risks colliding with them —
+    // unlike every other label here, a Boundary title stays single-line by design.
+    const { layout, font } = fitLabel(title, {
       font: FONTS.groupTitle,
+      minFontSize: TEXT_SIZES.groupTitleMin,
       maxWidth: Math.max(16, node.width - 24),
-      lineHeight: FONTS.groupTitle.size * LINE_HEIGHTS.label,
+      maxHeight: Math.max(0, node.height - titleTop),
+      lineHeightRatio: LINE_HEIGHTS.label,
       maxLines: 1,
       measurer: ctx.measurer,
     });
@@ -2269,9 +2191,10 @@ function group(node: DraftNode, ctx: DescribeContext): Shape[] {
       x: 12,
       y: titleTop,
       layout,
-      font: FONTS.groupTitle,
+      font,
       fill: ctx.theme.textMuted,
       align: 'start',
+      role: 'label',
     });
   }
   return shapes;

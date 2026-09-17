@@ -21,7 +21,8 @@ import {
 import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { useSettle } from './useContinuation';
-import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
+import { FONTS, LINE_HEIGHTS, cssFont, type FontSpec } from '../render/text/fonts';
+import type { Shape } from '../render/displayList';
 import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { selectNode } from '../store/selectors';
@@ -226,6 +227,22 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     return emitDisplayList(describeNode(described, describeContext(theme, preset)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
   }, [liveNode, theme, preset, editingNote]);
+
+  /**
+   * The font a plain shape label (Service/Component/Database/Queue/Actor/Group — everything but
+   * Code/Note/Text, which already size their own editor from their own layout geometry) is
+   * currently fitted to, read straight off `describeNode`'s own output rather than re-deriving
+   * each shape's band here — the one thing that would let the editor and the render disagree.
+   * `null` while not editing (the only time this is needed) or for a node with no fitted label.
+   */
+  const editingLabelFont = useMemo<FontSpec | null>(() => {
+    if (!editing || !node || isCode || isNote || isText) return null;
+    const drawn = describeNode(node, describeContext(theme, preset));
+    const label = drawn.shapes.find(
+      (s): s is Extract<Shape, { t: 'text' }> => s.t === 'text' && s.role === 'label',
+    );
+    return label?.font ?? null;
+  }, [editing, node, theme, preset, isCode, isNote, isText]);
 
   /**
    * The plane behind a shape that has an inside — its own outline, from the same `describeNode`, so
@@ -485,7 +502,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           aria-label={isCode ? 'Code' : isNote ? 'Note' : isText ? 'Text' : 'Label'}
           placeholder={isNote ? 'Add a note…' : isText ? 'Type something…' : undefined}
           spellCheck={false}
-          style={editorStyle(node, effectiveHeight >= NOTE_AUTO_MAX_HEIGHT)}
+          style={editorStyle(node, effectiveHeight >= NOTE_AUTO_MAX_HEIGHT, editingLabelFont)}
           onInput={isNote || isText ? (event) => growToFit(event.currentTarget) : undefined}
           onBlur={(event) => {
             commit(event.currentTarget.value);
@@ -621,7 +638,7 @@ function placeholderStyle(node: DraftNode): React.CSSProperties {
  * The editor overlays the text it replaces, matching its font and metrics so
  * that committing an edit does not make the text visibly jump.
  */
-function editorStyle(node: DraftNode, atGrowthCap: boolean): React.CSSProperties {
+function editorStyle(node: DraftNode, atGrowthCap: boolean, labelFont?: FontSpec | null): React.CSSProperties {
   if (node.type === 'code') {
     return {
       font: cssFont(FONTS.code),
@@ -664,9 +681,13 @@ function editorStyle(node: DraftNode, atGrowthCap: boolean): React.CSSProperties
       textAlign: node.textAlign ?? 'left',
     };
   }
+  // Matches whatever the fitted label actually rendered at — see `editingLabelFont` above — so
+  // finishing an edit never snaps the text to a visibly different size than what was just typed.
+  // Falls back to the preferred size for a node this component didn't compute one for.
+  const font = labelFont ?? FONTS.nodeLabel;
   return {
-    font: cssFont(FONTS.nodeLabel),
-    lineHeight: `${FONTS.nodeLabel.size * LINE_HEIGHTS.label}px`,
+    font: cssFont(font),
+    lineHeight: `${font.size * LINE_HEIGHTS.label}px`,
     inset: '4px 10px',
     textAlign: 'center',
   };
