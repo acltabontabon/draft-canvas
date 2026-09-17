@@ -1,5 +1,5 @@
 import { getViewportForBounds } from '@xyflow/react';
-import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import { edgeRelationLabel } from '../document/connectorSemantics';
 import { displayNameFor } from '../document/factory';
 import { boundsOf, type Bounds } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
@@ -42,10 +42,10 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   ellipse: 'Junction',
 };
 
-function edgeLabel(edge: DraftEdge): string | undefined {
+function edgeLabel(document: DraftDocument, edge: DraftEdge): string | undefined {
   const explicit = edge.label?.trim();
   if (explicit) return explicit;
-  return edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : undefined;
+  return edgeRelationLabel(document, edge);
 }
 
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
@@ -136,7 +136,7 @@ export function jumpCommands(document: DraftDocument): Command[] {
   }
 
   for (const edge of document.edges) {
-    const label = edgeLabel(edge);
+    const label = edgeLabel(document, edge);
     if (!label) continue;
     const from = names.get(edge.source) ?? '?';
     const to = names.get(edge.target) ?? '?';

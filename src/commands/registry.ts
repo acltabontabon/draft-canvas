@@ -1,6 +1,6 @@
 import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../canvas/presets';
-import { categoryOf } from '../document/connectorSemantics';
-import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import { capabilityFor, categoryOf, edgeRelationLabel } from '../document/connectorSemantics';
+import { relationLabel } from '../document/edgeSemantics';
 import { createAttachment, defaultSizeFor, displayNameFor } from '../document/factory';
 import { stepIndexOf } from '../document/flow';
 import { LIMITS } from '../document/limits';
@@ -1125,7 +1125,16 @@ function isBundled(ctx: CommandContext, edge: DraftEdge): boolean {
 }
 
 export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
-  const semanticTitle = edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : 'Plain';
+  const doc = ctx.editor.document;
+  const semanticTitle = edgeRelationLabel(doc, edge) ?? 'Plain';
+  // What this pairing usually means leads the list, in the arrow's own wording; every other
+  // relationship follows, so nothing unusual is ever out of reach.
+  const sourceNode = doc.nodes.find((n) => n.id === edge.source);
+  const targetNode = doc.nodes.find((n) => n.id === edge.target);
+  const sourceCategory = sourceNode && categoryOf(sourceNode);
+  const targetCategory = targetNode && categoryOf(targetNode);
+  const suggested = sourceCategory && targetCategory ? (capabilityFor(sourceCategory, targetCategory)?.relations ?? []) : [];
+  const orderedSemantics = [...suggested, ...EDGE_SEMANTICS.filter((semantic) => !suggested.includes(semantic))];
   // `stepIndexOf`, not a primary-`edgeId` scan: a connector that is only an *extra* member of a
   // step is still in that flow, and offering to add it again would be a silent no-op.
   const flowsContaining = ctx.editor.document.flows.filter((flow) => stepIndexOf(flow, edge.id) !== undefined);
@@ -1145,9 +1154,9 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       run: () => ({
         prompt: 'Relationship',
         options: [
-          ...EDGE_SEMANTICS.map((semantic) => ({
+          ...orderedSemantics.map((semantic) => ({
             id: `edge-semantic:${semantic}`,
-            title: SEMANTIC_DEFAULTS[semantic].label,
+            title: relationLabel(semantic, sourceCategory, targetCategory),
             hint: edge.semantic === semantic ? 'Current' : undefined,
             run: (inner: CommandContext) => inner.editor.setEdgeSemantic(edge.id, semantic),
           })),

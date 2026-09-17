@@ -73,35 +73,45 @@ unrestricted connector.
 | Source → Target | Relations offered | Default | Notes |
 | --- | --- | --- | --- |
 | Service → Database | writes, reads, query, projects, dependsOn | writes | `projects` is a derived write — a projection materialising a read model |
-| Database → Service | reads, query, cdc, dependsOn | reads | `cdc` — a worker tailing the database's own change log, not an ordinary query |
+| Database → Service | reads, query, cdc | reads | `cdc` — a worker tailing the database's own change log, not an ordinary query |
 | Service → Cache | writes, reads, invalidates, dependsOn | writes | `invalidates` is cache-only |
-| Cache → Service | reads, dependsOn | reads | |
+| Cache → Service | reads | reads | |
 | Service → File System | reads, writes, watches, dependsOn | writes | |
-| File System → Service | reads, dependsOn | reads | |
+| File System → Service | reads | reads | |
 | Service → Object Storage | reads, writes, dependsOn | writes | |
-| Object Storage → Service | reads, dependsOn | reads | |
-| Object Storage → Queue/Topic | publishes, event, dependsOn | publishes | object storage is the one storage kind that legitimately triggers a downstream event |
-| Object Storage → Database | transforms, dependsOn | transforms | a landing zone refined into a structured table |
+| Object Storage → Service | reads | reads | |
+| Object Storage → Queue/Topic | publishes, event | publishes | object storage is the one storage kind that legitimately triggers a downstream event |
+| Object Storage → Database | transforms, ingests | transforms | a landing zone refined into a structured table |
 | Service → Search Index | searches, indexes, dependsOn | searches | |
-| Service → Queue | publishes, command, event, dependsOn | publishes | |
-| Queue → Service | consumes, deliversTo, event, dependsOn | consumes | |
+| Service → Queue | publishes, consumes, command, event, dependsOn | publishes | `consumes` for a worker drawn pulling from its queue — "consumes from" |
+| Queue → Service | consumes, deliversTo, event | consumes | competing consumers — reads "consumed by" in this direction |
 | Service → Topic | publishes, event, dependsOn | publishes | |
-| Topic → Service | deliversTo, consumes, dependsOn | deliversTo | a topic fans out to every subscriber |
-| Topic → Queue | fansOut, deliversTo, dependsOn | fansOut | |
-| Topic → Search Index | indexes, dependsOn | indexes | a topic sinking into a search index with no consumer drawn, the same word `Service → Search Index` uses; a Stream is a `queue` and takes the Worker path |
-| Topic → Database | ingests, dependsOn | ingests | a warehouse sinking a topic directly; the reverse pairing stays unlisted |
+| Topic → Service | deliversTo | deliversTo | a topic pushes to every subscriber; never "consumed by", which is a queue's shape |
+| Topic → Queue | fansOut, deliversTo | fansOut | |
+| Topic → Search Index | indexes, ingests | indexes | a topic sinking into a search index with no consumer drawn, the same word `Service → Search Index` uses; a Stream is a `queue` and takes the Worker path |
+| Topic → Database | ingests | ingests | a warehouse sinking a topic directly; the reverse pairing stays unlisted |
 | Queue → Topic | dependsOn, event | *(none)* | **`status: 'unusual'`** — see below |
-| Queue → Dead-letter queue | deadLetters, dependsOn | deadLetters | `failure` behaviour and a dashed (`async`) line — the same edge "Add DLQ" generates; `deliveryAttempts` captions it "after N attempts" |
+| Queue → Dead-letter queue | deadLetters | deadLetters | `failure` behaviour and a dashed (`async`) line — the same edge "Add DLQ" generates; `deliveryAttempts` captions it "after N attempts" |
+| Service → Dead-letter queue | deadLetters, publishes | deadLetters | a consumer parking a message it gave up on itself; the same dashed `failure` path as the broker's own |
 | Topic → Dead-letter queue | dependsOn | *(none)* | **`status: 'unusual'`** — a topic never dead-letters; retries and a DLQ belong to each consumer's own queue |
 | Service → Service | calls, http, grpc, command, query, event, compensates, dependsOn | calls | the one pairing with a full sync/async/callback/conditional/retry/failure/fallback picker |
 | Service → External | same as Service → Service | calls | `external` is a flavour of `service` for any pairing without its own row |
 | Component → Component | uses, dependsOn, calls | uses | an in-process dependency, never a network call; checked before the `service` fold |
 | Service → Port | calls, dependsOn | calls | |
 | Component → Port | uses, dependsOn | uses | |
-| Port → Component / Service | implementedBy, dependsOn | implementedBy | the thing after the port depends on the port's owner |
+| Port → Component / Service | implementedBy | implementedBy | the thing after the port depends on the port's owner |
 | Port → Database | dependsOn | *(none)* | **`status: 'unusual'`** — a port is a contract; something implements it and talks to the store |
 | Actor → Service | calls, http, command, query | calls | synchronous by predetermination, no behaviour picker |
-| Database → Database | ingests, replicates, cdc, syncs, transforms, dependsOn | ingests | data movement, not a request/response shape; `transforms` when the data's shape genuinely changes |
+| Database → Database | ingests, replicates, cdc, syncs, transforms | ingests | data movement, not a request/response shape; `transforms` when the data's shape genuinely changes |
+
+A category without its own row borrows one, most specific first: the exact pair, then the source
+folded (a Worker as a Service), then the target folded, then both. That is how Worker → Dead-letter
+queue finds its own row instead of plain Service → Queue, and Gateway → Worker routes. A
+dead-letter queue only folds with both sides at once, so DLQ → DLQ stays unlisted.
+
+`dependsOn` is only offered where the source can depend on something — never from a store, a
+channel or a port, where "depends on" would read backwards. The three `unusual` rows keep it as
+their one neutral choice.
 
 A relation offered here is a *suggestion*, never a restriction — the inspector always keeps an
 edge's current value selectable even if it's not in the list.
@@ -117,6 +127,55 @@ A capability may also set `defaultAsync`, asking a freshly inferred connector fo
 well as its default behaviour. Only Queue → Dead-letter queue does today: `failure` has no dash
 pattern of its own, and dead-lettering is genuinely asynchronous. Everything else leaves dashing to
 the behaviour (`event` dots its own line) or to the user.
+
+## Captions read in the arrow's direction
+
+A connector's caption reads *source, verb, target*, so the words always agree with the arrow. A
+relationship keeps one meaning however it is drawn — `reads` is always "a service reads a store" —
+and when the arrow starts at the verb's object, the caption turns passive
+(`src/document/edgeSemantics.ts`'s `relationLabel`):
+
+| Relationship | Arrow from the doer | Arrow from the other end |
+| --- | --- | --- |
+| reads / writes / queries / searches / invalidates / watches | Service → Database: "reads from" | Database → Service: "read by" |
+| consumes | Worker → Queue: "consumes from" | Queue → Worker: "consumed by" |
+| ingests / indexes | — | Topic → Database: "ingested by", Topic → Search Index: "indexed by" |
+
+Verbs a store or channel performs itself — delivers to, fans out to, dead-letters to, publishes to
+(object storage), replicates to, syncs to, CDC, transforms — have no passive form; they already
+read in the arrow's direction. The wording is display only: `semantic` is never rewritten, so
+diagrams saved before this read correctly without being touched, and reversing a connector keeps
+an explicit relationship's meaning while its caption turns around. An inferred one is re-inferred
+for the new direction instead (Service → Queue "publishes to" reversed is Queue → Service
+"consumed by"), and loses a dashed line only inference gave it.
+
+Choosing a relationship never writes its words into the connector's label: the label is only ever
+what someone typed, and it always wins over the caption.
+
+**Queue, Topic and Stream stay distinct where it matters.** A Queue is *consumed by* competing
+consumers; a Topic *delivers to* every subscriber and *fans out to* their queues; a dead-letter
+path is its own dashed failure route. A Stream shares a Queue's words — publish, then consume —
+because the vendor-neutral verbs are the same; nothing here assumes a particular broker.
+
+**Ports and adapters stay neutral.** Arrows follow the runtime call, words carry the inversion:
+Adapter → Port "uses", Port → Core or Adapter "implemented by". The diagram can't tell a driving
+port from a driven one, so neither is guessed.
+
+### Review notes
+
+Every row was checked for the same things: the relationship is technically real, the caption agrees
+with the arrow, dependency isn't confused with runtime traffic, nothing is assumed synchronous or
+vendor-specific, and a legitimate design that ignores the suggestion is still drawable. The
+judgement calls that remain on purpose:
+
+| Row | Why it stays |
+| --- | --- |
+| Service → Database / Cache default "writes to" | Chosen by the user over a neutral default. Reversing the arrow gives "read by". |
+| Service → Service "calls" | No behaviour is assumed: sync, async, retry and the rest stay one pick away. |
+| Scheduler → Service / Worker "triggers" | Says nothing about how, so it doesn't pretend a scheduler makes a synchronous call. |
+| Service → Table "writes to" | A Table folds into Data Store; the caption names data access, not a network hop. |
+| Database → Queue, Queue → Queue, Actor → Database | Unlisted on purpose: CDC, bridges and odd shapes are all real, and no opinion beats a wrong one. |
+| The three `unusual` rows | Still offer "depends on" as their one neutral pick; the ▲ marker already says to look again. |
 
 ## Two independent vocabularies
 
@@ -198,6 +257,7 @@ appear in that picker, whose standing presets already cover those shapes.
 | `object-storage-fan-out-topic` | secondary | Topic | Multiple subscribers can watch this bucket through a topic instead. |
 | `port-implementation-component` | primary | Component | This port isn't implemented by anything yet. |
 | `port-implementation-service` | secondary | Service | A port can also be implemented by a whole service. |
+| `adapter-port` | secondary | Port | The contract this adapter sits behind. |
 | `service-data-store` | secondary | Data Store | Services usually own their data. |
 | `service-topic` | secondary | Topic | Publish events other parts of the system react to. |
 | `service-queue` | secondary | Queue | Hand work off to be processed later. |

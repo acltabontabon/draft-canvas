@@ -3,7 +3,7 @@ import { LIMITS } from '../document/limits';
 import { EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import type { DraftNode } from '../document/types';
-import { capabilityFor, categoryOf } from '../document/connectorSemantics';
+import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
 import { edgeTierAt, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
 import { markerRef } from '../render/svg/markers';
 import {
@@ -141,11 +141,17 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // (no marker on a Junction-mediated unusual pairing) is an acceptable, deliberately cheap
   // simplification for an ambient canvas hint — it never shows a *wrong* marker, only sometimes
   // omits one the popover's fuller resolution would have shown.
-  const relationshipStatus = useEditorStore((state) => {
+  // The pairing is read as one `"source>target"` category string, again a primitive, so both the
+  // status marker and the caption's direction-aware wording (`relationshipCaptionLabel`) derive
+  // from the same subscription.
+  const pairing = useEditorStore((state) => {
     const source = selectNode(state.document, edge?.source ?? '');
     const target = selectNode(state.document, edge?.target ?? '');
-    return source && target ? capabilityFor(categoryOf(source), categoryOf(target))?.status : undefined;
+    return source && target ? `${categoryOf(source)}>${categoryOf(target)}` : undefined;
   });
+  const [sourceCategory, targetCategory] = (pairing?.split('>') ?? []) as [NodeCategory?, NodeCategory?];
+  const relationshipStatus =
+    sourceCategory && targetCategory ? capabilityFor(sourceCategory, targetCategory)?.status : undefined;
   const showSequence = useEditorStore((state) => state.document.settings.showSequence);
   // Playback, step badges and Focus are read as small per-edge primitives, not as the whole
   // `flows`/`flowPlayback`/`focus` objects: a step change then re-renders only the connectors whose
@@ -645,7 +651,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         const captionAt = collapsed ? route.trunkLabel! : { x: labelX, y: labelY };
         const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
         const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, edge.hasResponse ? Math.sign(responseLane) : 0);
-        const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse, edge.deliveryAttempts);
+        const label = relationshipCaptionLabel(edge.semantic, {
+          hasResponse: edge.hasResponse,
+          deliveryAttempts: edge.deliveryAttempts,
+          source: sourceCategory,
+          target: targetCategory,
+        });
         return (
           <text
             className="dc-edge-caption"

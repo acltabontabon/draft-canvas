@@ -63,7 +63,7 @@ test.describe('Topic-aware relationships', () => {
     await expect(page.locator('.dc-relationship-guidance')).toHaveCount(0);
 
     await relation.click();
-    await expect(page.getByRole('option')).toHaveText(['No type', 'Fans out', 'Delivers to', 'Depends on']);
+    await expect(page.getByRole('option')).toHaveText(['No type', 'Fans out', 'Delivers to']);
   });
 
   test('Service → Topic infers Publishes, same shape as Service → Queue', async ({ page }) => {
@@ -116,8 +116,8 @@ test.describe('Topic-aware relationships', () => {
     // Both new connectors' own inferred captions read correctly — a more direct check than
     // clicking each short connector to select it, which the compact layout (the Worker node
     // necessarily overlapping both its own short edges) makes unreliable.
-    await expect(page.locator('svg text').filter({ hasText: 'consumes' })).toBeVisible();
-    await expect(page.locator('svg text').filter({ hasText: 'publishes' })).toBeVisible();
+    await expect(page.locator('svg text').filter({ hasText: 'consumed by' })).toBeVisible();
+    await expect(page.locator('svg text').filter({ hasText: 'publishes to' })).toBeVisible();
 
     await page.keyboard.press('Meta+z');
     await expect(page.locator('.dc-node')).toHaveCount(2);
@@ -159,7 +159,7 @@ test.describe('Topic-aware relationships', () => {
     await expect(page.locator('.dc-relationship-guidance-text')).toHaveText(
       /"Writes" doesn't typically apply to this connection/,
     );
-    const fix = page.getByRole('button', { name: 'Use "publishes" instead' });
+    const fix = page.getByRole('button', { name: 'Use "publishes to" instead' });
     await expect(fix).toBeVisible();
 
     await fix.click();
@@ -188,7 +188,6 @@ test.describe('Database → Database relationships', () => {
       'CDC',
       'Syncs',
       'Transforms',
-      'Depends on',
     ]);
   });
 });

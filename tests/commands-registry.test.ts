@@ -300,7 +300,7 @@ describe('commandsFor — contextual (8.2)', () => {
 
     const semantics = stageOf(ctx, 'edge-semantic');
     expect(semantics.options.at(-1)!.title).toBe('None');
-    semantics.options.find((o) => o.title === 'publishes')!.run(ctx);
+    semantics.options.find((o) => o.title === 'publishes to')!.run(ctx);
     expect(useEditorStore.getState().document.edges[0]!.semantic).toBe('publishes');
 
     const kinds = stageOf(ctx, 'edge-kind');

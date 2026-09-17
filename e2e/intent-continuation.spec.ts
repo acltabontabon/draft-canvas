@@ -70,21 +70,21 @@ test.describe('Intent Continuation', () => {
     const ghost = page.locator('.dc-ghost');
     await expect(ghost).toHaveAttribute('data-trigger', 'select');
     await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');
-    await expect(page.locator('.dc-ghost-edges text')).toHaveText('fans out');
+    await expect(page.locator('.dc-ghost-edges text')).toHaveText('fans out to');
     await expect(page.locator('.dc-ghost-pill')).toContainText('Queue');
     // Alternatives exist, so the pill counts them — quietly, one ghost at a time.
     await expect(page.locator('.dc-ghost-pill-next')).toContainText('1/3');
 
     await page.keyboard.press('Tab');
     await expect(page.locator('.dc-node')).toHaveCount(3);
-    await expect(captions(page)).toContainText(['publishes', 'fans out']);
+    await expect(captions(page)).toContainText(['publishes to', 'fans out to']);
     // The new Queue is selected and, having no consumer, offers a Worker next.
     await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'service');
-    await expect(page.locator('.dc-ghost-edges text')).toHaveText('consumes');
+    await expect(page.locator('.dc-ghost-edges text')).toHaveText('consumed by');
 
     await page.keyboard.press('Tab');
     await expect(page.locator('.dc-node')).toHaveCount(4);
-    await expect(captions(page)).toContainText(['publishes', 'fans out', 'consumes']);
+    await expect(captions(page)).toContainText(['publishes to', 'fans out to', 'consumed by']);
     // A plain Worker has no single obvious next move: silence.
     await expect(ghost).toHaveCount(0);
 
@@ -112,12 +112,12 @@ test.describe('Intent Continuation', () => {
     // suggestion is showing, not a stale or broken one.
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
     await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');
-    await expect(page.locator('.dc-ghost-edges text')).toHaveText('fans out');
+    await expect(page.locator('.dc-ghost-edges text')).toHaveText('fans out to');
 
     // And it is functionally intact, not just visually present.
     await page.keyboard.press('Tab');
     await expect(page.locator('.dc-node')).toHaveCount(3);
-    await expect(captions(page)).toContainText(['publishes', 'fans out']);
+    await expect(captions(page)).toContainText(['publishes to', 'fans out to']);
   });
 
   test("the ghost node's mount-in animation lives on its inner body, never on the positioned outer element", async ({ page }) => {
@@ -143,7 +143,7 @@ test.describe('Intent Continuation', () => {
     await publisherAndTopic(page);
     await page.locator('.dc-ghost-pill-accept').click();
     await expect(page.locator('.dc-node')).toHaveCount(3);
-    await expect(captions(page)).toContainText(['publishes', 'fans out']);
+    await expect(captions(page)).toContainText(['publishes to', 'fans out to']);
   });
 
   test('Escape waves a ghost away without touching the diagram, and it stays away on reselect', async ({ page }) => {
@@ -198,7 +198,7 @@ test.describe('Intent Continuation', () => {
     await expect(rows.nth(0)).toHaveAttribute('data-suggested', 'true');
     await expect(page.locator('.dc-ghost')).toHaveAttribute('data-trigger', 'drop');
     await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');
-    await expect(page.locator('.dc-ghost-edges text')).toHaveText('fans out');
+    await expect(page.locator('.dc-ghost-edges text')).toHaveText('fans out to');
 
     // Arrows move the highlight and the ghost follows — sampled immediately, not just eventually,
     // so a one-frame drop to zero candidates between two valid rows would actually be caught.
@@ -207,7 +207,7 @@ test.describe('Intent Continuation', () => {
     await expect(rows.nth(1)).toHaveAttribute('data-highlighted', 'true');
     // A compound row previews the whole fragment it would add.
     await expect(page.locator('.dc-ghost-node')).toHaveCount(2);
-    await expect(page.locator('.dc-ghost-edges text')).toHaveText(['fans out', 'consumes']);
+    await expect(page.locator('.dc-ghost-edges text')).toHaveText(['fans out to', 'consumed by']);
 
     await page.keyboard.press('ArrowDown');
     await expect(rows.nth(2)).toHaveAttribute('data-highlighted', 'true');
@@ -221,7 +221,7 @@ test.describe('Intent Continuation', () => {
     await page.keyboard.press('Enter');
     await expect(menu).toBeHidden();
     await expect(page.locator('.dc-node')).toHaveCount(3);
-    await expect(captions(page)).toContainText(['publishes', 'fans out']);
+    await expect(captions(page)).toContainText(['publishes to', 'fans out to']);
   });
 
   test('the ghost scales with the diagram at a different zoom level and stays functional', async ({ page }) => {
@@ -274,7 +274,7 @@ test.describe('Intent Continuation', () => {
 
     await page.keyboard.press('Tab');
     await expect(page.locator('.dc-node')).toHaveCount(4);
-    await expect(captions(page)).toContainText(['publishes', 'fans out', 'consumes']);
+    await expect(captions(page)).toContainText(['publishes to', 'fans out to', 'consumed by']);
     // One step undoes the whole fragment.
     await page.keyboard.press('ControlOrMeta+z');
     await expect(page.locator('.dc-node')).toHaveCount(2);
@@ -303,13 +303,13 @@ test.describe('Intent Continuation', () => {
     await expect(page.locator('.dc-ghost')).toHaveCount(1);
     await expect(page.locator('.dc-ghost-node')).toHaveCount(0);
     await expect(page.locator('.dc-ghost-target')).toHaveCount(1);
-    await expect(page.locator('.dc-ghost-edges text')).toHaveText('publishes');
+    await expect(page.locator('.dc-ghost-edges text')).toHaveText('publishes to');
     await expect(page.locator('.dc-ghost-pill')).toContainText('Connect');
 
     await page.keyboard.press('Tab');
     await expect(page.locator('.dc-node')).toHaveCount(3);
     await expect(page.locator('.dc-edge')).toHaveCount(2);
-    await expect(captions(page)).toContainText(['calls', 'publishes']);
+    await expect(captions(page)).toContainText(['calls', 'publishes to']);
     // The topic is now selected and continues the sentence.
     await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');
   });

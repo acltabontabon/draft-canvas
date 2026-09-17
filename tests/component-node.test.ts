@@ -436,6 +436,6 @@ describe('Component — rendering across themes and personalities', () => {
 
 describe('relationshipCaptionLabel — Component pairings read like any other', () => {
   it('labels a Component→Datastore connector "writes", not something bespoke', () => {
-    expect(relationshipCaptionLabel('writes')).toBe('writes');
+    expect(relationshipCaptionLabel('writes')).toBe('writes to');
   });
 });

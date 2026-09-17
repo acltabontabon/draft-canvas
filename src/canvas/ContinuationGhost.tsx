@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react';
+import { categoryOf } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { dashForEdge, markerVariantForEdge } from '../edges/kindStyle';
@@ -186,7 +187,14 @@ function GhostEdge({
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
     obstacles,
   });
-  const caption = edge.semantic ? relationshipCaptionLabel(edge.semantic, edge.hasResponse, edge.deliveryAttempts) : undefined;
+  const caption = edge.semantic
+    ? relationshipCaptionLabel(edge.semantic, {
+        hasResponse: edge.hasResponse,
+        deliveryAttempts: edge.deliveryAttempts,
+        source: categoryOf(source),
+        target: categoryOf(target),
+      })
+    : undefined;
   const at = captionAnchor(route.labelSide, route.labelX, route.labelY);
   // Always the theme's plain connector colour: `Markers` mints an arrowhead for it unconditionally,
   // whereas an accent's marker only exists once a real edge of that colour does.

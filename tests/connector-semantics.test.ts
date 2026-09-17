@@ -89,7 +89,9 @@ describe('capabilityFor — the capability matrix', () => {
   it('database → service: defaults to reads, never offers messaging semantics', () => {
     const cap = capabilityFor('database', 'service')!;
     expect(cap.defaultRelation).toBe('reads');
-    expect(cap.relations).toEqual(['reads', 'query', 'cdc', 'dependsOn']);
+    expect(cap.relations).toEqual(['reads', 'query', 'cdc']);
+    // Never `dependsOn`: a store doesn't depend on the service reading it.
+    expect(cap.relations).not.toContain('dependsOn');
     expect(cap.relations).not.toContain('publishes');
     expect(cap.relations).not.toContain('consumes');
   });
@@ -103,7 +105,7 @@ describe('capabilityFor — the capability matrix', () => {
   it('service → queue: defaults to publishes, offers command as a sharper alternative, implies event behaviour with no picker', () => {
     const cap = capabilityFor('service', 'queue')!;
     expect(cap.defaultRelation).toBe('publishes');
-    expect(cap.relations).toEqual(['publishes', 'command', 'event', 'dependsOn']);
+    expect(cap.relations).toEqual(['publishes', 'consumes', 'command', 'event', 'dependsOn']);
     expect(cap.behaviors).toEqual([]);
     expect(cap.defaultBehavior).toBe('event');
   });
@@ -111,7 +113,7 @@ describe('capabilityFor — the capability matrix', () => {
   it('queue → service: defaults to consumes, offers deliversTo as an alternative, implies event behaviour with no picker', () => {
     const cap = capabilityFor('queue', 'service')!;
     expect(cap.defaultRelation).toBe('consumes');
-    expect(cap.relations).toEqual(['consumes', 'deliversTo', 'event', 'dependsOn']);
+    expect(cap.relations).toEqual(['consumes', 'deliversTo', 'event']);
     expect(cap.defaultBehavior).toBe('event');
   });
 
@@ -121,7 +123,7 @@ describe('capabilityFor — the capability matrix', () => {
 
   it('queue → dead-letter queue: defaults to dead-letters as a dashed failure route, no behaviour picker', () => {
     const cap = capabilityFor('queue', 'deadLetter')!;
-    expect(cap.relations).toEqual(['deadLetters', 'dependsOn']);
+    expect(cap.relations).toEqual(['deadLetters']);
     expect(cap.defaultRelation).toBe('deadLetters');
     expect(cap.behaviors).toEqual([]);
     expect(cap.defaultBehavior).toBe('failure');
@@ -160,7 +162,9 @@ describe('capabilityFor — the capability matrix', () => {
   it('a dead-letter queue is otherwise a plain queue for every pairing without its own row', () => {
     expect(capabilityFor('deadLetter', 'service')).toEqual(capabilityFor('queue', 'service'));
     expect(capabilityFor('deadLetter', 'worker')).toEqual(capabilityFor('queue', 'service'));
-    expect(capabilityFor('service', 'deadLetter')).toEqual(capabilityFor('service', 'queue'));
+    // Feeding one is the exception: a consumer parking a message it gave up on has its own row.
+    expect(capabilityFor('service', 'deadLetter')!.defaultRelation).toBe('deadLetters');
+    expect(capabilityFor('worker', 'deadLetter')).toEqual(capabilityFor('service', 'deadLetter'));
     expect(capabilityFor('deadLetter', 'deadLetter')).toBeUndefined();
   });
 
@@ -175,28 +179,28 @@ describe('capabilityFor — the capability matrix', () => {
   it('topic → service: defaults to deliversTo, not consumes — a topic fans out rather than being pulled from', () => {
     const cap = capabilityFor('topic', 'service')!;
     expect(cap.defaultRelation).toBe('deliversTo');
-    expect(cap.relations).toEqual(['deliversTo', 'consumes', 'dependsOn']);
+    expect(cap.relations).toEqual(['deliversTo']);
     expect(cap.status).toBeUndefined();
   });
 
   it('topic → queue: defaults to fans out, a valid and common pub-sub shape', () => {
     const cap = capabilityFor('topic', 'queue')!;
     expect(cap.defaultRelation).toBe('fansOut');
-    expect(cap.relations).toEqual(['fansOut', 'deliversTo', 'dependsOn']);
+    expect(cap.relations).toEqual(['fansOut', 'deliversTo']);
     expect(cap.status).toBeUndefined();
   });
 
   it('topic → searchIndex: defaults to indexes, the same word worker → searchIndex already uses', () => {
     const cap = capabilityFor('topic', 'searchIndex')!;
     expect(cap.defaultRelation).toBe('indexes');
-    expect(cap.relations).toEqual(['indexes', 'dependsOn']);
+    expect(cap.relations).toEqual(['indexes', 'ingests']);
     expect(cap.status).toBeUndefined();
   });
 
   it('topic → database: defaults to ingests, a warehouse sinking a stream directly', () => {
     const cap = capabilityFor('topic', 'database')!;
     expect(cap.defaultRelation).toBe('ingests');
-    expect(cap.relations).toEqual(['ingests', 'dependsOn']);
+    expect(cap.relations).toEqual(['ingests']);
     expect(cap.status).toBeUndefined();
   });
 
@@ -217,14 +221,14 @@ describe('capabilityFor — the capability matrix', () => {
   it('database → database: defaults to ingests, offers data-movement intents, no request/response shape', () => {
     const cap = capabilityFor('database', 'database')!;
     expect(cap.defaultRelation).toBe('ingests');
-    expect(cap.relations).toEqual(['ingests', 'replicates', 'cdc', 'syncs', 'transforms', 'dependsOn']);
+    expect(cap.relations).toEqual(['ingests', 'replicates', 'cdc', 'syncs', 'transforms']);
     expect(cap.status).toBeUndefined();
   });
 
   it('objectStorage → database: defaults to transforms, a landing zone refined into a structured table', () => {
     const cap = capabilityFor('objectStorage', 'database')!;
     expect(cap.defaultRelation).toBe('transforms');
-    expect(cap.relations).toEqual(['transforms', 'dependsOn']);
+    expect(cap.relations).toEqual(['transforms', 'ingests']);
     expect(cap.status).toBeUndefined();
   });
 
@@ -257,7 +261,9 @@ describe('capabilityFor — the capability matrix', () => {
     expect(capabilityFor('external', 'queue')).toEqual(capabilityFor('service', 'queue'));
     expect(capabilityFor('queue', 'external')).toEqual(capabilityFor('queue', 'service'));
     expect(capabilityFor('actor', 'external')).toEqual(capabilityFor('actor', 'service'));
-    expect(capabilityFor('external', 'external')).toEqual(capabilityFor('service', 'service'));
+    // An external system's own outbound call to another external one takes the richer
+    // `service>external` row once the source folds — the most specific row wins.
+    expect(capabilityFor('external', 'external')).toEqual(capabilityFor('service', 'external'));
   });
 
   it('worker falls back to being treated as a service for every pairing without its own override', () => {
@@ -334,7 +340,7 @@ describe('capabilityFor — the capability matrix', () => {
   it('cache → service: defaults to reads, minimal relation set', () => {
     const cap = capabilityFor('cache', 'service')!;
     expect(cap.defaultRelation).toBe('reads');
-    expect(cap.relations).toEqual(['reads', 'dependsOn']);
+    expect(cap.relations).toEqual(['reads']);
   });
 
   it('service → file system: reads/writes/watches, no database-specific query', () => {
@@ -347,7 +353,7 @@ describe('capabilityFor — the capability matrix', () => {
   it('file system → service: reads only, never behaves like an ordinary service call', () => {
     const cap = capabilityFor('fileSystem', 'service')!;
     expect(cap.defaultRelation).toBe('reads');
-    expect(cap.relations).toEqual(['reads', 'dependsOn']);
+    expect(cap.relations).toEqual(['reads']);
     expect(cap.relations).not.toContain('calls');
   });
 
@@ -360,7 +366,7 @@ describe('capabilityFor — the capability matrix', () => {
   it('object storage → service: reads only', () => {
     const cap = capabilityFor('objectStorage', 'service')!;
     expect(cap.defaultRelation).toBe('reads');
-    expect(cap.relations).toEqual(['reads', 'dependsOn']);
+    expect(cap.relations).toEqual(['reads']);
   });
 
   it('object storage may notify a Queue or Topic — the one storage kind with a documented event exception', () => {
@@ -368,7 +374,7 @@ describe('capabilityFor — the capability matrix', () => {
       const cap = capabilityFor('objectStorage', target)!;
       expect(cap.defaultRelation).toBe('publishes');
       expect(cap.defaultBehavior).toBe('event');
-      expect(cap.relations).toEqual(['publishes', 'event', 'dependsOn']);
+      expect(cap.relations).toEqual(['publishes', 'event']);
     }
     // Deliberately not extended to plain database/cache/fileSystem — this is Object Storage's own
     // documented exception, not "storage can publish events" in general.
@@ -744,7 +750,7 @@ describe('quickFixesFor', () => {
     // The exact "Service → Database writes, re-pointed to a Topic" scenario from the spec.
     const cap = capabilityFor('service', 'topic');
     const fixes = quickFixesFor(cap, { semantic: 'writes' });
-    expect(fixes).toEqual([{ id: 'retarget-relation', label: 'Use "publishes" instead', semantic: 'publishes' }]);
+    expect(fixes).toEqual([{ id: 'retarget-relation', label: 'Use "publishes to" instead', semantic: 'publishes' }]);
   });
 
   it('queue → topic never adds a retarget fix on top of Insert Worker — there is no default to retarget to', () => {
@@ -1496,7 +1502,7 @@ describe('capabilityFor through a Junction — endpoint compatibility is preserv
     const sourceCategory = resolveTransparentCategory(g, junction.id, 'source');
     const cap = capabilityFor(sourceCategory, categoryOf(queue))!;
 
-    expect(cap.relations).toEqual(['publishes', 'command', 'event', 'dependsOn']);
+    expect(cap.relations).toEqual(['publishes', 'consumes', 'command', 'event', 'dependsOn']);
     expect(cap.relations).not.toContain('query');
     expect(cap.relations).not.toContain('writes');
   });

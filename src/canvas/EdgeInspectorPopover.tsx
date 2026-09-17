@@ -21,7 +21,7 @@ import {
   resolveTransparentCategory,
   type ConnectionCapability,
 } from '../document/connectorSemantics';
-import { SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import { relationLabel } from '../document/edgeSemantics';
 import type { Rect } from '../edges/routing';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
@@ -333,7 +333,10 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
   const memberOf = flows.filter((flow) => stepIndexOf(flow, edge.id) !== undefined);
   const [editingLabel, setEditingLabel] = useState(false);
 
-  const caption = edge.label || (edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : null);
+  const relation = edge.semantic
+    ? relationLabel(edge.semantic, sourceNode && categoryOf(sourceNode), targetNode && categoryOf(targetNode))
+    : undefined;
+  const caption = edge.label || relation || null;
   const flowChip = flowChipFor(flows, selectedFlowId, memberOf, edge.id);
 
   // A connector fanning *out* of a Junction is a branch — the branching structure itself already
@@ -352,7 +355,7 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
             className="dc-edge-inspector-caption-input"
             aria-label="Connector label"
             defaultValue={edge.label ?? ''}
-            placeholder={edge.semantic ? SEMANTIC_DEFAULTS[edge.semantic].label : emptyLabelText}
+            placeholder={relation ?? emptyLabelText}
             spellCheck={false}
             onFocus={(event) => event.currentTarget.select()}
             onBlur={(event) => {

@@ -1,4 +1,4 @@
-import { SEMANTIC_DEFAULTS } from './edgeSemantics';
+import { relationLabel, SEMANTIC_DEFAULTS } from './edgeSemantics';
 import type { ConnectorKind, DraftEdge, DraftNode, EdgeSemantic } from './types';
 
 /**
@@ -222,18 +222,18 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // ordinary queries) is the same log-tailing relationship `database>database` already offers —
   // just now also expressible when the tailer is a service, not another database. Default stays
   // 'reads': most database→service edges are still an ordinary read.
-  'database>service': capability(['reads', 'query', 'cdc', 'dependsOn'], 'reads', []),
+  'database>service': capability(['reads', 'query', 'cdc'], 'reads', []),
   // Cache gets one verb a plain database connection structurally can't
   // express — invalidating a cached copy is a different architectural move
   // than writing through to a system of record.
   'service>cache': capability(['writes', 'reads', 'invalidates', 'dependsOn'], 'writes', []),
-  'cache>service': capability(['reads', 'dependsOn'], 'reads', []),
+  'cache>service': capability(['reads'], 'reads', []),
   // Read-oriented only, same restraint `database>service`/`cache>service`
   // already apply — a file system doesn't initiate an ordinary service call.
   'service>fileSystem': capability(['reads', 'writes', 'watches', 'dependsOn'], 'writes', []),
-  'fileSystem>service': capability(['reads', 'dependsOn'], 'reads', []),
+  'fileSystem>service': capability(['reads'], 'reads', []),
   'service>objectStorage': capability(['reads', 'writes', 'dependsOn'], 'writes', []),
-  'objectStorage>service': capability(['reads', 'dependsOn'], 'reads', []),
+  'objectStorage>service': capability(['reads'], 'reads', []),
   // 'reads' deliberately omitted — 'searches' already covers querying, and a
   // third near-synonym would just be vocabulary bloat.
   'service>searchIndex': capability(['searches', 'indexes', 'dependsOn'], 'searches', []),
@@ -243,10 +243,10 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // topic`'s own default) rather than inventing a new "notifies" term.
   // Deliberately not extended to database/cache/fileSystem — this is Object
   // Storage's own documented exception, not "storage can publish events."
-  'objectStorage>queue': capability(['publishes', 'event', 'dependsOn'], 'publishes', [], 'event'),
-  'objectStorage>topic': capability(['publishes', 'event', 'dependsOn'], 'publishes', [], 'event'),
-  'service>queue': capability(['publishes', 'command', 'event', 'dependsOn'], 'publishes', [], 'event'),
-  'queue>service': capability(['consumes', 'deliversTo', 'event', 'dependsOn'], 'consumes', [], 'event'),
+  'objectStorage>queue': capability(['publishes', 'event'], 'publishes', [], 'event'),
+  'objectStorage>topic': capability(['publishes', 'event'], 'publishes', [], 'event'),
+  'service>queue': capability(['publishes', 'consumes', 'command', 'event', 'dependsOn'], 'publishes', [], 'event'),
+  'queue>service': capability(['consumes', 'deliversTo', 'event'], 'consumes', [], 'event'),
   // `compensates` sits beside `command` because it *is* one — the saga's "release payment" is a
   // new local transaction another service runs on request, not something done to it — but it names
   // the one thing a plain command can't: that it exists to undo an earlier step that succeeded.
@@ -274,8 +274,8 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // so any pairing not listed here has no opinion: a port doesn't write, publish, or route.
   'service>port': capability(['calls', 'dependsOn'], 'calls', []),
   'component>port': capability(['uses', 'dependsOn'], 'uses', []),
-  'port>component': capability(['implementedBy', 'dependsOn'], 'implementedBy', []),
-  'port>service': capability(['implementedBy', 'dependsOn'], 'implementedBy', []),
+  'port>component': capability(['implementedBy'], 'implementedBy', []),
+  'port>service': capability(['implementedBy'], 'implementedBy', []),
   // The one mistake worth a nudge: wiring a port straight to storage makes the port look like an
   // infrastructure-owned thing. It's a contract; an adapter implements it and talks to the store.
   'port>database': capability(['dependsOn'], undefined, [], undefined, {
@@ -294,18 +294,18 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // A topic fans a message out to every subscriber rather than one worker pulling it off a
   // queue — 'deliversTo' (not 'consumes') is the default here for exactly that reason, unlike
   // `queue>service` above which keeps 'consumes'.
-  'topic>service': capability(['deliversTo', 'consumes', 'dependsOn'], 'deliversTo', [], 'event'),
-  'topic>queue': capability(['fansOut', 'deliversTo', 'dependsOn'], 'fansOut', [], 'event'),
+  'topic>service': capability(['deliversTo'], 'deliversTo', [], 'event'),
+  'topic>queue': capability(['fansOut', 'deliversTo'], 'fansOut', [], 'event'),
   // A Topic feeding a search index directly (a managed sink indexing its events, no consumer drawn)
   // reuses 'indexes' rather than inventing a second word for the same idea `worker>searchIndex`
   // already names. Topic only: a Stream (`queueKind: 'stream'`) folds into the `queue` category,
   // and its consumers are drawn as Workers — see the CDC starter — `searchIndex` never falls back to a generic `database`/`queue` row (see the matrix's
   // own "no opinion beats a wrong one" rule above), so this needs its own explicit entry.
-  'topic>searchIndex': capability(['indexes', 'dependsOn'], 'indexes', []),
+  'topic>searchIndex': capability(['indexes', 'ingests'], 'indexes', []),
   // A warehouse/analytics store ingesting straight off a Topic (a "sink," no separate consumer
   // shown) reuses 'ingests' — the same word and the same default `database>database` already
   // uses for "the most common intent when a fresh connection is drawn."
-  'topic>database': capability(['ingests', 'dependsOn'], 'ingests', []),
+  'topic>database': capability(['ingests'], 'ingests', []),
   // Deliberately NOT the inverse of 'topic>queue' — a queue doesn't itself publish into a
   // topic; something normally has to consume it and forward the message. Narrower relation
   // list, no default (nothing should ever auto-infer into this), 'unusual' status with a
@@ -319,13 +319,20 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // generates, now also what a hand-drawn Queue → DLQ connector infers, so the two can't drift.
   // `failure` has no dash pattern of its own (`edges/kindStyle.ts`), and dead-lettering is
   // genuinely asynchronous, so this is the one row that also asks for a dashed line.
-  'queue>deadLetter': capability(['deadLetters', 'dependsOn'], 'deadLetters', [], 'failure', {
+  'queue>deadLetter': capability(['deadLetters'], 'deadLetters', [], 'failure', {
     defaultAsync: true,
   }),
   // A Topic never dead-letters: it fans a message out and is done. Retries, and where a poison
   // message ends up after they run out, belong to each consumer's own delivery path — the same
   // rule `addDeadLetterQueue` enforces by refusing a Topic, restated here as guidance for a
   // connector someone draws by hand rather than a dead end.
+  // A consumer that gives up on a message and parks it itself — the application-level dead-letter
+  // path, as opposed to the broker's own redrive (`queue>deadLetter`). Same failure/dashed
+  // treatment so both read as the same kind of path; `publishes` stays one pick away for a
+  // service that simply writes to a queue someone happened to name a DLQ.
+  'service>deadLetter': capability(['deadLetters', 'publishes'], 'deadLetters', [], 'failure', {
+    defaultAsync: true,
+  }),
   'topic>deadLetter': capability(['dependsOn'], undefined, [], undefined, {
     status: 'unusual',
     guidance: "A topic doesn't dead-letter — retries and a DLQ belong to each consumer's own queue.",
@@ -335,13 +342,13 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // common intent when a fresh connection is drawn; the others are equally valid, explicit
   // choices, not lesser alternatives. 'transforms' sits beside them for a pairing where the data
   // genuinely changes shape (cleaned, normalised, aggregated) rather than just moving or copying.
-  'database>database': capability(['ingests', 'replicates', 'cdc', 'syncs', 'transforms', 'dependsOn'], 'ingests', []),
+  'database>database': capability(['ingests', 'replicates', 'cdc', 'syncs', 'transforms'], 'ingests', []),
   // A landing zone (object storage: raw, minimally-transformed files) being refined into a
   // structured table — the one storage-to-storage move that's genuinely a transformation, not a
   // copy, so it reuses 'transforms' rather than inventing a second word for the same idea. Default
   // is 'transforms' itself: unlike `database>database`, there's no plain-copy default to preserve
   // here (`objectStorage>service`'s own 'reads' already covers "read the raw files as they are").
-  'objectStorage>database': capability(['transforms', 'dependsOn'], 'transforms', []),
+  'objectStorage>database': capability(['transforms', 'ingests'], 'transforms', []),
   // The one place a Worker's own architectural role (background processor, not a request
   // handler) changes a default rather than just a shape: an indexer worker builds the index
   // rather than querying it. Same relation options as the plain `service>searchIndex` entry —
@@ -425,14 +432,19 @@ function resolved(category: NodeCategory): NodeCategory {
  * when Draft Canvas has no opinion — see the matrix's own doc comment.
  */
 export function capabilityFor(source: NodeCategory, target: NodeCategory): ConnectionCapability | undefined {
-  const exact = MATRIX[`${source}>${target}`];
-  if (exact) return exact;
+  // Most specific first: the exact pair, then one side folded at a time, then both. Folding one
+  // side at a time is what lets a Worker (→ service) reach `service>deadLetter` rather than
+  // skipping past it to `service>queue`, and a Gateway reach `gateway>service` for a Worker target.
+  // A dead-letter queue only folds with both sides at once: folding it alone as a *source* would
+  // make DLQ → DLQ read as `queue>deadLetter`, a dead-letter path out of a dead-letter queue.
   const resolvedSource = resolved(source);
   const resolvedTarget = resolved(target);
-  if (resolvedSource !== source || resolvedTarget !== target) {
-    return MATRIX[`${resolvedSource}>${resolvedTarget}`];
-  }
-  return undefined;
+  return (
+    MATRIX[`${source}>${target}`] ??
+    (source === 'deadLetter' ? undefined : MATRIX[`${resolvedSource}>${target}`]) ??
+    MATRIX[`${source}>${resolvedTarget}`] ??
+    MATRIX[`${resolvedSource}>${resolvedTarget}`]
+  );
 }
 
 /**
@@ -657,4 +669,17 @@ export function isEligibleForReinference(edge: DraftEdge): boolean {
   if (edge.semanticsOrigin === 'inferred') return true;
   if (edge.semanticsOrigin === 'explicit') return false;
   return edge.semantic === undefined && edge.kind === undefined;
+}
+
+/**
+ * The plain relationship caption for an edge as it sits in a document — `relationLabel` with the
+ * edge's own endpoint categories, so every text surface that names a connector's relationship
+ * (inspector, palette, search) reads in the arrow's direction the same way the canvas caption does.
+ * `undefined` when the edge carries no semantic.
+ */
+export function edgeRelationLabel(graph: Pick<GraphLike, 'nodes'>, edge: Pick<DraftEdge, 'semantic' | 'source' | 'target'>) {
+  if (!edge.semantic) return undefined;
+  const source = graph.nodes.find((n) => n.id === edge.source);
+  const target = graph.nodes.find((n) => n.id === edge.target);
+  return relationLabel(edge.semantic, source && categoryOf(source), target && categoryOf(target));
 }

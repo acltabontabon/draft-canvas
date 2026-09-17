@@ -251,6 +251,26 @@ const PORT_IMPLEMENTATION = defineFanOut(
 );
 
 /**
+ * An Adapter's next move is the Port it sits behind — on the driving side it calls one, on the
+ * driven side it implements one, and the diagram can't tell which, so the connector is inferred
+ * as the neutral `uses` (`MATRIX['component>port']`) and the adapter's direction is left to the
+ * user. Asked-for only: an Adapter alone isn't evidence it's missing anything, and unlike the
+ * Component family this needs no level — the adapter kind itself says ports-and-adapters.
+ */
+const ADAPTER_PORT: ContinuationRule = {
+  id: 'adapter-port',
+  tier: 'secondary',
+  label: 'Port',
+  reason: 'The contract this adapter sits behind.',
+  when: (nb, trigger) => nb.category === 'component' && nb.node.componentKind === 'adapter' && isExplicit(trigger),
+  fragment: () => ({
+    nodes: [{ key: 'target', type: 'component', componentKind: 'port' }],
+    edges: [{ from: 'anchor', to: 'target' }],
+  }),
+  silentAt: NOT_IN_AN_OVERVIEW,
+};
+
+/**
  * A Worker already fed by something but with no outbound connection at all yet — narrower than
  * the other families' evidence (zero outbound of *any* kind, not just a missing delivery path),
  * since "should this worker index something" is otherwise exactly the kind of guess `docs/
@@ -442,6 +462,7 @@ export const RULES: readonly ContinuationRule[] = [
   ...SCHEDULER_TRIGGER,
   ...OBJECT_STORAGE_FAN_OUT,
   ...PORT_IMPLEMENTATION,
+  ADAPTER_PORT,
   ...SERVICE_NEXT,
   ...WORKER_INDEXES,
   ...ACTOR_NEXT,

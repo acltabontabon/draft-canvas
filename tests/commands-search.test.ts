@@ -46,7 +46,7 @@ describe('jumpCommands', () => {
     const edge = state.connect(a.id, b.id)!;
     state.setEdgeSemantic(edge.id, 'publishes');
     const rows = jumpCommands(useEditorStore.getState().document);
-    expect(rows.some((row) => row.title === 'publishes')).toBe(true);
+    expect(rows.some((row) => row.title === 'publishes to')).toBe(true);
   });
 
   it('jumping to a node selects it, pans to it, and flashes it once', () => {

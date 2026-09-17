@@ -9,7 +9,7 @@ describe('resolveMessageLabel — priority chain', () => {
   });
 
   it('tier 1: whitespace-only labels are treated as absent', () => {
-    expect(resolveMessageLabel({ label: '   ', semantic: 'writes' }, 'service', 'database', 'sync')).toBe('writes');
+    expect(resolveMessageLabel({ label: '   ', semantic: 'writes' }, 'service', 'database', 'sync')).toBe('writes to');
   });
 
   it('tier 2: semantic formats through relationshipCaptionLabel, including its "requests" wording', () => {
@@ -27,9 +27,9 @@ describe('resolveMessageLabel — priority chain', () => {
 
   it('tier 3: an unset semantic falls back to the capability matrix\'s inferred default relation', () => {
     // service>database has no explicit semantic here but the matrix defaults to 'writes'.
-    expect(resolveMessageLabel({}, 'service', 'database', 'sync')).toBe('writes');
-    expect(resolveMessageLabel({}, 'database', 'service', 'sync')).toBe('reads');
-    expect(resolveMessageLabel({}, 'service', 'queue', 'async')).toBe('publishes');
+    expect(resolveMessageLabel({}, 'service', 'database', 'sync')).toBe('writes to');
+    expect(resolveMessageLabel({}, 'database', 'service', 'sync')).toBe('read by');
+    expect(resolveMessageLabel({}, 'service', 'queue', 'async')).toBe('publishes to');
   });
 
   it('tier 4: an unlisted pairing with no semantic falls back to the generic bucket word', () => {

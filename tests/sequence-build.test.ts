@@ -102,7 +102,7 @@ describe('buildSequenceModel — basic interaction kinds', () => {
     const model = buildOne([api, db], [edge], linearFlow([edge.id]));
 
     expect(model.participants[1]!.kind).toBe('database');
-    expect(messagesOf(model)[0]).toMatchObject({ interaction: 'sync', label: 'writes' });
+    expect(messagesOf(model)[0]).toMatchObject({ interaction: 'sync', label: 'writes to' });
   });
 
   it('service → database read, with no explicit response manufactured', () => {
@@ -112,7 +112,8 @@ describe('buildSequenceModel — basic interaction kinds', () => {
     const model = buildOne([db, api], [edge], linearFlow([edge.id]));
 
     expect(messagesOf(model)).toHaveLength(1);
-    expect(messagesOf(model)[0]!.label).toBe('reads');
+    // The message runs Database → API, so it reads in that direction.
+    expect(messagesOf(model)[0]!.label).toBe('read by');
   });
 
   it('service → queue publish is an async message', () => {

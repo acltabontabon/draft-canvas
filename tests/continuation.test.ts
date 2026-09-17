@@ -419,6 +419,7 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
       'object-storage-fan-out-topic': graph([service('p'), objectStorage('t')], [['p', 't']]),
       'port-implementation-component': graph([service('p'), port('t')], [['p', 't']]),
       'port-implementation-service': graph([service('p'), port('t')], [['p', 't']]),
+      'adapter-port': graph([{ id: 't', type: 'component', componentKind: 'adapter' }], []),
       'worker-indexes': graph([service('p'), worker('t')], [['p', 't']]),
       // Level-gated rules (see `ContinuationRule.levels`) only fire where the view has been said
       // to be one — the fixture says so the same way the editor does.

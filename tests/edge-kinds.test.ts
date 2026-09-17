@@ -243,7 +243,7 @@ describe('a connector\'s subtle relationship caption', () => {
     const edge = createEdge({ source: 'a', target: 'b', kind: 'event', semantic: 'publishes' });
     const texts = described(edge).overlay.filter((s) => s.t === 'text');
     expect(texts).toHaveLength(1);
-    expect(texts[0]!.layout.lines.map((l) => l.text).join('')).toBe('publishes');
+    expect(texts[0]!.layout.lines.map((l) => l.text).join('')).toBe('publishes to');
     expect(texts[0]!.fill).toBe(DARK.textFaint);
   });
 
@@ -268,7 +268,7 @@ describe('a connector\'s subtle relationship caption', () => {
     const overlay = described(edge).overlay;
     const texts = overlay.filter((s) => s.t === 'text');
     expect(texts).toHaveLength(1);
-    expect(texts[0]!.layout.lines.map((l) => l.text).join('')).toBe('publishes');
+    expect(texts[0]!.layout.lines.map((l) => l.text).join('')).toBe('publishes to');
     // Retry isn't event/conditional, so it gets no dot or diamond glyph —
     // the caption alone still carries the relationship.
     expect(overlay.some((s) => s.t === 'ellipse')).toBe(false);

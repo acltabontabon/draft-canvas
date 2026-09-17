@@ -118,13 +118,26 @@ export function InspectorSelect({
     const gap = 4; // matches the CSS gap between trigger and menu
     const avoid = getAvoidRect ? getAvoidRect() : avoidRect;
 
-    // Clamp each direction's available space by the viewport edge and, if `avoidRect` sits on
+    // The menu is measured against the canvas pane's own rect, not the browser viewport: this
+    // select lives inside React Flow's `overflow: hidden` root, which is usually shorter than the
+    // window (the toolbar and status bar sit above/below it), so a popover near the top or bottom
+    // of the *canvas* would otherwise be told it has room it doesn't — the menu would open past
+    // the pane's own edge and get silently clipped, hiding whichever options landed there. Falls
+    // back to the window when there's no such ancestor (e.g. this component rendered standalone).
+    const flowRoot = trigger.closest('.react-flow');
+    const flowRect = flowRoot?.getBoundingClientRect();
+    const viewTop = flowRect?.top ?? 0;
+    const viewBottom = flowRect?.bottom ?? window.innerHeight;
+    const viewLeft = flowRect?.left ?? 0;
+    const viewRight = flowRect?.right ?? window.innerWidth;
+
+    // Clamp each direction's available space by the canvas edge and, if `avoidRect` sits on
     // that side of the trigger, its edge too — opening toward it is exactly what this avoids.
-    const topLimit = avoid && avoid.bottom <= triggerRect.top ? Math.max(avoid.bottom, margin) : margin;
+    const topLimit = avoid && avoid.bottom <= triggerRect.top ? Math.max(avoid.bottom, viewTop + margin) : viewTop + margin;
     const bottomLimit =
       avoid && avoid.top >= triggerRect.bottom
-        ? Math.min(avoid.top, window.innerHeight - margin)
-        : window.innerHeight - margin;
+        ? Math.min(avoid.top, viewBottom - margin)
+        : viewBottom - margin;
     const space = {
       up: triggerRect.top - gap - topLimit,
       down: bottomLimit - (triggerRect.bottom + gap),
@@ -152,8 +165,8 @@ export function InspectorSelect({
     // anchored to the trigger, just growing the other way), and only clamps to a `maxWidth` when
     // neither side has room, so genuinely narrow viewports still degrade to the existing
     // ellipsis rather than overflowing the screen.
-    const spaceRight = window.innerWidth - margin - triggerRect.left;
-    const spaceLeft = triggerRect.right - margin;
+    const spaceRight = viewRight - margin - triggerRect.left;
+    const spaceLeft = triggerRect.right - viewLeft - margin;
     let align: 'start' | 'end' = 'start';
     let clampedWidth: number | undefined;
     if (naturalWidth > spaceRight) {

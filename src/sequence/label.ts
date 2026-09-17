@@ -40,9 +40,15 @@ export function resolveMessageLabel(
 ): string {
   const explicit = edge.label?.trim();
   if (explicit) return explicit;
-  if (edge.semantic) return relationshipCaptionLabel(edge.semantic, edge.hasResponse, edge.deliveryAttempts);
+  const options = {
+    hasResponse: edge.hasResponse,
+    deliveryAttempts: edge.deliveryAttempts,
+    source: sourceCategory,
+    target: targetCategory,
+  };
+  if (edge.semantic) return relationshipCaptionLabel(edge.semantic, options);
   const inferred = capabilityFor(sourceCategory, targetCategory)?.defaultRelation;
-  if (inferred) return relationshipCaptionLabel(inferred, edge.hasResponse, edge.deliveryAttempts);
+  if (inferred) return relationshipCaptionLabel(inferred, options);
   return GENERIC_FALLBACK[interaction];
 }
 

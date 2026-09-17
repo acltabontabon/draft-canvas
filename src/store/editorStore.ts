@@ -96,7 +96,7 @@ import {
   setStepViewport,
   updateFlowStepCaption as updateFlowStepCaptionOp,
 } from '../document/flow';
-import { relationshipCaptionLabel, SEMANTIC_DEFAULTS } from '../document/edgeSemantics';
+import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { DEFAULTS, LIMITS } from '../document/limits';
 import {
   capabilityFor,
@@ -578,13 +578,25 @@ function inferRelationshipThroughJunctions(
  * genuinely impossible via `apply`'s own recipes, but a pure function shouldn't assume its caller
  * always hands it a fully-linked graph).
  */
-function reinferIfEligible(doc: DraftDocument, edgeId: string): DraftDocument {
+function reinferIfEligible(doc: DraftDocument, edgeId: string, before?: DraftDocument): DraftDocument {
   const edge = doc.edges.find((e) => e.id === edgeId);
   if (!edge || !isEligibleForReinference(edge)) return doc;
   const sourceNode = doc.nodes.find((n) => n.id === edge.source);
   const targetNode = doc.nodes.find((n) => n.id === edge.target);
   if (!sourceNode || !targetNode) return doc;
   const relationship = inferRelationshipThroughJunctions(doc, sourceNode, targetNode);
+  // The one case `async` may be switched *off*: inference itself dashed this line (the previous
+  // pairing asked for `defaultAsync`) and the new pairing doesn't. A reversed Queue → DLQ is no
+  // longer a dead-letter path, so it shouldn't keep that path's dashes. An explicit edge never
+  // reaches here, so the user's own dashing is untouched.
+  const priorEdge = before?.edges.find((e) => e.id === edgeId);
+  const priorSource = priorEdge && before?.nodes.find((n) => n.id === priorEdge.source);
+  const priorTarget = priorEdge && before?.nodes.find((n) => n.id === priorEdge.target);
+  const prior =
+    before && priorEdge?.semanticsOrigin === 'inferred' && priorSource && priorTarget
+      ? inferRelationshipThroughJunctions(before, priorSource, priorTarget)
+      : undefined;
+  const dropInferredDash = Boolean(prior?.async && edge.async && !relationship?.async);
   // `hasResponse` is deliberately *absent* from this patch rather than passed
   // as `undefined`: `applyPatch` deletes keys whose value is undefined, so
   // naming it here at all would strip an explicit "Show response path" every
@@ -597,7 +609,7 @@ function reinferIfEligible(doc: DraftDocument, edgeId: string): DraftDocument {
     semantic: relationship?.semantic,
     kind: relationship?.kind,
     semanticsOrigin: relationship ? 'inferred' : undefined,
-    ...(relationship?.async ? { async: true } : {}),
+    ...(relationship?.async ? { async: true } : dropInferredDash ? { async: undefined } : {}),
   });
 }
 
@@ -1353,7 +1365,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // `service→database` "writes" edge would leave it *still* labeled "writes" pointing the other
   // way — stale relative to what the matrix itself would infer for the reversed pairing.
   reverseEdge(id) {
-    get().apply('Reverse direction', (doc) => reinferIfEligible(reverseEdgeOp(doc, id), id));
+    get().apply('Reverse direction', (doc) => reinferIfEligible(reverseEdgeOp(doc, id), id, doc));
   },
 
   reconnectEdge(id, endpoint, newNodeId, newSide, newOffset = 0.5) {
@@ -1361,7 +1373,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const reconnected = reconnectEdgeOp(doc, id, endpoint, newNodeId, newSide, newOffset);
       // A refused reconnect (onto the other endpoint, or a vanished node) must stay a no-op:
       // re-inference always rebuilds the edges array, which would record a dead undo step.
-      return reconnected === doc ? doc : reinferIfEligible(reconnected, id);
+      return reconnected === doc ? doc : reinferIfEligible(reconnected, id, doc);
     });
   },
 
@@ -1454,7 +1466,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!roomFor(1, 1)) return;
 
     const size = defaultSizeFor('queue');
-    const caption = relationshipCaptionLabel('deadLetters', undefined, 3);
+    const caption = relationshipCaptionLabel('deadLetters', { deliveryAttempts: 3 });
     const { x, y } = placeNear(state.document, source, size, gapForCaption(caption));
     const dlq = createNode({
       type: 'queue',
@@ -1507,7 +1519,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // needs the type/kind, not a real positioned node) so the caption it implies can size the gap
     // between source and companion.
     const capability = capabilityFor(categoryOf(source), categoryOf(companion));
-    const caption = capability?.defaultRelation ? SEMANTIC_DEFAULTS[capability.defaultRelation].label : undefined;
+    const caption = capability?.defaultRelation
+      ? relationshipCaptionLabel(capability.defaultRelation, { source: categoryOf(source), target: categoryOf(companion) })
+      : undefined;
     const { x, y } = placeNear(state.document, source, size, gapForCaption(caption));
     const node = createNode({
       ...companion,
@@ -1570,22 +1584,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setEdgeSemantic(id, semantic) {
-    const state = get();
-    const edge = state.document.edges.find((e) => e.id === id);
-    if (!edge) return;
+    if (!get().document.edges.some((e) => e.id === id)) return;
+    // Only the relationship itself. The caption renders from `semantic` in the arrow's own
+    // direction (`relationshipCaptionLabel`), so writing its words into `label` would only freeze
+    // them: a stored "writes to" can't be told from one the user typed, and goes stale the moment
+    // the connector is reversed. `label` stays the user's own text, which always wins.
     const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { semantic, semanticsOrigin: 'explicit' };
-    // Only a fill-in-the-blank convenience: never overrides a label the user already gave the
-    // connection, and never touches `accent` at all. Also skipped for a pairing the matrix flags
-    // as unusual/questionable — auto-filling a plain label there would silently replace the one
-    // visual signal (the caption's own warning marker, see `DraftEdgeView.tsx`) that this
-    // connection is worth a second look, at the exact moment a relation gets picked for it.
-    const status = capabilityFor(
-      resolveTransparentCategory(state.document, edge.source, 'source'),
-      resolveTransparentCategory(state.document, edge.target, 'target'),
-    )?.status;
-    const isUnusual = status === 'unusual' || status === 'questionable';
-    if (semantic && !edge.label && !isUnusual) patch.label = SEMANTIC_DEFAULTS[semantic].label;
-    state.apply('Set connector type', (doc) => updateEdge(doc, id, patch));
+    get().apply('Set connector type', (doc) => updateEdge(doc, id, patch));
   },
 
   setEdgeCondition(id, condition) {

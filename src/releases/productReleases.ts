@@ -21,6 +21,33 @@ export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './se
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.8.0',
+    date: '2026-09-17',
+    summary: 'Connectors read like sentences, and the shape library got a redraw.',
+    highlights: [
+      {
+        title: 'Captions read in the arrow’s direction',
+        description: 'Queue → Worker now reads "consumed by", Database → Service reads "read by" — point the arrow either way and the words still make sense.',
+      },
+      {
+        title: 'Reversing a connector keeps your choice',
+        description: 'Flip a connector and a relationship you picked turns with it; one Draft Canvas worked out for you is worked out again for the new direction.',
+      },
+      {
+        title: 'Adapters suggest their Port',
+        description: 'Drag off an Adapter and Draft Canvas offers the Port it sits behind.',
+      },
+      {
+        title: 'Shapes, redrawn',
+        description: 'Every Data Store kind, Gateway, Stream and Actor has a fresh, flatter look — neutral by default, with a quieter colour palette in both themes.',
+      },
+      {
+        title: 'Long names wrap before they’re cut',
+        description: 'A name typed into a shape wraps onto more lines, and shrinks a little if it still doesn’t fit, before it’s ever trimmed with an ellipsis.',
+      },
+    ],
+  },
+  {
     version: '1.7.0',
     date: '2026-09-17',
     summary: 'Look inside: C4-aware depth.',

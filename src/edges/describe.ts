@@ -353,10 +353,16 @@ export function describeEdge(
     if (edge.semantic) {
       const sourceNode = nodes.get(edge.source);
       const targetNode = nodes.get(edge.target);
-      const status =
-        sourceNode && targetNode ? capabilityFor(categoryOf(sourceNode), categoryOf(targetNode))?.status : undefined;
+      const sourceCategory = sourceNode ? categoryOf(sourceNode) : undefined;
+      const targetCategory = targetNode ? categoryOf(targetNode) : undefined;
+      const status = sourceCategory && targetCategory ? capabilityFor(sourceCategory, targetCategory)?.status : undefined;
       const isUnusual = status === 'unusual' || status === 'questionable';
-      const label = relationshipCaptionLabel(edge.semantic, edge.hasResponse, edge.deliveryAttempts);
+      const label = relationshipCaptionLabel(edge.semantic, {
+        hasResponse: edge.hasResponse,
+        deliveryAttempts: edge.deliveryAttempts,
+        source: sourceCategory,
+        target: targetCategory,
+      });
       const text = isUnusual ? `▲ ${label}` : label;
       const captionLayout = layoutText(text, {
         font: FONTS.connectorCaption,

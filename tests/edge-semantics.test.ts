@@ -7,22 +7,22 @@ import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 describe('relationshipCaptionLabel', () => {
   it('relabels the untouched call default to "requests" only when paired with a response line', () => {
-    expect(relationshipCaptionLabel('calls', true)).toBe('requests');
-    expect(relationshipCaptionLabel('calls', false)).toBe('calls');
-    expect(relationshipCaptionLabel('calls', undefined)).toBe('calls');
+    expect(relationshipCaptionLabel('calls', { hasResponse: true })).toBe('requests');
+    expect(relationshipCaptionLabel('calls', { hasResponse: false })).toBe('calls');
+    expect(relationshipCaptionLabel('calls', {})).toBe('calls');
   });
 
   it('leaves every other interaction label exactly as SEMANTIC_DEFAULTS says, response or not', () => {
-    expect(relationshipCaptionLabel('http', true)).toBe('HTTP');
-    expect(relationshipCaptionLabel('writes', true)).toBe('writes');
-    expect(relationshipCaptionLabel('publishes', false)).toBe('publishes');
+    expect(relationshipCaptionLabel('http', { hasResponse: true })).toBe('HTTP');
+    expect(relationshipCaptionLabel('writes', { hasResponse: true })).toBe('writes to');
+    expect(relationshipCaptionLabel('publishes', { hasResponse: false })).toBe('publishes to');
   });
 
   it('a deadLetters edge reads "after N attempts" once a count is set, else the generic label', () => {
-    expect(relationshipCaptionLabel('deadLetters', undefined, 3)).toBe('after 3 attempts');
-    expect(relationshipCaptionLabel('deadLetters', undefined, 1)).toBe('after 1 attempts');
+    expect(relationshipCaptionLabel('deadLetters', { deliveryAttempts: 3 })).toBe('after 3 attempts');
+    expect(relationshipCaptionLabel('deadLetters', { deliveryAttempts: 1 })).toBe('after 1 attempts');
     expect(relationshipCaptionLabel('deadLetters')).toBe('dead-letters to');
-    expect(relationshipCaptionLabel('deadLetters', undefined, 0)).toBe('dead-letters to');
+    expect(relationshipCaptionLabel('deadLetters', { deliveryAttempts: 0 })).toBe('dead-letters to');
   });
 });
 
@@ -40,7 +40,7 @@ describe('semantic connections', () => {
     });
   });
 
-  it('fills in a default label for a labelless edge, and never sets an accent', () => {
+  it('never writes a label or an accent — the caption renders from the semantic instead', () => {
     const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
     const edge = store.getState().connect(a.id, b.id)!;
@@ -50,7 +50,10 @@ describe('semantic connections', () => {
     store.getState().setEdgeSemantic(edge.id, 'reads');
     const stored = store.getState().document.edges[0]!;
     expect(stored.semantic).toBe('reads');
-    expect(stored.label).toBe('reads');
+    expect(stored.semanticsOrigin).toBe('explicit');
+    // A stored copy of the caption couldn't be told from the user's own text, and would go stale
+    // the moment the connector was reversed.
+    expect(stored.label).toBeUndefined();
     expect(stored.accent).toBeUndefined();
   });
 
@@ -92,13 +95,14 @@ describe('semantic connections', () => {
     const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
     const edge = store.getState().connect(a.id, b.id)!;
+    store.getState().updateEdgeLabel(edge.id, 'saves order');
     store.getState().setEdgeSemantic(edge.id, 'calls');
-    expect(store.getState().document.edges[0]!.label).toBe('calls');
+    expect(store.getState().document.edges[0]!.label).toBe('saves order');
 
     store.getState().setEdgeSemantic(edge.id, undefined);
     const stored = store.getState().document.edges[0]!;
     expect(stored.semantic).toBeUndefined();
-    expect(stored.label).toBe('calls');
+    expect(stored.label).toBe('saves order');
   });
 
   it('is one undo step', () => {

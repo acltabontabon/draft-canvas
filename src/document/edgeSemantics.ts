@@ -1,3 +1,4 @@
+import type { NodeCategory } from './connectorSemantics';
 import type { EdgeSemantic } from './types';
 
 /**
@@ -28,16 +29,82 @@ import type { EdgeSemantic } from './types';
  * shows exactly as it does everywhere else. Shared by both connector renderers (`DraftEdgeView.tsx`
  * and `edges/describe.ts`) so they can't quietly disagree.
  */
-export function relationshipCaptionLabel(
-  semantic: EdgeSemantic,
-  hasResponse?: boolean,
-  deliveryAttempts?: number,
-): string {
+export function relationshipCaptionLabel(semantic: EdgeSemantic, options: CaptionOptions = {}): string {
+  const { hasResponse, deliveryAttempts, source, target } = options;
   if (hasResponse && semantic === 'calls') return 'requests';
   // A protocol-neutral count beats the generic label the moment one is set — "after 3 attempts"
   // says what's actually being modeled without claiming a specific retry mechanism. See
   // `DraftEdge.deliveryAttempts`'s own doc comment for why it isn't called `retryAttempts`.
   if (semantic === 'deadLetters' && deliveryAttempts) return `after ${deliveryAttempts} attempts`;
+  return relationLabel(semantic, source, target);
+}
+
+/**
+ * What a caption needs beyond the semantic itself. `source`/`target` are the connector's endpoint
+ * categories (resolved through junctions where the caller has the graph) — without them the
+ * caption falls back to the active wording, which is right for every arrow a doer starts.
+ */
+export interface CaptionOptions {
+  hasResponse?: boolean;
+  deliveryAttempts?: number;
+  source?: NodeCategory;
+  target?: NodeCategory;
+}
+
+/** Categories that hold data rather than act on it. */
+export const STORE_CATEGORIES: ReadonlySet<NodeCategory> = new Set([
+  'database',
+  'cache',
+  'fileSystem',
+  'objectStorage',
+  'searchIndex',
+]);
+
+/** Categories that carry messages rather than act on them. */
+export const MESSAGING_CATEGORIES: ReadonlySet<NodeCategory> = new Set(['queue', 'topic', 'deadLetter']);
+
+/**
+ * A caption reads "source *verb* target", so it has to agree with the arrow. A semantic always
+ * means the same relationship — `reads` is "a service reads a store" however the connector is
+ * drawn — and when the arrow starts at the verb's *object* instead of its subject, the caption
+ * switches to the passive: Database → Service `reads` is "read by", Queue → Worker `consumes` is
+ * "consumed by". Display only: `semantic` is never rewritten, so a saved diagram drawn in the
+ * data-flow direction reads correctly without touching the document.
+ *
+ * Verbs a holder performs itself (`deliversTo`, `fansOut`, `deadLetters`, `publishes` from object
+ * storage, `replicates`, `syncs`, `cdc`, `transforms`) have no entry: they already read in the
+ * arrow's direction.
+ */
+const PASSIVE: Partial<Record<EdgeSemantic, { label: string; when: 'sourceIsStore' | 'sourceIsMessaging' | 'sourceIsHolder' }>> = {
+  reads: { label: 'read by', when: 'sourceIsStore' },
+  writes: { label: 'written by', when: 'sourceIsStore' },
+  query: { label: 'queried by', when: 'sourceIsStore' },
+  searches: { label: 'searched by', when: 'sourceIsStore' },
+  invalidates: { label: 'invalidated by', when: 'sourceIsStore' },
+  watches: { label: 'watched by', when: 'sourceIsStore' },
+  consumes: { label: 'consumed by', when: 'sourceIsMessaging' },
+  ingests: { label: 'ingested by', when: 'sourceIsHolder' },
+  indexes: { label: 'indexed by', when: 'sourceIsHolder' },
+};
+
+/** Whether a semantic has a passive reading at all — used by tests sweeping the matrix. */
+export function hasPassiveReading(semantic: EdgeSemantic): boolean {
+  return PASSIVE[semantic] !== undefined;
+}
+
+/** The plain caption for a semantic in the arrow's own direction — no response/attempts wording. */
+export function relationLabel(semantic: EdgeSemantic, source?: NodeCategory, target?: NodeCategory): string {
+  const passive = PASSIVE[semantic];
+  if (passive && source !== undefined) {
+    const isStore = STORE_CATEGORIES.has(source);
+    const isMessaging = MESSAGING_CATEGORIES.has(source);
+    const applies =
+      passive.when === 'sourceIsStore' ? isStore : passive.when === 'sourceIsMessaging' ? isMessaging : isStore || isMessaging;
+    // A store feeding another store (`reads` on Database → Database) has no subject on either
+    // end to make passive about — keep the active form rather than guess.
+    const targetActs = target === undefined || !(STORE_CATEGORIES.has(target) || MESSAGING_CATEGORIES.has(target));
+    if (applies && (targetActs || passive.when === 'sourceIsHolder')) return passive.label;
+  }
   return SEMANTIC_DEFAULTS[semantic].label;
 }
 
@@ -46,15 +113,15 @@ export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   grpc: { label: 'gRPC' },
   event: { label: 'event' },
   command: { label: 'command' },
-  query: { label: 'query' },
-  reads: { label: 'reads' },
-  writes: { label: 'writes' },
-  publishes: { label: 'publishes' },
-  consumes: { label: 'consumes' },
+  query: { label: 'queries' },
+  reads: { label: 'reads from' },
+  writes: { label: 'writes to' },
+  publishes: { label: 'publishes to' },
+  consumes: { label: 'consumes from' },
   calls: { label: 'calls' },
   dependsOn: { label: 'depends on' },
   uses: { label: 'uses' },
-  fansOut: { label: 'fans out' },
+  fansOut: { label: 'fans out to' },
   deliversTo: { label: 'delivers to' },
   ingests: { label: 'ingests' },
   replicates: { label: 'replicates to' },
@@ -64,8 +131,8 @@ export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   invalidates: { label: 'invalidates' },
   watches: { label: 'watches' },
   searches: { label: 'searches' },
-  indexes: { label: 'indexes' },
-  routes: { label: 'routes' },
+  indexes: { label: 'indexes into' },
+  routes: { label: 'routes to' },
   triggers: { label: 'triggers' },
   implementedBy: { label: 'implemented by' },
   compensates: { label: 'compensates' },

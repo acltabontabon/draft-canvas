@@ -199,9 +199,10 @@ export function reconnectEdge(
 /**
  * Swaps a connector's direction. Only the two endpoints and their anchors move — the label, the
  * semantic, the kind, the condition/response chips, attachments, and `semanticsOrigin` all stay
- * exactly as they were: reversing which way an arrow points never changes which node kinds are
- * on each end, so unlike `reconnectEdge` there is nothing for inference to re-derive. Flow steps
- * reference the edge by id, so they keep pointing at this connector too.
+ * exactly as they were here. Direction does change meaning, though: the store's `reverseEdge`
+ * re-infers an *inferred* relationship for the reversed pairing afterwards, and captions read in
+ * the arrow's direction (`relationshipCaptionLabel`). Flow steps reference the edge by id, so they
+ * keep pointing at this connector too.
  */
 export function reverseEdge(doc: DraftDocument, id: string): DraftDocument {
   let changed = false;

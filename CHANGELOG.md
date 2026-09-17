@@ -4,13 +4,29 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-17
+
 ### Added
 
 - Two new Actor kinds: Group (several people acting together) and Third Party (a person
   representing an organization outside your own system).
+- Dragging a connector off an Adapter now suggests the Port it sits behind.
+- A Worker connected to a dead-letter queue now reads "dead-letters to" and draws as the same
+  dashed failure path a queue's own dead-letter route does.
 
 ### Changed
 
+- Connector captions now always read in the direction of the arrow. Queue → Worker reads
+  "consumed by", Database → Service reads "read by", and Topic → Database reads "ingested by",
+  where these used to read backwards. Everyday verbs are a little more natural too: "reads from",
+  "writes to", "publishes to", "routes to". Saved diagrams pick this up without being changed.
+- Reversing a connector keeps a relationship you picked and turns its caption around to match. A
+  relationship Draft Canvas worked out for you is worked out again for the new direction.
+- Picking a relationship no longer copies its words into the connector's label, so the label is
+  only ever what you typed.
+- "Depends on" is no longer suggested where it would read backwards, such as from a data store, a
+  queue or a port.
+- "Change relationship…" in the command palette lists what fits the connector first.
 - A long name typed into a shape now wraps onto more lines, and shrinks a little if it still
   doesn't fit, before it's ever cut short with an ellipsis — so the name you typed usually stays
   fully visible.
@@ -44,6 +60,8 @@ All notable changes to Draft Canvas are documented here.
 
 - On a laptop-width window, the toolbar's shapes no longer run underneath the Flows button when a
   flow is selected. The row of shapes now scrolls when it runs out of room instead.
+- A shape's type menu (a Data Store's SQL/NoSQL/Cache/etc. picker and others like it) no longer
+  gets cut off when the shape sits near the top of the canvas, hiding the first option or two.
 
 ## [1.7.0] - 2026-09-17
 
@@ -1105,7 +1123,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.7.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.8.0...main
+[1.8.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.0...v1.6.1

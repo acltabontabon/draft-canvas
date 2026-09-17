@@ -56,7 +56,14 @@ export function materialize(
     const inbound = continuation.fragment.edges.find((e) => e.to === spec.key);
     const hostForGap = inbound ? resolve(inbound.from) : undefined;
     const semantic = hostForGap ? capabilityFor(categoryOf(hostForGap), categoryOf(spec))?.defaultRelation : undefined;
-    const caption = semantic ? relationshipCaptionLabel(semantic, undefined, inbound?.deliveryAttempts) : undefined;
+    const caption =
+      semantic && hostForGap
+        ? relationshipCaptionLabel(semantic, {
+            deliveryAttempts: inbound?.deliveryAttempts,
+            source: categoryOf(hostForGap),
+            target: categoryOf(spec),
+          })
+        : undefined;
 
     const position =
       index === 0 && options.at
