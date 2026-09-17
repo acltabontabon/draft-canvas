@@ -189,12 +189,14 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
           </Button>
         </div>
       ) : (
-        <ul className="dc-flow-list">
+        <ul className="dc-flow-list" role="listbox" aria-label="Flows">
           <li
             className="dc-flow-row dc-flow-diagram"
             data-flow-id=""
             data-selected={selectedFlowId === null ? 'true' : undefined}
             aria-current={selectedFlowId === null ? 'true' : undefined}
+            role="option"
+            aria-selected={selectedFlowId === null}
             tabIndex={0}
           >
             <div className="dc-flow-item-head" onClick={() => setSelectedFlowId(null)}>
@@ -217,6 +219,8 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
                 data-flow-id={flow.id}
                 data-selected={selected ? 'true' : undefined}
                 aria-current={selected ? 'true' : undefined}
+                role="option"
+                aria-selected={selected}
                 aria-expanded={expanded}
                 tabIndex={0}
               >

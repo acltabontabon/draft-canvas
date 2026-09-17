@@ -545,7 +545,12 @@ function ContinuationAnnouncer() {
  * the moment focus is inside an input — otherwise pressing "n" while renaming a
  * node would spawn a note.
  */
-function useKeyboard({
+/** Exported only for `tests/keyboard-dispatch.test.tsx`, which renders this hook directly (via
+ *  `renderHook`) to fire real `keydown` events against the actual dispatch switch below — so a
+ *  binding changed here can't silently drift from what `shortcutLookup.ts` tells the palette and
+ *  Shortcut Sheet to display. Not part of the app's own render path otherwise; `EditorScreen`
+ *  below still calls it exactly as before. */
+export function useKeyboard({
   createAtPointer,
   playback,
 }: {
@@ -557,7 +562,7 @@ function useKeyboard({
   const arm = useUiStore((state) => state.arm);
   const setFlowPanelOpen = useUiStore((state) => state.setFlowPanelOpen);
   const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
-  const { fitView, zoomIn, zoomOut, screenToFlowPosition, flowToScreenPosition, setCenter, getZoom } =
+  const { fitView, zoomIn, zoomOut, zoomTo, screenToFlowPosition, flowToScreenPosition, setCenter, getZoom } =
     useReactFlow();
 
   // Relationship-navigation (Alt+Shift+Left/Right) cycle state — which node the cycle started
@@ -881,6 +886,12 @@ function useKeyboard({
           case '-':
             event.preventDefault();
             void zoomOut();
+            return;
+          case '0':
+            // Reset-to-100%, the browser/VS Code/design-tool convention for this chord — keeps the
+            // current viewport center rather than recentering on the document.
+            event.preventDefault();
+            void zoomTo(1);
             return;
           case 'b':
           case 'i': {

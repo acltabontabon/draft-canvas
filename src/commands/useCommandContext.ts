@@ -22,7 +22,7 @@ export interface UseCommandContextParams {
  * whatever is true the instant it runs, not whatever was true when the menu opened.
  */
 export function useCommandContext({ createAt, createAtPointer, playback }: UseCommandContextParams): () => CommandContext {
-  const { fitView, zoomIn, zoomOut, screenToFlowPosition, setViewport } = useReactFlow();
+  const { fitView, zoomIn, zoomOut, zoomTo, screenToFlowPosition, setViewport } = useReactFlow();
   // Selected separately, as `useFlowPlayback` does: an object literal from a store selector is a
   // new identity every time and would re-render forever.
   const viewWidth = useStore((state) => state.width);
@@ -38,6 +38,7 @@ export function useCommandContext({ createAt, createAtPointer, playback }: UseCo
           fitView: (options) => fitView({ ...calm(options), nodes: options?.nodes ?? flowFitViewNodes(editor) }),
           zoomIn: (options) => zoomIn(calm(options)),
           zoomOut: (options) => zoomOut(calm(options)),
+          zoomTo: (zoomLevel, options) => zoomTo(zoomLevel, calm(options)),
           screenToFlowPosition,
           setViewport: (viewport, options) => setViewport(viewport, calm(options)),
           viewWidth,

@@ -61,7 +61,7 @@ export interface CommandContext {
   ui: UiStore;
   camera: Pick<
     ReturnType<typeof useReactFlow>,
-    'fitView' | 'zoomIn' | 'zoomOut' | 'screenToFlowPosition' | 'setViewport'
+    'fitView' | 'zoomIn' | 'zoomOut' | 'zoomTo' | 'screenToFlowPosition' | 'setViewport'
   > & {
     /** The pane's size in pixels — what a bounds-fit needs to pick a zoom (see `focusNodes`). */
     viewWidth: number;

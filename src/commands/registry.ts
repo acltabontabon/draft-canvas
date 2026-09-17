@@ -332,6 +332,14 @@ function viewCommands(ctx: CommandContext): Command[] {
       shortcut: `${MOD_SYMBOL} −`,
       run: (inner) => void inner.camera.zoomOut({ duration: 160 }),
     },
+    {
+      id: 'zoom-reset',
+      title: 'Zoom to 100%',
+      group: 'view',
+      keywords: ['actual size', 'reset zoom'],
+      shortcut: `${MOD_SYMBOL} 0`,
+      run: (inner) => void inner.camera.zoomTo(1, { duration: 160 }),
+    },
   ];
   if (ctx.editor.selection.nodes.length > 0) {
     commands.push({

@@ -34,6 +34,7 @@ export function stubContext(overrides: Partial<CommandContext> = {}): CommandCon
       fitView: vi.fn(async () => true),
       zoomIn: vi.fn(async () => true),
       zoomOut: vi.fn(async () => true),
+      zoomTo: vi.fn(async () => true),
       screenToFlowPosition: vi.fn((p: { x: number; y: number }) => p),
       setViewport: vi.fn(async () => true),
       viewWidth: 1200,

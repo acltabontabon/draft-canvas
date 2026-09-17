@@ -90,6 +90,7 @@ export const SECTIONS: Section[] = [
       { commandId: 'fit' },
       { commandId: 'zoom-in' },
       { commandId: 'zoom-out' },
+      { commandId: 'zoom-reset' },
       { keys: ['Space'], label: 'Hold, then drag to pan' },
       { keys: ['Arrow'], label: 'Nudge the selection — Shift+Arrow moves further' },
     ],
@@ -98,6 +99,7 @@ export const SECTIONS: Section[] = [
     title: 'Diagramming',
     rows: [
       { gesture: 'Double-click', label: 'Create here, or edit text' },
+      { keys: [mod, 'K'], label: 'Create and place a shape without the mouse' },
       { gesture: 'Drag from a handle', label: 'Connect — drop on empty canvas to create and wire a node' },
       { keys: ['Tab'], label: 'Accept the suggested next element, when one is showing' },
       { keys: [']', '['], label: 'Next or previous suggestion — or ask for one for the selected shape' },

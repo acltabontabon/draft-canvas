@@ -18,6 +18,7 @@ import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { useToolbarHeight } from './useToolbarHeight';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 import { rightClearance } from './canvasFrame';
+import { usePopoverKeyboard } from './usePopoverKeyboard';
 
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css`. */
 const POPOVER_EXIT_MS = 120;
@@ -80,6 +81,11 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
   const reorderAttachment = useEditorStore((state) => state.reorderAttachment);
 
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Same WAI-ARIA toolbar arrow-key behaviour as `ElementInspectorPopover`/`EdgeInspectorPopover`
+  // (and `Inspector`'s own strip) — shared so all four toolbars can't drift apart in how they
+  // respond to the keyboard. This popover's `role="toolbar"` had gone without it until now.
+  usePopoverKeyboard(panelRef);
 
   // The last live host and its position, kept for the panel to keep rendering *something*
   // coherent while it fades out, instead of going blank a frame early.
@@ -164,7 +170,7 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
       <div
         ref={panelRef}
         className="dc-attachment-popover"
-        role="dialog"
+        role="toolbar"
         aria-label={`Attachments for ${displayHost.text || 'this node'}`}
         data-closing={closing ? 'true' : undefined}
         data-placement={placement}

@@ -4,6 +4,16 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- ⌘0 (Ctrl+0) resets the zoom to 100%, alongside the existing zoom in and out.
+
+### Fixed
+
+- An attachment's popover now behaves like the other toolbars beside a shape or connector —
+  arrow keys move between its buttons, and screen readers announce it correctly.
+- The Flows panel's list is now announced correctly to screen readers.
+
 ## [1.8.0] - 2026-09-17
 
 ### Added
