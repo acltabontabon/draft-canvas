@@ -189,6 +189,24 @@ export interface UiStore {
    */
   actionCaptureOpen: boolean;
   /**
+   * Whether the arrival card is up — the third face of the Takeaways surface, shown once when a
+   * canvas that still owes something is opened (`takeaways/recall.ts`). Set *after* `setDocument`,
+   * which clears this alongside the rest of the per-document UI state.
+   */
+  takeawaysRecall: boolean;
+  /**
+   * An action to flash on arrival, set when the open came from the Library's "Still open" band so
+   * the row you clicked is the one you land on. One-shot, like `editRequestId`: the panel consumes
+   * and clears it, so a remount never re-flashes it.
+   */
+  takeawaysFlashActionId: string | null;
+  /**
+   * Bumped when the arrival card settles, so `TakeawaysChip` can pulse once as it receives it.
+   * A counter rather than a boolean: two recalls in a row must both be visible, and a flag that is
+   * already `true` would animate nothing the second time.
+   */
+  takeawaysChipPulse: number;
+  /**
    * A flow id the panel should open in rename mode, with its title selected — set by every
    * "new flow" entry point so naming is part of creating, not a separate errand. One-shot, like
    * `editRequestId`: `FlowPanel` consumes and clears it, so a remount (leaving present mode) or a
@@ -353,6 +371,10 @@ export interface UiStore {
   /** Opens or closes the capture line. Opening always shows the actions face behind it, so the
    *  thing you just captured is where you'd look for it. */
   setActionCaptureOpen: (open: boolean) => void;
+  /** Raises the arrival card, or settles it — settling also pulses the chip it returns to. */
+  setTakeawaysRecall: (open: boolean) => void;
+  /** Sets (or consumes, with `null`) the action the arrival should land on. */
+  flashAction: (actionId: string | null) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone'], action?: ToastAction) => void;
@@ -453,6 +475,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   takeawaysOpen: false,
   takeawaysView: 'actions',
   actionCaptureOpen: false,
+  takeawaysRecall: false,
+  takeawaysFlashActionId: null,
+  takeawaysChipPulse: 0,
   interactionActive: false,
   movingNodeIds: NO_MOVING_NODES,
   editRequestId: null,
@@ -522,6 +547,17 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setTakeawaysView: (takeawaysView) => set({ takeawaysView }),
   setActionCaptureOpen: (actionCaptureOpen) =>
     set(actionCaptureOpen ? { actionCaptureOpen, takeawaysView: 'actions' } : { actionCaptureOpen: false }),
+  setTakeawaysRecall: (takeawaysRecall) =>
+    // Settling is what teaches where the thing lives, so the pulse is part of closing rather than
+    // a second call a caller could forget to make.
+    set((state) =>
+      takeawaysRecall
+        ? { takeawaysRecall: true }
+        : // Only a card that was actually up has something to settle back: pulsing on a close that
+          // closed nothing would blink the chip every time a document was swapped.
+          { takeawaysRecall: false, takeawaysChipPulse: state.takeawaysChipPulse + (state.takeawaysRecall ? 1 : 0) },
+    ),
+  flashAction: (takeawaysFlashActionId) => set({ takeawaysFlashActionId }),
   setInteractionActive: (interactionActive, movingNodeIds) =>
     set((state) => {
       const moving = interactionActive && movingNodeIds ? new Set(movingNodeIds) : NO_MOVING_NODES;

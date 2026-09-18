@@ -5311,6 +5311,138 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   animation: dc-takeaways-in 140ms var(--dc-ease-out) reverse;
 }
 
+/*
+ * The arrival card: the same object again, one size between the line and the panel.
+ *
+ * It unrolls from its own bottom edge rather than sliding in from anywhere, because it is the
+ * status bar's count opening up — and on the way out it travels down and to the right, shrinking
+ * into the chip it becomes. That exit is the only thing that ever tells anyone where the count
+ * lives, so it is worth the extra 80ms over the other faces.
+ */
+.dc-takeaways[data-mode='recall'] {
+  width: min(360px, calc(100% - 24px));
+  transform-origin: bottom right;
+  animation: dc-takeaways-unroll 220ms var(--dc-ease-out);
+}
+
+.dc-takeaways[data-mode='recall'][data-closing] {
+  animation: dc-takeaways-settle 220ms var(--dc-ease-in-out) forwards;
+}
+
+@keyframes dc-takeaways-unroll {
+  from {
+    transform: translateY(12px) scaleY(0.86);
+    opacity: 0;
+  }
+}
+
+/* Down and to the right — the chip sits just below this card's right-hand edge. Approximated
+   rather than measured: a FLIP against a 20px target would cost a layout read every open to land
+   a movement nobody can follow that precisely anyway. */
+@keyframes dc-takeaways-settle {
+  to {
+    transform: translate(14px, 18px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.dc-takeaways-recall {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 11px;
+}
+
+.dc-takeaways-recall-head {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.dc-takeaways-recall-count {
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-takeaways-recall-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-takeaways-recall-row {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  /* Per-row, 30ms apart: the list reads as being recalled rather than pasted up. */
+  animation: dc-fade-in 200ms var(--dc-ease-out) backwards;
+  animation-delay: calc(60ms + var(--dc-row) * 30ms);
+}
+
+.dc-takeaways-recall-glyph {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dc-takeaways-recall-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Two lines at most. An action is one thing said out loud; a card that grew to fit a pasted
+   paragraph would stop being glanceable, which is the only thing it is for. */
+.dc-takeaways-recall-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--dc-text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dc-takeaways-recall-more {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.dc-takeaways-recall-more:hover,
+.dc-takeaways-recall-more:focus-visible {
+  color: var(--dc-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-takeaways[data-mode='recall'],
+  .dc-takeaways[data-mode='recall'][data-closing],
+  .dc-takeaways-recall-row {
+    animation: none;
+  }
+
+  /* The exit still has to end invisible: without the animation there is nothing else to hide it
+     during the unmount delay. */
+  .dc-takeaways[data-mode='recall'][data-closing] {
+    opacity: 0;
+  }
+}
+
 @keyframes dc-takeaways-in {
   from {
     transform: translateY(10px);
@@ -5719,4 +5851,31 @@ button.dc-status-takeaways:focus-visible {
 .dc-status-takeaways-glyph {
   font-size: 11px;
   opacity: 0.8;
+}
+
+/* One soft pulse as the arrival card settles into it — the end of a single movement, not an
+   attention-getter, so it brightens and returns rather than flashing a colour. */
+button.dc-status-takeaways[data-arrived] {
+  animation: dc-takeaways-received 600ms var(--dc-ease-out);
+}
+
+@keyframes dc-takeaways-received {
+  0% {
+    color: var(--dc-text-muted);
+  }
+
+  30% {
+    color: var(--dc-text);
+    transform: scale(1.08);
+  }
+
+  100% {
+    color: var(--dc-text-muted);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.dc-status-takeaways[data-arrived] {
+    animation: none;
+  }
 }

@@ -136,6 +136,9 @@ function TakeawaysChip() {
     void revision;
     return takeawaysFor(fileOf(useEditorStore.getState()));
   })();
+  // Bumped when the arrival card settles. Keyed on it rather than toggled by it, so the animation
+  // restarts cleanly on a second recall instead of being a class that is already applied.
+  const pulse = useUiStore((state) => state.takeawaysChipPulse);
   if (isEmpty(takeaways)) return null;
 
   const open = openCount(takeaways);
@@ -143,8 +146,10 @@ function TakeawaysChip() {
   return (
     <>
       <button
+        key={pulse}
         type="button"
         className="dc-status-takeaways"
+        data-arrived={pulse > 0 || undefined}
         title={open > 0 ? 'Actions still open — review takeaways' : 'What came out of this discussion'}
         aria-label={open > 0 ? `${label}, review takeaways` : 'Review takeaways'}
         onClick={() => useUiStore.getState().setTakeawaysOpen(true)}

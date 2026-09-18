@@ -916,6 +916,11 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'f
     // A shape hovered as the room changed is no longer under the pointer to say it has left.
     depthShapeHoverId: null,
     depthPlateFocusId: null,
+    // The arrival card and its flash belong to the document that was being opened when they were
+    // set, so they are raised *after* this runs (`useDocumentSession.openDocument`). Clearing them
+    // here is what stops a card raised for one canvas surviving a switch to another.
+    takeawaysRecall: false,
+    takeawaysFlashActionId: null,
   });
   return {
     selection: EMPTY_SELECTION,

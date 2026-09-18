@@ -11,6 +11,8 @@ import { loadStarters } from '../starters/load';
 import { Autosave } from '../storage/autosave';
 import { getRepository, type DraftRepository } from '../storage';
 import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
+import { openActions } from '../document/actions';
+import { shouldRecall } from '../takeaways/recall';
 import { useUiStore } from './uiStore';
 
 type EditorStoreModule = typeof import('./editorStore');
@@ -26,6 +28,39 @@ async function loadEditorStore(): Promise<EditorStoreModule> {
   return editorStoreModule;
 }
 
+/**
+ * Say what this canvas is still owed, once, as it arrives.
+ *
+ * Shared by every path that puts a stored document into the editor — opening from the Library,
+ * adopting an import, and the VS Code host — so the rule lives in one place rather than being
+ * re-derived at each door. Must be called *after* `setDocument`, which clears the two fields it
+ * sets along with the rest of the outgoing canvas's UI state.
+ *
+ * `presenting` is always false here: `setDocument` forces `mode: 'edit'`. The card checks it again
+ * while it is up, for a presentation started during those few seconds.
+ */
+export function arriveWith(
+  document: DraftDocument,
+  context: { reopening: boolean; revealAction?: string },
+): void {
+  const ui = useUiStore.getState();
+  if (context.revealAction) {
+    // Arrived by clicking a specific action: land on it, opened and flashed, and say nothing else.
+    ui.flashAction(context.revealAction);
+    ui.setTakeawaysOpen(true);
+    return;
+  }
+  const recall = shouldRecall({
+    reopening: context.reopening,
+    presenting: false,
+    alreadyOpen: ui.takeawaysOpen,
+    revealing: false,
+    // Root-only field, and this is the whole file: no walk needed to count what is open.
+    openCount: openActions(document).length,
+  });
+  if (recall) ui.setTakeawaysRecall(true);
+}
+
 export interface DocumentSession {
   ready: boolean;
   repository: DraftRepository | null;
@@ -33,7 +68,12 @@ export interface DocumentSession {
   durable: boolean;
   library: DraftSummary[];
   refreshLibrary: () => Promise<void>;
-  openDocument: (id: string) => Promise<void>;
+  /**
+   * Opens a stored canvas. `revealAction` — set when the open came from the Library's "Still open"
+   * band — lands on that action instead of raising the arrival card, so the thing you just read is
+   * never read back to you (`takeaways/recall.ts`).
+   */
+  openDocument: (id: string, options?: { revealAction?: string }) => Promise<void>;
   /** A blank canvas, or — given a `starterId` — one already holding that
    *  Architecture Starter, titled after it unless `title` says otherwise. */
   newDocument: (title?: string, starterId?: StarterId) => Promise<void>;
@@ -78,6 +118,16 @@ export function useDocumentSession(): DocumentSession {
   const navigation = useRef(0);
   /** A New canvas already on its way — a double-click must not make two. */
   const creating = useRef(false);
+  /**
+   * `openId` as a ref, for the callbacks that must not be rebuilt every time a canvas opens.
+   *
+   * It answers a question the editor store cannot: *is this canvas already the one on screen?*
+   * Closing a canvas clears `openId` but deliberately leaves the store holding it, so "the store
+   * still has this document" means only that it was open at some point — which is why the arrival
+   * card asks this instead.
+   */
+  const openIdRef = useRef<string | null>(null);
+  openIdRef.current = openId;
   const notify = useUiStore((state) => state.notify);
 
   useEffect(() => {
@@ -223,7 +273,7 @@ export function useDocumentSession(): DocumentSession {
   }, [repository]);
 
   const openDocument = useCallback(
-    async (id: string) => {
+    async (id: string, options?: { revealAction?: string }) => {
       if (!repository) return;
       const request = (navigation.current += 1);
       let loaded: DraftDocument | null;
@@ -263,6 +313,12 @@ export function useDocumentSession(): DocumentSession {
       // top, the same way it never opens into a flow.
       const reopening = editorStore.useEditorStore.getState().document.metadata.id === loaded.metadata.id;
       editorStore.useEditorStore.getState().setDocument(loaded, { keepPath: reopening });
+      // After `setDocument`, which clears both of these along with the rest of the previous
+      // canvas's UI state — raising them before it would be undone a line later.
+      // Deliberately not `reopening`: that one asks whether the *store* still holds this file (so a
+      // reload keeps the room you were standing in), which stays true after you have gone back to
+      // the Library. Arriving is about the screen, not the store.
+      arriveWith(loaded, { reopening: openIdRef.current === loaded.metadata.id, revealAction: options?.revealAction });
       setOpenId(loaded.metadata.id);
     },
     [notify, refreshLibrary, repository],
@@ -298,6 +354,7 @@ export function useDocumentSession(): DocumentSession {
         // Saved either way — it's in the Library — but only the latest open/create takes the editor.
         if (request === navigation.current) {
           useEditorStore.getState().setDocument(document);
+          arriveWith(document, { reopening: false });
           setOpenId(document.metadata.id);
         }
         await refreshLibrary();
