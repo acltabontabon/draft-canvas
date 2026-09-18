@@ -378,6 +378,7 @@ export function createDocument(title = 'Untitled canvas'): DraftDocument {
       background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 },
     },
     flows: [],
+    actions: [],
   };
 }
 

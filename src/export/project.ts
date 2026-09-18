@@ -27,6 +27,10 @@ export function serializeDocument(document: DraftDocument): string {
     viewport: document.viewport,
     settings: document.settings,
     flows: document.flows,
+    // Same rule as `level` below, and for the same reason: most canvases never capture an action,
+    // and an empty array written into every one of them would change the bytes of every file in
+    // every repository the moment this shipped. Absent is what `normalizeDocument` reads as none.
+    ...(document.actions.length === 0 ? {} : { actions: document.actions }),
     // Only written when the canvas actually has one, so a file from a canvas nobody said anything
     // about is byte-identical to what this has always produced.
     ...(document.level === undefined ? {} : { level: document.level }),

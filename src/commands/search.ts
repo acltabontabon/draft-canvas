@@ -50,8 +50,14 @@ function edgeLabel(document: DraftDocument, edge: DraftEdge): string | undefined
 
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Flashes one element, cancelling any flash still running from a previous jump. */
-function flash(ctx: CommandContext, id: string) {
+/**
+ * Flashes one element, cancelling any flash still running from a previous jump.
+ *
+ * Exported because "go to it" is no longer only the palette's jump rows: a Takeaways row points
+ * at the architecture an action came from and arrives the same way, and two pulses with two
+ * timers would be able to fight each other over `jumpFlashId`.
+ */
+export function flash(ctx: CommandContext, id: string) {
   if (flashTimer) clearTimeout(flashTimer);
   ctx.ui.setJumpFlashId(id);
   flashTimer = setTimeout(() => {

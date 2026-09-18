@@ -176,6 +176,19 @@ export interface UiStore {
   /** Whether the Flows panel — the one surface for flows (`FlowPanel.tsx`) — is visible. */
   flowPanelOpen: boolean;
   /**
+   * Whether the Takeaways surface (`TakeawaysPanel.tsx`) is showing, and which of its two faces.
+   * `'actions'` is the working list during the meeting; `'readout'` is everything the discussion
+   * produced, for the end of it. One surface, two states, rather than two panels.
+   */
+  takeawaysOpen: boolean;
+  takeawaysView: 'actions' | 'readout';
+  /**
+   * Whether the one-line action capture is open. Deliberately separate from `takeawaysOpen`: the
+   * whole point is that capturing costs one key and doesn't make you look at a list, so the line
+   * can be up with the panel shut — and, unlike every other panel, while presenting.
+   */
+  actionCaptureOpen: boolean;
+  /**
    * A flow id the panel should open in rename mode, with its title selected — set by every
    * "new flow" entry point so naming is part of creating, not a separate errand. One-shot, like
    * `editRequestId`: `FlowPanel` consumes and clears it, so a remount (leaving present mode) or a
@@ -334,6 +347,12 @@ export interface UiStore {
   setPresentationReveal: (target: PresentationReveal | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
   requestFlowRename: (flowId: string | null) => void;
+  /** Opens Takeaways on one of its two faces, or closes it. */
+  setTakeawaysOpen: (open: boolean, view?: 'actions' | 'readout') => void;
+  setTakeawaysView: (view: 'actions' | 'readout') => void;
+  /** Opens or closes the capture line. Opening always shows the actions face behind it, so the
+   *  thing you just captured is where you'd look for it. */
+  setActionCaptureOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone'], action?: ToastAction) => void;
@@ -431,6 +450,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   presentationReveal: null,
   flowPanelOpen: false,
   flowRenameRequestId: null,
+  takeawaysOpen: false,
+  takeawaysView: 'actions',
+  actionCaptureOpen: false,
   interactionActive: false,
   movingNodeIds: NO_MOVING_NODES,
   editRequestId: null,
@@ -493,6 +515,13 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
+  setTakeawaysOpen: (takeawaysOpen, view) =>
+    // Closing also puts the surface back on its working face: reopening it mid-meeting should
+    // show the list you are still adding to, not the summary you read once at the end.
+    set(takeawaysOpen ? { takeawaysOpen, ...(view ? { takeawaysView: view } : {}) } : { takeawaysOpen: false, takeawaysView: 'actions' }),
+  setTakeawaysView: (takeawaysView) => set({ takeawaysView }),
+  setActionCaptureOpen: (actionCaptureOpen) =>
+    set(actionCaptureOpen ? { actionCaptureOpen, takeawaysView: 'actions' } : { actionCaptureOpen: false }),
   setInteractionActive: (interactionActive, movingNodeIds) =>
     set((state) => {
       const moving = interactionActive && movingNodeIds ? new Set(movingNodeIds) : NO_MOVING_NODES;

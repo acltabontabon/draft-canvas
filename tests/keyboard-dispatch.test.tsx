@@ -8,6 +8,7 @@ import { shortcutFor } from '../src/commands/shortcutLookup';
 import { MOD_SYMBOL } from '../src/lib/platform';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
+import { CAPTURE_ACTION_KEY } from '../src/takeaways/capture';
 
 /**
  * `shortcutLookup.ts`'s own catalog (exercised by `tests/shortcut-catalog.test.ts`) only proves
@@ -40,6 +41,8 @@ function reset() {
     contextMenu: null,
     interactionActive: false,
     commandPaletteOpen: false,
+    actionCaptureOpen: false,
+    takeawaysOpen: false,
   });
 }
 
@@ -188,5 +191,74 @@ describe('keyboard dispatch — matches the shortcuts the UI displays', () => {
     const zoomReset = new KeyboardEvent('keydown', { key: '0', metaKey: true, cancelable: true, bubbles: true });
     act(() => void window.dispatchEvent(zoomReset));
     expect(zoomReset.defaultPrevented).toBe(true);
+  });
+});
+
+describe('capturing an action', () => {
+  beforeEach(reset);
+
+  it('opens the capture line on its own key, matching the shortcut the UI displays', () => {
+    mount();
+    expect(shortcutFor('capture-action')).toBe(CAPTURE_ACTION_KEY);
+
+    press(CAPTURE_ACTION_KEY.toLowerCase());
+    expect(useUiStore.getState().actionCaptureOpen).toBe(true);
+  });
+
+  it('works with Caps Lock on, and stands down for Shift and Alt', () => {
+    mount();
+    press(CAPTURE_ACTION_KEY);
+    expect(useUiStore.getState().actionCaptureOpen).toBe(true);
+
+    useUiStore.setState({ actionCaptureOpen: false });
+    press(CAPTURE_ACTION_KEY.toLowerCase(), { shiftKey: true });
+    press(CAPTURE_ACTION_KEY.toLowerCase(), { altKey: true });
+    expect(useUiStore.getState().actionCaptureOpen).toBe(false);
+  });
+
+  /*
+   * Present mode swallows every bare key but Escape. Capture is the one exception, and it is
+   * only defensible while it stays the only one — so this asserts the exception *and* the rule
+   * it is an exception to.
+   */
+  it('is the only bare key presentation lets through', () => {
+    mount();
+    useEditorStore.setState({ mode: 'present' });
+
+    press(CAPTURE_ACTION_KEY.toLowerCase());
+    expect(useUiStore.getState().actionCaptureOpen).toBe(true);
+
+    const node = addNode();
+    useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+    const before = useEditorStore.getState().document.nodes.length;
+    for (const key of ['s', 'n', 'c', 'b', 'q', 'a', 'd', 'f', 't', 'j', 'm']) press(key);
+    expect(useEditorStore.getState().document.nodes).toHaveLength(before);
+    expect(useUiStore.getState().flowPanelOpen).toBe(false);
+
+    press('Backspace');
+    expect(useEditorStore.getState().document.nodes).toHaveLength(before);
+  });
+
+  it('leaves Escape alone while presenting, where the panel is hidden rather than closed', () => {
+    mount();
+    useUiStore.getState().setTakeawaysOpen(true);
+    useEditorStore.setState({ mode: 'present' });
+
+    press('Escape');
+    // The press belonged to the presentation, not to a panel nobody can see.
+    expect(useEditorStore.getState().mode).toBe('edit');
+    expect(useUiStore.getState().takeawaysOpen).toBe(true);
+  });
+
+  it('Escape closes Takeaways before it reaches anything on the canvas', () => {
+    mount();
+    const node = addNode();
+    useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+    useUiStore.getState().setTakeawaysOpen(true);
+
+    press('Escape');
+    expect(useUiStore.getState().takeawaysOpen).toBe(false);
+    // The selection is what Escape would have meant next, and it is still here.
+    expect(useEditorStore.getState().selection.nodes).toEqual([node.id]);
   });
 });

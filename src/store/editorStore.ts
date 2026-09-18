@@ -96,6 +96,15 @@ import {
   setStepViewport,
   updateFlowStepCaption as updateFlowStepCaptionOp,
 } from '../document/flow';
+import {
+  addAction,
+  clearActionAnchor as clearActionAnchorOp,
+  clearDoneActions as clearDoneActionsOp,
+  createAction as createActionEntity,
+  removeAction as removeActionOp,
+  setActionDone as setActionDoneOp,
+  updateActionText as updateActionTextOp,
+} from '../document/actions';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { DEFAULTS, LIMITS } from '../document/limits';
 import {
@@ -110,6 +119,7 @@ import type {
   Accent,
   AttachableType,
   Attachment,
+  DraftAction,
   DraftDocument,
   DraftEdge,
   DraftFlow,
@@ -495,6 +505,20 @@ export interface EditorStore {
   setFlowStepViewport: (flowId: string, stepId: string, viewport: DraftViewport | null) => void;
   /** Which flow's step badges show on the canvas. `null` shows none. */
   setSelectedFlowId: (flowId: string | null) => void;
+
+  /* Actions */
+  /** Captures one. Returns the new action's id, or `null` when the text was empty or the
+   *  document is already at `LIMITS.maxActions`. */
+  captureAction: (text: string, anchor?: DraftAction['anchor']) => string | null;
+  updateActionText: (actionId: string, text: string) => void;
+  setActionDone: (actionId: string, done: boolean) => void;
+  /** Drops an action's architecture context, leaving what it says alone. */
+  clearActionAnchor: (actionId: string) => void;
+  removeAction: (actionId: string) => void;
+  clearDoneActions: () => void;
+  /** Puts plain text on the system clipboard, through the VS Code host bridge when embedded.
+   *  Not a document edit — no undo step, nothing touched. */
+  copyText: (text: string) => void;
 
   /* Document-level */
   rename: (title: string) => void;
@@ -2200,6 +2224,43 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ selectedFlowId: flowId });
   },
 
+  captureAction(text, anchor) {
+    const action = createActionEntity(text, anchor);
+    if (!action) return null;
+    get().apply('Capture action', (doc) => addAction(doc, action));
+    // `addAction` refuses at the cap rather than dropping the oldest, so the caller has to be
+    // told it didn't land — the same contract `createFlow` has.
+    return get().document.actions.some((entry) => entry.id === action.id) ? action.id : null;
+  },
+
+  updateActionText(actionId, text) {
+    get().apply('Edit action', (doc) => updateActionTextOp(doc, actionId, text), {
+      coalesceKey: `action-text:${actionId}`,
+    });
+  },
+
+  setActionDone(actionId, done) {
+    get().apply(done ? 'Complete action' : 'Reopen action', (doc) => setActionDoneOp(doc, actionId, done));
+  },
+
+  clearActionAnchor(actionId) {
+    get().apply('Clear action context', (doc) => clearActionAnchorOp(doc, actionId));
+  },
+
+  removeAction(actionId) {
+    get().apply('Remove action', (doc) => removeActionOp(doc, actionId));
+  },
+
+  clearDoneActions() {
+    get().apply('Clear completed actions', (doc) => clearDoneActionsOp(doc));
+  },
+
+  copyText(text) {
+    // The same writer `copySelection` uses, so a copy made from Takeaways reaches the VS Code
+    // host's clipboard rather than a `navigator.clipboard` the webview refuses.
+    writeSystemClipboard(text);
+  },
+
   rename(title) {
     get().apply('Rename', (doc) => setTitle(doc, title), { coalesceKey: 'title' });
   },
@@ -2422,6 +2483,9 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
     a.flows === b.flows &&
     a.settings === b.settings &&
     a.viewport === b.viewport &&
+    // Capturing, completing or clearing an action touches nothing on the canvas, so leaving this
+    // out would discard every one of those edits as a write that changed nothing.
+    a.actions === b.actions &&
     // Saying what a view shows changes nothing else about it, so without this the one edit that
     // only ever changes `level` would be thrown away as a no-op.
     a.level === b.level &&

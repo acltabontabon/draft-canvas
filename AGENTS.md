@@ -72,6 +72,14 @@ Each of these has a failure mode that is silent, delayed, or both.
   `everyRoom` in the `MIGRATIONS` table. `migrate.test.ts` builds an old file carrying the data each
   of those migrations exists to rewrite at all four levels and insists every level came through, so
   forgetting is a failing test rather than a silently half-migrated file.
+- **A root-only document field has to be named in `depth/tree.ts`'s `embed`.** `viewOf` hands a
+  room every root-level field through a spread, so `DraftDocument.actions` (and `settings`, and
+  `metadata`) is readable inside a room for free — and is dropped on the way back out unless
+  `embed` carries it home too. The failure is silent and only shows up as "the action I captured
+  while inside that service is gone." Anything added beside them needs a line in `embed`, in
+  `shallowEqualDocument` (`store/editorStore.ts`) and in `sameContent` (`history/HistoryStack.ts`);
+  miss the second and every edit to it is discarded as a no-op, miss the third and a typed-then-
+  erased burst leaves a dead undo step.
 - **A room is reached only through `src/depth/tree.ts` and the store's lens.** `editorStore`'s
   `document` is the room being edited (the whole file at the top, by identity); `fileOf` reassembles
   the file, and only the handful of places that persist or export a *file* — autosave, the VS Code
@@ -102,7 +110,9 @@ no router) — that's what lets `dist/` be served from any path (`base: './'`).
 `src/starters/` sits beside `document/` (it imports only that, and is not part of the file format);
 `store/` and `commands/` consume it. `src/continuation/` sits there too (it imports `document/` and
 `render/text` only) — the deterministic next-move rules; `store/`, `commands/` and `canvas/` consume it.
-`src/depth/` sits there as well (it imports `document/` only) — the tree of rooms inside shapes and
+`src/takeaways/` sits beside them too (it imports `document/` and `depth/` only) — what the
+discussion produced, derived from the notes already on the canvas plus the document's own
+`actions`; `commands/` and `ui/` consume it. `src/depth/` sits there as well (it imports `document/` only) — the tree of rooms inside shapes and
 the view levels they show; `store/`, `commands/`, `canvas/`, `history/`, `storage/` and `ui/` consume it. The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
 persistence, the crypto boundary, untrusted input, schema evolution — lives in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The rules above are the invariants that document

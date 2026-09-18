@@ -200,6 +200,16 @@ export const RECIPES = [
     note: `Plain ${MOD_SYMBOL} E works too, unless a browser extension claims it first.`,
     related: ['add-to-flow', 'present-flow'],
   },
+  {
+    id: 'capture-action',
+    title: 'Capture what needs to happen',
+    summary: 'Press I, say it, press Enter — the drawing never stops.',
+    category: 'flows',
+    keywords: ['action', 'todo', 'task', 'follow up', 'next step', 'takeaways', 'decision', 'question', 'meeting', 'minutes', 'assign', 'remember', 'copy', 'markdown'],
+    keys: [['i'], ['shift', 'enter']],
+    note: 'With something selected, it remembers where the action came from.',
+    related: ['present-flow', 'attach-note', 'export-sequence'],
+  },
 ] as const satisfies readonly LearnRecipe[];
 
 export type RecipeId = (typeof RECIPES)[number]['id'];

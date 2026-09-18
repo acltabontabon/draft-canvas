@@ -95,3 +95,25 @@ export const exportSequence: Scene = {
     },
   ],
 };
+
+/**
+ * The same checkout story, one step further on: the meeting has produced something to do, and the
+ * canvas hands it back. Deliberately in the Flows category — capture is at its most useful mid
+ * walkthrough, which is where this ends.
+ */
+export const captureAction: Scene = {
+  label:
+    'The Orders to Payments connector is selected and I opens a capture line in the bottom corner, already showing "Orders → Payments" as the context. Typing "Confirm the timeout with Kevin" and pressing Enter adds it, and the status bar count goes up. Opening Takeaways lists the action under the connector it came from.',
+  frames: [
+    { ms: 900, step: 'Select what it is about', add: { nodes: NODES, edges: EDGES }, cursor: { ...REST, travel: 0 } },
+    { ms: 800, cursor: { x: 385, y: 134, click: true }, select: ['e2'] },
+    { ms: 900, step: 'One key', overlay: { kind: 'keys', keys: ['i'] }, cursor: null },
+    {
+      ms: 1400,
+      step: 'Say it and move on',
+      overlay: { kind: 'pill', at: { x: 300, y: 318 }, text: 'Confirm the timeout with @Kevin  ↳ Orders → Payments' },
+    },
+    { ms: 900, overlay: { kind: 'keys', keys: ['enter'] } },
+    { ms: 1600, step: 'It kept the connector', select: [], overlay: { kind: 'pill', at: { x: 300, y: 318 }, text: '□ 1 open action' } },
+  ],
+};

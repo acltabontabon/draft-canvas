@@ -60,6 +60,15 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
 
   const menuItems: ToolbarMenuItem[] = [
     {
+      id: 'takeaways',
+      label: toolbarLabel('takeaways'),
+      shortcut: toolbarTooltip('takeaways').shortcut,
+      onSelect: () => {
+        closeMenu();
+        useUiStore.getState().setTakeawaysOpen(true);
+      },
+    },
+    {
       id: 'settings',
       label: toolbarLabel('settings'),
       onSelect: () => {

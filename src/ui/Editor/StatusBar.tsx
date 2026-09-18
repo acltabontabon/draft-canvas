@@ -1,5 +1,7 @@
 import { useReactFlow, useStore } from '@xyflow/react';
-import { flowFitViewNodes, useEditorStore, viewLevel } from '../../store/editorStore';
+import { fileOf, flowFitViewNodes, useEditorStore, viewLevel } from '../../store/editorStore';
+import { isEmpty, openCount, takeawaysFor } from '../../takeaways/collect';
+import { count } from '../../lib/plural';
 import { LEVEL_HINTS, LEVEL_LABELS } from '../../depth/level';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
@@ -103,6 +105,7 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
       )}
 
       <div className="dc-status-right">
+        <TakeawaysChip />
         <LevelChip />
         <span className="dc-muted">
           {nodeCount} {nodeCount === 1 ? 'element' : 'elements'} · {edgeCount}{' '}
@@ -112,6 +115,47 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
         <ZoomControls />
       </div>
     </footer>
+  );
+}
+
+/**
+ * What this canvas has to show for the conversation that produced it.
+ *
+ * The same bargain `LevelChip` strikes below: absent entirely unless there is something to say,
+ * which for most canvases is forever — and a label you can act on, because a count you cannot
+ * open is the kind of chrome that sends people looking for a setting.
+ *
+ * It counts decisions and open questions as well as actions, which are notes already on the
+ * canvas (`noteKind`) rather than anything this feature stores. So a diagram drawn long before
+ * Takeaways existed opens with the chip already showing — which is, in practice, how most people
+ * will find out it is there at all.
+ */
+function TakeawaysChip() {
+  const revision = useEditorStore((state) => state.revision);
+  const takeaways = (() => {
+    void revision;
+    return takeawaysFor(fileOf(useEditorStore.getState()));
+  })();
+  if (isEmpty(takeaways)) return null;
+
+  const open = openCount(takeaways);
+  const label = open > 0 ? count(open, 'open action') : 'takeaways';
+  return (
+    <>
+      <button
+        type="button"
+        className="dc-status-takeaways"
+        title={open > 0 ? 'Actions still open — review takeaways' : 'What came out of this discussion'}
+        aria-label={open > 0 ? `${label}, review takeaways` : 'Review takeaways'}
+        onClick={() => useUiStore.getState().setTakeawaysOpen(true)}
+      >
+        <span className="dc-status-takeaways-glyph" aria-hidden="true">
+          {open > 0 ? '\u25a1' : '\u2713'}
+        </span>
+        {open > 0 ? open : 'takeaways'}
+      </button>
+      <span className="dc-inspector-divider" />
+    </>
   );
 }
 

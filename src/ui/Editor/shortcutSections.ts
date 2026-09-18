@@ -110,6 +110,14 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
+    title: 'Takeaways',
+    rows: [
+      { commandId: 'capture-action', label: 'Capture an action — works while presenting too' },
+      { keys: ['Shift', 'Enter'], label: 'Capture it and keep the line open for the next one' },
+      { keys: ['Backspace'], label: 'On an empty line: forget the shape it came from' },
+    ],
+  },
+  {
     title: 'Flows & presentation',
     rows: [
       { commandId: 'flow-manage', label: 'Flows panel' },

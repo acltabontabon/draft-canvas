@@ -256,7 +256,7 @@ walks one function per transition. Contract: [`SCHEMA.md`](SCHEMA.md).
 
 ### Derived capabilities
 
-Five features are best understood as **derivations of the model** — that framing is what keeps them
+Six features are best understood as **derivations of the model** — that framing is what keeps them
 from becoming separate systems.
 
 | Capability | Derives | The rule that keeps it honest |
@@ -266,6 +266,7 @@ from becoming separate systems.
 | **Sequence export** | every playable flow → one Mermaid/PlantUML file | An export format, not a mode. Responsibility ends at correct, deterministic text. |
 | **Commands** | selection + mode + document → what makes sense now | Re-derived, never registered. Each one calls an existing store action. |
 | **Depth** | a node's `inside` + where you are standing → the room being edited | One seam (`depth/tree.ts` + the store's `path`): everything else still edits a plain document. A room exists exactly when it holds a shape, so navigating writes nothing. A level is stored only when someone said it; what the rooms inside show follows from it, and is never written down. |
+| **Takeaways** | the notes already on the canvas + one root-level list → what the meeting produced | Only `actions` is stored. Decisions and open questions are `note` nodes and note attachments tagged `decision`/`question`, gathered from every room — so a diagram drawn before this existed has something to show, with no migration. `warning` stays out: it annotates the architecture, not the discussion. |
 
 ### Keyboard model
 

@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 12;
+export const CURRENT_VERSION = 13;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -618,6 +618,35 @@ export interface DraftSettings {
   background: BackgroundSettings;
 }
 
+/**
+ * Something that has to happen because of the discussion — the third thing a technical meeting
+ * produces, after the drawing and the notes on it.
+ *
+ * Canvas-level on purpose, and never a node: a Note (or a Decision, or a Question — see
+ * `NoteKind`) is *about a place*, which is why it has coordinates; an action is about a person
+ * and a time, and giving it coordinates would be a lie. The architecture it came from is a
+ * back-reference, not a position, and it is optional — "follow up with SRE" belongs to the whole
+ * canvas.
+ *
+ * Deliberately four fields. Anything that needs a fifth — a due date, a priority, an assignee
+ * record, a status beyond open/done — is a different product.
+ */
+export interface DraftAction {
+  id: string;
+  /** Plain text, exactly as typed. Any `@name` stays inline, so the text a file carries is the
+   *  text that was written — mentions are recognised when drawn, never stored apart. */
+  text: string;
+  /** Absent means open. */
+  done?: boolean;
+  /**
+   * What was on screen when it was captured, when anything was. Ids are unique across the whole
+   * file rather than per room (see `validate.ts`), so this needs no room path to resolve.
+   * `validate.ts` drops an anchor that no longer resolves and keeps the action — the action is
+   * the point, and the context is a bonus.
+   */
+  anchor?: { kind: 'node' | 'edge'; id: string };
+}
+
 export interface DraftDocument {
   format: DraftFormat;
   /** The document's schema version — see `CURRENT_VERSION` and `migrate.ts`.
@@ -632,6 +661,12 @@ export interface DraftDocument {
   viewport: DraftViewport;
   settings: DraftSettings;
   flows: DraftFlow[];
+  /**
+   * Root-only, like `settings` and unlike `flows`: a room is a room, but the meeting is the file.
+   * `DraftInside` deliberately has no counterpart, so `depth/tree.ts`'s `embed` has to carry this
+   * back to the root the way it already carries `metadata` and `settings`.
+   */
+  actions: DraftAction[];
   /** The canvas's own level, when it has one — same rule as `DraftInside.level`. */
   level?: ViewLevel;
 }

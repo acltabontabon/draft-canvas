@@ -1,3 +1,5 @@
+import { flash, focusNodes } from '../../commands/search';
+import type { CommandContext } from '../../commands/types';
 import { isEditableTarget } from '../../lib/isEditableTarget';
 import { prefersReducedMotion } from '../../lib/motion';
 import { useEditorStore } from '../../store/editorStore';
@@ -57,4 +59,51 @@ export async function backOut(depth?: number): Promise<void> {
   // back in — except while presenting, where a selection ring is not part of the picture.
   if (after.mode !== 'present') after.setSelection({ nodes: [owner], edges: [] });
   play('out', owner, room);
+}
+
+/**
+ * Go to one element and make it obvious — wherever in the file it lives.
+ *
+ * The composition that was missing. `focusNodes` + `flash` has always been able to reach
+ * something in the room you are standing in (it is how the palette's jump rows work), and
+ * `lookInside`/`backOut` has always been able to change rooms; nothing put the two together, so
+ * "go to the connector this action came from" had no answer when the connector was two rooms
+ * down.
+ *
+ * The context is rebuilt rather than passed in, because the camera has to be aimed at the room
+ * that is on screen *after* the climb, not the one that was there when the row was clicked.
+ */
+export async function navigateToElement(
+  target: { kind: 'node' | 'edge'; id: string; path: readonly string[] },
+  buildContext: () => CommandContext,
+): Promise<void> {
+  const from = useEditorStore.getState().path;
+  let shared = 0;
+  while (shared < from.length && shared < target.path.length && from[shared] === target.path[shared]) shared += 1;
+
+  // Out to the deepest room both paths share, then down the rest of the way. Each step is the
+  // ordinary navigation, so the room transitions play exactly as they do by hand.
+  if (from.length > shared) await backOut(shared);
+  for (let depth = shared; depth < target.path.length; depth += 1) {
+    await lookInside(target.path[depth]!);
+  }
+
+  // The climb refused (a drag was still under way, or a room stopped resolving): aiming the
+  // camera at a room nobody is standing in would be worse than not moving at all.
+  if (useEditorStore.getState().path.length !== target.path.length) return;
+
+  const ctx = buildContext();
+  const document = ctx.editor.document;
+  if (target.kind === 'node') {
+    if (!document.nodes.some((node) => node.id === target.id)) return;
+    ctx.editor.setSelection({ nodes: [target.id], edges: [] });
+    focusNodes(ctx, [target.id]);
+  } else {
+    const edge = document.edges.find((candidate) => candidate.id === target.id);
+    if (!edge) return;
+    ctx.editor.setSelection({ nodes: [], edges: [target.id] });
+    // A connector has no box of its own, so the camera frames what it runs between.
+    focusNodes(ctx, [edge.source, edge.target]);
+  }
+  flash(ctx, target.id);
 }

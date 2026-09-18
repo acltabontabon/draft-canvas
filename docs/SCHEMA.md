@@ -9,7 +9,7 @@ this drifts from it, trust the code.
 
 Every `.draftcanvas` file (and everything in IndexedDB's `bodies` store) carries a `version:
 number` and a `format: "draft-canvas"` marker. `CURRENT_VERSION` is declared in
-`src/document/types.ts`, currently **12**. A file missing the marker, or whose `version` isn't a
+`src/document/types.ts`, currently **13**. A file missing the marker, or whose `version` isn't a
 finite integer, is treated as version 1 — the oldest shape the app has ever written.
 
 ## The migration funnel
@@ -32,6 +32,7 @@ v(n+1)-shaped one:
 | v9 → v10 | `migrateAddRouteMode` | Structural no-op — absent `routeMode` already means Smart Routing. Exists so a v9 file can't be confused with a pre-v9 one. |
 | v10 → v11 | `migrateBffToApi` | The `bff` Service kind is gone — a Backend for Frontend is a role, not a runtime primitive — so any `serviceKind: 'bff'` becomes `'api'`. |
 | v11 → v12 | `migrateAddInsides` | Structural no-op — a v11 node simply has no `inside`, which is what absent already means. The version still moves because a v11 build's whitelist would strip the rooms out of a v12 file and (in VS Code) write the stripped version back; refusing it by name is the only safe reading. |
+| v12 → v13 | `migrateAddActions` | Structural no-op — a v12 file simply has no canvas-level `actions`, which is what absent already means. Root-only, so deliberately *not* wrapped in `everyRoom`. The version still moves for v12's own reason: an older build's whitelist would strip the actions out of a v13 file and (in VS Code) write the stripped version back. |
 
 Several of these are deliberate **structural no-ops**: versions where the on-disk shape didn't
 actually need to change, but an entry is still required. `migrateToCurrent` walks the chain from a
@@ -70,12 +71,17 @@ assume is well-formed. Its policy is **repair, don't reject**, applied only afte
   outermost-first — an enormous file loses its deepest detail, never the overview. A room left
   with no shapes is dropped, since a room exists exactly when it holds something.
 - Collections over their `LIMITS` cap (`maxNodes: 5000`, `maxEdges: 10000`,
-  `maxAttachmentsPerNode: 12`, `maxAttachmentsPerEdge: 4`, `maxFlows: 50`, `maxStepsPerFlow: 200`,
+  `maxAttachmentsPerNode: 12`, `maxAttachmentsPerEdge: 4`, `maxFlows: 50`, `maxStepsPerFlow: 200`, `maxActions: 100`,
   `maxExtraMembersPerStep: 40`, …) are truncated, not rejected, and the truncation is reported back
   as a repair the caller can show the user.
 - Dangling references (an edge whose source/target no longer exists, a `parentId` pointing at a
   boundary that isn't there, a flow step referencing a missing edge) are dropped rather than kept
-  as landmines for later code to trip over.
+  as landmines for later code to trip over. An action's `anchor` is the one of these resolved
+  *after* every room is in — ids are unique file-wide, so a valid anchor may point into a room
+  that hasn't been validated yet — and only the anchor is dropped, never the action.
+
+`actions` is the one collection read at the root only. A room carrying one is ignored rather than
+merged upward: a room is a room, but the meeting is the file.
 
 The same `parseDocument()` funnel backs every entry point that reads a document from outside the
 live session: file import, IndexedDB load, secure (`.dcenc`) import, and clipboard paste

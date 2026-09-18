@@ -36,6 +36,10 @@ const FIXTURE_DOCUMENT = {
   nodes: [NODE_A, NODE_B, NODE_C, NODE_GROUP, NODE_TEXT],
   edges: [EDGE_A],
   flows: [],
+  // One captured action, so the Takeaways commands that only exist once a canvas has something
+  // to show are in the catalog this file builds — a command absent from the fixture is a shortcut
+  // the help sheet would be told doesn't exist.
+  actions: [{ id: 'a_fixture', text: 'Confirm the timeout' }],
 };
 
 /** The same fixture seen from outside, with `NODE_A` holding it as its inside — see `path` below. */

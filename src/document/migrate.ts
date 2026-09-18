@@ -271,6 +271,23 @@ function migrateAddInsides(doc: Record<string, unknown>): Record<string, unknown
 }
 
 /**
+ * v13 gives a document its canvas-level `actions` — what the meeting decided somebody has to do
+ * next (`DraftAction`). Structurally a no-op: a v12 file simply has none, and `normalizeDocument`
+ * fills in the empty list every document without one already means.
+ *
+ * Document-wide, so deliberately **not** wrapped in `everyRoom`: actions are root-only, like
+ * `settings`. A room is a room, but the meeting is the file.
+ *
+ * The version still moves, for the same reason v12's did: a v12 build's validator rebuilds the
+ * document from a field whitelist, so it would quietly drop the actions out of a v13 file and —
+ * in VS Code, where every edit writes straight back to disk — save the stripped version over the
+ * original. Refusing the file by name is the only safe reading an older build can give it.
+ */
+function migrateAddActions(doc: Record<string, unknown>): Record<string, unknown> {
+  return doc;
+}
+
+/**
  * Applies `fn` to the document's own graph and to every room nested inside it, however deep.
  *
  * Exists so a migration can say what it changes once and have it reach the whole file — which
@@ -331,6 +348,7 @@ const MIGRATIONS: Record<number, Migration> = {
   9: migrateAddRouteMode,
   10: everyRoom(migrateBffToApi),
   11: migrateAddInsides,
+  12: migrateAddActions,
 };
 
 export class UnsupportedVersionError extends Error {

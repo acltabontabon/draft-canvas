@@ -6,6 +6,11 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
+- **Takeaways.** Press `I` to capture what needs to happen next, without stopping the drawing —
+  during a meeting or mid-presentation.
+- A quiet count in the status bar opens Takeaways: your open actions, plus the decisions and open
+  questions already written on the canvas.
+- **Copy takeaways** puts the lot on the clipboard as Markdown, ready to paste anywhere.
 - ⌘0 (Ctrl+0) resets the zoom to 100%, alongside the existing zoom in and out.
 
 ### Fixed

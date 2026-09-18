@@ -40,6 +40,7 @@ import {
   type ActorKind,
   type AttachableType,
   type Attachment,
+  type DraftAction,
   type BackgroundFit,
   type BoundaryPreset,
   type CodeLanguage,
@@ -811,6 +812,56 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     repairs.push(`${truncatedFlowSteps} flow(s) had too many steps; kept the first ${LIMITS.maxStepsPerFlow} of each.`);
   }
 
+  /* ------------------------------------------------------------- actions -- */
+
+  /*
+   * Root-only, unlike flows: a room is a room, but the meeting is the file. A room carrying an
+   * `actions` array is a file written by something that misunderstood the format, so it is
+   * ignored rather than merged upward — silently, because there is nothing the reader could do
+   * about it and nothing was lost that the root's own list didn't already hold.
+   *
+   * Anchors are only shape-checked here. Whether one still points at something can't be known
+   * yet — the rooms it might name haven't been validated at this point — so the pruning happens
+   * once the whole file is in, just below.
+   */
+  const actions: DraftAction[] = [];
+  if (isRoot) {
+    const rawActions = Array.isArray(raw.actions) ? raw.actions : [];
+    let droppedActions = 0;
+    const seenActionIds = new Set<string>();
+    if (rawActions.length > LIMITS.maxActions) {
+      repairs.push(`Document had too many actions; kept the first ${LIMITS.maxActions}.`);
+    }
+    for (const candidate of rawActions.slice(0, LIMITS.maxActions)) {
+      if (!isRecord(candidate)) {
+        droppedActions += 1;
+        continue;
+      }
+      // An action with nothing written in it is not an action — it is what an interrupted
+      // capture leaves behind, and keeping it would put an empty row in the list forever.
+      const actionText = text(candidate.text, LIMITS.maxActionLength)?.trim();
+      if (!actionText) {
+        droppedActions += 1;
+        continue;
+      }
+      let id = safeId(candidate.id) ?? createId('a');
+      if (seenActionIds.has(id)) id = createId('a');
+      seenActionIds.add(id);
+
+      const action: DraftAction = { id, text: actionText };
+      if (candidate.done === true) action.done = true;
+      const anchorRaw = isRecord(candidate.anchor) ? candidate.anchor : undefined;
+      const anchorId = anchorRaw ? safeId(anchorRaw.id) : undefined;
+      if (anchorId && (anchorRaw!.kind === 'node' || anchorRaw!.kind === 'edge')) {
+        action.anchor = { kind: anchorRaw!.kind, id: anchorId };
+      }
+      actions.push(action);
+    }
+    if (droppedActions > 0) {
+      repairs.push(`Dropped ${droppedActions} action(s) that were unreadable or had no text.`);
+    }
+  }
+
   /* ------------------------------------------------------------ document -- */
 
   const viewportRaw = isRecord(raw.viewport) ? raw.viewport : {};
@@ -846,6 +897,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       },
     },
     flows,
+    actions,
     // Absent stays absent: a view with no level behaves exactly as every canvas did before
     // levels existed, and nothing here ever invents one.
     ...(() => {
@@ -858,7 +910,25 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   ctx.budget.nodes -= nodes.length;
   ctx.budget.edges -= edges.length;
   ctx.budget.flows -= flows.length;
-  if (isRoot) drainInsides(ctx, repairs);
+  if (isRoot) {
+    drainInsides(ctx, repairs);
+    // Only now does `ctx` know every id in the file, rooms included, so only now can an anchor be
+    // told from a dangling one. The action itself always survives: it is the thing somebody has
+    // to do, and the architecture it came from is a bonus — dropping the whole row because a
+    // shape was deleted would lose the part that mattered. Same posture as a flow step that
+    // outlives its connector.
+    let strandedAnchors = 0;
+    for (const action of document.actions) {
+      if (!action.anchor) continue;
+      const known = action.anchor.kind === 'node' ? ctx.nodeIds : ctx.edgeIds;
+      if (known.has(action.anchor.id)) continue;
+      delete action.anchor;
+      strandedAnchors += 1;
+    }
+    if (strandedAnchors > 0) {
+      repairs.push(`${strandedAnchors} action(s) pointed at something no longer here; kept the action.`);
+    }
+  }
 
   return { ok: true, document, repairs };
 }

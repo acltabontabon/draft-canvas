@@ -166,11 +166,15 @@ export function viewOf(file: DraftDocument, path: DepthPath): DraftDocument | un
 /**
  * The file that results from `view` being the room at `path`.
  *
- * The room's graph is written into the owner chain; `metadata` and `settings` travel back to the
- * root, since a rename or a grid change made while inside belongs to the whole file. Returns the
- * same file object when nothing actually changed, so the store's "this operation was a no-op"
- * identity check keeps working at any depth, and refuses (returning the file untouched) if the
- * path stopped resolving rather than inventing a room somewhere else.
+ * The room's graph is written into the owner chain; `metadata`, `settings` and `actions` travel
+ * back to the root, since a rename, a grid change or an action captured while inside belongs to
+ * the whole file. Returns the same file object when nothing actually changed, so the store's
+ * "this operation was a no-op" identity check keeps working at any depth, and refuses (returning
+ * the file untouched) if the path stopped resolving rather than inventing a room somewhere else.
+ *
+ * That write-back list is exhaustive by necessity: `viewOf` hands a room every root-level field
+ * through a spread, so a new one is readable inside a room for free and is then dropped on the
+ * way out unless it is named here too.
  */
 export function embed(file: DraftDocument, path: DepthPath, view: DraftDocument): DraftDocument {
   if (path.length === 0) return view;
@@ -178,10 +182,17 @@ export function embed(file: DraftDocument, path: DepthPath, view: DraftDocument)
   const nodes = embedInto(file.nodes, path, 0, view);
   if (nodes === undefined) return file;
 
-  const shared = view.metadata !== file.metadata || view.settings !== file.settings;
+  const shared =
+    view.metadata !== file.metadata || view.settings !== file.settings || view.actions !== file.actions;
   if (nodes === file.nodes && !shared) return file;
 
-  const next: DraftDocument = { ...file, nodes, metadata: view.metadata, settings: view.settings };
+  const next: DraftDocument = {
+    ...file,
+    nodes,
+    metadata: view.metadata,
+    settings: view.settings,
+    actions: view.actions,
+  };
   // The view this file was just built from is the view it yields — recording that here keeps
   // `viewOf(embed(...))` identity-stable, which is what lets an unchanged room compare equal.
   // Not when the room emptied: there is no room to be stable about, and caching the view anyway

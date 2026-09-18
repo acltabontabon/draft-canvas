@@ -36,6 +36,11 @@ export const LIMITS = {
   /** Per step, per array (`extraNodeIds`, `extraEdgeIds`) — a "frame" step spotlighting more than this is not a walkthrough anymore. */
   maxExtraMembersPerStep: 40,
   maxFlowTitleLength: 100,
+  /** A meeting's worth, several times over. Past this it isn't a meeting's takeaways any more. */
+  maxActions: 100,
+  /** One line said out loud. Long enough for "Confirm the timeout with the settlement team
+   *  @Kevin", short enough that the list stays scannable at a glance. */
+  maxActionLength: 200,
   maxConditionLength: 120,
   maxResponseLength: 120,
 } as const;

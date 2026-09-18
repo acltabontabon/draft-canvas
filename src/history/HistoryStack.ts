@@ -126,7 +126,11 @@ function sameContent(a: DraftDocument, b: DraftDocument, path: readonly string[]
     equivalent(viewA.nodes, viewB.nodes, 4) &&
     equivalent(viewA.edges, viewB.edges, 4) &&
     equivalent(viewA.flows, viewB.flows, 4) &&
-    equivalent(a.settings, b.settings, 4)
+    equivalent(a.settings, b.settings, 4) &&
+    // Read off the file, not the view, because actions are root-only — and compared for the same
+    // reason the rest of this is: typing an action and erasing it again inside the coalesce
+    // window has to come out as a burst that changed nothing, not a dead undo step.
+    equivalent(a.actions, b.actions, 4)
   );
 }
 
