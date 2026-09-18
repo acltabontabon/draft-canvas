@@ -72,6 +72,8 @@ export class Autosave {
   private readonly loaded = new Map<string, DraftDocument>();
 
   private pending: DraftDocument | null = null;
+  /** Whether every version queued since the last write moved only the camera — see `SaveOptions.cameraOnly`. */
+  private pendingCameraOnly = false;
   private inFlight = false;
   private current: Promise<void> | null = null;
   private lastFailed = false;
@@ -109,8 +111,12 @@ export class Autosave {
     this.loaded.delete(documentId);
   }
 
-  /** Records a new version of the document and schedules a write. */
-  schedule(document: DraftDocument): void {
+  /**
+   * Records a new version of the document and schedules a write. `cameraOnly` says the only thing
+   * that changed since the last version is where the camera is; a single real edit anywhere in what
+   * is queued makes the whole write a content write.
+   */
+  schedule(document: DraftDocument, options?: { cameraOnly?: boolean }): void {
     if (this.disposed) return;
     // The very object just tracked from disk — a canvas re-opened in place (taking another tab's copy
     // after a conflict, or restoring the stored copy) — is already stored. Writing it again would
@@ -120,6 +126,7 @@ export class Autosave {
       if (this.pending?.metadata.id === document.metadata.id) this.pending = null;
       return;
     }
+    this.pendingCameraOnly = options?.cameraOnly === true && (this.pending === null || this.pendingCameraOnly);
     this.pending = document;
     // Kept, not written: the conflict (and its message) stays up until the user resolves it.
     if (this.conflict) return;
@@ -161,7 +168,9 @@ export class Autosave {
 
   private async write(): Promise<void> {
     const document = this.pending!;
+    const cameraOnly = this.pendingCameraOnly;
     this.pending = null;
+    this.pendingCameraOnly = false;
     this.inFlight = true;
     this.firstDirtyAt = 0;
 
@@ -173,7 +182,11 @@ export class Autosave {
     const trackedAtStart = this.loaded.get(id);
     try {
       const base = this.baselines.get(id);
-      const adopted = await this.repository.save(document, base, this.overwriteNext ? { overwrite: true } : undefined);
+      const adopted = await this.repository.save(
+        document,
+        base,
+        this.overwriteNext ? { overwrite: true } : cameraOnly ? { cameraOnly: true } : undefined,
+      );
       this.overwriteNext = false;
       this.baselines.set(id, adopted ?? sharedMetadataOf(document.metadata));
       if (adopted && base) {
@@ -200,7 +213,10 @@ export class Autosave {
       // Keep the unwritten version queued (unless a newer one already replaced it) so
       // the next edit or an explicit flush retries it — not retried on a timer here,
       // since a full disk would only fail again in a tight loop.
-      this.pending ??= document;
+      if (this.pending === null) {
+        this.pending = document;
+        this.pendingCameraOnly = cameraOnly;
+      }
       this.clearSavingIndicator();
       if (error instanceof DocumentConflictError) {
         this.conflict = error.kind;

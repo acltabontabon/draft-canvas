@@ -1,5 +1,6 @@
 import type { DraftEdge, DraftNode, Side } from '../document/types';
 import { type EdgeSpine, type Rect, anchorPoint, laneIndex, rectOf, resolveSides } from './routing';
+import { sameNodeGeometry } from './sameGeometry';
 
 /**
  * Fan-out / fan-in edge bundling — the planning half of Smart Routing.
@@ -330,6 +331,9 @@ function planTrunkGap(
 
 const planCache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], RoutingPlan>>();
 
+/** The most recent plan and what it was built from — see `routingPlan`. */
+let lastPlanned: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[]; plan: RoutingPlan } | null = null;
+
 /**
  * Groups an edge set into shared routing trunks.
  *
@@ -344,7 +348,14 @@ export function routingPlan(nodes: readonly DraftNode[], edges: readonly DraftEd
   const cached = byNodes?.get(edges);
   if (cached) return cached;
 
-  const plan = computePlan(nodes, edges);
+  // A rename or a colour makes a new `nodes` array, and by identity a new plan, for a plan that
+  // depends only on where shapes are (and what kind they are). Same edges, same places: same plan.
+  const previous = lastPlanned;
+  const plan =
+    previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes)
+      ? previous.plan
+      : computePlan(nodes, edges);
+  lastPlanned = { nodes, edges, plan };
   if (byNodes) byNodes.set(edges, plan);
   else planCache.set(nodes, new WeakMap([[edges, plan]]));
   return plan;

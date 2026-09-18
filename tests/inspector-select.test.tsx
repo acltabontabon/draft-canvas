@@ -193,6 +193,36 @@ describe('InspectorSelect avoid rect', () => {
     expect(menu.style.maxHeight).toBe('220px');
   });
 
+  it('re-measures when the window is resized while it is open, instead of keeping the placement it opened with', async () => {
+    // Opens with lots of room below, so it goes down…
+    menuRect = rect({ left: 100, right: 340, top: 124, bottom: 200, width: 240, height: 76 });
+    triggerRect = rect({ left: 100, right: 140, top: 100, bottom: 120, width: 40, height: 20 });
+    renderSelect('api');
+    openMenu();
+    expect(screen.getByRole('listbox')).toHaveAttribute('data-direction', 'down');
+
+    // …and then the window is made shorter, so the trigger now sits right at the bottom of it.
+    vi.stubGlobal('innerHeight', 140);
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'));
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+
+    expect(screen.getByRole('listbox')).toHaveAttribute('data-direction', 'up');
+  });
+
+  it('never shrinks to a sliver when there is next to no room either way', () => {
+    // A trigger squeezed against both edges of a tiny pane: 10px above, 12px below.
+    menuRect = rect({ left: 100, right: 340, top: 124, bottom: 284, width: 240, height: 160 });
+    triggerRect = rect({ left: 100, right: 140, top: 30, bottom: 50, width: 40, height: 20 });
+    vi.stubGlobal('innerHeight', 76);
+    renderSelect('api');
+    openMenu();
+
+    const height = parseFloat(screen.getByRole('listbox').style.maxHeight);
+    expect(height).toBeGreaterThanOrEqual(96);
+  });
+
   it('still honours the rect whenever the menu actually fits beside it', () => {
     menuRect = rect({ left: 100, right: 340, top: 124, bottom: 184, width: 240, height: 60 });
     triggerRect = rect({ left: 100, right: 140, top: 300, bottom: 320, width: 40, height: 20 });

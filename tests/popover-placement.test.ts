@@ -61,6 +61,41 @@ describe('popoverPlacement with a screen-fixed (identity) anchor', () => {
     expect(x - size.width / 2).toBeGreaterThanOrEqual(clearances.left - 0.01);
   });
 
+  it('keeps a popover on screen when no side fits — an anchor zoomed far past the window', () => {
+    // A shape magnified until it fills the window: its top is far above the screen and its bottom
+    // far below it, so neither "above" nor "below" fits and `resolvePlacement` keeps what it had.
+    // Following the anchor would put the popover off screen with every control in it unreachable.
+    setViewport(1200, 800);
+    const size = { width: 140, height: 90 };
+    const coordinates = (transform: string) => {
+      const match = transform.match(/translate\((-?\d+(?:\.\d+)?)px, (-?\d+(?:\.\d+)?)px\)$/);
+      expect(match).not.toBeNull();
+      return { x: Number(match![1]), y: Number(match![2]) };
+    };
+
+    const above = anchorsForRect({ x: 400, y: -5000, width: 0, height: 0 });
+    const top = coordinates(placementTransform('above', above, size, clearances, identity, identity));
+    // `above` translates -100% in y, so `y` is the popover's bottom edge: its top must clear the top.
+    expect(top.y - size.height).toBeGreaterThanOrEqual(clearances.top - 0.01);
+
+    const below = anchorsForRect({ x: 400, y: 9000, width: 0, height: 0 });
+    const bottom = coordinates(placementTransform('below', below, size, clearances, identity, identity));
+    // `below` starts at `y`: its bottom edge must clear the bottom.
+    expect(bottom.y + size.height).toBeLessThanOrEqual(800 - clearances.bottom + 0.01);
+  });
+
+  it('does not move a popover that already fits (the clamp is a floor, not a nudge)', () => {
+    setViewport(1200, 800);
+    const size = { width: 140, height: 90 };
+    const anchors = anchorsForRect({ x: 600, y: 400, width: 0, height: 0 });
+    expect(placementTransform('below', anchors, size, clearances, identity, identity)).toBe(
+      'translate(-50%, 0) translate(600px, 406px)',
+    );
+    expect(placementTransform('above', anchors, size, clearances, identity, identity)).toBe(
+      'translate(-50%, -100%) translate(600px, 394px)',
+    );
+  });
+
   it('clamps a bottom-right corner anchor so the popover stays within the right edge too', () => {
     const anchors = anchorsForRect({ x: 1195, y: 795, width: 0, height: 0 });
     const size = { width: 140, height: 90 };

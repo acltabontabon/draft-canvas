@@ -232,7 +232,8 @@ export function useDocumentSession(): DocumentSession {
         // and absent from disk until some later edit happened to flush it.
         if (state.navigation !== previous.navigation) return;
         if (state.document.metadata.id !== openId) return;
-        autosave.current?.schedule(fileWithLiveViewport(state));
+        // No new revision means the camera is all that moved: remembered, but not a content change.
+        autosave.current?.schedule(fileWithLiveViewport(state), { cameraOnly: state.revision === previous.revision });
       });
     });
     return () => {

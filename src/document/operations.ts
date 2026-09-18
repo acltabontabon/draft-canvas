@@ -8,7 +8,7 @@ import { createId } from './ids';
 import { defaultSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
-import { clamp } from '../lib/math';
+import { centerOf, clamp, pointInBox } from '../lib/math';
 import { clampCoord, type Bounds } from './geometry';
 import type {
   Attachment,
@@ -1081,6 +1081,73 @@ export function carryDescendants(
     if (dx !== 0 || dy !== 0) positions.set(node.id, { x: node.x + dx, y: node.y + dy });
   }
   return moveNodes(after, positions);
+}
+
+/**
+ * The deepest (most specific) boundary containing `point` — nested boundaries
+ * resolve to the smallest one that still contains the point, not whichever
+ * happens to appear first in the document.
+ */
+export function deepestBoundaryAt(
+  point: { x: number; y: number },
+  doc: DraftDocument,
+  excludeIds: ReadonlySet<string>,
+): string | null {
+  let best: { id: string; area: number } | null = null;
+  for (const node of doc.nodes) {
+    if (node.type !== 'group' || excludeIds.has(node.id)) continue;
+    if (!pointInBox(point, node)) continue;
+    const area = node.width * node.height;
+    if (!best || area < best.area) best = { id: node.id, area };
+  }
+  return best?.id ?? null;
+}
+
+/**
+ * Makes membership agree with where a gesture left things. A node is a member of a boundary exactly
+ * when its centre is inside it — that is the rule a single dropped node has always followed — and
+ * `parentId` is what a delete cascades along and a boundary drag carries, so a node whose parent no
+ * longer holds it is one Delete away from vanishing while visibly nowhere near what removes it.
+ *
+ * `movedIds` is what the gesture repositioned, and only the *outermost* of them are considered: a
+ * shape carried along with a boundary that is moving too keeps the boundary it is travelling in.
+ *
+ *  - A shape is re-homed to the deepest boundary under its centre, or to none.
+ *  - A boundary only ever *leaves* one it was carried out of (its centre no longer inside its
+ *    parent). Dropping a boundary onto another does not nest it — nesting boundaries is what
+ *    Group is for, and a stray drop across a diagram should never do it silently.
+ */
+export function reconcileMembership(doc: DraftDocument, movedIds: Iterable<string>): DraftDocument {
+  const moved = new Set(movedIds);
+  if (moved.size === 0) return doc;
+  const byId = new Map(doc.nodes.map((node) => [node.id, node]));
+
+  const carriedByAnother = (node: DraftNode): boolean => {
+    const seen = new Set<string>();
+    for (let at = node.parentId ? byId.get(node.parentId) : undefined; at && !seen.has(at.id); at = at.parentId ? byId.get(at.parentId) : undefined) {
+      if (moved.has(at.id)) return true;
+      seen.add(at.id);
+    }
+    return false;
+  };
+
+  let next = doc;
+  for (const id of moved) {
+    const node = byId.get(id);
+    if (!node || carriedByAnother(node)) continue;
+    const centre = centerOf(node);
+    if (node.type === 'group') {
+      const parent = node.parentId ? byId.get(node.parentId) : undefined;
+      if (!parent || pointInBox(centre, parent)) continue;
+      const exclude = new Set([id, ...descendantsOf(doc, id)]);
+      next = setParent(next, [id], deepestBoundaryAt(centre, doc, exclude) ?? undefined);
+    } else {
+      // Only a boundary can be a parent, so a plain shape has no descendants to exclude.
+      const target = deepestBoundaryAt(centre, doc, new Set([id])) ?? undefined;
+      if (target !== node.parentId) next = setParent(next, [id], target);
+    }
+  }
+  return next;
 }
 
 export function setParent(

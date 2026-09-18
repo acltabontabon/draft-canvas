@@ -145,9 +145,19 @@ function TakeawaysChip() {
   // Bumped when the nudge folds in. Keyed on it rather than toggled by it, so the animation
   // restarts cleanly on a second arrival instead of being a class that is already applied.
   const pulse = useUiStore((state) => state.takeawaysChipPulse);
+  const recalling = useUiStore((state) => state.takeawaysRecall);
+  const open = openCount(takeaways);
+
+  // The arrival note points at open actions, so it is over the moment there are none. Opening
+  // Takeaways already puts it away; this is for the ways the last action can still go while it is up
+  // (an undo, a reload from outside) — without it the flag outlives the bubble, and the next action
+  // captured minutes later brings the "you just arrived" note back out of nowhere.
+  useEffect(() => {
+    if (recalling && open === 0) useUiStore.getState().setTakeawaysRecall(false);
+  }, [recalling, open]);
+
   if (isEmpty(takeaways)) return null;
 
-  const open = openCount(takeaways);
   const label = open > 0 ? count(open, 'open action') : 'takeaways';
   return (
     <>

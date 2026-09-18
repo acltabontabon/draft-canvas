@@ -358,6 +358,11 @@ export class IndexedDbRepository implements DraftRepository {
     const id = document.metadata.id;
     const checked = base !== undefined && this.stamps.has(id) && !options?.overwrite;
     const known = this.stamps.get(id);
+    // A camera move is written only against a copy this tab knows is still the stored one: without a
+    // stamp to compare there is nothing to say the write is safe, and a camera position is never worth
+    // replacing content for.
+    const cameraOnly = options?.cameraOnly === true && !options.overwrite;
+    if (cameraOnly && !checked) return;
     const conflictIn = (row: DraftSummary | undefined) =>
       !checked ? null : !row ? 'deleted' : row.contentStamp !== known ? 'changed' : null;
     try {
@@ -367,7 +372,10 @@ export class IndexedDbRepository implements DraftRepository {
       for (let attempt = 1; ; attempt += 1) {
         const before = base ? await this.db.get('documents', id) : undefined;
         const early = conflictIn(before);
-        if (early) throw new DocumentConflictError(early);
+        if (early) {
+          if (cameraOnly) return;
+          throw new DocumentConflictError(early);
+        }
         const written = base && before ? reconcileMetadata(document, base, before) : document;
         const encrypted = await encryptDocument(written, key);
         const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
@@ -376,6 +384,7 @@ export class IndexedDbRepository implements DraftRepository {
           const late = conflictIn(current);
           if (late) {
             await tx.done;
+            if (cameraOnly) return;
             throw new DocumentConflictError(late);
           }
           if (before && current && attempt < METADATA_WRITE_ATTEMPTS && !sameSharedMetadata(current, before)) {
@@ -383,7 +392,9 @@ export class IndexedDbRepository implements DraftRepository {
             continue;
           }
         }
-        const stamp = createId('s');
+        // A camera move keeps the stamp it found (`checked` guarantees `known` is that stamp), so what
+        // other tabs last read is still true of the content.
+        const stamp = cameraOnly ? known! : createId('s');
         await Promise.all([
           tx.objectStore('documents').put({ ...summarize(written), contentStamp: stamp }),
           tx.objectStore('bodies').put(encrypted),

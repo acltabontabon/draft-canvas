@@ -624,6 +624,134 @@ test.describe('editing', () => {
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
   });
 
+  test('hit areas follow the zoom once it settles', async ({ page }) => {
+    await newCanvas(page, 'Zoom hit areas');
+    await create(page, 'Service', { x: 400, y: 300 });
+    const zoomVariable = () =>
+      page.locator('.react-flow').evaluate((el) => (el as HTMLElement).style.getPropertyValue('--dc-zoom'));
+    const zoomLevel = () =>
+      page.locator('.react-flow__viewport').evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+
+    const before = await zoomVariable();
+    for (let i = 0; i < 4; i += 1) await page.keyboard.press('Meta+=');
+    // The variable is published when the zoom stops moving, not on every step of it — so it is
+    // allowed to lag a moment, but it must arrive, and agree with where the zoom ended up.
+    await expect.poll(zoomVariable).not.toBe(before);
+    await expect.poll(async () => Math.abs(Number(await zoomVariable()) - (await zoomLevel()))).toBeLessThan(0.06);
+  });
+
+  test('Escape while dragging out a new connector cancels it, and only it', async ({ page }) => {
+    await newCanvas(page, 'Cancel a connection');
+    await create(page, 'Service', { x: 350, y: 280 });
+    await create(page, 'Data Store', { x: 650, y: 280 });
+    // Selected, so we can see that Escape did not also clear the selection out from under the drag.
+    await page.locator('.dc-node').nth(0).click();
+
+    const source = page.locator('.dc-node').nth(0);
+    await source.hover();
+    const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
+    const target = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    const aim = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(aim.x, aim.y, { steps: 10 });
+    await page.keyboard.press('Escape');
+    // Let go over the very shape it was aimed at, which is what would normally connect them.
+    await page.mouse.move(aim.x + 3, aim.y, { steps: 2 });
+    await page.mouse.up();
+
+    await expect(page.locator('.dc-edge')).toHaveCount(0);
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
+    // Nothing was written, so there is nothing to undo: the next undo would remove the second shape.
+    await page.keyboard.press('Meta+z');
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+    await page.keyboard.press('Meta+Shift+z');
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+
+    // The gesture that follows a cancelled one is an ordinary one.
+    await source.hover();
+    const again = (await source.locator('.dc-handle').nth(1).boundingBox())!;
+    await page.mouse.move(again.x + again.width / 2, again.y + again.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(aim.x, aim.y, { steps: 10 });
+    await page.mouse.up();
+    await expect(page.locator('.dc-edge')).toHaveCount(1);
+  });
+
+  test('a selection carried out of a boundary is no longer deleted along with it', async ({ page }) => {
+    const service = (id: string, x: number, y: number, extra: Record<string, unknown> = {}) => ({
+      id,
+      type: 'service',
+      x,
+      y,
+      width: 140,
+      height: 70,
+      z: 1,
+      text: id,
+      ...extra,
+    });
+    const document = {
+      format: 'draft-canvas',
+      version: 1,
+      metadata: { id: 'membership', title: 'Membership', createdAt: 1, updatedAt: 2 },
+      nodes: [
+        { id: 'b', type: 'group', x: 40, y: 40, width: 460, height: 320, z: 0, text: 'Boundary', boundaryPreset: 'boundary' },
+        service('m1', 80, 120, { parentId: 'b' }),
+        service('m2', 80, 240, { parentId: 'b' }),
+        service('far', 720, 120),
+      ],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+      settings: { showSequence: true, grid: 'dots' },
+    };
+    await page.goto('/');
+    await page.setInputFiles('input[type="file"]', {
+      name: 'membership.draftcanvas',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(document)),
+    });
+    await page.waitForSelector('.dc-editor');
+    await expect(page.locator('.dc-node')).toHaveCount(4);
+
+    const node = (id: string) => page.locator(`.react-flow__node[data-id="${id}"] .dc-node`);
+    const boundary = node('b');
+
+    // Both members selected together (a multi-drag, which never re-homes anything on its own)…
+    await node('m1').click();
+    await page.keyboard.down('Shift');
+    await node('m2').click();
+    await page.keyboard.up('Shift');
+    // …and carried well clear of the boundary, into the open canvas beyond it.
+    const grab = (await node('m1').boundingBox())!;
+    const from = { x: grab.x + grab.width / 2, y: grab.y + grab.height / 2 };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 380, from.y + 300, { steps: 16 });
+    await page.mouse.up();
+    const outside = (await node('m1').boundingBox())!;
+    const frame = (await boundary.boundingBox())!;
+    expect(outside.y).toBeGreaterThan(frame.y + frame.height);
+
+    // Delete the boundary they are visibly no longer in. They must not go with it.
+    await boundary.click({ position: { x: 8, y: 8 } });
+    await page.keyboard.press('Backspace');
+    await expect(page.locator('.dc-node[data-type="group"]')).toHaveCount(0);
+    await expect(page.locator('.dc-node')).toHaveCount(3);
+
+    // Undo brings the boundary back; undoing again is the whole carry-out, in one step — the
+    // members are back inside it, as they were.
+    await page.keyboard.press('Meta+z');
+    await expect(page.locator('.dc-node[data-type="group"]')).toHaveCount(1);
+    await page.keyboard.press('Meta+z');
+    const restored = (await node('m1').boundingBox())!;
+    const restoredFrame = (await boundary.boundingBox())!;
+    expect(restored.y + restored.height).toBeLessThan(restoredFrame.y + restoredFrame.height);
+    await boundary.click({ position: { x: 8, y: 8 } });
+    await page.keyboard.press('Backspace');
+    await expect(page.locator('.dc-node')).toHaveCount(1); // only `far`: its members went with it
+  });
+
   test('dragging an outer boundary sweeps a nested boundary and everything inside it', async ({
     page,
   }) => {

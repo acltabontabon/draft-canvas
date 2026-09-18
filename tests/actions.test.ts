@@ -328,6 +328,17 @@ describe('markdown', () => {
     expect(markdown).toContain('- \\- use \\* for the wildcard');
   });
 
+  it('does not let a leading list marker of either flavour start a nested list', () => {
+    const decide = (text: string) => ({
+      ...createNode({ type: 'note', x: 0, y: 0, text }),
+      noteKind: 'decision' as const,
+    });
+    const base: DraftDocument = { ...doc(), nodes: [decide('1. pick a broker'), decide('2) then size it')] };
+    const markdown = takeawaysMarkdown(takeawaysFor(base), 'Lists');
+    expect(markdown).toContain('- 1\\. pick a broker');
+    expect(markdown).toContain('- 2\\) then size it');
+  });
+
   it('flattens a multi-line note into the bullet it belongs to', () => {
     const decision = {
       ...createNode({ type: 'note', x: 0, y: 0, text: 'Worker owns retry\nand the backoff' }),

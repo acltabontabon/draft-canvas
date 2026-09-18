@@ -49,6 +49,19 @@ describe('routingPlan recognises a fan-out and gives it one shared spine', () =>
     for (const edge of edges) expect(plan.spineFor(edge.id)).toBe(spine);
   });
 
+  it('is the very same plan after an edit that moved nothing, and a new one once a shape moves', () => {
+    const { nodes, edges } = fanOut(5);
+    const plan = routingPlan(nodes, edges);
+
+    // A rename makes a new `nodes` array. The plan reads only where shapes are, so it stands.
+    const renamed = nodes.map((node) => (node.id === 't2' ? { ...node, text: 'Renamed', accent: 'rose' as const } : node));
+    expect(routingPlan(renamed, edges)).toBe(plan);
+
+    // Moving a shape is a real change, and gets a real re-plan.
+    const moved = nodes.map((node) => (node.id === 't2' ? { ...node, y: node.y + 60 } : node));
+    expect(routingPlan(moved, edges)).not.toBe(plan);
+  });
+
   it('leaves the semantic graph completely untouched', () => {
     const { nodes, edges } = fanOut(5);
     const before = JSON.stringify(edges);

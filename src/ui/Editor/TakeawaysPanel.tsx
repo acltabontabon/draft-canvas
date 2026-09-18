@@ -449,19 +449,24 @@ function NoteRow({ note, goTo }: { note: TakeawayNote; goTo: (target: TakeawayTa
 
 function Readout({ takeaways, goTo }: { takeaways: Takeaways; goTo: (target: TakeawayTarget) => void }) {
   const title = useEditorStore((state) => state.document.metadata.title);
-  const [copied, setCopied] = useState(false);
+  // What the last press of Copy did, said for a moment — and `failed` says so plainly, because the
+  // one thing this button must never do is announce a copy the clipboard refused (an insecure
+  // origin has no clipboard API at all).
+  const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
 
   useEffect(() => {
     if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), motionMs(1400) || 1400);
+    const timer = window.setTimeout(() => setCopied(null), motionMs(copied === 'failed' ? 3600 : 1400) || 1400);
     return () => window.clearTimeout(timer);
   }, [copied]);
 
   const copy = () => {
     const text = takeawaysMarkdown(takeaways, title);
     if (!text) return;
-    useEditorStore.getState().copyText(text);
-    setCopied(true);
+    void useEditorStore
+      .getState()
+      .copyText(text)
+      .then((ok) => setCopied(ok ? 'ok' : 'failed'));
   };
 
   return (
@@ -497,7 +502,9 @@ function Readout({ takeaways, goTo }: { takeaways: Takeaways; goTo: (target: Tak
         )}
       </div>
       <div className="dc-takeaways-foot">
-        <span className="dc-muted dc-takeaways-hint">{copied ? 'Copied as Markdown.' : ''}</span>
+        <span className="dc-muted dc-takeaways-hint" role="status">
+          {copied === 'ok' ? 'Copied as Markdown.' : copied === 'failed' ? 'The browser wouldn’t let us copy.' : ''}
+        </span>
         <Button variant="quiet" icon="copy" onClick={copy} disabled={isEmpty(takeaways)}>
           Copy takeaways
         </Button>

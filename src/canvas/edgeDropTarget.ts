@@ -33,6 +33,12 @@ export function findEdgeDropCandidate(
 ): string | null {
   const draggedEl = document.querySelector(`.react-flow__node[data-id="${CSS.escape(draggedNodeId)}"]`);
   const stack = document.elementsFromPoint(clientX, clientY);
+  // The stack lists everything at the point, hidden or not, so a connector running under a panel, a
+  // toolbar or a popover is in it as much as one in the open. Whatever is on top decides: if that is
+  // interface rather than canvas, the connector under it cannot be seen or clicked, and arming it
+  // would attach the note to something the person is not pointing at.
+  const top = stack.find((el) => !draggedEl?.contains(el));
+  if (top && (!top.closest('.react-flow') || top.closest('[class*="dc-popover"]'))) return null;
   let fallback: string | null = null;
   let bestId: string | null = null;
   let bestDistance = Infinity;

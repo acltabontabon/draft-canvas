@@ -29,7 +29,8 @@ function escapeMarkdown(text: string): string {
     .trim()
     .replace(/([\\`*_[\]<>])/g, '\\$1')
     .replace(/^([-+#>])/, '\\$1')
-    .replace(/^(\d+)\./, '$1\\.');
+    // `1.` and `1)` are both ordered-list markers, and inside a bullet either one starts a nested list.
+    .replace(/^(\d+)([.)])/, '$1\\$2');
 }
 
 /** "Who owns retry (Payments API)" — the room a note was written in, when it wasn't this one. */

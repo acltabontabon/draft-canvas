@@ -76,7 +76,87 @@ async function humps(page: Page, edgeId: string): Promise<number> {
   return ((d ?? '').match(/C/g) ?? []).length / 2;
 }
 
+/**
+ * One long horizontal connector crossed by two independent vertical ones. The horizontal line owns
+ * both hops, which is what makes it the interesting one to disturb: moving a shape on *one* of the
+ * vertical connectors makes only *some* of its crossings unreliable.
+ */
+function doubleCrossingDocument() {
+  const box = (id: string, x: number, y: number) => ({
+    id,
+    type: 'service',
+    x,
+    y,
+    width: 160,
+    height: 80,
+    z: 0,
+    text: id,
+  });
+  return {
+    format: 'draft-canvas',
+    version: 1,
+    metadata: { id: 'double-crossing', title: 'Two crossings', createdAt: 1, updatedAt: 2 },
+    nodes: [
+      box('a', 0, 300),
+      box('b', 1000, 300),
+      box('up1', 300, 0),
+      box('down1', 300, 620),
+      box('up2', 640, 0),
+      box('down2', 640, 620),
+    ],
+    edges: [
+      { id: 'across', source: 'a', target: 'b', directed: true, routing: 'smoothstep' },
+      { id: 'left', source: 'up1', target: 'down1', directed: true, routing: 'smoothstep' },
+      { id: 'right', source: 'up2', target: 'down2', directed: true, routing: 'smoothstep' },
+    ],
+    viewport: { x: 0, y: 0, zoom: 1 },
+    settings: { showSequence: true, grid: 'dots' },
+  };
+}
+
 test.describe('line jumps', () => {
+  test('dragging a shape that only some of a connector\'s crossings involve keeps the canvas alive', async ({
+    page,
+  }) => {
+    const problems: string[] = [];
+    page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
+    page.on('console', (message) => {
+      if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+    });
+
+    await page.goto('/');
+    await page.setInputFiles('input[type="file"]', {
+      name: 'double-crossing.draftcanvas',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(doubleCrossingDocument())),
+    });
+    await page.waitForSelector('.dc-editor');
+    await expect(page.locator('.dc-edge-line')).toHaveCount(3);
+    // Both crossings are the horizontal connector's to hop.
+    await expect.poll(() => humps(page, 'across')).toBe(2);
+
+    // Pick up a shape on the left vertical connector and carry it a little way, staying mid-drag.
+    const grabbed = (await page.locator('.react-flow__node[data-id="up1"] .dc-node').boundingBox())!;
+    const start = { x: grabbed.x + grabbed.width / 2, y: grabbed.y + grabbed.height / 2 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    for (let step = 1; step <= 12; step += 1) {
+      await page.mouse.move(start.x + step * 6, start.y + step * 2);
+    }
+
+    // Mid-drag, the canvas is still there: every connector still drawn, nothing thrown.
+    await expect(page.locator('.dc-edge-line')).toHaveCount(3);
+    await expect(page.locator('.dc-node')).toHaveCount(6);
+
+    await page.mouse.up();
+    await expect(page.locator('.dc-edge-line')).toHaveCount(3);
+    await expect(page.locator('.dc-node')).toHaveCount(6);
+    // The crossing the moved shape is not part of survives the whole gesture.
+    await expect.poll(() => humps(page, 'across')).toBeGreaterThanOrEqual(1);
+
+    expect(problems).toEqual([]);
+  });
+
   test('the horizontal connector hops over the vertical one', async ({ page }) => {
     await crossingDiagram(page);
 

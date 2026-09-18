@@ -77,6 +77,15 @@ export interface SaveOptions {
   /** Write even though the stored copy changed or was deleted elsewhere — the user chose to keep
    *  this editor's version (see `DocumentConflictError`). */
   overwrite?: boolean;
+  /**
+   * The only thing that changed is where the camera is. It is remembered, but it is not content: it
+   * keeps the stored copy's content stamp instead of minting a new one — otherwise another tab's next
+   * real edit would be told this canvas "changed", when all anyone did was look around — and it
+   * never wins against newer content. If the stored copy has moved on (another tab saved, or it was
+   * deleted), the write is dropped without complaint: nobody should be asked to resolve a conflict
+   * over a camera position, and the real one surfaces at the next real edit.
+   */
+  cameraOnly?: boolean;
 }
 
 /**

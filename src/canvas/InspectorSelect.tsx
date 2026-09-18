@@ -1,6 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { clamp } from '../lib/math';
 
+/** The least a menu is allowed to shrink to: about three options, so it is still a list. */
+const MIN_MENU_HEIGHT = 96;
+
 export interface InspectorSelectOption {
   value: string;
   label: string;
@@ -65,6 +68,9 @@ export function InspectorSelect({
   const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined);
   const [hAlign, setHAlign] = useState<'start' | 'end'>('start');
   const [menuMaxWidth, setMenuMaxWidth] = useState<number | undefined>(undefined);
+  // Bumped when something that changes how much room the menu has happens while it is open — see
+  // the effect below — so the measurement is redone rather than left describing a screen that is gone.
+  const [measureTick, setMeasureTick] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -99,6 +105,30 @@ export function InspectorSelect({
     if (open) listRef.current?.focus();
   }, [open]);
 
+  // The menu is placed from what was measured when it opened, and a menu that stays open while the
+  // window is resized, or the canvas is panned or zoomed with the wheel underneath it, is being
+  // judged against a screen that no longer exists: what fitted below the trigger a moment ago may
+  // now run off the bottom of the pane with its last options unreachable. Both re-measure, once per
+  // frame at most.
+  useEffect(() => {
+    if (!open) return;
+    let frame = 0;
+    const remeasure = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        setMeasureTick((tick) => tick + 1);
+      });
+    };
+    window.addEventListener('resize', remeasure);
+    window.addEventListener('wheel', remeasure, { passive: true });
+    return () => {
+      window.removeEventListener('resize', remeasure);
+      window.removeEventListener('wheel', remeasure);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [open]);
+
   // Real measurement, not a guess — the menu's own rendered height and the trigger's actual
   // screen position, checked against the viewport and `avoidRect`. `getBoundingClientRect()`
   // already returns real screen pixels regardless of the canvas's own pan/zoom transform (this
@@ -112,7 +142,10 @@ export function InspectorSelect({
     if (!trigger || !menu) return;
     const triggerRect = trigger.getBoundingClientRect();
     const menuRect = menu.getBoundingClientRect();
-    const naturalHeight = menuRect.height;
+    // `scrollHeight` as well as the box: on a re-measure the menu already wears the cap it was given
+    // last time, and its box would report *that* rather than what it wants — so a menu squeezed by a
+    // window that has since grown back would never find out it could have its full height again.
+    const naturalHeight = Math.max(menuRect.height, menu.scrollHeight);
     const naturalWidth = menuRect.width;
     const margin = 8;
     const gap = 4; // matches the CSS gap between trigger and menu
@@ -178,7 +211,9 @@ export function InspectorSelect({
     }
 
     setDirection(resolved);
-    setMaxHeight(clamp(space[resolved], 0, 220));
+    // Never a sliver: with next to no room either way, a menu a few pixels tall is worse than one
+    // that reaches past the pane's edge, which is at least a list somebody can scroll.
+    setMaxHeight(clamp(space[resolved], MIN_MENU_HEIGHT, 220));
 
     // Horizontal: the menu (now free to grow via CSS `width: max-content`) is measured at its
     // natural, unclamped width — the widest option's real width, not the trigger's. It stays
@@ -206,7 +241,7 @@ export function InspectorSelect({
     // options while the menu stays open and mounted (e.g. switching selection between shape
     // types) re-measures instead of keeping a stale width from the previous option set.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, preferredDirection, avoidRect?.top, avoidRect?.bottom, getAvoidRect, options.map((o) => o.label).join('\u0000')]);
+  }, [open, measureTick, preferredDirection, avoidRect?.top, avoidRect?.bottom, getAvoidRect, options.map((o) => o.label).join('\u0000')]);
 
   const commit = (index: number) => {
     const option = options[index];

@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LIMITS } from '../document/limits';
-import { EdgeLabelRenderer, useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
+import { useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import type { DraftNode } from '../document/types';
 import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
@@ -26,6 +26,7 @@ import {
 import { routingPlan } from '../edges/bundles';
 import { layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
+import { EdgeLabels } from './EdgeLabels';
 import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
 import { obstaclesForEdge, withoutNodes } from '../edges/obstacles';
 import { bridgePath } from '../edges/bridge';
@@ -237,8 +238,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // node that is moving, which reroutes it live while the plan still holds its committed route.
   // `withoutNodes` having shortened the obstacle list is exactly that third case, already measured.
   const routeUnsettled = endpointMoving || obstacles.length !== nearbyObstacles.length;
-  const crossings = useUiStore((state) =>
-    routeUnsettled ? NO_CROSSINGS : withoutMoving(planned, state.movingNodeIds),
+  // `withoutMoving` hands back a fresh array whenever it drops *some* of the crossings — the very
+  // case of a connector hopping over two others when a shape on just one of them is picked up.
+  // zustand 5 re-reads a selector to check it is stable, so an unguarded fresh array is an
+  // infinite render loop that takes the whole canvas down; `useShallow` compares the crossings
+  // themselves (identity-stable, straight out of the frozen plan) rather than the array holding them.
+  const crossings = useUiStore(
+    useShallow((state) => (routeUnsettled ? NO_CROSSINGS : withoutMoving(planned, state.movingNodeIds))),
   );
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
@@ -258,7 +264,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
 
   // Tracked in JS, not left to a pure `.dc-edge:hover` CSS rule: the response label and the
-  // attachment chip row both live in React Flow's `EdgeLabelRenderer` portal, a sibling overlay div
+  // attachment chip row both live in React Flow's `EdgeLabels` portal, a sibling overlay div
   // elsewhere in the DOM tree, not real descendants of this `<g>` — so no ancestor-based CSS
   // selector can ever reach them, the same reason
   // `.dc-edge-label`'s own `data-active`/`data-dimmed`/etc. are passed as explicit props rather than
@@ -719,7 +725,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         );
       })()}
 
-      <EdgeLabelRenderer>
+      <EdgeLabels>
         {/*
           Draggable endpoint handles. Rendered here, in React Flow's HTML
           overlay portal — which always paints above the nodes layer — rather
@@ -917,7 +923,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             style={{ position: 'absolute', transform: attachmentRowTransform(labelX, labelY, attachmentFlipBelow) }}
           />
         ) : null}
-      </EdgeLabelRenderer>
+      </EdgeLabels>
     </g>
   );
 });

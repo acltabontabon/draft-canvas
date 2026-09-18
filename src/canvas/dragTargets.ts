@@ -96,22 +96,5 @@ export function evaluateAttachCandidates(
   return { overlapId, centerHitId };
 }
 
-/**
- * The deepest (most specific) boundary containing `point` — nested boundaries
- * resolve to the smallest one that still contains the point, not whichever
- * happens to appear first in the document.
- */
-export function deepestBoundaryAt(
-  point: { x: number; y: number },
-  doc: DraftDocument,
-  excludeIds: ReadonlySet<string>,
-): string | null {
-  let best: { id: string; area: number } | null = null;
-  for (const node of doc.nodes) {
-    if (node.type !== 'group' || excludeIds.has(node.id)) continue;
-    if (!pointInBox(point, node)) continue;
-    const area = node.width * node.height;
-    if (!best || area < best.area) best = { id: node.id, area };
-  }
-  return best?.id ?? null;
-}
+/** Where a dropped node is a member: the rule lives beside the operation that applies it. */
+export { deepestBoundaryAt } from '../document/operations';

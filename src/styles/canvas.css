@@ -358,6 +358,13 @@
   stroke-width: clamp(10px, calc(30px / var(--dc-zoom, 1)), 72px);
 }
 
+/* Escape during a new-connector drag. React Flow has no cancel and redraws its live line on every
+   pointer move until release, so once cancelled the line is simply not shown (`Canvas.tsx` vetoes
+   the connection itself). */
+.dc-canvas[data-connect-cancelled='true'] .react-flow__connection {
+  display: none;
+}
+
 /* Safari has a documented flickering-selection bug where a shape/edge selection drag can
    trigger the browser's own native text-selection highlight over nearby content instead of only
    this app's own selection outline — see https://github.com/xyflow/xyflow/issues/4806. Scoped to

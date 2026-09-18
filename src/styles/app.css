@@ -2463,6 +2463,16 @@ kbd {
   white-space: nowrap;
 }
 
+/* The count is one phrase, and the bar a fixed height: at a laptop's narrower widths it used to
+   wrap onto a second line and spill out of the bar. The hint on the left is what gives way. */
+.dc-status-right {
+  flex-shrink: 0;
+}
+
+.dc-status-right > .dc-muted {
+  white-space: nowrap;
+}
+
 .dc-zoom-value {
   min-width: 46px;
   border: 0;

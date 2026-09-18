@@ -116,10 +116,18 @@ export function placementTransform(
   const screenAnchor = flowToScreenPosition(anchors[placement]);
   if (placement === 'above' || placement === 'below') {
     const clampedScreenX = clampCenterX(screenAnchor.x, size.width / 2, clearances.left, clearances.right);
-    const at = screenToContainer({ x: clampedScreenX, y: screenAnchor.y });
+    // The popover's near edge, held on screen the way its centre already is across. Where a side
+    // fits (the only case `resolvePlacement` chooses one on) this changes nothing; where none does —
+    // a shape zoomed until it fills the window — the anchor is off screen, and following it there
+    // would leave the popover, and every control in it, unreachable.
+    const edgeY =
+      placement === 'above'
+        ? clamp(screenAnchor.y - clearances.gap, clearances.top + size.height, window.innerHeight - clearances.bottom)
+        : clamp(screenAnchor.y + clearances.gap, clearances.top, window.innerHeight - clearances.bottom - size.height);
+    const at = screenToContainer({ x: clampedScreenX, y: edgeY });
     return placement === 'above'
-      ? `translate(-50%, -100%) translate(${at.x}px, ${at.y - clearances.gap}px)`
-      : `translate(-50%, 0) translate(${at.x}px, ${at.y + clearances.gap}px)`;
+      ? `translate(-50%, -100%) translate(${at.x}px, ${at.y}px)`
+      : `translate(-50%, 0) translate(${at.x}px, ${at.y}px)`;
   }
   const halfHeight = size.height / 2;
   const clampedScreenY = clamp(

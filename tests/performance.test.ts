@@ -363,10 +363,11 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
    */
   it('plans routing spines for the whole document within budget', () => {
     const started = performance.now();
-    // Ten commits' worth: a fresh nodes array each time defeats the memo, so
-    // this measures real planning work, not cache hits.
+    // Ten commits' worth: every shape nudged each time, so the memo cannot help (a fresh array of
+    // *unmoved* shapes is a cache hit now — see `sameNodeGeometry`), and this measures real
+    // planning work.
     for (let i = 0; i < 10; i += 1) {
-      routingPlan(doc.nodes.map((node) => ({ ...node })), doc.edges);
+      routingPlan(doc.nodes.map((node) => ({ ...node, x: node.x + i })), doc.edges);
     }
     expect(performance.now() - started).toBeLessThan(1000);
   });

@@ -107,4 +107,64 @@ test.describe('element inspector popover', () => {
     await expect(page.locator('.dc-inspector')).toContainText('2 elements');
     await expect(page.locator('.dc-element-inspector')).toHaveCount(0);
   });
+
+  test('stays on screen when the selected shape is far larger than the window', async ({ page }) => {
+    // A system boundary worked inside at high zoom: its top and bottom are thousands of pixels off
+    // screen, so neither "above" nor "below" fits, and its left edge is too close to the window's
+    // for "left". The popover used to follow its anchor off the screen, with every control in it.
+    const document = {
+      format: 'draft-canvas',
+      version: 1,
+      metadata: { id: 'huge', title: 'Huge boundary', createdAt: 1, updatedAt: 2 },
+      nodes: [
+        { id: 'b', type: 'group', x: 100, y: -2000, width: 3000, height: 5000, z: 0, text: 'System', boundaryPreset: 'system' },
+        { id: 's', type: 'service', x: 500, y: 300, width: 160, height: 70, z: 1, text: 'Inside', parentId: 'b' },
+      ],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+      settings: { showSequence: true, grid: 'dots' },
+    };
+    await page.goto('/');
+    await page.setInputFiles('input[type="file"]', {
+      name: 'huge.draftcanvas',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(document)),
+    });
+    await page.waitForSelector('.dc-editor');
+
+    // The boundary's own left padding, the one part of it in view.
+    await page.mouse.click(108, 400);
+    const popover = page.locator('.dc-element-inspector');
+    await expect(popover).toBeVisible();
+
+    const box = (await popover.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  });
+
+  test('an open dropdown moves out of the way when the window is made smaller under it', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 760 });
+    await newCanvas(page, 'Dropdown and resize');
+    await create(page, 'Service', { x: 500, y: 60 });
+    await page.locator('.dc-node').first().click();
+    await page.getByRole('button', { name: 'Service type' }).click();
+    const menu = page.getByRole('listbox');
+    await expect(menu).toBeVisible();
+
+    const paneBox = async () => (await page.locator('.react-flow').boundingBox())!;
+    const fits = async () => {
+      const pane = await paneBox();
+      const box = (await menu.boundingBox())!;
+      return box.y >= pane.y - 1 && box.y + box.height <= pane.y + pane.height + 1;
+    };
+    expect(await fits()).toBe(true);
+
+    // Made short enough that where the menu opened now runs off the bottom of the canvas. It was
+    // placed once, when it opened, and used to stay there with its last options out of reach.
+    await page.setViewportSize({ width: 1280, height: 330 });
+    await expect.poll(fits).toBe(true);
+  });
 });

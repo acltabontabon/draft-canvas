@@ -13,10 +13,12 @@ All notable changes to Draft Canvas are documented here.
   then folds into the status bar count.
 - **Line jumps.** Where two connectors cross, one now hops over the other with a small arc, so a
   crossing reads as a crossing rather than a join. Nothing to turn on and nothing to place — they
-  appear, move and disappear as you draw, and they show up in exported images too.
+  appear, move and disappear as you draw, they keep working in dense diagrams of hundreds of
+  connectors, and they show up in exported images too.
 - ⌘0 (Ctrl+0) resets the zoom to 100%, alongside the existing zoom in and out.
 - Escape now cancels a drag. The shape goes back where it started, and nothing is moved,
-  attached or added to the undo history.
+  attached or added to the undo history. It cancels a connector you are drawing out too, and
+  switching to another window mid-drag puts the shape back instead of leaving it wherever it stopped.
 
 ### Changed
 
@@ -27,6 +29,10 @@ All notable changes to Draft Canvas are documented here.
   them out when you reach for it.
 - Your diagram list no longer counts elements and connectors on each row. The little thumbnail
   beside a diagram already shows how big and how tangled it is, and shows it faster.
+- Big diagrams are smoother. On a diagram of around 500 shapes and 800 connectors, clicking a shape
+  takes about a third of the time, panning and zooming hold much closer to 60 frames a second, and
+  the pause after dropping a shape, drawing a connector or renaming one is roughly halved or better
+  — on a 200-shape diagram it is gone.
 
 ### Fixed
 
@@ -36,7 +42,15 @@ All notable changes to Draft Canvas are documented here.
   keyboard navigation. Arrow keys move between popover buttons, and all interactive elements are
   properly announced.
 - A dropdown next to a shape near the edge of the canvas no longer squeezes itself into the gap
-  and hides options behind a scrollbar — it opens where there is room for all of them.
+  and hides options behind a scrollbar — it opens where there is room for all of them, and moves
+  out of the way again if the window is made smaller while it is open.
+- Dragging several shapes, or a boundary, out of the boundary they are in now takes them out of it
+  for real. Before, deleting that boundary afterwards deleted them with it, even though they were
+  nowhere near it.
+- A shape's toolbar no longer ends up off the screen when the shape is bigger than the window, such
+  as a large boundary at high zoom.
+- Panning or zooming in one tab no longer makes another tab with the same diagram report that it
+  "changed in another tab" the next time you edit.
 
 ## [1.8.0] - 2026-09-17
 

@@ -171,4 +171,98 @@ test.describe('drag capsule', () => {
     await page.keyboard.press('ControlOrMeta+z');
     await expect(page.locator('.dc-node[data-type="note"]')).toHaveCount(0);
   });
+
+  test('Escape puts every shape of a multi-selection back, keeps it selected, and commits nothing', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Escape multi');
+    await create(page, 'Service', { x: 350, y: 300 });
+    await create(page, 'Data Store', { x: 650, y: 300 });
+    await page.keyboard.press('ControlOrMeta+a');
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
+
+    const first = page.locator('.dc-node').nth(0);
+    const second = page.locator('.dc-node').nth(1);
+    const beforeFirst = (await first.boundingBox())!;
+    const beforeSecond = (await second.boundingBox())!;
+    await grabAndMoveTo(page, first, { x: beforeFirst.x + 320, y: beforeFirst.y + 240 });
+    // Mid-gesture the whole selection has really moved.
+    expect(Math.abs((await second.boundingBox())!.x - beforeSecond.x)).toBeGreaterThan(100);
+
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+
+    for (const [node, before] of [
+      [first, beforeFirst],
+      [second, beforeSecond],
+    ] as const) {
+      const after = (await node.boundingBox())!;
+      expect(Math.round(after.x)).toBe(Math.round(before.x));
+      expect(Math.round(after.y)).toBe(Math.round(before.y));
+    }
+    // Escape meant "cancel the drag", not "and also deselect".
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
+
+    // Nothing was written: undo reaches past the cancelled drag to the second shape's creation.
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+  });
+
+  test('the window losing focus mid-drag puts the shape back instead of dropping it wherever it is', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Blur mid-drag');
+    await create(page, 'Service', { x: 350, y: 300 });
+    const node = page.locator('.dc-node').first();
+    const before = await grabAndMoveTo(page, node, { x: 720, y: 500 });
+
+    // Cmd-Tab away: the release will go to another window, so the drag never gets its own ending.
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await page.mouse.up();
+
+    const after = (await node.boundingBox())!;
+    expect(Math.round(after.x)).toBe(Math.round(before.x));
+    expect(Math.round(after.y)).toBe(Math.round(before.y));
+    // Nothing was written, and the keyboard is the app's again: undo reaches the shape's creation.
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.locator('.dc-node')).toHaveCount(0);
+  });
+
+  test('Escape puts a dragged boundary back with everything nested inside it', async ({ page }) => {
+    await newCanvas(page, 'Escape boundary');
+    await create(page, 'Service', { x: 350, y: 300 });
+    await create(page, 'Data Store', { x: 650, y: 300 });
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.getByRole('button', { name: 'Group', exact: true }).click();
+
+    const boundary = page.locator('.dc-node[data-type="group"]');
+    const children = page.locator('.dc-node:not([data-type="group"])');
+    await expect(boundary).toHaveCount(1);
+    await expect(children).toHaveCount(2);
+    const boundaryBefore = (await boundary.boundingBox())!;
+    const childrenBefore = [(await children.nth(0).boundingBox())!, (await children.nth(1).boundingBox())!];
+
+    // The boundary's own padding, clear of any child — the grip a real drag of it uses.
+    await page.mouse.move(boundaryBefore.x + 8, boundaryBefore.y + 8);
+    await page.mouse.down();
+    await page.mouse.move(boundaryBefore.x + 8 + 260, boundaryBefore.y + 8 + 160, { steps: 15 });
+    expect(Math.abs((await children.nth(0).boundingBox())!.x - childrenBefore[0]!.x)).toBeGreaterThan(100);
+
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+
+    const boundaryAfter = (await boundary.boundingBox())!;
+    expect(Math.round(boundaryAfter.x)).toBe(Math.round(boundaryBefore.x));
+    expect(Math.round(boundaryAfter.y)).toBe(Math.round(boundaryBefore.y));
+    for (let i = 0; i < 2; i += 1) {
+      const after = (await children.nth(i).boundingBox())!;
+      expect(Math.round(after.x)).toBe(Math.round(childrenBefore[i]!.x));
+      expect(Math.round(after.y)).toBe(Math.round(childrenBefore[i]!.y));
+    }
+
+    // No history entry: the last thing undo can reach is the grouping itself.
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.locator('.dc-node[data-type="group"]')).toHaveCount(0);
+    await expect(children).toHaveCount(2);
+  });
 });

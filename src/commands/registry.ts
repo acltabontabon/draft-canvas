@@ -294,8 +294,9 @@ export function takeawaysCommands(ctx: CommandContext): Command[] {
     run: (inner) => {
       const text = takeawaysMarkdown(takeawaysFor(fileOf(inner.editor)), inner.editor.document.metadata.title);
       if (!text) return;
-      inner.editor.copyText(text);
-      inner.ui.notify('Takeaways copied.');
+      void inner.editor
+        .copyText(text)
+        .then((ok) => inner.ui.notify(ok ? 'Takeaways copied.' : 'The browser wouldn’t let us copy.'));
     },
   });
   return commands;

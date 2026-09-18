@@ -16,6 +16,7 @@ import type { DraftEdge, DraftNode } from '../document/types';
 import { routingPlan } from './bundles';
 import { dashForEdge } from './kindStyle';
 import { obstaclesForEdge } from './obstacles';
+import { sameNodeGeometry } from './sameGeometry';
 import { BRIDGE_RADIUS } from './bridge';
 import {
   flattenPath,
@@ -56,7 +57,14 @@ export interface CrossingPlan {
 }
 
 const NO_CROSSINGS: readonly Crossing[] = Object.freeze([]);
-const EMPTY_PLAN: CrossingPlan = { crossingsFor: () => NO_CROSSINGS };
+/** What `compute` hands back: the plan, and the per-connector lists behind it, kept so the next plan
+ *  can reuse the ones that did not change. */
+interface ComputedPlan extends CrossingPlan {
+  lists: ReadonlyMap<string, readonly Crossing[]>;
+}
+
+const NO_LISTS: ReadonlyMap<string, readonly Crossing[]> = new Map();
+const EMPTY_PLAN: ComputedPlan = { crossingsFor: () => NO_CROSSINGS, lists: NO_LISTS };
 
 /**
  * How far a crossing must sit from anything that would make its arc unreadable — a connector's own
@@ -114,10 +122,13 @@ const CLUSTER_RADIUS = BRIDGE_RADIUS * 2;
  *  down because a connector segment is a good deal smaller than a diagram. */
 const CELL = 256;
 
-/** Past this many segment-pair tests the plan gives up and draws no bridges at all. Readability
- *  help is worth a few milliseconds a commit and not one more; "no bridges" is a correct diagram,
- *  exactly as "route independently" is the correct fallback when bundle planning gets too large. */
-const MAX_CROSSING_OPS = 400_000;
+/** Past this many segment-pair visits the plan gives up and draws no bridges at all. Readability
+ *  help is worth a bounded cost a commit and not more; "no bridges" is a correct diagram, exactly as
+ *  "route independently" is the correct fallback when bundle planning gets too large. A visit is a
+ *  couple of integer compares now (`cx0`/`cy0` pick the one cell a pair is tested in), which is why
+ *  this is ten times what it once was: a diagram of 800 connectors used to hit the old limit and
+ *  lose every bridge at once. */
+const MAX_CROSSING_OPS = 4_000_000;
 
 /** And past this many connectors, don't even route. A diagram this dense has bigger problems than
  *  crossings, and the whole-document routing pass is the real cost here, not the pair tests. */
@@ -261,6 +272,43 @@ function blockingRects(nodes: readonly DraftNode[]): Rect[] {
 interface SegmentRef {
   line: number;
   index: number;
+  /** The lowest grid cell this segment's box covers. Two segments are tested in the first cell
+   *  *both* cover — `max` of these — which is what lets a pair reached from several cells be tested
+   *  exactly once without remembering which pairs have been. */
+  cx0: number;
+  cy0: number;
+}
+
+interface Cell {
+  cx: number;
+  cy: number;
+  refs: SegmentRef[];
+}
+
+/** Grid cells as one number, so a lookup allocates no string. Cells are far inside ±32768. */
+const cellKey = (cx: number, cy: number) => (cx + 32768) * 65536 + (cy + 32768);
+
+/**
+ * The blocking rects bucketed by grid cell, each covering everything within `margin` of it, so "is
+ * this point inside or near any node" reads one cell rather than every node on the canvas.
+ */
+function rectGrid(rects: readonly Rect[], margin: number): Map<number, Rect[]> {
+  const grid = new Map<number, Rect[]>();
+  for (const rect of rects) {
+    const x0 = Math.floor((rect.x - margin) / CELL);
+    const x1 = Math.floor((rect.x + rect.width + margin) / CELL);
+    const y0 = Math.floor((rect.y - margin) / CELL);
+    const y1 = Math.floor((rect.y + rect.height + margin) / CELL);
+    for (let cx = x0; cx <= x1; cx += 1) {
+      for (let cy = y0; cy <= y1; cy += 1) {
+        const key = cellKey(cx, cy);
+        const bucket = grid.get(key);
+        if (bucket) bucket.push(rect);
+        else grid.set(key, [rect]);
+      }
+    }
+  }
+  return grid;
 }
 
 /** Which of the two lines draws the arc, or `null` if neither can. Orientation decides — the more
@@ -286,54 +334,55 @@ function compute(
   nodes: readonly DraftNode[],
   edges: readonly DraftEdge[],
   obstacleNodes: readonly DraftNode[],
-): CrossingPlan {
+  previous?: ReadonlyMap<string, readonly Crossing[]>,
+): ComputedPlan {
   if (edges.length < 2 || edges.length > MAX_CROSSING_EDGES) return EMPTY_PLAN;
   const lines = linesOf(nodes, edges, obstacleNodes);
   if (lines.length < 2) return EMPTY_PLAN;
-  const rects = blockingRects(nodes);
+  const blocking = rectGrid(blockingRects(nodes), BRIDGE_CLEARANCE);
 
   // A uniform grid over segments rather than every pair of connectors: pair counts grow with the
   // square of the *segment* count, and a stepped connector flattens to a dozen or more.
-  const cells = new Map<string, SegmentRef[]>();
+  const cells = new Map<number, Cell>();
   lines.forEach((line, lineIndex) => {
     for (let i = 0; i + 1 < line.points.length; i += 1) {
       const p = line.points[i]!;
       const q = line.points[i + 1]!;
-      const ref: SegmentRef = { line: lineIndex, index: i };
       const x0 = Math.floor(Math.min(p.x, q.x) / CELL);
       const x1 = Math.floor(Math.max(p.x, q.x) / CELL);
       const y0 = Math.floor(Math.min(p.y, q.y) / CELL);
       const y1 = Math.floor(Math.max(p.y, q.y) / CELL);
+      const ref: SegmentRef = { line: lineIndex, index: i, cx0: x0, cy0: y0 };
       for (let cx = x0; cx <= x1; cx += 1) {
         for (let cy = y0; cy <= y1; cy += 1) {
-          const key = `${cx}:${cy}`;
+          const key = cellKey(cx, cy);
           const cell = cells.get(key);
-          if (cell) cell.push(ref);
-          else cells.set(key, [ref]);
+          if (cell) cell.refs.push(ref);
+          else cells.set(key, { cx, cy, refs: [ref] });
         }
       }
     }
   });
 
   const found = new Map<string, Crossing[]>();
-  const seen = new Set<string>();
   let ops = 0;
 
   for (const cell of cells.values()) {
-    for (let i = 0; i < cell.length; i += 1) {
-      for (let j = i + 1; j < cell.length; j += 1) {
+    const refs = cell.refs;
+    for (let i = 0; i < refs.length; i += 1) {
+      const refA = refs[i]!;
+      for (let j = i + 1; j < refs.length; j += 1) {
         if ((ops += 1) > MAX_CROSSING_OPS) return EMPTY_PLAN;
-        const refA = cell[i]!;
-        const refB = cell[j]!;
+        const refB = refs[j]!;
+        // A segment pair is tested in the first cell both cover, and skipped in the others — the
+        // same pair is reached from every cell the two boxes share.
+        if (cell.cx !== (refA.cx0 > refB.cx0 ? refA.cx0 : refB.cx0)) continue;
+        if (cell.cy !== (refA.cy0 > refB.cy0 ? refA.cy0 : refB.cy0)) continue;
         const a = lines[refA.line]!;
         const b = lines[refB.line]!;
         // The same connector never crosses itself, and neither half of a request/response pair
         // crosses the other: they are one relationship drawn as two lines.
         if (a.edgeId === b.edgeId) continue;
-        // A segment pair reached from two cells at once is the same pair.
-        const pairKey = `${refA.line}.${refA.index}|${refB.line}.${refB.index}`;
-        if (seen.has(pairKey)) continue;
-        seen.add(pairKey);
 
         const crossing = intersect(a, refA.index, b, refB.index);
         if (!crossing) continue;
@@ -345,7 +394,7 @@ function compute(
         // real crossing and still get one.
         if (a.ends.some((end) => near(end, { x, y }, BRIDGE_CLEARANCE))) continue;
         if (b.ends.some((end) => near(end, { x, y }, BRIDGE_CLEARANCE))) continue;
-        if (rects.some((rect) => insideRect(rect, x, y, BRIDGE_CLEARANCE))) continue;
+        if (insideAnyRect(blocking, x, y)) continue;
         if (atBend(a, x, y) || atBend(b, x, y)) continue;
 
         const drawableA = drawable(a, x, y);
@@ -373,20 +422,84 @@ function compute(
     }
   }
 
+  const clusters = crossingHash(found);
   const result = new Map<string, readonly Crossing[]>();
   for (const [edgeId, list] of found) {
-    const kept = list.filter((crossing) => !crowded(crossing, edgeId, found));
-    if (kept.length > 0) result.set(edgeId, Object.freeze(kept));
+    const kept = list.filter((crossing) => !crowded(crossing, edgeId, clusters));
+    if (kept.length === 0) continue;
+    // A connector subscribes to its own list by identity, so a list that has not changed has to come
+    // back as the very same array — otherwise every commit hands every crossed connector a "new"
+    // list, and every one of them re-renders for a move that did not touch it. The same interning
+    // `internSpine` does for a bundle's trunk.
+    const before = previous?.get(edgeId);
+    result.set(edgeId, before && sameCrossings(before, kept) ? before : Object.freeze(kept));
   }
-  return { crossingsFor: (edgeId) => result.get(edgeId) ?? NO_CROSSINGS };
+  return planOf(result);
+}
+
+/** Built outside `compute` on purpose. A closure created inside it would share `compute`'s scope with
+ *  `cells` and `clusters` — the segment grid and the crowding hash — and keep both alive for as long
+ *  as the plan is. Undo history holds a plan per step, so that was a few hundred KB of scratch
+ *  structure per edit at Medium and over a megabyte at Large, all of it dead the moment `compute`
+ *  returned. */
+function planOf(lists: ReadonlyMap<string, readonly Crossing[]>): ComputedPlan {
+  return { crossingsFor: (edgeId) => lists.get(edgeId) ?? NO_CROSSINGS, lists };
+}
+
+function sameCrossings(a: readonly Crossing[], b: readonly Crossing[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i]!;
+    const y = b[i]!;
+    if (x.x !== y.x || x.y !== y.y || x.nx !== y.nx || x.ny !== y.ny || x.otherSource !== y.otherSource || x.otherTarget !== y.otherTarget) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Whether a point is inside, or within `BRIDGE_CLEARANCE` of, any blocking rect. */
+function insideAnyRect(grid: Map<number, Rect[]>, x: number, y: number): boolean {
+  const bucket = grid.get(cellKey(Math.floor(x / CELL), Math.floor(y / CELL)));
+  if (!bucket) return false;
+  for (const rect of bucket) if (insideRect(rect, x, y, BRIDGE_CLEARANCE)) return true;
+  return false;
+}
+
+interface Placed {
+  edgeId: string;
+  x: number;
+  y: number;
+}
+
+/** Every crossing bucketed by a cell one cluster radius wide, so "is anything else near here" reads
+ *  nine cells instead of every connector's whole list. */
+function crossingHash(found: Map<string, Crossing[]>): Map<number, Placed[]> {
+  const hash = new Map<number, Placed[]>();
+  for (const [edgeId, list] of found) {
+    for (const { x, y } of list) {
+      const key = cellKey(Math.floor(x / CLUSTER_RADIUS), Math.floor(y / CLUSTER_RADIUS));
+      const bucket = hash.get(key);
+      if (bucket) bucket.push({ edgeId, x, y });
+      else hash.set(key, [{ edgeId, x, y }]);
+    }
+  }
+  return hash;
 }
 
 /** Whether another connector also wants a hump within one hump's width of this one — see
  *  `CLUSTER_RADIUS`. */
-function crowded(crossing: Crossing, edgeId: string, found: Map<string, Crossing[]>): boolean {
-  for (const [otherId, list] of found) {
-    if (otherId === edgeId) continue;
-    if (list.some((other) => near(other, crossing, CLUSTER_RADIUS))) return true;
+function crowded(crossing: Crossing, edgeId: string, hash: Map<number, Placed[]>): boolean {
+  const cx = Math.floor(crossing.x / CLUSTER_RADIUS);
+  const cy = Math.floor(crossing.y / CLUSTER_RADIUS);
+  for (let dx = -1; dx <= 1; dx += 1) {
+    for (let dy = -1; dy <= 1; dy += 1) {
+      const bucket = hash.get(cellKey(cx + dx, cy + dy));
+      if (!bucket) continue;
+      for (const other of bucket) {
+        if (other.edgeId !== edgeId && near(other, crossing, CLUSTER_RADIUS)) return true;
+      }
+    }
   }
   return false;
 }
@@ -479,6 +592,14 @@ function intersect(
 
 const planCache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], CrossingPlan>>();
 
+/** The lists of the plan most recently built for the canvas, for `compute` to reuse — see there. Only
+ *  ever the cached path's: an export or a mid-gesture plan is for a different set of obstacles and
+ *  would only make the canvas's next plan find nothing to reuse. */
+let lastLists: ReadonlyMap<string, readonly Crossing[]> = NO_LISTS;
+
+/** The inputs and result of that same most recent canvas plan — see `crossingPlan`. */
+let lastBuilt: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[]; plan: ComputedPlan } | null = null;
+
 /**
  * Where each connector crosses another, for the whole document.
  *
@@ -497,7 +618,16 @@ export function crossingPlan(
   const cached = byNodes?.get(edges);
   if (cached) return cached;
 
-  const plan = compute(nodes, edges, obstacleNodes);
+  // An edit that moved nothing — a rename, a colour, a note's text — is a new `nodes` array and so,
+  // by identity, a new plan, for an answer that cannot have changed. Crossings are where connectors
+  // are, and where they are depends only on the shapes' places, so the plan already built stands.
+  const previous = lastBuilt;
+  const plan =
+    previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes)
+      ? previous.plan
+      : compute(nodes, edges, obstacleNodes, lastLists);
+  lastBuilt = { nodes, edges, plan };
+  lastLists = plan.lists;
   if (byNodes) byNodes.set(edges, plan);
   else planCache.set(nodes, new WeakMap([[edges, plan]]));
   return plan;
@@ -507,7 +637,8 @@ export function crossingPlan(
  *  being moved, whose live route has left the one this plan was built from. The plan itself is
  *  built from the committed document and does not recompute mid-gesture — positions only reach the
  *  store when the drag ends. Returns the original array when nothing is dropped, so an untouched
- *  connector keeps its identity and does not re-render. */
+ *  connector keeps its identity and does not re-render — but a *partial* drop is a new array every
+ *  call, so anything subscribing to the result must compare it shallowly (`useShallow`). */
 export function withoutMoving(crossings: readonly Crossing[], moving: ReadonlySet<string>): readonly Crossing[] {
   if (moving.size === 0 || crossings.length === 0) return crossings;
   const kept = crossings.filter((crossing) => !moving.has(crossing.otherSource) && !moving.has(crossing.otherTarget));

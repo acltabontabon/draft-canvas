@@ -30,7 +30,7 @@ import { edgeIndex, nodeIndex } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { CanvasBackground } from './CanvasBackground';
-import { ATTACH_DWELL_MS, deepestBoundaryAt, evaluateAttachCandidates } from './dragTargets';
+import { ATTACH_DWELL_MS, evaluateAttachCandidates } from './dragTargets';
 import {
   CAPSULE_MOVE_THRESHOLD_PX,
   CAPSULE_RELEASE_MARGIN_PX,
@@ -43,6 +43,7 @@ import { clearPathCache } from '../edges/nearest';
 import { edgeLabelPoint, rectOfInternal, type InternalNode } from './edgeGeometry';
 import { findEdgeDropCandidate } from './edgeDropTarget';
 import { DraftEdgeView } from './DraftEdgeView';
+import { EdgeLabelRoot } from './EdgeLabels';
 import { DraftNodeView } from './DraftNodeView';
 import { Markers } from './Markers';
 import {
@@ -316,25 +317,50 @@ function sweepDescendants(
   });
 }
 
+/** How long the zoom must hold still before `--dc-zoom` follows it. */
+const ZOOM_VARIABLE_SETTLE_MS = 140;
+
 /** A host's name in the one-line "Attach to …" pill — a note can hold pages of text, and the pill
  *  never wraps, so anything past a short name would run off across the canvas. */
 /**
  * Publishes the zoom as `--dc-zoom` on React Flow's root, for the few hit areas that must stay a
  * steady size on screen (`canvas.css`). Written from a store subscription — no React render per
- * zoom frame — and in 5% steps, since every change restyles the canvas subtree.
+ * zoom frame — in 5% steps, and only once the zoom has stopped moving.
+ *
+ * Every write restyles the whole canvas subtree (a custom property is inherited by every one of its
+ * thousands of elements), which on a large diagram was 30–90 ms and happened on every step of a wheel
+ * or pinch zoom — the hitches in an otherwise cheap gesture. What reads the value is hit-area sizing,
+ * which nobody is exercising while the view is still moving, so it follows the zoom when it settles.
+ * The first value is written at once: there is no earlier one to be stale against.
  */
 function useZoomVariable() {
   const storeApi = useStoreApi();
   useEffect(() => {
     let written: { node: HTMLElement; zoom: number } | null = null;
-    const publish = ({ domNode, transform }: { domNode: HTMLElement | null; transform: [number, number, number] }) => {
-      const zoom = Math.round(transform[2] * 20) / 20;
+    let timer: number | undefined;
+    const quantized = (transform: [number, number, number]) => Math.round(transform[2] * 20) / 20;
+    const write = () => {
+      timer = undefined;
+      const { domNode, transform } = storeApi.getState();
+      const zoom = quantized(transform);
       if (!domNode || (written?.node === domNode && written.zoom === zoom)) return;
       domNode.style.setProperty('--dc-zoom', String(zoom));
       written = { node: domNode, zoom };
     };
-    publish(storeApi.getState());
-    return storeApi.subscribe(publish);
+    write();
+    const unsubscribe = storeApi.subscribe(({ domNode, transform }) => {
+      if (written === null) {
+        write();
+        return;
+      }
+      if (timer !== undefined) window.clearTimeout(timer);
+      // Back to the value already published: nothing to follow, so nothing is scheduled.
+      timer = written.node === domNode && written.zoom === quantized(transform) ? undefined : window.setTimeout(write, ZOOM_VARIABLE_SETTLE_MS);
+    });
+    return () => {
+      unsubscribe();
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [storeApi]);
 }
 
@@ -417,7 +443,7 @@ export interface CanvasProps {
   ) => void;
 }
 
-export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: CanvasProps) {
+const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: CanvasProps) {
   const document = useEditorStore((state) => state.document);
   const selection = useEditorStore((state) => state.selection);
   const mode = useEditorStore((state) => state.mode);
@@ -545,6 +571,16 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    */
   const dragCancelled = useRef(false);
   const stopWatchingEscape = useRef<(() => void) | null>(null);
+  /**
+   * Escape while a new connector is being dragged out. Same shape as `dragCancelled`, for the same
+   * reason: React Flow has no cancel of its own and completes the connection on release wherever it
+   * lands, so cancelling is vetoing that (`onConnect` and `onConnectEnd` both check this) and
+   * hiding the live line, which React Flow would otherwise keep redrawing on every move.
+   */
+  const connectCancelled = useRef(false);
+  const stopWatchingConnect = useRef<(() => void) | null>(null);
+  const [connectionCancelled, setConnectionCancelled] = useState(false);
+  const rfStore = useStoreApi();
   const clearDwell = useCallback(() => {
     if (dwellTimer.current !== null) {
       window.clearTimeout(dwellTimer.current);
@@ -1057,9 +1093,19 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         keyEvent.stopPropagation();
         cancelDrag.current();
       };
+      // The window losing focus mid-drag (Cmd-Tab, a system dialog) is the one way a button release
+      // can go to somebody else's window, leaving the drag half-finished with nobody holding the
+      // pointer. What the person meant is unknowable, so the only safe reading is the cancel one —
+      // never a commit of wherever the card happened to be.
+      const onBlur = () => {
+        if (draggingIds.current.size === 0 || dragCancelled.current) return;
+        cancelDrag.current();
+      };
       window.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('blur', onBlur);
       stopWatchingEscape.current = () => {
         window.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('blur', onBlur);
         stopWatchingEscape.current = null;
       };
 
@@ -1111,9 +1157,11 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    * host's attachments; (2) failing that, its centre landed inside a
    * boundary (the deepest one, if several are nested) — reparent it there,
    * or clear its parent if it landed on bare canvas; (3) otherwise it is
-   * simply a move. A multi-node drag (marquee, or a boundary sweeping its
-   * contents) is always just a move — attach and reparent are deliberately
-   * restricted to a single, unambiguous node.
+   * simply a move. Attach is deliberately restricted to a single, unambiguous
+   * node, but membership (2) is not: `reconcileMembership` applies the same
+   * centre rule to every shape a multi-selection or a swept boundary moved,
+   * because a shape that leaves its boundary while keeping its `parentId` is
+   * deleted along with it.
    */
   /**
    * Escape mid-drag. The card goes back where it started and nothing is committed — no move, no
@@ -1187,18 +1235,11 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       if (positions.size > 0) state.commitPositions(positions);
       markArrived(state.attachExistingNodeToEdge(singleId, armedEdge));
     } else {
-      const draggedDoc = singleId ? state.document.nodes.find((n) => n.id === singleId) : undefined;
-      const finalPosition = singleId ? positions.get(singleId) : undefined;
-      if (positions.size > 0) state.commitPositions(positions);
-
-      if (draggedDoc && draggedDoc.type !== 'group' && finalPosition) {
-        const center = centerOf({ ...finalPosition, width: draggedDoc.width, height: draggedDoc.height });
-        const exclude = new Set([draggedDoc.id, ...descendantsOf(state.document, draggedDoc.id)]);
-        const boundaryId = deepestBoundaryAt(center, state.document, exclude);
-        if (boundaryId !== (draggedDoc.parentId ?? null)) {
-          state.reparentNode(draggedDoc.id, boundaryId);
-        }
-      }
+      // Membership follows where things landed, for a whole selection or a boundary and what it
+      // carries as much as for one shape dropped on its own. `parentId` is what a delete cascades
+      // along, so a shape carried out of its boundary but still parented to it would go with it.
+      // Written together with the move: each write re-derives every connector's route and crossings.
+      state.commitMove(positions, draggedIds);
     }
 
     state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : undefined);
@@ -1224,8 +1265,40 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     if (id && draggingIds.current.size > 0 && !nodeIndex(document.nodes).has(id)) finishDrag.current();
   }, [document.nodes]);
 
+  const onConnectStart = useCallback(() => {
+    connectCancelled.current = false;
+    stopWatchingConnect.current?.();
+    // Capture phase, and stopped: the editor's own Escape (deselect, or step back out of a room) is
+    // gated on `interactionActive`, which a connection drag does not set, so without this one press
+    // would cancel nothing and also clear the selection the drag started from.
+    const cancel = () => {
+      connectCancelled.current = true;
+      setConnectionCancelled(true);
+      rfStore.getState().cancelConnection();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || connectCancelled.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancel();
+    };
+    // Losing the window mid-drag reads as a cancel for the same reason it does for a shape.
+    const onBlur = () => {
+      if (!connectCancelled.current) cancel();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('blur', onBlur);
+    stopWatchingConnect.current = () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('blur', onBlur);
+      stopWatchingConnect.current = null;
+    };
+  }, [rfStore]);
+  useEffect(() => () => stopWatchingConnect.current?.(), []);
+
   const onConnect = useCallback(
     (connection: Connection) => {
+      if (connectCancelled.current) return;
       if (!connection.source || !connection.target) return;
       // A handle id encodes exactly which of the 12 anchors it is (see
       // `HANDLE_ANCHORS`/`parseAnchorId` in `edges/routing.ts`), so this is
@@ -1258,6 +1331,13 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    */
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+      stopWatchingConnect.current?.();
+      if (connectCancelled.current) {
+        // Released after Escape: nothing connects, and nothing is offered in place of it.
+        connectCancelled.current = false;
+        setConnectionCancelled(false);
+        return;
+      }
       if (connectionState.isValid) return;
       const source = connectionState.fromNode?.id;
       if (!source) return;
@@ -1531,6 +1611,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       data-explain={explainActive ? 'on' : undefined}
       data-focus={focusActive ? 'on' : undefined}
       data-lens={lensActive ? 'on' : undefined}
+      data-connect-cancelled={connectionCancelled ? 'true' : undefined}
       onPointerDownCapture={onCanvasPointerDown}
       // The one Tab stop for the whole diagram — individual nodes/edges are deliberately not
       // real DOM tab stops (see `nodesFocusable`/`edgesFocusable` below); Tab reaches "the
@@ -1562,6 +1643,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
         onConnect={onConnect}
+        onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
         onDoubleClick={onPaneDoubleClick}
         onPaneClick={onPaneClick}
@@ -1673,5 +1755,18 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         </ViewportPortal>
       </ReactFlow>
     </div>
+  );
+});
+
+/**
+ * The canvas, inside the one place that looks up React Flow's edge-label layer for every
+ * connector's labels (`EdgeLabels.tsx`) — outside `CanvasBody` so that lookup isn't repeated per
+ * connector, which is what made every pan frame and every click cost a DOM query per connector.
+ */
+export const Canvas = memo(function Canvas(props: CanvasProps) {
+  return (
+    <EdgeLabelRoot>
+      <CanvasBody {...props} />
+    </EdgeLabelRoot>
   );
 });

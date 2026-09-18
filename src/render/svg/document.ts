@@ -214,9 +214,12 @@ export function buildScene(
     ? document.nodes.filter((node) => options.only!.has(node.id))
     : document.nodes;
   const visible = new Set(nodes.map((node) => node.id));
-  const edges = document.edges.filter(
-    (edge) => visible.has(edge.source) && visible.has(edge.target),
-  );
+  const isVisible = (edge: DraftEdge) => visible.has(edge.source) && visible.has(edge.target);
+  // The document's own array whenever every connector is in the picture (the usual case — only a
+  // "selection only" export leaves some out). `routingPlan` and `crossingPlan` are memoized on
+  // array identity, so a fresh copy here made every call re-plan the whole diagram: an animated
+  // export builds one scene per frame, and paid for the full crossing analysis on each of them.
+  const edges = document.edges.every(isVisible) ? document.edges : document.edges.filter(isVisible);
 
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const lanes = laneIndex(edges);

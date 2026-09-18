@@ -168,6 +168,64 @@ test.describe('Takeaways', () => {
     expect(markdown).toContain('- [ ] Check DLQ retention');
   });
 
+  test('a capture left half-typed does not follow you into the next canvas', async ({ page }) => {
+    await newCanvas(page, 'First');
+    await page.keyboard.press('i');
+    await expect(page.locator(CAPTURE)).toBeFocused();
+    await page.keyboard.type('half a thou');
+
+    // Text in the line keeps it open when focus leaves (dropping it would lose what was said), so
+    // walking out of the canvas is the case that has to close it.
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await page.getByRole('button', { name: 'New canvas' }).click();
+    await expect(page.locator('.dc-editor')).toBeVisible();
+
+    await expect(page.locator(CAPTURE)).toHaveCount(0);
+    await expect(page.locator('.dc-takeaways')).toHaveCount(0);
+  });
+
+  test('the arrival note goes away when Takeaways opens, however it was opened, and stays away', async ({ page }) => {
+    const NUDGE = '.dc-takeaways-nudge';
+    await newCanvas(page, 'Reminder');
+    await capture(page, 'Call the vendor');
+
+    // Away and back: a canvas that still owes something says so, once.
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await page.locator('.dc-library-item', { hasText: 'Reminder' }).click();
+    await expect(page.locator(NUDGE)).toBeVisible();
+
+    // Opened from the palette rather than the chip it points at: it has done its job all the same,
+    // and would otherwise sit underneath the panel that opened over the very corner it hangs in.
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.keyboard.type('Takeaways');
+    await page.keyboard.press('Enter');
+    await expect(page.locator(PANEL)).toBeVisible();
+    await expect(page.locator(NUDGE)).toHaveCount(0);
+
+    // Finish the only open action, put the panel away, and capture something new later: not an
+    // arrival, so nothing should point at it.
+    await page.getByRole('button', { name: 'Back to actions' }).click();
+    await page.getByRole('checkbox', { name: 'Call the vendor' }).click();
+    await page.keyboard.press('Escape');
+    await page.locator(CANVAS).click({ position: { x: 700, y: 480 } });
+    await capture(page, 'Chase the invoice');
+    await expect(page.locator(CHIP)).toHaveAttribute('aria-label', /1 open action/);
+    await expect(page.locator(NUDGE)).toHaveCount(0);
+  });
+
+  test('capturing puts the arrival note away, so it is never underneath the capture line', async ({ page }) => {
+    const NUDGE = '.dc-takeaways-nudge';
+    await newCanvas(page, 'Reminder two');
+    await capture(page, 'Call the vendor');
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await page.locator('.dc-library-item', { hasText: 'Reminder two' }).click();
+    await expect(page.locator(NUDGE)).toBeVisible();
+
+    await page.keyboard.press('i');
+    await expect(page.locator(CAPTURE)).toBeFocused();
+    await expect(page.locator(NUDGE)).toHaveCount(0);
+  });
+
   test('captures mid-walkthrough, taking the step as its context, without leaving presenting', async ({
     page,
   }) => {

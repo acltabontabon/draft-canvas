@@ -233,6 +233,13 @@ flowchart TD
 The two-store split is what lets the library list itself without deserializing — or decrypting — a
 single canvas. The fingerprint drawn as a library thumbnail is **silhouettes, never words**.
 
+Every content write mints a stamp, and an open editor's save is checked against the stamp it last read:
+a different one means another tab saved other content, and the user is asked which copy to keep. A
+**camera move** is saved too — a diagram reopens where it was left — but it is not content
+(`SaveOptions.cameraOnly`): it keeps the stamp it found, and if the stored copy has moved on it is
+dropped without complaint, so looking around in one tab never makes another tab's next edit
+conflict, and never overwrites anything.
+
 Failure posture: a failed decrypt never overwrites the only copy; no IndexedDB falls back to memory
 and says so plainly.
 

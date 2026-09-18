@@ -57,6 +57,7 @@ import {
   removeEdgeAttachment as removeEdgeAttachmentOp,
   removeElements,
   reorderAttachment as reorderAttachmentOp,
+  reconcileMembership as reconcileMembershipOp,
   reorderEdgeAttachment as reorderEdgeAttachmentOp,
   sendBackward,
   sendToBack,
@@ -488,6 +489,11 @@ export interface EditorStore {
   /* Boundary containment */
   /** Sets or clears (`boundaryId: null`) a node's containing boundary. */
   reparentNode: (nodeId: string, boundaryId: string | null) => void;
+  /** Commits a finished drag: the new positions, and — in the same write — each moved shape's
+   *  boundary membership agreeing with where it landed, so a later delete or boundary drag acts on
+   *  what is visibly inside. One write, because every write re-derives the whole diagram's routing
+   *  and crossings, and doing that twice per drop was the largest part of its cost. */
+  commitMove: (positions: Map<string, { x: number; y: number }>, movedIds: Iterable<string>) => void;
 
   /* Flows */
   /** Returns the new flow's id, or `null` when the document is already at `LIMITS.maxFlows`. */
@@ -522,7 +528,8 @@ export interface EditorStore {
   clearDoneActions: () => void;
   /** Puts plain text on the system clipboard, through the VS Code host bridge when embedded.
    *  Not a document edit — no undo step, nothing touched. */
-  copyText: (text: string) => void;
+  /** Resolves to whether the text reached the system clipboard. */
+  copyText: (text: string) => Promise<boolean>;
 
   /* Document-level */
   rename: (title: string) => void;
@@ -693,17 +700,23 @@ function applyComponentAutoLabel(doc: DraftDocument, nodeId: string, before: Dra
  * Best-effort: a missing/denied Clipboard API (insecure context, an older browser, a test env) never
  * breaks same-tab copy/paste, which the in-memory `clipboard` already covers on its own. Embedded in a
  * host that offers its clipboard, the copy goes there instead, since the frame is refused the API.
+ *
+ * Resolves to whether the text actually left the app. Copying shapes doesn't care (it has the
+ * in-memory clipboard), but a copy whose whole point is *the system clipboard* — Takeaways as
+ * Markdown — must not tell someone it worked when it didn't.
  */
-function writeSystemClipboard(text: string): void {
+async function writeSystemClipboard(text: string): Promise<boolean> {
   const host = hostClipboard();
   if (host) {
     host.write(text);
-    return;
+    return true;
   }
   try {
-    void navigator.clipboard?.writeText?.(text)?.catch(() => {});
+    if (!navigator.clipboard?.writeText) return false;
+    await navigator.clipboard.writeText(text);
+    return true;
   } catch {
-    // ignore
+    return false;
   }
 }
 
@@ -924,6 +937,10 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'f
     // happens *after* this runs (`useDocumentSession.openDocument`). Clearing it here is what
     // stops a card raised for one canvas surviving a switch to another.
     takeawaysRecall: false,
+    // A half-typed capture belongs to the room it was started in — its context (the selected shape)
+    // was resolved there. Left open, the next canvas would arrive with a focused input swallowing
+    // the keys somebody meant as shortcuts.
+    actionCaptureOpen: false,
   });
   return {
     selection: EMPTY_SELECTION,
@@ -1790,6 +1807,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Move', (doc) => moveNodes(doc, positions));
   },
 
+  commitMove(positions, movedIds) {
+    get().apply('Move', (doc) => reconcileMembershipOp(moveNodes(doc, positions), movedIds));
+  },
+
   nudgeSelection(dx, dy) {
     const state = get();
     if (state.selection.nodes.length === 0) return;
@@ -1840,7 +1861,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const fragment = extractFragment(state.document, state.selection.nodes);
     const text = encodeClipboard(fragment);
     set({ clipboard: fragment, pasteRepeat: 0 });
-    writeSystemClipboard(text);
+    void writeSystemClipboard(text);
     return text;
   },
 
@@ -1856,7 +1877,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const fragment = extractFragment(state.document, selection.nodes);
       text = encodeClipboard(fragment);
       set({ clipboard: fragment, pasteRepeat: 0 });
-      writeSystemClipboard(text);
+      void writeSystemClipboard(text);
     }
     state.apply('Cut', (doc) => removeElements(doc, selection.nodes, selection.edges), {
       selection: EMPTY_SELECTION,
@@ -2135,6 +2156,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Reparent', (doc) => setParent(doc, [nodeId], boundaryId ?? undefined));
   },
 
+
   raise(toFront = false) {
     const { selection, apply } = get();
     apply('Bring forward', (doc) =>
@@ -2268,7 +2290,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   copyText(text) {
     // The same writer `copySelection` uses, so a copy made from Takeaways reaches the VS Code
     // host's clipboard rather than a `navigator.clipboard` the webview refuses.
-    writeSystemClipboard(text);
+    return writeSystemClipboard(text);
   },
 
   rename(title) {
@@ -2357,7 +2379,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setSaveState(save) {
-    set({ save });
+    // Autosave reports every transition, and reports "saved" again for an unchanged file; an
+    // identical state is not news, and each write re-runs every connector's and shape's selectors.
+    set((state) =>
+      state.save.status === save.status &&
+      state.save.message === save.message &&
+      state.save.lastSavedAt === save.lastSavedAt &&
+      state.save.conflict === save.conflict
+        ? state
+        : { save },
+    );
   },
 
   setMode(mode) {

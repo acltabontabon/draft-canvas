@@ -146,6 +146,69 @@ describe('local persistence', () => {
     expect((await tabB.load(doc.metadata.id))!.nodes).toHaveLength(4);
   });
 
+  describe('a camera move is not a content change', () => {
+    const withCamera = (doc: DraftDocument, x: number): DraftDocument => ({ ...doc, viewport: { x, y: 0, zoom: 1 } });
+
+    it("does not make another tab's next real edit conflict", async () => {
+      const tabA = await IndexedDbRepository.open();
+      const tabB = await IndexedDbRepository.open();
+      const doc = documentWith('Shared');
+      await tabA.save(doc);
+      const base = { title: 'Shared' };
+      // Tab B opens it: from here it knows which content it is looking at.
+      const inB = (await tabB.load(doc.metadata.id))!;
+
+      // Tab A only looks around — over and over, as panning does.
+      await tabA.save(withCamera(doc, -300), base, { cameraOnly: true });
+      await tabA.save(withCamera(doc, -640), base, { cameraOnly: true });
+
+      // Tab B's real edit is not told the canvas changed underneath it.
+      const editedB = addNodes(inB, [createNode({ type: 'note', x: 0, y: 400 })]);
+      await expect(tabB.save(editedB, base)).resolves.toBeUndefined();
+      expect((await tabA.load(doc.metadata.id))!.nodes).toHaveLength(3);
+    });
+
+    it('is remembered, so the canvas reopens where it was left', async () => {
+      const repository = await IndexedDbRepository.open();
+      const doc = documentWith('Camera');
+      await repository.save(doc);
+
+      await repository.save(withCamera(doc, -480), { title: 'Camera' }, { cameraOnly: true });
+
+      expect((await repository.load(doc.metadata.id))!.viewport.x).toBe(-480);
+    });
+
+    it("never replaces content another tab saved since, and doesn't ask anyone to resolve it", async () => {
+      const tabA = await IndexedDbRepository.open();
+      const tabB = await IndexedDbRepository.open();
+      const doc = documentWith('Shared');
+      await tabA.save(doc);
+      const base = { title: 'Shared' };
+      const inB = (await tabB.load(doc.metadata.id))!;
+      await tabA.load(doc.metadata.id);
+
+      // B saves real content. A, still looking at the old copy, then pans.
+      await tabB.save(addNodes(inB, [createNode({ type: 'note', x: 0, y: 400 })]), base);
+      await expect(tabA.save(withCamera(doc, -900), base, { cameraOnly: true })).resolves.toBeUndefined();
+
+      // B's content stands, and A's camera did not overwrite it.
+      const stored = (await tabB.load(doc.metadata.id))!;
+      expect(stored.nodes).toHaveLength(3);
+      expect(stored.viewport.x).not.toBe(-900);
+    });
+
+    it('is dropped rather than bringing back a canvas another tab deleted', async () => {
+      const tabA = await IndexedDbRepository.open();
+      const tabB = await IndexedDbRepository.open();
+      const doc = documentWith('Shared');
+      await tabA.save(doc);
+      await tabB.remove(doc.metadata.id);
+
+      await expect(tabA.save(withCamera(doc, -50), { title: 'Shared' }, { cameraOnly: true })).resolves.toBeUndefined();
+      expect(await tabB.list()).toHaveLength(0);
+    });
+  });
+
   it('has() reports a stored id even when its body cannot be read', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Present');
@@ -617,6 +680,55 @@ describe('autosave', () => {
 
     autosave.dispose();
     vi.useRealTimers();
+  });
+
+  describe('camera-only writes', () => {
+    type Options = { cameraOnly?: boolean } | undefined;
+
+    class OptionsRepository extends MemoryRepository {
+      readonly options: Options[] = [];
+
+      async save(document: DraftDocument, base?: Parameters<MemoryRepository['save']>[1], options?: Options) {
+        this.options.push(options);
+        return super.save(document, base);
+      }
+    }
+
+    const setup = () => {
+      const repository = new OptionsRepository();
+      const autosave = new Autosave({ repository, onStateChange: () => {} });
+      const doc = documentWith('Camera');
+      autosave.track(doc);
+      return { repository, autosave, doc };
+    };
+    const moved = (doc: DraftDocument, x: number): DraftDocument => ({ ...doc, viewport: { x, y: 0, zoom: 1 } });
+
+    it('passes a queue of only camera moves on as camera-only', async () => {
+      const { repository, autosave, doc } = setup();
+      autosave.schedule(moved(doc, -10), { cameraOnly: true });
+      autosave.schedule(moved(doc, -20), { cameraOnly: true });
+      await autosave.flush();
+      expect(repository.options).toEqual([{ cameraOnly: true }]);
+    });
+
+    it('is a content write the moment a real edit is anywhere in what was queued', async () => {
+      const { repository, autosave, doc } = setup();
+      autosave.schedule(moved(doc, -10), { cameraOnly: true });
+      autosave.schedule(addNodes(doc, [createNode({ type: 'note', x: 0, y: 400 })]));
+      // …and a later camera move cannot turn that edit back into "just looking".
+      autosave.schedule(moved(addNodes(doc, [createNode({ type: 'note', x: 0, y: 400 })]), -30), { cameraOnly: true });
+      await autosave.flush();
+      expect(repository.options).toEqual([undefined]);
+    });
+
+    it('starts afresh after each write', async () => {
+      const { repository, autosave, doc } = setup();
+      autosave.schedule(addNodes(doc, [createNode({ type: 'note', x: 0, y: 400 })]));
+      await autosave.flush();
+      autosave.schedule(moved(doc, -40), { cameraOnly: true });
+      await autosave.flush();
+      expect(repository.options).toEqual([undefined, { cameraOnly: true }]);
+    });
   });
 
   it('takes on a rename made in another tab and keeps it across later saves', async () => {

@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
+import * as crossings from '../src/edges/crossings';
 import { crossingPlan, withoutMoving } from '../src/edges/crossings';
 import { routeEdge } from '../src/edges/routing';
 import { renderDocumentSvg } from '../src/render/svg/document';
@@ -226,6 +227,63 @@ describe('an exported image', () => {
   });
 });
 
+describe('a dense diagram', () => {
+  /**
+   * Two facing columns of shapes joined by a couple of hundred long, criss-crossing connectors — the
+   * densest thing a real diagram grows into. Every connector shares a corridor with every other, so
+   * the pair count is enormous: the plan used to hit its work limit on exactly this and draw no
+   * bridge anywhere, all at once, with nothing on screen to say why.
+   */
+  function crisscross(columnSize: number, perNode: number) {
+    const nodes: DraftNode[] = [];
+    for (let i = 0; i < columnSize; i += 1) {
+      nodes.push(box(`l${i}`, 0, i * 120), box(`r${i}`, 3000, i * 120));
+    }
+    const edges: DraftEdge[] = [];
+    for (let i = 0; i < columnSize; i += 1) {
+      for (let k = 0; k < perNode; k += 1) {
+        const target = (i * 7 + k * 5 + 3) % columnSize;
+        edges.push(createEdge({ id: `e${i}-${k}`, source: `l${i}`, target: `r${target}`, routing: 'straight' }));
+      }
+    }
+    return { nodes, edges };
+  }
+
+  it('still draws bridges rather than giving up on all of them', () => {
+    // 224 connectors: a diagram nobody would call huge, and one the old work limit gave up on
+    // entirely — none of them drew a bridge.
+    const { nodes, edges } = crisscross(16, 14);
+    expect(edges).toHaveLength(224);
+
+    const plan = crossingPlan(nodes, edges);
+    const bridged = edges.filter((edge) => plan.crossingsFor(edge.id).length > 0).length;
+
+    expect(bridged).toBeGreaterThan(100);
+  });
+});
+
+describe('drawing the same diagram more than once', () => {
+  it('plans the crossings once, however many exports or animation frames are drawn from it', () => {
+    const { nodes, edges } = squareCrossing();
+    const doc = addEdges(addNodes(createDocument('Frames'), nodes), edges);
+    const spy = vi.spyOn(crossings, 'crossingPlan');
+    try {
+      renderDocumentSvg(doc, { theme: 'dark' });
+      renderDocumentSvg(doc, { theme: 'dark' });
+      renderDocumentSvg(doc, { theme: 'dark' });
+
+      const plans = spy.mock.results.map((result) => result.value);
+      expect(plans).toHaveLength(3);
+      // The same plan object each time: it was memoized on the document's own arrays, not on a
+      // filtered copy made per call, which is what an animated export used to pay for on every frame.
+      expect(plans[1]).toBe(plans[0]);
+      expect(plans[2]).toBe(plans[0]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
 describe('moving a shape', () => {
   it('takes the hump away when the crossing goes, and brings it back when it returns', () => {
     const { nodes, edges } = squareCrossing();
@@ -255,6 +313,47 @@ describe('the plan itself', () => {
   it('hands back the identical result for an unchanged document', () => {
     const { nodes, edges } = squareCrossing();
     expect(crossingPlan(nodes, edges)).toBe(crossingPlan(nodes, edges));
+  });
+
+  it('is the very same plan after an edit that moved nothing — a rename, a colour, a note', () => {
+    const { nodes, edges } = squareCrossing();
+    const far = box('far', 3000, 3000);
+    const before = crossingPlan([...nodes, far], edges);
+
+    // A new `nodes` array, and by identity a new plan — for crossings that cannot have changed,
+    // because they are a function of where shapes are and nothing has moved. Re-planning here was the
+    // cost of every keystroke in a label.
+    const after = crossingPlan([...nodes, { ...far, text: 'Renamed', accent: 'rose' as const }], edges);
+
+    expect(after).toBe(before);
+  });
+
+  it('plans afresh when a shape moved, and still hands an untouched connector the same list', () => {
+    const { nodes, edges } = squareCrossing();
+    const far = box('far', 3000, 3000);
+    const before = crossingPlan([...nodes, far], edges);
+
+    // A distant shape moves: that is a real change, so a new plan — but the crossing is where it was.
+    // A connector subscribes to its list by identity, so if the plan handed back an equal-but-
+    // different array here, every crossed connector on the canvas would re-render on every commit,
+    // however far from the edit.
+    const after = crossingPlan([...nodes, { ...far, x: far.x + 400 }], edges);
+
+    expect(after).not.toBe(before);
+    expect(after.crossingsFor('across')).toBe(before.crossingsFor('across'));
+    expect(after.crossingsFor('across')).toHaveLength(1);
+  });
+
+  it('does hand over a new list when the crossing itself moved', () => {
+    const { nodes, edges } = squareCrossing();
+    const before = crossingPlan(nodes, edges);
+
+    // The vertical connector's shapes shift sideways, and the crossing goes with them.
+    const moved = nodes.map((node) => (node.id === 'up' || node.id === 'down' ? { ...node, x: node.x + 40 } : node));
+    const after = crossingPlan(moved, edges);
+
+    expect(after.crossingsFor('across')).not.toBe(before.crossingsFor('across'));
+    expect(after.crossingsFor('across')[0]!.x).toBeCloseTo(before.crossingsFor('across')[0]!.x + 40, 0);
   });
 
   it('hands back the identical empty list for every connector that crosses nothing', () => {

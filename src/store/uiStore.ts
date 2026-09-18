@@ -115,6 +115,11 @@ let settleTimer: ReturnType<typeof setTimeout> | undefined;
 const CONTINUATION_PREFERENCE = 'continuation';
 const NO_MOVING_NODES: ReadonlySet<string> = new Set();
 
+/** The change that puts the arrival note away — nothing at all when it was not up, so opening
+ *  Takeaways never pulses the chip for a note that was never there. */
+const settledRecall = (state: Pick<UiStore, 'takeawaysRecall' | 'takeawaysChipPulse'>) =>
+  state.takeawaysRecall ? { takeawaysRecall: false, takeawaysChipPulse: state.takeawaysChipPulse + 1 } : {};
+
 /** On unless the device says otherwise. Read once at startup; a preference store that is not
  *  usable at that moment (blocked storage, a test harness still wiring up) means "on". */
 function initialContinuationsEnabled(): boolean {
@@ -575,13 +580,25 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
+  // Opening Takeaways, or the capture line, by any route means the arrival note has done its job —
+  // it exists to teach where they live — and both are drawn over the very corner it hangs in, so
+  // leaving it up would stack the note under the thing it was pointing at. Settled the same way
+  // `setTakeawaysRecall(false)` does, pulse included.
   setTakeawaysOpen: (takeawaysOpen, view) =>
     // Closing also puts the surface back on its working face: reopening it mid-meeting should
     // show the list you are still adding to, not the summary you read once at the end.
-    set(takeawaysOpen ? { takeawaysOpen, ...(view ? { takeawaysView: view } : {}) } : { takeawaysOpen: false, takeawaysView: 'actions' }),
+    set((state) =>
+      takeawaysOpen
+        ? { takeawaysOpen, ...(view ? { takeawaysView: view } : {}), ...settledRecall(state) }
+        : { takeawaysOpen: false, takeawaysView: 'actions' },
+    ),
   setTakeawaysView: (takeawaysView) => set({ takeawaysView }),
   setActionCaptureOpen: (actionCaptureOpen) =>
-    set(actionCaptureOpen ? { actionCaptureOpen, takeawaysView: 'actions' } : { actionCaptureOpen: false }),
+    set((state) =>
+      actionCaptureOpen
+        ? { actionCaptureOpen, takeawaysView: 'actions', ...settledRecall(state) }
+        : { actionCaptureOpen: false },
+    ),
   setTakeawaysRecall: (takeawaysRecall) =>
     // Settling is what teaches where the thing lives, so the pulse is part of closing rather than
     // a second call a caller could forget to make.
@@ -733,7 +750,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
   },
   setDepthTransition: (depthTransition) => set({ depthTransition }),
   setDepthPlateFocusId: (depthPlateFocusId) => set({ depthPlateFocusId }),
-  setDepthShapeHoverId: (depthShapeHoverId) => set({ depthShapeHoverId }),
+  // Guarded: a hover fires on every entry and exit, and every write re-runs every subscriber's
+  // selector — a few thousand of them on a large diagram — whether or not anything changed.
+  setDepthShapeHoverId: (depthShapeHoverId) =>
+    set((state) => (state.depthShapeHoverId === depthShapeHoverId ? state : { depthShapeHoverId })),
   dismissOverviewOffer: () => set({ overviewOfferDismissed: true }),
   setSettleNodeIds: (settleNodeIds) => {
     clearTimeout(settleTimer);

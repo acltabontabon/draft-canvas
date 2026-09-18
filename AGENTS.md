@@ -94,6 +94,23 @@ Each of these has a failure mode that is silent, delayed, or both.
   endpoints through them, so hiding them deletes every connector.
 - `nodeTypes` / `edgeTypes` must stay module-scope constants, or React Flow remounts every node
   on every render.
+- **A store selector must return a stable reference.** zustand 5 re-reads a selector to check it, so
+  one that can hand back a fresh array or object (a `.filter()` that dropped only *some* of its
+  input, a spread, a `new Set`) is an infinite render loop that takes the whole canvas down — and it
+  only shows when the input is partly filtered, which is why one shipped. Wrap any selector that
+  can return a new collection in `useShallow`, as `DraftEdgeView.tsx`'s `obstacles` and `crossings` do.
+- **Nothing per node or per edge may do real work on every store update.** A selector subscribed by
+  every connector runs (connectors × store updates) times — every frame of a pan, every click — so
+  React Flow's own `<EdgeLabelRenderer>`, which does a `querySelector` in one, was three quarters of
+  all main-thread time on a large diagram. Use `src/canvas/EdgeLabels.tsx` (one lookup, shared through
+  context) rather than the library component, and treat any new per-element `useStore` selector that
+  touches the DOM, allocates, or scans as a bug.
+- **A memoized plan must not close over its scratch work.** Undo history keeps a snapshot per step,
+  and each snapshot keeps its `routingPlan` / `crossingPlan` alive. V8 gives every closure made in
+  a function one shared scope, so a lookup built *inside* the planner (`crossingsFor: (id) =>
+  result.get(id)`) quietly keeps the planner's segment grid and hash alive with it — over a
+  megabyte per step at Large, all of it dead the moment the function returned. Build the returned
+  object in a module-level function, as `planOf` in `crossings.ts` does.
 - **Edges are the one exception to "one renderer."** Unlike nodes, `src/canvas/DraftEdgeView.tsx`
   (on-screen) and `src/edges/describe.ts` (SVG export) are two independent implementations of the
   same connector. A visual addition to a connector — a badge, a dash pattern, a chip — must be
