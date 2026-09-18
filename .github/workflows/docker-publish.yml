@@ -10,6 +10,10 @@ name: Docker
 #
 # Needs the DOCKERHUB_USERNAME repository variable and the DOCKERHUB_TOKEN
 # repository secret (a Docker Hub access token, not the account password).
+#
+# It also pushes docs/DOCKER_HUB.md to the repository's Docker Hub page, so
+# the description is version-controlled and reviewed like everything else
+# rather than edited by hand and left to go stale.
 
 on:
   workflow_call:
@@ -97,3 +101,37 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
+
+  # The Docker Hub page's own copy, from the repository rather than from
+  # whoever last edited the web form.
+  #
+  # Its own job, after the image, so a description that fails to sync can
+  # never cost anyone the release they actually came for. `continue-on-error`
+  # keeps the run green for the same reason — the job still shows red in the
+  # run view, which is the signal to go and look. The token needs read/write/
+  # delete scope, the same scope pushing the image needs; if this starts
+  # failing, that is the first thing to check.
+  #
+  # From `main`, deliberately — unlike the image, the page describes the
+  # product as it stands rather than one version of it, and a wording fix
+  # should not have to wait for a release to go live. The consequence is that
+  # manually republishing an *older* tag still leaves today's description up,
+  # which is the right way round: `latest` moving back is the surprising part
+  # of that operation, not the prose.
+  description:
+    needs: publish
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: acltabontabon/draft-canvas
+          readme-filepath: ./docs/DOCKER_HUB.md
+          short-description: A local-first canvas for developers to explain software visually

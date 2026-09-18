@@ -115,6 +115,11 @@ Pushing the `vX.Y.Z` tag does the rest. It creates the GitHub Release, deploys P
 Release exists, publishes `acltabontabon/draft-canvas` to Docker Hub (see
 `.github/workflows/docker-publish.yml`).
 
+The Docker Hub page's own description lives in [`docs/DOCKER_HUB.md`](docs/DOCKER_HUB.md) and is
+pushed from `main` by that same workflow — edit the file, don't edit the web form, or the next
+release will overwrite whatever was typed there. It is written for someone who found the image
+before they found the project, so it repeats things the README says rather than linking to them.
+
 Draft Canvas for VS Code (`vscode-extension/`) is released separately, from `extension-vX.Y.Z` tags,
 with its own version and changelog — see [`vscode-extension/RELEASING.md`](vscode-extension/RELEASING.md).
 
