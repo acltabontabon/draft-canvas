@@ -548,30 +548,19 @@ kbd {
 }
 
 /*
- * The open-action tally in the meta line — one box per thing still owed (`OpenTally.tsx`).
+ * What this canvas still owes, in the meta line.
  *
- * It carries the line's only full-strength colour. Weight is what marks it, never hue: a coloured
- * badge or a dot would read as a notification, and this is a fact about the drawing rather than
- * something that just happened. Lifts to the selection colour with the fingerprint and the title
- * on hover, so the row still reads as one object.
+ * It carries the line's only full-strength colour, which is the whole of its emphasis: weight,
+ * never hue. A coloured badge or a dot would read as a notification, and this is a standing fact
+ * about the drawing rather than something that just happened. Lifts to the selection colour with
+ * the fingerprint and the title on hover, so the row still reads as one object.
  */
-.dc-open-tally {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.dc-library-item-open {
   color: var(--dc-text);
-}
-
-.dc-open-tally-boxes {
-  display: block;
-  flex-shrink: 0;
-}
-
-.dc-open-tally-rest {
   font-variant-numeric: tabular-nums;
 }
 
-.dc-library-item:hover .dc-open-tally {
+.dc-library-item:hover .dc-library-item-open {
   color: var(--dc-selection);
 }
 
