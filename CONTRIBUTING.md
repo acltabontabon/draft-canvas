@@ -115,10 +115,16 @@ Pushing the `vX.Y.Z` tag does the rest. It creates the GitHub Release, deploys P
 Release exists, publishes `acltabontabon/draft-canvas` to Docker Hub (see
 `.github/workflows/docker-publish.yml`).
 
-The Docker Hub page's own description lives in [`docs/DOCKER_HUB.md`](docs/DOCKER_HUB.md) and is
-pushed from `main` by that same workflow — edit the file, don't edit the web form, or the next
-release will overwrite whatever was typed there. It is written for someone who found the image
-before they found the project, so it repeats things the README says rather than linking to them.
+The Docker Hub page's own description lives in [`docs/DOCKER_HUB.md`](docs/DOCKER_HUB.md), and it is
+the one part of a release that is not automated. Docker Hub answers the description API with 403 for
+an access token however it is scoped — only the account password reaches it, which is not worth
+putting in CI. So: edit the file, and when it changes, paste it into **Repository → Edit → Overview**
+on Docker Hub. The short description beside it is:
+
+> A local-first canvas for developers to explain software visually
+
+It is written for someone who found the image before they found the project, so it repeats things
+the README says rather than linking to them.
 
 Draft Canvas for VS Code (`vscode-extension/`) is released separately, from `extension-vX.Y.Z` tags,
 with its own version and changelog — see [`vscode-extension/RELEASING.md`](vscode-extension/RELEASING.md).
