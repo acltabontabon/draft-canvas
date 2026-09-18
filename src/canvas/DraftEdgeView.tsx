@@ -257,14 +257,15 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const editRequested = useUiStore((state) => state.editRequestId === id);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
 
-  // Tracked in JS, not left to a pure `.dc-edge:hover` CSS rule: the response label lives in React
-  // Flow's `EdgeLabelRenderer` portal, a sibling overlay div elsewhere in the DOM tree, not a real
-  // descendant of this `<g>` — so no ancestor-based CSS selector can ever reach it, the same reason
+  // Tracked in JS, not left to a pure `.dc-edge:hover` CSS rule: the response label and the
+  // attachment chip row both live in React Flow's `EdgeLabelRenderer` portal, a sibling overlay div
+  // elsewhere in the DOM tree, not real descendants of this `<g>` — so no ancestor-based CSS
+  // selector can ever reach them, the same reason
   // `.dc-edge-label`'s own `data-active`/`data-dimmed`/etc. are passed as explicit props rather than
   // relied on to cascade from a parent. This one boolean covers both the response line (a real SVG
   // child, which *could* use plain `:hover`, but sharing one mechanism avoids two divergent ones)
   // and its portaled label.
-  const [hoveringResponse, setHoveringResponse] = useState(false);
+  const [hovering, setHovering] = useState(false);
 
   // The live pointer position while this edge's own endpoint is being
   // dragged — local state, not the shared store, so only this one edge
@@ -500,7 +501,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const responseLabelY = responseRoute ? responseRoute.labelY : 0;
   // Compact by default; the response's own half of a two-phase presentation pulse also counts as
   // "useful to see right now", same as hover/selection.
-  const responseRevealed = selected || hoveringResponse || pulseTarget === 'response';
+  const responseRevealed = selected || hovering || pulseTarget === 'response';
 
   return (
     <g
@@ -516,8 +517,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
       data-lens-pulse={lensPulsing ? 'true' : undefined}
-      onPointerEnter={responseRoute ? () => setHoveringResponse(true) : undefined}
-      onPointerLeave={responseRoute ? () => setHoveringResponse(false) : undefined}
+      // No longer gated on this edge having a response: a connector carrying several attachments
+      // rests as dots and names them on approach, and that needs the same hover signal.
+      onPointerEnter={() => setHovering(true)}
+      onPointerLeave={() => setHovering(false)}
     >
 {/*
         Two sibling paths, same shape `BaseEdge` itself renders internally — but decoupled onto
@@ -602,6 +605,26 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           strokeLinecap="round"
           strokeLinejoin="round"
           opacity={0.8}
+        />
+      )}
+
+      {/* Where a dropped Note/Code will actually land: this connector's own label point, the
+          same one its chip row hangs from below. Mounted only while this connector is the armed
+          target of a drag, so a connector carries no extra mark the rest of the time. Drag chrome,
+          like the selection ring — deliberately not mirrored into `edges/describe.ts`, because it
+          must never reach an exported image. */}
+      {attachTarget && (
+        <circle
+          className="dc-edge-landing"
+          cx={labelX}
+          cy={labelY}
+          r={3.5}
+          fill={theme.selection}
+          // Punched out of the line rather than drawn on top of it — the dot sits on a connector
+          // already tinted with the selection colour, and without this it reads as a thickening of
+          // the stroke instead of as a point on it.
+          stroke={theme.canvas}
+          strokeWidth={1.5}
         />
       )}
 
@@ -890,6 +913,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             actions={attachmentActions}
             dimmed={lensDimmed}
             explainTier={playbackActive ? tier : undefined}
+            revealed={selected || hovering}
             style={{ position: 'absolute', transform: attachmentRowTransform(labelX, labelY, attachmentFlipBelow) }}
           />
         ) : null}

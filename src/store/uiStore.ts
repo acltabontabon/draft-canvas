@@ -44,6 +44,19 @@ export interface ArmedAnchor {
   offset: number;
 }
 
+/** A Note/Code card standing in as its own capsule mid-drag — see `dragCapsule` below and
+ *  `src/canvas/dragCapsule.ts` for when a card collapses into one. */
+export interface DragCapsuleState {
+  nodeId: string;
+  /** Where the grab landed on the card, in flow units from its top-left. The capsule is drawn
+   *  from here, so it stays under the cursor no matter which corner of a large card was grabbed. */
+  offsetX: number;
+  offsetY: number;
+  /** A small lean toward an armed connector's landing point, in screen pixels. Zero otherwise. */
+  nudgeX: number;
+  nudgeY: number;
+}
+
 /** What was right-clicked (or Shift+F10'd) to open the context menu — `id` is absent for `pane`
  *  (nothing under the pointer) and `selection` (the target is "whatever's currently selected", not
  *  one specific id, since a multi-selection has no single owner). */
@@ -129,6 +142,15 @@ export interface UiStore {
   /** The edge id a dragged note/code node is currently armed against — see `Canvas.tsx`'s
    *  drag-to-attach wiring and `dragTargets.ts`'s `findEdgeDropCandidate`. */
   attachArmedEdgeTarget: string | null;
+  /**
+   * The Note/Code card currently collapsed into its drag capsule, and where on that card the
+   * grab started (`offsetX`/`offsetY`, in flow units from its own top-left — the aim point).
+   *
+   * Written twice per gesture, not per frame: the capsule is rendered *inside* the dragged node
+   * (`DraftNodeView.tsx`), so React Flow's own transform is what moves it and nothing re-renders
+   * while the pointer travels. Every other node's selector reads a stable `null`.
+   */
+  dragCapsule: DragCapsuleState | null;
   /**
    * The node id a connector-endpoint drag (see `DraftEdgeView.tsx`) is
    * currently hovering as a candidate drop target. Node handles always keep
@@ -351,6 +373,7 @@ export interface UiStore {
   setContextMenu: (state: ContextMenuState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
   setAttachArmedEdgeTarget: (edgeId: string | null) => void;
+  setDragCapsule: (dragCapsule: DragCapsuleState | null) => void;
   setReconnectHoverTarget: (nodeId: string | null) => void;
   setReconnectDragActive: (active: boolean) => void;
   setArmedAnchor: (anchor: ArmedAnchor | null) => void;
@@ -458,6 +481,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   contextMenu: null,
   attachArmedTarget: null,
   attachArmedEdgeTarget: null,
+  dragCapsule: null,
   reconnectHoverTarget: null,
   reconnectDragActive: false,
   armedAnchor: null,
@@ -512,6 +536,25 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (state.attachArmedTarget === attachArmedTarget ? state : { attachArmedTarget })),
   setAttachArmedEdgeTarget: (attachArmedEdgeTarget) =>
     set((state) => (state.attachArmedEdgeTarget === attachArmedEdgeTarget ? state : { attachArmedEdgeTarget })),
+  setDragCapsule: (dragCapsule) =>
+    set((state) => {
+      const current = state.dragCapsule;
+      if (current === dragCapsule) return state;
+      // The nudge changes while an edge stays armed, so identity alone isn't enough to tell a
+      // real change from a repeat — but every field matching still means nothing to re-render.
+      if (
+        current &&
+        dragCapsule &&
+        current.nodeId === dragCapsule.nodeId &&
+        current.offsetX === dragCapsule.offsetX &&
+        current.offsetY === dragCapsule.offsetY &&
+        current.nudgeX === dragCapsule.nudgeX &&
+        current.nudgeY === dragCapsule.nudgeY
+      ) {
+        return state;
+      }
+      return { dragCapsule };
+    }),
   setReconnectHoverTarget: (reconnectHoverTarget) =>
     set((state) => (state.reconnectHoverTarget === reconnectHoverTarget ? state : { reconnectHoverTarget })),
   setReconnectDragActive: (reconnectDragActive) =>

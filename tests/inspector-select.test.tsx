@@ -163,4 +163,52 @@ describe('InspectorSelect avoid rect', () => {
     // Down only has 130 − 124 of room before the element now, so the menu flips up instead.
     expect(screen.getByRole('listbox')).toHaveAttribute('data-direction', 'up');
   });
+
+  /**
+   * The rect is a preference, not a boundary. With the popover near the top of the canvas and the
+   * element right below it, both directions are boxed in — and capping the menu to that strip put
+   * a scrollbar on it, hiding options. Covering the element for a moment is the lesser cost: the
+   * menu exists to show what there is to pick.
+   */
+  it('opens over the element it avoids rather than scrolling, when honouring it would not fit', () => {
+    // A tall menu, a trigger high on the canvas, and the element immediately below it: 84px of
+    // room above and 10px below, against a menu that wants 160.
+    menuRect = rect({ left: 100, right: 340, top: 124, bottom: 284, width: 240, height: 160 });
+    triggerRect = rect({ left: 100, right: 140, top: 92, bottom: 112, width: 40, height: 20 });
+    render(
+      <InspectorSelect
+        value="api"
+        options={SERVICE_OPTIONS}
+        onChange={vi.fn()}
+        ariaLabel="Service type"
+        getAvoidRect={() => ({ top: 122, bottom: 400 })}
+      />,
+    );
+    openMenu();
+
+    const menu = screen.getByRole('listbox');
+    // Down, ignoring the element, now has the whole canvas below it — far more than the 84px
+    // above — so that is where it goes, and at its full natural height.
+    expect(menu).toHaveAttribute('data-direction', 'down');
+    expect(menu.style.maxHeight).toBe('220px');
+  });
+
+  it('still honours the rect whenever the menu actually fits beside it', () => {
+    menuRect = rect({ left: 100, right: 340, top: 124, bottom: 184, width: 240, height: 60 });
+    triggerRect = rect({ left: 100, right: 140, top: 300, bottom: 320, width: 40, height: 20 });
+    render(
+      <InspectorSelect
+        value="api"
+        options={SERVICE_OPTIONS}
+        onChange={vi.fn()}
+        ariaLabel="Service type"
+        getAvoidRect={() => ({ top: 330, bottom: 600 })}
+      />,
+    );
+    openMenu();
+
+    // The element blocks downward, but there is ample room above for all 60px — no need to
+    // reach past the rect at all.
+    expect(screen.getByRole('listbox')).toHaveAttribute('data-direction', 'up');
+  });
 });

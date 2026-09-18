@@ -20,9 +20,20 @@ All notable changes to Draft Canvas are documented here.
 - **Line jumps.** Where two connectors cross, one now hops over the other with a small arc, so a
   crossing reads as a crossing rather than a join. Nothing to turn on and nothing to place — they
   appear, move and disappear as you draw, and they show up in exported images too.
+- Escape now cancels a drag. The shape goes back where it started, and nothing is moved,
+  attached or added to the undo history.
 
 ### Changed
 
+- Dragging a Note or Code card now shows a small tag of what you are carrying — `NOTE`,
+  `TYPESCRIPT` — as soon as you reach something it can attach to, instead of the whole card
+  following the pointer and covering what you are aiming at. Let go somewhere with nothing to
+  attach to and it is an ordinary move, card and all.
+- Connectors are much easier to drop a Note or Code card onto: the line you are aiming at is
+  forgiving about a few pixels, tells you where the note will land, and picks the nearest line
+  when several run close together.
+- A connector carrying several notes now rests as a row of small dots and spells them out when you
+  reach for it, instead of a line of labels stretched across the diagram.
 - Your diagram list no longer counts elements and connectors on each row. The little thumbnail
   beside a diagram already shows how big and how tangled it is, and shows it faster.
 
@@ -33,6 +44,8 @@ All notable changes to Draft Canvas are documented here.
 - An attachment's popover now behaves like the other toolbars beside a shape or connector —
   arrow keys move between its buttons, and screen readers announce it correctly.
 - The Flows panel's list is now announced correctly to screen readers.
+- A dropdown next to a shape near the edge of the canvas no longer squeezes itself into the gap
+  and hides options behind a scrollbar — it opens where there is room for all of them.
 
 ## [1.8.0] - 2026-09-17
 

@@ -12,6 +12,7 @@ import {
 } from '../src/document/operations';
 import { createFlow, explainEdgeTier, stepIndexOf } from '../src/document/flow';
 import { evaluateAttachCandidates, deepestBoundaryAt } from '../src/canvas/dragTargets';
+import { clearPathCache, distanceToPath } from '../src/edges/nearest';
 import { obstaclesForEdge, withoutNodes } from '../src/edges/obstacles';
 import { isEdgeFocused } from '../src/store/editorStore';
 import { serializeDocument } from '../src/export/project';
@@ -211,10 +212,31 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
     for (let frame = 0; frame < 60; frame += 1) {
       const point = { x: draggedRect.x + frame, y: draggedRect.y };
       evaluateAttachCandidates({ ...draggedRect, x: point.x }, dragged.type, doc, exclude);
+      // The same scan a collapsed Note/Code card runs: a zero-size rect at its aim point rather
+      // than its own rectangle. Same code path, so it shares this budget rather than getting a
+      // performance test of its own.
+      evaluateAttachCandidates({ ...point, width: 0, height: 0 }, 'note', doc, exclude);
       deepestBoundaryAt(point, doc, exclude);
     }
     // A generous budget: this exists to catch an accidental quadratic scan
     // per candidate, not to police milliseconds on a variable CI machine.
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  /**
+   * Resolving which of several overlapping connector corridors a drop aims at
+   * (`edges/nearest.ts`) runs on the same throttled probe, over whatever the
+   * DOM handed back — a handful of routes, but flattened path geometry each.
+   * The cache is what keeps it flat across a long drag.
+   */
+  it('measures distance to many connector routes repeatedly within budget', () => {
+    const routes = Array.from({ length: 24 }, (_, i) => `M 0,${i * 40} L 600,${i * 40} L 600,${i * 40 + 200}`);
+    clearPathCache();
+
+    const started = performance.now();
+    for (let frame = 0; frame < 120; frame += 1) {
+      for (const d of routes) distanceToPath({ x: frame * 4, y: 300 }, d);
+    }
     expect(performance.now() - started).toBeLessThan(500);
   });
 

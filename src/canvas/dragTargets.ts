@@ -33,6 +33,13 @@ export interface AttachCandidates {
  * measured against the *smaller* of the two areas, so the same threshold
  * works whether a large card lands on a small node or a small note lands on
  * a large one.
+ *
+ * A dragged Note/Code card passes a **zero-size rect at its aim point** rather than its own
+ * rectangle: while its capsule stands in for it (`capsuleCollapse.ts`) that rectangle is not on
+ * screen, so arming off it would highlight a target nowhere near what the pointer is over. The
+ * arithmetic here already yields exactly the right semantics for that case with no special
+ * casing — no area means no `overlapId`, so every shape arms through the deliberate dwell, and
+ * `centerInside` reduces to "is the aim point in this node". `tests/drag-targets.test.ts` pins it.
  */
 // Evaluated on every pointer-move frame of a drag, while the committed `nodes` array stays the same
 // object until the drop — so the filtered, z-sorted list is built once per (nodes, exclusion) pair.

@@ -9,6 +9,7 @@ import { Icon } from '../ui/common/Icon';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { attachmentLookFor } from './attachmentLook';
+import { useSettle } from './useContinuation';
 import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
 
 /** Must match the `dc-attachment-card-in`/`-out` keyframe duration in `canvas.css` — the card
@@ -108,6 +109,7 @@ export function AttachmentChipRow({
   actions,
   dimmed,
   explainTier,
+  revealed,
   style,
 }: {
   hostKind: 'node' | 'edge';
@@ -119,6 +121,9 @@ export function AttachmentChipRow({
   dimmed?: boolean;
   /** While a flow plays, the row recedes with its connector's own step tier — see `canvas.css`. */
   explainTier?: 'active' | 'shown' | 'hidden';
+  /** Whether the host is being reached for (hovered or selected). Only meaningful for a connector
+   *  carrying several attachments, where the row rests as dots and names itself on approach. */
+  revealed?: boolean;
   style?: CSSProperties;
 }) {
   if (!attachments.length) return null;
@@ -130,6 +135,13 @@ export function AttachmentChipRow({
       data-flip={cardSide === 'below' ? 'below' : undefined}
       data-lens-dimmed={dimmed ? 'true' : undefined}
       data-explain-tier={explainTier}
+      // Several attachments on one connector would otherwise spell themselves out across the
+      // diagram — four chips is most of a connector's length. So a connector carrying more than
+      // one rests as its colour dots alone and names them when the connector is reached for, the
+      // same "compact until approached" contract `.dc-edge-response-label` already keeps. A node's
+      // chips live inside their own popover panel, which has the room, so they never compact.
+      data-compact={hostKind === 'edge' && attachments.length > 1 ? 'true' : undefined}
+      data-revealed={revealed ? 'true' : undefined}
       style={style}
     >
       {attachments.map((attachment, index) => (
@@ -341,6 +353,7 @@ function AttachmentChip({
   } as CSSProperties;
 
   const chipName = pinned ? 'Close attached detail' : kind === 'code' ? 'View attached code' : 'View attached note';
+  const settling = useSettle(attachment.id);
 
   return (
     // The slot, not the chip, is what the outside-pointerdown check above measures against and what
@@ -351,6 +364,11 @@ function AttachmentChip({
         type="button"
         className="dc-attachment-chip"
         data-kind={kind}
+        // Just arrived from a drag: the capsule that was under the cursor becomes this chip, and
+        // a very short scale-in is what ties the two together instead of one blinking into the
+        // other. Reuses the same one-shot marker accepted continuation nodes use, which expires
+        // on its own — `uiStore`'s `setSettleNodeIds`.
+        data-settle={settling ? 'true' : undefined}
         // Suppresses the chip's own hover-pop while its card is showing — without this, the chip's
         // `:hover` scale (which reverts the instant the pointer leaves, ~90ms) and the card's own
         // open/close fade (a separate 120ms animation) run as two unsynchronized transforms, and

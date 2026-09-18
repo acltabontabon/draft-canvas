@@ -19,7 +19,12 @@ export interface AttachmentLook {
   label: string;
 }
 
-export function attachmentLookFor(theme: Theme, attachment: Attachment): AttachmentLook {
+/** Everything the look depends on. Widened from `Attachment` to the fields it actually reads so a
+ *  `DraftNode` can be passed straight in — the drag capsule (`DragCapsule.tsx`) draws the card it is
+ *  standing in for as the chip that card is about to become, from this one function. */
+export type LookSubject = Pick<Attachment, 'type' | 'noteKind' | 'language' | 'accent'>;
+
+export function attachmentLookFor(theme: Theme, attachment: LookSubject): AttachmentLook {
   if (attachment.type === 'code') {
     const language = attachment.language ?? 'plaintext';
     return {

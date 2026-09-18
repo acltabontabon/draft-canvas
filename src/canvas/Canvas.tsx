@@ -19,7 +19,7 @@ import {
 } from '@xyflow/react';
 import { defaultTextFor, maxSizeFor, minSizeFor } from '../document/factory';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
-import type { DraftDocument, DraftViewport, Side } from '../document/types';
+import type { DraftDocument, DraftEdge, DraftNode, DraftViewport, Side } from '../document/types';
 import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
@@ -31,6 +31,16 @@ import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { CanvasBackground } from './CanvasBackground';
 import { ATTACH_DWELL_MS, deepestBoundaryAt, evaluateAttachCandidates } from './dragTargets';
+import {
+  CAPSULE_MOVE_THRESHOLD_PX,
+  CAPSULE_RELEASE_MARGIN_PX,
+  EXPANDED,
+  expandRect,
+  nextCapsuleState,
+  type CapsuleState,
+} from './capsuleCollapse';
+import { clearPathCache } from '../edges/nearest';
+import { edgeLabelPoint, rectOfInternal, type InternalNode } from './edgeGeometry';
 import { findEdgeDropCandidate } from './edgeDropTarget';
 import { DraftEdgeView } from './DraftEdgeView';
 import { DraftNodeView } from './DraftNodeView';
@@ -68,6 +78,62 @@ const PRO_OPTIONS = { hideAttribution: true } as const;
 const CONTEXT_MENU_DRAG_THRESHOLD_PX = 4;
 /** How far (screen px) a dragged card moves before the connector under it is hit-tested again. */
 const EDGE_PROBE_STEP_PX = 4;
+
+/** The furthest the capsule leans toward an armed connector's landing point, in screen pixels.
+ *  Small on purpose: this says "the drop has a destination", it does not drag the pointer. */
+const CAPSULE_NUDGE_MAX_PX = 10;
+
+/** Stable empty array, so `sameGuides` keeps short-circuiting rather than seeing a new `[]`. */
+const NO_GUIDES: Guide[] = [];
+
+/** Ties the capsule that was under the cursor to the chip it just became: the new chip plays the
+ *  same one-shot arrival the accepted-continuation nodes do, and the marker expires on its own. */
+/** The screen point a drag started from, whichever kind of event React Flow handed over. Null for
+ *  a gesture that carried no pointer at all (a multi-touch start), where the aim point falls back
+ *  to the card's own centre. */
+function pointerOf(event: MouseEvent | TouchEvent): XYPosition | null {
+  if ('touches' in event) {
+    const touch = event.touches[0];
+    return touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }
+  return { x: event.clientX, y: event.clientY };
+}
+
+function markArrived(attachmentId: string | null): void {
+  if (attachmentId) useUiStore.getState().setSettleNodeIds([attachmentId]);
+}
+
+/** Where a connector's attachment chip will actually appear — its label point, the same one
+ *  `DraftEdgeView` hangs its chip row from, so the capsule's lean and the landing dot can never
+ *  disagree about the destination. */
+function landingPointFor(
+  document: DraftDocument,
+  edge: DraftEdge,
+  internalNode: (id: string) => InternalNode | undefined,
+): XYPosition | null {
+  const source = internalNode(edge.source);
+  const target = internalNode(edge.target);
+  if (!source || !target) return null;
+  const byId = nodeIndex(document.nodes);
+  const sourceRect = rectOfInternal(source, byId.get(edge.source)?.type);
+  const targetRect = rectOfInternal(target, byId.get(edge.target)?.type);
+  if (!sourceRect || !targetRect) return null;
+  // `interactionActive`: a drag is in flight, so route it the cheap way the live edge is being
+  // routed right now — matching what is on screen matters more here than obstacle avoidance.
+  return edgeLabelPoint(document, edge, sourceRect, targetRect, { interactionActive: true });
+}
+
+/** A capped step from `from` toward `to`, in screen pixels, rounded so sub-pixel drift never
+ *  reaches the store. */
+function leanToward(from: XYPosition, to: XYPosition | null, zoom: number): XYPosition {
+  if (!to) return { x: 0, y: 0 };
+  const dx = (to.x - from.x) * zoom;
+  const dy = (to.y - from.y) * zoom;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 1) return { x: 0, y: 0 };
+  const scale = Math.min(CAPSULE_NUDGE_MAX_PX, distance) / distance;
+  return { x: Math.round(dx * scale), y: Math.round(dy * scale) };
+}
 
 /** See `onSelectionChange`: more reports than this inside the window is a feedback loop, not clicks. */
 const SELECTION_BURST_WINDOW_MS = 300;
@@ -365,7 +431,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   // A fresh object here would defeat React Flow's own memoized renderer on every drag frame.
   const connectionLineStyle = useMemo(() => ({ stroke: theme.selection, strokeWidth: 1.8 }), [theme.selection]);
 
-  const { screenToFlowPosition, flowToScreenPosition, getNodes, getInternalNode, setViewport, fitView } =
+  const { screenToFlowPosition, flowToScreenPosition, getNodes, getInternalNode, getZoom, setViewport, fitView } =
     useReactFlow<DraftRfNode>();
 
   // `defaultViewport` is read once, at mount — so stepping into or out of a shape has to move the
@@ -407,6 +473,9 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   const [guides, setGuides] = useState<Guide[]>([]);
   const attachArmedTarget = useUiStore((state) => state.attachArmedTarget);
   const attachTarget = attachArmedTarget ? nodeIndex(document.nodes).get(attachArmedTarget) : undefined;
+  /** A boolean, not the capsule itself: this only widens the connector hit corridor for the
+   *  length of the gesture, so it flips twice per drag and never re-renders on the nudge. */
+  const carryingCapsule = useUiStore((state) => state.dragCapsule !== null);
 
   /** Rectangles of everything not being dragged, rebuilt once per gesture. */
   const staticRects = useRef<Rect[]>([]);
@@ -428,6 +497,9 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   const grabbedId = useRef<string | null>(null);
   const stopWatchingTouches = useRef<(() => void) | null>(null);
   const finishDrag = useRef<() => void>(() => {});
+  /** Same indirection as `finishDrag` above, for the Escape listener a drag installs: the listener
+   *  is bound once at drag start, but the callback it should reach is rebuilt on every render. */
+  const cancelDrag = useRef<() => void>(() => {});
   /**
    * Attach-arming dwell: while the pointer sits still, React Flow fires no
    * further drag events at all, so elapsed time can't be checked from inside
@@ -443,6 +515,36 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   /** Where the right mouse button went down, in screen coordinates — compared against the native
    *  `contextmenu` event's own position to tell a stationary right-click from a right-drag. */
   const rightPointerDown = useRef<{ x: number; y: number } | null>(null);
+  /**
+   * The aim point of a note/code drag: where on the card the grab landed, in flow units from its
+   * own top-left. Recorded once, then added to the card's live position every frame — the card
+   * moves by the pointer delta, so this tracks the pointer exactly without a pointer listener of
+   * its own, and stays correct through zoom, pan and auto-pan for free.
+   *
+   * It is what the card is aimed *with*: attach targets are tested against this point rather than
+   * against the card's (now unpainted) rectangle, so what arms is always whatever the capsule is
+   * sitting on. See `dragCapsule.ts`.
+   */
+  const grabOffset = useRef<XYPosition | null>(null);
+  /** The card's position when the grab started — the baseline for the movement threshold that
+   *  keeps a card resting on a shape from collapsing the instant it is touched. */
+  const grabOrigin = useRef<XYPosition | null>(null);
+  const capsule = useRef<CapsuleState>(EXPANDED);
+  /** The capsule's lean toward an armed connector's landing point, in screen pixels. Recomputed
+   *  only on the throttled edge probe, never per frame. */
+  const nudge = useRef<XYPosition>({ x: 0, y: 0 });
+  /** The rect of whatever caused the current collapse, for the release margin to measure against —
+   *  one rect test per frame instead of a second pass over every candidate. */
+  const capsuleHostRect = useRef<Rect | null>(null);
+  /**
+   * Escape during a drag. React Flow has no cancel of its own and keeps streaming position
+   * changes until the pointer is released, so cancelling is two halves: this flag makes
+   * `onNodesChange` drop those changes (which is what actually pins the card), and makes
+   * `onNodeDragStop` skip the commit entirely. Nothing was written to the document mid-gesture,
+   * so `endInteraction` finds it unchanged and records no history entry.
+   */
+  const dragCancelled = useRef(false);
+  const stopWatchingEscape = useRef<(() => void) | null>(null);
   const clearDwell = useCallback(() => {
     if (dwellTimer.current !== null) {
       window.clearTimeout(dwellTimer.current);
@@ -454,6 +556,19 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
   // event; nothing previously cleared it if `Canvas` itself unmounted
   // mid-dwell (e.g. closing the document mid-drag).
   useEffect(() => clearDwell, [clearDwell]);
+
+  /** Puts the dragged card back on screen and forgets everything the capsule was tracking. Called
+   *  from every way a gesture can end — a drop, Escape, an abort, unmount. */
+  const clearCapsule = useCallback(() => {
+    capsule.current = EXPANDED;
+    capsuleHostRect.current = null;
+    nudge.current = { x: 0, y: 0 };
+    grabOffset.current = null;
+    grabOrigin.current = null;
+    clearPathCache();
+    useUiStore.getState().setDragCapsule(null);
+  }, []);
+  useEffect(() => clearCapsule, [clearCapsule]);
 
   const selectedNodes = useMemo(() => new Set(selection.nodes), [selection.nodes]);
   const selectedEdges = useMemo(() => new Set(selection.edges), [selection.edges]);
@@ -515,6 +630,15 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    */
   const onNodesChange = useCallback(
     (changes: NodeChange<DraftRfNode>[]) => {
+      // A cancelled drag (Escape) still receives frames until the pointer is released — React
+      // Flow has no cancel of its own. Dropping their position changes is what pins the card
+      // where `onDragCancel` put it back; everything else (a dimensions change, a selection
+      // change) still applies normally.
+      if (dragCancelled.current && draggingIds.current.size > 0) {
+        const moving = draggingIds.current;
+        changes = changes.filter((change) => !(change.type === 'position' && moving.has(change.id)));
+        if (changes.length === 0) return;
+      }
       // Per id, not `getNodes()`: that copies every node on every frame of a drag.
       const nodeById: NodeLookup = (id) => getInternalNode(id);
       const snappedMove = snapChanges(changes, nodeById, staticRects.current);
@@ -558,7 +682,13 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       // Attach-arming only applies to a genuine single-node drag — never a
       // multi-select move, and never the sweep a dragged boundary causes.
       let probingEdges = false;
-      if (draggingIds.current.size === 1 && sweptDescendants.current.size === 0) {
+      // Whether this frame leaves the dragged card collapsed into its capsule. Decided from the
+      // same aim point that decides arming, so the capsule is never sitting on one thing while
+      // something else is armed.
+      let capsuleInside = false;
+      /** The dragged card and where it is aimed, when this frame could collapse it at all. */
+      let capsuleSubject: { node: DraftNode; aim: XYPosition } | null = null;
+      if (!dragCancelled.current && draggingIds.current.size === 1 && sweptDescendants.current.size === 0) {
         const [draggedId] = draggingIds.current;
         const state = useEditorStore.getState();
         const draggedDoc = nodeIndex(state.document.nodes).get(draggedId!);
@@ -584,12 +714,36 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
           useUiStore.getState().setAttachArmedEdgeTarget(null);
         } else if (draggedDoc && livePosition) {
           const liveRect: Rect = { ...livePosition, width: draggedDoc.width, height: draggedDoc.height };
+          const collapsible = draggedDoc.type === 'note' || draggedDoc.type === 'code';
+          // The point the card is aimed with. Falls back to its centre before a grab offset is
+          // known (a drag started some way that carried no pointer event), which is what this
+          // always used.
+          const offset = grabOffset.current;
+          const aim =
+            collapsible && offset
+              ? { x: livePosition.x + offset.x, y: livePosition.y + offset.y }
+              : centerOf(liveRect);
+          // A Note/Code card is tested as a point, not as its rectangle: its rectangle is not on
+          // screen while the capsule stands in for it, so arming off it would highlight targets
+          // nowhere near what the user is pointing at. A zero-size rect runs the *existing*
+          // evaluation unchanged and yields exactly the semantics this wants — no overlap winner
+          // (`overlapArea` is 0), so every shape arms through the deliberate dwell instead.
+          const probeRect: Rect = collapsible ? { x: aim.x, y: aim.y, width: 0, height: 0 } : liveRect;
+          // Only past a real movement threshold. Grabbing a note that already rests on a shape
+          // would otherwise collapse it before the pointer had moved at all — the card would
+          // simply vanish on mousedown.
+          const origin = grabOrigin.current;
+          const movedFar =
+            origin !== null &&
+            Math.hypot(livePosition.x - origin.x, livePosition.y - origin.y) * getZoom() >=
+              CAPSULE_MOVE_THRESHOLD_PX;
+          if (collapsible && offset && movedFar) capsuleSubject = { node: draggedDoc, aim };
           // Only a boundary has descendants, so only a boundary pays for walking them.
           const exclude = new Set(
             draggedDoc.type === 'group' ? [draggedDoc.id, ...descendantsOf(state.document, draggedDoc.id)] : [draggedDoc.id],
           );
           const { overlapId, centerHitId } = evaluateAttachCandidates(
-            liveRect,
+            probeRect,
             draggedDoc.type,
             state.document,
             exclude,
@@ -600,6 +754,9 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
             useUiStore.getState().setAttachArmedTarget(overlapId);
             useUiStore.getState().setAttachArmedEdgeTarget(null);
           } else if (centerHitId) {
+            capsuleInside = true;
+            const host = nodeIndex(state.document.nodes).get(centerHitId);
+            if (host) capsuleHostRect.current = { x: host.x, y: host.y, width: host.width, height: host.height };
             if (dwellTargetId.current !== centerHitId) {
               clearDwell();
               dwellTargetId.current = centerHitId;
@@ -624,7 +781,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(null);
             probingEdges = true;
-            const flowPoint = centerOf(liveRect);
+            const flowPoint = aim;
             const screenPoint = flowToScreenPosition(flowPoint);
             const lastProbe = lastEdgeProbe.current;
             // Flow space too: an auto-pan near the viewport edge slides connectors under a card
@@ -635,7 +792,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
               Math.hypot(flowPoint.x - lastProbe.flow.x, flowPoint.y - lastProbe.flow.y) >= EDGE_PROBE_STEP_PX
             ) {
               lastEdgeProbe.current = { screen: screenPoint, flow: flowPoint };
-              const edgeId = findEdgeDropCandidate(screenPoint.x, screenPoint.y, draggedDoc.id);
+              const edgeId = findEdgeDropCandidate(screenPoint.x, screenPoint.y, draggedDoc.id, flowPoint);
               const edge = edgeId ? edgeIndex(state.document.edges).get(edgeId) : undefined;
               // The card's own connectors never arm: attaching removes the card, and them with it.
               const canAttach =
@@ -644,7 +801,17 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
                 edge.target !== draggedDoc.id &&
                 hasAttachmentRoom(edge, 'edge');
               useUiStore.getState().setAttachArmedEdgeTarget(canAttach ? edge.id : null);
+              // A connector has no rect to hold a release margin against, so the corridor itself
+              // is the margin — already generously widened for the length of this gesture (see
+              // `.dc-canvas[data-attach-drag]`), and the minimum hold covers a fast crossing.
+              if (canAttach) capsuleHostRect.current = null;
+              // The capsule leans toward the exact spot the chip will appear — the connector's
+              // own label point, the same one `DraftEdgeView` hangs its chip row from, so the
+              // lean and the landing dot always agree. Capped hard: this is a hint that the drop
+              // has a destination, not a real magnet that would fight the pointer.
+              nudge.current = canAttach && edge ? leanToward(flowPoint, landingPointFor(state.document, edge, getInternalNode), getZoom()) : { x: 0, y: 0 };
             }
+            capsuleInside = useUiStore.getState().attachArmedEdgeTarget !== null;
           } else {
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(null);
@@ -658,6 +825,33 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
       }
       if (!probingEdges) lastEdgeProbe.current = null;
 
+      // Collapse/expand, decided from the same aim point that decided arming above. This is pure
+      // paint — the card itself never moves or resizes — so neither direction can make it jump,
+      // and a drop that attaches nothing lands exactly where it always did.
+      if (capsuleSubject) {
+        const { node: subject, aim } = capsuleSubject;
+        const margin = CAPSULE_RELEASE_MARGIN_PX / Math.max(getZoom(), 0.01);
+        const host = capsuleHostRect.current;
+        const near = host !== null && pointInBox(aim, expandRect(host, margin));
+        const next = nextCapsuleState(capsule.current, { inside: capsuleInside, near }, performance.now());
+        if (next !== capsule.current) {
+          capsule.current = next;
+          if (!next.collapsed) capsuleHostRect.current = null;
+        }
+        const offset = grabOffset.current;
+        useUiStore
+          .getState()
+          .setDragCapsule(
+            next.collapsed && offset
+              ? { nodeId: subject.id, offsetX: offset.x, offsetY: offset.y, nudgeX: nudge.current.x, nudgeY: nudge.current.y }
+              : null,
+          );
+      } else if (capsule.current.collapsed) {
+        capsule.current = EXPANDED;
+        capsuleHostRect.current = null;
+        useUiStore.getState().setDragCapsule(null);
+      }
+
       setNodes((current) => {
         const next = applyNodeChanges(snapped.changes, current);
         return sweepDescendants(next, sweptDescendants.current, useEditorStore.getState().document);
@@ -665,7 +859,13 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
 
       // Guides appear and disappear; they do not move every frame. Updating
       // state only when the set actually changes is what keeps drags smooth.
-      setGuides((current) => (sameGuides(current, guides) ? current : guides));
+      //
+      // Read *after* the capsule decision above, never before it: alignment guides are measured
+      // against the dragged card's own edges, so while the capsule stands in for it they would be
+      // lining up a box nobody can see. Checking the flag earlier leaves the guide from the last
+      // pre-collapse frame stranded on screen for the rest of the gesture.
+      const shown = capsule.current.collapsed ? NO_GUIDES : guides;
+      setGuides((current) => (sameGuides(current, shown) ? current : shown));
 
       // Committing from `snapped.changes` (not the raw `changes` argument) is
       // what makes the terminal frame's snap correction actually stick — the
@@ -697,7 +897,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         }
       }
     },
-    [clearDwell, flowToScreenPosition, getInternalNode, setNodes],
+    [clearDwell, flowToScreenPosition, getInternalNode, getZoom, setNodes],
   );
 
   const setEdges = useCallback(
@@ -829,11 +1029,40 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    * the wrong node's position whenever those two disagree.
    */
   const onNodeDragStart = useCallback(
-    (_event: unknown, grabbed: DraftRfNode, dragged: DraftRfNode[]) => {
+    (event: MouseEvent | TouchEvent, grabbed: DraftRfNode, dragged: DraftRfNode[]) => {
       const state = useEditorStore.getState();
       state.beginInteraction('Move');
 
       grabbedId.current = grabbed.id;
+      dragCancelled.current = false;
+      // Where on the card the grab landed. Recorded once here rather than tracked with a pointer
+      // listener: React Flow moves the card by the pointer delta, so the card's live position plus
+      // this offset *is* the pointer, in flow space, on every later frame.
+      const grabPoint = pointerOf(event);
+      const grabFlow = grabPoint ? screenToFlowPosition(grabPoint) : null;
+      grabOffset.current = grabFlow
+        ? { x: grabFlow.x - grabbed.position.x, y: grabFlow.y - grabbed.position.y }
+        : null;
+      grabOrigin.current = { x: grabbed.position.x, y: grabbed.position.y };
+      capsule.current = EXPANDED;
+      capsuleHostRect.current = null;
+      nudge.current = { x: 0, y: 0 };
+
+      // Escape cancels the drag. React Flow has none of its own, and `EditorScreen`'s global
+      // Escape is gated on `interactionActive`, so nothing else is listening while this runs.
+      stopWatchingEscape.current?.();
+      const onKeyDown = (keyEvent: KeyboardEvent) => {
+        if (keyEvent.key !== 'Escape' || draggingIds.current.size === 0 || dragCancelled.current) return;
+        keyEvent.preventDefault();
+        keyEvent.stopPropagation();
+        cancelDrag.current();
+      };
+      window.addEventListener('keydown', onKeyDown, true);
+      stopWatchingEscape.current = () => {
+        window.removeEventListener('keydown', onKeyDown, true);
+        stopWatchingEscape.current = null;
+      };
+
       stopWatchingTouches.current?.();
       const onTouchMove = (event: TouchEvent) => {
         if (event.touches.length > 1 && draggingIds.current.size > 0) finishDrag.current();
@@ -868,7 +1097,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
         .filter((node) => !moving.has(node.id))
         .map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height }));
     },
-    [clearDwell],
+    [clearDwell, screenToFlowPosition],
   );
 
   /**
@@ -886,10 +1115,56 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
    * contents) is always just a move — attach and reparent are deliberately
    * restricted to a single, unambiguous node.
    */
+  /**
+   * Escape mid-drag. The card goes back where it started and nothing is committed — no move, no
+   * attach, no reparent, and no history entry, since the document was never written during the
+   * gesture in the first place. React Flow keeps streaming position changes until the pointer is
+   * released; `onNodesChange` drops them from here on, which is what actually pins the card.
+   */
+  const onDragCancel = useCallback(() => {
+    dragCancelled.current = true;
+    clearDwell();
+    clearCapsule();
+    setGuides([]);
+    useUiStore.getState().setAttachArmedTarget(null);
+    useUiStore.getState().setAttachArmedEdgeTarget(null);
+    // Back to the committed positions. The document is the pre-drag truth, so there is nothing
+    // extra to have remembered.
+    const byId = nodeIndex(useEditorStore.getState().document.nodes);
+    const moving = draggingIds.current;
+    setNodes((current) =>
+      current.map((node) => {
+        if (!moving.has(node.id)) return node;
+        const doc = byId.get(node.id);
+        if (!doc || (node.position.x === doc.x && node.position.y === doc.y)) return node;
+        return { ...node, position: { x: doc.x, y: doc.y }, dragging: false };
+      }),
+    );
+  }, [clearCapsule, clearDwell, setNodes]);
+  useEffect(() => {
+    cancelDrag.current = onDragCancel;
+  }, [onDragCancel]);
+
   const onNodeDragStop = useCallback(() => {
     stopWatchingTouches.current?.();
+    stopWatchingEscape.current?.();
     grabbedId.current = null;
     setGuides([]);
+    // A cancelled gesture commits nothing at all. `endInteraction` still runs below to close the
+    // bracket, and is a guaranteed no-op: it bails when the document is unchanged, which it is.
+    if (dragCancelled.current) {
+      dragCancelled.current = false;
+      useEditorStore.getState().endInteraction();
+      useUiStore.getState().setInteractionActive(false);
+      draggingIds.current = new Set();
+      lastEdgeProbe.current = null;
+      sweptDescendants.current = new Map();
+      clearDwell();
+      clearCapsule();
+      useUiStore.getState().setAttachArmedTarget(null);
+      useUiStore.getState().setAttachArmedEdgeTarget(null);
+      return;
+    }
     const state = useEditorStore.getState();
     const draggedIds = draggingIds.current;
     const rfNodes = getNodes();
@@ -906,11 +1181,11 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     if (singleId && armedHost) {
       positions.delete(singleId);
       if (positions.size > 0) state.commitPositions(positions);
-      state.attachExistingNode(singleId, armedHost);
+      markArrived(state.attachExistingNode(singleId, armedHost));
     } else if (singleId && armedEdge) {
       positions.delete(singleId);
       if (positions.size > 0) state.commitPositions(positions);
-      state.attachExistingNodeToEdge(singleId, armedEdge);
+      markArrived(state.attachExistingNodeToEdge(singleId, armedEdge));
     } else {
       const draggedDoc = singleId ? state.document.nodes.find((n) => n.id === singleId) : undefined;
       const finalPosition = singleId ? positions.get(singleId) : undefined;
@@ -932,14 +1207,16 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     lastEdgeProbe.current = null;
     sweptDescendants.current = new Map();
     clearDwell();
+    clearCapsule();
     useUiStore.getState().setAttachArmedTarget(null);
     useUiStore.getState().setAttachArmedEdgeTarget(null);
-  }, [clearDwell, getNodes]);
+  }, [clearCapsule, clearDwell, getNodes]);
 
   useEffect(() => {
     finishDrag.current = onNodeDragStop;
   }, [onNodeDragStop]);
   useEffect(() => () => stopWatchingTouches.current?.(), []);
+  useEffect(() => () => stopWatchingEscape.current?.(), []);
   // The grabbed node gone from the document mid-drag (deleted some way other than a key, which
   // waits for the drag): React Flow abandons the gesture on its next move.
   useEffect(() => {
@@ -1250,6 +1527,7 @@ export const Canvas = memo(function Canvas({ onCreateAt, onQuickConnectMenu, onE
     <div
       ref={paneRef}
       className="dc-canvas"
+      data-attach-drag={carryingCapsule ? 'true' : undefined}
       data-explain={explainActive ? 'on' : undefined}
       data-focus={focusActive ? 'on' : undefined}
       data-lens={lensActive ? 'on' : undefined}

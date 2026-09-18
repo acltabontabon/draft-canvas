@@ -133,21 +133,25 @@ export function InspectorSelect({
 
     // Clamp each direction's available space by the canvas edge and, if `avoidRect` sits on
     // that side of the trigger, its edge too — opening toward it is exactly what this avoids.
-    const topLimit = avoid && avoid.bottom <= triggerRect.top ? Math.max(avoid.bottom, viewTop + margin) : viewTop + margin;
-    const bottomLimit =
-      avoid && avoid.top >= triggerRect.bottom
-        ? Math.min(avoid.top, viewBottom - margin)
-        : viewBottom - margin;
-    const space = {
-      up: triggerRect.top - gap - topLimit,
-      down: bottomLimit - (triggerRect.bottom + gap),
+    const spaceWithin = (respectAvoid: boolean) => {
+      const topLimit =
+        respectAvoid && avoid && avoid.bottom <= triggerRect.top
+          ? Math.max(avoid.bottom, viewTop + margin)
+          : viewTop + margin;
+      const bottomLimit =
+        respectAvoid && avoid && avoid.top >= triggerRect.bottom
+          ? Math.min(avoid.top, viewBottom - margin)
+          : viewBottom - margin;
+      return {
+        up: triggerRect.top - gap - topLimit,
+        down: bottomLimit - (triggerRect.bottom + gap),
+      };
     };
 
     const other = preferredDirection === 'up' ? 'down' : 'up';
     // Prefer the requested side if it fully fits; else the other side if *it* fully fits; else
-    // whichever has more room — the menu's own height then gets capped to whatever that is, so
-    // it shrinks (scrollable) rather than covering `avoidRect` or clipping the viewport.
-    const resolved =
+    // whichever has more room.
+    const pick = (space: Record<'up' | 'down', number>) =>
       space[preferredDirection] >= naturalHeight
         ? preferredDirection
         : space[other] >= naturalHeight
@@ -155,6 +159,23 @@ export function InspectorSelect({
           : space[preferredDirection] >= space[other]
             ? preferredDirection
             : other;
+
+    let space = spaceWithin(true);
+    let resolved = pick(space);
+    // `avoidRect` is a preference, not a boundary. With the popover near the canvas edge, the
+    // strip left between that edge and the shape being edited can be shorter than the menu — and
+    // capping to it hides options behind a scrollbar, which is a worse failure than briefly
+    // covering the shape: the whole point of the menu is to show what you can pick. So when
+    // neither direction can fit the menu while honouring the rect, this asks again ignoring it,
+    // and takes that only if it genuinely has more room.
+    if (space[resolved] < naturalHeight && avoid) {
+      const free = spaceWithin(false);
+      const freeResolved = pick(free);
+      if (free[freeResolved] > space[resolved]) {
+        space = free;
+        resolved = freeResolved;
+      }
+    }
 
     setDirection(resolved);
     setMaxHeight(clamp(space[resolved], 0, 220));

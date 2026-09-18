@@ -465,7 +465,10 @@ export interface EditorStore {
   /* Attachments */
   attachToNode: (hostId: string, attachment: Attachment, insertIndex?: number) => void;
   /** Folds an existing canvas node into a host's attachments (drag-to-attach). */
-  attachExistingNode: (nodeId: string, hostId: string) => void;
+  /** Returns the id of the attachment the card became, or `null` when the fold was refused (a
+   *  full host, or a card carrying attachments of its own) — the caller can then mark it as
+   *  freshly arrived, which is what gives a dropped capsule its landing animation. */
+  attachExistingNode: (nodeId: string, hostId: string) => string | null;
   detachAttachment: (hostId: string, attachmentId: string) => void;
   updateAttachment: (hostId: string, attachmentId: string, patch: Partial<Omit<Attachment, 'id'>>) => void;
   removeAttachment: (hostId: string, attachmentId: string) => void;
@@ -474,8 +477,9 @@ export interface EditorStore {
   /* Edge attachments — see `AttachmentChipRow` in `AttachmentPresentation.tsx`. */
   attachToEdge: (edgeId: string, attachment: Attachment) => void;
   /** Dragging an existing Note/Code node onto a connector folds it into that connector's
-   *  attachment — the same idea as `attachExistingNode`, mirrored for an edge target. */
-  attachExistingNodeToEdge: (nodeId: string, edgeId: string) => void;
+   *  attachment — the same idea as `attachExistingNode`, mirrored for an edge target. Returns the
+   *  new attachment's id, or `null` when refused. */
+  attachExistingNodeToEdge: (nodeId: string, edgeId: string) => string | null;
   updateEdgeAttachment: (edgeId: string, attachmentId: string, patch: Partial<Omit<Attachment, 'id'>>) => void;
   removeEdgeAttachment: (edgeId: string, attachmentId: string) => void;
   detachEdgeAttachment: (edgeId: string, attachmentId: string) => void;
@@ -2031,7 +2035,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const host = state.document.nodes.find((n) => n.id === hostId);
     // The node is deleted in the same step, so anything the attachment can't carry is refused
     // up front: a full host, or a card with attachments of its own.
-    if (!node || !host || !hasAttachmentRoom(host, 'node') || node.attachments?.length) return;
+    if (!node || !host || !hasAttachmentRoom(host, 'node') || node.attachments?.length) return null;
     // Callers only invoke this for a node whose type is already attachable
     // (checked against ATTACHABLE_TYPES before the drag is even armed).
     const attachment = createAttachment({
@@ -2049,6 +2053,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       (doc) => attachToNodeOp(removeElements(doc, [nodeId]), hostId, attachment),
       { selection: EMPTY_SELECTION },
     );
+    return attachment.id;
   },
 
   detachAttachment(hostId, attachmentId) {
@@ -2081,10 +2086,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     const node = state.document.nodes.find((n) => n.id === nodeId);
     const edge = state.document.edges.find((e) => e.id === edgeId);
-    if (!node || !edge || !hasAttachmentRoom(edge, 'edge') || node.attachments?.length) return;
+    if (!node || !edge || !hasAttachmentRoom(edge, 'edge') || node.attachments?.length) return null;
     // Removing the node below also removes its own connectors — this one included — so the
     // attachment would have nowhere to land and the card would simply be deleted.
-    if (edge.source === nodeId || edge.target === nodeId) return;
+    if (edge.source === nodeId || edge.target === nodeId) return null;
     // Callers only invoke this for a note/code node — checked before the drag is even armed.
     const attachment = createAttachment({
       type: node.type as AttachableType,
@@ -2101,6 +2106,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       (doc) => attachToEdgeOp(removeElements(doc, [nodeId]), edgeId, attachment),
       { selection: EMPTY_SELECTION },
     );
+    return attachment.id;
   },
 
   updateEdgeAttachment(edgeId, attachmentId, patch) {

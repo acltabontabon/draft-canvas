@@ -21,6 +21,7 @@ import {
 import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { useSettle } from './useContinuation';
+import { DragCapsule } from './DragCapsule';
 import { FONTS, LINE_HEIGHTS, cssFont, type FontSpec } from '../render/text/fonts';
 import type { Shape } from '../render/displayList';
 import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
@@ -62,6 +63,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // A boolean, not the id itself: every node's selector runs on every drag
   // frame, so only the two nodes whose armed state actually flips re-render.
   const isAttachTarget = useUiStore((state) => state.attachArmedTarget === id);
+  // The object, not a boolean, because the capsule is drawn from its grab offset — but only for
+  // the one node being carried. Every other node reads a stable `null` and never re-renders,
+  // which is the same discipline as `isAttachTarget` above with one extra step.
+  const capsule = useUiStore((state) => (state.dragCapsule?.nodeId === id ? state.dragCapsule : null));
   // Same boolean-not-id discipline as `isAttachTarget` — see its comment.
   const isReconnectTarget = useUiStore((state) => state.reconnectHoverTarget === id);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
@@ -353,6 +358,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-lens-member={lensMember ? 'true' : undefined}
       data-editing={editing ? 'true' : undefined}
       data-attach-target={isAttachTarget ? 'true' : undefined}
+      data-drag-capsule={capsule ? 'true' : undefined}
       data-reconnect-target={isReconnectTarget ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-settle={settling ? 'true' : undefined}
@@ -484,6 +490,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       <SvgSurface className="dc-node-surface" width={effectiveWidth} height={effectiveHeight}>
         {shapes}
       </SvgSurface>
+
+      {/* Standing in for everything above while the card is being carried — `canvas.css` hides the
+          surface and the chrome under `[data-drag-capsule]`, so this is all that shows. */}
+      {capsule && <DragCapsule node={node} capsule={capsule} />}
 
       {isNote && !editing && !readOnly && !(node.text ?? '').trim() && (
         <div className="dc-note-placeholder" style={placeholderStyle(node)}>

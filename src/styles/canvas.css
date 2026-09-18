@@ -349,6 +349,15 @@
   stroke-width: clamp(4px, calc(16px / var(--dc-zoom, 1)), 40px);
 }
 
+/* A connector is the hardest thing on the canvas to drop a note onto — it is a line. While a
+   Note/Code card is being carried (and only then), its hit corridor widens well past what a click
+   needs, so reaching a connector stops being a test of aim. Clicking, hovering and reconnecting
+   keep the narrower corridor above, untouched. Overlapping corridors are resolved by distance, not
+   paint order — see `edgeDropTarget.ts`. */
+.dc-canvas[data-attach-drag='true'] .dc-edge-hit {
+  stroke-width: clamp(10px, calc(30px / var(--dc-zoom, 1)), 72px);
+}
+
 /* Safari has a documented flickering-selection bug where a shape/edge selection drag can
    trigger the browser's own native text-selection highlight over nearby content instead of only
    this app's own selection outline — see https://github.com/xyflow/xyflow/issues/4806. Scoped to
@@ -385,7 +394,7 @@
  * into an attachment. A brighter, wider glow than selection's, so "drop here" reads as a distinct
  * signal, not as "this happens to be selected". */
 .dc-edge[data-attach-target='true'] .dc-edge-line {
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--dc-selection) 85%, transparent));
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 55%, transparent));
 }
 
 /*
@@ -693,6 +702,54 @@
 /* A note's icon is the same "colour bar, not a sticky-note skeuomorph" idea its real card uses,
    shrunk to a dot; code gets a literal glyph instead, so the two kinds are distinguishable even
    with the row's uppercase label style making every chip's text look similar. */
+/* Several attachments on one connector rest as their colour dots alone, and name themselves when
+   the connector is reached for — hovered, selected, or one of their own cards open. Four spelled-out
+   chips span most of a connector's length; four dots are about 100px, and the kinds are still
+   legible at a glance because the colour *is* the kind. The same "compact until approached"
+   contract `.dc-edge-response-label` above already keeps.
+
+   The row itself is a hover target too: the labels must not collapse again the moment the pointer
+   leaves the line on its way to a chip. */
+.dc-attachment-chip-row[data-compact='true'] .dc-attachment-chip {
+  gap: 0;
+  padding: 3px 5px;
+}
+
+.dc-attachment-chip-row[data-compact='true'] .dc-attachment-chip-label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-attachment-chip-row[data-compact='true'] .dc-attachment-chip,
+  .dc-attachment-chip-row[data-compact='true'] .dc-attachment-chip-label {
+    transition:
+      max-width 140ms var(--dc-ease-out),
+      opacity 110ms ease,
+      gap 140ms var(--dc-ease-out),
+      padding 140ms var(--dc-ease-out);
+  }
+}
+
+.dc-attachment-chip-row[data-compact='true'][data-revealed='true'] .dc-attachment-chip,
+.dc-attachment-chip-row[data-compact='true']:hover .dc-attachment-chip,
+.dc-attachment-chip-row[data-compact='true']:focus-within .dc-attachment-chip,
+.dc-attachment-chip-row[data-compact='true'] .dc-attachment-slot[data-open='true'] .dc-attachment-chip {
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+}
+
+.dc-attachment-chip-row[data-compact='true'][data-revealed='true'] .dc-attachment-chip-label,
+.dc-attachment-chip-row[data-compact='true']:hover .dc-attachment-chip-label,
+.dc-attachment-chip-row[data-compact='true']:focus-within .dc-attachment-chip-label,
+.dc-attachment-chip-row[data-compact='true'] .dc-attachment-slot[data-open='true'] .dc-attachment-chip-label {
+  /* Wide enough for the longest label a chip can carry (`PLAINTEXT`), and a cap rather than a
+     size — the label is `white-space: nowrap`, so it simply takes what it needs. */
+  max-width: 8rem;
+  opacity: 1;
+}
+
 .dc-attachment-chip-icon {
   display: inline-flex;
   align-items: center;
@@ -1005,6 +1062,107 @@
   font-weight: 500;
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* ------------------------------------------------- drag capsule -- */
+
+/* A Note/Code card being carried somewhere shows its identity instead of its geometry — the pill
+   it is about to become. See `src/canvas/capsuleCollapse.ts` for when a card collapses, and
+   `DragCapsule.tsx` for why the capsule reuses `.dc-attachment-chip` rather than inventing a
+   second look for the same object. */
+
+/* Everything the card normally paints goes quiet while the capsule stands in for it. The node
+   itself keeps its inline width/height, so React Flow measures it unchanged and no dimension
+   change is emitted mid-drag. */
+.dc-node[data-drag-capsule='true'] > .dc-node-surface,
+.dc-node[data-drag-capsule='true'] > .dc-inside-mark,
+.dc-node[data-drag-capsule='true'] .dc-attachment-badge,
+.dc-node[data-drag-capsule='true'] .dc-code-copy,
+.dc-node[data-drag-capsule='true'] .dc-note-placeholder,
+.dc-node[data-drag-capsule='true'] .dc-handle,
+.dc-node[data-drag-capsule='true'] .react-flow__resize-control {
+  display: none;
+}
+
+/* The selection ring too — it is drawn from the card's own box, so leaving it on would keep
+   outlining the exact geometry the capsule exists to stop showing. A card is still selected while
+   it is carried; it just isn't drawn. */
+.dc-node[data-drag-capsule='true']::after {
+  display: none;
+}
+
+/* A zero-size point at the grab offset. The capsule hangs off it, so it stays wherever on the card
+   the grab actually landed rather than snapping to a corner or the middle. */
+.dc-drag-capsule-anchor {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* `--dc-zoom` (published on React Flow's root) cancels the viewport scale, so the pill is the same
+   size on screen at any zoom — a capsule that shrank with the diagram would be unreadable at the
+   zoom levels where a crowded canvas actually needs it.
+
+   The translate places its top-left just past the aim point, down and to the right: the familiar
+   physical drag-preview hold. The point being aimed with stays uncovered, and nothing above or to
+   the left of the cursor — where the target usually is — is hidden behind the pill. */
+.dc-drag-capsule {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  transform: scale(calc(1 / var(--dc-zoom, 1)))
+    translate(calc(14px + var(--dc-capsule-nudge-x, 0px)), calc(18px + var(--dc-capsule-nudge-y, 0px)));
+  cursor: grabbing;
+  /* Inert: the pointer is mid-drag and owns the card underneath. */
+  pointer-events: none;
+  /* Lifted a little further off the canvas than a resting chip — it is being held, not sitting. */
+  box-shadow: var(--dc-shadow);
+}
+
+/* Only the lean toward an armed connector animates; the pill itself must track the pointer with no
+   lag at all, which is why it rides React Flow's own node transform rather than a transition. */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-drag-capsule {
+    transition: transform 90ms var(--dc-ease-out);
+  }
+}
+
+/* A connector armed as a drop target says exactly where the chip will land, rather than glowing
+   along its whole length. Mounted only while armed (`DraftEdgeView.tsx`), so a connector carries
+   no extra mark the rest of the time. */
+.dc-edge-landing {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-edge-landing {
+    animation: dc-landing-in 120ms var(--dc-ease-out) 1;
+  }
+}
+
+@keyframes dc-landing-in {
+  from {
+    r: 0;
+    opacity: 0;
+  }
+}
+
+/* The chip a dropped capsule just became, tied to the capsule that was under the cursor a moment
+   earlier — brief on purpose, so the gesture reads as one object arriving rather than two things
+   swapping. */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-attachment-chip[data-settle='true'] {
+    animation: dc-chip-arrive 140ms var(--dc-ease-out) 1;
+  }
+}
+
+@keyframes dc-chip-arrive {
+  from {
+    transform: scale(0.92);
+    opacity: 0.4;
+  }
 }
 
 .dc-attachment-badge {

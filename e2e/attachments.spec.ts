@@ -240,6 +240,9 @@ test.describe('attachments', () => {
     const serviceCenter = { x: serviceBox.x + serviceBox.width / 2, y: serviceBox.y + serviceBox.height / 2 };
 
     const release = await dragNodeCenterTo(page, code, serviceCenter);
+    // A Note/Code card is aimed with its capsule now, so a shape arms through the dwell rather
+    // than through overlap — the same wait `:146` documents, for the same reason.
+    await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
     await release();
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
 
@@ -298,6 +301,9 @@ test.describe('attachments', () => {
     const serviceCenter = { x: serviceBox.x + serviceBox.width / 2, y: serviceBox.y + serviceBox.height / 2 };
 
     const release = await dragNodeCenterTo(page, code, serviceCenter);
+    // A Note/Code card is aimed with its capsule now, so a shape arms through the dwell rather
+    // than through overlap — the same wait `:146` documents, for the same reason.
+    await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
     await release();
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
 
@@ -352,10 +358,16 @@ test.describe('attachments', () => {
 
     await create(page, 'Note', { x: 750, y: 200 });
     const releaseNote = await dragNodeCenterTo(page, page.locator('.dc-node[data-type="note"]'), serviceCenter);
+    // A Note/Code card is aimed with its capsule now, so a shape arms through the dwell rather
+    // than through overlap — the same wait `:146` documents, for the same reason.
+    await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
     await releaseNote();
 
     await create(page, 'Code', { x: 750, y: 440 });
     const releaseCode = await dragNodeCenterTo(page, page.locator('.dc-node[data-type="code"]'), serviceCenter);
+    // A Note/Code card is aimed with its capsule now, so a shape arms through the dwell rather
+    // than through overlap — the same wait `:146` documents, for the same reason.
+    await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
     await releaseCode();
 
     await expect(page.locator('.dc-attachment-badge')).toContainText('2');

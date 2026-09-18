@@ -1004,6 +1004,9 @@ test.describe('editing', () => {
     await page.mouse.move(serviceBox.x + serviceBox.width / 2, serviceBox.y + serviceBox.height / 2, {
       steps: 12,
     });
+    // A Code card is aimed with its capsule, so the host arms through the deliberate dwell — see
+    // `drag-capsule.spec.ts`. Releasing before it arms would just move the card.
+    await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
     await page.mouse.up();
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
 
