@@ -728,4 +728,17 @@ export interface DraftSummary {
    *  editor tells that another tab saved different content since it last read or wrote. Absent on a
    *  row written before it existed. */
   contentStamp?: string;
+  /**
+   * How many actions this canvas still has open — the Library's half of the status bar's `□ 3`.
+   *
+   * The second body-derived field to live in the plaintext `documents` store, and it stays on the
+   * right side of the same line `shape` draws: it is a count and carries no words. What the actions
+   * *say* is in the encrypted body and never comes out into a summary — the Library's "Still open"
+   * band loads the bodies it needs rather than reading text from here.
+   *
+   * Written on every save including when it is `0`, so `undefined` means one thing only: a row
+   * summarised by a build from before this existed (backfilled once at startup — see
+   * `IndexedDbRepository.backfillSummaries`).
+   */
+  openActions?: number;
 }

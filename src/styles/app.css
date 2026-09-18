@@ -548,6 +548,24 @@ kbd {
 }
 
 /*
+ * What this canvas still owes, in the meta line — the same `□ 3` the status bar shows while it is
+ * open, down to the small caps and the tabular figures, because one mark meaning one thing in two
+ * places is the whole reason it reads without explanation.
+ *
+ * Full-strength text against the muted line around it. Weight is what carries it: a coloured badge
+ * or a dot would be a notification, and this is a fact about the drawing.
+ */
+.dc-library-item-open {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--dc-text);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
  * The fingerprint: each row's topology, in the row's own muted colour, lit
  * to the selection colour with the title on hover. Every mark is
  * `currentColor` (see `Fingerprint.tsx`), so these rules are the whole

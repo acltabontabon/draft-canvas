@@ -1,4 +1,5 @@
 import { totals } from '../depth/tree';
+import { openActions } from '../document/actions';
 import { libraryShapeOf } from '../document/shape';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 
@@ -155,6 +156,9 @@ export function summarize(document: DraftDocument): DraftSummary {
     // reading it as one showed "0 shapes" in the Library and skipped it in the thumbnail sweep.
     nodeCount: counts.nodes,
     edgeCount: counts.edges,
+    // Always written, `0` included: absent has to mean "older build", not "nothing open", or the
+    // backfill could never tell the two apart. Root-only field, so no walk across rooms.
+    openActions: openActions(document).length,
     ...(document.metadata.projectId ? { projectId: document.metadata.projectId } : {}),
     ...(document.nodes.length > 0 ? { shape: libraryShapeOf(document.nodes, document.edges) } : {}),
   };

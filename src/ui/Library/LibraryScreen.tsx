@@ -287,6 +287,21 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                             {entry.edgeCount} {entry.edgeCount === 1 ? 'connector' : 'connectors'}
                           </>
                         )}
+                        {/* The status bar's own mark, at the same size and in the same voice, so
+                            `□ 3` means one thing wherever it is seen. It carries the line's only
+                            full-strength colour: this is the part of the row that is owed. */}
+                        {entry.openActions !== undefined && entry.openActions > 0 && (
+                          <>
+                            <span className="dc-dot" />
+                            <span className="dc-library-item-open">
+                              <span aria-hidden="true">□</span>
+                              {entry.openActions}
+                              <span className="dc-sr-only">
+                                {entry.openActions === 1 ? ' open action' : ' open actions'}
+                              </span>
+                            </span>
+                          </>
+                        )}
                       </span>
                     </span>
                   </button>
