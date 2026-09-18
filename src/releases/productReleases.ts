@@ -21,6 +21,37 @@ export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './se
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.9.0',
+    date: '2026-09-19',
+    summary: 'Capture what a diagram decided, and keep up on the big ones.',
+    highlights: [
+      {
+        title: 'Takeaways',
+        description: 'Press I to capture a decision, a question or something that needs doing, without stopping the drawing. A quiet count in the status bar opens them, and Copy as Markdown pastes the lot anywhere.',
+      },
+      {
+        title: 'A canvas still knows what it owes you',
+        description: 'Your diagram list shows which canvases have open actions, and opening one points them out for a few seconds before folding back into the status bar.',
+      },
+      {
+        title: 'Crossing connectors hop over each other',
+        description: 'Where two connectors cross, one now arcs over the other, so a crossing reads as a crossing rather than a join — in the canvas and in exported images.',
+      },
+      {
+        title: 'Big diagrams keep up',
+        description: 'On a diagram of around 500 shapes, clicking one takes about a third of the time it did, panning and zooming hold much closer to 60 frames a second, and the pause after dropping a shape is roughly halved.',
+      },
+      {
+        title: 'Escape cancels a drag',
+        description: 'Change your mind mid-drag and the shape goes back where it started — nothing moved, nothing attached, nothing to undo.',
+      },
+      {
+        title: 'Notes say where they will land',
+        description: 'Drag a Note or Code card towards a connector and a small tag shows what is about to attach, and which line it will attach to when several run close together.',
+      },
+    ],
+  },
+  {
     version: '1.8.0',
     date: '2026-09-17',
     summary: 'Connectors read like sentences, and the shape library got a redraw.',

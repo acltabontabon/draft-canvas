@@ -4,6 +4,8 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-19
+
 ### Added
 
 - **Takeaways.** Press `I` to capture what needs to happen next — decisions, questions, and open
@@ -1171,7 +1173,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.8.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.0...main
+[1.9.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.1...v1.6.2
