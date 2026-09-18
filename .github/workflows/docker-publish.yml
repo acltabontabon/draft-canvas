@@ -16,8 +16,8 @@ name: Docker
 # metadata PATCH with 403, because editing a repository's description is one
 # of the things a token may not do however it is scoped. Only the account
 # password reaches that endpoint, and a password in CI is a worse trade than
-# a page updated by hand. The copy still lives in docs/DOCKER_HUB.md so it is
-# written and reviewed here; pasting it is a step in CONTRIBUTING.md.
+# a page updated by hand. The description is maintained on Docker Hub itself;
+# CONTRIBUTING.md's release workflow says so.
 
 on:
   workflow_call:
