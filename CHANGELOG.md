@@ -6,34 +6,25 @@ All notable changes to Draft Canvas are documented here.
 
 ### Added
 
-- **Takeaways.** Press `I` to capture what needs to happen next, without stopping the drawing —
-  during a meeting or mid-presentation.
-- A quiet count in the status bar opens Takeaways: your open actions, plus the decisions and open
-  questions already written on the canvas.
-- Open a canvas that still has actions on it and a small note points them out in the status bar
-  for a few seconds, then folds into that count — so what a meeting agreed doesn't go quiet the
-  moment the file closes.
-- Each diagram in your list says how many actions it still has open, so you can see what's
-  outstanding before opening anything.
-- **Copy takeaways** puts the lot on the clipboard as Markdown, ready to paste anywhere.
-- ⌘0 (Ctrl+0) resets the zoom to 100%, alongside the existing zoom in and out.
+- **Takeaways.** Press `I` to capture what needs to happen next — decisions, questions, and open
+  actions — without stopping the drawing. A quiet count in the status bar opens Takeaways, each
+  diagram shows how many actions remain, and you can copy them as Markdown to paste anywhere.
+- When a canvas still has open actions, a small note points them out for a few seconds on open,
+  then folds into the status bar count.
 - **Line jumps.** Where two connectors cross, one now hops over the other with a small arc, so a
   crossing reads as a crossing rather than a join. Nothing to turn on and nothing to place — they
   appear, move and disappear as you draw, and they show up in exported images too.
+- ⌘0 (Ctrl+0) resets the zoom to 100%, alongside the existing zoom in and out.
 - Escape now cancels a drag. The shape goes back where it started, and nothing is moved,
   attached or added to the undo history.
 
 ### Changed
 
-- Dragging a Note or Code card now shows a small tag of what you are carrying — `NOTE`,
-  `TYPESCRIPT` — as soon as you reach something it can attach to, instead of the whole card
-  following the pointer and covering what you are aiming at. Let go somewhere with nothing to
-  attach to and it is an ordinary move, card and all.
-- Connectors are much easier to drop a Note or Code card onto: the line you are aiming at is
-  forgiving about a few pixels, tells you where the note will land, and picks the nearest line
-  when several run close together.
-- A connector carrying several notes now rests as a row of small dots and spells them out when you
-  reach for it, instead of a line of labels stretched across the diagram.
+- Dragging a Note or Code card onto a connector now shows a small tag (`NOTE`, `TYPESCRIPT`) as
+  soon as you reach something it can attach to. The connector's target line is forgiving about a
+  few pixels, tells you where the note will land, and picks the nearest line when several run
+  close together. A connector carrying several notes now rests as a row of small dots and spells
+  them out when you reach for it.
 - Your diagram list no longer counts elements and connectors on each row. The little thumbnail
   beside a diagram already shows how big and how tangled it is, and shows it faster.
 
@@ -41,9 +32,9 @@ All notable changes to Draft Canvas are documented here.
 
 - Two shapes left slightly out of line no longer get a small kink in the connector between them —
   it draws as the single straight line you meant.
-- An attachment's popover now behaves like the other toolbars beside a shape or connector —
-  arrow keys move between its buttons, and screen readers announce it correctly.
-- The Flows panel's list is now announced correctly to screen readers.
+- An attachment's popover and the Flows panel list now work correctly with screen readers and
+  keyboard navigation. Arrow keys move between popover buttons, and all interactive elements are
+  properly announced.
 - A dropdown next to a shape near the edge of the canvas no longer squeezes itself into the gap
   and hides options behind a scrollbar — it opens where there is room for all of them.
 
