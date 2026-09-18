@@ -10,11 +10,20 @@ All notable changes to Draft Canvas are documented here.
   during a meeting or mid-presentation.
 - A quiet count in the status bar opens Takeaways: your open actions, plus the decisions and open
   questions already written on the canvas.
+- Open a canvas that still has actions on it and it says what they are, briefly, before settling
+  back into that count — so what a meeting agreed doesn't go quiet the moment the file closes.
+- Each diagram in your list says how many actions it still has open, so you can see what's
+  outstanding before opening anything.
 - **Copy takeaways** puts the lot on the clipboard as Markdown, ready to paste anywhere.
 - ⌘0 (Ctrl+0) resets the zoom to 100%, alongside the existing zoom in and out.
 - **Line jumps.** Where two connectors cross, one now hops over the other with a small arc, so a
   crossing reads as a crossing rather than a join. Nothing to turn on and nothing to place — they
   appear, move and disappear as you draw, and they show up in exported images too.
+
+### Changed
+
+- Your diagram list no longer counts elements and connectors on each row. The little thumbnail
+  beside a diagram already shows how big and how tangled it is, and shows it faster.
 
 ### Fixed
 

@@ -13,17 +13,19 @@ Everything you draw. Two object stores:
 
 | Store | Key | Contents | Encrypted? |
 | --- | --- | --- | --- |
-| `documents` | `id` | Title, created and updated timestamps, node and edge counts. Used to render the library list without loading any canvas. | No — plain text, by design (see below). |
+| `documents` | `id` | Title, created and updated timestamps, node and edge counts, a small topology sketch (shape kinds and their relative positions, for the list thumbnail), and how many actions the canvas has still open. Used to render the library list without loading any canvas. | No — plain text, by design (see below). |
 | `bodies` | `id` | The full document: nodes, connections, text, code, viewport, settings. | Yes — AES-256-GCM, before it ever reaches IndexedDB. |
 
 Written by `src/storage/IndexedDbRepository.ts`, and by nothing else.
 
 The `documents` summary is left unencrypted deliberately: it exists specifically so the library
 screen can list your diagrams — including their titles — without decrypting every one of them just
-to draw a list. That is a real, disclosed tradeoff, not an oversight: a diagram's **title** is
-readable in IndexedDB without the local key; everything else about it — nodes, labels, code,
-connector text — is not. If a title itself would be sensitive to expose this way, name the diagram
-something neutral.
+to draw a list. That is a real, disclosed tradeoff, not an oversight. Readable in IndexedDB without
+the local key: a diagram's **title**, its counts, the rough shape of it — which kinds of shapes it
+uses and roughly where they sit, which is what draws the thumbnail — and **how many actions it has
+open**, which is a number and nothing more. Not readable: everything anything is *called* — node
+labels, note and code text, connector text, and what any action says. If a title itself would be
+sensitive to expose this way, name the diagram something neutral.
 
 If IndexedDB cannot be opened — a private window, a blocked-storage policy, some embedded
 webviews — the app falls back to an in-memory store, and the status bar says **In memory only**
