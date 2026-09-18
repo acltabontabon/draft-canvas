@@ -43,11 +43,6 @@ export interface RecallSource {
   presenting: boolean;
   /** The panel is already up, so the card would be the same information twice, one inch apart. */
   alreadyOpen: boolean;
-  /**
-   * This open came from clicking a specific action in the Library's "Still open" band. You just
-   * read it — being told again on arrival is the exact redundancy this feature has to avoid.
-   */
-  revealing: boolean;
   /** Open (unticked) actions in the file. Decisions and questions never bring the card back. */
   openCount: number;
 }
@@ -63,7 +58,6 @@ export function shouldRecall(source: RecallSource): boolean {
   if (source.reopening) return false;
   if (source.presenting) return false;
   if (source.alreadyOpen) return false;
-  if (source.revealing) return false;
   return true;
 }
 

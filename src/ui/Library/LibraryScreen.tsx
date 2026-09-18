@@ -12,6 +12,7 @@ import { Icon } from '../common/Icon';
 import { Modal } from '../common/Modal';
 import { FirstRunHome } from './FirstRunHome';
 import { Fingerprint } from './Fingerprint';
+import { OpenTally } from './OpenTally';
 import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
@@ -277,29 +278,16 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                     <Fingerprint shape={entry.shape} />
                     <span className="dc-library-item-text">
                       <span className="dc-library-item-title">{entry.title}</span>
+                      {/* Element and connector counts used to live here. They said nothing anyone
+                          was deciding between two rows on — the fingerprint already shows how big
+                          and how tangled a canvas is, and shows it faster. What is still owed is
+                          the one thing about a canvas you cannot see by looking at it. */}
                       <span className="dc-library-item-meta">
                         {relativeTime(entry.updatedAt)}
-                        <span className="dc-dot" />
-                        {entry.nodeCount} {entry.nodeCount === 1 ? 'element' : 'elements'}
-                        {entry.edgeCount > 0 && (
-                          <>
-                            <span className="dc-dot" />
-                            {entry.edgeCount} {entry.edgeCount === 1 ? 'connector' : 'connectors'}
-                          </>
-                        )}
-                        {/* The status bar's own mark, at the same size and in the same voice, so
-                            `□ 3` means one thing wherever it is seen. It carries the line's only
-                            full-strength colour: this is the part of the row that is owed. */}
                         {entry.openActions !== undefined && entry.openActions > 0 && (
                           <>
                             <span className="dc-dot" />
-                            <span className="dc-library-item-open">
-                              <span aria-hidden="true">□</span>
-                              {entry.openActions}
-                              <span className="dc-sr-only">
-                                {entry.openActions === 1 ? ' open action' : ' open actions'}
-                              </span>
-                            </span>
+                            <OpenTally count={entry.openActions} />
                           </>
                         )}
                       </span>

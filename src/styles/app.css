@@ -548,21 +548,31 @@ kbd {
 }
 
 /*
- * What this canvas still owes, in the meta line — the same `□ 3` the status bar shows while it is
- * open, down to the small caps and the tabular figures, because one mark meaning one thing in two
- * places is the whole reason it reads without explanation.
+ * The open-action tally in the meta line — one box per thing still owed (`OpenTally.tsx`).
  *
- * Full-strength text against the muted line around it. Weight is what carries it: a coloured badge
- * or a dot would be a notification, and this is a fact about the drawing.
+ * It carries the line's only full-strength colour. Weight is what marks it, never hue: a coloured
+ * badge or a dot would read as a notification, and this is a fact about the drawing rather than
+ * something that just happened. Lifts to the selection colour with the fingerprint and the title
+ * on hover, so the row still reads as one object.
  */
-.dc-library-item-open {
+.dc-open-tally {
   display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+  align-items: center;
+  gap: 5px;
   color: var(--dc-text);
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.04em;
+}
+
+.dc-open-tally-boxes {
+  display: block;
+  flex-shrink: 0;
+}
+
+.dc-open-tally-rest {
   font-variant-numeric: tabular-nums;
+}
+
+.dc-library-item:hover .dc-open-tally {
+  color: var(--dc-selection);
 }
 
 /*

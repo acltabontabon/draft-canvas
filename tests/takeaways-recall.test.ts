@@ -8,7 +8,6 @@ const ARRIVING: RecallSource = {
   reopening: false,
   presenting: false,
   alreadyOpen: false,
-  revealing: false,
   openCount: 3,
 };
 
@@ -41,12 +40,6 @@ describe('shouldRecall', () => {
 
   it('says nothing when the panel is already up', () => {
     expect(shouldRecall({ ...ARRIVING, alreadyOpen: true })).toBe(false);
-  });
-
-  it('says nothing when the open came from clicking one of these actions', () => {
-    // The whole point of the band: you just read it. Being told again on arrival is the
-    // redundancy this feature exists to avoid.
-    expect(shouldRecall({ ...ARRIVING, revealing: true })).toBe(false);
   });
 });
 

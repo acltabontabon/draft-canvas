@@ -195,12 +195,6 @@ export interface UiStore {
    */
   takeawaysRecall: boolean;
   /**
-   * An action to flash on arrival, set when the open came from the Library's "Still open" band so
-   * the row you clicked is the one you land on. One-shot, like `editRequestId`: the panel consumes
-   * and clears it, so a remount never re-flashes it.
-   */
-  takeawaysFlashActionId: string | null;
-  /**
    * Bumped when the arrival card settles, so `TakeawaysChip` can pulse once as it receives it.
    * A counter rather than a boolean: two recalls in a row must both be visible, and a flag that is
    * already `true` would animate nothing the second time.
@@ -307,6 +301,7 @@ export interface UiStore {
   depthShapeHoverId: string | null;
   /** "No thanks" to treating a canvas as a system overview — put away for the rest of the session. */
   overviewOfferDismissed: boolean;
+
   dismissOverviewOffer: () => void;
   depthTransition: {
     id: number;
@@ -373,8 +368,6 @@ export interface UiStore {
   setActionCaptureOpen: (open: boolean) => void;
   /** Raises the arrival card, or settles it — settling also pulses the chip it returns to. */
   setTakeawaysRecall: (open: boolean) => void;
-  /** Sets (or consumes, with `null`) the action the arrival should land on. */
-  flashAction: (actionId: string | null) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone'], action?: ToastAction) => void;
@@ -476,7 +469,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   takeawaysView: 'actions',
   actionCaptureOpen: false,
   takeawaysRecall: false,
-  takeawaysFlashActionId: null,
   takeawaysChipPulse: 0,
   interactionActive: false,
   movingNodeIds: NO_MOVING_NODES,
@@ -557,7 +549,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
           // closed nothing would blink the chip every time a document was swapped.
           { takeawaysRecall: false, takeawaysChipPulse: state.takeawaysChipPulse + (state.takeawaysRecall ? 1 : 0) },
     ),
-  flashAction: (takeawaysFlashActionId) => set({ takeawaysFlashActionId }),
   setInteractionActive: (interactionActive, movingNodeIds) =>
     set((state) => {
       const moving = interactionActive && movingNodeIds ? new Set(movingNodeIds) : NO_MOVING_NODES;
