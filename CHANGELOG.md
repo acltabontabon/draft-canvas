@@ -12,9 +12,14 @@ All notable changes to Draft Canvas are documented here.
   questions already written on the canvas.
 - **Copy takeaways** puts the lot on the clipboard as Markdown, ready to paste anywhere.
 - ⌘0 (Ctrl+0) resets the zoom to 100%, alongside the existing zoom in and out.
+- **Line jumps.** Where two connectors cross, one now hops over the other with a small arc, so a
+  crossing reads as a crossing rather than a join. Nothing to turn on and nothing to place — they
+  appear, move and disappear as you draw, and they show up in exported images too.
 
 ### Fixed
 
+- Two shapes left slightly out of line no longer get a small kink in the connector between them —
+  it draws as the single straight line you meant.
 - An attachment's popover now behaves like the other toolbars beside a shape or connector —
   arrow keys move between its buttons, and screen readers announce it correctly.
 - The Flows panel's list is now announced correctly to screen readers.

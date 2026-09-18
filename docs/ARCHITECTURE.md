@@ -119,6 +119,8 @@ than not agreeing at all.
 
 > ⚠️ **Connectors are the exception.** On-screen and exported edges are two independent
 > implementations. Nothing enforces parity — a new badge, dash or chip must be added in **both**.
+> `e2e/line-jumps.spec.ts` closes the seam for one visual by comparing the two in a real browser,
+> which is the only place both renderers exist at once; the rest are still on trust.
 
 ---
 

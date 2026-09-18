@@ -28,6 +28,8 @@ import { layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
 import { obstaclesForEdge, withoutNodes } from '../edges/obstacles';
+import { bridgePath } from '../edges/bridge';
+import { NO_CROSSINGS, crossingPlan, withoutMoving } from '../edges/crossings';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
@@ -224,6 +226,20 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     ),
   );
   const obstacles = useUiStore(useShallow((state) => withoutNodes(nearbyObstacles, state.movingNodeIds)));
+  // Where this connector crosses another, and so draws a small arc over it. Safe to subscribe to
+  // as an array for the same reason `spine` is safe as an object: the plan is memoized on the
+  // (nodes, edges) pair and hands back a frozen, identity-stable list — the very same empty one
+  // for every connector that crosses nothing, which is most of them.
+  const planned = useEditorStore((state) => crossingPlan(state.document.nodes, state.document.edges).crossingsFor(id));
+  // A gesture makes three kinds of crossing unreliable, and all three are dropped for its duration
+  // rather than recomputed per frame: this connector's own endpoint moving, the crossed
+  // connector's endpoint moving, and — the quiet one — this connector merely detouring around a
+  // node that is moving, which reroutes it live while the plan still holds its committed route.
+  // `withoutNodes` having shortened the obstacle list is exactly that third case, already measured.
+  const routeUnsettled = endpointMoving || obstacles.length !== nearbyObstacles.length;
+  const crossings = useUiStore((state) =>
+    routeUnsettled ? NO_CROSSINGS : withoutMoving(planned, state.movingNodeIds),
+  );
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
@@ -428,8 +444,16 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Bundle members each draw the whole shared trunk, so they must wobble it
   // identically or it frays into a rope — see `strokeSeed`.
   const seed = strokeSeed(edge.id, route.trunkLabel ? spine : undefined);
-  const drawnPath = roughenPath(route.d, `${seed}:0`, profile.outline, profile.bow);
-  const secondStrokePath = profile.strokes === 2 ? roughenPath(route.d, `${seed}:1`, profile.outline, profile.bow) : null;
+  // Crossing bridges go on *after* the wobble, never before. `roughenPath` jitters by point
+  // ordinal, so inserting an arc's points first would change the wobble of everything downstream
+  // of it — the whole line would visibly re-settle whenever an unrelated crossing appeared, and a
+  // bundle's members would each wobble the shared trunk differently, which is exactly what
+  // `strokeSeed` exists to prevent. Going on afterwards leaves the wobble byte-identical.
+  const drawnPath = bridgePath(roughenPath(route.d, `${seed}:0`, profile.outline, profile.bow), crossings);
+  const secondStrokePath =
+    profile.strokes === 2
+      ? bridgePath(roughenPath(route.d, `${seed}:1`, profile.outline, profile.bow), crossings)
+      : null;
   // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
   // `render/roughness/roughArrow.ts`.
   const usesHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';

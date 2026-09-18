@@ -318,6 +318,36 @@ export const LABEL_LINE_GAP = 8;
  *  and a stepped one. */
 const LEVEL_SNAP = 1;
 
+/**
+ * How far out of line two shapes may be and still be connected by one straight run.
+ *
+ * Two shapes a person nudged into roughly a column are not asking for a step in the connector
+ * between them — but the step router has no way to know that, so it dutifully draws one, and at
+ * this size it cannot: the corner radius is 10, so a jog shorter than two of them comes out as a
+ * cramped double-kink halfway down the line rather than as a deliberate turn. Straightening it
+ * moves the far end a few units along the side it was already landing on, which reads as the line
+ * the composition obviously meant.
+ *
+ * Only ever applied when neither end has an anchor of its own: an anchor is someone saying exactly
+ * where the connector should meet the shape, and tidiness does not get to overrule that.
+ */
+const NEAR_LEVEL = 2 * 10 + 4;
+
+/** How much of a shape's side to keep clear of at each end when straightening a connector onto it,
+ *  so the line never slides out to a corner it would look detached from. */
+const NEAR_LEVEL_INSET = 14;
+
+/** `target`, moved along `side` to line up with `coordinate` — or unchanged if that is further than
+ *  `NEAR_LEVEL`, or would push the endpoint out toward a corner of the shape. */
+function levelOnto(rect: Rect, side: Side, coordinate: number, current: number): number {
+  if (Math.abs(coordinate - current) > NEAR_LEVEL) return current;
+  const span = isHorizontalSide(side) ? verticalSpan(rect) : { start: rect.x, length: rect.width };
+  const low = span.start + NEAR_LEVEL_INSET;
+  const high = span.start + span.length - NEAR_LEVEL_INSET;
+  if (low > high || coordinate < low || coordinate > high) return current;
+  return coordinate;
+}
+
 export interface LaneAssignment {
   /** This edge's signed slot within its parallel-edge group; `0` for a lone edge. */
   offset: number;
@@ -1142,10 +1172,20 @@ export function routeBetween(
   // `.75` against a box centre on the integer grid — would otherwise get a stepped path with an
   // invisible 0.25px jog and two hairline bends near the target. Snapping the target along its own
   // side keeps it on the boundary and draws the one straight line the composition intended.
+  // Shapes only roughly in line get the same treatment, within `NEAR_LEVEL`.
+  //
+  // "Chosen by hand" means an *off-centre* anchor. Drawing a connector from a shape's middle handle
+  // records an anchor too, but at the very point the router would have picked anyway — treating
+  // that as a deliberate placement would leave every connector anyone actually dragged out with the
+  // kink this exists to remove, while connectors the router placed came out straight.
+  const deliberate = (anchor: EdgeAnchor | undefined) => anchor !== undefined && anchor.offset !== 0.5;
+  const automatic = !deliberate(anchors?.source) && !deliberate(anchors?.target);
   if (isHorizontalSide(sourceSide) && isHorizontalSide(targetSide) && sourceSide !== targetSide) {
     if (Math.abs(from.y - to.y) < LEVEL_SNAP) to.y = from.y;
+    else if (automatic) to.y = levelOnto(targetRect, targetSide, from.y, to.y);
   } else if (isVerticalSide(sourceSide) && isVerticalSide(targetSide) && sourceSide !== targetSide) {
     if (Math.abs(from.x - to.x) < LEVEL_SNAP) to.x = from.x;
+    else if (automatic) to.x = levelOnto(targetRect, targetSide, from.x, to.x);
   }
 
   const params = {

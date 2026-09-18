@@ -777,7 +777,7 @@ describe('placeLabel: segment-aware label placement', () => {
 
   it('puts a stepped fan\'s label above (or below) its horizontal run — never beside it', () => {
     const route = routeBetween(client, api, 'smoothstep', {
-      anchors: { source: { side: 'bottom', offset: 0.5 }, target: { side: 'top', offset: 0.5 } },
+      anchors: { source: { side: 'bottom', offset: 0.75 }, target: { side: 'top', offset: 0.25 } },
     });
     expect(['top', 'bottom']).toContain(route.labelSide);
     expect(chipStraddlesLine(route)).toBe(false);
@@ -889,5 +889,66 @@ describe('placeLabel: segment-aware label placement', () => {
         : Math.abs(route.labelX - a.x) < 1 && (route.labelSide === 'left' || route.labelSide === 'right');
     });
     expect(onSegment).toBe(true);
+  });
+});
+
+describe('shapes only roughly in line get one straight connector, not a kink', () => {
+  const stacked = (offset: number) => ({
+    source: { x: 400, y: 0, width: 170, height: 76 },
+    target: { x: 400 + offset, y: 400, width: 170, height: 76 },
+  });
+
+  /** The bends a path turns through, ignoring the collinear waypoints the step router emits. */
+  function turns(d: string): number {
+    const points = flattenPath(d);
+    let count = 0;
+    for (let i = 1; i + 1 < points.length; i += 1) {
+      const before = Math.atan2(points[i]!.y - points[i - 1]!.y, points[i]!.x - points[i - 1]!.x);
+      const after = Math.atan2(points[i + 1]!.y - points[i]!.y, points[i + 1]!.x - points[i]!.x);
+      let turn = Math.abs(after - before);
+      if (turn > Math.PI) turn = 2 * Math.PI - turn;
+      if (turn > 0.15) count += 1;
+    }
+    return count;
+  }
+
+  it('draws a plumb line when the two are a few units out', () => {
+    const { source, target } = stacked(17);
+    expect(turns(routeBetween(source, target, 'smoothstep').d)).toBe(0);
+  });
+
+  it('still steps when they are genuinely offset', () => {
+    const { source, target } = stacked(120);
+    expect(turns(routeBetween(source, target, 'smoothstep').d)).toBeGreaterThan(0);
+  });
+
+  it('straightens a connector drawn from the shapes\' own middle handles', () => {
+    // Dragging a connector out records an anchor even when it came from the middle handle, at the
+    // very point the router would have picked itself. That is not a placement to defend.
+    const { source, target } = stacked(17);
+    const d = routeBetween(source, target, 'smoothstep', {
+      anchors: { source: { side: 'bottom', offset: 0.5 }, target: { side: 'top', offset: 0.5 } },
+    }).d;
+    expect(turns(d)).toBe(0);
+  });
+
+  it('never overrules an off-centre anchor someone placed by hand', () => {
+    const source = { x: 400, y: 0, width: 170, height: 76 };
+    // Narrow enough that a quarter-way anchor still lands within a few units of the source's
+    // centre — so the only reason not to straighten is that someone chose that anchor.
+    const target = { x: 470, y: 400, width: 40, height: 76 };
+    const d = routeBetween(source, target, 'smoothstep', {
+      anchors: { target: { side: 'top', offset: 0.25 } },
+    }).d;
+    expect(turns(d)).toBeGreaterThan(0);
+  });
+
+  it('leaves the endpoint on the shape rather than dragging it out to a corner', () => {
+    // A narrow shape has no room to absorb the offset, so the step stays.
+    const source = { x: 400, y: 0, width: 40, height: 76 };
+    const target = { x: 422, y: 400, width: 40, height: 76 };
+    const route = routeBetween(source, target, 'smoothstep');
+    expect(route.target.x).toBeGreaterThanOrEqual(target.x);
+    expect(route.target.x).toBeLessThanOrEqual(target.x + target.width);
   });
 });

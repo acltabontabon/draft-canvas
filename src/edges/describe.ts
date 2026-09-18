@@ -27,6 +27,8 @@ import {
   type Side,
 } from './routing';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
+import { bridgePath } from './bridge';
+import type { Crossing } from './crossings';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
 import { layoutEdgeLabel, layoutEdgeResponse } from './labelLayout';
@@ -48,6 +50,12 @@ export interface EdgeDescribeContext {
   spine?: EdgeSpine;
   /** The nodes this connector may detour around. Omitted: every node but its endpoints and groups. */
   obstacles?: readonly Rect[];
+  /**
+   * Where this connector crosses another and so draws a small arc over it — see
+   * `edges/crossings.ts`. Absent means draw none, exactly as every connector did before bridges
+   * existed, which is what keeps the many callers that build a bare context unchanged.
+   */
+  crossings?: readonly Crossing[];
   /** Intentional Roughness. Defaults to `'clean'` at call sites
    *  that construct this object directly without a preset. */
   preset?: PersonalityPreset;
@@ -189,10 +197,16 @@ export function describeEdge(
   // `outline === 0 && bow === 0` (Clean), so the base line needs no separate branch.
   const usesHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';
   const markerEnd = edge.directed && !usesHandDrawnArrow ? markerRef(color, variant) : undefined;
+  // Crossing bridges go on *after* the wobble — see the matching note in `DraftEdgeView.tsx`.
+  // `bridgePath` is the identity with no crossings, so a connector that crosses nothing keeps the
+  // exact path string it always had.
+  const crossings = ctx.crossings ?? [];
+  const drawn = (suffix: string) =>
+    bridgePath(roughenPath(route.d, `${seed}:${suffix}`, profile.outline, profile.bow), crossings);
   const line: Shape[] = [
     {
       t: 'path',
-      d: roughenPath(route.d, `${seed}:0`, profile.outline, profile.bow),
+      d: drawn('0'),
       fill: 'none',
       stroke: strokeBase,
       markerEnd,
@@ -201,7 +215,7 @@ export function describeEdge(
       ? ([
           {
             t: 'path',
-            d: roughenPath(route.d, `${seed}:1`, profile.outline, profile.bow),
+            d: drawn('1'),
             fill: 'none',
             stroke: { ...strokeBase, width: 1 },
             opacity: 0.5,

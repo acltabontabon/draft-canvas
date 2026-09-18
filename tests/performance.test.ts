@@ -20,6 +20,7 @@ import { renderDocumentSvg } from '../src/render/svg/document';
 import { projectNodes, projectEdges } from '../src/canvas/projection';
 import { laneIndex, rectOf, routeEdge } from '../src/edges/routing';
 import { routingPlan } from '../src/edges/bundles';
+import { crossingPlan } from '../src/edges/crossings';
 import { embed, totals, viewOf } from '../src/depth/tree';
 import type { DraftDocument } from '../src/document/types';
 import { ARCHITECTURE_STARTERS } from '../src/starters';
@@ -367,6 +368,32 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
 
   it('reuses the routing plan for an unchanged (nodes, edges) pair', () => {
     expect(routingPlan(doc.nodes, doc.edges)).toBe(routingPlan(doc.nodes, doc.edges));
+  });
+
+  /**
+   * Crossing bridges cost a whole-document routing pass plus a pairwise sweep over every connector
+   * segment, once per commit — the same cadence `routingPlan` runs at, and the same reason for a
+   * budget: to catch an accidental quadratic blowup, not to police milliseconds. The plan gives up
+   * and draws nothing at all rather than exceed its own op budget, so the failure mode this guards
+   * is a slow success, not a hang.
+   */
+  it('works out every connector\'s crossings within budget', () => {
+    const started = performance.now();
+    const plan = crossingPlan(doc.nodes, doc.edges);
+    for (const edge of doc.edges) plan.crossingsFor(edge.id);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it('reuses the crossing plan for an unchanged (nodes, edges) pair', () => {
+    expect(crossingPlan(doc.nodes, doc.edges)).toBe(crossingPlan(doc.nodes, doc.edges));
+  });
+
+  it('hands every connector that crosses nothing the identical empty list', () => {
+    const plan = crossingPlan(doc.nodes, doc.edges);
+    const empty = doc.edges.map((edge) => plan.crossingsFor(edge.id)).filter((list) => list.length === 0);
+    // One frozen array shared by all of them, so a connector without crossings never re-renders
+    // because its list looked new.
+    expect(new Set(empty).size).toBe(1);
   });
 
   it('rebuilds the lane index only when the edges array identity actually changes', () => {

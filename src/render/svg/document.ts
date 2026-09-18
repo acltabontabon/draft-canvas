@@ -6,6 +6,7 @@ import { boundsOf } from '../../document/operations';
 import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../../document/types';
 import { laneIndex } from '../../edges/routing';
 import { routingPlan } from '../../edges/bundles';
+import { crossingPlan, withoutMoving } from '../../edges/crossings';
 import { blurRadiusFor } from '../backgroundAnchor';
 import { themeFor, type Theme, type ThemeName } from '../theme/tokens';
 import { getMeasurer } from '../text/measure';
@@ -227,6 +228,11 @@ export function buildScene(
   const plan = routingPlan(nodes, edges);
   const moving = options.movingNodeIds;
   const obstacleNodes = moving?.size ? nodes.filter((node) => !moving.has(node.id)) : nodes;
+  // Planned over the same filtered arrays, and against the same obstacle set actually routed
+  // against — otherwise it would place arcs on routes nobody draws. Mid-gesture, the crossings
+  // against a connector attached to a moving node are dropped exactly as the live canvas drops
+  // them, so a Learn frame mid-drag looks like the canvas mid-drag.
+  const crossings = crossingPlan(nodes, edges, obstacleNodes);
 
   beginClipScope(options.clipScope ?? 'export');
 
@@ -246,6 +252,9 @@ export function buildScene(
       lane,
       spine: plan.spineFor(edge.id),
       obstacles: obstaclesForEdge(obstacleNodes, edge.source, edge.target),
+      crossings: moving?.size
+        ? withoutMoving(crossings.crossingsFor(edge.id), moving)
+        : crossings.crossingsFor(edge.id),
     });
     if (!described) continue;
     if (edge.directed) arrowColors.add(described.color);
