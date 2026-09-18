@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { CommandContext } from '../../commands/types';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { count } from '../../lib/plural';
@@ -18,7 +18,6 @@ import {
 } from '../../takeaways/collect';
 import { takeawaysMarkdown } from '../../takeaways/markdown';
 import { CAPTURE_ACTION_KEY, captureAnchorFor } from '../../takeaways/capture';
-import { RECALL_FLOOR_MS, RECALL_MS, recallItems } from '../../takeaways/recall';
 import { usePopoverPresence } from '../../canvas/usePopoverPresence';
 import { navigateToElement } from './depthNavigation';
 import { Button } from '../common/Button';
@@ -44,9 +43,6 @@ import { Icon } from '../common/Icon';
  */
 
 const EXIT_MS = 140;
-/** The arrival card leaves over a longer beat than the other faces, because it is travelling
- *  — down and to the right, into the chip it becomes. */
-const RECALL_EXIT_MS = 220;
 
 interface TakeawaysPanelProps {
   playback: FlowPlaybackController;
@@ -56,24 +52,17 @@ interface TakeawaysPanelProps {
 export function TakeawaysPanel({ playback, buildCommandContext }: TakeawaysPanelProps) {
   const open = useUiStore((state) => state.takeawaysOpen);
   const capturing = useUiStore((state) => state.actionCaptureOpen);
-  const recalling = useUiStore((state) => state.takeawaysRecall);
   const presenting = useEditorStore((state) => state.mode === 'present');
   // Presentation shows the capture line and nothing else: the canvas carries the story, and a
   // list of chores over the top of it is exactly the kind of chrome present mode exists without.
   const showPanel = open && !presenting;
-  // The arrival card is the same surface again, one size between the two: it never competes with
-  // the panel it grows into, and a presentation started while it is up takes it away.
-  const showRecall = recalling && !showPanel && !capturing && !presenting;
-  const { mounted, closing } = usePopoverPresence(
-    showPanel || capturing || showRecall,
-    showRecall || recalling ? RECALL_EXIT_MS : EXIT_MS,
-  );
+  const { mounted, closing } = usePopoverPresence(showPanel || capturing, EXIT_MS);
 
   if (!mounted) return null;
   return (
     <div
       className="dc-takeaways"
-      data-mode={showPanel ? 'panel' : showRecall ? 'recall' : 'line'}
+      data-mode={showPanel ? 'panel' : 'line'}
       data-presenting={presenting || undefined}
       data-closing={closing || undefined}
       // Bare keys are shape shortcuts on the canvas; inside here they are letters being typed, or
@@ -85,7 +74,6 @@ export function TakeawaysPanel({ playback, buildCommandContext }: TakeawaysPanel
       {showPanel && <TakeawaysHeader />}
       {capturing && <CaptureLine playback={playback} />}
       {showPanel && <TakeawaysBody buildCommandContext={buildCommandContext} />}
-      {showRecall && <RecallCard buildCommandContext={buildCommandContext} />}
     </div>
   );
 }
@@ -106,129 +94,6 @@ function TakeawaysHeader() {
         aria-label="Close takeaways"
         onClick={() => useUiStore.getState().setTakeawaysOpen(false)}
       />
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------- recall -- */
-
-/**
- * What this canvas is still owed, said once on the way in.
- *
- * Not a toast: a toast is a thing that happened, and this is a thing that is true. It is the
- * status bar's own count opened up for a few seconds and then folded back into it, which is why it
- * shares the surface rather than floating over the middle of the screen. Watching it settle is
- * also the only instruction anyone gets about where the count lives.
- *
- * Deliberately never focused. An arrival card that stole the caret would make every open of every
- * canvas begin with a keystroke to escape it.
- */
-function RecallCard({ buildCommandContext }: { buildCommandContext: () => CommandContext }) {
-  const revision = useEditorStore((state) => state.revision);
-  const items = useMemo(() => {
-    void revision;
-    return recallItems(takeawaysFor(fileOf(useEditorStore.getState())));
-  }, [revision]);
-
-  const settle = useCallback(() => useUiStore.getState().setTakeawaysRecall(false), []);
-
-  // Time is held, not restarted, while the pointer or focus is on the card: restarting would make
-  // a card you glanced at outlast one you ignored. The floor stops it vanishing the instant the
-  // pointer leaves, which reads as a glitch rather than as a timeout.
-  const remaining = useRef(RECALL_MS);
-  const startedAt = useRef(0);
-  const timer = useRef<number | undefined>(undefined);
-
-  /** Stops the clock without forgetting how much of it is left. */
-  const stop = useCallback(() => {
-    if (timer.current === undefined) return;
-    window.clearTimeout(timer.current);
-    timer.current = undefined;
-  }, []);
-
-  const hold = useCallback(() => {
-    if (timer.current === undefined) return;
-    const spent = Date.now() - startedAt.current;
-    stop();
-    remaining.current = Math.max(RECALL_FLOOR_MS, remaining.current - spent);
-  }, [stop]);
-
-  const run = useCallback(() => {
-    if (timer.current !== undefined) return;
-    startedAt.current = Date.now();
-    timer.current = window.setTimeout(settle, remaining.current);
-  }, [settle]);
-
-  useEffect(() => {
-    // `motionMs` is 0 under reduced motion for animations, but the card still has to be readable —
-    // the timer is the content, not the movement, so it runs at full length either way.
-    run();
-    // `stop`, not a bare `clearTimeout`: the handle has to be forgotten as well as cancelled.
-    // StrictMode runs this effect twice, and a second `run()` that still saw a live handle would
-    // decline to reschedule the timer the first cleanup had just cancelled — leaving the card up
-    // for good. It only ever showed in a browser, never in a test.
-    return stop;
-  }, [run, stop]);
-
-  const openPanel = () => {
-    settle();
-    useUiStore.getState().setTakeawaysOpen(true);
-  };
-
-  const goTo = (target: TakeawayTarget) => {
-    settle();
-    navigateToElement(target, buildCommandContext);
-  };
-
-  // Nothing to say — the last action was ticked between the open and this render.
-  if (items.total === 0) return null;
-
-  return (
-    <div
-      className="dc-takeaways-recall"
-      onPointerEnter={hold}
-      onPointerLeave={run}
-      onFocus={hold}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) run();
-      }}
-      onKeyDown={(event) => {
-        // Settles the card and stops there: the Escape cascade in `EditorScreen` is guarded on the
-        // panel being open, and an arrival card must never be the reason a selection got cleared.
-        if (event.key !== 'Escape') return;
-        event.preventDefault();
-        event.stopPropagation();
-        settle();
-      }}
-    >
-      <div className="dc-takeaways-recall-head">
-        <strong className="dc-takeaways-title">Still open</strong>
-        <span className="dc-takeaways-recall-count">{items.total}</span>
-      </div>
-      <ul className="dc-takeaways-recall-list">
-        {items.shown.map((entry, index) => (
-          // The stagger is per-row and tiny: the list reads as being remembered rather than as a
-          // card appearing all at once. CSS drops it entirely under reduced motion.
-          <li key={entry.action.id} className="dc-takeaways-recall-row" style={{ '--dc-row': index } as CSSProperties}>
-            <span className="dc-takeaways-recall-glyph" aria-hidden="true">
-              □
-            </span>
-            <span className="dc-takeaways-recall-body">
-              <span className="dc-takeaways-recall-text">
-                <MentionText text={entry.action.text} />
-              </span>
-              {entry.context && <ContextLine target={entry.context} onGo={() => goTo(entry.context!)} />}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <button type="button" className="dc-takeaways-recall-more" onClick={openPanel}>
-        {items.overflow > 0 ? `+${items.overflow} more` : 'Review takeaways'}
-      </button>
-      {/* Announced once, politely. The card is not an alert: nothing has gone wrong. */}
-      <span className="dc-sr-only" role="status">
-        {count(items.total, 'open action')} on this canvas.
-      </span>
     </div>
   );
 }

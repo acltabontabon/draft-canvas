@@ -10,8 +10,9 @@ All notable changes to Draft Canvas are documented here.
   during a meeting or mid-presentation.
 - A quiet count in the status bar opens Takeaways: your open actions, plus the decisions and open
   questions already written on the canvas.
-- Open a canvas that still has actions on it and it says what they are, briefly, before settling
-  back into that count — so what a meeting agreed doesn't go quiet the moment the file closes.
+- Open a canvas that still has actions on it and a small note points them out in the status bar
+  for a few seconds, then folds into that count — so what a meeting agreed doesn't go quiet the
+  moment the file closes.
 - Each diagram in your list says how many actions it still has open, so you can see what's
   outstanding before opening anything.
 - **Copy takeaways** puts the lot on the clipboard as Markdown, ready to paste anywhere.
