@@ -47,12 +47,122 @@ event-driven, CQRS, hexagonal, saga), not invented fixtures — regenerate them 
   expose the latter, and this doc won't call it that.
 - **Drag** — wall-clock time for one 40-step drag of the first node, mirroring `e2e/scale.spec.ts`'s
   proven gesture pattern. Each measured run is undone (`Meta+Z`) before the next, so iterations
-  stay comparable.
+  stay comparable. Every awaited move waits for the display, so this is roughly 40 frames at 60 Hz
+  (about 670 ms): the length of the gesture, *not* a lag. It changes only if something makes the
+  drag miss frames badly; how each frame fares is what `npm run perf:interaction` measures.
 
 Each number is a median of 3 measured iterations (plus 1 discarded warmup iteration). With this
 few samples, a percentile beyond the median would be false precision, so none is calculated — the
 JSON result still carries `minMs`/`maxMs` per timing, which is enough to catch "one run was wildly
 off" without pretending statistical rigor.
+
+## Does it stay smooth while somebody works?
+
+The three questions above are about a diagram at rest. Working *in* one — panning, zooming, dragging,
+connecting, renaming, opening a panel — is where a hitch is felt, and an average frame rate hides
+exactly that. This second benchmark measures the frames themselves.
+
+```
+npm run perf:interaction                                   # every size, every scenario (~30 min)
+npm run perf:interaction -- --sizes medium --scenarios drag-single,zoom-wheel
+npm run perf:interaction -- --profile /tmp/prof --sizes medium --scenarios drag-single
+```
+
+It builds the production bundle, serves it, and drives it with **real mouse and keyboard events**
+(synthetic events dispatched from inside the page do not drive React Flow), one pointer event per
+animation frame — what a 60 Hz person produces. Each scenario picks its targets from what is on
+screen, so the same fixture and viewport always yield the same gesture.
+
+**Fixtures** (`benchmark/workloads/scale.ts`) are generated, not stored, from a seeded PRNG with
+explicit ids, so the same size is byte-identical every run and a before/after comparison measures the
+app, never the fixture. They are shaped like a C4-aware diagram that has grown: system → container →
+domain boundaries three deep, connectors that cross boundaries and each other, notes and code on shapes
+and connectors, a few shapes with a room inside them, flows and actions.
+
+| Size | Shapes / connectors on the canvas | Boundaries | Attachments | Rooms |
+|---|---|---|---|---|
+| Small | 50 / 75 | 12 | 19 | 1 |
+| Medium | 200 / 300 | 45 | 56 | 3 |
+| Large | 500 / 800 | 112 | 144 | 6 |
+| Stress | 1,000 / 1,500 | 226 | 278 | 10 |
+
+These are investigation sizes, not capacity claims.
+
+**Scenarios** (`benchmark/interaction/scenarios.ts`): pan (drag and wheel), zoom, dragging one shape /
+a multi-selection / a boundary with everything nested in it / a Note across dense connectors, drawing a
+connector, hovering, clicking through shapes, renaming a shape, and opening the palette, Flows and
+Takeaways. Each has an unmeasured `prepare` and a measured `run`, followed by a *tail* in which the
+debounced work the gesture caused (autosave, viewport save) lands — reported separately, because a
+stall 700 ms after a perfectly smooth drag is still felt.
+
+**What is reported** (`benchmark/interaction/stats.ts`): frame-time p50 / p95 / p99 / max, the share of
+frames past 20 ms (a missed 60 Hz deadline) and past 33 ms (a visible hitch), frames over 50 ms, input
+latency (a pointer event's own timestamp to the first frame after it), long tasks and Long Animation
+Frames with their worst offenders, main-thread busy share, and — from the browser's own counters —
+script, layout and style-recalculation time. Page errors are captured too: a scenario that takes the
+canvas down is reported as such rather than as a fast run.
+
+**Reading it honestly.** It runs the *production* build in Chromium's current headless mode, on
+whatever machine you run it on; the environment is recorded in the result. A frame time of 16.7 ms is
+the display's vsync floor, not a measurement of how much headroom there is — read it together with
+the busy share. Automation adds its own overhead (each paced move is a round trip), so compare runs of
+this harness with each other, not with a number from anywhere else. `--dist <dir>` measures a build made
+somewhere else, which is how a before and after are taken from two commits; `--compare a.json b.json`
+prints them side by side.
+
+**Profiling.** `--profile <dir>` runs the first measured iteration of each scenario under the CPU
+profiler and prints the functions that took the time (self and inclusive). Point it at a build made
+with `vite build --minify false` so names survive — it is the same code, just legible. Read *self* time
+first, then look at who called the top native (`querySelector`, `getBoundingClientRect`): a profile of
+a diagram of 800 connectors is what showed one library call at 73% of a pan, called 800 times per
+frame from a selector every connector subscribed to.
+
+**Comparing two builds.** `--against <dist> --against-label before` measures another build
+*interleaved* with this one, scenario by scenario with the order alternating, and prints the two side
+by side. Two runs taken half an hour apart are not comparable — a laptop moving from AC to battery
+changes what Chromium is willing to do — so anything that has to be compared is measured this way.
+
+**The idle frame floor.** Every result records how fast an *idle* page ticks on the machine that ran
+it (16.7 ms is a 60 Hz machine) and flags anything above 20 ms. Below roughly 20% battery Chromium caps
+rendering at 30 frames a second, which turns every frame time into "33.3" and every gesture into a
+"dropped frame" for reasons that have nothing to do with the app. `--uncap-frames` lifts the cap when
+that cannot be avoided; a run that shows the flag is not comparable with one that does not.
+
+### Whole actions, and whether memory settles
+
+```
+npm run perf:lifecycle                                    # load, export, a 100-diagram Library, two soaks
+npm run perf:lifecycle -- --only load,library --sizes medium
+```
+
+`benchmark/lifecycle-cli.ts` measures what is not a gesture: a cold **load** of each size (with the
+longest task), an **SVG and PNG export** through the real dialog, the **Library with a hundred
+diagrams** (time to every row and its fingerprint being on screen after a fresh navigation), and two
+**soaks** — open / edit / switch diagrams 25 times, and drag a shape out and back 150 times, which
+fills history to its limit and then trims it on every step.
+
+Memory is judged by slope, never by a snapshot: the soak samples the JS heap, DOM node count and
+listener count after every cycle (with a forced GC first), discards the warmup, and fits a line through
+the rest. A cache that has filled has a slope near zero; a retained object graph keeps climbing. One
+reading cannot tell the two apart.
+
+**What the soaks have caught.** A regression that never shipped, and a false alarm. A draft of the
+crossing planner had the editing soak showing a Large diagram's heap climbing to 316 MiB over a long
+session, where the code before it settled at 110 MiB. Undo history keeps a crossing plan for every
+step, and each plan was keeping the planner's scratch —
+its segment grid and crowding hash — alive, because a closure made inside a function shares one scope
+with everything else in it. Built outside the planner, it settles at 118 MiB. The switching soak, on
+the other hand, once reported 6,700 DOM nodes leaking per cycle; that was the harness. A handle from
+`page.waitForSelector` stays alive in Playwright and pinned every canvas it had waited for, so wait
+with a locator, and distrust a heap snapshot whose only retainer is "DevTools console".
+
+**What opening a big diagram costs.** Small opens in about half a second and Medium in under one, but
+Large (500 shapes, 800 connectors) takes about 2.8 s and Stress about 9 s, each as a single main-thread
+task: the page does not respond meanwhile. A CPU profile of the Large open puts no more than about a
+fifth of it in Draft Canvas's own code (the crossing plan and connector geometry). The rest is React Flow updating its
+store as it measures every node, and every subscriber re-checking its selector. No single function is
+left to fix, so this is a limit rather than a to-do — opening is about twice as fast as it was, which is
+not the same as fast.
 
 ## Comparing against a baseline
 
@@ -73,7 +183,13 @@ npm run perf:publish
 ```
 
 Regenerates the `<!-- performance:start -->…<!-- performance:end -->` block in `README.md` from
-`benchmark/results/latest.json`. Run `npm run perf` first.
+`benchmark/results/latest.json`. Run `npm run perf` first. When `benchmark/results/interaction.json`
+exists (the default output of `npm run perf:interaction`) the block also carries the "While you work"
+table — frame times while panning, zooming, selecting and dragging, and the longest freeze after an
+edit — so the README says what a person feels as well as what a diagram costs at rest. The same goes
+for `benchmark/results/lifecycle.json` (the default output of `npm run perf:lifecycle`), which adds
+"Opening one, and working for a long time": how long a big diagram takes to open and how long the page
+cannot respond meanwhile, what exporting costs, and whether memory stopped growing over a long session.
 
 ## CI
 

@@ -17,14 +17,19 @@ export interface BenchServer {
   stop: () => Promise<void>;
 }
 
-export async function startBenchServer(opts: { port: number; skipBuild?: boolean }): Promise<BenchServer> {
-  if (!opts.skipBuild) {
+export async function startBenchServer(opts: {
+  port: number;
+  skipBuild?: boolean;
+  /** Serve an already-built `dist` from somewhere else — how a before/after run measures two builds. */
+  distDir?: string;
+}): Promise<BenchServer> {
+  if (!opts.skipBuild && !opts.distDir) {
     execSync('npm run build', { stdio: 'inherit', cwd: REPO_ROOT });
   }
 
   const child: ChildProcess = spawn(
     'npm',
-    ['run', 'preview', '--', '--port', String(opts.port), '--strictPort'],
+    ['run', 'preview', '--', '--port', String(opts.port), '--strictPort', ...(opts.distDir ? ['--outDir', opts.distDir] : [])],
     { cwd: REPO_ROOT, stdio: 'pipe', detached: true },
   );
 
