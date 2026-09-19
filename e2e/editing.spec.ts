@@ -1055,7 +1055,7 @@ test.describe('editing', () => {
     expect(Math.abs(afterUndo.x - afterShift.x)).toBeLessThan(1.5);
   });
 
-  test('Enter edits a single selected node or edge, and is a no-op otherwise', async ({ page }) => {
+  test('Enter edits a single selected node, boundary or edge, and is a no-op otherwise', async ({ page }) => {
     await newCanvas(page, 'Keyboard enter');
     await create(page, 'Service', { x: 300, y: 250 });
     await create(page, 'Data Store', { x: 600, y: 250 });
@@ -1086,13 +1086,15 @@ test.describe('editing', () => {
     await page.keyboard.press('Enter');
     await expect(page.locator('.dc-node-editor')).toHaveCount(0);
 
-    // A boundary (group) node: no-op.
+    // A boundary (group) node edits its caption, like any other shape.
     await page.getByRole('button', { name: 'Group', exact: true }).click();
     // Click in the boundary's own padding, clear of the connector running
     // between its two contained nodes (which would otherwise intercept a
     // click at the node's default centre point).
     await page.locator('.dc-node[data-type="group"]').click({ position: { x: 8, y: 8 } });
     await page.keyboard.press('Enter');
+    await expect(page.locator('.dc-node-editor')).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(page.locator('.dc-node-editor')).toHaveCount(0);
   });
 
