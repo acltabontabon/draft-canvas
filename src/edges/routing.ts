@@ -7,7 +7,7 @@ import {
   type EdgeRouting,
   type Side,
 } from '../document/types';
-import { anchorBandOf } from '../document/queueGeometry';
+import { anchorBandOf, type AnchorBand } from '../document/queueGeometry';
 import { centerOf, clamp } from '../lib/math';
 
 /**
@@ -38,11 +38,12 @@ export interface Rect {
   width: number;
   height: number;
   /**
-   * The absolute y-range a LEFT/RIGHT anchor may occupy — a queue-family node's tube glyph (see
-   * `document/queueGeometry.ts`'s `anchorBandOf`). Absent means the whole side. Only anchor
-   * placement reads it: obstacle, overlap and selection geometry always use the full box.
+   * Where the anchors land when the drawn glyph is smaller than the box — a queue-family node's tube
+   * or a Data Store's glyph (see `document/queueGeometry.ts`'s `anchorBandOf`). Absent means the
+   * box's own edges. Only anchor placement reads it: obstacle, overlap and selection geometry
+   * always use the full box.
    */
-  anchorBand?: { top: number; bottom: number };
+  anchorBand?: AnchorBand;
 }
 
 export interface Anchor {
@@ -78,16 +79,16 @@ export function anchorPoint(rect: Rect, side: Side, offset = 0.5): { x: number; 
   const t = clamp(offset, 0, 1);
   switch (side) {
     case 'top':
-      return { x: rect.x + rect.width * t, y: rect.y };
+      return { x: rect.x + rect.width * t, y: rect.anchorBand?.glyphTop ?? rect.y };
     case 'bottom':
       return { x: rect.x + rect.width * t, y: rect.y + rect.height };
     case 'left': {
       const span = verticalSpan(rect);
-      return { x: rect.x, y: span.start + span.length * t };
+      return { x: rect.anchorBand?.left ?? rect.x, y: span.start + span.length * t };
     }
     case 'right': {
       const span = verticalSpan(rect);
-      return { x: rect.x + rect.width, y: span.start + span.length * t };
+      return { x: rect.anchorBand?.right ?? rect.x + rect.width, y: span.start + span.length * t };
     }
   }
 }

@@ -28,7 +28,7 @@ export function rectOfInternal(node: InternalNode, type?: DraftNodeType): Rect |
     width,
     height,
   };
-  const band = type ? anchorBandOf({ type, y: rect.y, height }) : undefined;
+  const band = type ? anchorBandOf({ type, x: rect.x, y: rect.y, width, height }) : undefined;
   return band ? { ...rect, anchorBand: band } : rect;
 }
 

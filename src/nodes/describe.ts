@@ -14,6 +14,7 @@ import { tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import { DS_GLYPH_HEIGHT, DS_GLYPH_TOP } from '../document/dataStoreGeometry';
 import { roughenPath } from '../render/roughness/roughPath';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
@@ -1035,8 +1036,6 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
  * a name laid over it collides with the very thing that identifies the kind. Anchoring every kind
  * the same way is also what lets eight quite different silhouettes still read as one family.
  */
-const DS_GLYPH_TOP = 9;
-const DS_GLYPH_HEIGHT = 42;
 const DS_GLYPH_BOTTOM = DS_GLYPH_TOP + DS_GLYPH_HEIGHT;
 const DS_CAPTION_GAP = 5;
 

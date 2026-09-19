@@ -1,3 +1,4 @@
+import { dataStoreGlyphBounds } from './dataStoreGeometry';
 import type { DraftNode } from './types';
 
 /**
@@ -19,15 +20,40 @@ export function queueTubeSpan(height: number): { top: number; bottom: number } {
 }
 
 /**
- * The absolute vertical band a node's left/right connectors should be distributed over — the tube
- * for a queue-family node, `undefined` (meaning "the whole side") for everything else, whose drawn
- * body fills its box. Top/bottom sides are unaffected: the tube's top *is* the box top, and a
- * connector leaving downward exits below the captions rather than through them.
+ * Where a connector's anchors land, when that isn't simply the box's own edge — for a node whose
+ * drawn glyph is smaller than its box. Only anchor placement reads it: obstacle, overlap and
+ * selection geometry always use the full box.
+ *
+ * `top`/`bottom` is the absolute vertical band a left/right connector is distributed over. The
+ * optional `left`/`right` are the absolute x of the glyph's own edges, where a left/right
+ * connector meets it instead of the box edge; `glyphTop` is the y a top connector meets it at.
+ * Absent means the box edge.
+ */
+export interface AnchorBand {
+  top: number;
+  bottom: number;
+  left?: number;
+  right?: number;
+  glyphTop?: number;
+}
+
+/**
+ * The band a node's connectors should land on — the tube for a queue-family node (vertical only:
+ * it fills the box's width), the glyph for a Data Store (which is narrow, centred and sits near the
+ * top of its box, so a left/right arrow used to stop a good way short of it), `undefined` (meaning
+ * the whole side) for everything else, whose drawn body fills its box. A bottom connector is
+ * unaffected: it leaves below the captions rather than through them.
  */
 export function anchorBandOf(
-  node: Pick<DraftNode, 'type' | 'y' | 'height'>,
-): { top: number; bottom: number } | undefined {
-  if (node.type !== 'queue') return undefined;
-  const span = queueTubeSpan(node.height);
-  return { top: node.y + span.top, bottom: node.y + span.bottom };
+  node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'>,
+): AnchorBand | undefined {
+  if (node.type === 'queue') {
+    const span = queueTubeSpan(node.height);
+    return { top: node.y + span.top, bottom: node.y + span.bottom };
+  }
+  if (node.type === 'database') {
+    const glyph = dataStoreGlyphBounds(node);
+    return { top: glyph.top, bottom: glyph.bottom, left: glyph.left, right: glyph.right, glyphTop: glyph.top };
+  }
+  return undefined;
 }
