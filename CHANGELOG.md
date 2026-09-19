@@ -4,6 +4,13 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Pressing Enter on a selected Boundary now edits its caption, as the command palette's **Edit
+  caption** row already said it would.
+- ⌘Enter (Ctrl+Enter) now starts presenting the way the Present button does: it plays the flow and
+  fits it to the screen, instead of only switching to the presenting view.
+
 ## [1.9.0] - 2026-09-19
 
 ### Added

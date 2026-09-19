@@ -1,6 +1,6 @@
 import { ReactFlowProvider } from '@xyflow/react';
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument } from '../src/document/factory';
 import { useKeyboard } from '../src/ui/Editor/EditorScreen';
 import { useFlowPlayback } from '../src/presentation/useFlowPlayback';
@@ -46,11 +46,11 @@ function reset() {
   });
 }
 
-function mount() {
+function mount(onPresent: () => void = () => {}) {
   return renderHook(
     () => {
       const playback = useFlowPlayback();
-      useKeyboard({ createAtPointer: () => null, playback });
+      useKeyboard({ createAtPointer: () => null, onPresent, playback });
       return playback;
     },
     { wrapper: ({ children }) => <ReactFlowProvider>{children}</ReactFlowProvider> },
@@ -135,16 +135,36 @@ describe('keyboard dispatch — matches the shortcuts the UI displays', () => {
     expect(useEditorStore.getState().document.nodes.some((n) => n.type === 'group')).toBe(false);
   });
 
-  it('present toggle (⌘Enter) flips edit/present mode, matching its displayed shortcut', () => {
-    mount();
+  it('present toggle (⌘Enter) starts presenting through the same path as the Present button, and exits again', () => {
+    // Starting must go through `onPresent` (start the flow, frame it), not merely flip the mode —
+    // the palette row that shows this chord and the toolbar button both do the full thing.
+    const onPresent = vi.fn(() => useEditorStore.getState().setMode('present'));
+    mount(onPresent);
     expect(shortcutFor('present')).toBe(`${MOD_SYMBOL} Enter`);
     expect(useEditorStore.getState().mode).toBe('edit');
 
     press('Enter', { metaKey: true });
+    expect(onPresent).toHaveBeenCalledTimes(1);
     expect(useEditorStore.getState().mode).toBe('present');
 
     press('Enter', { metaKey: true });
+    expect(onPresent).toHaveBeenCalledTimes(1);
     expect(useEditorStore.getState().mode).toBe('edit');
+  });
+
+  it('Enter edits the selected shape, a Boundary included, matching its displayed shortcut', () => {
+    mount();
+    expect(shortcutFor('edit-text')).toBe('Enter');
+    const a = addNode();
+    const b = useEditorStore.getState().addNode({ type: 'service', x: 200, y: 0, text: 'B' });
+    useEditorStore.getState().setSelection({ nodes: [a.id, b.id], edges: [] });
+    useEditorStore.getState().groupSelection();
+    const boundary = useEditorStore.getState().document.nodes.find((n) => n.type === 'group')!;
+    expect(useEditorStore.getState().selection.nodes).toEqual([boundary.id]);
+
+    useUiStore.getState().requestEdit(null);
+    press('Enter');
+    expect(useUiStore.getState().editRequestId).toBe(boundary.id);
   });
 
   it('export (⌘⇧E) opens the export dialog, matching its displayed shortcut', () => {

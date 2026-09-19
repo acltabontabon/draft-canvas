@@ -26,6 +26,8 @@ const VIEWPORT = { width: 1200, height: 640 };
 
 const CANVAS = '.react-flow__pane';
 
+const log = (line: string) => process.stdout.write(`${line}\n`);
+
 async function startServer(): Promise<() => Promise<void>> {
   const child: ChildProcess = spawn('npm', ['run', 'dev', '--', '--port', String(PORT), '--strictPort'], {
     cwd: REPO_ROOT,
@@ -63,14 +65,14 @@ async function shot(page: Page, name: string, clip?: { x: number; y: number; wid
   // Let motion settle (popovers, ghosts, camera) so the picture is the resting state.
   await page.waitForTimeout(1300);
   await page.screenshot({ path: join(OUT, `${name}.png`), clip });
-  console.log(`  ${name}.png`);
+  log(`  ${name}.png`);
 }
 
 /** A dialog on its own, without the dimmed editor behind it. */
 async function shotDialog(page: Page, name: string) {
   await page.waitForTimeout(600);
   await page.getByRole('dialog').screenshot({ path: join(OUT, `${name}.png`) });
-  console.log(`  ${name}.png`);
+  log(`  ${name}.png`);
 }
 
 const box = async (locator: Locator) => (await locator.boundingBox())!;
@@ -152,7 +154,7 @@ async function main() {
     await page.goto(URL);
 
     // ── Getting started ────────────────────────────────────────────────────────────────────
-    console.log('getting started');
+    log('getting started');
     await page.getByRole('button', { name: 'New canvas' }).first().click();
     await expect(page.locator('.dc-editor')).toBeVisible();
     const title = page.getByLabel('Diagram title');
@@ -240,7 +242,7 @@ async function main() {
     await page.keyboard.press('Escape');
 
     // ── Keyboard and the command palette ───────────────────────────────────────────────────
-    console.log('keyboard');
+    log('keyboard');
     await page.locator(CANVAS).click({ position: { x: 700, y: 520 } });
     await page.keyboard.press('Control+k');
     await page.keyboard.type('queue');
@@ -255,7 +257,7 @@ async function main() {
     await page.keyboard.press('Escape');
 
     // ── Depth ──────────────────────────────────────────────────────────────────────────────
-    console.log('depth');
+    log('depth');
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
     await page.getByRole('button', { name: 'New canvas' }).first().click();
     await expect(page.locator('.dc-editor')).toBeVisible();
@@ -292,7 +294,7 @@ async function main() {
     await page.keyboard.press('Control+ArrowUp');
 
     // ── The Library ────────────────────────────────────────────────────────────────────────
-    console.log('library');
+    log('library');
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
     await expect(page.getByText('Order processing')).toBeVisible();
     await shot(page, 'library');

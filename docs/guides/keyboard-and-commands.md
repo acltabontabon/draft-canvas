@@ -72,7 +72,7 @@ all appear as **Jump to** results. Choosing one selects it and moves the view to
 
 | Keys | Does |
 | --- | --- |
-| `Enter` | Edit the selected shape's or connector's text |
+| `Enter` | Edit the selected shape's or connector's text (a Boundary's caption too) |
 | `Esc` | Step back one level: editing, then popovers, then the selection |
 | `⌘Z` / `⌘⇧Z` | Undo / redo |
 | `⌘C` `⌘X` `⌘V` | Copy, cut, paste. Pasting works between diagrams |
@@ -84,8 +84,8 @@ all appear as **Jump to** results. Choosing one selects it and moves the view to
 
 While you type, `Enter` commits a shape's label and `Shift+Enter` adds a line. Notes work the other
 way round: `Enter` adds a line and `⌘Enter` commits. In a Code shape, `Enter` is always a new line.
-`Esc` keeps what you typed in a Note and discards it elsewhere. A Boundary's caption is edited by
-double-clicking it, or with **Edit caption** in the palette.
+`Esc` keeps what you typed in a Note and discards it elsewhere. On a Boundary, `Enter` edits its
+caption.
 
 `Shift+F10` (or the Menu key) opens the context menu for the selection, the keyboard route to the
 same actions as a right-click.
@@ -113,9 +113,8 @@ with a shortcut or the mouse, and it is a good way to discover what exists.
 
 ## While presenting
 
-The **Present** button in the toolbar (or **Start presentation** in the palette) starts the flow and
-fits it to the view. `⌘Enter` also switches to presenting, but only that: choose **Present a flow**
-when it appears to start playing one.
+`⌘Enter`, the **Present** button in the toolbar, and **Start presentation** in the palette all do the
+same thing: start the flow and fit it to the view. Press `⌘Enter` again to leave.
 
 Presenting is read-only. `→` or `Space` goes to the next step, `←` to the previous one, and `Esc`
 leaves. `⌘K` still works, and shows only presentation commands. `I` still opens the line for

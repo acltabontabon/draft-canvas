@@ -313,7 +313,19 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     [createAt, screenToFlowPosition],
   );
 
-  useKeyboard({ createAtPointer, playback });
+  // One way to start presenting, shared by the toolbar's Present button and the ⌘Enter chord, so
+  // the chord does what the button (and the palette row that shows the same chord) does: start the
+  // flow and frame it, not just flip the mode.
+  const onPresent = useCallback(() => {
+    // Read before `playback.start()` flips `flowPlayback.active` — otherwise the fit-view
+    // guard would see playback as already active and skip scoping to the presented flow.
+    const nodes = flowFitViewNodes(useEditorStore.getState());
+    setMode('present');
+    if (playback.canStart) playback.start();
+    void fitView({ padding: 0.18, duration: motionMs(320), nodes });
+  }, [playback, fitView, setMode]);
+
+  useKeyboard({ createAtPointer, onPresent, playback });
 
   const buildCommandContext = useCommandContext({ createAt, createAtPointer, playback });
 
@@ -355,15 +367,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     },
     [buildCommandContext, setContextMenu],
   );
-
-  const onPresent = useCallback(() => {
-    // Read before `playback.start()` flips `flowPlayback.active` — otherwise the fit-view
-    // guard would see playback as already active and skip scoping to the presented flow.
-    const nodes = flowFitViewNodes(useEditorStore.getState());
-    setMode('present');
-    if (playback.canStart) playback.start();
-    void fitView({ padding: 0.18, duration: motionMs(320), nodes });
-  }, [playback, fitView, setMode]);
 
   const presenting = mode === 'present';
 
@@ -557,9 +560,11 @@ function ContinuationAnnouncer() {
  *  below still calls it exactly as before. */
 export function useKeyboard({
   createAtPointer,
+  onPresent,
   playback,
 }: {
   createAtPointer: (preset: Preset) => void;
+  onPresent: () => void;
   playback: ReturnType<typeof useFlowPlayback>;
 }) {
   const setExportOpen = useUiStore((state) => state.setExportOpen);
@@ -852,7 +857,8 @@ export function useKeyboard({
             return;
           case 'enter':
             event.preventDefault();
-            state.setMode(state.mode === 'present' ? 'edit' : 'present');
+            if (state.mode === 'present') state.setMode('edit');
+            else onPresent();
             return;
           // The Finder chord, for the same two moves: open the thing you have, and go back out to
           // what contains it. Works while presenting too — stepping into a system mid-walkthrough
@@ -1108,7 +1114,7 @@ export function useKeyboard({
           const { nodes, edges } = state.selection;
           if (nodes.length === 1 && edges.length === 0) {
             const target = state.document.nodes.find((n) => n.id === nodes[0]);
-            if (!target || target.type === 'group') return;
+            if (!target) return;
             event.preventDefault();
             uiState.requestEdit(target.id);
           } else if (edges.length === 1 && nodes.length === 0) {
@@ -1135,6 +1141,7 @@ export function useKeyboard({
   }, [
     arm,
     createAtPointer,
+    onPresent,
     openContextMenuFromKeyboard,
     playback,
     fitView,

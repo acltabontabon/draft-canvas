@@ -61,7 +61,7 @@ function mount() {
   return renderHook(
     () => {
       const playback = useFlowPlayback();
-      useKeyboard({ createAtPointer: () => null, playback });
+      useKeyboard({ createAtPointer: () => null, onPresent: () => {}, playback });
       return playback;
     },
     { wrapper: ({ children }) => <ReactFlowProvider>{children}</ReactFlowProvider> },

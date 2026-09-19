@@ -76,8 +76,8 @@ A flow is a numbered path through connectors. It's how you say "first this happe
    ![The Flows panel listing "Place an order" with two steps, and numbered badges on the two connectors.](../media/guides/flows-panel.png)
 
 4. Click **Present** in the toolbar. The editor gets out of the way and the flow starts at step 1.
-   Press `→` or `Space` for the next step and `←` to go back. `Esc` returns to editing. (`⌘Enter`
-   switches to presenting too, but leaves you to click **Present a flow** to start.)
+   Press `→` or `Space` for the next step and `←` to go back. `Esc` returns to editing. `⌘Enter`
+   does the same as the button.
 
 While a step is showing, the notes attached to what it shows appear beside it. The note on the queue
 appears when the flow first reaches the queue.
