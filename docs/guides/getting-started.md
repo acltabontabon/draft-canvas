@@ -31,7 +31,7 @@ saves itself as you work; see [Saving, backing up and sharing](saving-and-sharin
    `Enter` to name it `Fulfilment worker`. If the guess isn't what you want, press `Esc`, or `]` to
    see another.
 
-   ![A faint Worker shape and a dashed connector labelled "consumed by" appear next to the selected queue, with a note reading "Suggested: Worker. Press Tab to add it."](../media/guides/suggestion.png)
+   ![A faint Worker shape and a dashed connector labelled "consumed by" appear next to the selected queue, with a small pill reading "Worker" and "Tab".](../media/guides/suggestion.png)
 
 The connectors have labelled themselves with what they mean. The line from the API to the queue
 says it *publishes to* it, and reads in the direction the arrow points. To change one, select the

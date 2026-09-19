@@ -88,6 +88,32 @@ async function drop(page: Page, key: string, at: { x: number; y: number }, name:
   await page.keyboard.press('Enter');
 }
 
+/** Where a shape's connectors leave or enter on one side: the middle of that side's three handles. */
+async function sideY(page: Page, index: number, side: 'left' | 'right') {
+  const boxes = await page.locator('.dc-node').nth(index).locator('.dc-handle').evaluateAll((els) =>
+    els.map((el) => el.getBoundingClientRect()).map((r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 })),
+  );
+  const edge = side === 'left' ? Math.min(...boxes.map((b) => b.x)) : Math.max(...boxes.map((b) => b.x));
+  const ys = boxes.filter((b) => Math.abs(b.x - edge) < 4).map((b) => b.y).sort((a, b) => a - b);
+  return ys[Math.floor(ys.length / 2)]!;
+}
+
+/**
+ * Nudges `to` up or down until the connector from `from` runs level. Shapes differ in height (a
+ * queue's label hangs below its body), so dropping them at the same y leaves a jog in the line, which
+ * reads as sloppy in a picture even though the app is right to draw it.
+ */
+async function levelWith(page: Page, from: number, to: number) {
+  const dy = (await sideY(page, from, 'right')) - (await sideY(page, to, 'left'));
+  if (Math.abs(dy) < 1) return;
+  const target = page.locator('.dc-node').nth(to);
+  await target.click({ position: { x: 8, y: 8 } });
+  const key = dy < 0 ? 'ArrowUp' : 'ArrowDown';
+  for (let i = 0; i < Math.floor(Math.abs(dy) / 10); i += 1) await page.keyboard.press(`Shift+${key}`);
+  for (let i = 0; i < Math.round(Math.abs(dy) % 10); i += 1) await page.keyboard.press(key);
+  // No Escape here: it would dismiss the suggestion ghost the selected shape is about to offer.
+}
+
 /** Clicks the line between two shapes, a little in from the first one: where a person would. */
 async function clickConnector(page: Page, from: number, to: number) {
   const a = await box(page.locator('.dc-node').nth(from));
@@ -108,6 +134,7 @@ async function connectNodes(page: Page, from: number, to: number) {
   await page.mouse.move(target.x, target.y, { steps: 12 });
   await page.mouse.up();
   await page.keyboard.press('Escape');
+  await levelWith(page, from, to);
 }
 
 async function main() {
@@ -150,6 +177,7 @@ async function main() {
     await page.keyboard.type('orders');
     await page.keyboard.press('Enter');
     await expect(page.locator('.dc-node')).toHaveCount(2);
+    await levelWith(page, 0, 1);
 
     // The ghost worker appears beside the selected queue; Tab takes it.
     await page.locator('.dc-node').nth(1).click();
@@ -162,6 +190,8 @@ async function main() {
     await page.keyboard.type('Fulfilment worker');
     await page.keyboard.press('Enter');
     await page.keyboard.press('Escape');
+    await levelWith(page, 1, 2);
+    await page.mouse.click(700, 560);
     await expect(page.locator('.dc-edge text')).toContainText(['publishes to', 'consumed by']);
     await shot(page, 'service-queue-worker');
 
