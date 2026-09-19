@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 13;
+export const CURRENT_VERSION = 14;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -217,14 +217,9 @@ export const EDGE_SEMANTICS = [
    *  (a saga's "release payment" after "reserve payment"). A command in every other respect —
    *  offered where `command` is, never a rollback of anything. */
   'compensates',
-  /** Materialising a read model from events or from the write side — a projection's write into a
-   *  read store. Offered beside `writes` so the authoritative write and the derived one never read
-   *  the same. */
-  'projects',
   /** Cleaning, normalising, validating, enriching, or aggregating data into a more refined form —
    *  the move a data-pipeline layer (raw → refined → curated) makes, distinct from a plain copy
-   *  (`ingests`/`replicates`/`syncs`) or a derived read model (`projects`), neither of which says
-   *  the shape of the data actually changed. */
+   *  (`ingests`/`replicates`/`syncs`), which says nothing about the shape of the data changing. */
   'transforms',
 ] as const;
 export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];

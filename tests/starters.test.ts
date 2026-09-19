@@ -702,15 +702,15 @@ describe('buildStarter', () => {
       expect(crosses).toBe(false);
       expect(sideOf(edge.source) === query && sideOf(edge.target) === command).toBe(false);
     }
-    // A projection's write is a derived one, and reads as such — never the authoritative `writes`.
-    expect(between('Projection Service', 'Read Store').semantic).toBe('projects');
-    expect(between('Projection Service', 'Read Store').semanticsOrigin).toBe('explicit');
+    // A projection's write is a write like any other: the role lives in the names and the layout,
+    // not in a relationship of its own.
+    expect(between('Projection Service', 'Read Store').semantic).toBe('writes');
     expect(byText('Projection Service').serviceKind).toBe('worker');
     // The one honest cost of the pattern is on the canvas, under the bridge.
     expect(byText('Eventually consistent').annotation).toBe(true);
     expect(byText('Eventually consistent').parentId).toBeUndefined();
     // Nothing on the query side is written by the command side, and vice versa.
-    expect(edges.filter((edge) => edge.target === byText('Read Store').id).map((edge) => edge.semantic).sort()).toEqual(['projects', 'reads']);
+    expect(edges.filter((edge) => edge.target === byText('Read Store').id).map((edge) => edge.semantic).sort()).toEqual(['reads', 'writes']);
     expect(edges.filter((edge) => edge.target === byText('Write Store').id)).toHaveLength(1);
 
     // Two flows: the whole write story including the async tail, and the two-step read.

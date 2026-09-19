@@ -72,7 +72,7 @@ unrestricted connector.
 
 | Source → Target | Relations offered | Default | Notes |
 | --- | --- | --- | --- |
-| Service → Database | writes, reads, query, projects, dependsOn | writes | `projects` is a derived write — a projection materialising a read model |
+| Service → Database | writes, reads, query, dependsOn | writes | |
 | Database → Service | reads, query, cdc | reads | `cdc` — a worker tailing the database's own change log, not an ordinary query |
 | Service → Cache | writes, reads, invalidates, dependsOn | writes | `invalidates` is cache-only |
 | Cache → Service | reads | reads | |
@@ -182,7 +182,7 @@ judgement calls that remain on purpose:
 - **`EdgeSemantic`** — what the connection *represents*: `http`, `grpc`, `event`, `command`,
   `query`, `reads`, `writes`, `publishes`, `consumes`, `calls`, `dependsOn`, `fansOut`,
   `deliversTo`, `ingests`, `replicates`, `cdc`, `syncs`, `deadLetters`, `invalidates`, `watches`,
-  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implementedBy`, `compensates`, `projects`,
+  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implementedBy`, `compensates`,
   `transforms`. A label convenience only — never changes the connector's colour.
 - **`ConnectorKind`** — how it *behaves*: `sync`, `async`, `event`, `callback`, `conditional`,
   `retry`, `failure`, `fallback`. Drives the solid/dashed line and small glyphs, not the caption.
@@ -224,7 +224,7 @@ than something that happens at a point in time during a Flow. `src/sequence/stru
 `STRUCTURAL_SEMANTICS` (`dependsOn`, `implementedBy`) is checked before a Flow step's edge is ever
 turned into a message: a structural edge contributes no message at all (though its endpoints may
 still appear as participants via some *other*, behavioral edge). Deliberately small — every other
-`EdgeSemantic`, including `uses` (Component ↔ Component) and `compensates`/`projects` (Saga/CQRS),
+`EdgeSemantic`, including `uses` (Component ↔ Component) and `compensates` (Saga),
 describes a real runtime interaction and is never excluded.
 
 ## Intent Continuation rules

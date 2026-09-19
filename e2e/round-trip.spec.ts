@@ -14,7 +14,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const richDocument = () => ({
   format: 'draft-canvas',
-  version: 13,
+  version: 14,
   metadata: { id: 'round-trip', title: 'Round trip', createdAt: 1, updatedAt: 2 },
   level: 'container',
   nodes: [

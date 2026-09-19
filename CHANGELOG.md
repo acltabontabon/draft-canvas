@@ -11,7 +11,9 @@ All notable changes to Draft Canvas are documented here.
   the anchor dots you reach for sit on the shape too.
 - The CQRS, Hexagonal, Medallion, Kappa, CDC and Transactional Outbox starters put their stores on
   the line they connect along, so those arrows run straight into the shape instead of stepping.
-- A projection's arrow reads "projects into" rather than "projects".
+- **Projects** is no longer a connector type. A projection writing into a read store is an ordinary
+  *writes to*, like any other write; the CQRS, Kappa and CDC starters say so, and a diagram that
+  already used *projects* opens with *writes to* instead.
 
 ## [1.9.1] - 2026-09-19
 

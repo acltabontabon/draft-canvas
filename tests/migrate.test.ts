@@ -597,6 +597,45 @@ describe('v11 to v12 migration: a shape can have an inside', () => {
   });
 });
 
+describe('v13 to v14 migration: the projects relationship removal', () => {
+  function v13Fixture(edges: unknown[]) {
+    return {
+      format: DRAFT_FORMAT,
+      version: 13,
+      metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0 },
+      nodes: [
+        { id: 'w', type: 'service', serviceKind: 'worker', x: 0, y: 0, width: 160, height: 60, z: 0, text: 'Projection' },
+        { id: 's', type: 'database', x: 300, y: 0, width: 148, height: 88, z: 0, text: 'Read Store' },
+      ],
+      edges,
+      settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
+      flows: [],
+    };
+  }
+
+  it('turns a projects connector into writes, keeping how it was chosen and its label', () => {
+    const raw = v13Fixture([
+      { id: 'e1', source: 'w', target: 's', semantic: 'projects', semanticsOrigin: 'explicit', label: 'my own words' },
+    ]);
+    const result = parseDocument(JSON.stringify(raw));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.version).toBe(CURRENT_VERSION);
+    expect(result.document.edges[0]).toMatchObject({ semantic: 'writes', semanticsOrigin: 'explicit', label: 'my own words' });
+  });
+
+  it('leaves every other relationship as it was', () => {
+    const raw = v13Fixture([
+      { id: 'e1', source: 'w', target: 's', semantic: 'reads' },
+      { id: 'e2', source: 's', target: 'w', semantic: 'transforms' },
+    ]);
+    const result = parseDocument(JSON.stringify(raw));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.edges.map((edge) => edge.semantic)).toEqual(['reads', 'transforms']);
+  });
+});
+
 describe('migration chain completeness', () => {
   it('has no gap between v1 and the current version', () => {
     const { applied } = migrateToCurrent({ version: 1 });
@@ -628,6 +667,7 @@ describe('a migration reaches every room, not just the top one', () => {
           target: `card-${depth}`,
           sequence: 1,
           response: 'ok',
+          semantic: 'projects',
         },
       ],
       flows: [],
@@ -664,7 +704,7 @@ describe('a migration reaches every room, not just the top one', () => {
 
   /** The graph at each of the four levels, outermost first. */
   const levels = (() => {
-    const out: { nodes: readonly { serviceKind?: string; type: string }[]; edges: readonly { hasResponse?: boolean }[]; flows: readonly unknown[] }[] = [];
+    const out: { nodes: readonly { serviceKind?: string; type: string }[]; edges: readonly { hasResponse?: boolean; semantic?: string }[]; flows: readonly unknown[] }[] = [];
     let graphAt: { nodes: readonly typeof migrated.nodes[number][]; edges: readonly typeof migrated.edges[number][]; flows: readonly unknown[] } = migrated;
     for (let depth = 0; depth < 4; depth += 1) {
       out.push(graphAt);
@@ -691,6 +731,10 @@ describe('a migration reaches every room, not just the top one', () => {
 
   it.each([0, 1, 2, 3])('gives the reply at depth %i its line', (depth) => {
     expect(levels[depth]!.edges[0]!.hasResponse).toBe(true);
+  });
+
+  it.each([0, 1, 2, 3])('turns the projects connector at depth %i into writes', (depth) => {
+    expect(levels[depth]!.edges[0]!.semantic).toBe('writes');
   });
 
   it.each([0, 1, 2, 3])('turns the numbered walkthrough at depth %i into a flow', (depth) => {

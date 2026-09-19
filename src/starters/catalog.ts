@@ -1537,9 +1537,9 @@ const backendForFrontend: ArchitectureStarter = {
  *   so this starter stays valid for a plain state-based write model that emits events. CQRS is
  *   not Event Sourcing, and the two are drawn apart on purpose.
  * - `Projection Service` is a Worker that turns each event into an update of the `Read Store`
- *   (`projects`, its own relationship — a derived write, never confused with the authoritative
- *   one), and `Query API` → `Read Store` is the query side: it `reads` and mutates nothing (the
- *   boundary's subtitle is the rule).
+ *   (a plain `writes`; the role is in the name and the side it sits on), and `Query API` →
+ *   `Read Store` is the query side: it `reads` and mutates nothing (the boundary's subtitle is the
+ *   rule).
  * - The "Eventually consistent" annotation sits under the bridge: a read straight after a command
  *   may not yet see it. That is the one honest cost of the pattern, so it is on the canvas, not in
  *   a footnote.
@@ -1720,7 +1720,7 @@ const cqrs: ArchitectureStarter = {
       attachments: [{ type: 'note', text: 'OrderPlaced — a fact, published after the write store commits.' }],
     },
     { key: 'project', ...down('events', 'projection') },
-    { key: 'materialize', ...across('projection', 'read-store'), semantic: 'projects' },
+    { key: 'materialize', ...across('projection', 'read-store') },
     { key: 'query', ...down('client', 'query-api'), semantic: 'query' },
     { key: 'read', ...down('query-api', 'read-store'), semantic: 'reads' },
   ],
@@ -2051,7 +2051,7 @@ const medallion: ArchitectureStarter = {
  *   is the Kappa idea: new events and replayed history enter the *same* processor by the *same*
  *   path. A second "replay" arrow would draw two paths, which is the architecture this isn't.
  * - `Stream Processor` is a plain Worker — a continuous consumer — and `Materialized View` a
- *   `table` reached by `projects`, described as "Derived, rebuildable". The two descriptors carry
+ *   `table` it writes to, described as "Derived, rebuildable". The two descriptors carry
  *   the contrast the whole pattern turns on: history on the left, current state on the right.
  * - `Query API` and `Analytics` *read* the view, so their arrows point at it — the consumer does
  *   the reading, the same direction CQRS's query side uses. Analytics is a plain Service: it
@@ -2246,7 +2246,7 @@ const kappa: ArchitectureStarter = {
     { key: 'app-publish', ...down('application', 'log') },
     { key: 'ext-publish', ...down('external', 'log') },
     { key: 'consume', ...across('log', 'processor'), label: 'live + replay' },
-    { key: 'materialize', ...across('processor', 'view'), semantic: 'projects' },
+    { key: 'materialize', ...across('processor', 'view') },
     { key: 'query', ...down('query-api', 'view'), semantic: 'reads' },
     { key: 'analyze', ...down('analytics', 'view'), semantic: 'reads' },
   ],
@@ -2294,7 +2294,7 @@ const kappa: ArchitectureStarter = {
  *   A Topic says "broadcast and forget"; that is not what a change feed is. Name and shape agree.
  * - `Derived views` holds two lanes, each a consumer Worker and the store it maintains:
  *   `Search Indexer` → `Search Index` (`indexes`), `Warehouse Loader` → `Data Warehouse`
- *   (`projects` — a derived view, never an authoritative `writes`). The workers aren't
+ *   (`writes` — a derived view, named as one). The workers aren't
  *   completeness: each one owns its read position, pace and failures, which is the consumer
  *   independence CDC exists to buy — and because both read the stream the same way (`consumes`),
  *   Smart Routing draws the fan as one trunk with one caption, where two direct sinks with two
@@ -2499,7 +2499,7 @@ const cdc: ArchitectureStarter = {
     { key: 'consume-search', ...across('stream', 'search-indexer') },
     { key: 'consume-warehouse', ...across('stream', 'warehouse-loader') },
     { key: 'index', ...across('search-indexer', 'search-index') },
-    { key: 'project', ...across('warehouse-loader', 'warehouse'), semantic: 'projects' },
+    { key: 'project', ...across('warehouse-loader', 'warehouse') },
   ],
   flows: [
     {

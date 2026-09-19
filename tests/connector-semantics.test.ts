@@ -81,7 +81,7 @@ describe('capabilityFor — the capability matrix', () => {
   it('service → database: defaults to writes, offers writes/reads/query/dependsOn, behaviour is not a meaningful choice', () => {
     const cap = capabilityFor('service', 'database')!;
     expect(cap.defaultRelation).toBe('writes');
-    expect(cap.relations).toEqual(['writes', 'reads', 'query', 'projects', 'dependsOn']);
+    expect(cap.relations).toEqual(['writes', 'reads', 'query', 'dependsOn']);
     expect(cap.behaviors).toEqual([]);
     expect(cap.defaultBehavior).toBeUndefined();
   });

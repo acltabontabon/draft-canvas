@@ -255,6 +255,22 @@ function migrateBffToApi(doc: Record<string, unknown>): Record<string, unknown> 
 }
 
 /**
+ * v14 removed the `projects` relationship — a projection's write into a read store is a write, and
+ * says so with `writes` like every other one; the role belongs to the label, the shapes and the
+ * layout. This retypes any connector's `semantic: 'projects'` to `'writes'`, leaving every other
+ * field (including whether the semantic was inferred or chosen) untouched.
+ */
+function migrateProjectsToWrites(doc: Record<string, unknown>): Record<string, unknown> {
+  const retype = (raw: unknown): unknown => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const item = raw as Record<string, unknown>;
+    return item.semantic === 'projects' ? { ...item, semantic: 'writes' } : item;
+  };
+  const rawEdges = Array.isArray(doc.edges) ? doc.edges : [];
+  return { ...doc, edges: rawEdges.map(retype) };
+}
+
+/**
  * v12 lets a node own the architecture that runs inside it (`DraftNode.inside`). Structurally a
  * no-op — a v11 node simply has no inside, which is exactly what absent already means — but the
  * version still has to move, and for a reason worth stating: a v11 build's validator rebuilds
@@ -349,6 +365,7 @@ const MIGRATIONS: Record<number, Migration> = {
   10: everyRoom(migrateBffToApi),
   11: migrateAddInsides,
   12: migrateAddActions,
+  13: everyRoom(migrateProjectsToWrites),
 };
 
 export class UnsupportedVersionError extends Error {

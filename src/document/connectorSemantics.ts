@@ -215,9 +215,7 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // query vocabulary as Generic, deliberately, rather than implementation-
   // specific verbs like "executes"/"scans" for a distinction the product
   // spec itself calls optional.
-  // `projects` sits beside `writes`: a projection materialising a read model is a write, but a
-  // derived one — CQRS/read-model diagrams need the two to read differently.
-  'service>database': capability(['writes', 'reads', 'query', 'projects', 'dependsOn'], 'writes', []),
+  'service>database': capability(['writes', 'reads', 'query', 'dependsOn'], 'writes', []),
   // 'cdc' beside 'reads': a worker that tails the database's own change log (rather than issuing
   // ordinary queries) is the same log-tailing relationship `database>database` already offers —
   // just now also expressible when the tailer is a service, not another database. Default stays

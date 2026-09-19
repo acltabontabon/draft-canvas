@@ -73,7 +73,6 @@ const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   triggers: 'Triggers',
   implementedBy: 'Implemented by',
   compensates: 'Compensates',
-  projects: 'Projects',
   transforms: 'Transforms',
 };
 
