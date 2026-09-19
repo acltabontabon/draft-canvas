@@ -161,11 +161,26 @@ type Rect = { x: number; y: number; width: number; height: number };
 
 /** The boxes a display list's filled shapes cover. Lines and text are left out: text always sits
  *  on a chip, and a line's ends are at nodes the extent already includes. */
-function shapeRects(shapes: readonly Shape[], dx = 0, dy = 0, out: Rect[] = []): Rect[] {
+function shapeRects(shapes: readonly Shape[], dx = 0, dy = 0, out: Rect[] = [], scale = 1): Rect[] {
   for (const shape of shapes) {
-    if (shape.t === 'rect') out.push({ x: shape.x + dx, y: shape.y + dy, width: shape.w, height: shape.h });
-    else if (shape.t === 'ellipse') out.push({ x: shape.cx - shape.rx + dx, y: shape.cy - shape.ry + dy, width: shape.rx * 2, height: shape.ry * 2 });
-    else if (shape.t === 'group') shapeRects(shape.children, dx + (shape.translate?.x ?? 0), dy + (shape.translate?.y ?? 0), out);
+    if (shape.t === 'rect') out.push({ x: shape.x * scale + dx, y: shape.y * scale + dy, width: shape.w * scale, height: shape.h * scale });
+    else if (shape.t === 'ellipse') {
+      out.push({
+        x: (shape.cx - shape.rx) * scale + dx,
+        y: (shape.cy - shape.ry) * scale + dy,
+        width: shape.rx * 2 * scale,
+        height: shape.ry * 2 * scale,
+      });
+    } else if (shape.t === 'group') {
+      // A point in the group lands at `group.scale * p + group.translate`, then the parent's own.
+      shapeRects(
+        shape.children,
+        dx + scale * (shape.translate?.x ?? 0),
+        dy + scale * (shape.translate?.y ?? 0),
+        out,
+        scale * (shape.scale ?? 1),
+      );
+    }
   }
   return out;
 }

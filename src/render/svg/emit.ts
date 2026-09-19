@@ -180,9 +180,10 @@ export function emitShape(shape: Shape): SvgEl[] {
       const children = shape.children.flatMap(emitShape);
       const attrs: Record<string, string | number | undefined> = {};
       if (shape.opacity !== undefined) attrs.opacity = shape.opacity;
-      if (shape.translate) {
-        attrs.transform = `translate(${n(shape.translate.x)} ${n(shape.translate.y)})`;
-      }
+      const transforms: string[] = [];
+      if (shape.translate) transforms.push(`translate(${n(shape.translate.x)} ${n(shape.translate.y)})`);
+      if (shape.scale !== undefined && shape.scale !== 1) transforms.push(`scale(${n(shape.scale)})`);
+      if (transforms.length > 0) attrs.transform = transforms.join(' ');
 
       if (!shape.clip) return [el('g', attrs, children)];
 

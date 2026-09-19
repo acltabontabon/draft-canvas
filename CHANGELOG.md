@@ -6,6 +6,9 @@ All notable changes to Draft Canvas are documented here.
 
 ### Fixed
 
+- **A Data Store's shape now resizes with it.** Drag a database, cache or file system larger and
+  the drawing grows too — the connector anchors follow it, and exports match — instead of a small
+  shape floating in a big empty box. Stores at the default size or smaller look exactly as before.
 - A connector now meets a Data Store's own shape instead of stopping short of it. Arrows into the
   side or top of a database, cache or file system used to end at the empty edge of its box, and
   the anchor dots you reach for sit on the shape too.

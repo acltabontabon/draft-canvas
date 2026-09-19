@@ -15,8 +15,16 @@ const clean = describeContext(LIGHT);
 const draft = describeContext(LIGHT, 'draft');
 const sketch = describeContext(LIGHT, 'sketch');
 
+type Shape = ReturnType<typeof describeNode>['shapes'][number];
+
+/** A display list's shapes with groups looked through: a Data Store bigger than its default draws
+ *  its glyph as one scaled group, and what these tests ask is about the shapes inside. */
+function flat(shapes: readonly Shape[]): Shape[] {
+  return shapes.flatMap((shape) => (shape.t === 'group' ? flat(shape.children) : [shape]));
+}
+
 function outlineShapes(node: ReturnType<typeof createNode>, ctx: typeof clean) {
-  return describeNode(node, ctx).shapes.filter((s) => s.t === 'rect' || s.t === 'path' || s.t === 'ellipse');
+  return flat(describeNode(node, ctx).shapes).filter((s) => s.t === 'rect' || s.t === 'path' || s.t === 'ellipse');
 }
 
 function textOf(node: ReturnType<typeof createNode>, ctx: typeof clean) {
@@ -103,8 +111,8 @@ describe('Intentional Roughness — developer-preset silhouettes stay recognisab
   it('database/queue add exactly a retrace body+lid pair at Sketch, still all paths', () => {
     for (const type of ['database', 'queue'] as const) {
       const node = createNode({ type, id: 'dev1', x: 0, y: 0, width: 176, height: 96, text: 'X' });
-      const cleanShapes = describeNode(node, clean).shapes;
-      const sketchShapes = describeNode(node, sketch).shapes;
+      const cleanShapes = flat(describeNode(node, clean).shapes);
+      const sketchShapes = flat(describeNode(node, sketch).shapes);
       expect(sketchShapes.length).toBe(cleanShapes.length + 2);
       expect(sketchShapes.every((s) => s.t === 'path' || s.t === 'text')).toBe(true);
     }
@@ -123,8 +131,8 @@ describe('Intentional Roughness — developer-preset silhouettes stay recognisab
   it('sketch outline paths differ from clean for every developer preset', () => {
     for (const type of ['database', 'queue', 'actor'] as const) {
       const node = createNode({ type, id: 'dev2', x: 0, y: 0, width: 176, height: 96, text: 'X' });
-      const cleanD = describeNode(node, clean).shapes.find((s) => s.t === 'path') as { d: string } | undefined;
-      const sketchD = describeNode(node, sketch).shapes.find((s) => s.t === 'path') as { d: string } | undefined;
+      const cleanD = flat(describeNode(node, clean).shapes).find((s) => s.t === 'path') as { d: string } | undefined;
+      const sketchD = flat(describeNode(node, sketch).shapes).find((s) => s.t === 'path') as { d: string } | undefined;
       expect(cleanD).toBeDefined();
       expect(sketchD).toBeDefined();
       expect(sketchD!.d).not.toBe(cleanD!.d);
@@ -146,8 +154,8 @@ describe('Intentional Roughness — every kind of a primitive is drawn by hand, 
     (type, field, kind) => {
       const node = createNode({ type, id: 'kind1', x: 0, y: 0, width: 176, height: 96, text: 'X', [field]: kind });
       const closed = (ctx: typeof clean) =>
-        describeNode(node, ctx)
-          .shapes.filter((s): s is Extract<typeof s, { t: 'path' }> => s.t === 'path')
+        flat(describeNode(node, ctx).shapes)
+          .filter((s): s is Extract<typeof s, { t: 'path' }> => s.t === 'path')
           // Outlines carry a stroke; a filled glyph (a tie, a bucket's pips) is a mark, not a silhouette.
           .filter((s) => s.stroke !== undefined && s.fill !== undefined && s.fill !== 'none' && /Z\s*$/.test(s.d))
           .map((s) => s.d);

@@ -106,7 +106,10 @@ export interface GroupShape {
   children: Shape[];
   clip?: { x: number; y: number; w: number; h: number; r?: number };
   opacity?: number;
+  /** Applied after `scale`: a point `p` in the group lands at `scale * p + translate`. */
   translate?: { x: number; y: number };
+  /** Uniform. Strokes scale with it — a caller that wants them to keep their width divides them. */
+  scale?: number;
 }
 
 export type Shape =

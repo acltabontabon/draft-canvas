@@ -14,7 +14,7 @@ import { tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
-import { DS_GLYPH_HEIGHT, DS_GLYPH_TOP } from '../document/dataStoreGeometry';
+import { DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreScale } from '../document/dataStoreGeometry';
 import { roughenPath } from '../render/roughness/roughPath';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
@@ -1008,6 +1008,38 @@ function cylinderPaths(
  * fills the node the same way the cylinder does.
  */
 function database(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const scale = dataStoreScale(node);
+  return [...scaledGlyph(dataStoreGlyph(node, ctx), scale, node.width / 2), ...dataStoreCaption(node, ctx, palette, scale)];
+}
+
+/**
+ * A glyph, drawn at its normal size around the box's centre line, grown by `scale` about the top
+ * of the box — so a bigger Data Store gets a bigger shape, not just more empty box around the same
+ * one. Strokes keep their weight: the group scales them, so they are divided back here. At the
+ * normal size (`scale` 1, every box up to the default) the shapes are returned untouched.
+ */
+function scaledGlyph(shapes: Shape[], scale: number, centreX: number): Shape[] {
+  if (scale === 1) return shapes;
+  const unscaled = (stroke: Stroke | undefined): Stroke | undefined =>
+    stroke && { ...stroke, width: stroke.width / scale, dash: stroke.dash?.map((length) => length / scale) };
+  const restore = (shape: Shape): Shape => {
+    switch (shape.t) {
+      case 'rect':
+      case 'ellipse':
+      case 'path':
+        return shape.stroke ? { ...shape, stroke: unscaled(shape.stroke) } : shape;
+      case 'group':
+        return { ...shape, children: shape.children.map(restore) };
+      default:
+        return shape;
+    }
+  };
+  return [{ t: 'group', children: shapes.map(restore), scale, translate: { x: centreX * (1 - scale), y: 0 } }];
+}
+
+/** A Data Store's glyph alone, at its normal size — see `database` for what goes around it. */
+function dataStoreGlyph(node: DraftNode, ctx: DescribeContext): Shape[] {
   switch (node.databaseKind) {
     case 'nosql':
       return dataStoreNoSql(node, ctx);
@@ -1041,9 +1073,9 @@ const DS_CAPTION_GAP = 5;
 
 /** The caption under a Data Store's glyph. `generic` has no kind label of its own — it's the
  *  family's baseline, so it carries just the name. */
-function dataStoreCaption(node: DraftNode, ctx: DescribeContext, palette: AccentPalette): Shape[] {
+function dataStoreCaption(node: DraftNode, ctx: DescribeContext, palette: AccentPalette, scale = 1): Shape[] {
   const kindLabel = DATABASE_KIND_LABELS[node.databaseKind ?? 'generic'];
-  const top = DS_GLYPH_BOTTOM + DS_CAPTION_GAP;
+  const top = DS_GLYPH_BOTTOM * scale + DS_CAPTION_GAP;
   if (kindLabel) {
     return pinnedCaption(node, ctx, { top, kindLabel, nameColor: palette.text });
   }
@@ -1124,7 +1156,6 @@ function dataStoreCylinder(node: DraftNode, ctx: DescribeContext): Shape[] {
     });
   }
 
-  shapes.push(...dataStoreCaption(node, ctx, palette));
   return shapes;
 }
 
@@ -1169,7 +1200,6 @@ function dataStoreFileSystem(node: DraftNode, ctx: DescribeContext): Shape[] {
       fill: 'none',
       stroke: { color: palette.chip, width: 1.4, linecap: 'round' },
     },
-    ...dataStoreCaption(node, ctx, palette),
   ];
 }
 
@@ -1209,7 +1239,6 @@ function dataStoreNoSql(node: DraftNode, ctx: DescribeContext): Shape[] {
     outlineShape(`${node.id}:back`, ctx, back, { fill: palette.fill, stroke }),
     outlineShape(node.id, ctx, front, { fill: palette.fill, stroke }),
     { t: 'group', children: dots },
-    ...dataStoreCaption(node, ctx, palette),
   ];
 }
 
@@ -1252,7 +1281,6 @@ function dataStoreCache(node: DraftNode, ctx: DescribeContext): Shape[] {
     chip(top + step * 2),
     chip(top + step),
     chip(top),
-    ...dataStoreCaption(node, ctx, palette),
   ];
 }
 
@@ -1306,7 +1334,6 @@ function dataStoreObjectStorage(node: DraftNode, ctx: DescribeContext): Shape[] 
       fill: palette.chip,
     },
     { t: 'rect', x: cx + 2, y: markY - 3, w: 6, h: 6, r: 1.5, fill: palette.chip },
-    ...dataStoreCaption(node, ctx, palette),
   ];
 }
 
@@ -1355,7 +1382,6 @@ function dataStoreSearchIndex(node: DraftNode, ctx: DescribeContext): Shape[] {
       fill: 'none',
       stroke: { color: palette.line, width: 1.8, linecap: 'round' },
     },
-    ...dataStoreCaption(node, ctx, palette),
   ];
 }
 
@@ -1400,7 +1426,6 @@ function dataStoreTable(node: DraftNode, ctx: DescribeContext): Shape[] {
         { t: 'path', d: rules.join(' '), fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.6 },
       ],
     },
-    ...dataStoreCaption(node, ctx, palette),
   ];
 }
 
