@@ -497,12 +497,12 @@ export function resolveSides(
  * never persisted, never selectable, and never participates in validation or
  * semantics. Five connectors sharing a spine are still five independent
  * relationships; the spine only decides where their lines happen to run. See
- * `edges/bundles.ts` for the grouping rules and `docs/ARCHITECTURE.md`'s
+ * `edges/bundles.ts` for the grouping rules and `docs/reference/architecture.md`'s
  * "semantic graph vs. routing graph" note.
  *
  * `trunkGap` is measured from the hub's own rect rather than stored as an
  * absolute coordinate on purpose: the document isn't written during a drag
- * (see `docs/ARCHITECTURE.md`), so an absolute trunk would stay behind while
+ * (see `docs/reference/architecture.md`), so an absolute trunk would stay behind while
  * the branches followed the pointer. Hub-relative, every member recomputes the
  * trunk from a rect it already has, and dragging the hub moves the whole
  * bundle rigidly with no re-planning at all.

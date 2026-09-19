@@ -17,7 +17,7 @@
  * Where `benchmark/cli.ts` answers "how fast does it load and how big is it", this answers "does it
  * stay smooth while somebody works": frame-time distributions, input latency and long tasks for
  * pan, zoom, drags, connecting, hovering, selecting, typing and opening panels, on deterministic
- * fixtures from 50 to 1,000 shapes. See `docs/PERFORMANCE.md`.
+ * fixtures from 50 to 1,000 shapes. See `docs/reference/performance.md`.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';

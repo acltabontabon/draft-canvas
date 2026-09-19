@@ -55,6 +55,8 @@ by step, and sequence diagrams from those flows. Open source, no account.
 
 ## Links
 
+- [Working with `.draftcanvas` files in VS Code](https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/vscode.md), the longer guide
+- [Getting started](https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/getting-started.md)
 - [Draft Canvas](https://acltabontabon.com/draft-canvas/)
 - [GitHub](https://github.com/acltabontabon/draft-canvas)
 - [Issues](https://github.com/acltabontabon/draft-canvas/issues)

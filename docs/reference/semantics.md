@@ -2,7 +2,7 @@
 
 The contributor-facing reference for what Draft Canvas actually understands about the diagrams you
 draw — the concrete rules, not the reasoning behind them (for that, see
-[`docs/ARCHITECTURE.md`'s Relationship model](ARCHITECTURE.md#relationship-model)). Everything below
+[`architecture.md`'s Relationship model](architecture.md#relationship-model)). Everything below
 is implemented and tested (`tests/connector-semantics.test.ts`, `tests/edge-semantics.test.ts`,
 `tests/edge-kinds.test.ts`, `tests/continuation.test.ts`).
 
@@ -198,7 +198,7 @@ through one resolves by looking at what actually feeds it — `Service → Junct
 infers `writes`. If a Junction has no clear single category on one side, it resolves to
 `'junction'` itself, and the connector falls back to the full, unrestricted vocabulary.
 
-The Sequence Diagram (`src/sequence/`, see `docs/ARCHITECTURE.md`) applies the same principle one
+The Sequence Diagram (`src/sequence/`, see `architecture.md`) applies the same principle one
 level up: a Junction is never a lifeline. `resolveJunctionEndpoint` (`connectorSemantics.ts`) is
 `resolveTransparentCategory`'s node-identity sibling — same "walk the whole graph, not just the
 current selection" traversal, but resolving to an actual node rather than a category, since a
@@ -230,7 +230,7 @@ describes a real runtime interaction and is never excluded.
 ## Intent Continuation rules
 
 The next moves Draft Canvas will sketch for a selected node (see
-[`docs/ARCHITECTURE.md`'s Intent Continuation](ARCHITECTURE.md#derived-capabilities)). Every
+[`architecture.md`'s Intent Continuation](architecture.md#derived-capabilities)). Every
 connector a rule adds is inferred from the capability matrix above — a rule that proposed a pairing
 the matrix does not offer, or flags `unusual`, is dropped by the engine before it can show.
 

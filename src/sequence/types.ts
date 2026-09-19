@@ -3,7 +3,7 @@
  *
  * A `SequenceModel` is derived, never persisted: `build.ts`'s `buildSequenceModel` is the only
  * thing that produces one, from the whole live document — every *playable* Flow, aggregated into
- * one coherent diagram (see `docs/ARCHITECTURE.md`). Mermaid (`mermaid.ts`) and PlantUML
+ * one coherent diagram (see `docs/reference/architecture.md`). Mermaid (`mermaid.ts`) and PlantUML
  * (`plantuml.ts`) are the only two consumers; both are pure, independent `SequenceModel -> string`
  * functions that must never re-derive semantics of their own. There is no preview renderer in this
  * app — Draft Canvas generates sequence *source*, not a rendered diagram.

@@ -7,7 +7,7 @@ import type { ContinuationRule } from './types';
  * intent. Nothing from a plain Service, an Actor, a Data Store, a Cache, a File System, a Search
  * Index or a bare Component ever appears unprompted: too many valid next moves, so no one of them
  * is *the* move. Services and Actors do get a short list of `surfaces: 'invoke'` alternatives — only
- * reachable by asking with `]` — see `docs/SEMANTICS.md`'s "Deliberately no rule..." note and this
+ * reachable by asking with `]` — see `docs/reference/semantics.md`'s "Deliberately no rule..." note and this
  * file's own family comments for exactly which pairings were considered and rejected.
  *
  * Some rules are hand-written standalone objects (the original five, plus the two dead-letter
@@ -273,8 +273,8 @@ const ADAPTER_PORT: ContinuationRule = {
 /**
  * A Worker already fed by something but with no outbound connection at all yet — narrower than
  * the other families' evidence (zero outbound of *any* kind, not just a missing delivery path),
- * since "should this worker index something" is otherwise exactly the kind of guess `docs/
- * SEMANTICS.md` warns a plain Service against. `MATRIX['worker>searchIndex']` defaults to
+ * since "should this worker index something" is otherwise exactly the kind of guess `docs/reference/
+ * semantics.md` warns a plain Service against. `MATRIX['worker>searchIndex']` defaults to
  * `'indexes'` (overriding the generic `service>searchIndex` default of `'searches'`), so a Worker
  * is the one service-family kind with a real, opinionated row here — a plain Service still gets no
  * rule at all.

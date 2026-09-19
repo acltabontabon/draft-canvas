@@ -3,7 +3,7 @@ import { AES_GCM, CRYPTO_VERSION, IV_BYTES, STORAGE_VERSION, type EncryptedBody 
 /**
  * The encryption boundary for a single document body. Nothing outside this
  * module (and `keyStore.ts`, for the key itself) touches `crypto.subtle`
- * directly — see `docs/ARCHITECTURE.md`'s note on the encrypted-storage
+ * directly — see `docs/reference/architecture.md`'s note on the encrypted-storage
  * boundary. Callers pass a plain `DraftDocument`-shaped value in and get an
  * opaque `EncryptedBody` out (or the reverse); neither direction knows or
  * cares about IndexedDB, the document schema, or migration.

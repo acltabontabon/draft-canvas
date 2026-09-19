@@ -9,7 +9,7 @@ import { accentOf, type Theme } from '../render/theme/tokens';
  * file, even though how each renderer turns this array into a stroke (a
  * display-list `Shape`'s `stroke.dash` field vs a DOM element's CSS
  * `strokeDasharray` string) stays renderer-specific by design. See
- * `docs/ARCHITECTURE.md`'s note on the two independent edge renderers.
+ * `docs/reference/architecture.md`'s note on the two independent edge renderers.
  */
 export function dashForEdge(edge: DraftEdge): number[] | undefined {
   switch (edge.kind) {

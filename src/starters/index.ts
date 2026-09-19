@@ -9,7 +9,7 @@
  *
  * The layering is one-way and matches the rest of the app: `commands/` names a `store/` action,
  * the store composes `document/` operations, and this module is pure data plus the function that
- * turns it into document elements. See `docs/ARCHITECTURE.md`.
+ * turns it into document elements. See `docs/reference/architecture.md`.
  */
 
 export { ARCHITECTURE_STARTERS } from './catalog';

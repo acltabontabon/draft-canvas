@@ -260,7 +260,7 @@ export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
  * canvas element. Deliberately a small, closed subset of `DraftNode`'s own
  * fields — an attachment is "the content of a Code/Note node, minus the
  * fields that only make sense for something living on the canvas" (position,
- * z-order, parentage). See `docs/ARCHITECTURE.md` for why this is an embedded
+ * z-order, parentage). See `docs/reference/architecture.md` for why this is an embedded
  * array on the host rather than a second kind of graph node.
  */
 export interface Attachment {
@@ -520,7 +520,7 @@ export interface DraftEdge {
  * overview, a boundary, a scenario's starting state) — a genuinely different
  * kind of step, not a variant of `FocusState` (arbitrary, unordered,
  * available in edit mode too) or `FlowPlaybackState` (which this *is* an
- * ordered member of) — see `docs/ARCHITECTURE.md`.
+ * ordered member of) — see `docs/reference/architecture.md`.
  */
 export interface DraftFlowStep {
   id: string;

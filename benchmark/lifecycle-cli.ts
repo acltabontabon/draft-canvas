@@ -7,7 +7,7 @@
  *
  * The other half of `interaction-cli.ts`: not a gesture but a whole action — open a diagram, export
  * it, find it among a hundred, or work for a long session — and whether memory settles after doing
- * the same things over and over. See `docs/PERFORMANCE.md`.
+ * the same things over and over. See `docs/reference/performance.md`.
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs';

@@ -2,9 +2,9 @@
 
 Draft Canvas has no backend, so most of the usual questions ("is your API rate-limited," "how do
 you rotate credentials") don't apply. What's left is the local encryption model, and this document
-is the honest account of what it does and doesn't do. See also [`docs/PRIVACY.md`](docs/PRIVACY.md)
+is the honest account of what it does and doesn't do. See also [`docs/reference/privacy.md`](docs/reference/privacy.md)
 for what's stored and what leaves the machine (nothing), and
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#persistence-and-the-crypto-boundary) for the module boundary.
+[`docs/reference/architecture.md`](docs/reference/architecture.md#persistence-and-the-crypto-boundary) for the module boundary.
 
 ## Threat model
 
@@ -15,7 +15,7 @@ for what's stored and what leaves the machine (nothing), and
 - A stolen or copied device/disk image, where the attacker has the files but not a running,
   unlocked instance of the browser as you.
 - Casual browsing of local storage through devtools or a file manager — a diagram's contents, not
-  its title (see the `documents`/`bodies` split in `docs/PRIVACY.md`), never appear as plaintext.
+  its title (see the `documents`/`bodies` split in `docs/reference/privacy.md`), never appear as plaintext.
 
 **Out of scope — what it does not protect against:**
 
@@ -23,7 +23,7 @@ for what's stored and what leaves the machine (nothing), and
   running as you is sufficient to read your diagrams — the same as any other locally-stored,
   locally-encrypted data with no separate password gate.
 - XSS in the page itself. There is no user-generated code execution surface by design (node text
-  and code cards are rendered as data, never as markup or script — see `docs/ARCHITECTURE.md`'s
+  and code cards are rendered as data, never as markup or script — see `docs/reference/architecture.md`'s
   "one renderer" section), but this document does not claim zero-vulnerability, only zero-network.
 - Memory inspection or a screenshot/screen-recording of an unlocked session. If you can see the
   diagram, so can anything with access to your screen.

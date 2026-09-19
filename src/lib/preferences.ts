@@ -3,7 +3,7 @@
  *
  * `localStorage` is synchronous and size-limited, so it holds nothing but a few
  * short strings: the theme, the grid style, the last tool. Documents live in
- * IndexedDB. Nothing here ever contains canvas content — see docs/PRIVACY.md.
+ * IndexedDB. Nothing here ever contains canvas content — see docs/reference/privacy.md.
  */
 const PREFIX = 'draft-canvas.';
 

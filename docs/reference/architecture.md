@@ -6,10 +6,10 @@
 | Looking for | Go to |
 | --- | --- |
 | Why it's built this way | this document |
-| What it understands about a diagram | [`SEMANTICS.md`](SEMANTICS.md) |
-| The file format and migrations | [`SCHEMA.md`](SCHEMA.md) |
-| "Never break this" | [`AGENTS.md`](../AGENTS.md) |
-| Threat model and keys | [`SECURITY.md`](../SECURITY.md) |
+| What it understands about a diagram | [`semantics.md`](semantics.md) |
+| The file format and migrations | [`schema.md`](schema.md) |
+| "Never break this" | [`AGENTS.md`](../../AGENTS.md) |
+| Threat model and keys | [`SECURITY.md`](../../SECURITY.md) |
 
 ---
 
@@ -46,7 +46,7 @@ Two of these carry their own test before they're allowed to be called true:
   concept still make sense?* Component, Adapter, Datastore, Queue: yes. Kafka, PostgreSQL, Lambda:
   no. A technology name is a label a user types onto a primitive, never a reason to add one.
 - **#2's build test** — `tests/privacy.test.ts` greps the app's own source for `fetch`,
-  `XMLHttpRequest`, `WebSocket`, `sendBeacon`, `eval`. See [`PRIVACY.md`](PRIVACY.md).
+  `XMLHttpRequest`, `WebSocket`, `sendBeacon`, `eval`. See [`privacy.md`](privacy.md).
 
 ---
 
@@ -177,7 +177,7 @@ flowchart LR
 Deliberately **sparse** — an undocumented pairing keeps full freedom. The matrix being *one* thing
 is what makes the rest safe: a starter can't state a relationship the inspector would disagree
 with, and a suggestion can't propose a pairing the app wouldn't have inferred itself. Rules:
-[`SEMANTICS.md`](SEMANTICS.md).
+[`semantics.md`](semantics.md).
 
 ### Flows and presentation
 
@@ -261,7 +261,7 @@ ninety-seven intact and reports what it dropped. Enums whitelisted, coordinates 
 de-duplicated, cycles detached — colour is an enum, so no user string ever reaches an SVG `fill`.
 
 Version numbers are read in exactly one place. A newer file is refused *by name*; an older one
-walks one function per transition. Contract: [`SCHEMA.md`](SCHEMA.md).
+walks one function per transition. Contract: [`schema.md`](schema.md).
 
 ### Derived capabilities
 

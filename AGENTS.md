@@ -114,7 +114,7 @@ Each of these has a failure mode that is silent, delayed, or both.
 - **Edges are the one exception to "one renderer."** Unlike nodes, `src/canvas/DraftEdgeView.tsx`
   (on-screen) and `src/edges/describe.ts` (SVG export) are two independent implementations of the
   same connector. A visual addition to a connector — a badge, a dash pattern, a chip — must be
-  made in both, by hand; nothing enforces parity. See `docs/ARCHITECTURE.md`. (Intent
+  made in both, by hand; nothing enforces parity. See `docs/reference/architecture.md`. (Intent
   Continuation's ghost connector in `src/canvas/ContinuationGhost.tsx` is a preview, never
   exported, and reuses the routing/dash/marker helpers rather than restating them — it is exempt.)
 
@@ -132,7 +132,7 @@ discussion produced, derived from the notes already on the canvas plus the docum
 `actions`; `commands/` and `ui/` consume it. `src/depth/` sits there as well (it imports `document/` only) — the tree of rooms inside shapes and
 the view levels they show; `store/`, `commands/`, `canvas/`, `history/`, `storage/` and `ui/` consume it. The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
 persistence, the crypto boundary, untrusted input, schema evolution — lives in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The rules above are the invariants that document
+[`docs/reference/architecture.md`](docs/reference/architecture.md). The rules above are the invariants that document
 distills into "never break this"; read that file for *why* each one holds.
 
 ## Conventions
@@ -147,8 +147,19 @@ Comments explain *why*, not *what*. Several of the ones in `Canvas.tsx`, `autosa
 
 ## Documentation
 
-`docs/ARCHITECTURE.md` (the design principles and the reasoning behind every boundary) ·
-`docs/SEMANTICS.md` (the connector capability matrix) ·
-`docs/SCHEMA.md` (schema version history and the migration/import-validation contract) ·
-`docs/PRIVACY.md` · `SECURITY.md` (threat model and key lifecycle) ·
-`CHANGELOG.md` (user-facing release notes)
+Start at [`docs/index.md`](docs/index.md). Guides for people using the app live in `docs/guides/`;
+design and reference material lives in `docs/reference/`:
+
+- `docs/reference/architecture.md` — the design principles and the reasoning behind every boundary
+- `docs/reference/semantics.md` — the connector capability matrix (a test keeps its rules table in step with the code)
+- `docs/reference/schema.md` — schema version history and the migration/import-validation contract
+- `docs/reference/privacy.md` — what is stored, where, and what leaves the machine
+- `docs/reference/performance.md` — benchmark methodology and the published results
+- `SECURITY.md` — threat model and key lifecycle
+- `CHANGELOG.md` — user-facing release notes
+
+Docs files are lowercase kebab-case; the conventional root files (`README.md`, `CONTRIBUTING.md`,
+`SECURITY.md`, …) keep their usual names. The performance tables in `README.md` and
+`docs/reference/performance.md` are generated (`npm run perf:publish`) — edit the prose around the
+markers, not what sits between them. `tests/docs.test.ts` fails on a broken relative link or anchor,
+and `npx tsx e2e/docs-screenshots.ts` regenerates the guides' screenshots from the real UI.

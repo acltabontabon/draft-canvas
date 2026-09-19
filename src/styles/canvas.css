@@ -283,7 +283,7 @@
  * connection is in flight and tags it `.connectingto`/`.valid` — this makes
  * that one handle read as "release here" without any hit-testing of our own.
  * The result should feel obvious before the user lets go, not surprise them
- * after (see docs/ARCHITECTURE.md's connector routing notes).
+ * after (see docs/reference/architecture.md's connector routing notes).
  *
  * `[data-armed='true']` is the same idea for a reconnect drag, which has no
  * native equivalent — `DraftEdgeView.tsx`'s `EdgeEndpointHandle` sets it by

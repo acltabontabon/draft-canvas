@@ -1,8 +1,16 @@
 /**
- * Regenerates the `<!-- performance:start -->` … `<!-- performance:end -->` block in `README.md`
- * from `benchmark/results/latest.json` — a straightforward regex splice, not a templating system.
- * Run via `npm run perf:publish` after `npm run perf` (or `perf:stress`) to refresh the README's
- * numbers. Idempotent: running it twice on the same `latest.json` produces identical output.
+ * Regenerates the two performance blocks that are spliced into Markdown from
+ * `benchmark/results/latest.json` (plus `interaction.json` and `lifecycle.json` when present) —
+ * a straightforward regex splice, not a templating system:
+ *
+ * - `README.md`, between `<!-- performance:start -->` and `<!-- performance:end -->`: the short
+ *   summary — one sentence, the at-rest table and where to read more.
+ * - `docs/reference/performance.md`, between `<!-- performance-results:start -->` and
+ *   `<!-- performance-results:end -->`: every table and the chart. The methodology around them is
+ *   written by hand and left alone.
+ *
+ * Run via `npm run perf:publish` after `npm run perf` (or `perf:stress`). Idempotent: running it
+ * twice on the same results produces identical output.
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -23,15 +31,16 @@ const LIFECYCLE_PATH = join(REPO_ROOT, 'benchmark/results/lifecycle.json');
 // Committed at the repo root, not under the gitignored `results/` — see `cli.ts`.
 const CHART_PATH = join(REPO_ROOT, 'benchmark/memory-chart.svg');
 const README_PATH = join(REPO_ROOT, 'README.md');
+const PERFORMANCE_DOC_PATH = join(REPO_ROOT, 'docs/reference/performance.md');
 
-const START_MARKER = '<!-- performance:start -->';
-const END_MARKER = '<!-- performance:end -->';
+const README_MARKERS = { start: '<!-- performance:start -->', end: '<!-- performance:end -->' };
+const DOC_MARKERS = { start: '<!-- performance-results:start -->', end: '<!-- performance-results:end -->' };
 
 function capitalize(name: string): string {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-/** Rounds to the nearest whole unit — README numbers don't need decimal precision. */
+/** Rounds to the nearest whole unit — published numbers don't need decimal precision. */
 function ms(value: number): string {
   return `${Math.round(value)} ms`;
 }
@@ -40,7 +49,7 @@ function mib(value: number): string {
 }
 
 /** `os.platform()`'s raw values ('darwin', 'linux', 'win32') are correct but not what a reader
- *  expects in a README's "measured on" line. */
+ *  expects in a "measured on" line. */
 function friendlyOsName(platform: string): string {
   switch (platform) {
     case 'darwin':
@@ -107,7 +116,7 @@ function buildInteractionSection(interaction: InteractionResult): string {
   });
 
   return [
-    '**While you work.** How long a frame takes while panning, zooming, selecting and dragging in a big diagram (95th percentile; 16.7 ms is one frame at 60 Hz), and the longest freeze after dropping a shape, drawing a connector or renaming one:',
+    'How long a frame takes while panning, zooming, selecting and dragging in a big diagram (95th percentile; 16.7 ms is one frame at 60 Hz), and the longest freeze after dropping a shape, drawing a connector or renaming one:',
     '',
     '| Diagram | Pan | Zoom | Select a shape | Drag | Longest freeze after an edit |',
     '|---|---|---|---|---|---|',
@@ -166,7 +175,7 @@ function buildLifecycleSection(life: LifecycleResult): string {
   }
 
   return [
-    '**Opening one, and working for a long time.** How long a diagram takes to appear after you choose it, the longest stretch the page cannot respond in that time, and what exporting it costs (SVG / PNG):',
+    'How long a diagram takes to appear after you choose it, the longest stretch the page cannot respond in that time, and what exporting it costs (SVG / PNG):',
     '',
     '| Diagram | Opens in | Longest freeze while opening | Export |',
     '|---|---|---|---|',
@@ -176,8 +185,41 @@ function buildLifecycleSection(life: LifecycleResult): string {
   ].join('\n');
 }
 
-function buildBlock(result: BenchmarkResult, interaction?: InteractionResult, lifecycle?: LifecycleResult): string {
+const PERFORMANCE_DOC_LINK = 'docs/reference/performance.md';
+
+function measuredOn(result: BenchmarkResult): string {
   const env = result.meta.environment;
+  return `Measured on: ${env.cpuModel}, ${friendlyOsName(env.os)} ${env.osVersion}, Chromium ${env.browserVersion}, Draft Canvas ${result.meta.draftCanvasVersion}.`;
+}
+
+/** What the README carries: enough to answer "is it fast?" and a pointer to everything else. */
+function buildReadmeBlock(result: BenchmarkResult): string {
+  const rows = result.workloads
+    .map((w) => {
+      const size = `${w.nodeCount} nodes / ${w.edgeCount} connections`;
+      return `| ${capitalize(w.name)} | ${size} | ${ms(w.diagramLoad.medianMs)} | ${mib(w.jsHeapUsedMiB)} |`;
+    })
+    .join('\n');
+
+  return [
+    README_MARKERS.start,
+    '## Performance',
+    '',
+    buildSummary(result),
+    '',
+    '| Diagram | Size | Load time | Memory (JS heap) |',
+    '|---|---|---|---|',
+    rows,
+    '',
+    `${measuredOn(result)} Reference-machine numbers on real architecture diagrams, not a guarantee for every device.`,
+    '',
+    `Frame times while you pan, zoom and drag in diagrams of up to 1,000 shapes, how long big diagrams take to open, and how to reproduce all of it: [\`${PERFORMANCE_DOC_LINK}\`](${PERFORMANCE_DOC_LINK}).`,
+    README_MARKERS.end,
+  ].join('\n');
+}
+
+/** What `performance.md` carries: the full set of tables, with paths relative to `docs/reference/`. */
+function buildResultsBlock(result: BenchmarkResult, interaction?: InteractionResult, lifecycle?: LifecycleResult): string {
   const rows = result.workloads
     .map((w) => {
       const size = `${w.nodeCount} nodes / ${w.edgeCount} connections`;
@@ -186,12 +228,12 @@ function buildBlock(result: BenchmarkResult, interaction?: InteractionResult, li
     .join('\n');
 
   const chartLine = existsSync(CHART_PATH)
-    ? '\n\n![JS heap vs. diagram size](benchmark/memory-chart.svg)'
+    ? '\n\n![JS heap vs. diagram size](../../benchmark/memory-chart.svg)'
     : '';
 
   return [
-    START_MARKER,
-    '## Performance',
+    DOC_MARKERS.start,
+    '### At rest',
     '',
     buildSummary(result),
     '',
@@ -201,13 +243,24 @@ function buildBlock(result: BenchmarkResult, interaction?: InteractionResult, li
     '',
     "Measured against the production build in Chromium, on real architecture diagrams (not synthetic shapes) built from Draft Canvas's own starter catalog. These are reference-machine numbers, not a guarantee for every device. The drag column is how long a scripted 40-step drag takes end to end — one step per frame at 60 Hz, so it is the length of the gesture rather than any lag in it; how each frame fares is in the next table.",
     '',
-    `Measured on: ${env.cpuModel}, ${friendlyOsName(env.os)} ${env.osVersion}, Chromium ${env.browserVersion}, Draft Canvas ${result.meta.draftCanvasVersion}.${chartLine}`,
+    `${measuredOn(result)}${chartLine}`,
     '',
-    ...(interaction ? [buildInteractionSection(interaction), ''] : []),
-    ...(lifecycle ? [buildLifecycleSection(lifecycle), ''] : []),
-    'Full methodology, limitations, and how to reproduce this: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).',
-    END_MARKER,
+    ...(interaction ? ['### While you work', '', buildInteractionSection(interaction), ''] : []),
+    ...(lifecycle ? ['### Opening one, and working for a long time', '', buildLifecycleSection(lifecycle), ''] : []),
+    DOC_MARKERS.end,
   ].join('\n');
+}
+
+/** Replaces what sits between a pair of markers; refuses to guess when they are missing. */
+function splice(path: string, markers: { start: string; end: string }, block: string): void {
+  const text = readFileSync(path, 'utf-8');
+  const pattern = new RegExp(`${markers.start}[\\s\\S]*?${markers.end}`);
+  if (!pattern.test(text)) {
+    console.error(`Could not find ${markers.start} / ${markers.end} markers in ${path}.`);
+    process.exit(1);
+  }
+  writeFileSync(path, text.replace(pattern, () => block));
+  console.log(`Updated ${path}.`);
 }
 
 function main(): void {
@@ -222,17 +275,9 @@ function main(): void {
   const lifecycle = existsSync(LIFECYCLE_PATH)
     ? (JSON.parse(readFileSync(LIFECYCLE_PATH, 'utf-8')) as LifecycleResult)
     : undefined;
-  const block = buildBlock(result, interaction, lifecycle);
 
-  const readme = readFileSync(README_PATH, 'utf-8');
-  const pattern = new RegExp(`${START_MARKER}[\\s\\S]*?${END_MARKER}`);
-  if (!pattern.test(readme)) {
-    console.error(`Could not find ${START_MARKER} / ${END_MARKER} markers in README.md.`);
-    process.exit(1);
-  }
-  const updated = readme.replace(pattern, block);
-  writeFileSync(README_PATH, updated);
-  console.log('Updated README.md performance section.');
+  splice(README_PATH, README_MARKERS, buildReadmeBlock(result));
+  splice(PERFORMANCE_DOC_PATH, DOC_MARKERS, buildResultsBlock(result, interaction, lifecycle));
 }
 
 main();

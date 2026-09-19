@@ -450,7 +450,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const explainActive = useEditorStore((state) => state.flowPlayback.active);
   const focusActive = useEditorStore((state) => state.focus.active);
   // A flow merely selected (not presented) acts as a gentler lens — see
-  // `docs/ARCHITECTURE.md`'s "Flows and presentation". `lensFlow` owns the rule for when that
+  // `docs/reference/architecture.md`'s "Flows and presentation". `lensFlow` owns the rule for when that
   // lens is on (never during Presentation/Focus, never for an empty flow).
   const lensActive = useEditorStore((state) => lensFlow(state) !== undefined);
   const theme = useThemeValue();

@@ -1246,12 +1246,12 @@ describe('performance — local neighborhoods, not full-graph scans', () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* docs/SEMANTICS.md stays in step with the rules                       */
+/* docs/reference/semantics.md stays in step with the rules                       */
 /* ------------------------------------------------------------------ */
 
-describe('docs/SEMANTICS.md rules table', () => {
+describe('docs/reference/semantics.md rules table', () => {
   it('lists exactly the shipped rules, in order, with their authored reasons', () => {
-    const doc = readFileSync(resolve(__dirname, '../docs/SEMANTICS.md'), 'utf8');
+    const doc = readFileSync(resolve(__dirname, '../docs/reference/semantics.md'), 'utf8');
     const block = doc.split('<!-- continuation-rules:start')[1]?.split('<!-- continuation-rules:end -->')[0] ?? '';
     const rows = block
       .split('\n')

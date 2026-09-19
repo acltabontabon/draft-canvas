@@ -18,7 +18,7 @@ import type { ContextMenuTarget } from '../store/uiStore';
  * never a parallel command catalog. Every entry here is a real `Command` sourced from `registry.ts`
  * (the same object the ⌘K palette would show, same `id`/`run`), just picked, ordered, and grouped
  * differently for a menu that should show only what's useful for *this* thing, right now — see
- * `docs/ARCHITECTURE.md`'s "Command surface" section.
+ * `docs/reference/architecture.md`'s "Command surface" section.
  *
  * Hard rule, applied uniformly rather than as one-off exclusions: a context-menu entry never wraps a
  * command whose `run()` can return a `CommandStage` (a follow-up picker, e.g. "Connect to…" or

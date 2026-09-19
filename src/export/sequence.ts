@@ -1,7 +1,7 @@
 /**
  * SequenceModel -> downloaded file. Mirrors `project.ts`'s `exportProjectFile` pattern exactly:
  * build the model, render it, hand the text to `downloadText`. There is no image/rendered export
- * here — the source text IS the product (see `docs/ARCHITECTURE.md`).
+ * here — the source text IS the product (see `docs/reference/architecture.md`).
  */
 import type { DraftDocument } from '../document/types';
 import { buildSequenceModel, toMermaid, toPlantUml } from '../sequence';

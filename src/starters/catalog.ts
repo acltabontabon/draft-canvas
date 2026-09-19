@@ -253,7 +253,7 @@ const monolith: ArchitectureStarter = {
  * empty boundary box says "here is a zone" and nothing else — it can't be the hero of a diagram,
  * only its container. A Component is a real, sized, named thing that can still sit inside
  * `Application`'s own boundary while reading as internal rather than a deployable peer — the same
- * read `docs/ARCHITECTURE.md` already documents for Hexagonal's Use Cases and Domain Model,
+ * read `docs/reference/architecture.md` already documents for Hexagonal's Use Cases and Domain Model,
  * applied here to the primitive it names for exactly this ("an internal subdivision" —
  * `document/types.ts`'s `COMPONENT_KINDS`). Grown past Component's own default footprint (152×56
  * → `MODULE`'s 176×76) the same way Hexagonal grew its one hub node past default for hero status —
@@ -322,7 +322,7 @@ const monolith: ArchitectureStarter = {
  * deliberately-absent pairs — so `inferRelationship` genuinely returns nothing for this pairing,
  * the same honest "no opinion" a hand-drawn boundary→database connection gets anywhere else in the
  * app. Rather than force a label onto a relationship the matrix doesn't recognise (which would say
- * something the rest of the app doesn't actually agree with — the one thing `docs/ARCHITECTURE.md`'s
+ * something the rest of the app doesn't actually agree with — the one thing `docs/reference/architecture.md`'s
  * own rule for this file, "relationships come from the matrix, never from the catalog," exists to
  * prevent), this connector carries no `label` and gets none: `DraftEdgeView.tsx`'s caption block is
  * gated on `edge.semantic` being truthy, so an edge with neither an inferred semantic nor an

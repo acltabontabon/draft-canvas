@@ -110,12 +110,12 @@ export interface Fragment {
 }
 
 export interface ContinuationRule {
-  /** Stable id: named in tests, dismissals, and the reasons table in `docs/SEMANTICS.md`. */
+  /** Stable id: named in tests, dismissals, and the reasons table in `docs/reference/semantics.md`. */
   id: string;
   tier: ContinuationTier;
   /** What the offer is called: "Queue", "Worker", "Dead-letter queue". */
   label: string;
-  /** One authored sentence saying why — never generated. Kept for tests and `docs/SEMANTICS.md`. */
+  /** One authored sentence saying why — never generated. Kept for tests and `docs/reference/semantics.md`. */
   reason: string;
   when(nb: Neighborhood, trigger: ContinuationTrigger): boolean;
   fragment(nb: Neighborhood): Fragment;

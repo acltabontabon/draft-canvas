@@ -39,7 +39,7 @@
     "perf:lifecycle": "tsx benchmark/lifecycle-cli.ts",
     "perf:save-baseline": "tsx benchmark/cli.ts --save-baseline",
     "perf:regen-fixtures": "tsx benchmark/workloads/regen-fixtures.ts",
-    "perf:publish": "tsx benchmark/publish-readme.ts"
+    "perf:publish": "tsx benchmark/publish-results.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.6",

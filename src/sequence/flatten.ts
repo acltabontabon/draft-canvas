@@ -2,7 +2,7 @@
  * Junction flattening for the Sequence Diagram.
  *
  * A Junction (`type: 'ellipse'`) is a pure canvas routing/convergence primitive with no semantic
- * identity of its own (see `docs/SEMANTICS.md`'s "Junctions are semantics-transparent") — it must
+ * identity of its own (see `docs/reference/semantics.md`'s "Junctions are semantics-transparent") — it must
  * never become a sequence participant on its own. A path like `Service A → Junction → Service B`
  * is really one interaction and must flatten into one `SequenceMessage`, without losing whichever
  * edge's label/semantics is most meaningful.

@@ -2,7 +2,7 @@
  * Canvas -> SequenceModel — the one pure transform from Draft Canvas's live document into the
  * renderer-agnostic sequence representation. No React, no Mermaid/PlantUML syntax, no canvas
  * rendering. Aggregates every *playable* Flow into one coherent diagram (see
- * `docs/ARCHITECTURE.md`) — Mermaid (`mermaid.ts`) and PlantUML (`plantuml.ts`) are both
+ * `docs/reference/architecture.md`) — Mermaid (`mermaid.ts`) and PlantUML (`plantuml.ts`) are both
  * independent, pure consumers of this same result.
  */
 import { categoryOf, type NodeCategory } from '../document/connectorSemantics';

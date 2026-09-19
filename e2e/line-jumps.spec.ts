@@ -10,7 +10,7 @@ import { expect, test, type Page } from '@playwright/test';
  * connector underneath is selected, labelled and deleted exactly as it was.
  *
  * It also carries the one parity check the unit tests cannot: connectors are drawn by two
- * independent renderers (see `docs/ARCHITECTURE.md`'s "two seams"), and only a browser has both the
+ * independent renderers (see `docs/reference/architecture.md`'s "two seams"), and only a browser has both the
  * live canvas and the exporter in the same process to compare.
  */
 

@@ -4,6 +4,10 @@ All notable changes to Draft Canvas for VS Code are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- The README links to a fuller guide and to Getting started.
+
 ## [0.1.4] - 2026-09-17
 
 ### Fixed

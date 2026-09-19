@@ -3,7 +3,7 @@
  * happens at a point in time during a Flow — these must never become a `SequenceMessage`, per the
  * Sequence Diagram export's own product rule: structural relationships are not runtime behavior.
  * Deliberately small: every other `EdgeSemantic` (including `uses`, `compensates`, `projects`)
- * describes a real runtime interaction. See `docs/SEMANTICS.md`.
+ * describes a real runtime interaction. See `docs/reference/semantics.md`.
  */
 import type { EdgeSemantic } from '../document/types';
 

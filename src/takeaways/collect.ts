@@ -1,7 +1,7 @@
 /**
  * What came out of the discussion, read back off the document.
  *
- * A derivation, in the sense `docs/ARCHITECTURE.md` uses the word: the only thing this feature
+ * A derivation, in the sense `docs/reference/architecture.md` uses the word: the only thing this feature
  * stores is `DraftDocument.actions`. Decisions and open questions are not a second copy of
  * anything — they are the `note` nodes and note attachments already in the file, tagged
  * `decision` or `question` (`NoteKind`), gathered from every room. Which is why Takeaways has

@@ -9,14 +9,21 @@ This document exists so the privacy claim can be audited rather than believed.
 
 ### IndexedDB — database `draft-canvas`
 
-Everything you draw. Two object stores:
+Everything you draw. Four object stores:
 
 | Store | Key | Contents | Encrypted? |
 | --- | --- | --- | --- |
 | `documents` | `id` | Title, created and updated timestamps, node and edge counts, a small topology sketch (shape kinds and their relative positions, for the list thumbnail), and how many actions the canvas has still open. Used to render the library list without loading any canvas. | No — plain text, by design (see below). |
 | `bodies` | `id` | The full document: nodes, connections, text, code, viewport, settings. | Yes — AES-256-GCM, before it ever reaches IndexedDB. |
+| `projects` | `id` | The names of the Library's flat project folders. | No — plain text, like the summaries. |
+| `backgroundImages` | `id` | The optional canvas background image, one per diagram, as a blob. | No. A wallpaper is far less sensitive than diagram content, and encrypting a blob would add a lot of plumbing for little. If a background image is sensitive, don't use it. |
 
-Written by `src/storage/IndexedDbRepository.ts`, and by nothing else.
+### IndexedDB — database `draft-canvas-keys`
+
+One object store, `keys`, holding the non-extractable AES-256-GCM key that encrypts `bodies`
+(`src/crypto/keyStore.ts`). See [`SECURITY.md`](../../SECURITY.md) for its lifecycle.
+
+`draft-canvas` is written by `src/storage/IndexedDbRepository.ts`, and by nothing else.
 
 The `documents` summary is left unencrypted deliberately: it exists specifically so the library
 screen can list your diagrams — including their titles — without decrypting every one of them just
@@ -40,14 +47,18 @@ reopen works with no internet connection after the first successful visit.
 
 ### localStorage
 
-Short, named UI preferences only: `draft-canvas.personality`
-(the roughness preset), and — for the command palette's history — `draft-canvas.command-recent.<n>` (the ids of the last few commands
-run) and `draft-canvas.command-use.<id>` (a per-command counter). Command ids name actions
-("add-service", "connect-to"), never elements: nothing about a diagram's content is stored here.
-`draft-canvas.clipboard-permission` (`granted`/`denied`) remembers whether you already answered
-"Allow clipboard access?" for the right-click/⌘K Paste commands, so you aren't asked again;
-Cmd/Ctrl+V never touches this preference, since it reads the native paste event directly and never
-prompts.
+Short, named UI preferences only, every key prefixed `draft-canvas.`:
+
+| Key | Holds |
+| --- | --- |
+| `personality` | The roughness preset |
+| `continuation` | Whether next-move suggestions are on (`on`/`off`) |
+| `command-recent.<n>`, `command-use.<id>` | The ids of the last few commands run, and a per-command counter for the palette. Command ids name actions ("add-service", "connect-to"), never elements |
+| `export-mode`, `export-document-format`, `export-image-format`, `sequence-export-format` | The last Export dialog choices, so it opens where you left it |
+| `clipboard-permission` | `granted`/`denied`: whether you already answered "Allow clipboard access?" for the right-click and ⌘K Paste commands, so you aren't asked again. Cmd/Ctrl+V never touches it: it reads the native paste event directly and never prompts |
+| `last-seen-product-release` | The last version whose "What's New" you saw |
+
+Nothing about a diagram's content is stored here.
 
 All access goes through `src/lib/preferences.ts`, which namespaces keys and rejects any value
 longer than 64 characters. No canvas content is written there, and a test
@@ -102,7 +113,7 @@ right typeface.
 
 ### Exports
 
-`.draftcanvas`, `.dcenc`, PNG and SVG files are all generated in the page and handed to the
+`.draftcanvas`, `.dcenc`, PNG, SVG, GIF and the Mermaid and PlantUML sequence sources (`.mmd`, `.puml`) are all generated in the page and handed to the
 browser's download mechanism. No file passes through a server. What happens to a file after you
 save it is, of course, up to you.
 
@@ -111,7 +122,7 @@ same way anyone who gets a source file can read it. `.dcenc` is the alternative 
 acceptable: a passphrase-protected export, encrypted with a key derived from a passphrase you
 choose at export time (PBKDF2, ≥600,000 iterations, a fresh random salt per file), readable only by
 someone who has both the file and that passphrase. Draft Canvas never stores the passphrase and has
-no way to recover a forgotten one — see [`SECURITY.md`](../SECURITY.md) for the full key lifecycle.
+no way to recover a forgotten one — see [`SECURITY.md`](../../SECURITY.md) for the full key lifecycle.
 
 ### Imports
 
@@ -148,7 +159,7 @@ Being honest about the limits:
   (e.g. a stolen disk image, or someone browsing IndexedDB files directly). It does **not** protect
   against someone with full access to an already-unlocked copy of this browser profile: the app
   itself must be able to use the key to open your diagrams, so anyone who can run the app as you
-  can too. See [`SECURITY.md`](../SECURITY.md) for the full threat model and key lifecycle.
+  can too. See [`SECURITY.md`](../../SECURITY.md) for the full threat model and key lifecycle.
 - **Storage quotas are finite.** If the browser runs out of space the app tells you and keeps the
   document in memory so you can export it.
 

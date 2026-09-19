@@ -1669,7 +1669,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   tidyConnections() {
     const state = get();
     // Deliberately the *only* thing this clears. An anchor is where the user
-    // dragged a connector to attach, and `docs/ARCHITECTURE.md` is explicit
+    // dragged a connector to attach, and `docs/reference/architecture.md` is explicit
     // that routing never moves one — so "Tidy connectors" stays safe to run
     // without first checking what it will do. Everything else Smart Routing
     // would tidy is derived per render and needs nothing persisted to undo.
