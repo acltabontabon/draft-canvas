@@ -29,6 +29,7 @@ import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } fr
 import { EdgeLabels } from './EdgeLabels';
 import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
 import { obstaclesForEdge, withoutNodes } from '../edges/obstacles';
+import { badgePoint } from '../edges/badgePoint';
 import { bridgePath } from '../edges/bridge';
 import { NO_CROSSINGS, crossingPlan, withoutMoving } from '../edges/crossings';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
@@ -429,6 +430,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const labelLayout = edge.label ? layoutEdgeLabel(edge.label) : null;
   const responseLayout = edge.response ? layoutEdgeResponse(edge.response) : null;
   const hasStep = showSequence && typeof stepNumber === 'number';
+  // The very point the exporter puts it at — one function, so the two can't drift apart.
+  const badgeAt = hasStep ? badgePoint(route, edge.routing) : null;
   // The step being explained is the one thing that should stand out.
   // `style` renders as an inline attribute, which always wins over an
   // external stylesheet rule — so a selected connector's stroke and width
@@ -824,7 +827,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-focus-dimmed={focusDimmed ? 'true' : undefined}
             data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{
-              transform: `translate(-50%, -50%) translate(${badgeX(route)}px, ${badgeY(route)}px)`,
+              transform: `translate(-50%, -50%) translate(${badgeAt?.x ?? 0}px, ${badgeAt?.y ?? 0}px)`,
               borderColor: color,
               color,
             }}
@@ -1120,28 +1123,6 @@ function EdgeEndpointHandle({
       onLostPointerCapture={onPointerCancel}
     />
   );
-}
-
-/** Mirrors `badgePoint` in `edges/describe.ts`, in screen coordinates. */
-const BADGE_OFFSET = 22;
-
-function badgeX(route: ReturnType<typeof routeBetween>): number {
-  // Every member of a fan-out leaves its hub from the same anchor, so walking
-  // outward from `source` would stack all N badges on one point — see
-  // `badgePoint` in `edges/describe.ts`.
-  if (route.branchStart) return route.branchStart.x + Math.sign(route.target.x - route.branchStart.x) * BADGE_OFFSET;
-  const side = route.source.side;
-  if (side === 'left') return route.source.x - BADGE_OFFSET;
-  if (side === 'right') return route.source.x + BADGE_OFFSET;
-  return route.source.x;
-}
-
-function badgeY(route: ReturnType<typeof routeBetween>): number {
-  if (route.branchStart) return route.branchStart.y + Math.sign(route.target.y - route.branchStart.y) * BADGE_OFFSET;
-  const side = route.source.side;
-  if (side === 'top') return route.source.y - BADGE_OFFSET;
-  if (side === 'bottom') return route.source.y + BADGE_OFFSET;
-  return route.source.y;
 }
 
 /** The flow being presented, if any. */

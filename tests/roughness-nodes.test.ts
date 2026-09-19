@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { NODE_TYPES } from '../src/document/types';
+import {
+  ACTOR_KINDS,
+  COMPONENT_KINDS,
+  DATABASE_KINDS,
+  NODE_TYPES,
+  QUEUE_KINDS,
+  SERVICE_KINDS,
+} from '../src/document/types';
 import { createNode } from '../src/document/factory';
 import { describeContext, describeNode } from '../src/nodes/describe';
 import { LIGHT } from '../src/render/theme/tokens';
@@ -123,6 +130,32 @@ describe('Intentional Roughness — developer-preset silhouettes stay recognisab
       expect(sketchD!.d).not.toBe(cleanD!.d);
     }
   });
+});
+
+describe('Intentional Roughness — every kind of a primitive is drawn by hand, not just its default', () => {
+  const primitives = [
+    ['service', 'serviceKind', SERVICE_KINDS],
+    ['database', 'databaseKind', DATABASE_KINDS],
+    ['queue', 'queueKind', QUEUE_KINDS],
+    ['actor', 'actorKind', ACTOR_KINDS],
+    ['component', 'componentKind', COMPONENT_KINDS],
+  ] as const;
+
+  it.each(primitives.flatMap(([type, field, kinds]) => kinds.map((kind) => [type, field, kind] as const)))(
+    '%s (%s: %s) leaves no closed outline crisp at Sketch',
+    (type, field, kind) => {
+      const node = createNode({ type, id: 'kind1', x: 0, y: 0, width: 176, height: 96, text: 'X', [field]: kind });
+      const closed = (ctx: typeof clean) =>
+        describeNode(node, ctx)
+          .shapes.filter((s): s is Extract<typeof s, { t: 'path' }> => s.t === 'path')
+          // Outlines carry a stroke; a filled glyph (a tie, a bucket's pips) is a mark, not a silhouette.
+          .filter((s) => s.stroke !== undefined && s.fill !== undefined && s.fill !== 'none' && /Z\s*$/.test(s.d))
+          .map((s) => s.d);
+      const sketched = new Set(closed(sketch));
+      // Every closed outline Clean draws is redrawn (wobbled) at Sketch: none survives verbatim.
+      expect(closed(clean).filter((d) => sketched.has(d))).toEqual([]);
+    },
+  );
 });
 
 describe('Intentional Roughness — Junction (ellipse) gets a clamped, retraced treatment', () => {

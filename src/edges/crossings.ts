@@ -365,6 +365,8 @@ function compute(
   });
 
   const found = new Map<string, Crossing[]>();
+  /** Each owning connector's tie-break identity (its spine for a bundle member) — see `crowded`. */
+  const keyOf = new Map<string, string>();
   let ops = 0;
 
   for (const cell of cells.values()) {
@@ -405,6 +407,7 @@ function compute(
         const ownerIndex = owner === a ? refA.index : refB.index;
         const normal = bowOf(owner.points[ownerIndex]!, owner.points[ownerIndex + 1]!);
 
+        keyOf.set(owner.edgeId, owner.key);
         const list = found.get(owner.edgeId);
         const entry: Crossing = {
           x,
@@ -422,10 +425,10 @@ function compute(
     }
   }
 
-  const clusters = crossingHash(found);
+  const clusters = crossingHash(found, keyOf);
   const result = new Map<string, readonly Crossing[]>();
   for (const [edgeId, list] of found) {
-    const kept = list.filter((crossing) => !crowded(crossing, edgeId, clusters));
+    const kept = list.filter((crossing) => !crowded(crossing, keyOf.get(edgeId) ?? edgeId, clusters));
     if (kept.length === 0) continue;
     // A connector subscribes to its own list by identity, so a list that has not changed has to come
     // back as the very same array — otherwise every commit hands every crossed connector a "new"
@@ -467,29 +470,31 @@ function insideAnyRect(grid: Map<number, Rect[]>, x: number, y: number): boolean
 }
 
 interface Placed {
-  edgeId: string;
+  key: string;
   x: number;
   y: number;
 }
 
 /** Every crossing bucketed by a cell one cluster radius wide, so "is anything else near here" reads
  *  nine cells instead of every connector's whole list. */
-function crossingHash(found: Map<string, Crossing[]>): Map<number, Placed[]> {
+function crossingHash(found: Map<string, Crossing[]>, keyOf: ReadonlyMap<string, string>): Map<number, Placed[]> {
   const hash = new Map<number, Placed[]>();
   for (const [edgeId, list] of found) {
+    const owner = keyOf.get(edgeId) ?? edgeId;
     for (const { x, y } of list) {
       const key = cellKey(Math.floor(x / CLUSTER_RADIUS), Math.floor(y / CLUSTER_RADIUS));
       const bucket = hash.get(key);
-      if (bucket) bucket.push({ edgeId, x, y });
-      else hash.set(key, [{ edgeId, x, y }]);
+      if (bucket) bucket.push({ key: owner, x, y });
+      else hash.set(key, [{ key: owner, x, y }]);
     }
   }
   return hash;
 }
 
 /** Whether another connector also wants a hump within one hump's width of this one — see
- *  `CLUSTER_RADIUS`. */
-function crowded(crossing: Crossing, edgeId: string, hash: Map<number, Placed[]>): boolean {
+ *  `CLUSTER_RADIUS`. Compared by tie-break key, not connector id: the members of a bundle's shared
+ *  trunk all bridge the same crossing on the same line, which is one hump, not a crowd of them. */
+function crowded(crossing: Crossing, key: string, hash: Map<number, Placed[]>): boolean {
   const cx = Math.floor(crossing.x / CLUSTER_RADIUS);
   const cy = Math.floor(crossing.y / CLUSTER_RADIUS);
   for (let dx = -1; dx <= 1; dx += 1) {
@@ -497,7 +502,7 @@ function crowded(crossing: Crossing, edgeId: string, hash: Map<number, Placed[]>
       const bucket = hash.get(cellKey(cx + dx, cy + dy));
       if (!bucket) continue;
       for (const other of bucket) {
-        if (other.edgeId !== edgeId && near(other, crossing, CLUSTER_RADIUS)) return true;
+        if (other.key !== key && near(other, crossing, CLUSTER_RADIUS)) return true;
       }
     }
   }

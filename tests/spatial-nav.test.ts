@@ -70,6 +70,12 @@ describe('nextRelationshipNeighbor', () => {
     expect(nextRelationshipNeighbor(document, 'a', 'outgoing', 'b')).toBe('c');
   });
 
+  it('reaches every neighbor when two connectors join the same pair, and skips a self-loop', () => {
+    const twin = { edges: [edge('e1', 'a', 'b'), edge('e2', 'a', 'b'), edge('e3', 'a', 'a'), edge('e4', 'a', 'c')] };
+    expect(nextRelationshipNeighbor(twin, 'a', 'outgoing', 'b')).toBe('c');
+    expect(nextRelationshipNeighbor(twin, 'a', 'outgoing', 'c')).toBe('b');
+  });
+
   it('wraps back to the first outgoing neighbor after the last', () => {
     expect(nextRelationshipNeighbor(document, 'a', 'outgoing', 'c')).toBe('b');
   });

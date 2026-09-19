@@ -289,6 +289,7 @@ function planTrunkGap(
   const usable = nearest - MIN_BRANCH;
   if (usable < MIN_STEM) return null;
 
+  const farRects = members.map((member) => (hub === 'source' ? member.targetRect : member.sourceRect));
   const crossFrom = Math.min(hubCross, ...branches.map((branch) => branch.cross));
   const crossTo = Math.max(hubCross, ...branches.map((branch) => branch.cross));
 
@@ -307,11 +308,14 @@ function planTrunkGap(
     const trunkLo = at(gap, crossFrom);
     const trunkHi = at(gap, crossTo);
     if (runBlocked(trunkLo.x, trunkLo.y, trunkHi.x, trunkHi.y, obstacles, budget)) return true;
-    // And every branch's own run in to its far node.
-    return branches.some((branch) => {
+    // And every branch's own run in to its far node — past the *other* branches' far nodes, which
+    // `obstacles` leaves out (each is its own branch's destination) but which a longer branch can
+    // still run straight through when they stack along its path.
+    return branches.some((branch, index) => {
       const tap = at(gap, branch.cross);
       const end = verticalTrunk ? { x: branch.face, y: branch.cross } : { x: branch.cross, y: branch.face };
-      return runBlocked(tap.x, tap.y, end.x, end.y, obstacles, budget);
+      const others = farRects.filter((_, other) => other !== index);
+      return runBlocked(tap.x, tap.y, end.x, end.y, others.length > 0 ? [...obstacles, ...others] : obstacles, budget);
     });
   };
 

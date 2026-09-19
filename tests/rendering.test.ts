@@ -103,6 +103,14 @@ describe('text layout', () => {
 });
 
 describe('code tokenizing', () => {
+  it('stops a tab at the next column of the line, whatever tokens the language splits it into', () => {
+    const text = (lines: ReturnType<typeof tokenizeCode>) => lines[0]!.map((t) => t.text).join('');
+    // `f(ab,` is 5 columns, so the tab stops at column 6 in both: one space, tokenised or not.
+    expect(text(tokenizeCode('f(ab,\ty)', 'javascript'))).toBe('f(ab, y)');
+    expect(text(tokenizeCode('f(ab,\ty)', 'plaintext'))).toBe('f(ab, y)');
+    expect(text(tokenizeCode('{"a":\t1}', 'json'))).toBe(text(tokenizeCode('{"a":\t1}', 'plaintext')));
+  });
+
   it('splits highlighted code into one token list per line', () => {
     const lines = tokenizeCode('{\n  "status": "CANCELLED"\n}', 'json');
     expect(lines).toHaveLength(3);

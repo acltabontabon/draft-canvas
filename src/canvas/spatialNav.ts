@@ -73,9 +73,16 @@ export function nextRelationshipNeighbor(
   direction: RelationshipDirection,
   afterId?: string | null,
 ): string | null {
-  const neighbors = document.edges
-    .filter((edge) => (direction === 'outgoing' ? edge.source === nodeId : edge.target === nodeId))
-    .map((edge) => (direction === 'outgoing' ? edge.target : edge.source));
+  // Distinct neighbors: two connectors to the same node (a saga's forward and compensating arrows)
+  // would otherwise make `indexOf` land on the first one every press, and the cycle never moves on.
+  const neighbors = [
+    ...new Set(
+      document.edges
+        .filter((edge) => (direction === 'outgoing' ? edge.source === nodeId : edge.target === nodeId))
+        .map((edge) => (direction === 'outgoing' ? edge.target : edge.source))
+        .filter((id) => id !== nodeId),
+    ),
+  ];
   if (neighbors.length === 0) return null;
   if (!afterId) return neighbors[0]!;
   const index = neighbors.indexOf(afterId);

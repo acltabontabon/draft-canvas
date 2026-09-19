@@ -375,3 +375,33 @@ describe('the plan itself', () => {
     expect(plan.crossingsFor('only')).toHaveLength(0);
   });
 });
+
+describe('a connector crossing a bundle\'s shared trunk', () => {
+  // A hub fanning out to three targets, two of them to the left: both left members ride the same
+  // horizontal trunk out from the hub, and a vertical connector cuts across that shared stretch.
+  const fan = () => ({
+    nodes: [
+      box('hub', 300, 0),
+      box('t0', -200, 500),
+      box('t1', 0, 500),
+      box('t2', 600, 500),
+      box('up', 100, -300),
+      box('down', 100, 900),
+    ],
+    edges: [
+      createEdge({ id: 'h0', source: 'hub', target: 't0' }),
+      createEdge({ id: 'h1', source: 'hub', target: 't1' }),
+      createEdge({ id: 'h2', source: 'hub', target: 't2' }),
+      createEdge({ id: 'cut', source: 'up', target: 'down' }),
+    ],
+  });
+
+  it('bridges the shared trunk once, instead of every member reading the others as a crowd', () => {
+    const { nodes, edges } = fan();
+    const plan = crossingPlan(nodes, edges);
+    // Both left members ride the trunk at the cut, and both keep the one bridge over it.
+    expect(plan.crossingsFor('h0')).toHaveLength(1);
+    expect(plan.crossingsFor('h1')).toHaveLength(1);
+    expect(plan.crossingsFor('h2')).toHaveLength(0);
+  });
+});

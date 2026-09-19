@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { MIN_SPINE_MEMBERS, routingPlan } from '../src/edges/bundles';
-import { RESPONSE_LANE_DELTA, responseSpineFor, routeBetween, routeEdge, trunkCoordinate } from '../src/edges/routing';
+import {
+  RESPONSE_LANE_DELTA,
+  flattenPath,
+  rectOf,
+  responseSpineFor,
+  routeBetween,
+  routeEdge,
+  trunkCoordinate,
+} from '../src/edges/routing';
+import { obstaclesForEdge } from '../src/edges/obstacles';
 import { describeEdge } from '../src/edges/describe';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
@@ -599,5 +608,43 @@ describe('taking manual control of a bundle', () => {
     const before = useEditorStore.getState().history.past.length;
     useEditorStore.getState().tidyConnections();
     expect(useEditorStore.getState().history.past.length).toBe(before);
+  });
+});
+
+describe('a fan whose members stack along one another\'s path', () => {
+  it('never draws a longer branch through a nearer member\'s node', () => {
+    // C sits directly below B, so H→C's straight run down the spine would cut through B.
+    const nodes = [
+      createNode({ id: 'h', type: 'service', x: 300, y: 0, width: 120, height: 60 }),
+      createNode({ id: 'b', type: 'service', x: 300, y: 200, width: 120, height: 60 }),
+      createNode({ id: 'c', type: 'service', x: 320, y: 500, width: 120, height: 60 }),
+      createNode({ id: 'd', type: 'service', x: 80, y: 200, width: 120, height: 60 }),
+      createNode({ id: 'e', type: 'service', x: 560, y: 200, width: 120, height: 60 }),
+    ];
+    const edges = ['b', 'c', 'd', 'e'].map((id) => createEdge({ id: `h-${id}`, source: 'h', target: id, routing: 'smoothstep' }));
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const plan = routingPlan(nodes, edges);
+
+    for (const edge of edges) {
+      const route = routeEdge(edge, nodeMap, {
+        spine: plan.spineFor(edge.id),
+        obstacles: obstaclesForEdge(nodes, edge.source, edge.target),
+      })!;
+      const points = flattenPath(route.d);
+      for (const node of nodes.filter((n) => n.id !== edge.source && n.id !== edge.target)) {
+        const rect = rectOf(node);
+        for (let i = 0; i + 1 < points.length; i += 1) {
+          const p = points[i]!;
+          const q = points[i + 1]!;
+          const steps = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / 4));
+          for (let k = 0; k <= steps; k += 1) {
+            const x = p.x + ((q.x - p.x) * k) / steps;
+            const y = p.y + ((q.y - p.y) * k) / steps;
+            const inside = x > rect.x + 2 && x < rect.x + rect.width - 2 && y > rect.y + 2 && y < rect.y + rect.height - 2;
+            expect(inside, `${edge.id} passes through ${node.id} at ${x},${y}`).toBe(false);
+          }
+        }
+      }
+    }
   });
 });

@@ -14,6 +14,7 @@ import { tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import { roughenPath } from '../render/roughness/roughPath';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
 import { accentOf, type AccentPalette, type Theme } from '../render/theme/tokens';
@@ -358,6 +359,16 @@ function outlineShape(
   };
 }
 
+/**
+ * A hand-built closed outline (a notch, a socket, a chevron — silhouettes `outlineShape`'s rounded
+ * rect can't express) put through the same wobble every other node gets, so at Draft and Sketch it
+ * doesn't sit crisp among shapes that were drawn by hand. A no-op at Clean.
+ */
+function roughOutline(d: string, seedId: string, ctx: DescribeContext): string {
+  const profile = PERSONALITY_PROFILES[ctx.preset];
+  return roughenPath(d, seedId, profile.outline, profile.bow);
+}
+
 function box(node: DraftNode, ctx: DescribeContext, radius: number): Shape[] {
   const palette = accentOf(ctx.theme, node.accent);
   return [
@@ -548,7 +559,7 @@ function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
   ].join(' ');
 
   return [
-    { t: 'path', d, fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
+    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
     {
       t: 'group',
       clip: { x, y, w, h, r },
@@ -714,7 +725,7 @@ function serviceGateway(node: DraftNode, ctx: DescribeContext): Shape[] {
   ].join(' ');
 
   return [
-    { t: 'path', d, fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
+    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
     // The label clears the chevron cut into the left edge.
     ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: palette.text, left: chevron }),
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.gateway!, ctx.theme.textMuted),
@@ -843,7 +854,7 @@ function componentModule(node: DraftNode, ctx: DescribeContext): Shape[] {
   ].join(' ');
 
   return [
-    { t: 'path', d, fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
+    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
     ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '' }),
     ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.module!, ctx.theme.textMuted),
   ];
@@ -915,7 +926,7 @@ function componentAdapter(node: DraftNode, ctx: DescribeContext): Shape[] {
   const captionInset = { right: notchDepth + 5 };
 
   return [
-    { t: 'path', d, fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
+    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
     // The label clears the sockets cut into both vertical edges.
     ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '', left: notchDepth, right: notchDepth }),
     ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.adapter!, ctx.theme.textMuted, captionInset),
@@ -1152,7 +1163,7 @@ function dataStoreFileSystem(node: DraftNode, ctx: DescribeContext): Shape[] {
   const bodyMid = y + (h - tabH) / 2;
   const lineX = x + 11;
   return [
-    { t: 'path', d, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
+    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
     {
       t: 'path',
       d: `M${lineX},${bodyMid - 4} h${w - 22} M${lineX},${bodyMid + 3} h${w - 30}`,
@@ -1221,13 +1232,17 @@ function dataStoreCache(node: DraftNode, ctx: DescribeContext): Shape[] {
 
   const chip = (cy: number): Shape => ({
     t: 'path',
-    d: [
-      `M${cx},${cy - chipH / 2}`,
-      `L${cx + chipW / 2},${cy}`,
-      `L${cx},${cy + chipH / 2}`,
-      `L${cx - chipW / 2},${cy}`,
-      'Z',
-    ].join(' '),
+    d: roughOutline(
+      [
+        `M${cx},${cy - chipH / 2}`,
+        `L${cx + chipW / 2},${cy}`,
+        `L${cx},${cy + chipH / 2}`,
+        `L${cx - chipW / 2},${cy}`,
+        'Z',
+      ].join(' '),
+      `${node.id}:chip${cy}`,
+      ctx,
+    ),
     fill: palette.fill,
     stroke,
   });
@@ -1283,7 +1298,7 @@ function dataStoreObjectStorage(node: DraftNode, ctx: DescribeContext): Shape[] 
     `M${mx},${my - s} L${mx + s},${my + s * 0.8} L${mx - s},${my + s * 0.8} Z`;
 
   return [
-    { t: 'path', d: body, fill: palette.fill, stroke },
+    { t: 'path', d: roughOutline(body, node.id, ctx), fill: palette.fill, stroke },
     { t: 'path', d: rim, fill: 'none', stroke },
     { t: 'path', d: handle, fill: 'none', stroke: { color: palette.line, width: 1.3 } },
     {

@@ -118,7 +118,13 @@ export function flattenToLines(root: HastRoot): CodeLine[] {
       const parts = node.value.split('\n');
       parts.forEach((part, index) => {
         if (index > 0) lines.push([]);
-        if (part !== '') lines[lines.length - 1]!.push({ text: expandTabs(part), scope });
+        if (part === '') return;
+        const line = lines[lines.length - 1]!;
+        // A tab stops at the next column of the *line*, not of this token: the tokens before it on
+        // the line (already expanded) have used some of the width, and which tokens a language
+        // splits a line into must not change where its text lines up.
+        const column = line.reduce((used, token) => used + token.text.length, 0);
+        line.push({ text: expandTabs(part, column), scope });
       });
       return;
     }
@@ -181,11 +187,11 @@ const TAB_WIDTH = 2;
  * `charWidth * length`, which is what lets the exporter place code without
  * measuring anything.
  */
-function expandTabs(text: string): string {
+function expandTabs(text: string, column = 0): string {
   if (!text.includes('\t')) return text;
   let out = '';
   for (const ch of text) {
-    if (ch === '\t') out += ' '.repeat(TAB_WIDTH - (out.length % TAB_WIDTH) || TAB_WIDTH);
+    if (ch === '\t') out += ' '.repeat(TAB_WIDTH - ((column + out.length) % TAB_WIDTH) || TAB_WIDTH);
     else out += ch;
   }
   return out;
