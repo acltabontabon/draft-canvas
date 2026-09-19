@@ -60,6 +60,7 @@ export function useCommandContext({ createAt, createAtPointer, playback }: UseCo
       viewWidth,
       zoomIn,
       zoomOut,
+      zoomTo,
     ],
   );
 }

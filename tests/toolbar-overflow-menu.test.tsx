@@ -91,6 +91,17 @@ describe('toolbar overflow menu', () => {
     expect(screen.getByRole('button', { name: /^More/ })).toHaveFocus();
   });
 
+  it('steps aside for ⌘K, so the palette does not open over a menu answering the same keys', async () => {
+    const user = userEvent.setup();
+    renderToolbar();
+    await openMenu(user);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    await user.keyboard('{Meta>}k{/Meta}');
+
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
   it('closes when the trigger is clicked again', async () => {
     const user = userEvent.setup();
     renderToolbar();

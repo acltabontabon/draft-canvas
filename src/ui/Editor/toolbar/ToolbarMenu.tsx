@@ -116,6 +116,12 @@ export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMe
           itemsRef.current[highlightRef.current]?.onSelect();
           return;
         }
+        case 'k':
+        case 'K':
+          // ⌘K reaches the editor (it opens the palette) — the menu steps aside rather than staying
+          // open under it, where both would answer the same arrows and one Escape closed the pair.
+          if (event.metaKey || event.ctrlKey) onDismiss();
+          return;
         default:
           return;
       }

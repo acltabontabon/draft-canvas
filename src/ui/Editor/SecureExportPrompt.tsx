@@ -35,7 +35,8 @@ export function SecureExportPrompt({
     <Modal
       title="Export securely"
       width={420}
-      onClose={onCancel}
+      // Inert while encrypting: the file still downloads, so closing now would only hide it.
+      onClose={busy ? () => {} : onCancel}
       footer={
         <>
           <Button variant="quiet" onClick={onCancel} disabled={busy}>

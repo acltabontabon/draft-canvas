@@ -85,6 +85,18 @@ describe('FlowPanel', () => {
     expect(screen.getByText(/No steps yet/)).toBeTruthy();
   });
 
+  it('does not pull focus onto a flow row when a rename ends, so Delete never means "delete this flow"', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'New flow' }));
+    const input = screen.getByLabelText('Flow name') as HTMLInputElement;
+    // Clicking the canvas: the field commits on blur, and focus goes wherever the click landed.
+    fireEvent.blur(input);
+
+    expect(screen.queryByLabelText('Flow name')).toBeNull();
+    expect(document.activeElement?.closest('.dc-flow-item')).toBeNull();
+    expect(useEditorStore.getState().document.flows).toHaveLength(1);
+  });
+
   it('Enter commits the typed name and Escape keeps the old one', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'New flow' }));

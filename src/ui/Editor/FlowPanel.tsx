@@ -55,14 +55,21 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
   // Tabs away it is — give it real focus the moment it appears. Skipped when this open is for a
   // fresh rename (a flow just created elsewhere): the rename `<input>`'s own `autoFocus` owns that
   // case instead, and stealing focus back to a row here would fight it.
+  //
+  // Once per open, whatever the reason it was skipped. Keyed on `renamingId` it would run again when
+  // a rename ends — including by clicking the canvas — and pull focus onto a flow row, where Delete
+  // and Backspace mean "delete this flow" rather than "delete what I just selected".
+  const focusedThisOpen = useRef(false);
   useEffect(() => {
-    // `renameRequestId` alone isn't enough: it's a one-shot signal, cleared by the effect above on
-    // the render right after this one fires, which would make *this* effect re-run on that very
-    // next render and see it as falsy again — stealing focus back from the rename input its own
-    // `autoFocus` had just placed it in. `renamingId` (the persistent local state that request
-    // becomes) covers every render after the first; `renameRequestId` itself covers that first one,
-    // before `renamingId` has had a chance to catch up.
-    if (!open || renameRequestId || renamingId) return;
+    if (!open) {
+      focusedThisOpen.current = false;
+      return;
+    }
+    if (focusedThisOpen.current || !rootRef.current) return;
+    focusedThisOpen.current = true;
+    // `renameRequestId` is a one-shot signal, cleared by the effect above on the render right after
+    // this one fires; `renamingId` (the persistent local state it becomes) covers the renders after.
+    if (renameRequestId || renamingId) return;
     const rows = Array.from(rootRef.current?.querySelectorAll<HTMLElement>('.dc-flow-row') ?? []);
     // No flows yet: the panel shows its own empty state (prose + a "New flow" button) instead of
     // any `.dc-flow-row` at all — focus that button instead, so opening the panel this way is

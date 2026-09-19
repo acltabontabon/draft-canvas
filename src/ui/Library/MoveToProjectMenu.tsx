@@ -48,6 +48,14 @@ export function MoveToProjectMenu({ currentProjectId, projects, onMove, onClose 
           event.stopPropagation();
           onClose();
           return;
+        // Same as `ContextMenu` and the toolbar menu: leaving by keyboard closes the menu. Left open,
+        // Tab walked focus on to another control while this window-level listener kept taking its
+        // Enter, Space and arrows.
+        case 'Tab':
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+          return;
         case 'Home':
         case 'End':
           event.preventDefault();

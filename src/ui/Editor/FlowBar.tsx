@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { displayNameFor } from '../../document/factory';
-import { isActivatableTarget, isEditableTarget } from '../../lib/isEditableTarget';
+import { isActivatableTarget, isEditableTarget, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
 import {
   describePresentationSubject,
@@ -39,6 +39,9 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
       // true, which covers `picking` too (a `flowId === null` sub-state of `active`, not a
       // separate one). A second listener here used to race it; one owner is enough.
       if (playback.picking) return;
+      // ⌘E and ? stay live while presenting, and their dialogs own the arrows and Space: without
+      // this the walkthrough stepped on behind the Export sheet.
+      if (overlayAboveCanvasIsOpen()) return;
       // Space on a focused bar button (Previous, Exit…) is that button's click, not "next".
       if (event.key === ' ' && isActivatableTarget(event.target)) return;
       // Arrows and Space on a focused, scrollable callout code block scroll it.

@@ -1153,5 +1153,6 @@ export function useKeyboard({
     setShortcutsOpen,
     zoomIn,
     zoomOut,
+    zoomTo,
   ]);
 }

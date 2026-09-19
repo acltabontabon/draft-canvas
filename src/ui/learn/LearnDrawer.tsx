@@ -6,6 +6,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../common/Icon';
 import { trapTab } from '../common/focusTrap';
+import { focusReturnTarget } from '../common/useFocusReturn';
 import { LearnHome } from './LearnHome';
 import { LearnRecipe } from './LearnRecipe';
 import './learn.css';
@@ -69,7 +70,7 @@ function LearnPanel({ closing, sheet }: { closing: boolean; sheet: boolean }) {
   // Whatever had focus when Learn opened gets it back on close — but only if focus is still in
   // Learn by then. A docked drawer stays open while you work on the canvas, and closing it must not
   // yank focus away from wherever you've since gone.
-  const [returnFocusTo] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
+  const [returnFocusTo] = useState(focusReturnTarget);
   useEffect(() => {
     if (!closing) return;
     const active = document.activeElement;

@@ -97,6 +97,19 @@ describe('CommandPalette', () => {
     expect(highlighted()).toHaveTextContent(options()[count - 1]!.textContent!);
   });
 
+  it('keeps focus in the search box when the panel itself is clicked', () => {
+    mount();
+    input().focus();
+    const panel = screen.getByRole('dialog', { name: 'Commands' });
+
+    // A mousedown on the panel's own padding would take focus to the page unless it is cancelled.
+    const notCancelled = fireEvent.mouseDown(panel);
+    expect(notCancelled).toBe(false);
+    // …but one in the field itself is left alone, so the caret and text selection still work.
+    expect(fireEvent.mouseDown(input())).toBe(true);
+    expect(document.activeElement).toBe(input());
+  });
+
   it('Escape closes without touching the document', () => {
     useEditorStore.getState().addNode({ type: 'note', x: 10, y: 10, text: 'keep me' });
     const before = JSON.stringify(useEditorStore.getState().document);

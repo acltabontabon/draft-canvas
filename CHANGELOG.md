@@ -10,6 +10,26 @@ All notable changes to Draft Canvas are documented here.
   caption** row already said it would.
 - ⌘Enter (Ctrl+Enter) now starts presenting the way the Present button does: it plays the flow and
   fits it to the screen, instead of only switching to the presenting view.
+- Long connector labels, conditions, responses and shape text are held to the length a saved file
+  keeps, so nothing you type is quietly cut short the next time the diagram opens.
+- **Detach** on a note or code card keeps the text you had just typed, instead of the older text.
+- Copying a shape out of a Boundary and pasting it back inside now keeps it in the Boundary.
+- A connector in a fan no longer runs through another shape in the same fan, and a line jump over a
+  shared trunk no longer disappears when a second connector joins it.
+- The Draft and Sketch looks now reach every shape — API, Gateway, Module, Adapter, Cache, File
+  System and Object Storage were staying crisp — and tabs in code cards line up the same in every
+  language.
+- Alt+Shift+←/→ can walk on past a shape that has two connectors to the same neighbour, and a
+  step number sits on a straight connector where it appears in exported images.
+- Pressing Delete after naming a flow no longer removes the flow you just clicked away from.
+- Dialogs opened from the command palette give focus back to where you were, and clicking the
+  palette's edge no longer drops your typing.
+- Export's **Selection only** no longer stays ticked from an earlier open, and the passphrase
+  prompts can't be dismissed halfway through encrypting or decrypting.
+- While presenting, the arrow keys and Space no longer advance the flow behind an open dialog,
+  ⌘K closes the More menu instead of opening over it, and the Move menu closes on Tab.
+- A starter added inside a shape can no longer push a file past its flow limit, and the save
+  indicator settles back when you undo an edit before it saved.
 
 ## [1.9.0] - 2026-09-19
 

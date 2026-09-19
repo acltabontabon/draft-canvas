@@ -56,6 +56,17 @@ describe('MoveToProjectMenu keyboard navigation', () => {
     trigger.remove();
   });
 
+  it('Tab closes the menu instead of leaving its window-level keys live over another control', () => {
+    const onClose = vi.fn();
+    const onMove = vi.fn();
+    render(<MoveToProjectMenu currentProjectId={undefined} projects={projects} onMove={onMove} onClose={onClose} />);
+
+    fireEvent.keyDown(window, { key: 'Tab' });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
   it('Escape closes without selecting anything', () => {
     const onMove = vi.fn();
     const onClose = vi.fn();

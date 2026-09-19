@@ -129,6 +129,9 @@ export function ExportDialog() {
   const close = () => {
     gifAbort.current?.abort();
     requestExportSelection(false);
+    // The checkbox is per open: left ticked, a reopen with nothing selected shows it ticked and
+    // disabled, and a later single selection would export only that.
+    setSelectionOnly(false);
     setOpen(false);
   };
 

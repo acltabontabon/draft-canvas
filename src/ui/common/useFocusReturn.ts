@@ -31,7 +31,7 @@ export function useFocusReturn(active: boolean) {
   // since nothing runs between them, so capturing once (the first) is not observably different
   // from capturing on every call.
   if (active && !wasActive.current) {
-    previouslyFocused.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previouslyFocused.current = focusReturnTarget();
   }
   wasActive.current = active;
   // oxlint-enable react/refs
@@ -56,4 +56,28 @@ export function useFocusReturn(active: boolean) {
       if (toRestore && document.contains(toRestore)) toRestore.focus();
     };
   }, [active]);
+
+  return previouslyFocused;
+}
+
+/** Set by a surface that closes in the same render as the dialog its command opens — see `handOffFocus`. */
+let handoff: { from: HTMLElement; to: HTMLElement } | null = null;
+
+/**
+ * The palette closes and the dialog a command opens mounts in one render, so the dialog reads its
+ * "what had focus before me" while the palette's own input still has it — an element that is gone by
+ * the time the dialog closes, and focus would fall to `<body>`. The palette says here that its input
+ * stands in for whatever it was itself opened from, so a dialog opened *through* it hands focus back
+ * to that instead.
+ */
+export function handOffFocus(from: HTMLElement | null, to: HTMLElement | null): void {
+  handoff = from && to ? { from, to } : null;
+}
+
+/** What should get focus back when a dialog opening right now closes: the focused element, or, if
+ *  that is a surface that just handed its own opener over (`handOffFocus`), the opener. */
+export function focusReturnTarget(): HTMLElement | null {
+  const focused = document.activeElement;
+  if (!(focused instanceof HTMLElement)) return null;
+  return handoff && focused === handoff.from ? handoff.to : focused;
 }

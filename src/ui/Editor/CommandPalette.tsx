@@ -18,7 +18,7 @@ import type { FlowPlaybackController } from '../../presentation/useFlowPlayback'
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../common/Icon';
-import { useFocusReturn } from '../common/useFocusReturn';
+import { handOffFocus, useFocusReturn } from '../common/useFocusReturn';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 
 interface CommandPaletteProps {
@@ -69,7 +69,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
 
   // Whatever had focus (a toolbar button, the canvas) when ⌘K was pressed gets it back on close —
   // shared with `Modal` so the two dialogs can't drift on this.
-  useFocusReturn(true);
+  const returnFocusTo = useFocusReturn(true);
 
   // Read once, on the open that carried it: the body remounts per open, so this is that open's
   // starting point and nothing else.
@@ -158,6 +158,8 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
       const root = stageRootRef.current ?? entry.id;
       // Close first: a command that opens another dialog must not end up underneath this one,
       // and a command that throws must never leave the overlay stuck open.
+      // A dialog this command opens is mounted in the same render that closes the palette.
+      handOffFocus(inputRef.current, returnFocusTo.current);
       setOpen(false);
       let result: void | CommandStage;
       try {
@@ -180,7 +182,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
       // a Learn row is reading, not doing (it'd only push real commands out of Recent).
       if (!root.startsWith('jump-') && !root.startsWith('learn-')) recordUse(root);
     },
-    [buildContext, setOpen],
+    [buildContext, returnFocusTo, setOpen],
   );
 
   const rowsRef = useRef(rows);
@@ -276,6 +278,11 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
         aria-modal="true"
         aria-label="Commands"
         onPointerDown={(event) => event.stopPropagation()}
+        // A click on the panel's padding or footer would otherwise take focus off the search box and
+        // drop it on the page, where typing goes nowhere and Tab is swallowed.
+        onMouseDown={(event) => {
+          if (event.target !== inputRef.current) event.preventDefault();
+        }}
       >
         <div className="dc-palette-input">
           <Icon name="search" size={16} className="dc-palette-input-icon" />

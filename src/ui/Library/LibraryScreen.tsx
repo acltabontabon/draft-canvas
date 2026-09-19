@@ -507,7 +507,9 @@ function SecureImportPrompt({
     <Modal
       title="Enter passphrase"
       width={420}
-      onClose={onCancel}
+      // Escape, the backdrop and the X are inert while decrypting: the import still finishes, so
+      // closing now would open the canvas the user just cancelled.
+      onClose={busy ? () => {} : onCancel}
       footer={
         <>
           <Button variant="quiet" onClick={onCancel} disabled={busy}>
