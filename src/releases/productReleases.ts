@@ -21,6 +21,43 @@ export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './se
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.9.1',
+    date: '2026-09-19',
+    summary: 'Nothing you type gets lost, and connectors behave in the tight spots.',
+    highlights: [
+      {
+        title: 'Long text keeps its length',
+        description:
+          'Labels, conditions, responses and shape text are held to what a saved diagram keeps, so nothing you typed is quietly cut short when the canvas next opens.',
+      },
+      {
+        title: 'Detach keeps what you just typed',
+        description:
+          'Detaching a note or code card from a connector or shape now brings along the text you were still editing.',
+      },
+      {
+        title: 'Connectors steer clear',
+        description:
+          'A connector in a fan no longer runs through another shape in the same fan, and line jumps over a shared line stay put when a connector joins it.',
+      },
+      {
+        title: 'Draft and Sketch reach every shape',
+        description:
+          'API, Gateway, Module, Adapter, Cache, File System and Object Storage now get the hand-drawn look instead of staying crisp.',
+      },
+      {
+        title: 'Focus goes back where it was',
+        description:
+          'Close a dialog you opened from the command palette and you land where you were, and clicking away from a flow you just named no longer leaves Delete pointed at it.',
+      },
+      {
+        title: 'Enter and ⌘Enter do what they say',
+        description:
+          'Enter on a selected Boundary edits its caption, and ⌘Enter presents the flow the way the Present button does.',
+      },
+    ],
+  },
+  {
     version: '1.9.0',
     date: '2026-09-19',
     summary: 'Capture what a diagram decided, and keep up on the big ones.',

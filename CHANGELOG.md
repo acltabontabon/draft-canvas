@@ -4,6 +4,8 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-09-19
+
 ### Fixed
 
 - Pressing Enter on a selected Boundary now edits its caption, as the command palette's **Edit
