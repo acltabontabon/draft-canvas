@@ -4,6 +4,12 @@ All notable changes to Draft Canvas for VS Code are documented here.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-19
+
+### Added
+
+- The Marketplace page opens with a short demo of Draft Canvas at work.
+
 ### Changed
 
 - The README links to a fuller guide and to Getting started.

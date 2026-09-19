@@ -6,6 +6,8 @@ Open a `.draftcanvas` file and you're straight in the [Draft Canvas](https://acl
 editor. Draw, hit ⌘S / Ctrl+S, and the diagram is saved back to that file: plain JSON you can diff,
 review and commit.
 
+![A run through Draft Canvas: drawing a Service, Queue and Worker with the keyboard, dropping in a composed CQRS architecture, attaching a note to a connector, presenting a flow step by step, looking inside a shape with Cmd+Down, and opening the Learn handbook.](https://raw.githubusercontent.com/acltabontabon/draft-canvas/main/docs/media/demo.gif)
+
 ## Usage
 
 - **Open a diagram:** click any `.draftcanvas` file in the Explorer.
