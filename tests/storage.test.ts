@@ -682,6 +682,30 @@ describe('autosave', () => {
     vi.useRealTimers();
   });
 
+  it('settles back to idle when the queued edit is undone to the stored copy before it writes', async () => {
+    vi.useFakeTimers();
+    const repository = new RecordingRepository();
+    const states: string[] = [];
+    const autosave = new Autosave({
+      repository,
+      onStateChange: (state) => states.push(state.status),
+      debounceMs: 100,
+      maxWaitMs: 500,
+    });
+    const doc = documentWith('Stored');
+    autosave.track(doc);
+
+    autosave.schedule(addNodes(doc, [createNode({ type: 'note', x: 0, y: 0 })]));
+    autosave.schedule(doc);
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(states).toEqual(['dirty', 'idle']);
+    expect(repository.saved).toHaveLength(0);
+
+    autosave.dispose();
+    vi.useRealTimers();
+  });
+
   describe('camera-only writes', () => {
     type Options = { cameraOnly?: boolean } | undefined;
 

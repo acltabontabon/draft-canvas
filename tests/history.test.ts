@@ -1,4 +1,5 @@
-import { DEFAULTS } from '../src/document/limits';
+import { DEFAULTS, LIMITS } from '../src/document/limits';
+import { parseDocument } from '../src/document/validate';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
 import { HISTORY_LIMIT } from '../src/history/HistoryStack';
@@ -356,6 +357,29 @@ describe('undo and redo', () => {
     // Moving it onto a pair another connector already joins is still refused.
     store.getState().reconnectEdge(compensation.id, 'target', c.id, undefined);
     expect(store.getState().document.edges.find((e) => e.id === compensation.id)!.target).toBe(b.id);
+  });
+
+  it('holds connector and node text to what a reload keeps, so a save never carries text the next open trims', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    const edge = store.getState().connect(a.id, b.id)!;
+
+    store.getState().updateEdgeLabel(edge.id, 'x'.repeat(LIMITS.maxLabelLength + 50));
+    store.getState().setEdgeCondition(edge.id, 'c'.repeat(LIMITS.maxConditionLength + 50));
+    store.getState().setEdgeResponse(edge.id, 'r'.repeat(LIMITS.maxResponseLength + 50));
+    store.getState().updateNodeText(a.id, 'n'.repeat(LIMITS.maxTextLength + 50));
+
+    const saved = store.getState().document;
+    const result = parseDocument(JSON.stringify(saved));
+    if (!result.ok) throw new Error(result.error);
+    const reloaded = result.document;
+    expect(reloaded.edges[0]).toMatchObject({
+      label: saved.edges[0]!.label,
+      condition: saved.edges[0]!.condition,
+      response: saved.edges[0]!.response,
+    });
+    expect(reloaded.nodes.find((n) => n.id === a.id)!.text).toBe(saved.nodes.find((n) => n.id === a.id)!.text);
+    expect(saved.edges[0]!.label).toHaveLength(LIMITS.maxLabelLength);
   });
 
   it('committing an unchanged value records nothing and keeps redo', () => {

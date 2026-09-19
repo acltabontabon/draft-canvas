@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AttachmentChipRow } from '../src/canvas/AttachmentPresentation';
 import { ThemeProvider } from '../src/ui/theme/ThemeProvider';
@@ -54,5 +54,22 @@ describe('AttachmentChipRow compaction', () => {
     // Compaction hides the label visually, never structurally — each chip keeps its own accessible
     // name, so nothing about it is lost to a screen reader or to keyboard navigation.
     expect(screen.getAllByRole('button', { name: 'View attached note' })).toHaveLength(3);
+  });
+});
+
+describe('AttachmentChip detach', () => {
+  it('commits text typed in the card before detaching, so the new node carries it', () => {
+    actions.update.mockClear();
+    actions.detach.mockClear();
+    renderRow('edge', [note('a')]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View attached note' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit attached detail' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Attached note' }), { target: { value: 'typed just now' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Detach onto the canvas' }));
+
+    expect(actions.update).toHaveBeenCalledWith('a', { text: 'typed just now' });
+    expect(actions.detach).toHaveBeenCalledWith('a');
+    expect(actions.update.mock.invocationCallOrder[0]!).toBeLessThan(actions.detach.mock.invocationCallOrder[0]!);
   });
 });

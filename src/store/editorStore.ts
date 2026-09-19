@@ -1235,9 +1235,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   addNodesWithEdges(nodes, edges, label, flows = []) {
     const cost = costOf(nodes);
     if (!roomFor(cost.nodes, cost.edges + edges.length)) return false;
+    // A flow that doesn't fit is dropped and the diagram still lands. The limit is file-wide, but
+    // `addFlow` only sees this room's flows, so inside a room with none of its own it would let a
+    // starter past the cap — and the next load would trim it back with a repair note.
+    const flowRoom = Math.max(0, LIMITS.maxFlows - totals(fileOf(get())).flows);
+    const fitting = flows.slice(0, flowRoom);
     get().apply(
       label,
-      (doc) => flows.reduce((next, flow) => addFlow(next, flow), addEdges(addNodes(doc, nodes), edges)),
+      (doc) => fitting.reduce((next, flow) => addFlow(next, flow), addEdges(addNodes(doc, nodes), edges)),
       { selection: { nodes: nodes.map((n) => n.id), edges: [] } },
     );
     return true;
@@ -1334,7 +1339,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  updateNodeText(id, text, options) {
+  updateNodeText(id, rawText, options) {
+    // Held to what a load keeps (`parseDocument`), so a save never holds text the next open trims.
+    const text = rawText.slice(0, LIMITS.maxTextLength);
     // A manual edit is permanent intent from this point on, even if the typed value happens to
     // match a subtype's own default (e.g. renaming an API to literally "API") — see
     // `DraftNode.textOrigin`'s doc comment. `updateNodeById`'s Service auto-relabeling never
@@ -1623,7 +1630,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  updateEdgeLabel(id, label) {
+  updateEdgeLabel(id, rawLabel) {
+    // Held to what a load keeps (`parseDocument`), so a save never holds text the next open trims.
+    const label = rawLabel.slice(0, LIMITS.maxLabelLength);
     // An unlabeled connector committed empty is the same connector — `''` and absent both read blank.
     get().apply(
       'Label connector',
@@ -1643,13 +1652,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setEdgeCondition(id, condition) {
-    get().apply('Set condition', (doc) => updateEdge(doc, id, { condition: condition.trim() || undefined }), {
+    const value = condition.slice(0, LIMITS.maxConditionLength).trim() || undefined;
+    get().apply('Set condition', (doc) => updateEdge(doc, id, { condition: value }), {
       coalesceKey: `edge-condition:${id}`,
     });
   },
 
   setEdgeResponse(id, response) {
-    get().apply('Set response', (doc) => updateEdge(doc, id, { response: response.trim() || undefined }), {
+    const value = response.slice(0, LIMITS.maxResponseLength).trim() || undefined;
+    get().apply('Set response', (doc) => updateEdge(doc, id, { response: value }), {
       coalesceKey: `edge-response:${id}`,
     });
   },
@@ -1860,6 +1871,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (state.selection.nodes.length === 0) return null;
     const fragment = extractFragment(state.document, state.selection.nodes);
     const text = encodeClipboard(fragment);
+    // Remembered so the paste of this very text keeps the in-memory fragment: decoding it back
+    // (`applyExternalClipboardText`) drops a `parentId` whose boundary wasn't copied.
+    lastSystemClipboardText = text;
     set({ clipboard: fragment, pasteRepeat: 0 });
     void writeSystemClipboard(text);
     return text;
@@ -1876,6 +1890,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (selection.nodes.length > 0) {
       const fragment = extractFragment(state.document, selection.nodes);
       text = encodeClipboard(fragment);
+      lastSystemClipboardText = text;
       set({ clipboard: fragment, pasteRepeat: 0 });
       void writeSystemClipboard(text);
     }

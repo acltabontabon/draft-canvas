@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import type { Attachment } from '../document/types';
 import { tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
@@ -230,21 +230,24 @@ function AttachmentChip({
   // from focus/blur timing.
   const pendingValueRef = useRef<string | null>(null);
   const wasPinned = useRef(pinned);
-  useEffect(() => {
-    if (wasPinned.current && !pinned) {
+  const commitPending = useCallback(
+    (discard: boolean) => {
       const pending = pendingValueRef.current;
-      // Consumed (and cleared) here regardless of outcome — see `wasLastKeydownEscape`'s own doc
-      // comment for why this can't be decided from inside this component at all.
-      const discard = wasLastKeydownEscape();
       if (pending !== null && !discard) {
         const field = attachment.type === 'code' ? 'code' : 'text';
         const current = attachment.type === 'code' ? attachment.code ?? '' : attachment.text ?? '';
         if (pending !== current) actions.update(attachment.id, { [field]: pending });
       }
       pendingValueRef.current = null;
-    }
+    },
+    [attachment, actions],
+  );
+  useEffect(() => {
+    // Consumed (and cleared) here regardless of outcome — see `wasLastKeydownEscape`'s own doc
+    // comment for why this can't be decided from inside this component at all.
+    if (wasPinned.current && !pinned) commitPending(wasLastKeydownEscape());
     wasPinned.current = pinned;
-  }, [pinned, attachment, actions]);
+  }, [pinned, commitPending]);
 
   // A click on the chip reveals the card read-only first — the earlier "click opens straight into
   // an editable textarea, cursor already blinking" behavior read as the card silently rewriting
@@ -466,6 +469,9 @@ function AttachmentChip({
                       aria-label="Detach onto the canvas"
                       title="Detach onto the canvas"
                       onClick={() => {
+                        // Detach removes the attachment, so the unpin effect above never gets to
+                        // commit what was typed — and the new node copies the stored text.
+                        commitPending(false);
                         actions.detach?.(attachment.id);
                         setOpenAttachmentDetail(null);
                       }}

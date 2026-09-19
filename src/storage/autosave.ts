@@ -123,7 +123,17 @@ export class Autosave {
     // only mint a new content stamp, and the other tab's next save would then report a conflict
     // nobody caused. Anything queued for it is superseded: the editor now shows what's stored.
     if (this.loaded.get(document.metadata.id) === document) {
-      if (this.pending?.metadata.id === document.metadata.id) this.pending = null;
+      if (this.pending?.metadata.id === document.metadata.id) {
+        this.pending = null;
+        // The edit that marked the status dirty is gone, and with it the write its timer was
+        // armed for — without this the status would stay "dirty" until some later real save.
+        if (this.timer) {
+          clearTimeout(this.timer);
+          this.timer = null;
+        }
+        this.firstDirtyAt = 0;
+        if (this.state.status === 'dirty' && !this.conflict) this.emit({ status: 'idle' });
+      }
       return;
     }
     this.pendingCameraOnly = options?.cameraOnly === true && (this.pending === null || this.pendingCameraOnly);

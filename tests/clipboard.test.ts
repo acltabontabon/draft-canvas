@@ -141,6 +141,19 @@ describe('group/boundary copy', () => {
     expect(pastedChild.parentId).toBeUndefined();
   });
 
+  it('keeps the boundary when a copied child is pasted back inside it through the paste event', () => {
+    const { doc, boundary, child } = boundaryWithChild();
+    store.setState({ document: doc });
+    store.getState().setSelection({ nodes: [child.id], edges: [] });
+    const text = store.getState().copySelection()!;
+    // The browser's own paste event hands the app back the very text it just wrote.
+    expect(store.getState().applyExternalClipboardText(text)).toBe(true);
+    store.getState().paste({ x: 100, y: 100 });
+
+    const pastedId = store.getState().selection.nodes[0]!;
+    expect(store.getState().document.nodes.find((n) => n.id === pastedId)!.parentId).toBe(boundary.id);
+  });
+
   it('copying just the boundary brings its contents, and leaves the originals alone', () => {
     const { doc, boundary, child } = boundaryWithChild();
     store.setState({ document: doc });

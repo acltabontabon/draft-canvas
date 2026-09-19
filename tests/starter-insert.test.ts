@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
 import { createFlow, flowHasMembers } from '../src/document/flow';
 import { LIMITS } from '../src/document/limits';
-import { boundsOf, freeOriginFor, INSERT_GAP } from '../src/document/operations';
+import { addNodes, boundsOf, freeOriginFor, INSERT_GAP } from '../src/document/operations';
 import type { Bounds } from '../src/document/operations';
 import { parseDocument } from '../src/document/validate';
 import { ARCHITECTURE_STARTERS, starterById, starterSize } from '../src/starters';
@@ -115,6 +115,22 @@ describe('insertStarter', () => {
       });
     },
   );
+
+  it('counts a starter\'s flows against the file-wide flow limit, even from inside a room with none of its own', () => {
+    const host = createNode({ type: 'service', x: 0, y: 0 });
+    const full = Array.from({ length: LIMITS.maxFlows - 1 }, (_, i) => createFlow({ title: `Flow ${i}` }));
+    store.setState({ document: { ...addNodes(createDocument('Starters'), [host]), flows: full } });
+    store.getState().enterInside(host.id);
+    expect(store.getState().document.flows).toEqual([]);
+
+    // Saga ships two flows: one more than the file has room for. The diagram still lands.
+    const inserted = store.getState().insertStarter(starterById('saga-orchestration')!);
+
+    expect(inserted.length).toBeGreaterThan(0);
+    expect(store.getState().document.flows).toHaveLength(1);
+    store.getState().exitTo(0);
+    expect(store.getState().document.flows).toHaveLength(LIMITS.maxFlows - 1);
+  });
 
   it('takes the flows out with one undo and brings them back with one redo', () => {
     store.getState().insertStarter(starterById('saga-orchestration')!);
