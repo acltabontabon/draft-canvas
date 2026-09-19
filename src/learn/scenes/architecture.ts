@@ -65,7 +65,8 @@ export const intentContinuation: Scene = {
     {
       ms: 1500,
       step: 'A ghost suggests a next move',
-      add: { nodes: [store('db', 350, 136, 'Data Store')], edges: [edge('g1', 'orders', 'db')] },
+      // 145, not 136: the store's glyph (not its box) sits on Orders' centre line, so the arrow runs level.
+      add: { nodes: [store('db', 350, 145, 'Data Store')], edges: [edge('g1', 'orders', 'db')] },
       ghost: ['db', 'g1'],
       overlay: { kind: 'pill', at: { x: 412, y: 238 }, text: 'Add Data Store', keys: ['tab'] },
       cursor: { x: 190, y: 250 },

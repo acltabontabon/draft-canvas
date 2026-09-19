@@ -980,4 +980,36 @@ describe('buildStarter', () => {
       }
     }
   });
+
+  // The guard above only looks at lines that *are* level. A Data Store's glyph sits above its box
+  // centre and routing lands a side connector on the glyph, so a store placed by its box leaves the
+  // line into it jogging — and drops out of that check unseen.
+  it('lands a one-to-one side connection to a Data Store level, so it never jogs into the shape', () => {
+    for (const starter of ARCHITECTURE_STARTERS) {
+      const { nodes, edges } = buildStarter(starter, { x: 0, y: 0 });
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      const horizontal = (edge: (typeof edges)[number]) =>
+        (edge.sourceAnchor?.side === 'left' || edge.sourceAnchor?.side === 'right') &&
+        (edge.targetAnchor?.side === 'left' || edge.targetAnchor?.side === 'right');
+      const sideEdges = edges.filter(horizontal);
+      const sharing = (id: string, side: string | undefined) =>
+        sideEdges.filter(
+          (edge) =>
+            (edge.source === id && edge.sourceAnchor?.side === side) || (edge.target === id && edge.targetAnchor?.side === side),
+        ).length;
+      for (const edge of sideEdges) {
+        const source = byId.get(edge.source)!;
+        const target = byId.get(edge.target)!;
+        if (source.type !== 'database' && target.type !== 'database') continue;
+        // A fan (one node reaching several) is deliberately not level: each branch leaves at its own height.
+        if (sharing(source.id, edge.sourceAnchor!.side) > 1 || sharing(target.id, edge.targetAnchor!.side) > 1) continue;
+        const sourceY = anchorPoint(rectOfNode(source), edge.sourceAnchor!.side, edge.sourceAnchor!.offset).y;
+        const targetY = anchorPoint(rectOfNode(target), edge.targetAnchor!.side, edge.targetAnchor!.offset).y;
+        expect(
+          Math.abs(sourceY - targetY),
+          `${starter.name}: "${source.text ?? source.type}" → "${target.text ?? target.type}" should meet the store's glyph level`,
+        ).toBeLessThanOrEqual(0.5);
+      }
+    }
+  });
 });

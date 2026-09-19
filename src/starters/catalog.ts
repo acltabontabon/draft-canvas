@@ -34,6 +34,7 @@ import {
   centeredAt,
   columnsAt,
 } from './compose';
+import { dataStoreGlyphBounds } from '../document/dataStoreGeometry';
 import { queueTubeSpan } from '../document/queueGeometry';
 import type { ArchitectureStarter, StarterEdgeSpec, StarterNodeSpec } from './types';
 
@@ -65,6 +66,23 @@ const RIGHT: StarterEdgeSpec['sourceAnchor'] = { side: 'right', offset: 0.5 };
 function tubeCenteredAt(cy: number, height: number): number {
   const span = queueTubeSpan(height);
   return Math.round(cy - (span.top + span.bottom) / 2);
+}
+
+/** How far below a Data Store's top edge its glyph is centred. Every kind and size shares it
+ *  (`dataStoreGlyphBounds`), a cylinder and a table alike. */
+const STORE_GLYPH_CENTER = (() => {
+  const glyph = dataStoreGlyphBounds({ x: 0, y: 0, width: STORE.width, height: STORE.height });
+  return (glyph.top + glyph.bottom) / 2;
+})();
+
+/**
+ * The top edge that puts a Data Store's *glyph* (not its box) on the axis `cy` — the counterpart of
+ * `tubeCenteredAt` for the other node whose drawn glyph sits above its box centre. Routing lands a
+ * left/right connector on the glyph (`anchorBandOf`), so a store on a level line has to be placed by
+ * its glyph or the line jogs.
+ */
+function storeCenteredAt(cy: number): number {
+  return Math.round(cy - STORE_GLYPH_CENTER);
 }
 
 /** A plain top-to-bottom connection: the default reading direction of every starter. */
@@ -1243,7 +1261,7 @@ const hexagonal: ArchitectureStarter = {
       text: 'Database',
       accent: 'blue',
       x: HEX_TECH_X,
-      y: centeredAt(HEX_ROW_A_CENTER, STORE.height),
+      y: storeCenteredAt(HEX_ROW_A_CENTER),
       ...STORE,
     },
     {
@@ -1552,7 +1570,7 @@ const CQRS_QUERY_X = CQRS_BRIDGE_X + SERVICE.width + GUTTER;
 const CQRS_COMMAND_CX = CQRS_COMMAND_X + CQRS_BOX_WIDTH / 2;
 const CQRS_QUERY_CX = CQRS_QUERY_X + CQRS_BOX_WIDTH / 2;
 const CQRS_MODEL_CENTER = CQRS_MODEL_Y + CQRS_MODEL.height / 2;
-const CQRS_STORE_CENTER = CQRS_STORE_Y + STORE.height / 2;
+const CQRS_STORE_CENTER = CQRS_STORE_Y + STORE_GLYPH_CENTER;
 /** The annotation sits just under the store row, still inside the boundaries' own bottom pad. */
 const CQRS_ANNOTATION_Y = CQRS_STORE_Y + STORE.height + 8;
 const CQRS_ANNOTATION = { width: 124, height: 24 };
@@ -1785,18 +1803,18 @@ const MED_DESCRIPTOR_Y = MED_LAKE_TOP + TABLE.height + 8;
 const MED_LAKE_HEIGHT = MED_DESCRIPTOR_Y + MED_DESCRIPTOR_HEIGHT + BOUNDARY_PAD;
 const MED_LAKE_WIDTH = BOUNDARY_PAD * 2 + TABLE.width * 3 + MED_LAYER_GAP * 2;
 /** The whole composition's spine: the tables' centre line. */
-const MED_SPINE_CENTER = MED_LAKE_TOP + TABLE.height / 2;
+const MED_SPINE_CENTER = MED_LAKE_TOP + STORE_GLYPH_CENTER;
 /** Stacked siblings inside the Sources/Serving zones — tighter than `INNER_BAND` so neither box towers. */
 const MED_STACK_GAP = 40;
 /** Room between the Sources zone and Ingestion for the three arrows' captions. */
 const MED_SOURCE_GAP = 96;
 const MED_SOURCES_X = 0;
 const MED_SOURCES_WIDTH = STORE.width + BOUNDARY_PAD * 2;
-const MED_FILES_Y = centeredAt(MED_SPINE_CENTER, STORE.height);
+const MED_FILES_Y = storeCenteredAt(MED_SPINE_CENTER);
 const MED_DB_Y = MED_FILES_Y - MED_STACK_GAP - STORE.height;
 /** How far above the spine `Operational Database`'s arrow leaves — `Event Stream`'s tube sits the
  *  same distance below it, so the two corners into Ingestion mirror each other exactly. */
-const MED_SOURCE_REACH = MED_SPINE_CENTER - (MED_DB_Y + STORE.height / 2);
+const MED_SOURCE_REACH = MED_SPINE_CENTER - (MED_DB_Y + STORE_GLYPH_CENTER);
 const MED_STREAM_Y = tubeCenteredAt(MED_SPINE_CENTER + MED_SOURCE_REACH, NAMED_QUEUE.height);
 const MED_SOURCES_Y = MED_DB_Y - BOUNDARY_HEADER_TITLE_ONLY;
 const MED_SOURCES_HEIGHT = MED_STREAM_Y + NAMED_QUEUE.height + BOUNDARY_PAD - MED_SOURCES_Y;
@@ -2072,7 +2090,7 @@ const KAP_PROCESSOR_X = KAP_LOG_X + NAMED_QUEUE.width + KAP_REPLAY_GAP;
 /** Wider than the shared `TABLE`: "Materialized View" doesn't fit the plain table card's width. */
 const KAP_VIEW = { width: 172, height: TABLE.height };
 const KAP_VIEW_X = KAP_PROCESSOR_X + SERVICE.width + BAND;
-const KAP_VIEW_Y = centeredAt(KAP_SPINE, KAP_VIEW.height);
+const KAP_VIEW_Y = storeCenteredAt(KAP_SPINE);
 const KAP_LOG_CX = KAP_LOG_X + NAMED_QUEUE.width / 2;
 const KAP_VIEW_CX = KAP_VIEW_X + KAP_VIEW.width / 2;
 const KAP_CORE_WIDTH = KAP_VIEW_X + KAP_VIEW.width + KAP_CORE_INSET;
@@ -2296,7 +2314,7 @@ const CDC_OPS_CX = CDC_OPS_WIDTH / 2;
 const CDC_APP_Y = BOUNDARY_HEADER_TITLE_ONLY;
 const CDC_DB_Y = CDC_APP_Y + SERVICE.height + INNER_BAND;
 /** The pipeline's spine: the database's centre line, which the connector and stream share. */
-const CDC_SPINE = CDC_DB_Y + STORE.height / 2;
+const CDC_SPINE = CDC_DB_Y + STORE_GLYPH_CENTER;
 /** Annotation text is left-aligned at its own x, so the box is sized to the words to centre them. */
 const CDC_TRUTH = { width: 76, height: 24 };
 const CDC_TRUTH_Y = CDC_DB_Y + STORE.height + 8;
@@ -2326,8 +2344,8 @@ const CDC_LANE_GAP = 40;
 const CDC_LANE_OFFSET = (STORE.height + CDC_LANE_GAP) / 2;
 const CDC_SEARCH_CY = CDC_SPINE - CDC_LANE_OFFSET;
 const CDC_WAREHOUSE_CY = CDC_SPINE + CDC_LANE_OFFSET;
-const CDC_VIEWS_Y = CDC_SEARCH_CY - STORE.height / 2 - CDC_SUBTITLED_TOP;
-const CDC_VIEWS_HEIGHT = CDC_WAREHOUSE_CY + STORE.height / 2 + BOUNDARY_PAD - CDC_VIEWS_Y;
+const CDC_VIEWS_Y = storeCenteredAt(CDC_SEARCH_CY) - CDC_SUBTITLED_TOP;
+const CDC_VIEWS_HEIGHT = storeCenteredAt(CDC_WAREHOUSE_CY) + STORE.height + BOUNDARY_PAD - CDC_VIEWS_Y;
 
 const cdc: ArchitectureStarter = {
   id: 'cdc',
@@ -2448,7 +2466,7 @@ const cdc: ArchitectureStarter = {
       accent: 'blue',
       parent: 'views',
       x: CDC_STORE_X,
-      y: centeredAt(CDC_SEARCH_CY, STORE.height),
+      y: storeCenteredAt(CDC_SEARCH_CY),
       ...STORE,
     },
     {
@@ -2470,7 +2488,7 @@ const cdc: ArchitectureStarter = {
       accent: 'blue',
       parent: 'views',
       x: CDC_STORE_X,
-      y: centeredAt(CDC_WAREHOUSE_CY, STORE.height),
+      y: storeCenteredAt(CDC_WAREHOUSE_CY),
       ...STORE,
     },
   ],
@@ -2919,8 +2937,8 @@ const OUTBOX_PUBLISHER_X = OUTBOX_BOX_X + OUTBOX_BOX_WIDTH + BAND;
 const OUTBOX_TOPIC_X = OUTBOX_PUBLISHER_X + SERVICE.width + GUTTER;
 const OUTBOX_CONSUMER_X = OUTBOX_TOPIC_X + NAMED_QUEUE.width + GUTTER;
 /** The producer faces the middle of the two rows it writes; everything downstream sits on the outbox row. */
-const OUTBOX_ROWS_CENTER = (OUTBOX_BUSINESS_Y + OUTBOX_RECORD_Y + TABLE.height) / 2;
-const OUTBOX_RECORD_CENTER = OUTBOX_RECORD_Y + TABLE.height / 2;
+const OUTBOX_ROWS_CENTER = (OUTBOX_BUSINESS_Y + OUTBOX_RECORD_Y) / 2 + STORE_GLYPH_CENTER;
+const OUTBOX_RECORD_CENTER = OUTBOX_RECORD_Y + STORE_GLYPH_CENTER;
 
 const transactionalOutbox: ArchitectureStarter = {
   id: 'transactional-outbox',

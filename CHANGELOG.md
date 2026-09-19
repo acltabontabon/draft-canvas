@@ -9,6 +9,9 @@ All notable changes to Draft Canvas are documented here.
 - A connector now meets a Data Store's own shape instead of stopping short of it. Arrows into the
   side or top of a database, cache or file system used to end at the empty edge of its box, and
   the anchor dots you reach for sit on the shape too.
+- The CQRS, Hexagonal, Medallion, Kappa, CDC and Transactional Outbox starters put their stores on
+  the line they connect along, so those arrows run straight into the shape instead of stepping.
+- A projection's arrow reads "projects into" rather than "projects".
 
 ## [1.9.1] - 2026-09-19
 
