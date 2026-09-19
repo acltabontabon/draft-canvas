@@ -24,7 +24,7 @@ import {
   captionAnchor,
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
-import { layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { EdgeLabels } from './EdgeLabels';
 import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
@@ -89,15 +89,17 @@ const OPPOSITE_SIDE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 
  * anchoring straight at `(x, y)` as before, since they were never the ones being cut through.
  */
 function labelChipTransform(side: Side, x: number, y: number): string {
+  // Set back by the chip's padding, so the text — not the chip — is `LABEL_LINE_GAP` from the line,
+  // where a relationship caption's text sits.
   switch (side) {
     case 'right':
-      return `translate(0, -50%) translate(${x + LABEL_LINE_GAP}px, ${y}px)`;
+      return `translate(0, -50%) translate(${x + LABEL_LINE_GAP - LABEL_PADDING_X}px, ${y}px)`;
     case 'left':
-      return `translate(-100%, -50%) translate(${x - LABEL_LINE_GAP}px, ${y}px)`;
+      return `translate(-100%, -50%) translate(${x - LABEL_LINE_GAP + LABEL_PADDING_X}px, ${y}px)`;
     case 'top':
-      return `translate(-50%, -100%) translate(${x}px, ${y - LABEL_LINE_GAP}px)`;
+      return `translate(-50%, -100%) translate(${x}px, ${y - LABEL_LINE_GAP + LABEL_PADDING_Y}px)`;
     case 'bottom':
-      return `translate(-50%, 0) translate(${x}px, ${y + LABEL_LINE_GAP}px)`;
+      return `translate(-50%, 0) translate(${x}px, ${y + LABEL_LINE_GAP - LABEL_PADDING_Y}px)`;
   }
 }
 

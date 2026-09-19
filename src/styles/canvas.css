@@ -457,11 +457,17 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 5px;
+  /* `LABEL_PADDING_X`/`_Y` in `edges/labelLayout.ts`, which the chip's placement and the export use. */
+  padding: 3px 6px;
   border-radius: var(--dc-radius-xs);
   background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
-  color: var(--dc-text);
-  font-size: 11.5px;
+  /* The same size and tone as the relationship caption a label replaces (`.dc-edge-caption`):
+     a connector's words are annotation, and shouldn't outweigh the shapes they join. They come
+     back to full strength while hovered or being edited, so reaching for one still reads. Keep
+     `font-size` equal to `TEXT_SIZES.edgeLabel` — the export lays the label out with it, and
+     `tests/connector-text.test.ts` holds the two together. */
+  color: var(--dc-text-faint);
+  font-size: 9.5px;
   font-weight: 500;
   line-height: 1.35;
   white-space: nowrap;
@@ -492,6 +498,7 @@
 .dc-edge-label:hover,
 .dc-edge-label:focus-within {
   background: var(--dc-edge-label-bg);
+  color: var(--dc-text);
 }
 
 /* When a connector is both labelled and numbered, the step rides inside the
@@ -617,7 +624,7 @@
   border-radius: 3px;
   background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
   color: var(--dc-text-faint);
-  font-size: 10px;
+  font-size: 9.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;

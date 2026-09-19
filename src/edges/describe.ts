@@ -32,7 +32,7 @@ import { bridgePath } from './bridge';
 import type { Crossing } from './crossings';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
-import { layoutEdgeLabel, layoutEdgeResponse } from './labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel, layoutEdgeResponse } from './labelLayout';
 
 export interface EdgeDescribeContext {
   theme: Theme;
@@ -62,8 +62,6 @@ export interface EdgeDescribeContext {
   preset?: PersonalityPreset;
 }
 
-const LABEL_PADDING_X = 6;
-const LABEL_PADDING_Y = 3;
 const BADGE_RADIUS = 8;
 /** Space between the step circle and the label text inside a chip. */
 const LABEL_GAP = 5;
@@ -82,15 +80,17 @@ const OPPOSITE_SIDE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 
  * directly here since this renderer already knows the chip's exact `w`/`h` up front.
  */
 function labelChipRect(side: Side, x: number, y: number, w: number, h: number): { left: number; top: number } {
+  // Set back by the chip's padding, so the text — not the chip — is `LABEL_LINE_GAP` from the line,
+  // where a relationship caption's text sits (`captionAnchor`).
   switch (side) {
     case 'right':
-      return { left: x + LABEL_LINE_GAP, top: y - h / 2 };
+      return { left: x + LABEL_LINE_GAP - LABEL_PADDING_X, top: y - h / 2 };
     case 'left':
-      return { left: x - LABEL_LINE_GAP - w, top: y - h / 2 };
+      return { left: x - LABEL_LINE_GAP + LABEL_PADDING_X - w, top: y - h / 2 };
     case 'top':
-      return { left: x - w / 2, top: y - LABEL_LINE_GAP - h };
+      return { left: x - w / 2, top: y - LABEL_LINE_GAP + LABEL_PADDING_Y - h };
     case 'bottom':
-      return { left: x - w / 2, top: y + LABEL_LINE_GAP };
+      return { left: x - w / 2, top: y + LABEL_LINE_GAP - LABEL_PADDING_Y };
   }
 }
 
@@ -501,7 +501,8 @@ export function describeEdge(
       y: centerY - layout.height / 2,
       layout,
       font: FONTS.edgeLabel,
-      fill: ctx.theme.text,
+      // The caption's own tone, as on screen (full-strength only while hovered or edited).
+      fill: ctx.theme.textFaint,
       align: 'middle',
     });
   } else if (hasStep) {

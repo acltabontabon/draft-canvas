@@ -55,7 +55,10 @@ export const TEXT_SIZES = {
   freeTextTitle: 24,
   freeTextTechnical: 13,
   code: 12.5,
-  edgeLabel: 11.5,
+  /** A connector's own words and its relationship caption are one style — the same size, and the
+   *  same muted tone on the canvas and in exports — so a typed label replacing a caption reads as
+   *  the same kind of text. Held equal by `tests/connector-text.test.ts`. */
+  edgeLabel: 9.5,
   sequenceBadge: 11,
   groupTitle: 12,
   /** A Boundary title only ever shrinks this one step — see the `group()` doc comment on why it
