@@ -6,6 +6,9 @@ All notable changes to Draft Canvas are documented here.
 
 ### Changed
 
+- **A Data Store is drawn a little larger.** The cylinder, folder, bucket and card all sat light
+  next to a Service box; a store you add now starts big enough to hold its own beside one, and the
+  starters are drawn at the new size. A store already in a diagram keeps the size it has.
 - **A Service's suggestions now read the shapes pointing at it.** Press `]` on a Service and what
   it leads with depends on where its work comes from: one behind a Gateway or called by a person
   starts with its own Data Store and a Cache, one fed by a Queue or a Topic starts with where the

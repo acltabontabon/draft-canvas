@@ -42,7 +42,7 @@ import type { ArchitectureStarter, StarterEdgeSpec, StarterNodeSpec } from './ty
 /** Mirrors of `document/limits.ts`'s `DEFAULTS`, named for what they are here. Authoring against
  *  literals keeps every coordinate below arithmetically checkable by eye. */
 const SERVICE = { width: 176, height: 68 };
-const STORE = { width: 148, height: 88 };
+const STORE = { width: 172, height: 102 };
 /** The queue-family box — Queue, Topic and DLQ all share it. */
 const QUEUE = { width: 140, height: 48 };
 /** The same box for a queue-family node that carries a name (`DEFAULTS.queueNamedHeight`): the
@@ -68,12 +68,20 @@ function tubeCenteredAt(cy: number, height: number): number {
   return Math.round(cy - (span.top + span.bottom) / 2);
 }
 
-/** How far below a Data Store's top edge its glyph is centred. Every kind and size shares it
- *  (`dataStoreGlyphBounds`), a cylinder and a table alike. */
-const STORE_GLYPH_CENTER = (() => {
-  const glyph = dataStoreGlyphBounds({ x: 0, y: 0, width: STORE.width, height: STORE.height });
+/**
+ * How far below a Data Store's top edge its glyph is centred. Every kind shares it
+ * (`dataStoreGlyphBounds`), a cylinder and a table alike — but *size* matters: the glyph grows
+ * with a box bigger than its unit one, and the flat `TABLE` card is short enough that it never
+ * does while a full `STORE` does. So this takes the box rather than assuming one; a level line
+ * between a cylinder and a table is only level if each is placed by its own centre.
+ */
+function storeGlyphCenter(size: { width: number; height: number }): number {
+  const glyph = dataStoreGlyphBounds({ x: 0, y: 0, width: size.width, height: size.height });
   return (glyph.top + glyph.bottom) / 2;
-})();
+}
+
+const STORE_GLYPH_CENTER = storeGlyphCenter(STORE);
+const TABLE_GLYPH_CENTER = storeGlyphCenter(TABLE);
 
 /**
  * The top edge that puts a Data Store's *glyph* (not its box) on the axis `cy` — the counterpart of
@@ -81,8 +89,8 @@ const STORE_GLYPH_CENTER = (() => {
  * left/right connector on the glyph (`anchorBandOf`), so a store on a level line has to be placed by
  * its glyph or the line jogs.
  */
-function storeCenteredAt(cy: number): number {
-  return Math.round(cy - STORE_GLYPH_CENTER);
+function storeCenteredAt(cy: number, center: number = STORE_GLYPH_CENTER): number {
+  return Math.round(cy - center);
 }
 
 /** A plain top-to-bottom connection: the default reading direction of every starter. */
@@ -346,7 +354,7 @@ const monolith: ArchitectureStarter = {
  * gated on `edge.semantic` being truthy, so an edge with neither an inferred semantic nor an
  * explicit label renders as a plain, honest line — present because the association is real, silent
  * because Draft Canvas has no opinion on what to call it at this level. `Application Database` is
- * sized to `MODULE`'s own width (176, not `STORE`'s default 148) because its label needs the room
+ * sized to `MODULE`'s own width (176, not `STORE`'s own 172) because its label needs the room
  * on a single line — a data-store cylinder's caption never wraps (`nodes/describe.ts`'s
  * `dataStoreCylinder`). No annotation sits beneath it either: an earlier revision added
  * `Module-owned data` to spell out the ownership principle in words, but the boundary-level edge,
@@ -397,7 +405,7 @@ const MODULAR_MODULES_Y = MODULAR_API_Y + API.height + BAND;
 // (see this block's own doc comment) — so `BOUNDARY_PAD` closes the boundary directly beneath it.
 const MODULAR_BOUNDARY_HEIGHT = MODULAR_MODULES_Y + MODULE.height + BOUNDARY_PAD;
 const MODULAR_BOUNDARY_WIDTH = MODULAR_INNER_WIDTH + BOUNDARY_PAD * 2;
-/** `MODULE`'s width, not `STORE`'s default 148: "Application Database" needs the room on a single
+/** `MODULE`'s width, not `STORE`'s own 172: "Application Database" needs the room on a single
  *  line — a data-store cylinder's caption never wraps (`nodes/describe.ts`'s `dataStoreCylinder`).
  */
 const DATABASE_BOX = { width: MODULE.width, height: STORE.height };
@@ -1803,7 +1811,7 @@ const MED_DESCRIPTOR_Y = MED_LAKE_TOP + TABLE.height + 8;
 const MED_LAKE_HEIGHT = MED_DESCRIPTOR_Y + MED_DESCRIPTOR_HEIGHT + BOUNDARY_PAD;
 const MED_LAKE_WIDTH = BOUNDARY_PAD * 2 + TABLE.width * 3 + MED_LAYER_GAP * 2;
 /** The whole composition's spine: the tables' centre line. */
-const MED_SPINE_CENTER = MED_LAKE_TOP + STORE_GLYPH_CENTER;
+const MED_SPINE_CENTER = MED_LAKE_TOP + TABLE_GLYPH_CENTER;
 /** Stacked siblings inside the Sources/Serving zones — tighter than `INNER_BAND` so neither box towers. */
 const MED_STACK_GAP = 40;
 /** Room between the Sources zone and Ingestion for the three arrows' captions. */
@@ -2090,7 +2098,7 @@ const KAP_PROCESSOR_X = KAP_LOG_X + NAMED_QUEUE.width + KAP_REPLAY_GAP;
 /** Wider than the shared `TABLE`: "Materialized View" doesn't fit the plain table card's width. */
 const KAP_VIEW = { width: 172, height: TABLE.height };
 const KAP_VIEW_X = KAP_PROCESSOR_X + SERVICE.width + BAND;
-const KAP_VIEW_Y = storeCenteredAt(KAP_SPINE);
+const KAP_VIEW_Y = storeCenteredAt(KAP_SPINE, TABLE_GLYPH_CENTER);
 const KAP_LOG_CX = KAP_LOG_X + NAMED_QUEUE.width / 2;
 const KAP_VIEW_CX = KAP_VIEW_X + KAP_VIEW.width / 2;
 const KAP_CORE_WIDTH = KAP_VIEW_X + KAP_VIEW.width + KAP_CORE_INSET;
@@ -2330,8 +2338,14 @@ const CDC_CONNECTOR_X = CDC_PIPE_X + BOUNDARY_PAD;
 const CDC_STREAM_X = CDC_CONNECTOR_X + SERVICE.width + GUTTER;
 const CDC_STREAM_Y = tubeCenteredAt(CDC_SPINE, NAMED_QUEUE.height);
 const CDC_PIPE_WIDTH = CDC_STREAM_X + NAMED_QUEUE.width + BOUNDARY_PAD - CDC_PIPE_X;
-const CDC_PIPE_HEIGHT =
-  Math.max(CDC_SPINE + SERVICE.height / 2, CDC_STREAM_Y + NAMED_QUEUE.height) + BOUNDARY_PAD - CDC_PIPE_Y;
+/** Rounded because it is a *size*: a store's glyph centre — and so the spine derived from it — is
+ *  a fraction at boxes bigger than the glyph's unit one, and a fractional width or height does not
+ *  survive a save (`document/validate.ts` rounds it back), which would make the file differ from
+ *  the canvas it was written from. Axes stay exact; only what gets stored is rounded — up, so the
+ *  boundary never rounds down onto a child it is supposed to contain. */
+const CDC_PIPE_HEIGHT = Math.ceil(
+  Math.max(CDC_SPINE + SERVICE.height / 2, CDC_STREAM_Y + NAMED_QUEUE.height) + BOUNDARY_PAD - CDC_PIPE_Y,
+);
 /** The fan's collapsed `consumes` caption sits midway along its stem; this gap moves the trunk far
  *  enough out that the caption clears the pipeline boundary's edge instead of sitting on it. */
 const CDC_FAN_GAP = 128;
@@ -2937,8 +2951,8 @@ const OUTBOX_PUBLISHER_X = OUTBOX_BOX_X + OUTBOX_BOX_WIDTH + BAND;
 const OUTBOX_TOPIC_X = OUTBOX_PUBLISHER_X + SERVICE.width + GUTTER;
 const OUTBOX_CONSUMER_X = OUTBOX_TOPIC_X + NAMED_QUEUE.width + GUTTER;
 /** The producer faces the middle of the two rows it writes; everything downstream sits on the outbox row. */
-const OUTBOX_ROWS_CENTER = (OUTBOX_BUSINESS_Y + OUTBOX_RECORD_Y) / 2 + STORE_GLYPH_CENTER;
-const OUTBOX_RECORD_CENTER = OUTBOX_RECORD_Y + STORE_GLYPH_CENTER;
+const OUTBOX_ROWS_CENTER = (OUTBOX_BUSINESS_Y + OUTBOX_RECORD_Y) / 2 + TABLE_GLYPH_CENTER;
+const OUTBOX_RECORD_CENTER = OUTBOX_RECORD_Y + TABLE_GLYPH_CENTER;
 
 const transactionalOutbox: ArchitectureStarter = {
   id: 'transactional-outbox',

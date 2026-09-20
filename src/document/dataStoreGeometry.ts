@@ -9,7 +9,16 @@
  * numbers.
  */
 
-import { DEFAULTS } from './limits';
+/**
+ * The box the glyph is drawn at its normal size for. Deliberately a frozen pair rather than
+ * `DEFAULTS.dataStoreWidth`/`dataStoreHeight`: the default box is now a little larger than this,
+ * so a Data Store someone drops on the canvas reads at the weight of the shapes around it — but a
+ * store already in a saved diagram keeps the box it was created with, and has to keep the glyph
+ * that went with it. Tying the scale to the default instead would silently redraw every store in
+ * every diagram the moment the default moved.
+ */
+const DS_UNIT_WIDTH = 148;
+const DS_UNIT_HEIGHT = 88;
 
 /** The glyph's top edge, from the box's top, at its normal size. */
 export const DS_GLYPH_TOP = 9;
@@ -22,12 +31,13 @@ export const DS_GLYPH_MARGIN = 12;
 const DS_GLYPH_WIDTH = 54;
 
 /**
- * How much bigger than normal a Data Store's glyph is drawn: 1 at the default box and at every
+ * How much bigger than normal a Data Store's glyph is drawn: 1 at the unit box above and at every
  * smaller one, then growing with the box — uniformly, by whichever side has grown the least, so a
- * box stretched only one way keeps its glyph and one dragged out from a corner scales it.
+ * box stretched only one way keeps its glyph and one dragged out from a corner scales it. A store
+ * at today's default box is a little over 1; one at the old default is exactly 1.
  */
 export function dataStoreScale(node: { width: number; height: number }): number {
-  return Math.max(1, Math.min(node.width / DEFAULTS.dataStoreWidth, node.height / DEFAULTS.dataStoreHeight));
+  return Math.max(1, Math.min(node.width / DS_UNIT_WIDTH, node.height / DS_UNIT_HEIGHT));
 }
 
 export interface DataStoreGlyphBounds {

@@ -4,6 +4,7 @@ import { addEdges, addNodes } from '../src/document/operations';
 import { addFlow, createFlow } from '../src/document/flow';
 import { NODE_TYPES } from '../src/document/types';
 import { describeContext, describeNode } from '../src/nodes/describe';
+import type { Shape } from '../src/render/displayList';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { beginClipScope, emitShape } from '../src/render/svg/emit';
 import { escapeXmlAttr, escapeXmlText, serialize, stripInvalidXml } from '../src/render/svg/element';
@@ -605,15 +606,20 @@ describe('live resize', () => {
 
   function fillsAndCaptions(ctx: ReturnType<typeof describeContext>, node: ReturnType<typeof createNode>) {
     const display = describeNode(node, ctx);
+    // A glyph drawn bigger than its unit size arrives wrapped in a `group` (a Data Store at the
+    // default box does), so walk into those rather than reading only the top level.
+    const flatten = (shapes: readonly Shape[]): Shape[] =>
+      shapes.flatMap((shape) => (shape.t === 'group' ? flatten(shape.children) : [shape]));
+    const shapes = flatten(display.shapes);
     // Only the silhouette's own fill (rect/path/ellipse) — a caption's text
     // colour is a different visual channel and deliberately uses the
     // theme's neutral muted colour regardless of accent.
-    const fills = display.shapes
+    const fills = shapes
       .filter((shape) => shape.t !== 'text')
       .map((shape) => ('fill' in shape ? shape.fill : undefined))
       .filter((fill): fill is string => typeof fill === 'string');
-    const texts = display.shapes
-      .filter((shape): shape is Extract<typeof shape, { t: 'text' }> => shape.t === 'text')
+    const texts = shapes
+      .filter((shape): shape is Extract<Shape, { t: 'text' }> => shape.t === 'text')
       .map((shape) => shape.layout.lines.map((line) => line.text).join(''));
     return { fills, texts };
   }

@@ -68,9 +68,13 @@ export const DEFAULTS = {
   actorWidth: 120,
   actorHeight: 92,
   /** Narrower and taller than the generic node default — a cylinder that wide and short reads
-   *  as a stretched database icon rather than a deliberate container shape. */
-  dataStoreWidth: 148,
-  dataStoreHeight: 88,
+   *  as a stretched database icon rather than a deliberate container shape. Sized so the drawn
+   *  glyph (`dataStoreGeometry.ts`, whose unit box is the smaller 148x88 this used to be) holds
+   *  its own beside a Service: the mark itself is what a reader sees, and at the unit size it sat
+   *  noticeably light next to a 176x68 Service box. A store already saved at any other size is
+   *  untouched — this is read only when a caller omits `width`/`height`. */
+  dataStoreWidth: 172,
+  dataStoreHeight: 102,
   /** The tube is a compact glyph anchored to the top, with its kind caption
    *  sitting snugly below it — sized to leave just enough margin below the
    *  caption for a top/bottom-anchored connector to meet the node without a
