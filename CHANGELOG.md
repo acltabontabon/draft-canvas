@@ -4,13 +4,6 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
-### Fixed
-
-- The Medallion starter's Bronze, Silver and Gold tables printed the word "Table" on top of the
-  description underneath them. A table card now gets the same room for its name and kind as every
-  other Data Store, so the three read as separate lines. Kappa's materialized view and the
-  Transactional Outbox tables had the same overflow into empty space, and are fixed with it.
-
 ### Changed
 
 - **A Data Store is drawn a little larger.** The cylinder, folder, bucket and card all sat light
@@ -28,6 +21,10 @@ All notable changes to Draft Canvas are documented here.
 
 ### Fixed
 
+- The Medallion starter's Bronze, Silver and Gold tables printed the word "Table" on top of the
+  description underneath them. A table card now gets the same room for its name and kind as every
+  other Data Store, so the three read as separate lines. Kappa's materialized view and the
+  Transactional Outbox tables had the same overflow into empty space, and are fixed with it.
 - **A Data Store's shape now resizes with it.** Drag a database, cache or file system larger and
   the drawing grows too — the connector anchors follow it, and exports match — instead of a small
   shape floating in a big empty box. Stores at the default size or smaller look exactly as before.
