@@ -4,6 +4,8 @@
  *
  * - `context.ts` — one node's neighborhood (plus the connectors leaving its neighbors).
  * - `rules.ts` / `families.ts` — authored candidates: one node, or a short chain (`defineChain`).
+ * - `role.ts` — what an anchor is evidently doing, from what points at it; reorders its own
+ *   alternatives without ever adding or removing one.
  * - `existing.ts` — candidates that connect to a suitable node already drawn nearby.
  * - `engine.ts` — generate → matrix validity → suppression → derived confidence → `rank.ts`.
  *   The capability matrix, never a rule, decides what is technically allowed.
@@ -17,6 +19,8 @@
  */
 
 export { neighborhoodOf } from './context';
+export { ROLE_PREFERENCE, anchorRole } from './role';
+export type { AnchorRole } from './role';
 export { continuationSets, continuationsFor } from './engine';
 export { dismissalKey } from './dismissal';
 export { gapForCaption, horizontalAnchorsFor, materialize } from './materialize';

@@ -1,4 +1,5 @@
 import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
+import { ROLE_PREFERENCE, anchorRole } from './role';
 import type { Continuation, FragmentNodeSpec, Neighborhood } from './types';
 
 /**
@@ -51,6 +52,18 @@ const repeatsExisting: RankingSignal = (candidate, { nb }) => {
   return repeated ? -2 : 0;
 };
 
+/**
+ * "This is what a shape in that position usually needs next." The same Service is a different
+ * thing behind a gateway, on the end of a queue, or woken by a scheduler (`role.ts`), and the
+ * authored order can only be right for one of them — so the anchor's role picks which of its own
+ * alternatives to lead with. It never adds a candidate, and it never overrules the signal below:
+ * a shape the anchor already draws stays where that put it.
+ */
+const fitsNeighborhood: RankingSignal = (candidate, context) => {
+  if (repeatsExisting(candidate, context) < 0) return 0;
+  return ROLE_PREFERENCE[anchorRole(context.nb)][candidate.ruleId] ?? 0;
+};
+
 /** "You have been adding this kind of thing." A nudge among the optional candidates, nothing more. */
 const recentlyAccepted: RankingSignal = (candidate, { recent }) =>
   candidate.confidence === 'medium' && recent.includes(candidate.ruleId) ? 1 : 0;
@@ -61,7 +74,13 @@ const recentlyAccepted: RankingSignal = (candidate, { recent }) =>
  */
 const alreadyDrawn: RankingSignal = (candidate) => ((candidate.fragment.existing?.length ?? 0) > 0 ? 1 : 0);
 
-const SIGNALS: readonly RankingSignal[] = [siblingBranch, repeatsExisting, recentlyAccepted, alreadyDrawn];
+const SIGNALS: readonly RankingSignal[] = [
+  siblingBranch,
+  repeatsExisting,
+  fitsNeighborhood,
+  recentlyAccepted,
+  alreadyDrawn,
+];
 
 /**
  * Best first. Confidence always dominates — a medium candidate never outranks a high one, whatever

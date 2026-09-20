@@ -264,6 +264,7 @@ appear in that picker, whose standing presets already cover those shapes.
 | `service-service` | secondary | Service | Call another service. |
 | `service-cache` | secondary | Cache | Keep hot reads close. |
 | `service-external` | secondary | External System | Call a system outside this one. |
+| `service-search-index` | secondary | Search Index | Queries its data store can't answer. |
 | `worker-indexes` | secondary | Search Index | This worker doesn't index anything yet. |
 | `actor-gateway` | secondary | Gateway | Requests usually enter through a gateway. |
 | `actor-api` | secondary | API | Or call an API directly. |
@@ -279,7 +280,8 @@ Keyboard only: the `service-*` and `actor-*` rules.
 Nothing starts unprompted from a plain Service, an Actor, a Data Store, a Cache, a File System, a
 Search Index or a bare (non-Port) Component: each has too many valid next moves for any one of them
 to be *the* move, and no suggestion beats a weak one. Services and Actors get a short list when
-asked; the rest get nothing at all. Adding a rule for one category is never license to assume a
+asked; the rest get nothing at all. What a Service's list *leads* with is not fixed, though — see
+"What points at it" below. Adding a rule for one category is never license to assume a
 neighboring one is now covered too — see `tests/continuation.test.ts`'s broad silence sweep.
 
 ### Ranking
@@ -291,9 +293,33 @@ order:
 | Signal | Effect |
 | --- | --- |
 | Sibling branch | A fan-out anchor (Topic, Gateway, Object Storage) that already has a branch of the same shape ranks another one first — a Topic with a `Queue → Worker` subscriber leads with `Queue → Worker`. |
+| Fits the neighborhood | A Service is the shape whose next move least follows from the shape itself, so its own alternatives are ordered by what points at it. Never overrides the row below. |
 | Repeats what's there | The same verb to the same kind of node the anchor already has drops back: a Queue with a consumer leads with its dead-letter queue, a Service writing to a Data Store gets another Data Store last (a Cache is unaffected). Fan-out rules are exempt. |
 | Already drawn | Connecting to an existing node outranks creating a look-alike. |
 | Recently accepted | A rule accepted earlier in this session gets a small nudge among medium candidates. Session-only, never saved. |
+
+#### What points at it
+
+Nothing on a Service box says whether it answers requests, drains a queue or wakes on a timer, and
+the next thing you would draw is different in each. Its inbound connectors do say, so the list `]`
+cycles through is ordered by them (`src/continuation/role.ts`):
+
+| What points at it | Reading | Leads with |
+| --- | --- | --- |
+| A Queue, a Topic or a dead-letter queue | Work arrives here | Data Store, then Topic, then External System |
+| A Scheduler | A job on a timer | Data Store, then External System |
+| A Gateway or a person | Someone is waiting for an answer | Data Store, then Cache, then Service |
+| Nothing, or another Service | Not enough to say | The authored order, unchanged |
+
+The most specific reading wins: a consumer that also sits behind a gateway is still a consumer.
+This reorders a Service's own alternatives and does nothing else — it never adds a candidate, never
+takes one away, never makes one appear unprompted, and never argues a shape back up that the anchor
+already draws. Being wrong about a role costs one more press of `]`.
+
+One row has to be earned rather than ranked: a **Search Index** is offered only once the Service
+already writes to a Data Store, because `searches` means "the queries that store can't answer" and
+an index in front of nothing has no content. A Worker keeps its own `worker-indexes` row instead,
+so the same shape is never listed twice.
 
 ### Connecting to what's already there
 

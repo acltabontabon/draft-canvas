@@ -4,6 +4,18 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **A Service's suggestions now read the shapes pointing at it.** Press `]` on a Service and what
+  it leads with depends on where its work comes from: one behind a Gateway or called by a person
+  starts with its own Data Store and a Cache, one fed by a Queue or a Topic starts with where the
+  result lands and what it announces next, and one a Scheduler wakes reaches outward instead. The
+  same alternatives are still all there in the same cycle — only the order changes, and a Service
+  with nothing pointing at it is exactly as it was. A shape the Service already draws never climbs
+  back up the list.
+- A Service that writes to a Data Store can now add a **Search Index** to it — the queries that
+  store can't answer. It is offered only once there is something to index, and only when asked.
+
 ### Fixed
 
 - **A Data Store's shape now resizes with it.** Drag a database, cache or file system larger and

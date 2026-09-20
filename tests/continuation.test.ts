@@ -406,6 +406,7 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
       'service-service': graph([service('t')], []),
       'service-cache': graph([service('t')], []),
       'service-external': graph([service('t')], []),
+      'service-search-index': graph([service('t'), database('db')], [['t', 'db']]),
       'actor-gateway': graph([actor('t')], []),
       'actor-api': graph([actor('t')], []),
       'topic-fan-out-worker': graph([service('p'), topic('t')], [['p', 't']]),
@@ -939,6 +940,129 @@ describe('ranking — asked-for alternatives', () => {
   });
 });
 
+describe('a Service asks its neighborhood what comes next', () => {
+  // The same six alternatives every time — what changes is which one `]` lands on first.
+  const SIX = ['service-data-store', 'service-topic', 'service-queue', 'service-service', 'service-cache', 'service-external'];
+
+  it('alone on the canvas, keeps the authored order: nothing points at it, so there is nothing to read', () => {
+    expect(ids(graph([service('s')], []), 's', 'invoke')).toEqual(SIX);
+  });
+
+  it('behind a Gateway, leads with its own data, then what keeps those reads fast', () => {
+    const doc = graph([gateway('gw'), service('s')], [['gw', 's']]);
+    expect(ids(doc, 's', 'invoke')).toEqual([
+      'service-data-store',
+      'service-cache',
+      'service-service',
+      'service-topic',
+      'service-queue',
+      'service-external',
+    ]);
+  });
+
+  it('reads an Actor calling it the same way a Gateway routing to it reads', () => {
+    const viaGateway = ids(graph([gateway('gw'), service('s')], [['gw', 's']]), 's', 'invoke');
+    const viaActor = ids(graph([actor('u'), service('s')], [['u', 's']]), 's', 'invoke');
+    expect(viaActor).toEqual(viaGateway);
+  });
+
+  it('fed by a Queue, leads with where the result lands, then what it announces', () => {
+    const doc = graph([queue('q'), service('s')], [['q', 's']]);
+    expect(ids(doc, 's', 'invoke')).toEqual([
+      'service-data-store',
+      'service-topic',
+      'service-external',
+      'service-queue',
+      'service-service',
+      'service-cache',
+    ]);
+  });
+
+  it('is genuinely a different answer per neighborhood, not the same list reshuffled by luck', () => {
+    const behindGateway = ids(graph([gateway('gw'), service('s')], [['gw', 's']]), 's', 'invoke');
+    const onAQueue = ids(graph([queue('q'), service('s')], [['q', 's']]), 's', 'invoke');
+    const alone = ids(graph([service('s')], []), 's', 'invoke');
+    expect(behindGateway).not.toEqual(onAQueue);
+    expect(behindGateway).not.toEqual(alone);
+    expect(onAQueue).not.toEqual(alone);
+    // Same candidates throughout: a role reorders, it never adds or takes away.
+    expect([...behindGateway].sort()).toEqual([...onAQueue].sort());
+    expect([...behindGateway].sort()).toEqual([...alone].sort());
+  });
+
+  it('woken by a Scheduler, reaches outward before it publishes — where a Queue consumer does the reverse', () => {
+    const scheduled = ids(graph([scheduler('cron'), service('s')], [['cron', 's']]), 's', 'invoke');
+    expect(scheduled[0]).toBe('service-data-store');
+    expect(scheduled.indexOf('service-external')).toBeLessThan(scheduled.indexOf('service-topic'));
+
+    const consuming = ids(graph([queue('q'), service('s')], [['q', 's']]), 's', 'invoke');
+    expect(consuming.indexOf('service-topic')).toBeLessThan(consuming.indexOf('service-external'));
+  });
+
+  it('a Worker is read the same way a Service is', () => {
+    const order = ids(graph([queue('q'), worker('w')], [['q', 'w']]), 'w', 'invoke');
+    expect(order[0]).toBe('service-data-store');
+    expect(order.indexOf('service-topic')).toBeLessThan(order.indexOf('service-external'));
+  });
+
+  it('never argues a shape back up that the anchor already draws', () => {
+    // Behind a gateway a Data Store would lead — but this one already has one, and that wins.
+    const doc = graph([gateway('gw'), service('s'), database('db')], [['gw', 's'], ['s', 'db']]);
+    const order = ids(doc, 's', 'invoke');
+    expect(order[0]).toBe('service-cache');
+    expect(order.at(-1)).toBe('service-data-store');
+  });
+
+  it('stays silent unprompted and in the picker, whatever its neighborhood says', () => {
+    for (const doc of [
+      graph([gateway('gw'), service('s')], [['gw', 's']]),
+      graph([queue('q'), service('s')], [['q', 's']]),
+      graph([scheduler('cron'), service('s')], [['cron', 's']]),
+    ]) {
+      expect(ids(doc, 's', 'select')).toEqual([]);
+      expect(ids(doc, 's', 'drop')).toEqual([]);
+    }
+  });
+});
+
+describe('a Search Index is the one Service row that has to be earned', () => {
+  it('is not offered to a Service with nothing to index', () => {
+    expect(ids(graph([service('s')], []), 's', 'invoke')).not.toContain('service-search-index');
+  });
+
+  it('appears once the Service writes to a Data Store', () => {
+    const doc = graph([service('s'), database('db')], [['s', 'db']]);
+    expect(ids(doc, 's', 'invoke')).toContain('service-search-index');
+  });
+
+  it('a Cache is not something you build an index from', () => {
+    const doc = graph([service('s'), { id: 'c', type: 'database', databaseKind: 'cache' }], [['s', 'c']]);
+    expect(ids(doc, 's', 'invoke')).not.toContain('service-search-index');
+  });
+
+  it('goes away again once there is one', () => {
+    const doc = graph([service('s'), database('db'), searchIndex('si')], [['s', 'db'], ['s', 'si']]);
+    expect(ids(doc, 's', 'invoke')).not.toContain('service-search-index');
+  });
+
+  it('never appears unprompted, and never turns a plain Service into a ghost', () => {
+    const doc = graph([service('s'), database('db')], [['s', 'db']]);
+    expect(ids(doc, 's', 'select')).toEqual([]);
+    expect(ids(doc, 's', 'drop')).toEqual([]);
+  });
+
+  it('leaves a Worker to the Worker rule, so the same shape is never listed twice', () => {
+    for (const doc of [
+      graph([queue('q'), worker('w')], [['q', 'w']]),
+      graph([queue('q'), worker('w'), database('db')], [['q', 'w'], ['w', 'db']]),
+    ]) {
+      const offered = ids(doc, 'w', 'invoke');
+      expect(offered).toContain('worker-indexes');
+      expect(offered).not.toContain('service-search-index');
+    }
+  });
+});
+
 describe('compound fragments', () => {
   beforeEach(() =>
     resetStores(graph([service('pub'), topic('t'), queue('q'), worker('w')], [['pub', 't'], ['t', 'q'], ['q', 'w']])),
@@ -1295,14 +1419,18 @@ describe('what a view is showing changes what comes next', () => {
     expect(asked(doc, customer.id, 'context')).toEqual(['System', 'External System']);
   });
 
+  // The Customer calling the Platform is what orders this list — a system someone talks to leads
+  // with its own data and a cache (`role.ts`). The level's job is which rows exist, not their order.
+  const WHOLE_VOCABULARY = ['Data Store', 'Cache', 'Service', 'Topic', 'Queue', 'External System'];
+
   it.each([undefined, 'none'] as const)('is exactly what it always was when the view says %s', (level) => {
     const { doc, platform, customer } = customerAndSystem();
-    expect(asked(doc, platform.id, level)).toEqual(['Data Store', 'Topic', 'Queue', 'Service', 'Cache', 'External System']);
+    expect(asked(doc, platform.id, level)).toEqual(WHOLE_VOCABULARY);
     expect(asked(doc, customer.id, level)).toEqual(['Gateway', 'API']);
   });
 
   it.each(['container', 'component'] as const)('leaves the whole vocabulary alone at %s', (level) => {
     const { doc, platform } = customerAndSystem();
-    expect(asked(doc, platform.id, level)).toEqual(['Data Store', 'Topic', 'Queue', 'Service', 'Cache', 'External System']);
+    expect(asked(doc, platform.id, level)).toEqual(WHOLE_VOCABULARY);
   });
 });
