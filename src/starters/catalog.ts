@@ -48,9 +48,13 @@ const QUEUE = { width: 140, height: 48 };
 /** The same box for a queue-family node that carries a name (`DEFAULTS.queueNamedHeight`): the
  *  name and kind caption stack under the tube and need the extra height to stay inside the box. */
 const NAMED_QUEUE = { width: QUEUE.width, height: 72 };
-/** A `table` Data Store: a flat card, deliberately shorter than a cylinder — a table is a part of
- *  a store, and reads as one. */
-const TABLE = { width: STORE.width, height: 64 };
+/** A `table` Data Store. The box is a store's box: what is deliberately shorter than a cylinder is
+ *  the *card* (`dataStoreTable` draws it 4px shorter, and flat), and the box has to hold the name
+ *  and kind caption underneath it like every other kind's does. It used to be pinned at 64, which
+ *  is less than the caption alone needs — the kind label overflowed onto whatever the starter put
+ *  below the card, which is exactly what Medallion's layer descriptors are. Making the box shorter
+ *  again cannot work: the glyph scales with the box, so the caption moves down with it. */
+const TABLE = { width: STORE.width, height: STORE.height };
 const ACTOR = { width: 120, height: 92 };
 const TOP: StarterEdgeSpec['sourceAnchor'] = { side: 'top', offset: 0.5 };
 const BOTTOM: StarterEdgeSpec['sourceAnchor'] = { side: 'bottom', offset: 0.5 };

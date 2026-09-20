@@ -6,6 +6,9 @@ import type { DraftNode } from '../src/document/types';
 import { BOUNDARY_PAD, BOUNDARY_HEADER_CAPTION_ONLY, BOUNDARY_TITLE_SUBLINE_Y } from '../src/starters/compose';
 import { ARCHITECTURE_STARTERS, STARTER_IDS, starterById, starterSize } from '../src/starters';
 import { buildStarter, sizeOfSpec } from '../src/starters/build';
+import { describeContext, describeNode } from '../src/nodes/describe';
+import { LIGHT } from '../src/render/theme/tokens';
+import type { Shape } from '../src/render/displayList';
 import type { ArchitectureStarter, StarterNodeSpec } from '../src/starters/types';
 
 /**
@@ -154,6 +157,31 @@ describe('the starter catalog', () => {
 });
 
 describe('buildStarter', () => {
+  /**
+   * A node's box is invisible, so a caption that outgrows it goes unnoticed until something is
+   * drawn underneath — which is how the `table` card's kind label ended up printed over Medallion's
+   * layer descriptors, while the same overflow in Kappa and Outbox sat in empty space and looked
+   * fine. Checking the drawn text rather than the authored rectangle is the only way to see it.
+   */
+  each('gives every node room for the caption it actually draws', (starter) => {
+    const ctx = describeContext(LIGHT);
+    const flatten = (shapes: readonly Shape[]): Shape[] =>
+      shapes.flatMap((shape) => (shape.t === 'group' ? flatten(shape.children) : [shape]));
+    for (const node of buildStarter(starter, { x: 0, y: 0 }).nodes) {
+      // A boundary's own caption is drawn inside its top edge, not stacked under a glyph.
+      if (node.type === 'group') continue;
+      const texts = flatten(describeNode(node, ctx).shapes).filter(
+        (shape): shape is Extract<Shape, { t: 'text' }> => shape.t === 'text',
+      );
+      if (texts.length === 0) continue;
+      const bottom = Math.max(...texts.map((text) => text.y + text.layout.height));
+      expect(
+        bottom - node.height,
+        `${starter.name}: "${node.text ?? node.type}" draws ${(bottom - node.height).toFixed(1)}px past its box`,
+      ).toBeLessThanOrEqual(0.5);
+    }
+  });
+
   each('lands its bounding box exactly on the requested origin', (starter) => {
     const origin = { x: 1200, y: -340 };
     const { nodes } = buildStarter(starter, origin);
