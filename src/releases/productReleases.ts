@@ -21,6 +21,38 @@ export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './se
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.9.2',
+    date: '2026-09-20',
+    summary: 'Data Stores hold their own, and suggestions land somewhere sensible.',
+    highlights: [
+      {
+        title: 'Data Stores are drawn larger',
+        description:
+          'A cylinder, folder, bucket or card now starts big enough to sit beside a Service, and its drawing grows when you resize the box instead of floating inside it. Stores already in a diagram keep the size they have.',
+      },
+      {
+        title: 'Connectors meet the shape',
+        description:
+          'An arrow into a database, cache or file system now lands on the shape itself rather than the empty edge of its box, and the anchor dots you reach for sit on it too.',
+      },
+      {
+        title: 'Suggestions step around what is there',
+        description:
+          'Pressing ] no longer drops the new shape onto a connector or its caption when there is a clear spot nearby.',
+      },
+      {
+        title: 'A Service suggests what fits it',
+        description:
+          'What ] leads with now depends on where the work comes from — a Service behind a Gateway starts with its own store and a cache, one fed by a Queue starts with where the result lands. It can also add a Search Index once there is something to index.',
+      },
+      {
+        title: 'Labels read like captions',
+        description:
+          'A connector\'s own label is set at the same size and tone as a relationship caption, and comes back to full strength while you hover or edit it.',
+      },
+    ],
+  },
+  {
     version: '1.9.1',
     date: '2026-09-19',
     summary: 'Nothing you type gets lost, and connectors behave in the tight spots.',

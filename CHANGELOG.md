@@ -4,47 +4,38 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-09-20
+
 ### Changed
 
-- **A suggested shape steps off the connectors already drawn there.** Placement used to avoid other
-  shapes and nothing else, so pressing `]` could drop the new shape straight onto a nearby
-  connector or its caption — a dead-letter queue landed on the line from its own queue to the
-  worker. It now prefers a spot that is clear of both. Only a preference: where nothing is clear,
-  the shape still appears exactly where it used to, because no suggestion is worse than an untidy
-  one.
-- **A Data Store is drawn a little larger.** The cylinder, folder, bucket and card all sat light
-  next to a Service box; a store you add now starts big enough to hold its own beside one, and the
-  starters are drawn at the new size. A store already in a diagram keeps the size it has.
-- **A Service's suggestions now read the shapes pointing at it.** Press `]` on a Service and what
-  it leads with depends on where its work comes from: one behind a Gateway or called by a person
-  starts with its own Data Store and a Cache, one fed by a Queue or a Topic starts with where the
-  result lands and what it announces next, and one a Scheduler wakes reaches outward instead. The
-  same alternatives are still all there in the same cycle — only the order changes, and a Service
-  with nothing pointing at it is exactly as it was. A shape the Service already draws never climbs
-  back up the list.
-- A Service that writes to a Data Store can now add a **Search Index** to it — the queries that
-  store can't answer. It is offered only once there is something to index, and only when asked.
+- A suggested shape now steps clear of the connectors and captions already drawn there, not just
+  the other shapes. It stays a preference: where nothing is clear, the shape appears exactly where
+  it used to.
+- A Data Store is drawn a little larger by default, so a cylinder, folder, bucket or card holds its
+  own beside a Service. The starters use the new size; a store already in a diagram keeps its own.
+- A Service's suggestions read what points at it. One behind a Gateway leads with its own store and
+  a cache, one fed by a Queue leads with where the result lands, one a Scheduler wakes reaches
+  outward. The same alternatives are all still in the cycle — only the order changes.
+- A Service that writes to a Data Store can add a **Search Index** to it — offered only once there
+  is something to index.
 
 ### Fixed
 
-- The Medallion starter's Bronze, Silver and Gold tables printed the word "Table" on top of the
-  description underneath them. A table card now gets the same room for its name and kind as every
-  other Data Store, so the three read as separate lines. Kappa's materialized view and the
-  Transactional Outbox tables had the same overflow into empty space, and are fixed with it.
-- **A Data Store's shape now resizes with it.** Drag a database, cache or file system larger and
-  the drawing grows too — the connector anchors follow it, and exports match — instead of a small
-  shape floating in a big empty box. Stores at the default size or smaller look exactly as before.
-- A connector now meets a Data Store's own shape instead of stopping short of it. Arrows into the
-  side or top of a database, cache or file system used to end at the empty edge of its box, and
-  the anchor dots you reach for sit on the shape too.
-- The CQRS, Hexagonal, Medallion, Kappa, CDC and Transactional Outbox starters put their stores on
-  the line they connect along, so those arrows run straight into the shape instead of stepping.
-- A connector's own label is now set exactly like a relationship caption — the same small size and
-  muted tone, and the same distance from its line — instead of full-strength text. It comes back
-  to full strength while you hover or edit it. The reply label matches, and exports do too.
+- A connector now meets a Data Store's own shape instead of stopping at the empty edge of its box,
+  and the anchor dots sit on the shape too.
+- A Data Store's drawing resizes with its box, instead of a small shape floating in a big one.
+  Anchors and exports follow it; stores at the default size or smaller look as before.
+- Table cards printed the word "Table" on top of the description beneath them. Name and kind now
+  get the same room as every other Data Store, in the Medallion, Kappa and Transactional Outbox
+  starters.
+- The CQRS, Hexagonal, Medallion, Kappa, CDC and Transactional Outbox starters line their stores up
+  on the connections, so those arrows run straight into the shape instead of stepping.
+- A connector's label is set exactly like a relationship caption — the same size, tone and distance
+  from the line — and comes back to full strength while you hover or edit it. Replies and exports
+  match.
 - **Projects** is no longer a connector type. A projection writing into a read store is an ordinary
-  *writes to*, like any other write; the CQRS, Kappa and CDC starters say so, and a diagram that
-  already used *projects* opens with *writes to* instead.
+  *writes to*; the CQRS, Kappa and CDC starters say so, and a diagram that used *projects* opens
+  with *writes to* instead.
 
 ## [1.9.1] - 2026-09-19
 
@@ -1244,7 +1235,9 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.2...main
+[1.9.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.1...v1.9.2
+[1.9.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.6.2...v1.7.0

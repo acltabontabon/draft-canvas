@@ -1,7 +1,7 @@
 {
   "name": "draft-canvas",
   "private": true,
-  "version": "1.9.1",
+  "version": "1.9.2",
   "type": "module",
   "description": "A local-first canvas for developers to explain software visually.",
   "license": "Apache-2.0",
