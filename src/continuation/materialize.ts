@@ -1,8 +1,16 @@
 import { capabilityFor, categoryOf, inferRelationship } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { createEdge, createNode, defaultSizeFor } from '../document/factory';
-import { addNodes, COMPANION_GAP, enclosingParentId, tryPlaceNear, type CompanionDirection } from '../document/operations';
+import {
+  addNodes,
+  COMPANION_GAP,
+  companionRegion,
+  enclosingParentId,
+  tryPlaceNear,
+  type CompanionDirection,
+} from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode, EdgeAnchor } from '../document/types';
+import { connectorClearance } from '../edges/clearance';
 import { chooseSides, type Rect } from '../edges/routing';
 import { FONTS } from '../render/text/fonts';
 import { getMeasurer } from '../render/text/measure';
@@ -65,10 +73,17 @@ export function materialize(
           })
         : undefined;
 
+    const gap = gapForCaption(caption);
+    // Where the connectors already drawn through here are, so a candidate that would sit on one
+    // ranks behind a candidate that wouldn't. A preference only: see `PlaceNearOptions.avoid`.
+    // `working` carries the nodes placed so far but not the fragment's own new connectors, so a
+    // chain is never asked to dodge the connector it is about to draw to itself.
+    const avoid = connectorClearance(working, companionRegion(host, size, gap, direction));
+
     const position =
       index === 0 && options.at
         ? { x: Math.round(options.at.x), y: Math.round(options.at.y) }
-        : tryPlaceNear(working, host, size, gapForCaption(caption), { direction, parent });
+        : tryPlaceNear(working, host, size, gap, { direction, parent, avoid });
     if (!position) return undefined;
 
     const derived = spec.text === undefined ? derivedName(hostForGap, spec) : undefined;

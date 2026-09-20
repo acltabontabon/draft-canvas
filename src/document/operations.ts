@@ -9,7 +9,7 @@ import { defaultSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
 import { centerOf, clamp, pointInBox } from '../lib/math';
-import { clampCoord, type Bounds } from './geometry';
+import { boundsOf, clampCoord, type Bounds } from './geometry';
 import type {
   Attachment,
   DraftDocument,
@@ -936,6 +936,15 @@ export interface PlaceNearOptions {
    *  don't — a companion prefers to stay inside its host's boundary when there is room, without
    *  ever being forced there (its own boundary is never an obstacle; see `tryPlaceNear`). */
   parent?: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>;
+  /**
+   * Rects a candidate should stay off when it can — the connectors already drawn through this
+   * stretch of canvas and their captions (`edges/clearance.ts`). **Never blocking:** a candidate
+   * that hits one of these is only ranked behind a candidate that hits none, and is still chosen
+   * when it is the best one clear of actual nodes. A node landing on a line is untidy; not
+   * offering the node at all is worse, and `tryPlaceNear` returning `undefined` is how a
+   * suggestion disappears.
+   */
+  avoid?: readonly Bounds[];
 }
 
 /**
@@ -964,7 +973,7 @@ export function tryPlaceNear(
   const foreignBoundaries = doc.nodes.filter(
     (n) => n.type === 'group' && n.id !== host.id && n !== options.parent && !containsRect(n, host),
   );
-  const candidates = orderCandidates(companionCandidates(host, size, gap, options.direction), options.parent);
+  const candidates = orderCandidates(companionCandidates(host, size, gap, options.direction), options.parent, options.avoid);
   const chosen = candidates.find(
     (rect) => !obstacles.some((n) => rectsOverlap(rect, n)) && !foreignBoundaries.some((n) => rectsOverlap(rect, n)),
   );
@@ -992,12 +1001,45 @@ export function placeNear(
 
 /** Boundary-contained candidates first (their relative order otherwise preserved), then the rest —
  *  a no-op when `parent` is absent or nothing fits inside it. */
-function orderCandidates(candidates: Bounds[], parent?: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>): Bounds[] {
-  if (!parent) return candidates;
-  const inside = candidates.filter((c) => containsRect(parent, c));
-  if (inside.length === 0) return candidates;
-  const outside = candidates.filter((c) => !containsRect(parent, c));
-  return [...inside, ...outside];
+/**
+ * The candidate list, best first. Two preferences, in strict order of importance:
+ *
+ * 1. **Staying inside the host's boundary**, when any candidate can — membership is meaning, and a
+ *    companion that leaves the boundary says something the diagram didn't.
+ * 2. **Staying off the connectors already drawn here** — cosmetic, so it only ever reorders
+ *    candidates that agree on the first question.
+ *
+ * Stable within each group, so with neither preference in play the order is exactly the authored
+ * one. Neither preference can reject a candidate: that is `tryPlaceNear`'s own obstacle test.
+ */
+function orderCandidates(
+  candidates: Bounds[],
+  parent?: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>,
+  avoid?: readonly Bounds[],
+): Bounds[] {
+  const insideAny = parent !== undefined && candidates.some((c) => containsRect(parent, c));
+  const crowded = avoid !== undefined && avoid.length > 0;
+  if (!insideAny && !crowded) return candidates;
+  const rank = (c: Bounds) =>
+    (insideAny && !containsRect(parent!, c) ? 2 : 0) + (crowded && avoid!.some((a) => rectsOverlap(c, a)) ? 1 : 0);
+  return candidates
+    .map((candidate, index) => ({ candidate, index }))
+    .sort((a, b) => rank(a.candidate) - rank(b.candidate) || a.index - b.index)
+    .map(({ candidate }) => candidate);
+}
+
+/**
+ * The box every candidate `tryPlaceNear` will consider fits inside. A caller gathering soft
+ * obstacles needs to know where to look, and deriving it here rather than restating the offsets is
+ * what keeps the two from drifting apart.
+ */
+export function companionRegion(
+  host: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>,
+  size: { width: number; height: number },
+  gap: number = COMPANION_GAP,
+  direction: CompanionDirection = 'right',
+): Bounds {
+  return boundsOf(companionCandidates(host, size, gap, direction))!;
 }
 
 function companionCandidates(

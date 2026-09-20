@@ -19,7 +19,7 @@ import { capabilityFor, categoryOf, inferRelationship } from '../src/document/co
 import { createDocument, createEdge, createNode, defaultSizeFor } from '../src/document/factory';
 import { addFlow, createFlow } from '../src/document/flow';
 import { addEdges, addNodes, placeNear } from '../src/document/operations';
-import { rectOf, routeBetween } from '../src/edges/routing';
+import { flattenPath, rectOf, routeBetween, routeEdge } from '../src/edges/routing';
 import type { CreateNodeInput } from '../src/document/factory';
 import type { DraftDocument, DraftNode, ViewLevel } from '../src/document/types';
 
@@ -56,6 +56,41 @@ const searchIndex = (id: string): Spec => ({ id, type: 'database', databaseKind:
 const port = (id: string): Spec => ({ id, type: 'component', componentKind: 'port' });
 const component = (id: string): Spec => ({ id, type: 'component' });
 const actor = (id: string): Spec => ({ id, type: 'actor' });
+
+/**
+ * Which connectors a rect lands on. Deliberately derived here rather than from
+ * `edges/clearance.ts` — a test that asked the implementation where it thought the lines were
+ * would agree with itself no matter what it got wrong. This routes every connector for real.
+ */
+function crossedConnectors(doc: DraftDocument, rect: { x: number; y: number; width: number; height: number }): string[] {
+  const byId = new Map(doc.nodes.map((node) => [node.id, node]));
+  const inside = (p: { x: number; y: number }) =>
+    p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height;
+  type P = { x: number; y: number };
+  const side = (o: P, p: P, q: P) => (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+  const corners = [
+    { x: rect.x, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y + rect.height },
+    { x: rect.x, y: rect.y + rect.height },
+  ];
+  const hits = (a: P, b: P) => {
+    if (inside(a) || inside(b)) return true;
+    return corners.some((c, i) => {
+      const d = corners[(i + 1) % corners.length]!;
+      const [d1, d2, d3, d4] = [side(a, b, c), side(a, b, d), side(c, d, a), side(c, d, b)];
+      return d1 > 0 !== d2 > 0 && d3 > 0 !== d4 > 0;
+    });
+  };
+  return doc.edges
+    .filter((edge) => {
+      const route = routeEdge(edge, byId);
+      if (!route) return false;
+      const points = flattenPath(route.d);
+      return points.some((point, i) => i > 0 && hits(points[i - 1]!, point));
+    })
+    .map((edge) => `${edge.source}->${edge.target}`);
+}
 
 const ids = (doc: DraftDocument, anchor: string, trigger: ContinuationTrigger, dismissed?: ReadonlySet<string>) =>
   continuationsFor(doc, anchor, trigger, { dismissed }).map((c) => c.ruleId);
@@ -521,13 +556,85 @@ describe('materialize', () => {
     expect(edge.async).toBe(true);
     expect(edge.semanticsOrigin).toBe('inferred');
     expect(edge.deliveryAttempts).toBe(3);
-    // Same gap rule `addDeadLetterQueue` uses: the caption "after 3 attempts" fits between them.
+    // Directly right of the queue is where this used to go, and it put the dead-letter queue on
+    // top of the `q -> w` connector and its caption both. Placement steps off a connector when it
+    // can (#15), so the DLQ hangs below the queue instead — which is where one is usually drawn.
     const anchor = doc.nodes.find((n) => n.id === 'q')!;
-    expect(node.x).toBeGreaterThan(anchor.x + anchor.width + 32);
-    expect(node.y).toBe(anchor.y);
-    // Horizontal companion → tube-centred anchors on both queue ends.
-    expect(edge.sourceAnchor?.side).toBe('right');
-    expect(edge.targetAnchor?.side).toBe('left');
+    expect(node.x).toBe(anchor.x);
+    expect(node.y).toBeGreaterThan(anchor.y + anchor.height);
+    expect(crossedConnectors(doc, node)).toEqual([]);
+    // Vertical companion → the tube's own top and bottom.
+    expect(edge.sourceAnchor?.side).toBe('bottom');
+    expect(edge.targetAnchor?.side).toBe('top');
+  });
+
+  /*
+   * Connectors are a *preference*, never an obstacle. Placement failing is how a suggestion
+   * silently disappears, so every case below that has somewhere better to go takes it, and every
+   * case that doesn't still lands exactly where it always did.
+   */
+  describe('steps off the connectors already drawn there', () => {
+    it('does not sit on the anchor\'s own outgoing connector when a neighbouring slot is free', () => {
+      // `a` calls `b` away to the right; the slot directly right of `a` is empty of nodes but the
+      // connector runs straight through it.
+      const base = graph([service('a'), service('b')], [['a', 'b']]);
+      const doc = { ...base, nodes: base.nodes.map((n) => (n.id === 'b' ? { ...n, x: 1100 } : n)) };
+      const [offer] = continuationsFor(doc, 'a', 'invoke');
+      const node = materialize(doc, offer!)!.nodes[0]!;
+      expect(crossedConnectors(doc, node)).toEqual([]);
+      expect(node.y).toBeGreaterThan(doc.nodes.find((n) => n.id === 'a')!.y);
+    });
+
+    it('keeps clear of a connector running past the anchor that it has nothing to do with', () => {
+      // `up -> down` passes vertically through the slot to the right of the topic, touching neither end.
+      const built = [
+        createNode({ id: 'pub', type: 'service', x: 0, y: 0 }),
+        createNode({ id: 't', type: 'queue', queueKind: 'topic', x: 480, y: 0 }),
+        createNode({ id: 'up', type: 'service', x: 760, y: -420 }),
+        createNode({ id: 'down', type: 'service', x: 760, y: 420 }),
+      ];
+      let doc = addNodes(createDocument('Crossing'), built);
+      doc = addEdges(doc, [
+        createEdge({ source: 'pub', target: 't', ...inferRelationship(built[0]!, built[1]!), semanticsOrigin: 'inferred' }),
+        createEdge({ source: 'up', target: 'down', ...inferRelationship(built[2]!, built[3]!), semanticsOrigin: 'inferred' }),
+      ]);
+      const [offer] = continuationsFor(doc, 't', 'select');
+      const node = materialize(doc, offer!)!.nodes[0]!;
+      expect(crossedConnectors(doc, node)).toEqual([]);
+    });
+
+    it('never overrules staying inside the host\'s boundary', () => {
+      // The candidate inside the boundary is crossed by a connector; the ones outside are not.
+      // Membership is meaning and cosmetics do not get to trade it away.
+      const built = [
+        createNode({ id: 'b', type: 'group', x: -60, y: -120, width: 900, height: 560 }),
+        createNode({ id: 'pub', type: 'service', x: 0, y: 0 }),
+        createNode({ id: 't', type: 'queue', queueKind: 'topic', x: 0, y: 260 }),
+        createNode({ id: 'far', type: 'service', serviceKind: 'worker', x: 640, y: 260 }),
+      ];
+      let doc = addNodes(createDocument('Bounded'), [
+        built[0]!,
+        { ...built[1]!, parentId: 'b' },
+        { ...built[2]!, parentId: 'b' },
+        { ...built[3]!, parentId: 'b' },
+      ]);
+      doc = addEdges(doc, [
+        createEdge({ source: 'pub', target: 't', ...inferRelationship(built[1]!, built[2]!), semanticsOrigin: 'inferred' }),
+        createEdge({ source: 't', target: 'far', ...inferRelationship(built[2]!, built[3]!), semanticsOrigin: 'inferred' }),
+      ]);
+      const [offer] = continuationsFor(doc, 't', 'invoke');
+      const node = materialize(doc, offer!)!.nodes[0]!;
+      expect(node.parentId).toBe('b');
+    });
+
+    it('leaves an explicit drop position alone — the user said where', () => {
+      const base = graph([service('a'), service('b')], [['a', 'b']]);
+      const doc = { ...base, nodes: base.nodes.map((n) => (n.id === 'b' ? { ...n, x: 1100 } : n)) };
+      const [offer] = continuationsFor(doc, 'a', 'invoke');
+      const at = { x: 300, y: 6 };
+      const node = materialize(doc, offer!, { at })!.nodes[0]!;
+      expect({ x: node.x, y: node.y }).toEqual(at);
+    });
   });
 
   it('is identical to what placeNear + inferRelationship give for a Topic → Queue', () => {
@@ -1365,6 +1472,30 @@ describe('performance — local neighborhoods, not full-graph scans', () => {
     // Generous ceiling to absorb CI variance — the point is "milliseconds for 50 runs against a
     // 150-node document," not a tight benchmark. A real regression (an accidental full-document
     // scan somewhere in the pipeline) would blow past this by orders of magnitude, not a fraction.
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  it('stays fast where placement actually has to look at connectors', () => {
+    // The case above has one connector near its anchor and none near the other. This is the
+    // opposite: a hub wired to 40 neighbours on every side, so the clearance pass can't take its
+    // cheap way out and routes for real, once per `materialize`. Routing is the expensive thing
+    // placement now touches, and `DEFAULT_LIMIT` is what bounds it — this is the test that notices
+    // if that bound is ever removed.
+    const nodeSpecs: Spec[] = [{ ...service('hub'), x: 0, y: 0 }];
+    const edges: Array<[string, string]> = [];
+    for (let i = 0; i < 40; i++) {
+      const angle = (i / 40) * Math.PI * 2;
+      nodeSpecs.push({ ...database(`d${i}`), x: Math.round(Math.cos(angle) * 520), y: Math.round(Math.sin(angle) * 520) });
+      edges.push(['hub', `d${i}`]);
+    }
+    const doc = graph(nodeSpecs, edges);
+
+    const start = performance.now();
+    for (let i = 0; i < 50; i++) {
+      const [offer] = continuationsFor(doc, 'hub', 'invoke');
+      materialize(doc, offer!);
+    }
+    const elapsed = performance.now() - start;
     expect(elapsed).toBeLessThan(500);
   });
 });

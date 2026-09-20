@@ -460,6 +460,37 @@ describe('no-op edits and duplicate connectors', () => {
     expect(nearby.x).toBeGreaterThan(host.x + host.width);
   });
 
+  it('treats `avoid` as a preference and never as an obstacle', () => {
+    const host = createNode({ type: 'service', x: 0, y: 0 });
+    const doc = addNodes(createDocument(), [host]);
+    const size = { width: 176, height: 68 };
+    const plain = tryPlaceNear(doc, host, size)!;
+
+    // A rect over the first candidate steps to the next one...
+    const onTheFirst = [{ ...plain, width: size.width, height: size.height }];
+    const stepped = tryPlaceNear(doc, host, size, undefined, { avoid: onTheFirst })!;
+    expect(stepped).not.toEqual(plain);
+
+    // ...but one covering everything changes nothing. A connector under a node is untidy; no node
+    // at all is how a suggestion silently disappears, so `avoid` can only ever reorder.
+    const everywhere = [{ x: -10_000, y: -10_000, width: 20_000, height: 20_000 }];
+    expect(tryPlaceNear(doc, host, size, undefined, { avoid: everywhere })).toEqual(plain);
+  });
+
+  it('never trades staying inside a boundary for dodging what `avoid` covers', () => {
+    const own = createNode({ type: 'group', x: -200, y: -200, width: 1200, height: 800 });
+    const host = createNode({ type: 'service', x: 0, y: 0 });
+    const doc = addNodes(createDocument(), [own, { ...host, parentId: own.id }]);
+    const size = { width: 176, height: 68 };
+    const inside = tryPlaceNear(doc, host, size, undefined, { parent: own })!;
+
+    // Cover every candidate that lands inside the boundary. The ones outside it are clear — and
+    // still lose, because membership means something and dodging a line does not.
+    const avoid = [{ x: own.x, y: own.y, width: own.width, height: own.height }];
+    const withAvoid = tryPlaceNear(doc, host, size, undefined, { parent: own, avoid })!;
+    expect(withAvoid).toEqual(inside);
+  });
+
   it('only a boundary can become a parent', () => {
     const { doc, a, b } = sample();
     expect(setParent(doc, [a.id], b.id)).toBe(doc);

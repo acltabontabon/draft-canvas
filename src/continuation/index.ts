@@ -14,8 +14,8 @@
  *
  * Silence is the default outcome: only high confidence shows unprompted; the rest waits to be
  * asked for. This module never learns what a ghost is, or how alternatives are cycled — see
- * `canvas/`. Layering matches the rest of the app: `document/`, `edges/routing` and `render/text`
- * only, nothing from `store/` or `canvas/`. See `docs/reference/architecture.md`.
+ * `canvas/`. Layering matches the rest of the app: `document/`, `edges/routing`, `edges/clearance`
+ * and `render/text` only, nothing from `store/` or `canvas/`. See `docs/reference/architecture.md`.
  */
 
 export { neighborhoodOf } from './context';

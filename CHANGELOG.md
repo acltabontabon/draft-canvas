@@ -6,6 +6,12 @@ All notable changes to Draft Canvas are documented here.
 
 ### Changed
 
+- **A suggested shape steps off the connectors already drawn there.** Placement used to avoid other
+  shapes and nothing else, so pressing `]` could drop the new shape straight onto a nearby
+  connector or its caption — a dead-letter queue landed on the line from its own queue to the
+  worker. It now prefers a spot that is clear of both. Only a preference: where nothing is clear,
+  the shape still appears exactly where it used to, because no suggestion is worse than an untidy
+  one.
 - **A Data Store is drawn a little larger.** The cylinder, folder, bucket and card all sat light
   next to a Service box; a store you add now starts big enough to hold its own beside one, and the
   starters are drawn at the new size. A store already in a diagram keeps the size it has.
