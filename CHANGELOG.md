@@ -4,6 +4,11 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- A System actor is now drawn as a computer, and a Third Party as an office building, so each
+  reads for what it is at a glance. Diagrams that already use them pick up the new look.
+
 ### Fixed
 
 - In the VS Code extension, Select All, Copy, Cut, Paste and Undo now work inside text fields (a
