@@ -1787,12 +1787,11 @@ function humanGlyph(
 }
 
 /**
- * System: an ID badge — a card on a clip, carrying a tiny portrait and two detail lines.
+ * System: a computer — a wide monitor with an inset screen, standing on a neck and foot.
  *
  * This is the participant that isn't a person: a service account, a machine identity, an
- * integration acting on someone's behalf. A plain window frame (the previous glyph) said "an
- * application," which is Service's job; a badge says "an identity that isn't human," which is
- * precisely what this kind is for, and it stays technology-neutral — no vendor chrome.
+ * integration acting on someone's behalf. A monitor says "a machine" at a glance, and its wide,
+ * landscape proportion keeps it clear of Device's tall, pocket-sized silhouette.
  */
 function systemGlyph(
   node: DraftNode,
@@ -1800,44 +1799,37 @@ function systemGlyph(
   stroke: Stroke,
   ctx: DescribeContext,
 ): { shapes: Shape[]; glyphBottom: number } {
-  const clipH = 6;
-  const cardW = 56;
-  const cardH = GLYPH_SLOT - clipH;
-  const cardX = cx - cardW / 2;
-  const cardY = GLYPH_TOP + clipH;
-  // The clip sits above the card, centred — the one piece that makes a rounded rect read as a
-  // badge on a lanyard rather than another window.
-  const clipW = 14;
-  const portraitCx = cardX + 15;
-  const portraitCy = cardY + cardH / 2;
-  const headR = 4.4;
-  const lineX = cardX + 26;
-  const lineW = cardW - 34;
-  // These are reference lines inside a glyph, not the silhouette — a restrained bow only, and
-  // never jittered at their endpoints so they stay parallel to the card they sit in.
-  const hairlineBow = PERSONALITY_PROFILES[ctx.preset].bow * 0.5;
-  const hairline = (seedSuffix: string, y: number, x0: number, w: number) => {
-    if (hairlineBow === 0) return `M${x0},${y} h${w}`;
-    const c = bowControlPoint({ x: x0, y }, { x: x0 + w, y }, `${node.id}:${seedSuffix}`, 0, hairlineBow);
-    return `M${x0},${y} Q${c.x},${c.y} ${x0 + w},${y}`;
-  };
+  const monitorW = 58;
+  const monitorH = 31;
+  const monitorX = cx - monitorW / 2;
+  const monitorY = GLYPH_TOP;
+  const screenInset = 4;
+  const neckTop = monitorY + monitorH;
+  const neckBottom = neckTop + 8;
+  const footY = neckBottom + 1;
+  const footHalf = 14;
 
   return {
     shapes: [
-      { t: 'rect', x: cx - clipW / 2, y: GLYPH_TOP, w: clipW, h: clipH + 2, r: 2, fill: 'none', stroke },
-      outlineShape(`${node.id}:actor-glyph`, ctx, { x: cardX, y: cardY, w: cardW, h: cardH, r: 4 }, { fill: 'none', stroke }),
-      // A miniature of Human's own head-and-shoulders, so the badge reads as "an identity."
-      { t: 'ellipse', cx: portraitCx, cy: portraitCy - 4, rx: headR, ry: headR, fill: 'none', stroke },
+      outlineShape(`${node.id}:actor-glyph`, ctx, { x: monitorX, y: monitorY, w: monitorW, h: monitorH, r: 4 }, { fill: 'none', stroke }),
+      // The screen — restrained relative to the outer silhouette, like Device's.
+      outlineShape(
+        `${node.id}:actor-glyph-screen`,
+        ctx,
+        { x: monitorX + screenInset, y: monitorY + screenInset, w: monitorW - screenInset * 2, h: monitorH - screenInset * 2, r: 2 },
+        { fill: stroke.color, opacity: 0.08 },
+        0.6,
+      ),
+      // A tapered neck and a flat foot — what turns a rectangle into a desktop monitor.
       {
         t: 'path',
-        d: `M${portraitCx - 6.5},${portraitCy + 7} a6.5,5.5 0 0 1 13,0`,
+        d: `M${cx - 4},${neckTop} L${cx - 6},${neckBottom} M${cx + 4},${neckTop} L${cx + 6},${neckBottom}`,
         fill: 'none',
         stroke,
       },
-      { t: 'path', d: hairline('badge-line-1', portraitCy - 3, lineX, lineW), fill: 'none', stroke },
-      { t: 'path', d: hairline('badge-line-2', portraitCy + 3, lineX, lineW * 0.66), fill: 'none', stroke },
+      { t: 'path', d: `M${cx - footHalf},${footY} L${cx + footHalf},${footY}`, fill: 'none', stroke },
     ],
-    glyphBottom: cardY + cardH,
+    glyphBottom: footY + 1,
   };
 }
 
@@ -1954,12 +1946,11 @@ function groupGlyph(
 }
 
 /**
- * Third Party: Human's bust wearing a collar and tie — a person representing an organisation.
+ * Third Party: an office building — a tower with a lower wing beside it, windows and a door.
  *
- * The collar is what separates this from plain Human at a glance: two short lapel strokes cutting
- * down from the neck, and a narrow tie between them. A dashed version of the plain bust was the
- * alternative (reusing this file's "dashed = not ours" grammar) but it read as a *tentative*
- * person rather than a formal one, and dashes already carry three other meanings here.
+ * A third party is an organisation outside this system's own ownership (a vendor, a partner), and
+ * a building is the shorthand every diagramming vocabulary already uses for "a company." It keeps
+ * clear of Human's bust and System's monitor, so the three read apart even at a glance.
  */
 function thirdPartyGlyph(
   node: DraftNode,
@@ -1967,32 +1958,42 @@ function thirdPartyGlyph(
   stroke: Stroke,
   ctx: DescribeContext,
 ): { shapes: Shape[]; glyphBottom: number } {
-  const { shapes, glyphBottom } = humanGlyph(node, cx, stroke, ctx);
-  // Positioned off the same constants `humanGlyph` builds its head from, so the collar always
-  // lands on the neck regardless of preset jitter underneath it.
-  const neckY = GLYPH_TOP + 13 * 2 - 3;
-  const lapelDrop = 11;
-  const lapelSpread = 7;
-  const tieTop = neckY + 2;
-  const tieLen = 13;
-  const tieHalf = 2.6;
+  const bottom = GLYPH_BOTTOM;
+  // The tower sits left of centre and the wing right of it, so the pair as a whole is centred.
+  const towerW = 30;
+  const towerH = GLYPH_SLOT;
+  const towerX = cx - 24;
+  const towerY = bottom - towerH;
+  const wingW = 18;
+  const wingH = 24;
+  const wingX = towerX + towerW;
+  const wingY = bottom - wingH;
+  const windowFill = { fill: stroke.color, opacity: 0.55 };
+  const win = (x: number, y: number): Shape => ({ t: 'rect', x, y, w: 4, h: 4, r: 0.8, ...windowFill });
+
+  const windows: Shape[] = [];
+  for (const row of [0, 1, 2]) {
+    for (const col of [0, 1, 2]) {
+      windows.push(win(towerX + 6 + col * 7, towerY + 6 + row * 8));
+    }
+  }
+  for (const row of [0, 1]) windows.push(win(wingX + 7, wingY + 5 + row * 8));
+
+  const doorW = 7;
+  const doorH = 8;
   return {
     shapes: [
-      ...shapes,
+      outlineShape(`${node.id}:actor-glyph-wing`, ctx, { x: wingX, y: wingY, w: wingW, h: wingH, r: 2 }, { fill: 'none', stroke }),
+      outlineShape(`${node.id}:actor-glyph`, ctx, { x: towerX, y: towerY, w: towerW, h: towerH, r: 2 }, { fill: 'none', stroke }),
+      ...windows,
       {
         t: 'path',
-        d: `M${cx - lapelSpread},${neckY} L${cx},${neckY + lapelDrop} L${cx + lapelSpread},${neckY}`,
+        d: `M${towerX + towerW / 2 - doorW / 2},${bottom} v${-doorH} h${doorW} v${doorH}`,
         fill: 'none',
         stroke,
       },
-      {
-        t: 'path',
-        d: `M${cx - tieHalf},${tieTop} L${cx + tieHalf},${tieTop} L${cx},${tieTop + tieLen} Z`,
-        fill: stroke.color,
-        opacity: 0.55,
-      },
     ],
-    glyphBottom,
+    glyphBottom: bottom,
   };
 }
 
