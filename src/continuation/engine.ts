@@ -1,5 +1,6 @@
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
 import type { DraftDocument, DraftNode, ViewLevel } from '../document/types';
+import { compensationCandidates } from './compensation';
 import { ANCHOR_TYPES, neighborhoodOf } from './context';
 import { ANY_CANDIDATE, dismissalKey } from './dismissal';
 import { existingTargetCandidates } from './existing';
@@ -43,10 +44,11 @@ function fitsLevel(rule: ContinuationRule, level: ViewLevel | undefined): boolea
 }
 
 /**
- * The continuations Draft Canvas is willing to offer for one node, best first — or none. Two
- * sources: the authored `RULES` (new nodes, alone or as a short chain) and `existing.ts` (a
- * connector to a suitable node already drawn nearby — never in the drop picker, whose whole point
- * is a new node where the user let go).
+ * The continuations Draft Canvas is willing to offer for one node, best first — or none. Three
+ * sources: the authored `RULES` (new nodes, alone or as a short chain), `existing.ts` (a
+ * connector to a suitable node already drawn nearby) and `compensation.ts` (a saga coordinator's
+ * undo for a step it can't unwind yet) — the last two never in the drop picker, whose whole point
+ * is a new node where the user let go.
  *
  * Deterministic by construction: the same document, anchor, trigger and options always produce
  * the same array. The pipeline is generate → technical validity → suppression → confidence →
@@ -85,7 +87,7 @@ export function continuationsFor(
     candidates.push(evaluated.candidate);
   }
   if (trigger !== 'drop') {
-    for (const candidate of existingTargetCandidates(doc, nb)) {
+    for (const candidate of [...existingTargetCandidates(doc, nb), ...compensationCandidates(nb)]) {
       if (dismissed.has(dismissalKey(anchorId, candidate.id, nb.key))) continue;
       if (trigger === 'select' && candidate.confidence !== 'high') continue;
       candidates.push(candidate);
@@ -105,7 +107,7 @@ export interface ContinuationSets {
  * `continuationsFor(…, 'select', options)` and `continuationsFor(…, 'invoke', { recent })` in one
  * pass — the selected node's quiet suggestion and everything `]` can step through — for a caller
  * that needs both on every document change. One neighborhood, one walk over the rules, one
- * connect-to-existing scan; each rule's fragment is built and matrix-checked once.
+ * connect-to-existing and compensation scan; each rule's fragment is built and matrix-checked once.
  */
 export function continuationSets(
   doc: DraftDocument,
@@ -130,7 +132,7 @@ export function continuationSets(
     if (asked && offeredFor(rule, evaluated, 'invoke')) explicit.push(evaluated.candidate);
     if (quietly && offeredFor(rule, evaluated, 'select')) quiet.push(evaluated.candidate);
   }
-  for (const candidate of existingTargetCandidates(doc, nb)) {
+  for (const candidate of [...existingTargetCandidates(doc, nb), ...compensationCandidates(nb)]) {
     explicit.push(candidate);
     if (quietAllowed && candidate.confidence === 'high' && !dismissed.has(dismissalKey(anchorId, candidate.id, nb.key))) {
       quiet.push(candidate);
@@ -192,8 +194,11 @@ function resolveRef(
   return existing ? doc.nodes.find((n) => n.id === existing.nodeId) : undefined;
 }
 
-/** Every edge the fragment would add must be one the matrix offers with a clean status. */
-function fragmentIsValid(doc: DraftDocument, nb: Neighborhood, fragment: Fragment): boolean {
+/**
+ * Every edge the fragment would add must be one the matrix offers with a clean status — and an
+ * edge that names its semantic must name one the matrix lists for that pairing.
+ */
+export function fragmentIsValid(doc: DraftDocument, nb: Neighborhood, fragment: Fragment): boolean {
   if (fragment.edges.length === 0) return false;
   if (fragment.nodes.length === 0 && (fragment.existing?.length ?? 0) === 0) return false;
   return fragment.edges.every((spec) => {
@@ -201,13 +206,14 @@ function fragmentIsValid(doc: DraftDocument, nb: Neighborhood, fragment: Fragmen
     const to = resolveRef(doc, nb, fragment, spec.to);
     if (!from || !to) return false;
     const capability = capabilityFor(categoryOf(from), categoryOf(to));
-    return capability?.defaultRelation !== undefined && (capability.status ?? 'valid') === 'valid';
+    if (capability?.defaultRelation === undefined || (capability.status ?? 'valid') !== 'valid') return false;
+    return spec.semantic === undefined || capability.relations.includes(spec.semantic);
   });
 }
 
 /**
  * "The user already drew this": an outgoing connector from the anchor whose semantic is what the
- * fragment's connector from the anchor would infer. Compared on semantic, not on target category,
+ * fragment's connector from the anchor would carry — the one it names, or else the one it would infer. Compared on semantic, not on target category,
  * so a hand-drawn `Queue → Service` (consumes) counts as the consumer a `Queue → Worker` rule
  * would add.
  */
@@ -216,7 +222,7 @@ function hasEquivalent(doc: DraftDocument, nb: Neighborhood, fragment: Fragment)
     if (spec.from !== 'anchor') return false;
     const to = resolveRef(doc, nb, fragment, spec.to);
     if (!to) return false;
-    const semantic = capabilityFor(nb.category, categoryOf(to))?.defaultRelation;
+    const semantic = spec.semantic ?? capabilityFor(nb.category, categoryOf(to))?.defaultRelation;
     return semantic !== undefined && nb.out.some(({ edge }) => edge.semantic === semantic);
   });
 }

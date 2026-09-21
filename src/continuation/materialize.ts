@@ -119,12 +119,16 @@ export function materialize(
     const to = resolve(spec.to);
     if (!from || !to) return undefined;
     const relationship = inferRelationship(from, to);
+    // A named semantic is the rule choosing among what the matrix offers (the engine has already
+    // checked it's listed) — stamped explicit, as a starter's or the user's own pick would be, so
+    // re-inference never quietly turns a compensation back into `calls`.
     edges.push(
       createEdge({
         source: from.id,
         target: to.id,
         ...relationship,
-        semanticsOrigin: relationship ? 'inferred' : undefined,
+        ...(spec.semantic ? { semantic: spec.semantic } : {}),
+        semanticsOrigin: spec.semantic ? 'explicit' : relationship ? 'inferred' : undefined,
         deliveryAttempts: spec.deliveryAttempts,
         // Pinned only between nodes placed here, together. A connector to a node the user drew
         // routes dynamically, like any connector drawn by hand to it — preview included.

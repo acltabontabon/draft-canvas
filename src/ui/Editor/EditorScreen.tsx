@@ -11,7 +11,7 @@ import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { nearestInDirection, nextRelationshipNeighbor, type Direction } from '../../canvas/spatialNav';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { offerFor, quickConnectItems, type QuickConnectItem } from '../../canvas/quickConnectItems';
-import { stepContinuation } from '../../canvas/stepContinuation';
+import { stepContinuation, type AskInstead } from '../../canvas/stepContinuation';
 import { contextMenuCommandsFor } from '../../commands/contextMenu';
 import { starterCommands } from '../../commands/registry';
 import type { Command } from '../../commands/types';
@@ -231,6 +231,14 @@ function EditorScreen({ session }: { session: DocumentSession }) {
    * the menu opens — the menu itself is screen-fixed, so its anchor must be too.
    */
   const quickConnectAnchorRect = useMemo(() => {
+    if (quickConnect?.asked && quickConnect.source) {
+      // Asked with `]`: stand clear of the shape itself — there is no drop point to centre on.
+      const node = useEditorStore.getState().document.nodes.find((n) => n.id === quickConnect.source);
+      if (!node) return undefined;
+      const topLeft = flowToScreenPosition({ x: node.x, y: node.y });
+      const bottomRight = flowToScreenPosition({ x: node.x + node.width, y: node.y + node.height });
+      return { x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y };
+    }
     if (!quickConnect?.center) return undefined;
     const { center } = quickConnect;
     const topLeft = flowToScreenPosition({ x: center.x - DEFAULTS.nodeWidth / 2, y: center.y - DEFAULTS.nodeHeight / 2 });
@@ -434,6 +442,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               screenPosition={quickConnect.screenPosition}
               anchorRect={quickConnectAnchorRect}
               items={quickConnectRows}
+              note={quickConnect.note}
               onSelect={onQuickConnectSelect}
               onHighlight={onQuickConnectHighlight}
               onDismiss={dismissQuickConnect}
@@ -648,6 +657,27 @@ export function useKeyboard({
     });
   }, [flowToScreenPosition, screenToFlowPosition]);
 
+  /**
+   * `]` found nothing to suggest: ask back instead — the add-element picker, opened on the
+   * selected shape the way a connector dropped beside it would open it, with why there was no
+   * guess above the rows. The menu sits below the shape; each row's preview is placed beside it
+   * like any `]` suggestion (`asked`), with a point just to its right only as the fallback.
+   */
+  const openQuickConnectFromKeyboard = useCallback(
+    ({ ask, note }: AskInstead) => {
+      const node = useEditorStore.getState().document.nodes.find((n) => n.id === ask);
+      if (!node) return;
+      useUiStore.getState().setQuickConnect({
+        source: node.id,
+        asked: true,
+        note,
+        flowPosition: { x: node.x + node.width + 80, y: node.y + node.height / 2 - DEFAULTS.nodeHeight / 2 },
+        screenPosition: flowToScreenPosition({ x: node.x + node.width / 2, y: node.y + node.height }),
+      });
+    },
+    [flowToScreenPosition],
+  );
+
   // Cmd/Ctrl+V is a real OS paste gesture, so the browser fires a native `paste` event carrying
   // `clipboardData` synchronously — reading that needs no `navigator.clipboard` permission at all,
   // unlike `syncClipboardFromSystem()`'s async Clipboard API read. This is why plain ⌘V never
@@ -765,17 +795,11 @@ export function useKeyboard({
       // Cmd/Ctrl branch because AltGr arrives as Ctrl+Alt on Windows (German `[` is AltGr+8, and
       // Option+5 on a Mac — hence Alt is allowed too). Cmd and plain Ctrl chords are left alone.
       if ((event.key === ']' || event.key === '[') && !event.metaKey && !(event.ctrlKey && !event.altKey)) {
-        if (
-          !event.repeat &&
-          !presenting &&
-          !playback.active &&
-          !state.focus.active &&
-          focusIsOnCanvas() &&
-          !modalIsOpen() &&
-          stepContinuation(state, event.key === ']' ? 1 : -1)
-        ) {
-          event.preventDefault();
-        }
+        if (event.repeat || presenting || playback.active || state.focus.active || !focusIsOnCanvas() || modalIsOpen()) return;
+        const stepped = stepContinuation(state, event.key === ']' ? 1 : -1);
+        if (!stepped) return;
+        event.preventDefault();
+        if (stepped !== true) openQuickConnectFromKeyboard(stepped);
         return;
       }
 
@@ -1133,6 +1157,7 @@ export function useKeyboard({
     createAtPointer,
     onPresent,
     openContextMenuFromKeyboard,
+    openQuickConnectFromKeyboard,
     playback,
     fitView,
     screenToFlowPosition,

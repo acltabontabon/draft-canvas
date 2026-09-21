@@ -7,6 +7,9 @@
  * - `role.ts` — what an anchor is evidently doing, from what points at it; reorders its own
  *   alternatives without ever adding or removing one.
  * - `existing.ts` — candidates that connect to a suitable node already drawn nearby.
+ * - `compensation.ts` — a saga coordinator's `compensates` connector to a step it can't unwind yet.
+ * - `ambiguity.ts` — where no guess is made on purpose, and why; what `]` explains instead of
+ *   going quiet. Never changes a candidate.
  * - `engine.ts` — generate → matrix validity → suppression → derived confidence → `rank.ts`.
  *   The capability matrix, never a rule, decides what is technically allowed.
  * - `materialize.ts` (+ `naming.ts`) — one candidate as real, positioned elements, so the preview
@@ -18,7 +21,9 @@
  * and `render/text` only, nothing from `store/` or `canvas/`. See `docs/reference/architecture.md`.
  */
 
-export { neighborhoodOf } from './context';
+export { AMBIGUOUS, ambiguityFor, ambiguityOf } from './ambiguity';
+export type { Ambiguity } from './ambiguity';
+export { ANCHOR_TYPES, neighborhoodOf } from './context';
 export { ROLE_PREFERENCE, anchorRole } from './role';
 export type { AnchorRole } from './role';
 export { continuationSets, continuationsFor } from './engine';

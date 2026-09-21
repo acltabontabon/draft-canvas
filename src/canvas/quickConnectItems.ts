@@ -87,6 +87,7 @@ export function offerFor(doc: DraftDocument, state: QuickConnectState, item: Qui
           anchorId: state.source,
           neighborhoodKey: '',
         };
-  const offer = materialize(doc, continuation, { at });
+  // Asked for with `]`: beside the source, like any suggestion — the drop point only as a fallback.
+  const offer = (state.asked ? materialize(doc, continuation) : undefined) ?? materialize(doc, continuation, { at });
   return offer ? { ...offer, trigger: 'drop' } : undefined;
 }

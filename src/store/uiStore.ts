@@ -19,8 +19,10 @@ export type Toast = { id: number; message: string; tone: 'info' | 'error'; actio
  * a connection handle dragged onto empty canvas (`source` present — the
  * chosen type is created *and* wired to `source`), and a double-click on
  * empty canvas with no tool armed (`source` absent — the chosen type is
- * simply created at `flowPosition`). Screen coordinates are fixed for the
- * life of the menu so it does not drift if the user pans while choosing.
+ * simply created at `flowPosition`) — plus `]` on a shape continuation has
+ * no suggestion for (`asked`), which asks the same question back instead of
+ * doing nothing. Screen coordinates are fixed for the life of the menu so it
+ * does not drift if the user pans while choosing.
  */
 export interface QuickConnectState {
   /** Absent for a plain double-click-to-create; present for a connector dropped on empty canvas. */
@@ -34,6 +36,14 @@ export interface QuickConnectState {
   /** The raw drop point in flow coordinates (`flowPosition` is that point already offset for a
    *  default-sized box) — so a picker row of any size can be centred on where the user let go. */
   center?: { x: number; y: number };
+  /**
+   * Opened by `]` on a shape Draft Canvas won't guess for, rather than by a drop: there is no
+   * point anyone let go of, so a row is placed beside `source` the way a `]` suggestion would be
+   * (`flowPosition` only when nothing fits) — see `offerFor`.
+   */
+  asked?: boolean;
+  /** One line above the rows saying why there is no suggestion (`continuation/ambiguity.ts`). */
+  note?: string;
 }
 
 /** The specific anchor (side + offset, one of `ANCHOR_OFFSETS`) a reconnect

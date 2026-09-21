@@ -25,6 +25,10 @@ export interface QuickConnectMenuProps {
    *  on open, then on every change; never with an out-of-range index. */
   onHighlight?: (item: QuickConnectItem) => void;
   onDismiss: () => void;
+  /** One quiet line above the rows — why there is no suggestion, when `]` opened the picker on a
+   *  shape Draft Canvas won't guess for (`continuation/ambiguity.ts`). Not a row: never
+   *  highlighted, never chosen. */
+  note?: string;
 }
 
 /** No conversion needed: `screenPosition` is already screen space, unlike the flow-space anchors
@@ -42,8 +46,9 @@ const GAP = 6;
 
 /**
  * The tiny type picker offered whenever Draft Canvas needs the user to choose a type rather than
- * guess one: a connection dragged onto empty canvas, or a double-click on empty canvas with no
- * tool armed — see `QuickConnectState` in `store/uiStore.ts`.
+ * guess one: a connection dragged onto empty canvas, a double-click on empty canvas with no
+ * tool armed, or `]` on a shape continuation deliberately has no suggestion for (with a `note`
+ * saying why) — see `QuickConnectState` in `store/uiStore.ts`.
  *
  * Its rows are data (`quickConnectItems`), best first: when the source node has an obvious next
  * move, that move leads and is already highlighted, so Enter (or Tab) takes it and the ghost on
@@ -63,6 +68,7 @@ export function QuickConnectMenu({
   onSelect,
   onHighlight,
   onDismiss,
+  note,
 }: QuickConnectMenuProps) {
   const panel = useRef<HTMLDivElement>(null);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
@@ -175,9 +181,15 @@ export function QuickConnectMenu({
       role="menu"
       aria-label="Add element"
       aria-activedescendant={current ? `dc-quick-connect-item-${Math.min(highlighted, items.length - 1)}` : undefined}
+      aria-describedby={note ? 'dc-quick-connect-note' : undefined}
       tabIndex={-1}
       style={{ transform }}
     >
+      {note && (
+        <p id="dc-quick-connect-note" className="dc-quick-connect-note">
+          {note}
+        </p>
+      )}
       {items.map((item, index) => (
         <div key={item.id} className="dc-quick-connect-row">
           {hasSuggestions && index === firstPreset && <div className="dc-quick-connect-separator" role="separator" />}

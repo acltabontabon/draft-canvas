@@ -8,6 +8,7 @@ import type {
   DraftEdge,
   DraftNode,
   DraftNodeType,
+  EdgeSemantic,
   QueueKind,
   ServiceKind,
   ViewLevel,
@@ -93,12 +94,22 @@ export interface FragmentEdgeSpec {
   from: 'anchor' | string;
   to: 'anchor' | string;
   deliveryAttempts?: number;
+  /**
+   * One of the relations the matrix *offers* for this pairing, when its default is not what the
+   * rule means — a saga's compensation is a `service>service` connector, but not a `calls`. Never
+   * a relation the pairing doesn't list: the engine drops such a fragment, the same way a starter's
+   * `semantic` is ignored unless the matrix offers it (`starters/build.ts`). Absent, the edge
+   * infers its default like any hand-drawn connector.
+   */
+  semantic?: EdgeSemantic;
 }
 
 /**
- * What accepting a continuation adds, described without positions or ids. Semantics are never
- * stated here — every edge reads the capability matrix when materialized, exactly like a
- * hand-drawn connector — so a fragment cannot claim a relationship the matrix would not infer.
+ * What accepting a continuation adds, described without positions or ids. Semantics are almost
+ * never stated here — every edge reads the capability matrix when materialized, exactly like a
+ * hand-drawn connector. The one exception, `FragmentEdgeSpec.semantic`, can only choose among the
+ * relations the matrix already offers for that pairing, so a fragment still cannot claim a
+ * relationship the matrix would not allow.
  *
  * A fragment is one node (`Queue`), a short chain (`Queue → Worker`), or only a connector to
  * something already drawn (`existing`, no `nodes`).

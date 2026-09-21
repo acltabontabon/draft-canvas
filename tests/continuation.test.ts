@@ -6,6 +6,8 @@ import type { CommandContext } from '../src/commands/types';
 import { __resetClipboardSync, __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore, type ContinuationOffer } from '../src/store/uiStore';
 import {
+  AMBIGUOUS,
+  ambiguityFor,
   continuationSets,
   continuationsFor,
   dismissalKey,
@@ -18,6 +20,8 @@ import {
 import { capabilityFor, categoryOf, inferRelationship } from '../src/document/connectorSemantics';
 import { createDocument, createEdge, createNode, defaultSizeFor } from '../src/document/factory';
 import { addFlow, createFlow } from '../src/document/flow';
+import { starterById } from '../src/starters';
+import { buildStarter } from '../src/starters/build';
 import { addEdges, addNodes, placeNear } from '../src/document/operations';
 import { flattenPath, rectOf, routeBetween, routeEdge } from '../src/edges/routing';
 import type { CreateNodeInput } from '../src/document/factory';
@@ -53,6 +57,7 @@ const scheduler = (id: string): Spec => ({ id, type: 'service', serviceKind: 'sc
 const database = (id: string): Spec => ({ id, type: 'database' });
 const objectStorage = (id: string): Spec => ({ id, type: 'database', databaseKind: 'object-storage' });
 const searchIndex = (id: string): Spec => ({ id, type: 'database', databaseKind: 'search-index' });
+const table = (id: string): Spec => ({ id, type: 'database', databaseKind: 'table' });
 const port = (id: string): Spec => ({ id, type: 'component', componentKind: 'port' });
 const component = (id: string): Spec => ({ id, type: 'component' });
 const actor = (id: string): Spec => ({ id, type: 'actor' });
@@ -300,6 +305,34 @@ const CASES: Case[] = [
     select: [],
     drop: [],
   },
+  {
+    name: 'Table another table feeds — a pipeline stage, so its next stage is offered when asked',
+    doc: graph([table('bronze'), table('t')], [['bronze', 't']]),
+    anchor: 't',
+    select: [],
+    drop: ['table-next-stage'],
+  },
+  {
+    name: 'Table only a service writes — outbox, read model or business data: no guess',
+    doc: graph([service('s'), table('t')], [['s', 't']]),
+    anchor: 't',
+    select: [],
+    drop: [],
+  },
+  {
+    name: 'Table already feeding its next stage — the stage is drawn, nothing more to add',
+    doc: graph([table('bronze'), table('t'), table('gold')], [['bronze', 't'], ['t', 'gold']]),
+    anchor: 't',
+    select: [],
+    drop: [],
+  },
+  {
+    name: 'Plain Data Store another store feeds — the pipeline rule is a Table\'s alone',
+    doc: graph([database('src'), database('t')], [['src', 't']]),
+    anchor: 't',
+    select: [],
+    drop: [],
+  },
 ];
 
 describe('continuationsFor — rule tables', () => {
@@ -343,6 +376,7 @@ describe('continuationsFor — rule tables', () => {
       actor: graph([actor('t')], []),
       'generic component': graph([{ id: 't', type: 'component' }], []),
       'plain database': graph([database('t')], []),
+      table: graph([table('t')], []),
       cache: graph([{ id: 't', type: 'database', databaseKind: 'cache' }], []),
       'file system': graph([{ id: 't', type: 'database', databaseKind: 'file-system' }], []),
       'search index': graph([searchIndex('t')], []),
@@ -457,6 +491,7 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
       'port-implementation-service': graph([service('p'), port('t')], [['p', 't']]),
       'adapter-port': graph([{ id: 't', type: 'component', componentKind: 'adapter' }], []),
       'worker-indexes': graph([service('p'), worker('t')], [['p', 't']]),
+      'table-next-stage': graph([table('p'), table('t')], [['p', 't']]),
       // Level-gated rules (see `ContinuationRule.levels`) only fire where the view has been said
       // to be one — the fixture says so the same way the editor does.
       'person-system': graph([actor('t')], [], 'context'),
@@ -488,6 +523,187 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
       seen.add(rule.id);
       expect(rule.label.length).toBeGreaterThan(0);
       expect(rule.reason.endsWith('.')).toBe(true);
+    }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Compensation: the one pattern the diagram names itself              */
+/* ------------------------------------------------------------------ */
+
+describe('compensation — a saga coordinator undoing the steps it drives', () => {
+  /** An orchestrator commanding each of `steps`, compensating each of `compensated`. */
+  function saga(steps: string[], compensated: string[], extra: Spec[] = []) {
+    const nodes = [service('o'), ...steps.map((id) => service(id)), ...extra].map((spec, i) =>
+      createNode({ x: i * 320, y: 0, ...spec }),
+    );
+    const edges = [
+      ...steps.map((id) => createEdge({ source: 'o', target: id, semantic: 'command', semanticsOrigin: 'explicit' })),
+      ...compensated.map((id) => createEdge({ source: 'o', target: id, semantic: 'compensates', semanticsOrigin: 'explicit' })),
+    ];
+    return addEdges(addNodes(createDocument('Saga'), nodes), edges);
+  }
+  const compensations = (doc: DraftDocument, trigger: ContinuationTrigger = 'invoke') =>
+    continuationsFor(doc, 'o', trigger).filter((c) => c.ruleId === 'compensate-step');
+
+  it('offers each step still missing its undo once two or more are, in the order they were drawn', () => {
+    const offered = compensations(saga(['pay', 'stock', 'ship'], ['pay']));
+    expect(offered.map((c) => c.id)).toEqual(['compensate:stock', 'compensate:ship']);
+    expect(offered.every((c) => c.confidence === 'medium' && c.tier === 'secondary')).toBe(true);
+  });
+
+  it('stays quiet with one step left — that may be the pivot, which never has an undo', () => {
+    expect(compensations(saga(['pay', 'stock', 'ship'], ['pay', 'stock']))).toEqual([]);
+  });
+
+  it('needs a compensation already drawn — commanding services is not a saga on its own', () => {
+    expect(compensations(saga(['pay', 'stock', 'ship'], []))).toEqual([]);
+  });
+
+  it('is never unprompted and never in the drop picker', () => {
+    const doc = saga(['pay', 'stock', 'ship'], ['pay']);
+    expect(compensations(doc, 'select')).toEqual([]);
+    expect(compensations(doc, 'drop')).toEqual([]);
+  });
+
+  it('only follows forward steps the matrix lets it compensate', () => {
+    // Writing to a store is not a step to undo with `compensates` — no row offers it there.
+    const doc = addEdges(saga(['pay', 'stock'], ['pay'], [database('db')]), [
+      createEdge({ source: 'o', target: 'db', semantic: 'writes', semanticsOrigin: 'explicit' }),
+    ]);
+    expect(compensations(doc)).toEqual([]);
+  });
+
+  it('accepting draws an explicit `compensates` connector to the step already there', () => {
+    const doc = saga(['pay', 'stock', 'ship'], ['pay']);
+    const [offer] = compensations(doc);
+    const placed = materialize(doc, offer!)!;
+    expect(placed.nodes).toEqual([]);
+    expect(placed.edges).toHaveLength(1);
+    expect(placed.edges[0]).toMatchObject({ source: 'o', target: 'stock', semantic: 'compensates', semanticsOrigin: 'explicit' });
+    expect(placed.continueFromId).toBe('stock');
+  });
+
+  it('comes into continuationSets the same way', () => {
+    const doc = saga(['pay', 'stock', 'ship'], ['pay']);
+    const sets = continuationSets(doc, 'o');
+    expect(sets.explicit.filter((c) => c.ruleId === 'compensate-step').map((c) => c.id)).toEqual(
+      compensations(doc).map((c) => c.id),
+    );
+    expect(sets.quiet.some((c) => c.ruleId === 'compensate-step')).toBe(false);
+  });
+
+  it('leaves the Saga starter as drawn alone — its one uncompensated step is the pivot', () => {
+    const built = buildStarter(starterById('saga-orchestration')!, { x: 0, y: 0 });
+    const doc = addEdges(addNodes(createDocument('Saga'), built.nodes), built.edges);
+    const coordinator = doc.edges.find((edge) => edge.semantic === 'compensates')!.source;
+    expect(continuationsFor(doc, coordinator, 'invoke').some((c) => c.ruleId === 'compensate-step')).toBe(false);
+
+    // Take one undo away and the gap is offered by name.
+    const gap = doc.edges.find((edge) => edge.semantic === 'compensates')!;
+    const opened = { ...doc, edges: doc.edges.filter((edge) => edge.id !== gap.id) };
+    const offered = continuationsFor(opened, coordinator, 'invoke').filter((c) => c.ruleId === 'compensate-step');
+    expect(offered.map((c) => c.id)).toContain(`compensate:${gap.target}`);
+  });
+});
+
+describe('a fragment edge that names its semantic', () => {
+  const naming = (semantic: 'compensates' | 'publishes'): ContinuationRule => ({
+    id: `names-${semantic}`,
+    tier: 'secondary',
+    label: 'X',
+    reason: 'test.',
+    when: () => true,
+    fragment: () => ({ nodes: [{ key: 's', type: 'service' }], edges: [{ from: 'anchor', to: 's', semantic }] }),
+  });
+
+  it('is offered when the matrix lists that relation for the pairing', () => {
+    expect(capabilityFor('service', 'service')?.relations).toContain('compensates');
+    expect(continuationsFor(graph([service('a')], []), 'a', 'drop', { rules: [naming('compensates')] })).toHaveLength(1);
+  });
+
+  it('is dropped when the matrix does not — naming a semantic is choosing, never inventing', () => {
+    expect(capabilityFor('service', 'service')?.relations).not.toContain('publishes');
+    expect(continuationsFor(graph([service('a')], []), 'a', 'drop', { rules: [naming('publishes')] })).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Ambiguity: where asking finds nothing, it is written down why        */
+/* ------------------------------------------------------------------ */
+
+describe('ambiguity — never silently empty when asked', () => {
+  // Every anchor shape there is, bare and fed by a service — the two neighborhoods a first `]`
+  // most often meets.
+  const SHAPES: Record<string, Spec> = {
+    service: service('t'),
+    external: { id: 't', type: 'service', serviceKind: 'external' },
+    worker: worker('t'),
+    gateway: gateway('t'),
+    scheduler: scheduler('t'),
+    actor: actor('t'),
+    component: component('t'),
+    adapter: { id: 't', type: 'component', componentKind: 'adapter' },
+    port: port('t'),
+    database: database('t'),
+    sql: { id: 't', type: 'database', databaseKind: 'sql' },
+    nosql: { id: 't', type: 'database', databaseKind: 'nosql' },
+    table: table('t'),
+    cache: { id: 't', type: 'database', databaseKind: 'cache' },
+    'file system': { id: 't', type: 'database', databaseKind: 'file-system' },
+    'object storage': objectStorage('t'),
+    'search index': searchIndex('t'),
+    queue: queue('t'),
+    topic: topic('t'),
+    stream: stream('t'),
+    'dead-letter queue': dlq('t'),
+  };
+
+  for (const level of [undefined, 'context', 'container', 'component'] as const) {
+    it(`every shape \`]\` leaves empty has a written reason (level: ${level ?? 'unset'})`, () => {
+      for (const [label, spec] of Object.entries(SHAPES)) {
+        for (const doc of [graph([spec], [], level), graph([service('feeder'), spec], [['feeder', 't']], level)]) {
+          if (continuationsFor(doc, 't', 'invoke', { level: doc.level }).length > 0) continue;
+          const nb = neighborhoodOf(doc, 't', doc.level)!;
+          expect(ambiguityFor(nb), `${label} at ${level ?? 'unset'}`).toBeDefined();
+        }
+      }
+    });
+  }
+
+  it('names the Outbox on a Table, whatever feeds it', () => {
+    const nb = neighborhoodOf(graph([service('s'), table('t')], [['s', 't']]), 't')!;
+    expect(ambiguityFor(nb)?.id).toBe('table');
+    expect(ambiguityFor(nb)?.reason).toMatch(/outbox/i);
+  });
+
+  it("gives the Transactional Outbox starter's two tables the same answer — nothing tells them apart", () => {
+    const built = buildStarter(starterById('transactional-outbox')!, { x: 0, y: 0 });
+    const doc = addEdges(addNodes(createDocument('Outbox'), built.nodes), built.edges);
+    const tables = doc.nodes.filter((node) => node.type === 'database' && node.databaseKind === 'table');
+    expect(tables).toHaveLength(2);
+    for (const node of tables) {
+      expect(continuationsFor(doc, node.id, 'invoke')).toEqual([]);
+      expect(ambiguityFor(neighborhoodOf(doc, node.id)!)?.id).toBe('table');
+    }
+  });
+
+  it("offers the Medallion starter's last layer a next stage, and says nothing unprompted", () => {
+    const built = buildStarter(starterById('medallion')!, { x: 0, y: 0 });
+    const doc = addEdges(addNodes(createDocument('Medallion'), built.nodes), built.edges);
+    const tables = new Set(doc.nodes.filter((node) => node.databaseKind === 'table').map((node) => node.id));
+    const last = [...tables].find((id) => !doc.edges.some((edge) => edge.source === id && tables.has(edge.target)))!;
+    expect(continuationsFor(doc, last, 'invoke').map((c) => c.ruleId)).toEqual(['table-next-stage']);
+    expect(continuationsFor(doc, last, 'select')).toEqual([]);
+  });
+
+  it('every entry carries a stable id, a label and a one-sentence reason', () => {
+    const seen = new Set<string>();
+    for (const entry of AMBIGUOUS) {
+      expect(seen.has(entry.id)).toBe(false);
+      seen.add(entry.id);
+      expect(entry.label.length).toBeGreaterThan(0);
+      expect(entry.reason.endsWith('.')).toBe(true);
     }
   });
 });
@@ -1513,6 +1729,16 @@ describe('docs/reference/semantics.md rules table', () => {
       .filter((line) => line.startsWith('| `'))
       .map((line) => line.split('|').map((cell) => cell.trim()).filter(Boolean));
     expect(rows).toEqual(RULES.map((rule) => [`\`${rule.id}\``, rule.tier, rule.label, rule.reason]));
+  });
+
+  it('lists exactly the written-down ambiguous cases, in order, with their reasons', () => {
+    const doc = readFileSync(resolve(__dirname, '../docs/reference/semantics.md'), 'utf8');
+    const block = doc.split('<!-- continuation-ambiguous:start')[1]?.split('<!-- continuation-ambiguous:end -->')[0] ?? '';
+    const rows = block
+      .split('\n')
+      .filter((line) => line.startsWith('| `'))
+      .map((line) => line.split('|').map((cell) => cell.trim()).filter(Boolean));
+    expect(rows).toEqual(AMBIGUOUS.map((entry) => [`\`${entry.id}\``, entry.label, entry.reason]));
   });
 });
 

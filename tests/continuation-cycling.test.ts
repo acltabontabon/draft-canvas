@@ -150,7 +150,7 @@ describe('cycling alternatives', () => {
     expect(showing()).toBeNull();
   });
 
-  it('only candidates with somewhere to go are alternatives; ] skips the rest, and does nothing if none fit', () => {
+  it('only candidates with somewhere to go are alternatives; ] skips the rest, and asks back if none fit', () => {
     // A note under everything: no new node fits anywhere, but connecting to the Queue already there does.
     const crowd = createNode({ id: 'crowd', type: 'note', x: -2000, y: -2000, width: 5000, height: 5000 });
     const doc = graph([service('pub'), topic('t'), at(queue('q'), 800)], [['pub', 't']]);
@@ -160,6 +160,23 @@ describe('cycling alternatives', () => {
 
     open({ ...doc, nodes: [crowd, ...doc.nodes.filter((n) => n.id !== 'q')] }, 't');
     expect(showing()).toBeNull();
+    // Nowhere to put anything — the picker, not silence. A Topic is no ambiguous shape, so no note.
+    expect(stepContinuation(useEditorStore.getState(), 1)).toEqual({ ask: 't', note: undefined });
+  });
+
+  it('] on a shape with no suggestion asks back, saying why — never silence', () => {
+    const table: Spec = { id: 'tbl', type: 'database', databaseKind: 'table' };
+    open(graph([service('s'), table], [['s', 'tbl']]), 'tbl');
+    const asked = stepContinuation(useEditorStore.getState(), 1);
+    expect(asked).toMatchObject({ ask: 'tbl' });
+    expect(asked !== true && asked !== false && asked.note).toMatch(/outbox/i);
+    expect(stepContinuation(useEditorStore.getState(), -1)).toMatchObject({ ask: 'tbl' });
+    // Asking never conjures a ghost for it.
+    expect(showing()).toBeNull();
+  });
+
+  it('] still does nothing for a shape continuation never anchors on', () => {
+    open(graph([{ id: 'n', type: 'note' }], []), 'n');
     expect(stepContinuation(useEditorStore.getState(), 1)).toBe(false);
   });
 

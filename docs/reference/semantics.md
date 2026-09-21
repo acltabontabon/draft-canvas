@@ -27,7 +27,7 @@ Connections are reasoned about using `NodeCategory` — coarser than a node's sh
 | `external` | Service shape with `serviceKind: 'external'` |
 | `component` | the Component shape, `componentKind` of `generic`/`module`/`adapter` — see below |
 | `port` | Component shape with `componentKind: 'port'` — a contract, see below |
-| `database` | Database shape, `databaseKind` of `generic`/`sql`/`nosql` |
+| `database` | Database shape, `databaseKind` of `generic`/`sql`/`nosql`/`table` |
 | `cache` | Database shape, `databaseKind: 'cache'` |
 | `fileSystem` | Database shape, `databaseKind: 'file-system'` |
 | `objectStorage` | Database shape, `databaseKind: 'object-storage'` |
@@ -258,6 +258,7 @@ appear in that picker, whose standing presets already cover those shapes.
 | `port-implementation-component` | primary | Component | This port isn't implemented by anything yet. |
 | `port-implementation-service` | secondary | Service | A port can also be implemented by a whole service. |
 | `adapter-port` | secondary | Port | The contract this adapter sits behind. |
+| `table-next-stage` | secondary | Table | The next stage of the pipeline this table is part of. |
 | `service-data-store` | secondary | Data Store | Services usually own their data. |
 | `service-topic` | secondary | Topic | Publish events other parts of the system react to. |
 | `service-queue` | secondary | Queue | Hand work off to be processed later. |
@@ -280,9 +281,42 @@ Keyboard only: the `service-*` and `actor-*` rules.
 Nothing starts unprompted from a plain Service, an Actor, a Data Store, a Cache, a File System, a
 Search Index or a bare (non-Port) Component: each has too many valid next moves for any one of them
 to be *the* move, and no suggestion beats a weak one. Services and Actors get a short list when
-asked; the rest get nothing at all. What a Service's list *leads* with is not fixed, though — see
-"What points at it" below. Adding a rule for one category is never license to assume a
+asked; a Table gets one only once the graph shows it is a pipeline stage (another store already
+`ingests` into or `transforms` into it, as in the Medallion starter); the rest get no suggestion —
+asking opens the picker instead (below). What a Service's list *leads* with is not fixed, though —
+see "What points at it" below. Adding a rule for one category is never license to assume a
 neighboring one is now covered too — see `tests/continuation.test.ts`'s broad silence sweep.
+
+### Where it won't guess
+
+Some shapes have several equally valid next moves and nothing in the diagram picks between them.
+The engine stays silent on those — a wrong suggestion costs more than none — but the person who
+pressed `]` still gets an answer: the add-element picker opens beside the shape, with one line
+saying why there is no suggestion. Choosing from it adds and connects the shape like a dropped
+connector would. Each case is written down in `src/continuation/ambiguity.ts`, and a test fails if
+asking ever comes back empty for a shape that isn't listed:
+
+<!-- continuation-ambiguous:start — generated from `src/continuation/ambiguity.ts`; `tests/continuation.test.ts` fails on drift -->
+| Case | Shape | Why there is no suggestion |
+| --- | --- | --- |
+| `overview` | Infrastructure in a System Context view | This view is a system overview — what comes after this belongs a level down. |
+| `table` | Table | A table could be an outbox, a read model or plain business data — nothing here says which. |
+| `data-store` | Data Store | What comes after a data store depends on who reads it — a service, a worker or a replica. |
+| `cache` | Cache | A cache is usually where a path ends — anything after it is your call. |
+| `file-system` | File System | Files here could feed a job, a service or nothing at all. |
+| `search-index` | Search Index | A search index is usually where a path ends — anything after it is your call. |
+| `dead-letter` | Dead-letter queue | Re-driving dead letters is a choice, not a default — many never leave the queue. |
+| `external` | External System | What a system someone else runs talks to is mostly outside this diagram. |
+| `component` | Component | A controller, a use case and a repository all look alike — nothing here says which this is. |
+<!-- continuation-ambiguous:end -->
+
+**The Outbox is the case in point.** In the Transactional Outbox starter, the Outbox and the
+Business Data beside it are the same `table` Data Store, in the same boundary, written by the same
+service — only their labels differ, and no rule reads labels. So neither gets an "outbox relay"
+Worker suggested: offering one for any Table a service writes would be wrong more often than right.
+A case leaves this list only when the document gains a real signal that tells its readings apart —
+for a Table, something like a role on the Data Store, the way `deliveryRole` tells a dead-letter
+queue from a queue. That signal doesn't exist yet, so the Table stays here.
 
 ### Ranking
 
@@ -336,6 +370,19 @@ shapes that could each continue into the other — a Service and a Topic side by
 until one of them is connected. The ghost is only the connector plus an outline on the target;
 nothing is duplicated.
 
+### Compensation
+
+`compensates` is never inferred — no pairing defaults to it — so one only exists because someone
+drew it, and that makes it the one pattern continuation recognises by name
+(`src/continuation/compensation.ts`). A Service that already compensates at least one step, and
+drives (`command`, `calls`, `http`, `grpc`) **two or more** steps it doesn't compensate yet, offers
+**Compensate *step*** for each of them when asked: a `compensates` connector to the step already
+drawn. Two, because a saga's last forward step — its pivot — legitimately has no undo; with one step
+left there's no telling a pivot from a gap, so a finished saga like the Saga starter's says nothing.
+Keyboard only, never unprompted, and only where the matrix offers `compensates` (Service to Service
+or External System). The connector is written as your own choice would be, so changing a node's
+kind never re-infers it back to `calls`.
+
 ### What the view is showing
 
 A canvas — or one room inside it — may say what it shows: **System context**, **Containers** or
@@ -357,4 +404,5 @@ one — nothing ever changes on a guess. Where a level is in force, it is on scr
 names it, and the depth map's corner repeats it.
 
 Not yet: continuation does not read the active Flow (the flow lens turns it off) or which starter a
-diagram came from (documents don't record it). Accepting never changes a Flow.
+diagram came from (documents don't record it) — which is also why a Table's role can't be read off
+the Transactional Outbox starter it came from. Accepting never changes a Flow.

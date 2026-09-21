@@ -102,7 +102,7 @@ export const SECTIONS: Section[] = [
       { keys: [mod, 'K'], label: 'Create and place a shape without the mouse' },
       { gesture: 'Drag from a handle', label: 'Connect — drop on empty canvas to create and wire a node' },
       { keys: ['Tab'], label: 'Accept the suggested next element, when one is showing' },
-      { keys: [']', '['], label: 'Next or previous suggestion — or ask for one for the selected shape' },
+      { keys: [']', '['], label: 'Next or previous suggestion — or ask; with none to give, pick the next shape' },
       { commandId: 'group' },
       { commandId: 'ungroup' },
       { commandId: 'text-toggle-bold', label: 'Bold (selected Text)' },

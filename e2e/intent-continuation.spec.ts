@@ -333,6 +333,29 @@ test.describe('Intent Continuation', () => {
     await expect(page.locator('.dc-node').nth(0)).toContainText('Orders]');
   });
 
+  test('] on a shape with no suggestion asks back: the picker opens on it, saying why', async ({ page }) => {
+    await newCanvas(page, 'Continuation won’t guess');
+    await create(page, 'Data Store', { x: 300, y: 300 });
+    await chooseInspectorOption(page, 'Data Store type', 'Table');
+    await page.keyboard.press('Escape');
+    await page.locator('.dc-node').nth(0).click();
+    await expect(page.locator('.dc-ghost')).toHaveCount(0);
+
+    await page.keyboard.press(']');
+    const picker = page.getByRole('menu', { name: 'Add element' });
+    await expect(picker).toBeVisible();
+    await expect(page.locator('.dc-quick-connect-note')).toContainText('outbox');
+    await expect(picker).toHaveAccessibleDescription(/outbox, a read model or plain business data/);
+    // The note is not a choice: the first row is highlighted and previewed beside the Table.
+    await expect(page.locator('.dc-quick-connect-item').first()).toHaveAttribute('data-highlighted', 'true');
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+
+    await page.keyboard.press('Enter');
+    await expect(picker).toBeHidden();
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+    await expect(page.locator('.dc-edge')).toHaveCount(1);
+  });
+
   test('dismissing the drop picker leaves no preview behind', async ({ page }) => {
     await newCanvas(page, 'Continuation drop dismiss');
     await publisherAndTopic(page);

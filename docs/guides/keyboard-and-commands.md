@@ -50,6 +50,11 @@ reason, and it stays quiet otherwise.
 | `]` / `[` | Show the next or previous alternative, or ask for one when nothing is showing |
 | `Esc` | Dismiss it |
 
+Some shapes have no suggestion on purpose. A Table could be an outbox, a read model or plain
+business data, and nothing in the diagram says which. Pressing `]` on one opens the add-element menu
+beside it instead, with a line saying why. Pick a shape with the arrow keys and `Enter` to add it and
+connect it in one move.
+
 Suggestions are on by default. **Turn off Intent Continuation** in the palette switches them off, and
 the same command turns them back on.
 

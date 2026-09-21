@@ -4,6 +4,17 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Pressing `]` on a shape Draft Canvas has no suggestion for now opens the add-element menu beside
+  it, with a line saying why. Before, nothing happened. A Table, for instance, could be an outbox, a
+  read model or plain business data, and nothing in the diagram says which.
+- A Table that another table feeds, like Bronze → Silver → Gold, offers the pipeline's next stage
+  when you press `]`.
+- A saga coordinator that already compensates one step offers **Compensate …** for the steps it
+  drives but can't undo yet, and adds the `compensates` connector to the step that's already there.
+  A finished saga stays quiet: its last step needs no undo.
+
 ### Changed
 
 - A System actor is now drawn as a computer, and a Third Party as an office building, so each

@@ -74,6 +74,18 @@ describe('offerFor', () => {
     expect(quickConnectItems(topicDoc(), drop('pub')).every((r) => r.kind === 'preset')).toBe(true);
   });
 
+  it('asked with ] rather than dropped: a row sits beside the source, not at a point nobody chose', () => {
+    const doc = topicDoc();
+    const asked: QuickConnectState = { source: 't', asked: true, flowPosition: { x: 5000, y: 5000 }, screenPosition: { x: 0, y: 0 } };
+    const row = quickConnectItems(doc, asked).find((r) => r.label === 'Data Store')!;
+    const offer = offerFor(doc, asked, row)!;
+    const topic = doc.nodes.find((n) => n.id === 't')!;
+    // Placed the way a `]` suggestion is — near the Topic — and nowhere near the fallback point.
+    expect(Math.abs(offer.nodes[0]!.x - topic.x)).toBeLessThan(800);
+    expect(offer.nodes[0]!.x).not.toBe(5000);
+    expect(offer.edges[0]!.source).toBe('t');
+  });
+
   it('is nothing for a picker with no source', () => {
     const doc = topicDoc();
     expect(offerFor(doc, drop(), quickConnectItems(doc, drop())[0]!)).toBeUndefined();
