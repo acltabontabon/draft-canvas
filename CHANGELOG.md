@@ -4,6 +4,8 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.9.4] - 2026-09-21
+
 ### Fixed
 
 - A saga's compensation can be drawn by hand, not only through the Saga starter. Drag a second
@@ -1265,7 +1267,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.3...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.4...main
+[1.9.4]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.3...v1.9.4
 [1.9.3]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.2...v1.9.3
 [1.9.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.0...v1.9.1

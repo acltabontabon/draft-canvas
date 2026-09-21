@@ -21,6 +21,22 @@ export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './se
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.9.4',
+    date: '2026-09-21',
+    summary: 'Draw a saga\'s compensation yourself.',
+    highlights: [
+      {
+        title: 'Compensations by hand',
+        description:
+          'Drag a second arrow onto a service the first one already calls and it becomes that step\'s compensation, or use Add compensation on the step\'s connector. Before, only the Saga starter could draw one.',
+      },
+      {
+        title: 'Compensates on the menu',
+        description: 'A connector between two services now lists Compensates beside HTTP and Generic Call.',
+      },
+    ],
+  },
+  {
     version: '1.9.3',
     date: '2026-09-21',
     summary: 'Asking always gets an answer, and System and Third Party look the part.',
