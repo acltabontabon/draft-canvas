@@ -186,10 +186,10 @@ test.describe('contextual connector toolbar', () => {
     await expect(inspectorSelect(page, 'Protocol')).toHaveText('Generic Call');
     await expect(inspectorSelect(page, 'Interaction mode')).toHaveText('Sync');
 
-    // Only HTTP and Generic Call are offered — none of the generic vocabulary (Event, Reads,
-    // Retry, Fallback, …) or gRPC (deliberately deferred) belongs on a direct service call.
+    // HTTP, Generic Call — and Compensates, a saga's undo, which nothing else can set — none of
+    // the generic vocabulary (Event, Reads, Retry, Fallback, …) or gRPC (deliberately deferred).
     await inspectorSelect(page, 'Protocol').click();
-    await expect(page.getByRole('option')).toHaveText(['HTTP', 'Generic Call']);
+    await expect(page.getByRole('option')).toHaveText(['HTTP', 'Generic Call', 'Compensates']);
     await page.keyboard.press('Escape');
 
     await inspectorSelect(page, 'Interaction mode').click();

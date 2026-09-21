@@ -4,6 +4,12 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- A saga's compensation can be drawn by hand, not only through the Saga starter. Drag a second
+  arrow onto a service the first one already calls, or use **Add compensation** on the step's
+  connector. **Compensates** is also on a Service → Service connector's Interaction menu.
+
 ## [1.9.3] - 2026-09-21
 
 ### Added

@@ -383,6 +383,13 @@ Keyboard only, never unprompted, and only where the matrix offers `compensates` 
 or External System). The connector is written as your own choice would be, so changing a node's
 kind never re-infers it back to `calls`.
 
+Drawing one by hand works the same way. Two services can have **one** second connector between
+them — a step and its undo — and nothing more: dragging another arrow onto a service already
+called draws it as `compensates` (or, the other way round, as the step beside an undo drawn first),
+and a third is refused, as any second arrow is between other shapes. A step's connector also has
+**Add compensation** in its inspector, ⌘K and right-click menu, and **Compensates** is on its
+Interaction menu.
+
 ### What the view is showing
 
 A canvas — or one room inside it — may say what it shows: **System context**, **Containers** or

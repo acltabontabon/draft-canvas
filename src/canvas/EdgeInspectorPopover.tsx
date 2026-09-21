@@ -717,14 +717,28 @@ const SERVICE_MODE_OPTIONS: InspectorSelectOption[] = [
  * means for a service call. This section updates `kind` directly via `updateEdgeById` instead,
  * so the primary line never dashes just because Async was chosen.
  */
-function ServiceInteractionSection({ edge }: { edge: DraftEdge }) {
+function ServiceInteractionSection({ edge, relations }: { edge: DraftEdge; relations: readonly EdgeSemantic[] }) {
   // Generic Call ('calls') is the fallback reading for anything outside {http, calls} too —
   // including an edge that predates this editor and was left on some other `EdgeSemantic`.
   const protocol = edge.semantic === 'http' ? 'http' : 'calls';
+  // A saga's compensation is the one thing two services do to each other that isn't a way of
+  // calling — it's *why* the call happens — and nothing else can set it, so it's always offered
+  // where the pairing allows it (`service>service`, `service>external`), not only once a starter
+  // has drawn one.
+  const offered: InspectorSelectOption[] = relations.includes('compensates')
+    ? [...SERVICE_PROTOCOL_OPTIONS, { value: 'compensates', label: EDGE_SEMANTIC_LABELS.compensates }]
+    : SERVICE_PROTOCOL_OPTIONS;
   const protocolOptions: InspectorSelectOption[] =
-    edge.semantic === undefined || edge.semantic === 'http' || edge.semantic === 'calls'
-      ? SERVICE_PROTOCOL_OPTIONS
-      : [...SERVICE_PROTOCOL_OPTIONS, { value: edge.semantic, label: EDGE_SEMANTIC_LABELS[edge.semantic] }];
+    edge.semantic === undefined || offered.some((option) => option.value === edge.semantic)
+      ? offered
+      : [...offered, { value: edge.semantic, label: EDGE_SEMANTIC_LABELS[edge.semantic] }];
+
+  // A step can have one undo drawn beside it (`addCompensation`) — the same twin a second drag
+  // between the pair draws. Offered on the step, never on the undo itself.
+  const hasCompensation = useEditorStore((state) =>
+    state.document.edges.some((e) => e.source === edge.source && e.target === edge.target && e.semantic === 'compensates'),
+  );
+  const canAddCompensation = relations.includes('compensates') && edge.semantic !== 'compensates' && !hasCompensation;
 
   const isAsync = edge.kind === 'async';
   const modeOptions: InspectorSelectOption[] =
@@ -778,6 +792,15 @@ function ServiceInteractionSection({ edge }: { edge: DraftEdge }) {
             }}
           />
         </div>
+        {canAddCompensation && (
+          <Button
+            variant="quiet"
+            title="Draw this step's undo — a compensates connector between the same two services"
+            onClick={() => useEditorStore.getState().addCompensation(edge.id)}
+          >
+            + Add compensation
+          </Button>
+        )}
       </section>
 
       <section className="dc-inspector-section">
@@ -1024,7 +1047,7 @@ function ExpandedPanel({
     <div className="dc-edge-inspector-panel dc-edge-inspector-expanded">
       <RelationshipGuidance edge={edge} capability={capability} />
       {isServiceToService ? (
-        <ServiceInteractionSection edge={edge} />
+        <ServiceInteractionSection edge={edge} relations={capability?.relations ?? []} />
       ) : (
         <>
           <section className="dc-inspector-section">

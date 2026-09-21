@@ -314,6 +314,50 @@ test.describe('Intent Continuation', () => {
     await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');
   });
 
+  test('a saga drawn by hand: a step gets its undo from the inspector, and ] offers the steps still missing one', async ({
+    page,
+  }) => {
+    await newCanvas(page, 'Continuation hand-drawn saga');
+    await create(page, 'Service', { x: 160, y: 330 });
+    await create(page, 'Service', { x: 600, y: 90 });
+    await create(page, 'Service', { x: 600, y: 250 });
+    await create(page, 'Service', { x: 600, y: 410 });
+    await create(page, 'Service', { x: 600, y: 570 });
+
+    // The first step: its connector's own inspector draws the undo beside it — the second arrow
+    // between one pair that a drag won't make. Compensates is also on the Interaction menu.
+    await connect(page, 0, 1);
+    await inspectorSelect(page, 'Protocol').click();
+    await expect(page.getByRole('option')).toHaveText(['HTTP', 'Generic Call', 'Compensates']);
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: '+ Add compensation' }).click();
+    await expect(page.locator('.dc-edge')).toHaveCount(2);
+    await expect(captions(page)).toContainText(['compensates']);
+    // The undo itself never offers another.
+    await expect(page.getByRole('button', { name: '+ Add compensation' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    // The second step's undo by dragging a second arrow onto it, the way anyone would try first.
+    await connect(page, 0, 2);
+    await page.keyboard.press('Escape');
+    await connect(page, 0, 2);
+    await expect(page.locator('.dc-edge')).toHaveCount(4);
+    await expect(captions(page).filter({ hasText: 'compensates' })).toHaveCount(2);
+    await page.keyboard.press('Escape');
+    for (const step of [3, 4]) {
+      await connect(page, 0, step);
+      await page.keyboard.press('Escape');
+    }
+
+    await page.locator('.dc-node').nth(0).click();
+    await page.keyboard.press(']');
+    await expect(page.locator('.dc-ghost-pill')).toContainText('Compensate');
+    await expect(page.locator('.dc-ghost-target')).toHaveCount(1);
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.dc-edge')).toHaveCount(7);
+    await expect(captions(page).filter({ hasText: 'compensates' })).toHaveCount(3);
+  });
+
   test('] asks for suggestions where none show on their own, and typing a label never cycles', async ({ page }) => {
     await newCanvas(page, 'Continuation ask');
     await create(page, 'Service', { x: 300, y: 300 });

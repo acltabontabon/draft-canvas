@@ -1264,6 +1264,18 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
         ],
       }),
     },
+    // A saga's undo for this step: the one second connector between a pair a drag won't draw.
+    ...(edge.semantic !== 'compensates' && suggested.includes('compensates')
+      ? [
+          {
+            id: 'edge-add-compensation',
+            title: 'Add compensation',
+            group: 'connector',
+            keywords: ['compensate', 'compensates', 'saga', 'undo', 'rollback', 'release'],
+            run: (inner: CommandContext) => inner.editor.addCompensation(edge.id),
+          } satisfies Command,
+        ]
+      : []),
     {
       id: 'edge-kind',
       title: 'Change kind…',

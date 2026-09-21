@@ -370,6 +370,8 @@ export interface EditorStore {
   /** "Add DLQ" — creates a compact, connected Dead Letter Queue companion for a plain Queue. A
    *  no-op if the node isn't a plain queue, is itself a generated DLQ, or already has one. */
   addDeadLetterQueue: (queueId: string) => void;
+  /** A saga's undo for the step `edgeId` asks for: a `compensates` twin between the same two services. */
+  addCompensation: (edgeId: string) => void;
   /** Removes a generated DLQ and its connecting edge — never deletes a node the edge was manually
    *  reconnected onto (see `deliveryRole` guard in the implementation). A no-op if there's no
    *  outgoing `deadLetters` edge. */
@@ -1285,19 +1287,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   connect(source, target, sourceSide, targetSide, sourceOffset = 0.5, targetOffset = 0.5) {
     const state = get();
     if (source === target) return null;
-    const exists = state.document.edges.some((e) => e.source === source && e.target === target);
-    if (exists) return null;
-    // Infer a relationship from what's actually being connected — see
-    // `inferRelationshipThroughJunctions`'s doc comment for exactly which pairings apply, and how
-    // a Junction on either end resolves transparently rather than blocking inference outright.
     const sourceNode = state.document.nodes.find((n) => n.id === source);
     const targetNode = state.document.nodes.find((n) => n.id === target);
     // Mirrors `addEdges`' own guard: a stale id (its node deleted since the caller looked it up —
     // e.g. a context-menu "Connect to" target picked before an intervening delete) must not return
     // a truthy edge that never actually gets persisted.
     if (!sourceNode || !targetNode) return null;
+    // A second arrow between a pair already joined is nearly always a slip, so it's refused — with
+    // one exception: a saga's step and its undo. Where the pairing offers `compensates`
+    // (`service>service`, `service>external`), the second connector is drawn as the half that's
+    // missing: the compensation beside a step, or the step beside a compensation. Never a third.
+    const between = state.document.edges.filter((e) => e.source === source && e.target === target);
+    let twinOf: 'step' | 'compensation' | undefined;
+    if (between.length > 0) {
+      const offersCompensation = capabilityFor(categoryOf(sourceNode), categoryOf(targetNode))?.relations.includes('compensates');
+      if (between.length > 1 || !offersCompensation) return null;
+      twinOf = between[0]!.semantic === 'compensates' ? 'compensation' : 'step';
+    }
     if (!roomFor(0, 1)) return null;
-    const relationship = inferRelationshipThroughJunctions(state.document, sourceNode, targetNode);
+    // Infer a relationship from what's actually being connected — see
+    // `inferRelationshipThroughJunctions`'s doc comment for exactly which pairings apply, and how
+    // a Junction on either end resolves transparently rather than blocking inference outright.
+    const inferred = inferRelationshipThroughJunctions(state.document, sourceNode, targetNode);
+    const relationship = twinOf === 'step' ? { ...inferred, semantic: 'compensates' as const } : inferred;
     const edge = createEdge({
       source,
       target,
@@ -1316,9 +1328,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // It stays one click away in the connector's own editor ("Show response
       // path"), and any document that already persisted `hasResponse: true`
       // keeps rendering exactly as it did.
-      semanticsOrigin: relationship ? 'inferred' : undefined,
+      semanticsOrigin: twinOf === 'step' ? 'explicit' : relationship ? 'inferred' : undefined,
     });
-    state.apply('Connect', (doc) => addEdges(doc, [edge]), {
+    state.apply(twinOf === 'step' ? 'Add compensation' : 'Connect', (doc) => addEdges(doc, [edge]), {
       selection: { nodes: [], edges: [edge.id] },
     });
     return edge;
@@ -1548,6 +1560,38 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Add DLQ', (doc) => addEdges(addNodes(doc, [dlq]), [edge]), {
       selection: { nodes: [dlq.id], edges: [] },
     });
+  },
+
+  addCompensation(edgeId) {
+    const state = get();
+    const step = state.document.edges.find((e) => e.id === edgeId);
+    if (!step || step.semantic === 'compensates') return;
+    const source = state.document.nodes.find((n) => n.id === step.source);
+    const target = state.document.nodes.find((n) => n.id === step.target);
+    if (!source || !target) return;
+    // Only where the matrix offers the relationship at all (`service>service`, `service>external`).
+    if (!capabilityFor(categoryOf(source), categoryOf(target))?.relations.includes('compensates')) return;
+    // One undo per step: asking again shows the one already there instead of stacking another.
+    const twin = state.document.edges.find(
+      (e) => e.source === step.source && e.target === step.target && e.semantic === 'compensates',
+    );
+    if (twin) {
+      state.setSelection({ nodes: [], edges: [twin.id] });
+      return;
+    }
+    if (!roomFor(0, 1)) return;
+    // The one second arrow allowed between a pair (see `connect()`'s own twin rule): a saga's step
+    // and its compensation are two different sentences between the same two services — the Saga
+    // starter ships exactly these twins. Stated explicit, like a starter's, so re-inference never
+    // turns it back into a call.
+    const edge = createEdge({
+      source: source.id,
+      target: target.id,
+      ...inferRelationship(source, target),
+      semantic: 'compensates',
+      semanticsOrigin: 'explicit',
+    });
+    state.apply('Add compensation', (doc) => addEdges(doc, [edge]), { selection: { nodes: [], edges: [edge.id] } });
   },
 
   removeDeadLetterQueue(queueId) {
