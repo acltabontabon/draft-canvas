@@ -26,10 +26,11 @@ describe('dataStoreScale', () => {
 
   it('grows with the box, by the side that has grown least', () => {
     expect(dataStoreScale({ width: 296, height: 176 })).toBe(2);
-    expect(dataStoreScale({ width: 400, height: 290 })).toBeCloseTo(400 / 148);
+    expect(dataStoreScale({ width: 400, height: 290 })).toBeCloseTo(290 / 88);
+    expect(dataStoreScale({ width: 120, height: 114 })).toBeCloseTo(114 / 88);
     // Stretched one way only: the glyph stays.
     expect(dataStoreScale({ width: 400, height: 88 })).toBe(1);
-    expect(dataStoreScale({ width: 148, height: 400 })).toBe(1);
+    expect(dataStoreScale({ width: 90, height: 400 })).toBe(1);
   });
 });
 

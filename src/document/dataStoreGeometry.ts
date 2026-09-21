@@ -16,8 +16,12 @@
  * store already in a saved diagram keeps the box it was created with, and has to keep the glyph
  * that went with it. Tying the scale to the default instead would silently redraw every store in
  * every diagram the moment the default moved.
+ *
+ * The width is what sets how much of its box the glyph fills (54 of 90, not 54 of 148): with the
+ * wider figure a glyph grown to fit its box still left a wide empty frame around it. Height is the
+ * side that limits a wide box, so a store at any aspect wider than ~1 keeps the scale it had.
  */
-const DS_UNIT_WIDTH = 148;
+const DS_UNIT_WIDTH = 90;
 const DS_UNIT_HEIGHT = 88;
 
 /** The glyph's top edge, from the box's top, at its normal size. */
