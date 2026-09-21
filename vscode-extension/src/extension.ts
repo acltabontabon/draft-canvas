@@ -124,6 +124,15 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
     // The background image the app last asked for. It reaches the disk with the file, on save, so an edit
     // that is never saved (or is reverted) leaves nothing behind, like the diagram's own text.
     let pendingBackground: { mime: string; bytes: Buffer } | 'remove' | undefined;
+    /**
+     * The file changed under the app — a revert, an undo in VS Code, a git checkout. The unsaved background
+     * went with the unsaved edits it belonged to: saving next must not write it beside text that no longer
+     * refers to it, and the app, which keeps what it already loaded, asks the disk for anything new.
+     */
+    const loadFromElsewhere = () => {
+      pendingBackground = undefined;
+      load();
+    };
     /** Runs after every edit already on its way. One that fails is reported, and the rest still run. */
     const enqueue = (task: () => Promise<unknown>) => {
       queue = queue.then(task).then(
@@ -156,7 +165,7 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
               }
               // A change from elsewhere that landed while this was applying was skipped by the
               // listener below; catch it now — once no newer edit from the app is still to come.
-              if (waiting === 0 && document.getText() !== appText) load();
+              if (waiting === 0 && document.getText() !== appText) loadFromElsewhere();
             });
             break;
           case 'draft-canvas:save':
@@ -226,17 +235,26 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
         }
       }),
       vscode.workspace.onDidSaveTextDocument((saved) => {
-        // A new diagram's first save is a Save As: the file is a new document that this panel is about to
-        // be replaced by, and it announces the save here first. It's this diagram's when its text is
-        // exactly ours — the text carries the diagram's own id, so no other file can match.
-        const target =
-          saved.uri.toString() === document.uri.toString()
-            ? document
-            : document.isUntitled && saved.uri.path.toLowerCase().endsWith(EXTENSION) && saved.getText() === appText
-              ? saved
-              : undefined;
-        if (!target || !pendingBackground) return;
+        // A Save As — a new diagram's first save, or ⌘⇧S on one already saved — is a new document that
+        // this panel is about to be replaced by, and it announces the save here first. It's this
+        // diagram's when its text is exactly ours: the text carries the diagram's own id, so no other
+        // file can match.
+        const sameFile = saved.uri.toString() === document.uri.toString();
+        const savedAs = !sameFile && saved.uri.path.toLowerCase().endsWith(EXTENSION) && saved.getText() === appText;
+        if (!sameFile && !savedAs) return;
+        const target = sameFile ? document : saved;
         const pending = pendingBackground;
+        if (!pending) {
+          // Nothing new to write — but a copy saved elsewhere takes the background already on disk along.
+          if (savedAs) {
+            const source = document;
+            enqueue(async () => {
+              const image = await readBackground(source).catch(() => undefined);
+              if (image) await writeBackground(target, image);
+            });
+          }
+          return;
+        }
         enqueue(async () => {
           await writeBackground(target, pending);
           // Unless the app changed its mind while that was being written.
@@ -246,7 +264,7 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
       vscode.workspace.onDidChangeTextDocument((event) => {
         // A revert, an undo in VS Code, a git checkout: anything that isn't the app's own edit.
         if (event.document !== document || event.contentChanges.length === 0 || applying > 0) return;
-        if (document.getText() !== appText) load();
+        if (document.getText() !== appText) loadFromElsewhere();
       }),
       // A language change closes and reopens the document, so keep hold of whichever one is open.
       vscode.workspace.onDidOpenTextDocument((opened) => {

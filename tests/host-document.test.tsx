@@ -10,6 +10,12 @@ vi.mock('../src/host/embeddedHost', async (importOriginal) => ({
   embeddedHost: 'vscode',
 }));
 
+// The chords below are written as a Mac user presses them: ⌘ is the command key, Ctrl is not.
+vi.mock('../src/lib/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/lib/platform')>()),
+  isCommandChord: (event: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey'>) => event.metaKey && !event.ctrlKey,
+}));
+
 const { useHostDocument } = await import('../src/host/useHostDocument');
 const { useDocumentSession } = await import('../src/store/useDocumentSession');
 const { useEditorStore } = await import('../src/store/editorStore');
@@ -394,6 +400,15 @@ describe('embedded in a host', () => {
         { type: 'draft-canvas:clipboard-write', text: 'Order', plain: true },
       ]);
       expect(execCommand.mock.calls).toEqual([['delete']]);
+    });
+
+    it('on a Mac, Ctrl+A and Ctrl+Y stay the system\'s own line editing', async () => {
+      await openWith(TEXT);
+      field.setSelectionRange(3, 3);
+      expect(press(field, 'a', { ctrlKey: true }).defaultPrevented).toBe(false);
+      expect(press(field, 'y', { ctrlKey: true }).defaultPrevented).toBe(false);
+      expect([field.selectionStart, field.selectionEnd]).toEqual([3, 3]);
+      expect(execCommand).not.toHaveBeenCalled();
     });
 
     it('a ⌘C with nothing selected writes nothing', async () => {

@@ -1,4 +1,5 @@
 import { isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../lib/isEditableTarget';
+import { isCommandChord } from '../lib/platform';
 import type { HostClipboard } from './hostClipboard';
 
 type TextField = HTMLInputElement | HTMLTextAreaElement;
@@ -25,7 +26,7 @@ function selectedTextOf(field: TextField | null): string {
  * from anything else.
  */
 export function handleTextChord(event: KeyboardEvent, clipboard: HostClipboard): boolean {
-  if (event.isComposing || event.altKey || !(event.metaKey || event.ctrlKey)) return false;
+  if (event.isComposing || event.altKey || !isCommandChord(event)) return false;
   const key = event.key.toLowerCase();
   const editable = isEditableTarget(event.target);
   const field = textFieldOf(event.target);

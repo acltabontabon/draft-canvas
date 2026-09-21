@@ -232,11 +232,22 @@ function EditorScreen({ session }: { session: DocumentSession }) {
    */
   const quickConnectAnchorRect = useMemo(() => {
     if (quickConnect?.asked && quickConnect.source) {
-      // Asked with `]`: stand clear of the shape itself — there is no drop point to centre on.
-      const node = useEditorStore.getState().document.nodes.find((n) => n.id === quickConnect.source);
+      // Asked with `]`: there is no drop point to centre on. Stand clear of the shape and of where
+      // the first row's preview lands beside it — the one the menu opens highlighting — so the menu
+      // never covers the very thing it is previewing.
+      const doc = useEditorStore.getState().document;
+      const node = doc.nodes.find((n) => n.id === quickConnect.source);
       if (!node) return undefined;
-      const topLeft = flowToScreenPosition({ x: node.x, y: node.y });
-      const bottomRight = flowToScreenPosition({ x: node.x + node.width, y: node.y + node.height });
+      const first = quickConnectRows[0];
+      const preview = first ? offerFor(doc, quickConnect, first) : undefined;
+      const rects = [node, ...(preview?.nodes ?? [])];
+      const left = Math.min(...rects.map((r) => r.x));
+      const top = Math.min(...rects.map((r) => r.y));
+      const topLeft = flowToScreenPosition({ x: left, y: top });
+      const bottomRight = flowToScreenPosition({
+        x: Math.max(...rects.map((r) => r.x + r.width)),
+        y: Math.max(...rects.map((r) => r.y + r.height)),
+      });
       return { x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y };
     }
     if (!quickConnect?.center) return undefined;
@@ -246,7 +257,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     return { x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y };
     // Measured once per menu: `quickConnect` identity is the open/close signal.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [quickConnect]);
+  }, [quickConnect, quickConnectRows]);
 
   /** The row under the highlight becomes the ghost on the canvas — a preview, not a creation. */
   const onQuickConnectHighlight = useCallback(

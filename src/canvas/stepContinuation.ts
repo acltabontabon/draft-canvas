@@ -52,7 +52,9 @@ export function stepContinuation(
   if (!pick) {
     const anchor = editor.document.nodes.find((node) => node.id === anchorId);
     if (!anchor || !ANCHOR_TYPES.has(anchor.type)) return false;
-    return { ask: anchorId, note: ambiguityOf(editor.document, anchorId, viewLevel(editor))?.reason };
+    // The reason is only true when there was nothing to suggest — not when a suggestion had no room.
+    const note = candidates.length === 0 ? ambiguityOf(editor.document, anchorId, viewLevel(editor))?.reason : undefined;
+    return { ask: anchorId, note };
   }
   ui.setContinuationCycle({ anchorId, neighborhoodKey: pick.neighborhoodKey, candidateId: pick.id });
   return true;

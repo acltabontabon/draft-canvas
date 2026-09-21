@@ -75,5 +75,5 @@ without one. If it can't load, the tab says *Draft Canvas couldn't be loaded* an
   reload fetches the current app.
 - **A canvas background image is a second file.** When you save, it's written next to the diagram as
   `name.draftcanvas.background.png` (or `.jpg`, `.webp`, `.gif`), not inside it. Keep the two together:
-  renaming the diagram in VS Code moves it along, but moving or copying the diagram anywhere else
-  leaves the background behind, and the diagram then opens without one.
+  renaming the diagram in VS Code moves it along and Save As takes a copy, but moving or copying the
+  diagram anywhere else leaves the background behind, and the diagram then opens without one.

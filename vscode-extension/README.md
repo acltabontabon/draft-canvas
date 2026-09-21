@@ -52,8 +52,8 @@ connection. After that, the app's offline cache usually lets it open without one
   what's inside.
 - **A canvas background image is a second file.** When you save, it's written next to the diagram as
   `name.draftcanvas.background.png` (or `.jpg`, `.webp`, `.gif`), not inside it. Keep the two together:
-  renaming the diagram in VS Code moves it along, but moving or copying the diagram anywhere else
-  leaves the background behind, and the diagram then opens without one.
+  renaming the diagram in VS Code moves it along and Save As takes a copy, but moving or copying the
+  diagram anywhere else leaves the background behind, and the diagram then opens without one.
 - Desktop VS Code only, for now. Not available on vscode.dev.
 
 ## About Draft Canvas

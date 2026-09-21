@@ -1,5 +1,6 @@
 import { continuationsFor, materialize, type Continuation, type FragmentNodeSpec } from '../continuation';
 import { defaultSizeFor } from '../document/factory';
+import { placeNear } from '../document/operations';
 import type { DraftDocument, ViewLevel } from '../document/types';
 import type { ContinuationOffer, QuickConnectState } from '../store/uiStore';
 import { quickConnectPresets, type Preset } from './presets';
@@ -87,7 +88,11 @@ export function offerFor(doc: DraftDocument, state: QuickConnectState, item: Qui
           anchorId: state.source,
           neighborhoodKey: '',
         };
-  // Asked for with `]`: beside the source, like any suggestion — the drop point only as a fallback.
-  const offer = (state.asked ? materialize(doc, continuation) : undefined) ?? materialize(doc, continuation, { at });
+  // Asked for with `]`: beside the source, like any suggestion — and where that finds no room, the
+  // nearest clear spot around it, never a fixed point that may already be taken.
+  const source = state.asked ? doc.nodes.find((node) => node.id === state.source) : undefined;
+  const offer = source
+    ? (materialize(doc, continuation) ?? materialize(doc, continuation, { at: placeNear(doc, source, size) }))
+    : materialize(doc, continuation, { at });
   return offer ? { ...offer, trigger: 'drop' } : undefined;
 }

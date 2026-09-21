@@ -5,6 +5,15 @@
 const isMac =
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
+/**
+ * Whether a chord was made with this platform's own command key and not the other one — ⌘ on a Mac,
+ * Ctrl elsewhere. On a Mac, Ctrl+A and Ctrl+Y in a text field are the system's own line editing
+ * (start of line, yank), not Select All and Redo.
+ */
+export function isCommandChord(event: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey'>): boolean {
+  return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+}
+
 /** Compact form, for inline `<kbd>` chips: "⌘" / "Ctrl". */
 export const MOD_SYMBOL = isMac ? '⌘' : 'Ctrl';
 
