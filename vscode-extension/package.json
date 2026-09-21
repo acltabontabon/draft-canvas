@@ -2,7 +2,7 @@
   "name": "draft-canvas",
   "displayName": "Draft Canvas",
   "description": "Open and edit .draftcanvas diagrams in VS Code.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "acltabontabon",
   "license": "Apache-2.0",
   "pricing": "Free",

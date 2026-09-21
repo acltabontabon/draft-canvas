@@ -10,7 +10,7 @@ It gives you architecture-aware shapes, familiar technical relationships, and sm
 
 [![CI](https://github.com/acltabontabon/draft-canvas/actions/workflows/ci.yml/badge.svg)](https://github.com/acltabontabon/draft-canvas/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Docker Pulls](https://img.shields.io/docker/pulls/acltabontabon/draft-canvas.svg)](https://hub.docker.com/r/acltabontabon/draft-canvas)
+[![Docker Hub](https://img.shields.io/badge/Docker-Hub-2496ED)](https://hub.docker.com/r/acltabontabon/draft-canvas)
 [![VS Code](https://img.shields.io/badge/VS%20Code-Marketplace-007ACC)](https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas)
 [![GitHub Release](https://img.shields.io/github/v/release/acltabontabon/draft-canvas)](https://github.com/acltabontabon/draft-canvas/releases)
 

@@ -4,31 +4,29 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-09-21
+
 ### Added
 
-- Pressing `]` on a shape Draft Canvas has no suggestion for now opens the add-element menu beside
-  it, with a line saying why. Before, nothing happened. A Table, for instance, could be an outbox, a
-  read model or plain business data, and nothing in the diagram says which.
-- A Table that another table feeds, like Bronze → Silver → Gold, offers the pipeline's next stage
-  when you press `]`.
-- A saga coordinator that already compensates one step offers **Compensate …** for the steps it
-  drives but can't undo yet, and adds the `compensates` connector to the step that's already there.
-  A finished saga stays quiet: its last step needs no undo.
+- Pressing `]` on a shape Draft Canvas has no suggestion for, like a Table or a Cache, now opens the
+  add-element menu beside it with a line saying why, instead of doing nothing.
+- A Table another table feeds (Bronze → Silver → Gold) offers the pipeline's next stage on `]`.
+- A saga coordinator offers **Compensate …** on `]` for steps it drives but can't undo yet.
 
 ### Changed
 
 - A System actor is now drawn as a computer, and a Third Party as an office building, so each
   reads for what it is at a glance. Diagrams that already use them pick up the new look.
+- A new Data Store starts narrower and taller, and its cylinder, folder, bucket or card fills more of
+  the box. Stores already in a diagram keep their size.
 
 ### Fixed
 
-- In the VS Code extension, Select All, Copy, Cut, Paste and Undo now work inside text fields (a
-  note, a label, the command palette's search), and selected text in the Learn drawer and dialogs can
-  be copied. VS Code's ⌘P, ⌘⇧P, ⌘W and a few more shortcuts work from the canvas too. These need the
-  matching extension update.
-- In the VS Code extension, a canvas background image is no longer lost when the tab closes. It's
-  saved beside the diagram as `name.draftcanvas.background.png` (or `.jpg`, `.webp`, `.gif`) when you
-  save. This needs the matching extension update too.
+- In VS Code, Select All, Copy, Cut, Paste and Undo work inside text fields, and ⌘P, ⌘⇧P, ⌘W and a
+  few more VS Code shortcuts work from the canvas. Needs extension 0.1.6.
+- In VS Code, a canvas background image is saved beside the diagram
+  (`name.draftcanvas.background.png`) instead of being lost when the tab closes. Needs extension
+  0.1.6.
 
 ## [1.9.2] - 2026-09-20
 
@@ -1261,7 +1259,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.2...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.3...main
+[1.9.3]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.2...v1.9.3
 [1.9.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.8.0...v1.9.0

@@ -21,6 +21,36 @@ export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './se
  */
 export const PRODUCT_RELEASES: ProductRelease[] = [
   {
+    version: '1.9.3',
+    date: '2026-09-21',
+    summary: 'Asking always gets an answer, and System and Third Party look the part.',
+    highlights: [
+      {
+        title: 'No suggestion? Pick one',
+        description:
+          'Pressing ] on a shape Draft Canvas won\'t guess for, like a Table that could be an outbox or a read model, now opens the add-element menu beside it and says why, instead of doing nothing.',
+      },
+      {
+        title: 'Pipelines and sagas continue',
+        description:
+          'A Table fed by another table offers the next stage, and a saga coordinator offers to compensate the steps it can\'t undo yet.',
+      },
+      {
+        title: 'System and Third Party, drawn',
+        description: 'A System actor is now a computer and a Third Party an office building, so each reads for what it is at a glance.',
+      },
+      {
+        title: 'Data Stores fill their box',
+        description: 'A new Data Store starts narrower and taller, and its drawing fills more of the box, so it reads clearly beside a Service.',
+      },
+      {
+        title: 'Better in VS Code',
+        description:
+          'Copy, paste, select all and undo work inside text fields, VS Code\'s own shortcuts reach it from the canvas, and a background image is saved beside the diagram. Needs the latest extension.',
+      },
+    ],
+  },
+  {
     version: '1.9.2',
     date: '2026-09-20',
     summary: 'Data Stores hold their own, and suggestions land somewhere sensible.',

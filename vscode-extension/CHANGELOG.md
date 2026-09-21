@@ -4,14 +4,18 @@ All notable changes to Draft Canvas for VS Code are documented here.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-21
+
 ### Fixed
 
 - Select All, Copy, Cut, Paste and Undo now work inside the canvas's text fields, and selected text
-  in the Learn drawer and dialogs can be copied.
+  in the Learn drawer and dialogs can be copied. On a Mac, Ctrl+A and other Ctrl line-editing keys
+  keep doing what they always do.
 - ⌘P, ⌘⇧P, ⌘W, ⌘⇧T, ⌘⇧F, ⌘J and ⌘, now reach VS Code from the canvas (Ctrl on Windows and Linux).
 - A canvas background image is no longer lost when the tab closes. It's saved beside the diagram as
   `name.draftcanvas.background.png` (or `.jpg`, `.webp`, `.gif`) when you save, follows the diagram
-  when you rename it in VS Code, and comes back when you reopen it.
+  when you rename it in VS Code, is copied along by Save As, and comes back when you reopen it.
+  Reverting the file drops an unsaved background change along with the rest.
 
 ## [0.1.5] - 2026-09-19
 
