@@ -6,17 +6,22 @@ import { isEditableTarget } from '../lib/isEditableTarget';
 import { useUiStore } from '../store/uiStore';
 import type { DocumentSession } from '../store/useDocumentSession';
 import {
+  chordOf,
   embeddedHost,
   HOST_PROTOCOL,
   isHostOrigin,
+  type BackgroundMessage,
   type ClipboardMessage,
   type LoadMessage,
   type ToHostMessage,
 } from './embeddedHost';
 import { hostClipboard, setHostClipboard, type HostClipboard } from './hostClipboard';
+import { base64ToBlob, blobToBase64 } from './hostBackground';
+import { handleTextChord } from './hostTextEditing';
 
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
 const CLIPBOARD_READ_TIMEOUT_MS = 1500;
+const BACKGROUND_READ_TIMEOUT_MS = 3000;
 
 export interface HostDocumentState {
   /** Why the file couldn't be opened, if it couldn't. */
@@ -32,8 +37,9 @@ export interface HostDocumentState {
  * The host sends the file's text; every committed edit goes straight back as the whole serialized
  * document. There's no debounce: the host can remove the frame at any moment (closing its tab never
  * blurs the frame first), so anything not already posted would be lost. ⌘S is forwarded because a
- * key pressed inside a cross-origin frame never reaches the host's own shortcuts. Links to other sites
- * go to the host too, since the frame isn't allowed to open a window.
+ * key pressed inside a cross-origin frame never reaches the host's own shortcuts — and neither do the
+ * others the host lists (⌘P, ⌘W), nor Select All, Copy, Cut, Paste and Undo in a text field, which the
+ * app does itself. Links to other sites go to the host too, since the frame isn't allowed to open a window.
  */
 export function useHostDocument(session: DocumentSession): HostDocumentState {
   const [state, setState] = useState<HostDocumentState>({ error: null, invalidWhileOpen: false });
@@ -66,11 +72,16 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       if (hostOrigin) window.parent.postMessage(message, hostOrigin);
     };
 
+    // What the host said it does for the app (see `LoadMessage`): none of it is used until then.
+    let textEditing = false;
+    let hostKeys = new Set<string>();
+    let hostKeepsBackground = false;
+
     let clipboardReadId = 0;
     const clipboardReads = new Map<number, (text: string | null) => void>();
     const clipboard: HostClipboard = {
-      write: (text) => post({ type: 'draft-canvas:clipboard-write', text }),
-      read: () =>
+      write: (text, plain) => post({ type: 'draft-canvas:clipboard-write', text, ...(plain ? { plain } : {}) }),
+      read: (plain) =>
         new Promise((resolve) => {
           const id = ++clipboardReadId;
           const settle = (text: string | null) => {
@@ -81,8 +92,63 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
           // A paste waits on this; a host that never answers mustn't hold it forever.
           const timeout = window.setTimeout(() => settle(null), CLIPBOARD_READ_TIMEOUT_MS);
           clipboardReads.set(id, settle);
-          post({ type: 'draft-canvas:clipboard-read', id });
+          post({ type: 'draft-canvas:clipboard-read', id, ...(plain ? { plain } : {}) });
         }),
+    };
+
+    let backgroundReadId = 0;
+    const backgroundReads = new Map<number, (image: Partial<BackgroundMessage>) => void>();
+    /** The host's stored image, or null when it has none — or doesn't answer, which mustn't hold the file's opening. */
+    const readBackground = () =>
+      new Promise<Blob | null>((resolve) => {
+        const id = ++backgroundReadId;
+        const settle = (reply: Partial<BackgroundMessage>) => {
+          window.clearTimeout(timeout);
+          backgroundReads.delete(id);
+          try {
+            resolve(typeof reply.data === 'string' && typeof reply.mime === 'string' ? base64ToBlob(reply.data, reply.mime) : null);
+          } catch {
+            resolve(null);
+          }
+        };
+        const timeout = window.setTimeout(() => settle({}), BACKGROUND_READ_TIMEOUT_MS);
+        backgroundReads.set(id, settle);
+        post({ type: 'draft-canvas:background-read', id });
+      });
+
+    /** The file turns on a background the app doesn't hold yet (a fresh tab, memory only): fetch it from the host. */
+    const restoreBackground = async (document: { metadata: { id: string }; settings: { background: { enabled: boolean; imageId?: string } } }) => {
+      const { enabled, imageId } = document.settings.background;
+      if (!hostKeepsBackground || !enabled || !repository) return;
+      const id = document.metadata.id;
+      if (await repository.loadBackgroundImage(id, imageId)) return;
+      const blob = await readBackground();
+      if (!blob) return;
+      try {
+        const bitmap = await createImageBitmap(blob);
+        const { width, height } = bitmap;
+        bitmap.close();
+        await repository.saveBackgroundImage(id, blob, { width, height }, imageId);
+      } catch (error) {
+        // An image that can't be read is the same as none: the canvas shows no background.
+        logDiagnostic(error, { operation: 'host-background-restore' });
+      }
+    };
+
+    // Reports run one after another, so a quick change of mind can't be overtaken by the first.
+    let backgroundReports = Promise.resolve();
+    const reportBackground = (documentId: string, background: { enabled: boolean; imageId?: string }) => {
+      backgroundReports = backgroundReports
+        .then(async () => {
+          if (!repository) return;
+          if (!background.enabled) {
+            post({ type: 'draft-canvas:background-remove' });
+            return;
+          }
+          const image = await repository.loadBackgroundImage(documentId, background.imageId);
+          if (image) post({ type: 'draft-canvas:background-write', mime: image.blob.type || 'image/png', data: await blobToBase64(image.blob) });
+        })
+        .catch((error: unknown) => logDiagnostic(error, { operation: 'host-background-report' }));
     };
 
     const postChange = async () => {
@@ -118,8 +184,16 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
         // Nor does opening a document count as an edit of it.
         if (loading || current.revision === previous.revision) return;
         pending ||= window.setTimeout(() => void sendChange(), 0);
+        // Only the image itself is the host's to keep; how it's drawn (dim, blur) is in the file.
+        const now = current.document.settings.background;
+        const was = previous.document.settings.background;
+        if (hostKeepsBackground && (now.enabled !== was.enabled || now.imageId !== was.imageId)) {
+          reportBackground(current.document.metadata.id, now);
+        }
       });
       await repository.save(document);
+      // Before the canvas is shown, which looks for the image only once.
+      await restoreBackground(document);
       await openDocument(document.metadata.id);
       if (disposed) return;
       opened = true;
@@ -151,15 +225,22 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
 
     const onMessage = (event: MessageEvent) => {
       if (event.source !== window.parent || !isHostOrigin(event.origin)) return;
-      const reply = event.data as Partial<ClipboardMessage> | null;
+      const reply = event.data as (Partial<ClipboardMessage> & Partial<BackgroundMessage>) | null;
       if (reply?.type === 'draft-canvas:clipboard') {
         if (typeof reply.id === 'number') clipboardReads.get(reply.id)?.(typeof reply.text === 'string' ? reply.text : null);
+        return;
+      }
+      if (reply?.type === 'draft-canvas:background') {
+        if (typeof reply.id === 'number') backgroundReads.get(reply.id)?.(reply);
         return;
       }
       const data = event.data as Partial<LoadMessage> | null;
       if (data?.type !== 'draft-canvas:load' || typeof data.text !== 'string') return;
       hostOrigin = event.origin;
       if (data.clipboard === true) setHostClipboard(clipboard);
+      textEditing = data.clipboard === true && data.textEditing === true;
+      hostKeepsBackground = data.background === true;
+      hostKeys = new Set(Array.isArray(data.keys) ? data.keys.filter((chord): chord is string => typeof chord === 'string') : []);
       const seq = typeof data.seq === 'number' ? data.seq : undefined;
       if (data.text === hostText && !queued && !invalid) {
         // Already showing it (the host re-sent what it got from here): only the numbering moves on.
@@ -177,25 +258,41 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       });
     };
 
+    /** Lets go of a field still being typed in and posts every edit still pending, so the host acts on
+     *  exactly what is on screen. Text being typed (a label, an inspector field) only reaches the document
+     *  when its field lets go, so without this a save — or a tab closing — would miss what was just typed. */
+    const flush = async () => {
+      const active = document.activeElement;
+      if (isEditableTarget(active)) {
+        (active as HTMLElement).blur();
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+      if (pending) {
+        window.clearTimeout(pending);
+        await sendChange();
+      } else {
+        await lastChange;
+      }
+    };
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 's') return;
-      event.preventDefault();
-      void (async () => {
-        // Text still being typed (a label, an inspector field) only reaches the document when its
-        // field lets go — so let go first, or the save would miss exactly what was just typed.
-        const active = document.activeElement;
-        if (isEditableTarget(active)) {
-          (active as HTMLElement).blur();
-          await new Promise((resolve) => window.setTimeout(resolve, 0));
-        }
-        if (pending) {
-          window.clearTimeout(pending);
-          await sendChange();
-        } else {
-          await lastChange;
-        }
-        post({ type: 'draft-canvas:save', saveAs: event.shiftKey });
-      })();
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (textEditing && handleTextChord(event, clipboard)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (!event.altKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void flush().then(() => post({ type: 'draft-canvas:save', saveAs: event.shiftKey }));
+        return;
+      }
+      const chord = event.repeat ? null : chordOf(event);
+      if (!chord || !hostKeys.has(chord)) return;
+      // Whether the app used it is only known once every listener has run: its own ⌘K, ⌘E and the rest win.
+      window.setTimeout(() => {
+        if (!event.defaultPrevented) void flush().then(() => post({ type: 'draft-canvas:key', chord }));
+      }, 0);
     };
 
     const onLinkClick = (event: MouseEvent) => {
@@ -231,6 +328,7 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       unsubscribe?.();
       if (hostClipboard() === clipboard) setHostClipboard(null);
       for (const settle of [...clipboardReads.values()]) settle(null);
+      for (const settle of [...backgroundReads.values()]) settle({});
     };
   }, [ready, repository, openDocument]);
 

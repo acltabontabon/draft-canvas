@@ -4,6 +4,16 @@ All notable changes to Draft Canvas are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- In the VS Code extension, Select All, Copy, Cut, Paste and Undo now work inside text fields (a
+  note, a label, the command palette's search), and selected text in the Learn drawer and dialogs can
+  be copied. VS Code's ⌘P, ⌘⇧P, ⌘W and a few more shortcuts work from the canvas too. These need the
+  matching extension update.
+- In the VS Code extension, a canvas background image is no longer lost when the tab closes. It's
+  saved beside the diagram as `name.draftcanvas.background.png` (or `.jpg`, `.webp`, `.gif`) when you
+  save. This needs the matching extension update too.
+
 ## [1.9.2] - 2026-09-20
 
 ### Changed

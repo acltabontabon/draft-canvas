@@ -62,3 +62,13 @@ export function overlayAboveCanvasIsOpen(): boolean {
 export function isImeKeyEvent(event: { isComposing?: boolean; keyCode?: number; nativeEvent?: { isComposing?: boolean } }): boolean {
   return event.isComposing === true || event.nativeEvent?.isComposing === true || event.keyCode === 229;
 }
+
+/** Whether this ⌘C/⌘X/⌘A belongs to the page's own text — reading Learn, or text selected in it —
+ *  rather than to the canvas selection. */
+export function isTextChord(event: KeyboardEvent): boolean {
+  if (isInOwnKeyboardRegion(event.target)) return true;
+  // Clicking plain text (not a control) leaves focus on the page itself.
+  if (event.target !== document.body) return false;
+  const selected = window.getSelection();
+  return Boolean(selected && !selected.isCollapsed && selected.anchorNode?.parentElement?.closest('[data-dc-keyboard-region]'));
+}

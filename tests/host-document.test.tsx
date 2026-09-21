@@ -339,4 +339,247 @@ describe('embedded in a host', () => {
       vi.unstubAllGlobals();
     });
   });
+  describe('text editing and VS Code shortcuts through the host', () => {
+    let execCommand: ReturnType<typeof vi.fn>;
+    let field: HTMLTextAreaElement;
+
+    async function openWith(load: Record<string, unknown>) {
+      const state = mount();
+      await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
+      const file = createDocument('Payments');
+      fromHost({ type: 'draft-canvas:load', text: serializeDocument(file), ...load });
+      await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+    }
+
+    /** A key pressed in `target`, as the frame would see it. */
+    function press(target: EventTarget, key: string, modifiers: KeyboardEventInit = { metaKey: true }) {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...modifiers });
+      act(() => void target.dispatchEvent(event));
+      return event;
+    }
+
+    beforeEach(() => {
+      execCommand = vi.fn(() => true);
+      Object.assign(document, { execCommand });
+      field = document.createElement('textarea');
+      field.value = 'Order service';
+      document.body.append(field);
+      field.focus();
+    });
+
+    afterEach(() => {
+      field.remove();
+      Reflect.deleteProperty(document, 'execCommand');
+    });
+
+    const TEXT = { clipboard: true, textEditing: true };
+
+    it('⌘A selects everything in the field', async () => {
+      await openWith(TEXT);
+      field.setSelectionRange(0, 0);
+      expect(press(field, 'a').defaultPrevented).toBe(true);
+      expect([field.selectionStart, field.selectionEnd]).toEqual([0, 'Order service'.length]);
+    });
+
+    it('⌘C sends the selected text to the host as plain text, and ⌘X also removes it', async () => {
+      await openWith(TEXT);
+      field.setSelectionRange(0, 5);
+
+      expect(press(field, 'c').defaultPrevented).toBe(true);
+      expect(press(field, 'x').defaultPrevented).toBe(true);
+
+      const writes = messages('draft-canvas:clipboard-write').map((entry) => entry.message);
+      expect(writes).toEqual([
+        { type: 'draft-canvas:clipboard-write', text: 'Order', plain: true },
+        { type: 'draft-canvas:clipboard-write', text: 'Order', plain: true },
+      ]);
+      expect(execCommand.mock.calls).toEqual([['delete']]);
+    });
+
+    it('a ⌘C with nothing selected writes nothing', async () => {
+      await openWith(TEXT);
+      field.setSelectionRange(3, 3);
+      press(field, 'c');
+      expect(messages('draft-canvas:clipboard-write')).toHaveLength(0);
+    });
+
+    it('⌘V inserts what the host answers a plain read with', async () => {
+      await openWith(TEXT);
+      expect(press(field, 'v').defaultPrevented).toBe(true);
+
+      const read = messages('draft-canvas:clipboard-read')[0]!.message as unknown as { id: number; plain?: boolean };
+      expect(read.plain).toBe(true);
+      fromHost({ type: 'draft-canvas:clipboard', id: read.id, text: 'pasted words' });
+
+      await waitFor(() => expect(execCommand).toHaveBeenCalledWith('insertText', false, 'pasted words'));
+    });
+
+    it('⌘Z and ⌘⇧Z undo and redo inside the field', async () => {
+      await openWith(TEXT);
+      press(field, 'z');
+      press(field, 'z', { metaKey: true, shiftKey: true });
+      expect(execCommand.mock.calls).toEqual([['undo'], ['redo']]);
+    });
+
+    it('a password field is never copied from', async () => {
+      await openWith(TEXT);
+      const secret = Object.assign(document.createElement('input'), { type: 'password', value: 'hunter2' });
+      document.body.append(secret);
+      secret.focus();
+      secret.select();
+      press(secret, 'c');
+      secret.remove();
+      expect(messages('draft-canvas:clipboard-write')).toHaveLength(0);
+    });
+
+    it('a host that never offered text editing leaves the keys alone', async () => {
+      await openWith({ clipboard: true });
+      field.select();
+      for (const key of ['a', 'c', 'x', 'v', 'z']) expect(press(field, key).defaultPrevented).toBe(false);
+      expect(messages('draft-canvas:clipboard-write')).toHaveLength(0);
+      expect(messages('draft-canvas:clipboard-read')).toHaveLength(0);
+      expect(execCommand).not.toHaveBeenCalled();
+    });
+
+    it("posts a chord the host listed and the app didn't use, and nothing else", async () => {
+      await openWith({ keys: ['cmd+p', 'cmd+w', 'cmd+k'] });
+
+      press(window, 'p');
+      await waitFor(() => expect(messages('draft-canvas:key')).toHaveLength(1));
+      expect(messages('draft-canvas:key')[0]!.message).toEqual({ type: 'draft-canvas:key', chord: 'cmd+p' });
+      expect(messages('draft-canvas:key')[0]!.origin).toBe(HOST_ORIGIN);
+
+      // Not listed, or alt held, or an auto-repeat: never sent.
+      press(window, 'r');
+      press(window, 'w', { metaKey: true, altKey: true });
+      press(window, 'p', { metaKey: true, repeat: true });
+      // Listed, but the app took it (its own ⌘K): the host doesn't also get it.
+      const takeIt = (event: KeyboardEvent) => event.preventDefault();
+      window.addEventListener('keydown', takeIt);
+      press(window, 'k');
+      window.removeEventListener('keydown', takeIt);
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(messages('draft-canvas:key')).toHaveLength(1);
+    });
+
+    it('lets go of a field before ⌘W, so the tab closing keeps what was just typed', async () => {
+      await openWith({ keys: ['cmd+w'] });
+      field.addEventListener('blur', () => useEditorStore.getState().rename('Typed'));
+
+      press(field, 'w');
+      await waitFor(() => expect(messages('draft-canvas:key')).toHaveLength(1));
+
+      const types = posted.map((entry) => entry.message.type);
+      expect(types.lastIndexOf('draft-canvas:change')).toBeLessThan(types.indexOf('draft-canvas:key'));
+      expect(JSON.parse(messages('draft-canvas:change').at(-1)!.message.text!).metadata.title).toBe('Typed');
+    });
+
+    it('a host that listed no keys is never sent one', async () => {
+      await openWith({ clipboard: true });
+      press(window, 'p');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(messages('draft-canvas:key')).toHaveLength(0);
+    });
+  });
+  describe('the background image through the host', () => {
+    const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+    const PNG_BASE64 = btoa(String.fromCharCode(...PNG));
+
+    beforeEach(() => {
+      // jsdom decodes no images; a bitmap with the size the canvas needs is all the app reads from one.
+      vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 640, height: 360, close: vi.fn() })));
+    });
+    afterEach(() => void vi.unstubAllGlobals());
+
+    const withBackground = (imageId: string) => {
+      const file = createDocument('Payments');
+      file.settings.background = { ...file.settings.background, enabled: true, imageId };
+      return file;
+    };
+    const repository = async () => (await import('../src/storage')).getRepository();
+    const readsOf = () => messages('draft-canvas:background-read').map((entry) => entry.message as unknown as { id: number });
+
+    async function openFile(file: ReturnType<typeof createDocument>, load: Record<string, unknown>) {
+      const state = mount();
+      await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
+      fromHost({ type: 'draft-canvas:load', text: serializeDocument(file), ...load });
+      return state;
+    }
+
+    it('asks the host for the image a file turns on, and has it stored before the canvas opens', async () => {
+      const file = withBackground('bg-1');
+      const state = await openFile(file, { background: true });
+
+      await waitFor(() => expect(readsOf()).toHaveLength(1));
+      // The canvas isn't shown until the host has answered.
+      expect(state().openId).toBeNull();
+      fromHost({ type: 'draft-canvas:background', id: readsOf()[0]!.id, mime: 'image/png', data: PNG_BASE64 });
+
+      await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+      const stored = await (await repository()).loadBackgroundImage(file.metadata.id, 'bg-1');
+      expect(stored).toMatchObject({ width: 640, height: 360 });
+      expect(stored!.blob.type).toBe('image/png');
+      expect(stored!.blob.size).toBe(PNG.length);
+    });
+
+    it('opens the file all the same when the host has no image, or an unreadable one', async () => {
+      const file = withBackground('bg-2');
+      const state = await openFile(file, { background: true });
+      await waitFor(() => expect(readsOf()).toHaveLength(1));
+      fromHost({ type: 'draft-canvas:background', id: readsOf()[0]!.id });
+
+      await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+      expect(await (await repository()).loadBackgroundImage(file.metadata.id, 'bg-2')).toBeNull();
+      expect(state().error).toBeNull();
+    });
+
+    it('does not ask for an image the file has switched off', async () => {
+      const file = createDocument('Payments');
+      const state = await openFile(file, { background: true });
+      await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+      expect(readsOf()).toHaveLength(0);
+    });
+
+    it("reports the image when one is chosen, again when it's replaced, and when it's removed", async () => {
+      const file = createDocument('Payments');
+      const state = await openFile(file, { background: true });
+      await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+      const repo = await repository();
+      const store = useEditorStore.getState();
+
+      await repo.saveBackgroundImage(file.metadata.id, new Blob([PNG], { type: 'image/png' }), { width: 640, height: 360 }, 'bg-a');
+      act(() => store.updateSettings({ background: { ...store.document.settings.background, enabled: true, imageId: 'bg-a' } }));
+      await waitFor(() => expect(messages('draft-canvas:background-write')).toHaveLength(1));
+      expect(messages('draft-canvas:background-write')[0]!.message).toEqual({
+        type: 'draft-canvas:background-write',
+        mime: 'image/png',
+        data: PNG_BASE64,
+      });
+      expect(messages('draft-canvas:background-write')[0]!.origin).toBe(HOST_ORIGIN);
+
+      // How it is drawn is the file's business, not the host's.
+      act(() => useEditorStore.getState().updateSettings({ background: { ...useEditorStore.getState().document.settings.background, dim: 0.9 } }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(messages('draft-canvas:background-write')).toHaveLength(1);
+      expect(messages('draft-canvas:background-remove')).toHaveLength(0);
+
+      act(() => useEditorStore.getState().updateSettings({ background: { ...useEditorStore.getState().document.settings.background, enabled: false } }));
+      await waitFor(() => expect(messages('draft-canvas:background-remove')).toHaveLength(1));
+    });
+
+    it('a host that never offered to keep the image is neither asked nor told anything about it', async () => {
+      const file = withBackground('bg-3');
+      const state = await openFile(file, { clipboard: true });
+      await waitFor(() => expect(state().openId).toBe(file.metadata.id));
+      const repo = await repository();
+      await repo.saveBackgroundImage(file.metadata.id, new Blob([PNG], { type: 'image/png' }), { width: 640, height: 360 }, 'bg-b');
+      act(() => useEditorStore.getState().updateSettings({ background: { ...useEditorStore.getState().document.settings.background, imageId: 'bg-b' } }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(messages('draft-canvas:background-read')).toHaveLength(0);
+      expect(messages('draft-canvas:background-write')).toHaveLength(0);
+      expect(messages('draft-canvas:background-remove')).toHaveLength(0);
+    });
+  });
 });

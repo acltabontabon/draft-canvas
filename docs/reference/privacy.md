@@ -143,6 +143,13 @@ That message goes from one frame to another inside VS Code's window, never over 
 only accepts a file from, and only sends one to, a parent frame whose origin is a VS Code webview
 (`vscode-webview://`). The one message it sends to any parent is a data-free "ready".
 
+A few more messages travel the same way, only once the host has said it takes them. Copy and Paste
+hand text to, and ask for text from, VS Code's clipboard, because a key pressed in the frame never
+becomes VS Code's own Copy or Paste; the app asks for the clipboard only when you paste. A chord such
+as ⌘P is named to VS Code so it can run its own command. A canvas background image is sent as bytes
+for the extension to save beside the file, and asked for again when the file is opened. None of it
+leaves VS Code's window.
+
 ## What this does not protect you from
 
 Being honest about the limits:

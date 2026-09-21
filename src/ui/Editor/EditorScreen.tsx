@@ -21,7 +21,7 @@ import { defaultSizeFor } from '../../document/factory';
 import { DEFAULTS } from '../../document/limits';
 import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
-import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion } from '../../lib/isEditableTarget';
+import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../../lib/isEditableTarget';
 import { centerOf } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
@@ -70,16 +70,6 @@ function modalIsOpen(): boolean {
  *  ⌘ chords ("press ⌘K"), so those keep working over it; everything else stands down as for any modal. */
 function dialogIsOpen(): boolean {
   return document.querySelector('[aria-modal="true"]:not(.dc-learn)') !== null;
-}
-
-/** Whether this ⌘C/⌘X/⌘A belongs to the page's own text — reading Learn, or text selected in it —
- *  rather than to the canvas selection. */
-function isTextChord(event: KeyboardEvent): boolean {
-  if (isInOwnKeyboardRegion(event.target)) return true;
-  // Clicking plain text (not a control) leaves focus on the page itself.
-  if (event.target !== document.body) return false;
-  const selected = window.getSelection();
-  return Boolean(selected && !selected.isCollapsed && selected.anchorNode?.parentElement?.closest('[data-dc-keyboard-region]'));
 }
 
 /** Whether keyboard focus is on the canvas itself (or nowhere in particular) rather than on a

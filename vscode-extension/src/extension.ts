@@ -10,6 +10,31 @@ const EXTERNAL_SCHEMES = new Set(['http', 'https', 'mailto']);
 const READY_TIMEOUT_MS = 15_000;
 /** The app's own ceiling for a diagram file; copied shapes are a diagram too. */
 const MAX_CLIPBOARD_BYTES = 24 * 1024 * 1024;
+/** Text copied from, or pasted into, a field in the app: a note or a label, never a file. */
+const MAX_PLAIN_CLIPBOARD_CHARS = 1_000_000;
+/** The canvas background images the app takes, by the extension its sidecar file gets. */
+const BACKGROUND_EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+const BACKGROUND_MIMES = Object.fromEntries(Object.entries(BACKGROUND_EXTENSIONS).map(([mime, extension]) => [extension, mime]));
+/** The app downscales to 4096 px on a side; anything past this isn't one of its images. */
+const MAX_BACKGROUND_BYTES = 16 * 1024 * 1024;
+
+/**
+ * Chords pressed in the app's frame that run a VS Code command. A key pressed in the frame never
+ * reaches VS Code's keybindings, so the app is told these (`keys` on load) and posts the ones it
+ * doesn't use itself. VS Code's default bindings, not the user's own. Named as the app names them:
+ * `cmd` on macOS and `ctrl` elsewhere, then `shift`, then the key.
+ */
+const KEY_COMMANDS: Record<string, string> = {
+  p: 'workbench.action.quickOpen',
+  'shift+p': 'workbench.action.showCommands',
+  w: 'workbench.action.closeActiveEditor',
+  'shift+t': 'workbench.action.reopenClosedEditor',
+  'shift+f': 'workbench.action.findInFiles',
+  j: 'workbench.action.togglePanel',
+  ',': 'workbench.action.openSettings',
+};
+const MOD = process.platform === 'darwin' ? 'cmd' : 'ctrl';
+const HOST_KEYS = Object.fromEntries(Object.entries(KEY_COMMANDS).map(([chord, command]) => [`${MOD}+${chord}`, command]));
 
 export function activate(context: vscode.ExtensionContext): void {
   // Lets the Extension Development Host point at a local build (e.g. `vite preview`) before a web
@@ -20,6 +45,11 @@ export function activate(context: vscode.ExtensionContext): void {
       : APP_URL;
 
   context.subscriptions.push(
+    // A diagram renamed in VS Code takes its background image with it. Best effort: a rename made
+    // outside VS Code (Finder, git) can't be followed.
+    vscode.workspace.onDidRenameFiles((event) => {
+      for (const { oldUri, newUri } of event.files) void moveBackground(oldUri, newUri);
+    }),
     vscode.window.registerCustomEditorProvider(VIEW_TYPE, new DraftCanvasEditor(context, appUrl), {
       // The app's state (undo history, selection, an open dialog) lives inside a cross-origin frame
       // that setState can't reach, so a hidden tab keeps its frame instead of reloading the app.
@@ -78,9 +108,22 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
       loadSeq += 1;
       const title = document.uri.path.split('/').pop()?.replace(/\.draftcanvas$/i, '');
       // `clipboard`: keys pressed in the app's frame never reach VS Code's Copy/Paste, and the frame
-      // is refused the Clipboard API, so the app copies and pastes through here instead.
-      void panel.webview.postMessage({ type: 'draft-canvas:load', text: appText, title, seq: loadSeq, clipboard: true });
+      // is refused the Clipboard API, so the app copies and pastes through here instead. `textEditing`
+      // and `keys` are the same story for a text field's Edit shortcuts and for VS Code's own.
+      void panel.webview.postMessage({
+        type: 'draft-canvas:load',
+        text: appText,
+        title,
+        seq: loadSeq,
+        clipboard: true,
+        textEditing: true,
+        keys: Object.keys(HOST_KEYS),
+        background: true,
+      });
     };
+    // The background image the app last asked for. It reaches the disk with the file, on save, so an edit
+    // that is never saved (or is reverted) leaves nothing behind, like the diagram's own text.
+    let pendingBackground: { mime: string; bytes: Buffer } | 'remove' | undefined;
     /** Runs after every edit already on its way. One that fails is reported, and the rest still run. */
     const enqueue = (task: () => Promise<unknown>) => {
       queue = queue.then(task).then(
@@ -129,23 +172,76 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
             if (typeof message.url === 'string') openExternal(message.url);
             break;
           case 'draft-canvas:clipboard-write':
-            if (typeof message.text === 'string' && isCopiedShapes(message.text)) {
+            if (typeof message.text === 'string' && isClipboardText(message.text, message.plain === true)) {
               void vscode.env.clipboard.writeText(message.text);
             }
             break;
           case 'draft-canvas:clipboard-read': {
             const id = message.id;
             if (typeof id !== 'number') break;
+            const plain = message.plain === true;
             void Promise.resolve(vscode.env.clipboard.readText()).then(
-              (text) => panel.webview.postMessage({ type: 'draft-canvas:clipboard', id, text: isCopiedShapes(text) ? text : '' }),
+              (text) => panel.webview.postMessage({ type: 'draft-canvas:clipboard', id, text: isClipboardText(text, plain) ? text : '' }),
               () => panel.webview.postMessage({ type: 'draft-canvas:clipboard', id, text: '' }),
             );
+            break;
+          }
+          case 'draft-canvas:key': {
+            // Only from the tab being looked at, and only for a chord the app was told about.
+            const command = typeof message.chord === 'string' ? HOST_KEYS[message.chord] : undefined;
+            if (command && panel.active) void vscode.commands.executeCommand(command);
+            break;
+          }
+          case 'draft-canvas:background-write': {
+            const { mime, data } = message;
+            if (typeof mime !== 'string' || typeof data !== 'string' || !(mime in BACKGROUND_EXTENSIONS)) break;
+            // base64 is a third longer than the bytes it holds.
+            if (data.length > (MAX_BACKGROUND_BYTES * 4) / 3 + 4) break;
+            pendingBackground = { mime, bytes: Buffer.from(data, 'base64') };
+            break;
+          }
+          case 'draft-canvas:background-remove':
+            pendingBackground = 'remove';
+            break;
+          case 'draft-canvas:background-read': {
+            const id = message.id;
+            if (typeof id !== 'number') break;
+            const reply = (image?: { mime: string; bytes: Uint8Array }) =>
+              panel.webview.postMessage({
+                type: 'draft-canvas:background',
+                id,
+                ...(image ? { mime: image.mime, data: Buffer.from(image.bytes).toString('base64') } : {}),
+              });
+            // What the app itself last chose wins over the disk, which is behind it until the next save.
+            if (pendingBackground) {
+              void reply(pendingBackground === 'remove' ? undefined : pendingBackground);
+              break;
+            }
+            void readBackground(document).then(reply, () => reply());
             break;
           }
           case 'openInBrowser':
             void vscode.env.openExternal(vscode.Uri.parse(APP_URL));
             break;
         }
+      }),
+      vscode.workspace.onDidSaveTextDocument((saved) => {
+        // A new diagram's first save is a Save As: the file is a new document that this panel is about to
+        // be replaced by, and it announces the save here first. It's this diagram's when its text is
+        // exactly ours — the text carries the diagram's own id, so no other file can match.
+        const target =
+          saved.uri.toString() === document.uri.toString()
+            ? document
+            : document.isUntitled && saved.uri.path.toLowerCase().endsWith(EXTENSION) && saved.getText() === appText
+              ? saved
+              : undefined;
+        if (!target || !pendingBackground) return;
+        const pending = pendingBackground;
+        enqueue(async () => {
+          await writeBackground(target, pending);
+          // Unless the app changed its mind while that was being written.
+          if (pendingBackground === pending) pendingBackground = undefined;
+        });
       }),
       vscode.workspace.onDidChangeTextDocument((event) => {
         // A revert, an undo in VS Code, a git checkout: anything that isn't the app's own edit.
@@ -164,6 +260,52 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
     if (document.isUntitled && document.languageId !== LANGUAGE_ID) {
       void vscode.languages.setTextDocumentLanguage(document, LANGUAGE_ID);
     }
+  }
+}
+
+/** The files beside a diagram that hold its background image: `<name>.draftcanvas.background.<ext>`. */
+async function backgroundFiles(diagram: vscode.Uri): Promise<Array<{ uri: vscode.Uri; extension: string }>> {
+  const folder = vscode.Uri.joinPath(diagram, '..');
+  const prefix = `${diagram.path.split('/').pop()}.background.`;
+  const entries = await vscode.workspace.fs.readDirectory(folder);
+  return entries
+    .filter(([name, type]) => type === vscode.FileType.File && name.startsWith(prefix) && name.slice(prefix.length).toLowerCase() in BACKGROUND_MIMES)
+    .map(([name]) => ({ uri: vscode.Uri.joinPath(folder, name), extension: name.slice(prefix.length).toLowerCase() }));
+}
+
+async function readBackground(document: vscode.TextDocument): Promise<{ mime: string; bytes: Uint8Array } | undefined> {
+  if (document.isUntitled) return undefined;
+  const [file] = await backgroundFiles(document.uri).catch(() => []);
+  if (!file) return undefined;
+  const bytes = await vscode.workspace.fs.readFile(file.uri);
+  return bytes.length <= MAX_BACKGROUND_BYTES ? { mime: BACKGROUND_MIMES[file.extension]!, bytes } : undefined;
+}
+
+/** Puts the app's background image beside the diagram — replacing an earlier one whatever its type — or removes it. */
+async function writeBackground(document: vscode.TextDocument, image: { mime: string; bytes: Uint8Array } | 'remove'): Promise<void> {
+  if (document.isUntitled) return;
+  try {
+    const wanted = image === 'remove' ? undefined : BACKGROUND_EXTENSIONS[image.mime];
+    for (const file of await backgroundFiles(document.uri).catch(() => [])) {
+      if (file.extension !== wanted) await vscode.workspace.fs.delete(file.uri);
+    }
+    if (image !== 'remove' && wanted) {
+      await vscode.workspace.fs.writeFile(document.uri.with({ path: `${document.uri.path}.background.${wanted}` }), image.bytes);
+    }
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Draft Canvas could not save the background image beside the diagram. ${error instanceof Error ? error.message : ''}`.trim());
+  }
+}
+
+/** A renamed diagram's background image goes with it. */
+async function moveBackground(from: vscode.Uri, to: vscode.Uri): Promise<void> {
+  if (!from.path.toLowerCase().endsWith(EXTENSION) || !to.path.toLowerCase().endsWith(EXTENSION)) return;
+  try {
+    for (const file of await backgroundFiles(from)) {
+      await vscode.workspace.fs.rename(file.uri, to.with({ path: `${to.path}.background.${file.extension}` }), { overwrite: true });
+    }
+  } catch {
+    // Nothing beside it, or not ours to move: the diagram simply opens without its background.
   }
 }
 
@@ -188,9 +330,15 @@ function openExternal(url: string): void {
 }
 
 /**
- * Only shapes copied in Draft Canvas cross between the clipboard and the app. The app is a website,
- * and nothing else on the clipboard (a password, a token) is its business.
+ * What may cross between the clipboard and the app. The app is a website, and by default only shapes
+ * copied in Draft Canvas do: nothing else on the clipboard (a password, a token) is its business. A
+ * `plain` request is the app's text fields (Copy and Paste inside a note, say), which is any text —
+ * asked for by a key pressed there, which the extension has no way to check.
  */
+function isClipboardText(text: string, plain: boolean): boolean {
+  return plain ? text.length <= MAX_PLAIN_CLIPBOARD_CHARS : isCopiedShapes(text);
+}
+
 function isCopiedShapes(text: string): boolean {
   if (text.length > MAX_CLIPBOARD_BYTES || !text.trimStart().startsWith('{')) return false;
   try {
@@ -259,8 +407,12 @@ function html(appUrl: string): string {
     'draft-canvas:open-external',
     'draft-canvas:clipboard-write',
     'draft-canvas:clipboard-read',
+    'draft-canvas:key',
+    'draft-canvas:background-write',
+    'draft-canvas:background-remove',
+    'draft-canvas:background-read',
   ];
-  const toApp = ['draft-canvas:load', 'draft-canvas:clipboard'];
+  const toApp = ['draft-canvas:load', 'draft-canvas:clipboard', 'draft-canvas:background'];
   let timer;
 
   // A cross-origin frame fires "load" for an error page too, so only the app saying so counts.

@@ -46,13 +46,16 @@ holds the whole picture from overview to detail.
 
 ## Copy and paste
 
-Copy, cut and paste work between diagrams. Only Draft Canvas
-shapes are passed to and from the system clipboard; anything else you copy is left alone.
+Copy, cut and paste work between diagrams, and inside the canvas's text fields (a note, a label, a
+search box), along with Select All and Undo there. Shapes and text both go through VS Code's
+clipboard. The app asks for the clipboard's text only when you paste into a text field, and never
+sends it anywhere.
 
 ## What the extension does and doesn't do
 
-It doesn't scan your workspace, read other files, collect telemetry, or send your diagram anywhere.
-The file goes from VS Code to the app inside the editor tab and back. The app itself makes no network
+It doesn't scan your workspace, read your source code, collect telemetry, or send your diagram
+anywhere. The only files it touches are the diagram you open and, if the canvas has a background
+image, the image saved beside it. The file goes from VS Code to the app inside the editor tab and back. The app itself makes no network
 requests with your diagram (see [Privacy](../reference/privacy.md#embedded-in-vs-code)).
 
 The extension doesn't bundle the app. It loads it from `https://acltabontabon.com/draft-canvas/`, so
@@ -62,10 +65,15 @@ without one. If it can't load, the tab says *Draft Canvas couldn't be loaded* an
 
 ## Known limits
 
-- **VS Code shortcuts don't work while the canvas has focus.** Keys pressed in the canvas go to
-  Draft Canvas, so `⌘P`, `⌘⇧P` and `⌘W` do nothing there. `⌘S` is passed through. Click the tab title
-  or anywhere outside the canvas first.
+- **Only some VS Code shortcuts work while the canvas has focus.** Keys pressed in the canvas go to
+  Draft Canvas first. `⌘S`, `⌘P`, `⌘⇧P`, `⌘W`, `⌘⇧T`, `⌘⇧F`, `⌘J` and `⌘,` are passed on to VS Code
+  (`Ctrl` on Windows and Linux), using VS Code's default keys rather than any you've changed. Any
+  other VS Code shortcut does nothing there: click the tab title or anywhere outside the canvas
+  first. Where Draft Canvas has its own shortcut, such as `⌘K`, that one wins.
 - **Diagrams with shapes inside shapes need a current Draft Canvas.** An old copy of the app, such as
   one left in its offline cache, refuses the file and says so instead of dropping what's inside. A
   reload fetches the current app.
-- **Canvas background images aren't saved in the file.** They last until the tab closes.
+- **A canvas background image is a second file.** When you save, it's written next to the diagram as
+  `name.draftcanvas.background.png` (or `.jpg`, `.webp`, `.gif`), not inside it. Keep the two together:
+  renaming the diagram in VS Code moves it along, but moving or copying the diagram anywhere else
+  leaves the background behind, and the diagram then opens without one.

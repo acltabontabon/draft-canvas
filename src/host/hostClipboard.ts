@@ -3,9 +3,10 @@
  * (see `LoadMessage.clipboard`). Set by `useHostDocument` once the host has said so; null otherwise.
  */
 export interface HostClipboard {
-  write: (text: string) => void;
-  /** The clipboard's text, empty when it doesn't hold copied shapes, or null if the host didn't answer. */
-  read: () => Promise<string | null>;
+  /** `plain`: text from a field rather than copied shapes (see `LoadMessage.textEditing`). */
+  write: (text: string, plain?: boolean) => void;
+  /** The clipboard's text, empty when it doesn't hold copied shapes (any text, for a `plain` read), or null if the host didn't answer. */
+  read: (plain?: boolean) => Promise<string | null>;
 }
 
 let current: HostClipboard | null = null;
