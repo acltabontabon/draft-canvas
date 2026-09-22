@@ -31,7 +31,7 @@ export interface ShellHandle {
     recents?: { name: string; text: string; ago: number }[];
     drafts?: { title: string; text: string; ago: number }[];
     /** Project folders on the list, most recent first: each diagram by its path in the folder. */
-    projects?: { name: string; diagrams: { path: string; text: string; ago: number }[] }[];
+    projects?: { name: string; path?: string; diagrams: { path: string; text: string; ago: number }[] }[];
   }): void;
   /** What the next folder dialog picks: a project by name (from `seed`), or `null` to cancel. */
   nextFolder(name: string | null): void;
@@ -124,6 +124,18 @@ export async function installMockShell(page: Page): Promise<void> {
       return found;
     };
     const stemOf = (relPath: string) => relPath.slice(relPath.lastIndexOf('/') + 1).replace(/\.draftcanvas$/, '');
+    /**
+     * The shell grants one handle per file on disk, however it is reached — so a project nested inside
+     * another (both on Home) hands out the same handle for the file they share, as `insert_file` does.
+     * A file already granted keeps its handle and the text it holds (it may have been saved since).
+     */
+    const grantInProject = (projectHandle: string, relPath: string, text: string) => {
+      const displayPath = `${folder(projectHandle).info.displayPath}/${relPath}`;
+      for (const [handle, held] of files) if (held.displayPath === displayPath) return handle;
+      const handle = `h_${(handles += 1)}`;
+      files.set(handle, { name: stemOf(relPath), displayPath, text, version: 1 });
+      return handle;
+    };
     const toFront = (handle: string) => void (listedProjects = [handle, ...listedProjects.filter((known) => known !== handle)]);
 
     // Each handler names the arguments it reads; `never` lets them all live in one table.
@@ -175,8 +187,7 @@ export async function installMockShell(page: Page): Promise<void> {
         const project = folder(args.projectHandle);
         const file = project.files.get(args.relPath);
         if (!file) throw { kind: 'NotFound', message: 'Draft Canvas couldn’t find that file.' };
-        const handle = `h_${(handles += 1)}`;
-        files.set(handle, { name: stemOf(args.relPath), displayPath: `${project.info.displayPath}/${args.relPath}`, text: file.text, version: 1 });
+        const handle = grantInProject(args.projectHandle, args.relPath, file.text);
         granted.set(handle, { project: args.projectHandle, relPath: args.relPath });
         return handle;
       },
@@ -232,8 +243,7 @@ export async function installMockShell(page: Page): Promise<void> {
         const project = folder(args.projectHandle);
         const text = project.files.get(args.relPath)?.text;
         if (text === undefined) throw { kind: 'NotFound', message: 'Draft Canvas couldn’t find that file.' };
-        const handle = `h_${(handles += 1)}`;
-        files.set(handle, { name: stemOf(args.relPath), displayPath: `${project.info.displayPath}/${args.relPath}`, text, version: 1 });
+        const handle = grantInProject(args.projectHandle, args.relPath, text);
         touch(handle, files.get(handle)!);
         return opened(handle, files.get(handle)!);
       },
@@ -324,7 +334,7 @@ export async function installMockShell(page: Page): Promise<void> {
         for (const project of projects) {
           const handle = `p_${(handles += 1)}`;
           folders.set(handle, {
-            info: { handle, name: project.name, displayPath: `~/work/${project.name}` },
+            info: { handle, name: project.name, displayPath: `~/work/${project.path ?? project.name}` },
             files: new Map(project.diagrams.map((diagram) => [diagram.path, { text: diagram.text, mtimeMs: Date.now() - diagram.ago }])),
           });
           listedProjects.push(handle);

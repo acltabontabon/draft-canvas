@@ -353,6 +353,63 @@ test('browses a project’s folders one level at a time, with breadcrumbs back u
   await expect(group.locator('.dc-desk-tile')).toHaveCount(3);
 });
 
+test('opens diagrams from a project’s root and its subfolders, namesakes and nested projects included', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/');
+  const texts = {
+    root: await documentText(page, 'Root canvas', 1),
+    sub: await documentText(page, 'Sub canvas', 2),
+    deep: await documentText(page, 'Deep canvas', 3),
+  };
+  // The layout that crashed: a project and one of its own subfolders both on Home, every folder holding
+  // an "Untitled canvas", one of them a level down and named in spaces and Unicode.
+  await page.addInitScript((texts) => {
+    window.__shell.seed({
+      projects: [
+        { name: 'sub Folder', path: 'Demo Project/sub Folder', diagrams: [{ path: 'Untitled canvas.draftcanvas', text: texts.sub, ago: 1_000 }] },
+        {
+          name: 'Demo Project',
+          diagrams: [
+            { path: 'Untitled canvas.draftcanvas', text: texts.root, ago: 30_000 },
+            { path: 'sub Folder/Untitled canvas.draftcanvas', text: texts.sub, ago: 1_000 },
+            { path: 'sub Folder/設計 é/Untitled canvas.draftcanvas', text: texts.deep, ago: 2_000 },
+          ],
+        },
+      ],
+    });
+  }, texts);
+  await page.reload();
+
+  const steps: { project: string; folders: string[]; path: string; shapes: number }[] = [
+    { project: 'Demo Project', folders: [], path: 'Demo Project/Untitled canvas', shapes: 1 },
+    { project: 'Demo Project', folders: ['sub Folder'], path: 'Demo Project/sub Folder/Untitled canvas', shapes: 2 },
+    { project: 'Demo Project', folders: ['sub Folder', '設計 é'], path: 'Demo Project/sub Folder/設計 é/Untitled canvas', shapes: 3 },
+    { project: 'sub Folder', folders: [], path: 'Demo Project/sub Folder/Untitled canvas', shapes: 2 },
+    { project: 'Demo Project', folders: [], path: 'Demo Project/Untitled canvas', shapes: 1 },
+  ];
+  for (const [index, step] of steps.entries()) {
+    if (index > 0) {
+      // Back to Find a Diagram, standing in the folder the last one was opened from — where it crashed.
+      await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+      await expect(page.getByText('Something went wrong')).toHaveCount(0);
+    } else {
+      await page.locator('.dc-desk-row').getByRole('button', { name: `Show the ${step.project} project` }).click();
+    }
+    const scope = page.getByRole('navigation', { name: 'Show' }).getByRole('button', { name: new RegExp(`^${step.project}`) });
+    if ((await scope.getAttribute('aria-pressed')) !== 'true') await scope.click();
+    const group = page.getByRole('region', { name: step.project });
+    const top = page.getByRole('navigation', { name: 'Folder' }).getByRole('button', { name: step.project, exact: true });
+    if (await top.count()) await top.click();
+    for (const name of step.folders) await group.getByRole('button', { name: `Open the ${name} folder` }).click();
+    await group.getByRole('button', { name: 'Open Untitled canvas', exact: true }).click();
+
+    await expect(status(page)).toContainText(`~/work/${step.path}.draftcanvas`);
+    await expect(page.locator('.react-flow__node')).toHaveCount(step.shapes);
+  }
+  expect(errors).toEqual([]);
+});
+
 test('renames the open file in place, from the File menu', async ({ page }) => {
   await page.goto('/');
   const text = await documentText(page, 'Payments', 1);

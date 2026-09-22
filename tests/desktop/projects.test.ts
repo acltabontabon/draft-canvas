@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument, createNode } from '../../src/document/factory';
 import { serializeDocument } from '../../src/export/project';
-import { createHarness, type Harness } from './harness';
+import { createHarness, documentText, type Harness } from './harness';
 
 let h: Harness;
 
@@ -254,5 +254,90 @@ describe('many projects', () => {
     expect(h.api.projectSaveNew).toHaveBeenCalledWith(search, expect.any(String), expect.anything());
     expect(h.store.getSnapshot().doc.kind).toBe('file');
     expect(projects().find((project) => project.info.handle === search)!.files).toHaveLength(1);
+  });
+});
+
+describe('opening from a project’s folders', () => {
+  const titleLoaded = () => (JSON.parse(h.loads().at(-1)!.text) as { metadata: { title: string } }).metadata.title;
+
+  it('opens the file at its own path, however many folders share its name — spaces, Unicode and all', async () => {
+    const demo = h.addProject('Demo Project', [
+      'Untitled canvas.draftcanvas',
+      'sub Folder/Untitled canvas.draftcanvas',
+      'sub Folder/設計 é/Untitled canvas.draftcanvas',
+    ]);
+    h.listProjects(demo);
+    await h.controller.start();
+    await h.controller.scanProjects([demo]);
+
+    for (const relPath of ['sub Folder/設計 é/Untitled canvas.draftcanvas', 'Untitled canvas.draftcanvas', 'sub Folder/Untitled canvas.draftcanvas']) {
+      await h.controller.openProjectFile(demo, relPath);
+      await h.settle();
+      expect(h.api.projectOpenFile).toHaveBeenLastCalledWith(demo, relPath);
+      // The harness titles each file by its own path, so this is the file asked for, not a namesake.
+      expect(titleLoaded()).toBe(relPath.replace(/\.draftcanvas$/, ''));
+      expect(h.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'Untitled canvas', displayPath: `~/work/Demo Project/${relPath}` });
+    }
+    expect(h.errors).toEqual([]);
+  });
+
+  it('lists what it can from a listing the shell sent with a field missing or misnamed, instead of crashing Find a Diagram', async () => {
+    const demo = h.addProject('Demo Project', ['a.draftcanvas', 'sub/b.draftcanvas']);
+    h.listProjects(demo);
+    await h.controller.start();
+    // What an older shell sent: `truncated_dirs`, not `truncatedDirs` — and a stray entry that isn't a file.
+    h.api.projectScan.mockResolvedValueOnce({
+      files: [{ relPath: 'a.draftcanvas', name: 'a', mtimeMs: 1, size: 2 }, { relPath: 'sub/b.draftcanvas', name: 'b' }, null, { name: 'no path' }],
+      truncated_dirs: [],
+    } as never);
+
+    await h.controller.scanProjects([demo]);
+
+    const [project] = projects();
+    expect(project!.status).toBe('ready');
+    expect(project!.truncatedDirs).toEqual([]);
+    expect(project!.files).toEqual([
+      { relPath: 'a.draftcanvas', name: 'a', mtimeMs: 1, size: 2 },
+      { relPath: 'sub/b.draftcanvas', name: 'b', mtimeMs: 0, size: 0 },
+    ]);
+  });
+
+  it('a file gone since the folder was listed says so, and leaves the open diagram and its edits alone', async () => {
+    const demo = h.addProject('Demo Project', ['open.draftcanvas', 'sub/gone.draftcanvas']);
+    h.listProjects(demo);
+    await h.controller.start();
+    await h.controller.scanProjects([demo]);
+    await h.controller.openProjectFile(demo, 'open.draftcanvas');
+    await h.settle();
+    h.edit(documentText('open, edited'));
+    await h.settle();
+    const before = h.store.getSnapshot().doc;
+
+    h.setProjectFile(demo, 'sub/gone.draftcanvas', null);
+    await h.controller.openProjectFile(demo, 'sub/gone.draftcanvas');
+    await h.settle();
+
+    expect(h.errors).toHaveLength(1);
+    expect(h.errors[0]!.message).toMatch(/couldn’t find/i);
+    expect(h.store.getSnapshot().doc).toEqual(before);
+    expect(h.loads()).toHaveLength(1);
+  });
+
+  it('a file in a subfolder that isn’t a diagram is refused by name, and the open diagram stays', async () => {
+    const demo = h.addProject('Demo Project', ['open.draftcanvas', 'sub/broken.draftcanvas']);
+    h.listProjects(demo);
+    await h.controller.start();
+    await h.controller.scanProjects([demo]);
+    await h.controller.openProjectFile(demo, 'open.draftcanvas');
+    await h.settle();
+
+    h.setProjectFile(demo, 'sub/broken.draftcanvas', '{ "format": "draft-canvas", truncated');
+    await h.controller.openProjectFile(demo, 'sub/broken.draftcanvas');
+    await h.settle();
+
+    expect(h.errors).toHaveLength(1);
+    expect(h.errors[0]!.title).toContain('broken.draftcanvas');
+    expect(h.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'open' });
+    expect(h.loads()).toHaveLength(1);
   });
 });

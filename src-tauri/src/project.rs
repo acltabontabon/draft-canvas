@@ -45,6 +45,7 @@ pub struct ProjectFile {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Scan {
     pub files: Vec<ProjectFile>,
     /// The `rel_path` (project-relative, `/`-separated) of every folder whose contents weren't fully
@@ -158,6 +159,28 @@ mod tests {
 
     fn rels(scan: &Scan) -> Vec<&str> {
         scan.files.iter().map(|f| f.rel_path.as_str()).collect()
+    }
+
+    /// The page reads these names as written here. Without `rename_all` on `Scan`, `truncated_dirs`
+    /// reached it as-is, `truncatedDirs` was undefined, and Find a Diagram crashed the whole app the
+    /// first time it showed a project's folder.
+    #[test]
+    fn serializes_with_the_names_the_page_reads() {
+        let dir = tempdir().unwrap();
+        touch(dir.path(), "sub/a b é.draftcanvas");
+        let json = serde_json::to_value(scan(dir.path(), &Limits::default()).unwrap()).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "files": [{
+                    "relPath": "sub/a b é.draftcanvas",
+                    "name": "a b é",
+                    "mtimeMs": json["files"][0]["mtimeMs"],
+                    "size": 2,
+                }],
+                "truncatedDirs": [],
+            })
+        );
     }
 
     #[test]

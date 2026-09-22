@@ -336,6 +336,12 @@ export function createHarness() {
     listedProjects: () => [...listed],
     /** What the next folder dialog picks (`null` cancels it). */
     pickFolder: (handle: string | null) => void (pickedProject = handle),
+    /** Rewrites (or, with `null`, deletes) one file in a project behind the app's back, as another program would. */
+    setProjectFile: (handle: string, relPath: string, text: string | null) => {
+      const listing = folders.get(handle)!.files;
+      if (text === null) listing.delete(relPath);
+      else listing.set(relPath, { text, mtimeMs: Date.now() });
+    },
     /** The folder goes away (an unplugged drive), or comes back. */
     setMissing: (handle: string, missing: boolean) => void (folders.get(handle)!.missing = missing),
     /** What the shell's updater answers with from now on. */

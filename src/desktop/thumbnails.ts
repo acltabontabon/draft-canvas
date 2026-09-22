@@ -83,7 +83,9 @@ export async function loadThumbnail(key: string, load: () => Promise<string | nu
   const wanters = new Set([wanted]);
   const result = turn(async () => {
     if (![...wanters].some((wants) => wants())) return null;
-    const next = await load().then(thumbnailOf, () => BLANK);
+    // `thumbnailOf` is given text from disk: whatever it makes of it, a tile shows a blank rather than a
+    // read that never settles (and a rejection nothing is waiting for).
+    const next = await load().then(thumbnailOf).catch(() => BLANK);
     remember(key, next);
     return next;
   }).finally(() => reading.delete(key));

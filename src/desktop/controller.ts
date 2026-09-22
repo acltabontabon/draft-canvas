@@ -11,7 +11,9 @@ import {
   type Handle,
   type HostEvent,
   type OpenedDoc,
+  type ProjectFile,
   type ProjectInfo,
+  type ProjectScan,
   type RecoveryEntry,
   type RenamedFile,
   type SavedAs,
@@ -100,6 +102,36 @@ export function titleOf(text: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * A project listing as the page can rely on it, whatever the shell actually sent. Everything that
+ * browses a project reads these arrays directly, so a field that arrives missing or misnamed was a
+ * crash of the whole app rather than one odd folder: Rust once sent `truncated_dirs`, and the first
+ * look inside a project's folders threw on `undefined.includes`. Entries that aren't a diagram's
+ * listing are dropped rather than trusted.
+ */
+export function scanOf(raw: unknown): ProjectScan {
+  const value = (raw ?? {}) as { files?: unknown; truncatedDirs?: unknown };
+  const files = Array.isArray(value.files)
+    ? value.files.filter(
+        (file): file is ProjectFile =>
+          typeof file === 'object' &&
+          file !== null &&
+          typeof (file as ProjectFile).relPath === 'string' &&
+          (file as ProjectFile).relPath !== '' &&
+          typeof (file as ProjectFile).name === 'string',
+      ).map((file) => ({
+        relPath: file.relPath,
+        name: file.name,
+        mtimeMs: Number.isFinite(file.mtimeMs) ? file.mtimeMs : 0,
+        size: Number.isFinite(file.size) ? file.size : 0,
+      }))
+    : [];
+  const truncatedDirs = Array.isArray(value.truncatedDirs)
+    ? value.truncatedDirs.filter((dir): dir is string => typeof dir === 'string')
+    : [];
+  return { files, truncatedDirs };
 }
 
 /** The message a person can act on, for whatever a command rejected with. */
@@ -1010,7 +1042,7 @@ export class DesktopController {
       for (let handle = queue.shift(); handle !== undefined; handle = queue.shift()) {
         let next: Pick<ProjectState, 'status' | 'files' | 'truncatedDirs'>;
         try {
-          const scan = await this.api.projectScan(handle);
+          const scan = scanOf(await this.api.projectScan(handle));
           next = { status: 'ready', files: scan.files, truncatedDirs: scan.truncatedDirs };
         } catch (error) {
           logDiagnostic(error, { operation: 'desktop-project-scan' });
