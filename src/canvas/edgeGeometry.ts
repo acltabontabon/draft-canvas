@@ -8,6 +8,7 @@ import type { useInternalNode } from '@xyflow/react';
 import { anchorBandOf } from '../document/queueGeometry';
 import type { DraftEdge, DraftNode, DraftNodeType } from '../document/types';
 import { routingPlan } from '../edges/bundles';
+import { labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
 import { labelLaneOffset, laneIndex, routeBetween, type Rect } from '../edges/routing';
 import { clamp } from '../lib/math';
@@ -74,6 +75,10 @@ export function edgeLabelPoint(
     obstacles: interactionActive ? undefined : obstaclesForEdge(document.nodes, edge.source, edge.target),
     spine: routingPlan(document.nodes, document.edges).spineFor(edge.id),
   });
+  // A connector sharing one label with others (`edges/labelGroups.ts`) is pointed at where that one
+  // label is drawn, not at the spot its own would have taken.
+  const shared = interactionActive ? undefined : labelGroupPlan(document.nodes, document.edges).groupFor(edge.id);
+  if (shared) return { x: shared.x, y: shared.y };
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, lane);
   return { x: route.labelX + labelNudge.x, y: route.labelY + labelNudge.y };
 }

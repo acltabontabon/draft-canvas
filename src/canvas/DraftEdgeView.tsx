@@ -24,6 +24,7 @@ import {
   captionAnchor,
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
+import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { EdgeLabels } from './EdgeLabels';
@@ -249,6 +250,26 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const crossings = useUiStore(
     useShallow((state) => (routeUnsettled ? NO_CROSSINGS : withoutMoving(planned, state.movingNodeIds))),
   );
+  // Connectors leaving together under one label draw it once, on the run they share — see
+  // `edges/labelGroups.ts`. The group is identity-stable out of a memoized plan, like `spine`.
+  const labelGroup = useEditorStore((state) => labelGroupPlan(state.document.nodes, state.document.edges).groupFor(id));
+  // A numbered step rides inside each connector's own label chip, so while a flow's steps show, a
+  // group whose members carry them keeps separate labels.
+  const groupStepped = useEditorStore((state) => {
+    if (!labelGroup || !state.document.settings.showSequence || !state.selectedFlowId) return false;
+    const flow = findFlow(state.document, state.selectedFlowId);
+    return labelGroup.members.some((member) => stepIndexOf(flow, member) !== undefined);
+  });
+  const sharedLabel = labelGroup && !groupStepped ? labelGroup : undefined;
+  // Which member draws it — a string, so only the group's own members re-render when it moves.
+  const sharedLabelLeader = useEditorStore((state) =>
+    sharedLabel
+      ? labelLeader(sharedLabel, {
+          selectedEdges: state.selection.edges,
+          tierOf: state.flowPlayback.active ? (member) => explainTierForEdge(state, member) : undefined,
+        })
+      : null,
+  );
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
@@ -274,7 +295,17 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // relied on to cascade from a parent. This one boolean covers both the response line (a real SVG
   // child, which *could* use plain `:hover`, but sharing one mechanism avoids two divergent ones)
   // and its portaled label.
-  const [hovering, setHovering] = useState(false);
+  // Which connector that is comes from `canvas/edgePick.ts`, via the store, rather than from this
+  // `<g>`'s own enter/leave: a node's handle ring in front of the line, or a neighbour's overlapping
+  // hit path, used to take the pointer without this connector ever hearing of it.
+  const hovering = useUiStore((state) => state.hoveredEdgeId === id);
+  useEffect(
+    () => () => {
+      // A connector deleted (or undone away) under the pointer must not come back already hovered.
+      if (useUiStore.getState().hoveredEdgeId === id) useUiStore.getState().setHoveredEdge(null);
+    },
+    [id],
+  );
 
   // The live pointer position while this edge's own endpoint is being
   // dragged — local state, not the shared store, so only this one edge
@@ -429,6 +460,19 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const attachmentFlipBelow = attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect);
 
   const hasLabel = Boolean(edge.label);
+  // In a label group, the leader draws the one label at the group's point — along its own live line
+  // while a gesture reroutes it, so the label rides the line instead of waiting for the drop — and
+  // every other member draws none (unless it is the one being edited).
+  const drawsSharedLabel = sharedLabel !== undefined && sharedLabelLeader === id;
+  const hidesOwnLabel = sharedLabel !== undefined && !drawsSharedLabel && !editing;
+  const sharedAt = drawsSharedLabel || (sharedLabel !== undefined && editing)
+    ? routeUnsettled || dragOverride
+      ? (pointAlong(route.d, sharedLabel!.distance) ?? sharedLabel!)
+      : sharedLabel!
+    : null;
+  const chipSide = sharedAt ? sharedLabel!.side : route.labelSide;
+  const chipX = sharedAt ? sharedAt.x : labelX;
+  const chipY = sharedAt ? sharedAt.y : labelY;
   const labelLayout = edge.label ? layoutEdgeLabel(edge.label) : null;
   const responseLayout = edge.response ? layoutEdgeResponse(edge.response) : null;
   const hasStep = showSequence && typeof stepNumber === 'number';
@@ -513,6 +557,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Compact by default; the response's own half of a two-phase presentation pulse also counts as
   // "useful to see right now", same as hover/selection.
   const responseRevealed = selected || hovering || pulseTarget === 'response';
+  // The hover emphasis itself is an editing affordance — "click to select this" — so Present, where
+  // nothing is selected, keeps only the reveals above.
+  const hoverShown = hovering && !selected && mode === 'edit';
 
   return (
     <g
@@ -528,10 +575,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
       data-lens-pulse={lensPulsing ? 'true' : undefined}
-      // No longer gated on this edge having a response: a connector carrying several attachments
-      // rests as dots and names them on approach, and that needs the same hover signal.
-      onPointerEnter={() => setHovering(true)}
-      onPointerLeave={() => setHovering(false)}
+      data-hovered={hoverShown ? 'true' : undefined}
     >
 {/*
         Two sibling paths, same shape `BaseEdge` itself renders internally — but decoupled onto
@@ -542,13 +586,35 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         ancestor `.react-flow__edge`, not to either path itself) and `.react-flow__edge-interaction`'s
         cursor styling keep working unchanged.
       */}
+      {/* A real stroke, fully transparent — not `stroke: none`. `pointer-events: visibleStroke` hits a
+          stroke of none just the same, but Chrome culls hit-testing to the shape's bounding box, and
+          without a stroke that box is the bare geometry: a straight connector's box has no height at
+          all, and a bent one's stops at its outermost run, so half of the band past it was dead. */}
       <path
         className="dc-edge-hit react-flow__edge-interaction"
         d={route.d}
         fill="none"
+        stroke="#000"
         strokeOpacity={0}
-        strokeWidth={18}
+        strokeWidth={12}
       />
+      {/* The reply line is part of the same connector, and as clickable as the request line. */}
+      {responseRoute && (
+        <path
+          className="dc-edge-hit react-flow__edge-interaction"
+          d={responseRoute.d}
+          fill="none"
+          stroke="#000"
+          strokeOpacity={0}
+          strokeWidth={12}
+        />
+      )}
+      {/* Hover, not selection: a faint wash of the selection colour under the line, so "this is the
+          one a click takes" reads without looking selected. Mounted only while hovered — canvas
+          chrome, never exported (`edges/describe.ts` has no counterpart, deliberately). */}
+      {hoverShown && (
+        <path className="dc-edge-hover" d={drawnPath} fill="none" pointerEvents="none" stroke={theme.selection} strokeLinecap="round" />
+      )}
       <path
         className="react-flow__edge-path dc-edge-line"
         d={drawnPath}
@@ -557,7 +623,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         markerEnd={edge.directed && !usesHandDrawnArrow ? markerRef(strokeColor, markerVariantForEdge(edge)) : undefined}
         style={{
           stroke: strokeColor,
-          strokeWidth: isActiveStep ? 2.6 : selected || attachTarget ? 2.4 : lensMember ? 2.0 : 1.6,
+          strokeWidth: isActiveStep ? 2.6 : selected || attachTarget ? 2.4 : lensMember ? 2.0 : hoverShown ? 2.0 : 1.6,
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
@@ -731,6 +797,17 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       })()}
 
       <EdgeLabels>
+        {/* `display: contents` — no box of its own, so every chip below still positions against the
+            label layer. It only tells `edgePick.ts` whose chip the pointer is on. */}
+        <div className="dc-edge-overlay" data-edge-overlay={edge.id}>
+        {/* Where this connector starts and ends, hinted while it is hovered: the same dots selecting it
+            makes draggable, smaller and hollow, and not yet anything to grab. */}
+        {hoverShown && (
+          <>
+            <div className="dc-edge-endpoint-hint" style={{ transform: `translate(-50%, -50%) translate(${route.source.x}px, ${route.source.y}px)` }} />
+            <div className="dc-edge-endpoint-hint" style={{ transform: `translate(-50%, -50%) translate(${route.target.x}px, ${route.target.y}px)` }} />
+          </>
+        )}
         {/*
           Draggable endpoint handles. Rendered here, in React Flow's HTML
           overlay portal — which always paints above the nodes layer — rather
@@ -764,16 +841,18 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           </>
         )}
 
-        {(hasLabel || editing) && (
+        {(hasLabel || editing) && !hidesOwnLabel && (
           <div
             className="dc-edge-label"
             data-editing={editing ? 'true' : undefined}
+            // Named for `edgePick.ts`: a click on a label several connectors share steps through them.
+            data-label-group={drawsSharedLabel ? sharedLabel!.members.join(' ') : undefined}
             data-dimmed={dimmed ? 'true' : undefined}
             data-focus-dimmed={focusDimmed ? 'true' : undefined}
             data-shown={isShownStep ? 'true' : undefined}
             data-active={isActiveStep ? 'true' : undefined}
             data-lens-dimmed={lensDimmed ? 'true' : undefined}
-            style={{ transform: labelChipTransform(route.labelSide, labelX, labelY) }}
+            style={{ transform: labelChipTransform(chipSide, chipX, chipY) }}
             onDoubleClick={() => mode === 'edit' && setEditing(true)}
           >
             {hasStep && (
@@ -805,7 +884,16 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             ) : (
               // The same lines the exporter draws (`layoutEdgeLabel`): wrapped at 220 units, two
               // lines at most, then an ellipsis — with the whole label in the tooltip.
-              <span className="dc-edge-label-text" title={labelLayout?.truncated ? edge.label : undefined}>
+              <span
+                className="dc-edge-label-text"
+                title={
+                  drawsSharedLabel && mode === 'edit'
+                    ? `${labelLayout?.truncated ? `${edge.label} — ` : ''}Shared by ${sharedLabel!.members.length} connectors. Click again for the next one.`
+                    : labelLayout?.truncated
+                      ? edge.label
+                      : undefined
+                }
+              >
                 {labelLayout?.lines.map((line, index) => (
                   <span key={index} className="dc-edge-label-line">
                     {line.text}
@@ -928,6 +1016,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             style={{ position: 'absolute', transform: attachmentRowTransform(labelX, labelY, attachmentFlipBelow) }}
           />
         ) : null}
+        </div>
       </EdgeLabels>
     </g>
   );

@@ -132,8 +132,23 @@ test.describe('element inspector popover', () => {
     });
     await page.waitForSelector('.dc-editor');
 
+    // Opening frames the whole diagram, which makes the boundary small. Zoom back in on its left
+    // edge — as someone working inside it would have — until it runs far off the top and bottom.
+    const boundary = page.locator('.react-flow__node[data-id="b"]');
+    for (let i = 0; i < 40; i += 1) {
+      const frame = (await boundary.boundingBox())!;
+      if (frame.height > 4000) break;
+      await page.mouse.move(Math.max(frame.x, 0) + 8, 400);
+      await page.keyboard.down('Control');
+      await page.mouse.wheel(0, -120);
+      await page.keyboard.up('Control');
+      await page.waitForTimeout(30);
+    }
+    const frame = (await boundary.boundingBox())!;
+    expect(frame.height).toBeGreaterThan(4000);
+
     // The boundary's own left padding, the one part of it in view.
-    await page.mouse.click(108, 400);
+    await page.mouse.click(frame.x + 8, 400);
     const popover = page.locator('.dc-element-inspector');
     await expect(popover).toBeVisible();
 

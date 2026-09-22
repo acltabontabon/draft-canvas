@@ -81,6 +81,10 @@ test('stays workable with 100 nodes and 180 connections', async ({ page }) => {
 
   const node = page.locator('.dc-node').first();
   const before = (await node.boundingBox())!;
+  // Opening frames the whole diagram, so the camera isn't the file's 0.5: scale the drag by the zoom
+  // actually on screen, so it moves n0 as far across the canvas as it always has.
+  const zoom = await page.locator('.react-flow__viewport').evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+  const scale = zoom / 0.5;
 
   await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
   await page.mouse.down();
@@ -89,18 +93,18 @@ test('stays workable with 100 nodes and 180 connections', async ({ page }) => {
   // eligible Code footprint does not end the drag substantially overlapping
   // a neighbour, which would arm and fold it into an attachment instead.
   for (let step = 1; step <= 40; step += 1) {
-    await page.mouse.move(before.x + before.width / 2 + step * 3.5, before.y + before.height / 2 + step * 1.75);
+    await page.mouse.move(before.x + before.width / 2 + step * 3.5 * scale, before.y + before.height / 2 + step * 1.75 * scale);
   }
   await page.mouse.up();
 
   const moved = (await node.boundingBox())!;
-  expect(moved.x).toBeGreaterThan(before.x + 100);
+  expect(moved.x).toBeGreaterThan(before.x + 100 * scale);
   await expect(page.locator('.dc-node')).toHaveCount(100);
   await expect(page.locator('.dc-save')).toContainText('Saved locally');
 
   // One drag remains one undo, even in a document this size.
   await page.keyboard.press('Meta+z');
-  await expect.poll(async () => Math.abs((await node.boundingBox())!.x - before.x)).toBeLessThan(6);
+  await expect.poll(async () => Math.abs((await node.boundingBox())!.x - before.x)).toBeLessThan(6 * Math.max(scale, 1));
 
   // Panning a full canvas keeps everything mounted.
   await page.mouse.move(1200, 700);

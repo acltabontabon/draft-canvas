@@ -186,6 +186,12 @@ export interface UiStore {
    */
   reconnectDragActive: boolean;
   /**
+   * The connector under the pointer, as `canvas/edgePick.ts` decides it — the one a click would
+   * select. Only that connector (and the one it replaces) re-renders as it changes. Transient view
+   * state: never saved, never exported, cleared whenever a gesture or a tool takes the pointer.
+   */
+  hoveredEdgeId: string | null;
+  /**
    * The specific anchor (not just the node) a reconnect drag is currently
    * hovering, so the one matching handle can highlight as "release here" —
    * the hand-rolled counterpart to React Flow's own `.connectingto.valid`,
@@ -400,6 +406,7 @@ export interface UiStore {
   setDragCapsule: (dragCapsule: DragCapsuleState | null) => void;
   setReconnectHoverTarget: (nodeId: string | null) => void;
   setReconnectDragActive: (active: boolean) => void;
+  setHoveredEdge: (id: string | null) => void;
   setArmedAnchor: (anchor: ArmedAnchor | null) => void;
   setOpenAttachmentDetail: (
     target: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null,
@@ -513,6 +520,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   dragCapsule: null,
   reconnectHoverTarget: null,
   reconnectDragActive: false,
+  hoveredEdgeId: null,
   armedAnchor: null,
   openAttachmentDetail: null,
   presentationReveal: null,
@@ -589,6 +597,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (state.reconnectHoverTarget === reconnectHoverTarget ? state : { reconnectHoverTarget })),
   setReconnectDragActive: (reconnectDragActive) =>
     set((state) => (state.reconnectDragActive === reconnectDragActive ? state : { reconnectDragActive })),
+  setHoveredEdge: (hoveredEdgeId) => set((state) => (state.hoveredEdgeId === hoveredEdgeId ? state : { hoveredEdgeId })),
   setArmedAnchor: (next) =>
     set((state) => {
       const current = state.armedAnchor;

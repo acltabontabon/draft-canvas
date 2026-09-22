@@ -344,10 +344,53 @@
   cursor: pointer;
 }
 
-/* The click band around a connector, kept near 16px on screen at any zoom (the 18-unit attribute
-   is the fallback) — clamped in flow units so zoomed-out bands don't swallow a neighbour's clicks. */
+/* The click band around a connector: 12px on screen at every zoom (the 12-unit attribute is the
+   fallback). It used to be capped in flow units so zoomed-out bands wouldn't swallow a neighbour's
+   clicks; they no longer can — where bands overlap the nearest route wins (`canvas/edgePick.ts`),
+   not whichever band is painted on top — so the cap only made far-out connectors hard to hit. */
 .dc-edge-hit {
-  stroke-width: clamp(4px, calc(16px / var(--dc-zoom, 1)), 40px);
+  stroke-width: calc(12px / var(--dc-zoom, 1));
+}
+
+/* Present keeps its own reveals on hover but has nothing to select. */
+.dc-editor[data-mode='present'] .react-flow__edge-interaction {
+  cursor: default;
+}
+
+/* A connector's relationship caption belongs to it: clicking the words selects it, like its label. */
+.dc-edge-caption {
+  pointer-events: visiblePainted;
+  cursor: pointer;
+}
+
+/* A node's connection handle sits over the last stretch of every arrow; while the pointer is really
+   on the connector there (see `edgePick.ts`), the cursor says so instead of offering a new one. */
+.dc-canvas[data-edge-hover] .react-flow__handle {
+  cursor: pointer;
+}
+
+/* The chips of one connector: no box of their own, only a name `edgePick.ts` can find. */
+.dc-edge-overlay {
+  display: contents;
+}
+
+/* Hover: a soft wash of the selection colour beneath a slightly firmer line — "a click takes this
+   one" — and deliberately short of selection's own colour, halo and handles. Fixed on screen. */
+.dc-edge-hover {
+  stroke-width: calc(7px / var(--dc-zoom, 1));
+  stroke-opacity: 0.12;
+}
+
+/* Where a hovered connector starts and ends: the endpoint dot's look, smaller and hollow, and nothing
+   to grab — dragging one takes selecting the connector first, as before. */
+.dc-edge-endpoint-hint {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid color-mix(in srgb, var(--dc-selection) 70%, transparent);
+  border-radius: 50%;
+  background: var(--dc-canvas);
+  pointer-events: none;
 }
 
 /* A connector is the hardest thing on the canvas to drop a note onto — it is a line. While a

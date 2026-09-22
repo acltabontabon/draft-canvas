@@ -57,6 +57,12 @@ export interface EdgeDescribeContext {
    * existed, which is what keeps the many callers that build a bare context unchanged.
    */
   crossings?: readonly Crossing[];
+  /**
+   * Set when this connector shares one label with others leaving alongside it — see
+   * `edges/labelGroups.ts`. The member that `draws` it puts its label chip there; the rest draw
+   * none. Absent means its own label, where its own route puts it.
+   */
+  sharedLabel?: { draws: boolean; x: number; y: number; side: Side };
   /** Intentional Roughness. Defaults to `'clean'` at call sites
    *  that construct this object directly without a preset. */
   preset?: PersonalityPreset;
@@ -440,7 +446,7 @@ export function describeEdge(
     });
   }
 
-  if (edge.label) {
+  if (edge.label && ctx.sharedLabel?.draws !== false) {
     const layout = layoutEdgeLabel(edge.label, ctx.measurer);
 
     // A numbered connector carries its step inside the label chip. Drawing the
@@ -448,7 +454,8 @@ export function describeEdge(
     const stepWidth = hasStep ? BADGE_RADIUS * 2 + LABEL_GAP : 0;
     const w = layout.width + stepWidth + LABEL_PADDING_X * 2;
     const h = Math.max(layout.height, hasStep ? BADGE_RADIUS * 2 : 0) + LABEL_PADDING_Y * 2;
-    const { left, top } = labelChipRect(route.labelSide, labelX, labelY, w, h);
+    const chip = ctx.sharedLabel ?? { side: route.labelSide, x: labelX, y: labelY };
+    const { left, top } = labelChipRect(chip.side, chip.x, chip.y, w, h);
     const centerY = top + h / 2;
 
     overlay.push({

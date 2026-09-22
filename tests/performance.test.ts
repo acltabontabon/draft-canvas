@@ -22,6 +22,7 @@ import { projectNodes, projectEdges } from '../src/canvas/projection';
 import { laneIndex, rectOf, routeEdge } from '../src/edges/routing';
 import { routingPlan } from '../src/edges/bundles';
 import { crossingPlan } from '../src/edges/crossings';
+import { labelGroupPlan } from '../src/edges/labelGroups';
 import { embed, totals, viewOf } from '../src/depth/tree';
 import type { DraftDocument } from '../src/document/types';
 import { ARCHITECTURE_STARTERS } from '../src/starters';
@@ -409,6 +410,34 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
 
   it('reuses the crossing plan for an unchanged (nodes, edges) pair', () => {
     expect(crossingPlan(doc.nodes, doc.edges)).toBe(crossingPlan(doc.nodes, doc.edges));
+  });
+
+  /**
+   * Shared labels (`edges/labelGroups.ts`) route only the connectors that could share one, and look
+   * around each shared run rather than at the whole diagram. The worst case is the one it exists for,
+   * repeated: 150 shapes each fanning out to six targets under one label, 900 candidate connectors.
+   */
+  it('works out every shared label within budget, even when every fan-out is a candidate', () => {
+    const nodes = [];
+    const edges = [];
+    for (let hub = 0; hub < 150; hub += 1) {
+      const x = (hub % 10) * 1600;
+      const y = Math.floor(hub / 10) * 1400;
+      nodes.push(createNode({ id: `hub${hub}`, type: 'service', x, y: y + 560, width: 160, height: 80 }));
+      for (let branch = 0; branch < 6; branch += 1) {
+        nodes.push(createNode({ id: `t${hub}-${branch}`, type: 'service', x: x + 640, y: y + branch * 220, width: 160, height: 80 }));
+        edges.push(createEdge({ id: `e${hub}-${branch}`, source: `hub${hub}`, target: `t${hub}-${branch}`, label: 'Pay Credit Card' }));
+      }
+    }
+    const started = performance.now();
+    const plan = labelGroupPlan(nodes, edges);
+    for (const edge of edges) plan.groupFor(edge.id);
+    expect(performance.now() - started).toBeLessThan(1500);
+    expect(labelGroupPlan(nodes, edges)).toBe(plan);
+    // And a document with nothing to share costs nothing: no connector is even routed.
+    const plain = performance.now();
+    labelGroupPlan(doc.nodes, doc.edges);
+    expect(performance.now() - plain).toBeLessThan(50);
   });
 
   it('hands every connector that crosses nothing the identical empty list', () => {

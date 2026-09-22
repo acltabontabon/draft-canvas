@@ -7,6 +7,7 @@ import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode } fr
 import { laneIndex } from '../../edges/routing';
 import { routingPlan } from '../../edges/bundles';
 import { crossingPlan, withoutMoving } from '../../edges/crossings';
+import { labelGroupPlan } from '../../edges/labelGroups';
 import { blurRadiusFor } from '../backgroundAnchor';
 import { themeFor, type Theme, type ThemeName } from '../theme/tokens';
 import { getMeasurer } from '../text/measure';
@@ -251,6 +252,14 @@ export function buildScene(
   // against a connector attached to a moving node are dropped exactly as the live canvas drops
   // them, so a Learn frame mid-drag looks like the canvas mid-drag.
   const crossings = crossingPlan(nodes, edges, obstacleNodes);
+  // Connectors that leave together under one label draw it once, as on the canvas — unless a flow's
+  // numbered steps are showing, which ride inside each connector's own label.
+  const labels = labelGroupPlan(nodes, edges);
+  const sharedLabelOf = (edgeId: string) => {
+    const group = labels.groupFor(edgeId);
+    if (!group || group.members.some((member) => stepIndexOf(options.selectedFlow, member) !== undefined)) return undefined;
+    return { draws: group.members[0] === edgeId, x: group.x, y: group.y, side: group.side };
+  };
 
   beginClipScope(options.clipScope ?? 'export');
 
@@ -269,6 +278,7 @@ export function buildScene(
       stepIndex,
       lane,
       spine: plan.spineFor(edge.id),
+      sharedLabel: sharedLabelOf(edge.id),
       obstacles: obstaclesForEdge(obstacleNodes, edge.source, edge.target),
       crossings: moving?.size
         ? withoutMoving(crossings.crossingsFor(edge.id), moving)

@@ -43,6 +43,7 @@ import {
 import { clearPathCache } from '../edges/nearest';
 import { edgeLabelPoint, rectOfInternal, type InternalNode } from './edgeGeometry';
 import { findEdgeDropCandidate } from './edgeDropTarget';
+import { edgeToSelect, pickEdgeAt } from './edgePick';
 import { DraftEdgeView } from './DraftEdgeView';
 import { EdgeLabelRoot } from './EdgeLabels';
 import { DraftNodeView } from './DraftNodeView';
@@ -1508,6 +1509,32 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition],
   );
 
+  /** Mirrors `onNodeContextMenu` exactly, just against `selection.edges` — see its own comment. */
+  const openEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edgeId: string) => {
+      event.preventDefault();
+      const moved = movedPastContextMenuThreshold(event);
+      const before = selectionAtRightPointerDown.current ?? useEditorStore.getState().selection;
+      clearRightPointerSnapshot();
+      if (moved) return;
+      const partOfMultiSelection = before.nodes.length + before.edges.length >= 2 && before.edges.includes(edgeId);
+      useEditorStore.getState().setSelection(partOfMultiSelection ? before : { nodes: [], edges: [edgeId] });
+      useUiStore.getState().setContextMenu({
+        target: partOfMultiSelection ? { kind: 'selection' } : { kind: 'edge', id: edgeId },
+        screenPosition: { x: event.clientX, y: event.clientY },
+        flowPosition: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+      });
+    },
+    [clearRightPointerSnapshot, movedPastContextMenuThreshold, screenToFlowPosition],
+  );
+
+  /** The connector a pointer event is on, as a click would pick it — see `edgePick.ts`. */
+  const edgeAtEvent = useCallback(
+    (event: { clientX: number; clientY: number }) =>
+      pickEdgeAt(event.clientX, event.clientY, screenToFlowPosition({ x: event.clientX, y: event.clientY }), getZoom()),
+    [getZoom, screenToFlowPosition],
+  );
+
   /**
    * Right-clicking a node that's already part of a multi-selection must preserve the whole
    * selection and open the multi-selection menu — never collapse it down to just the clicked
@@ -1519,6 +1546,13 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     (event: React.MouseEvent, node: DraftRfNode) => {
       if (!interactive) return;
       if (isEditableTarget(event.target)) return;
+      // A right-click on the end of an arrow lands on the node's handle ring in front of it — which
+      // the connector under it should win, exactly as a left click there does.
+      const pick = edgeAtEvent(event);
+      if (pick && pick.part !== 'control') {
+        openEdgeContextMenu(event, pick.id);
+        return;
+      }
       event.preventDefault();
       const moved = movedPastContextMenuThreshold(event);
       // The pre-click snapshot, not a fresh read — see `selectionAtRightPointerDown`'s own comment.
@@ -1536,28 +1570,18 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         flowPosition: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
       });
     },
-    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition],
+    [clearRightPointerSnapshot, edgeAtEvent, interactive, movedPastContextMenuThreshold, openEdgeContextMenu, screenToFlowPosition],
   );
 
-  /** Mirrors `onNodeContextMenu` exactly, just against `selection.edges` — see its own comment. */
   const onEdgeContextMenu = useCallback(
     (event: React.MouseEvent, edge: DraftRfEdge) => {
       if (!interactive) return;
       if (isEditableTarget(event.target)) return;
-      event.preventDefault();
-      const moved = movedPastContextMenuThreshold(event);
-      const before = selectionAtRightPointerDown.current ?? useEditorStore.getState().selection;
-      clearRightPointerSnapshot();
-      if (moved) return;
-      const partOfMultiSelection = before.nodes.length + before.edges.length >= 2 && before.edges.includes(edge.id);
-      useEditorStore.getState().setSelection(partOfMultiSelection ? before : { nodes: [], edges: [edge.id] });
-      useUiStore.getState().setContextMenu({
-        target: partOfMultiSelection ? { kind: 'selection' } : { kind: 'edge', id: edge.id },
-        screenPosition: { x: event.clientX, y: event.clientY },
-        flowPosition: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
-      });
+      // React Flow names whichever connector is painted on top; the menu is for the one aimed at.
+      const pick = edgeAtEvent(event);
+      openEdgeContextMenu(event, pick && pick.part !== 'control' ? pick.id : edge.id);
     },
-    [clearRightPointerSnapshot, interactive, movedPastContextMenuThreshold, screenToFlowPosition],
+    [edgeAtEvent, interactive, openEdgeContextMenu],
   );
 
   const onPaneDoubleClick = useCallback(
@@ -1596,6 +1620,54 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   );
 
   /**
+   * Which connector the pointer is on, for its hover emphasis — measured once a frame at most, and
+   * written to the store only when it changes, so moving across the canvas re-renders nothing but
+   * the connector that gained the hover and the one that lost it. A press held down (a pan, a
+   * marquee, a node or endpoint drag, a new connection), an armed tool, or a touch has no hover:
+   * each of those is the pointer doing something else.
+   */
+  const hoverFrame = useRef<number | null>(null);
+  const hoverAt = useRef<{ clientX: number; clientY: number } | null>(null);
+  const setHover = useCallback((id: string | null) => {
+    useUiStore.getState().setHoveredEdge(id);
+    // A connection handle in front of the line keeps its own crosshair unless told otherwise.
+    const pane = paneRef.current;
+    if (pane) pane.toggleAttribute('data-edge-hover', id !== null);
+  }, []);
+  const scheduleHover = useCallback(
+    (event: React.PointerEvent) => {
+      const ui = useUiStore.getState();
+      if (event.pointerType === 'touch' || event.buttons !== 0 || ui.armed || ui.interactionActive || ui.reconnectDragActive) {
+        hoverAt.current = null;
+        if (ui.hoveredEdgeId !== null) setHover(null);
+        return;
+      }
+      hoverAt.current = { clientX: event.clientX, clientY: event.clientY };
+      if (hoverFrame.current !== null) return;
+      hoverFrame.current = requestAnimationFrame(() => {
+        hoverFrame.current = null;
+        const at = hoverAt.current;
+        if (!at) return;
+        const pick = edgeAtEvent(at);
+        setHover(pick?.part === 'label' && pick.group ? edgeToSelect(pick, useEditorStore.getState().selection.edges) : (pick?.id ?? null));
+      });
+    },
+    [edgeAtEvent, setHover],
+  );
+  const clearHover = useCallback(() => {
+    hoverAt.current = null;
+    if (hoverFrame.current !== null) cancelAnimationFrame(hoverFrame.current);
+    hoverFrame.current = null;
+    if (useUiStore.getState().hoveredEdgeId !== null) setHover(null);
+  }, [setHover]);
+  useEffect(() => clearHover, [clearHover]);
+  // Arming a tool or switching into (or out of) Present hands the pointer to something else.
+  const armedTool = useUiStore((state) => state.armed);
+  useEffect(() => {
+    clearHover();
+  }, [armedTool, mode, clearHover]);
+
+  /**
    * Keyboard shortcuts create an element under the cursor, so the pointer
    * position is tracked outside React — re-rendering the canvas on every mouse
    * move to keep it in state would be indefensible.
@@ -1606,14 +1678,47 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       pointer.x = position.x;
       pointer.y = position.y;
       pointer.known = true;
+      scheduleHover(event);
     },
-    [screenToFlowPosition],
+    [scheduleHover, screenToFlowPosition],
+  );
+
+  /**
+   * A click on a connector selects the one `edgePick.ts` names — not React Flow's pick, which is
+   * whatever is painted on top at that pixel: a node's invisible connection handle over the end of
+   * an arrow, or a neighbouring connector's hit path. Taken in the capture phase so neither the
+   * handle, the node behind it nor the pane sees the click. Anything that isn't a connector (a node,
+   * an attachment chip, empty canvas) goes on to its own handler untouched.
+   */
+  const onCanvasClickCapture = useCallback(
+    (event: React.MouseEvent) => {
+      if (!interactive || event.button !== 0 || useUiStore.getState().armed) return;
+      if (isEditableTarget(event.target)) return;
+      const pick = edgeAtEvent(event);
+      if (!pick || pick.part === 'control') return;
+      event.stopPropagation();
+      const editor = useEditorStore.getState();
+      const current = editor.selection;
+      if (event.shiftKey || event.metaKey || event.ctrlKey) {
+        const id = pick.group ? edgeToSelect(pick, []) : pick.id;
+        const edges = current.edges.includes(id) ? current.edges.filter((known) => known !== id) : [...current.edges, id];
+        editor.setSelection({ nodes: current.nodes, edges });
+      } else {
+        // Only the second click of a click is a repeat: a double-click (to edit a label) must edit the
+        // connector its first click chose, not step past it.
+        const id = event.detail > 1 ? (current.edges.length === 1 ? current.edges[0]! : pick.id) : edgeToSelect(pick, current.nodes.length === 0 ? current.edges : []);
+        editor.setSelection({ nodes: [], edges: [id] });
+      }
+      setHover(pick.group ? edgeToSelect(pick, useEditorStore.getState().selection.edges) : pick.id);
+    },
+    [edgeAtEvent, interactive, setHover],
   );
 
   // A pan or zoom by the user slides the canvas out from under a menu pinned to a screen point, and
   // wheel/trackpad gestures never fire the pointerdown those menus close on. Programmatic moves
   // (fit, reveal) pass no event and leave them be.
   const onMoveStart = useCallback((event: MouseEvent | TouchEvent | null) => {
+    clearHover();
     if (!event) return;
     const ui = useUiStore.getState();
     if (ui.contextMenu) ui.setContextMenu(null);
@@ -1621,7 +1726,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       ui.setQuickConnect(null);
       if (ui.continuation?.trigger === 'drop') ui.setContinuation(null);
     }
-  }, []);
+  }, [clearHover]);
 
   const onMoveEnd = useCallback(
     (event: unknown, viewport: { x: number; y: number; zoom: number }) => {
@@ -1649,6 +1754,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       data-lens={lensActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}
       onPointerDownCapture={onCanvasPointerDown}
+      onClickCapture={onCanvasClickCapture}
+      onPointerLeave={clearHover}
       // The one Tab stop for the whole diagram — individual nodes/edges are deliberately not
       // real DOM tab stops (see `nodesFocusable`/`edgesFocusable` below); Tab reaches "the
       // canvas" once, and Alt+Arrow/arrow-key navigation moves *selection* from there on,
@@ -1702,6 +1809,15 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         // own dynamic-routing dead zone (`CENTER_DROP_TOLERANCE`) instead of
         // always resolving to one specific handle.
         connectionRadius={28}
+        // A press on a handle only becomes a new connector once it has really moved — the same 4px a
+        // connector's own endpoint drag waits for. React Flow's default (1px) turned the jitter of a
+        // plain click on the end of an arrow (where the handles sit) into a connection drag that ended
+        // on empty canvas and offered to create a node there.
+        connectionDragThreshold={4}
+        // React Flow's click-to-connect (click one handle, then another) is off: nothing in the app
+        // offers it, and with a node's handles sitting over the end of every arrow, two clicks near two
+        // arrowheads quietly drew a new connector between them.
+        connectOnClick={false}
         nodesDraggable={interactive}
         nodesConnectable={interactive}
         elementsSelectable={interactive}
@@ -1726,6 +1842,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         zoomOnDoubleClick={false}
         deleteKeyCode={null}
         multiSelectionKeyCode={['Meta', 'Shift', 'Control']}
+        // A marquee is already a plain drag on empty canvas (`selectionOnDrag`). React Flow's own
+        // selection key — Shift, the same key as adding to the selection — also turned a Shift-press
+        // *on* a connector or shape into the start of a marquee, which swallowed Shift-click.
+        selectionKeyCode={null}
         proOptions={PRO_OPTIONS}
         colorMode={theme.name}
         connectionLineStyle={connectionLineStyle}

@@ -52,6 +52,7 @@ export function distanceToPolyline(point: Point, vertices: readonly Point[]): nu
  * this never grows into a leak across a long editing session.
  */
 const flattened = new Map<string, Point[]>();
+const MAX_CACHED = 1024;
 
 export function verticesOf(d: string): Point[] {
   let vertices = flattened.get(d);
@@ -59,6 +60,9 @@ export function verticesOf(d: string): Point[] {
     // `flattenPath` yields nothing for a path it doesn't recognise; caching that empty result
     // is still right — it saves re-parsing the same unrecognised path every probe.
     vertices = flattenPath(d).map(({ x, y }) => ({ x, y }));
+    // Hovering measures routes too, with no gesture end to clear after — so the cache also empties
+    // itself once it holds far more routes than are ever under one pointer.
+    if (flattened.size >= MAX_CACHED) flattened.clear();
     flattened.set(d, vertices);
   }
   return vertices;
