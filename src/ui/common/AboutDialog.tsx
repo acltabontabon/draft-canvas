@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { formatReleaseDate, formatReleaseDateCompact } from '../../lib/date';
 import { versionKind } from '../../lib/semver';
+import { hostKind } from '../../host/hostInfo';
 import { PRODUCT } from '../../product';
 import {
   applicableReleases,
@@ -266,6 +267,12 @@ function AboutDialogBody() {
 
           <p className="dc-about-tagline">{PRODUCT.tagline}</p>
           <p className="dc-about-sub">{PRODUCT.pitch}</p>
+          {hostKind() === 'desktop' && (
+            <p className="dc-about-sub">
+              Your diagrams stay on this computer: nothing you draw is sent anywhere. The app only goes online to look for
+              updates (you can turn that off in Settings) and to download one when you ask.
+            </p>
+          )}
 
           <div className="dc-about-version-row">
             <span className="dc-about-version" aria-label={`Version ${PRODUCT.version}`}>

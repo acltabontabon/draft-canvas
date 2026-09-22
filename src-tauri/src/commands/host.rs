@@ -11,6 +11,7 @@ use crate::util::lock;
 use crate::window::{apply_state, show_main, Platform, ReportedState};
 use serde::Serialize;
 use std::path::Path;
+use std::sync::atomic::Ordering;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
 
@@ -22,6 +23,8 @@ pub struct HostBoot {
     pub settings: DesktopSettings,
     /// Every project on the list whose folder is still there, most recent first.
     pub projects: Vec<ProjectInfo>,
+    /// The menu-bar or tray icon is up. Some Linux desktops have nowhere to put one.
+    pub tray: bool,
 }
 
 /// The project folders the person has added and that still exist, each with a handle. A folder that has
@@ -50,6 +53,7 @@ pub async fn host_ready(
             platform: Platform::current(),
             settings: state.settings.get().public(),
             projects: projects(state),
+            tray: state.tray_ready.load(Ordering::SeqCst),
         };
         show_main(app);
         if let Some(ready) = lock(&state.smoke_ready).take() {
@@ -155,6 +159,7 @@ mod tests {
                 name: "P".into(),
                 display_path: "~/P".into(),
             }],
+            tray: true,
         };
         assert_eq!(
             serde_json::to_value(boot).unwrap(),
@@ -162,7 +167,8 @@ mod tests {
                 "version": "1.10.0",
                 "platform": "macos",
                 "settings": {"closeBehavior": "ask", "autoCheckUpdates": true},
-                "projects": [{"handle": "h_1", "name": "P", "displayPath": "~/P"}]
+                "projects": [{"handle": "h_1", "name": "P", "displayPath": "~/P"}],
+                "tray": true
             })
         );
     }

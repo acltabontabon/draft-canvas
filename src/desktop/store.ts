@@ -29,7 +29,14 @@ export interface ProjectState {
 export interface DesktopState {
   /** The shell has answered `host_ready`; Home has what it needs to draw. */
   ready: boolean;
+  /**
+   * Recents and drafts have been listed once. Until then Home can't tell a first run from a return
+   * visit, so it draws neither hero rather than the wrong one.
+   */
+  listed: boolean;
   platform: 'macos' | 'windows' | 'linux' | null;
+  /** The shell has an icon in the menu bar or system tray. */
+  tray: boolean;
   doc: DesktopDoc;
   saving: boolean;
   /** Every project on the list, most recently opened first. Each is scanned only when something shows it. */
@@ -46,7 +53,9 @@ export interface DesktopState {
 
 const INITIAL: DesktopState = {
   ready: false,
+  listed: false,
   platform: null,
+  tray: false,
   doc: { kind: 'none' },
   saving: false,
   projects: [],

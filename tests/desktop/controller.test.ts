@@ -101,6 +101,20 @@ describe('opening a file', () => {
   });
 });
 
+describe('starting up', () => {
+  it('says Home may choose its hero only once recents and drafts are listed — even if listing fails', async () => {
+    let finish!: () => void;
+    h.api.recoveryList.mockImplementationOnce(() => new Promise((resolve) => (finish = () => resolve([]))));
+    h.api.recentsList.mockRejectedValueOnce(new Error('unreadable'));
+    const started = h.controller.start();
+    await h.settle();
+    expect(h.store.getSnapshot()).toMatchObject({ ready: true, listed: false });
+    finish();
+    await started;
+    expect(h.store.getSnapshot().listed).toBe(true);
+  });
+});
+
 describe('saving', () => {
   it('writes exactly the text the app produced, with the stamp it opened with', async () => {
     const handle = await openFile();

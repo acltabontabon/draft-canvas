@@ -18,6 +18,15 @@ ahead of the release it leads to. Draft Canvas for VS Code has its own changelog
 
 ### Changed
 
+- **Desktop:** Home makes room for your work once there is some: the motto steps down to one line, and your
+  drafts and recent files are drawn larger, right under **Quick Draft**. A first visit keeps the full welcome.
+- **Desktop:** **Unsaved** on Home and in the menu bar is now **Drafts**, since a Quick Draft is kept on this
+  computer until you save it. **New Canvas…** is now **New File…**, which says what's different about it: it
+  asks where the file goes before you draw.
+- **Desktop:** an empty Drafts or Recent row says what would be there, instead of disappearing.
+- **Desktop:** Home no longer says `⌘N` works "from anywhere": it works while Draft Canvas is in front. Its
+  footer only mentions the menu bar or system tray when the icon is actually there, and **About** says what
+  the app does and doesn't send: nothing you draw, only a look for updates you can turn off.
 - **Desktop:** Home stays quick however much you have: a project is only listed once something shows
   it, and a diagram is only drawn once it's on screen.
 

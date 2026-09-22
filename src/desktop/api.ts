@@ -140,6 +140,8 @@ export interface HostBoot {
   settings: DesktopSettings;
   /** The project folders the person has added that are still there, most recently opened first. */
   projects: ProjectInfo[];
+  /** The menu-bar or tray icon is up; some Linux desktops have nowhere to put one. */
+  tray: boolean;
 }
 
 export type DocState =
@@ -167,7 +169,7 @@ export type HostEvent =
   | { type: 'open'; handle: Handle; name: string; displayPath: string }
   | { type: 'new-quick-draft' }
   | { type: 'new-canvas' }
-  /** A draft chosen from the tray's Unsaved section. */
+  /** A draft chosen from the tray's Drafts section. */
   | { type: 'recover-draft'; id: string }
   | { type: 'menu'; command: MenuCommand }
   | { type: 'quit-requested' }

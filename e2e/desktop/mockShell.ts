@@ -129,7 +129,7 @@ export async function installMockShell(page: Page): Promise<void> {
       host_ready: (args: { onEvent: ChannelLike }) => {
         events = args.onEvent;
         eventIndex = 0;
-        return { version: '1.9.4', platform: 'macos', settings, projects: listedProjects.map((handle) => folder(handle).info) };
+        return { version: '1.9.4', platform: 'macos', settings, projects: listedProjects.map((handle) => folder(handle).info), tray: true };
       },
       report_state: () => null,
       quit_ack: () => null,

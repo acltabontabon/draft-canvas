@@ -10,11 +10,12 @@ Draft Canvas, and all three work on the same file: the [web app](getting-started
 
 ## Quick Draft
 
-**New Quick Draft** is in the tray menu, the File menu (`⌘N` / `Ctrl+N`) and on Home. It opens a blank
-canvas at once: there is no name to pick, no folder to choose, nothing to set up.
+**New Quick Draft** is in the tray menu, the File menu (`⌘N` / `Ctrl+N`) and on Home, where it's the big
+**Quick Draft** button. It opens a blank canvas at once: there is no name to pick, no folder to choose, nothing
+to set up.
 
 A Quick Draft has no file yet. Until you save it, Draft Canvas keeps a working copy in its own data folder,
-so closing the window, quitting, or a crash doesn't lose it. It shows up under **Unsaved** on Home until you:
+so closing the window, quitting, or a crash doesn't lose it. It shows up under **Drafts** on Home until you:
 
 - **Save** it (`⌘S`), which asks where the file goes, or **Move into Project…** to put it in your most recent project;
 - **Discard** it, from Home; or
@@ -31,7 +32,7 @@ A diagram is a `.draftcanvas` file, like any other file on your computer.
 - **Save** (`⌘S`) writes the file. Draft Canvas never saves a file you chose behind your back: the status bar says
   *Unsaved changes* until you do, and asks before closing something unsaved. **Save As…** is `⌘⇧S`.
   **Revert to Saved…** puts back what is on disk.
-- **New canvas…** (`⌘⇧N`) asks where the file goes first, then opens it blank.
+- **New File…** (`⌘⇧N`) asks where the file goes first, then opens it blank.
 - The window title is the file's name, and **Reveal in Finder** / **File Explorer** shows where it is.
 
 Saving is careful. The diagram is written to a temporary file next to the original and swapped in only once it
@@ -58,7 +59,7 @@ payments/
 
 Home's **Projects** row shows the ones you used last, each as a small stack of its diagrams with the newest on
 top. Choose one to see everything in it, drawn, grouped under its folders. **Find a diagram** (`⌘F`) searches
-every project, your recent files and your unsaved drafts at once, by name or folder, and the chips along the top
+every project, your recent files and your drafts at once, by name or folder, and the chips along the top
 narrow it to one of them. A project whose folder isn't there right now (on a drive that isn't plugged in, say)
 stays on the list, marked as missing, and comes back when the folder does.
 
@@ -95,9 +96,9 @@ Draft Canvas stays a click away. On macOS it has a menu-bar icon, on Windows a s
 a small panel beside it, Home in miniature:
 
 - **New Quick Draft**
-- **Unsaved**: drafts waiting to be carried on with, and **Recent**: your last few files, each drawn as the
+- **Drafts**: Quick Drafts waiting to be carried on with, and **Recent**: your last few files, each drawn as the
   diagram it is
-- **Open…**, **Project…**, **New canvas**
+- **Open…**, **Project…**, **New file…**
 - the name at the top brings the window forward; **Settings** and **Quit** sit beside it
 
 Clicking anywhere else, or `Esc`, puts the panel away. On Windows, right-clicking the icon opens the same things as
@@ -131,12 +132,13 @@ updates**. How updates are built, signed and published is in [Desktop updates](d
 ## Keyboard
 
 Everything in the editor works as it does everywhere else in Draft Canvas ([the shortcuts](keyboard-and-commands.md)).
-The desktop adds the file shortcuts, in the menu as well:
+The desktop adds the file shortcuts, in the menu as well. They work while Draft Canvas is the app in front;
+none of them is system-wide.
 
 | Shortcut | Does |
 | --- | --- |
 | `⌘N` / `Ctrl+N` | New Quick Draft |
-| `⌘⇧N` / `Ctrl+Shift+N` | New canvas… |
+| `⌘⇧N` / `Ctrl+Shift+N` | New File… |
 | `⌘O` / `Ctrl+O` | Open… |
 | `⌘⇧O` / `Ctrl+Shift+O` | Add Project… |
 | `⌘S` / `Ctrl+S` | Save |

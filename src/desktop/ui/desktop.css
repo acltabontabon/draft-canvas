@@ -6,8 +6,11 @@
  */
 
 .dc-desk {
-  /* The editor's grid dot, a step quieter than the web home's: here it runs behind the words too. */
-  --dc-home-dot: color-mix(in srgb, var(--dc-text-faint) 22%, transparent);
+  /* The editor's grid dot, a step quieter than the web home's: here it runs behind the words and
+     the drawings too, so it stays well under both. */
+  --dc-home-dot: color-mix(in srgb, var(--dc-text-faint) 17%, transparent);
+  /* How large the row's drawings are: Home sets it, larger once there is work to come back to. */
+  --tile-scale: 1;
   --x: 50%;
   --y: 40%;
   position: relative;
@@ -125,10 +128,12 @@
   font-size: 16px;
 }
 
+/* Decoration, not a control: a quieter frame and hollow, lighter handles than the selection a
+   focused tile shows, so nothing up here looks like it can be pressed. */
 .dc-desk-motto-frame {
   position: absolute;
   inset: 0;
-  border: 1px solid color-mix(in srgb, var(--dc-selection) 34%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 24%, transparent);
   border-radius: 2px;
   pointer-events: none;
 }
@@ -137,9 +142,21 @@
   position: absolute;
   width: 7px;
   height: 7px;
-  border: 1px solid color-mix(in srgb, var(--dc-selection) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 48%, transparent);
   border-radius: 1.5px;
   background: var(--dc-canvas);
+}
+
+/* Coming back: the motto steps down to one quiet line, and the work moves up under the action. */
+.dc-desk[data-mode='returning'] .dc-desk-motto {
+  padding: 12px 26px 14px;
+}
+
+.dc-desk[data-mode='returning'] .dc-desk-motto h1 {
+  font-size: clamp(22px, 0.8vw + 16px, 30px);
+  font-weight: 620;
+  letter-spacing: -0.028em;
+  line-height: 1.15;
 }
 
 .dc-desk-motto-frame [data-at='nw'] {
@@ -167,10 +184,10 @@
 .dc-desk-action {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  height: 50px;
-  margin-top: 46px;
-  padding: 0 12px 0 19px;
+  gap: 11px;
+  min-height: 54px;
+  margin-top: 42px;
+  padding: 7px 12px 7px 18px;
   border: 0;
   border-radius: 12px;
   background: var(--dc-selection);
@@ -179,21 +196,53 @@
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  text-align: left;
   cursor: pointer;
+  /* Emphasis by colour and weight; the shadow only sets it on the canvas. */
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.16) inset,
-    0 14px 38px -16px var(--dc-selection);
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 8px 20px -14px var(--dc-selection);
   transition:
     transform 80ms ease,
     filter 120ms ease,
     box-shadow 200ms ease;
 }
 
+.dc-desk[data-mode='returning'] .dc-desk-action {
+  margin-top: 30px;
+}
+
+/* …and the row sits closer under its tabs: the bus still has room between them. */
+.dc-desk[data-mode='returning'] .dc-desk-label {
+  margin-top: 22px;
+}
+
+.dc-desk[data-mode='returning'] .dc-desk-row {
+  margin-top: 28px;
+}
+
 .dc-desk-action:hover {
   filter: brightness(1.06);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.16) inset,
-    0 18px 46px -16px var(--dc-selection);
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 10px 24px -14px var(--dc-selection);
+}
+
+.dc-desk-action-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 20px;
+}
+
+.dc-desk-action-hint {
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: 0;
+  line-height: 16px;
+  opacity: 0.78;
 }
 
 .dc-desk-action:active {
@@ -208,7 +257,8 @@
 
 .dc-desk-action kbd {
   min-width: 0;
-  margin-left: 4px;
+  align-self: center;
+  margin-left: 10px;
   padding: 0 7px;
   border: 0;
   border-radius: var(--dc-radius-sm);
@@ -278,9 +328,26 @@
 .dc-desk-row {
   display: flex;
   justify-content: center;
-  gap: 36px;
-  min-height: 132px;
-  margin-top: 46px;
+  align-items: flex-start;
+  gap: var(--tile-gap, 36px);
+  /* A row keeps its height whatever is in it, so switching to an empty tab moves nothing below. */
+  min-height: calc(84px * var(--tile-scale) + 48px);
+  margin-top: 42px;
+}
+
+/* A row with nothing in it: a sentence at the end of the connector, on clean canvas. */
+.dc-desk-empty {
+  max-width: 340px;
+  margin: 0;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: var(--dc-canvas);
+  color: var(--dc-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: balance;
+  animation: dc-fade-in 160ms ease both;
 }
 
 .dc-desk-row-pending {
@@ -312,6 +379,69 @@
 
 .dc-desk .dc-starter-name {
   max-width: 100%;
+}
+
+/* Home's row draws each tile at --tile-scale: the drawing, the swatch it sits in and the selection
+   frame around its bounds all grow together. The browse view keeps the standard size. */
+.dc-desk-row .dc-desk-tile {
+  width: calc(144px * var(--tile-scale));
+  /* The drops end inside the swatch, at each drawing's frame: a halo over the whole tile would fade
+     them out. Here only the words get clean canvas behind them. */
+  background: none;
+}
+
+.dc-desk-row .dc-starter-name,
+.dc-desk-row .dc-desk-tile-meta {
+  background: radial-gradient(closest-side, var(--dc-canvas) 70%, color-mix(in srgb, var(--dc-canvas) 0%, transparent));
+}
+
+.dc-desk-row .dc-starter-swatch {
+  width: 100%;
+  height: calc(84px * var(--tile-scale));
+}
+
+.dc-desk-row .dc-starter-glyph {
+  width: calc(144px * var(--tile-scale));
+  height: calc(76px * var(--tile-scale));
+}
+
+.dc-desk-row .dc-starter-swatch .dc-chrome {
+  top: calc((var(--by, 0px) + 4px) * var(--tile-scale) - 9px);
+  left: calc(var(--bx, 0px) * var(--tile-scale) - 9px);
+  width: calc(var(--bw, 144px) * var(--tile-scale) + 18px);
+  height: calc(var(--bh, 76px) * var(--tile-scale) + 18px);
+}
+
+/* Hover: a faint patch under the drawing, with the side handles the canvas shows on hover. Focus
+   adds the whole selection frame (app.css), so the two never look alike. */
+.dc-desk-row .dc-starter-swatch::before {
+  inset: -2px -6px;
+  border-radius: 12px;
+  transition: background 120ms ease;
+}
+
+@media (hover: hover) {
+  .dc-desk-row .dc-starter:hover .dc-starter-swatch::before {
+    background: color-mix(in srgb, var(--dc-text) 3%, transparent);
+  }
+}
+
+/* Long names get two lines before they give up, and the whole name is a hover away. */
+.dc-desk-row .dc-starter-name {
+  display: -webkit-box;
+  font-size: 13.5px;
+  line-height: 19px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.dc-desk-row .dc-starter:focus-visible .dc-starter-name {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--dc-selection) 60%, transparent);
+  text-underline-offset: 3px;
 }
 
 .dc-desk-tile-meta {
@@ -384,6 +514,11 @@
 }
 
 .dc-desk-tile[data-kind='project'] .dc-starter-glyph:not(.dc-desk-stack) {
+  transform: translate(calc(-4px * var(--tile-scale)), calc(4px * var(--tile-scale))) scale(0.6);
+}
+
+/* The browse view draws at the standard size whatever Home's row does. */
+.dc-browse .dc-desk-tile[data-kind='project'] .dc-starter-glyph:not(.dc-desk-stack) {
   transform: translate(-4px, 4px) scale(0.6);
 }
 
@@ -471,9 +606,6 @@
 
 .dc-desk-readout[data-idle] {
   color: var(--dc-text-faint);
-  font-family: var(--dc-mono);
-  font-size: 11.5px;
-  word-spacing: 0.1em;
 }
 
 .dc-desk-aside {
@@ -503,13 +635,22 @@
   white-space: nowrap;
 }
 
-/* Everything else there is to do, as one quiet line. */
+/* Everything else there is to do, as one quiet line: the other way to start, then the ways in. */
 .dc-desk-ways {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 2px 10px;
-  margin-top: clamp(26px, 5vh, 52px);
+  align-items: center;
+  gap: 2px 6px;
+  margin-top: clamp(18px, 4vh, 44px);
+  padding: 0 12px;
+}
+
+.dc-desk-ways-rule {
+  width: 1px;
+  height: 14px;
+  margin: 0 6px;
+  background: var(--dc-border);
 }
 
 .dc-desk-way {
@@ -781,7 +922,7 @@
   justify-content: center;
   align-items: center;
   gap: 8px;
-  padding: 10px 24px 18px;
+  padding: 10px 24px 16px;
   color: var(--dc-text-faint);
   font-size: 12px;
   text-align: center;
@@ -926,6 +1067,39 @@
 .dc-desk-readout,
 .dc-desk-ways {
   animation-delay: 480ms;
+}
+
+/* A short window: the same diagram, closer together, so the row and the ways stay in view. */
+@media (max-height: 680px) {
+  .dc-desk-top {
+    padding-top: 12px;
+  }
+
+  .dc-desk-motto {
+    padding: 16px 30px 18px;
+  }
+
+  .dc-desk-motto h1 {
+    font-size: clamp(34px, 2.6vw + 12px, 48px);
+  }
+
+  .dc-desk-action,
+  .dc-desk[data-mode='returning'] .dc-desk-action {
+    margin-top: 24px;
+  }
+
+  .dc-desk-label,
+  .dc-desk[data-mode='returning'] .dc-desk-label {
+    margin-top: 18px;
+  }
+
+  .dc-desk-row {
+    margin-top: 34px;
+  }
+
+  .dc-desk-ways {
+    margin-top: 12px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

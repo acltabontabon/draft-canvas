@@ -85,10 +85,13 @@ test('what is unsaved is kept, and offered back from Home', async ({ page }) => 
   await expect.poll(() => page.evaluate(() => window.__shell.recoveryIds().length)).toBe(1);
 
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
-  // Home opens on what isn't saved, drawn as the diagram it is.
-  await expect(page.getByRole('tab', { name: 'Unsaved' })).toHaveAttribute('aria-selected', 'true');
+  // Home opens on the drafts, each drawn as the diagram it is — and, with work to come back to, the
+  // motto steps down to one line.
+  await expect(page.getByRole('tab', { name: 'Drafts' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'Starters' })).toBeVisible();
-  const tile = page.getByRole('button', { name: 'Recover Quick Draft' });
+  await expect(page.locator('.dc-desk')).toHaveAttribute('data-mode', 'returning');
+  await expect(page.getByText('For meetings that suddenly need a diagram.')).toHaveCount(0);
+  const tile = page.getByRole('button', { name: 'Open Quick Draft, a draft not saved to a file' });
   await expect(tile).toHaveAttribute('data-thumbnail', 'drawn');
   // A Quick Draft is not asked about on the way out.
   expect(await page.evaluate(() => window.__shell.asked())).toEqual([]);
@@ -96,6 +99,71 @@ test('what is unsaved is kept, and offered back from Home', async ({ page }) => 
   await tile.click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   await expect(page.locator('.dc-node')).toHaveCount(1);
+});
+
+test('an empty tab says what would be there, and the tabs hold still', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Flow', 2);
+  await page.addInitScript((text) => {
+    window.__shell.seed({ recents: [{ name: 'payment-flow', text, ago: 60_000 }] });
+  }, text);
+  await page.reload();
+
+  await expect(page.getByRole('tab', { name: 'Recent' })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Drafts' }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Drafts' });
+  await expect(panel).toContainText('No drafts.');
+  await expect(panel.getByRole('button')).toHaveCount(0);
+});
+
+test('forgetting the last of a row leaves its tab chosen and saying so; forgetting everything is a first run again', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Flow', 2);
+  await page.addInitScript((text) => {
+    window.__shell.seed({ recents: [{ name: 'payment-flow', text, ago: 60_000 }], drafts: [{ title: 'Auth rework', text, ago: 60_000 }] });
+  }, text);
+  await page.reload();
+
+  await page.getByRole('tab', { name: 'Recent' }).click();
+  await page.getByRole('button', { name: 'Remove payment-flow from Recent' }).click();
+  await expect(page.getByRole('tab', { name: 'Recent' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel', { name: 'Recent' })).toContainText('Nothing opened lately.');
+
+  await page.evaluate(() => window.__shell.answer(0));
+  await page.getByRole('tab', { name: 'Drafts' }).click();
+  await page.getByRole('button', { name: 'Discard Auth rework' }).click();
+  await expect(page.locator('.dc-desk')).toHaveAttribute('data-mode', 'first');
+  await expect(page.getByText('For meetings that suddenly need a diagram.')).toBeVisible();
+});
+
+test('the row is walked and opened from the keyboard', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Flow', 2);
+  await page.addInitScript((text) => {
+    window.__shell.seed({ recents: [1, 2, 3].map((i) => ({ name: `diagram-${i}`, text, ago: i * 60_000 })) });
+  }, text);
+  await page.reload();
+
+  await page.getByRole('button', { name: 'New Quick Draft' }).focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('tab', { name: 'Recent' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Open diagram-1' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Open diagram-2' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await expect(page.locator('.dc-status-left')).toContainText('diagram-2');
+});
+
+test('a first run keeps the full welcome, and the footer claims no global shortcut', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.dc-desk')).toHaveAttribute('data-mode', 'first');
+  await expect(page.getByText('For meetings that suddenly need a diagram.')).toBeVisible();
+  await expect(page.getByText('Start drawing. Name it later.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New file…' })).toBeVisible();
+  const foot = page.locator('.dc-desk-foot');
+  await expect(foot).toHaveText('Available from your menu bar. Your diagrams stay local.');
 });
 
 test('recent files are drawn from their own contents, without being opened', async ({ page }) => {
@@ -172,6 +240,10 @@ test('keeps the row to one line, with the rest one click away', async ({ page })
   await expect(page.getByRole('button', { name: /^Recent/, pressed: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  // Back on Home, the row is as full as it was, with a connector to each tile.
+  await expect(row.locator('.dc-desk-tile')).toHaveCount(await row.locator('.dc-desk-tile').count());
+  await expect.poll(() => page.locator('.dc-desk-route').count()).toBe(await row.locator('.dc-desk-tile').count());
+  expect(await row.locator('.dc-desk-tile').count()).toBeGreaterThan(2);
 });
 
 test('holds many projects: one Projects tab, a row of the newest, and everything one search away', async ({ page }) => {
@@ -187,9 +259,10 @@ test('holds many projects: one Projects tab, a row of the newest, and everything
   }, text);
   await page.reload();
 
-  // However many projects: one Projects tab, never a tab each.
-  await expect(page.getByRole('tab')).toHaveText(['Projects', 'Starters']);
-  await page.getByRole('tab', { name: 'Projects' }).click();
+  // However many projects: one Projects tab, never a tab each — and it is the one shown, being the
+  // only one with anything in it.
+  await expect(page.getByRole('tab')).toHaveText(['Drafts', 'Recent', 'Projects', 'Starters']);
+  await expect(page.getByRole('tab', { name: 'Projects' })).toHaveAttribute('aria-selected', 'true');
   const row = page.locator('.dc-desk-row');
   await expect(row.getByRole('button', { name: 'All 10' })).toBeVisible();
   await expect(row.getByRole('button', { name: 'Show the project-1 project' })).toContainText('200 diagrams');
@@ -416,7 +489,7 @@ test('the tray panel draws each diagram and chooses only through the shell', asy
   await expect(recent.getByRole('button')).toHaveCount(2);
   // Each file is drawn as itself, read by its handle.
   await expect(recent.locator('.dc-tray-thumb[data-state="drawn"]')).toHaveCount(2);
-  await expect(page.getByRole('region', { name: 'Unsaved' }).getByRole('button', { name: /Auth rework/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Drafts' }).getByRole('button', { name: /Auth rework/ })).toBeVisible();
 
   const chosen = () =>
     page.evaluate(() =>

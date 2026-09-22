@@ -165,7 +165,7 @@ pub fn app_menu(platform: Platform) -> Vec<Spec> {
         ),
         item(
             "app:new-canvas",
-            "New Canvas\u{2026}",
+            "New File\u{2026}",
             Some("CmdOrCtrl+Shift+N"),
         ),
         item("app:open", "Open\u{2026}", Some("CmdOrCtrl+O")),
@@ -296,7 +296,7 @@ pub fn tray_menu(
         ),
         icon_item(
             "tray:new-canvas",
-            "New Canvas\u{2026}",
+            "New File\u{2026}",
             Some("CmdOrCtrl+Shift+N"),
             icons.new_canvas.as_ref(),
         ),
@@ -304,7 +304,7 @@ pub fn tray_menu(
 
     if !drafts.is_empty() {
         menu.push(Spec::Separator);
-        menu.push(label("Unsaved"));
+        menu.push(label("Drafts"));
         menu.extend(drafts.iter().take(TRAY_DRAFTS).map(|d| Spec::Item {
             id: format!("{DRAFT_PREFIX}{}", d.id),
             text: menu_text(&d.title),
@@ -564,7 +564,7 @@ mod tests {
         let bar = app_menu(Platform::Macos);
         for (id, text, accel) in [
             ("app:new-quick-draft", "New Quick Draft", "CmdOrCtrl+N"),
-            ("app:new-canvas", "New Canvas\u{2026}", "CmdOrCtrl+Shift+N"),
+            ("app:new-canvas", "New File\u{2026}", "CmdOrCtrl+Shift+N"),
             ("app:open", "Open\u{2026}", "CmdOrCtrl+O"),
             (
                 "app:open-project",
@@ -736,7 +736,7 @@ mod tests {
             shape(&tray),
             [
                 "New Quick Draft",
-                "New Canvas\u{2026}",
+                "New File\u{2026}",
                 "-",
                 "Open File\u{2026}",
                 "Add Project\u{2026}",
@@ -760,9 +760,9 @@ mod tests {
             shape(&tray),
             [
                 "New Quick Draft",
-                "New Canvas\u{2026}",
+                "New File\u{2026}",
                 "-",
-                "<Unsaved>",
+                "<Drafts>",
                 "Auth rework",
                 "-",
                 "<Recent>",

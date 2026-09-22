@@ -54,7 +54,7 @@ pub enum HostEvent {
     },
     NewQuickDraft,
     NewCanvas,
-    /// A draft chosen from the tray's Unsaved section, by its recovery id.
+    /// A draft chosen from the tray's Drafts section, by its recovery id.
     RecoverDraft {
         id: String,
     },

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { relativeTime } from '../../lib/relativeTime';
 import { PRODUCT } from '../../product';
@@ -20,9 +20,14 @@ import { UpdateChip } from './Updates';
 import { useDeskGeometry, type DeskGeometry } from './useDeskGeometry';
 import './desktop.css';
 
-/** A tile's drawing is 144px wide; the row keeps this much air between them. */
+/** A tile's drawing is 144px wide at scale 1; the row keeps this much air between them. */
 const TILE = 144;
-const GAP = 36;
+const GAP = { first: 36, returning: 28 } as const;
+/**
+ * How large a tile draws. Someone coming back is choosing between their own diagrams, so the drawings
+ * are big enough to tell apart; a first run shows starters, which read at the smaller size.
+ */
+const SCALE = { first: 1.15, returning: 1.36 } as const;
 /** However wide the window, one row stays one glance. */
 const MAX_TILES = 6;
 
@@ -37,14 +42,22 @@ interface Source {
   more?: { label: string; description: string; run: () => void };
   /** A line of the source's own actions, under the readout. */
   aside?: ReactNode;
+  /** What the readout says while nothing is under the pointer: what this row is. */
+  note: string;
+  /** What the row says when there is nothing in it. */
+  empty?: string;
 }
 
 /**
  * Where the desktop app opens — and it is itself a diagram, drawn in the app's own hand. The motto
  * is a text node, just placed and still selected; a connector runs from it into the one thing to do,
- * New Quick Draft; and from there a single bus fans out to a row of the person's own work, each
- * file drawn as the diagram it is. The bus's label is where the row is chosen, the way a connector
- * on the canvas carries a label: Unsaved, Recent, the open project, Starters.
+ * Quick Draft; and from there a single bus fans out to a row of the person's own work, each file
+ * drawn as the diagram it is. The bus's label is where the row is chosen, the way a connector on the
+ * canvas carries a label: Drafts, Recent, Projects, Starters.
+ *
+ * A first run gets the motto at full size over a row of starters. Once there is work to come back
+ * to, the motto steps down to one line and the row — drawn larger — moves up under the action.
+ * Which of the two is decided only once recents and drafts are listed, so neither flashes first.
  *
  * It knows names and dates first. A file's drawing is read only once its tile is on screen, a
  * handful at a time, and never through anything that would count as opening it.
@@ -61,26 +74,37 @@ export function DesktopHome() {
   const rowRef = useRef<HTMLDivElement>(null);
   const spotlight = useSpotlight(canvasRef);
   const mac = state.platform !== 'windows' && state.platform !== 'linux';
+  const returning = hasWork(state);
+  const scale = returning ? SCALE.returning : SCALE.first;
+  const gap = returning ? GAP.returning : GAP.first;
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hot, setHot] = useState<{ index: number; description: string } | null>(null);
   const [browse, setBrowse] = useState<BrowseScope | null>(null);
   const [browsing, setBrowsing] = useState(false);
-  const capacity = useCapacity(stageRef);
+  // Browsing unmounts the stage; coming back is a new one to measure and observe.
+  const capacity = useCapacity(stageRef, scale, gap, browse !== null);
 
-  const sources = sourcesFor(state, controller, catalog?.FEATURED_STARTERS ?? [], {
+  const sources = sourcesFor(state, controller, catalog?.FEATURED_STARTERS ?? [], returning, {
     showAll: (scope) => setBrowse(scope),
     browseStarters: () => setBrowsing(true),
   });
-  const active = sources.find((source) => source.id === activeId) ?? sources[0];
-  const history = sources.some((source) => source.id !== 'starters');
+  // A row picked by hand stays picked, even once it is empty; otherwise the first with anything in it.
+  const active = sources.find((source) => source.id === activeId) ?? sources.find((source) => source.tiles.length > 0) ?? sources[0];
+  const history = returning;
 
   // The row: as many tiles as fit, the last slot giving way to "more" when there is more.
   const room = Math.max(1, capacity);
   const overflow = active ? active.tiles.length > room || (active.more !== undefined && active.id === 'starters') : false;
   const shown = active ? active.tiles.slice(0, overflow ? room - 1 : room) : [];
   const moreShown = overflow && active?.more ? active.more : undefined;
-  const geometry = useDeskGeometry(stageRef, mottoRef, actionRef, rowRef, `${active?.id}:${shown.map((tile) => tile.entryKey).join('|')}:${moreShown ? 1 : 0}`);
+  const geometry = useDeskGeometry(
+    stageRef,
+    mottoRef,
+    actionRef,
+    rowRef,
+    `${browse !== null}:${state.listed}:${returning}:${active?.id}:${shown.map((tile) => tile.entryKey).join('|')}:${moreShown ? 1 : 0}`,
+  );
 
   // The projects in the row are listed (names and dates) so their stacks can be drawn; the rest wait.
   const rowProjects = active?.id === 'projects' ? shown.map((tile) => tile.entryKey.slice('projects:'.length)).join('|') : '';
@@ -163,8 +187,17 @@ export function DesktopHome() {
     );
   }
 
+  const empty = active && active.tiles.length === 0 && !moreShown ? active.empty : undefined;
+
   return (
-    <div className="dc-desk" ref={rootRef} onPointerMove={spotlight.move} onPointerLeave={spotlight.leave}>
+    <div
+      className="dc-desk"
+      ref={rootRef}
+      data-mode={!state.listed ? 'pending' : returning ? 'returning' : 'first'}
+      style={{ '--tile-scale': scale, '--tile-gap': `${gap}px` } as CSSProperties}
+      onPointerMove={spotlight.move}
+      onPointerLeave={spotlight.leave}
+    >
       <div className="dc-desk-canvas" ref={canvasRef} aria-hidden="true" />
       <UpdateChip placement="home" />
 
@@ -173,105 +206,140 @@ export function DesktopHome() {
       </header>
 
       <main className="dc-desk-stage" ref={stageRef}>
-        {geometry && <Connectors geometry={geometry} hot={hot?.index ?? null} dashedLast={moreShown !== undefined} />}
+        {/* Nothing is drawn until Home knows whether this is a first run: then the right hero arrives once. */}
+        {state.listed && (
+          <>
+            {geometry && <Connectors geometry={geometry} hot={hot?.index ?? null} dashedLast={moreShown !== undefined} />}
 
-        <div className="dc-desk-motto" ref={mottoRef}>
-          <span className="dc-desk-motto-frame" aria-hidden="true">
-            <span data-at="nw" />
-            <span data-at="ne" />
-            <span data-at="se" />
-            <span data-at="sw" />
-          </span>
-          <h1>{PRODUCT.motto}</h1>
-          <p>{PRODUCT.tagline}</p>
-        </div>
-
-        <button
-          ref={actionRef}
-          type="button"
-          className="dc-desk-action"
-          onClick={() => void controller.newQuickDraft()}
-          onKeyDown={(event) => {
-            if (event.key !== 'ArrowDown') return;
-            event.preventDefault();
-            (rootRef.current?.querySelector<HTMLButtonElement>('.dc-desk-label [aria-selected="true"]') ??
-              rowRef.current?.querySelector<HTMLButtonElement>('.dc-starter'))?.focus();
-          }}
-        >
-          <Icon name="plus" size={16} />
-          New Quick Draft
-          <kbd aria-hidden="true">{chord(mac, 'N')}</kbd>
-        </button>
-
-        <div className="dc-desk-label">
-          {history ? (
-            <div role="tablist" aria-label="Show">
-              {sources.map((source, i) => (
-                <button
-                  key={source.id}
-                  type="button"
-                  role="tab"
-                  data-source={source.id}
-                  aria-selected={source.id === active?.id}
-                  tabIndex={source.id === active?.id ? 0 : -1}
-                  onClick={() => choose(source.id)}
-                  onKeyDown={(event) => onTabKey(event, i)}
-                >
-                  {source.label}
-                </button>
-              ))}
+            <div className="dc-desk-motto" ref={mottoRef}>
+              <span className="dc-desk-motto-frame" aria-hidden="true">
+                <span data-at="nw" />
+                <span data-at="ne" />
+                <span data-at="se" />
+                <span data-at="sw" />
+              </span>
+              <h1>{PRODUCT.motto}</h1>
+              {!returning && <p>{PRODUCT.tagline}</p>}
             </div>
-          ) : (
-            <span className="dc-desk-caption">or cheat a little</span>
-          )}
-        </div>
 
-        <div className="dc-desk-row" ref={rowRef} role={history ? 'tabpanel' : 'group'} aria-label={active?.label ?? 'Starters'}>
-          {shown.map((tile, i) => (
-            <DocTile
-              key={`${active!.id}:${tile.entryKey}`}
-              {...tile}
-              index={i}
-              onHot={(on) => setHot(on ? { index: i, description: tile.description } : null)}
-              onKeyDown={onTileKey}
-            />
-          ))}
-          {moreShown && (
-            <DocTile
-              key={`${active!.id}:more`}
-              entryKey={`${active!.id}:more`}
-              kind="more"
-              name={moreShown.label}
-              label={moreShown.label}
-              index={shown.length}
-              onOpen={moreShown.run}
-              onHot={(on) => setHot(on ? { index: shown.length, description: moreShown.description } : null)}
-              onKeyDown={onTileKey}
-            />
-          )}
-          {!catalog && shown.length === 0 && <div className="dc-desk-row-pending" />}
-        </div>
+            <button
+              ref={actionRef}
+              type="button"
+              className="dc-desk-action"
+              aria-label="New Quick Draft"
+              aria-describedby="dc-desk-action-hint"
+              aria-keyshortcuts={mac ? 'Meta+N' : 'Control+N'}
+              onClick={() => void controller.newQuickDraft()}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowDown') return;
+                event.preventDefault();
+                (rootRef.current?.querySelector<HTMLButtonElement>('.dc-desk-label [aria-selected="true"]') ??
+                  rowRef.current?.querySelector<HTMLButtonElement>('.dc-starter'))?.focus();
+              }}
+            >
+              <Icon name="plus" size={16} />
+              <span className="dc-desk-action-text">
+                <span>Quick Draft</span>
+                <span className="dc-desk-action-hint" id="dc-desk-action-hint">
+                  Start drawing. Name it later.
+                </span>
+              </span>
+              <kbd aria-hidden="true">{chord(mac, 'N')}</kbd>
+            </button>
 
-        <p className="dc-desk-readout" aria-hidden="true" data-idle={hot ? undefined : 'true'}>
-          {hot ? hot.description : '← → browse  ·  ↵ open'}
-        </p>
-        {active?.aside && <div className="dc-desk-aside">{active.aside}</div>}
+            <div className="dc-desk-label">
+              {history ? (
+                <div role="tablist" aria-label="Show">
+                  {sources.map((source, i) => (
+                    <button
+                      key={source.id}
+                      type="button"
+                      role="tab"
+                      id={`dc-desk-tab-${source.id}`}
+                      data-source={source.id}
+                      aria-selected={source.id === active?.id}
+                      aria-controls="dc-desk-row"
+                      tabIndex={source.id === active?.id ? 0 : -1}
+                      onClick={() => choose(source.id)}
+                      onKeyDown={(event) => onTabKey(event, i)}
+                    >
+                      {source.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="dc-desk-caption">or cheat a little</span>
+              )}
+            </div>
 
-        <nav className="dc-desk-ways" aria-label="More ways in">
-          <DeskWay icon="upload" label="Open file…" keys={chord(mac, 'O')} onClick={() => void controller.openFile()} />
-          <DeskWay icon="folder" label="Add project…" keys={chord(mac, 'O', true)} onClick={() => void controller.pickProject()} />
-          <DeskWay icon="file" label="New canvas…" keys={chord(mac, 'N', true)} onClick={() => void controller.newCanvas()} />
-          {history && <DeskWay icon="search" label="Find a diagram" keys={chord(mac, 'F')} onClick={() => setBrowse('all')} />}
-        </nav>
+            <div
+              className="dc-desk-row"
+              id="dc-desk-row"
+              ref={rowRef}
+              role={history ? 'tabpanel' : 'group'}
+              {...(history ? { 'aria-labelledby': `dc-desk-tab-${active?.id}` } : { 'aria-label': 'Starters' })}
+            >
+              {shown.map((tile, i) => (
+                <DocTile
+                  key={`${active!.id}:${tile.entryKey}`}
+                  {...tile}
+                  index={i}
+                  onHot={(on) => setHot(on ? { index: i, description: tile.description } : null)}
+                  onKeyDown={onTileKey}
+                />
+              ))}
+              {moreShown && (
+                <DocTile
+                  key={`${active!.id}:more`}
+                  entryKey={`${active!.id}:more`}
+                  kind="more"
+                  name={moreShown.label}
+                  label={moreShown.label}
+                  index={shown.length}
+                  onOpen={moreShown.run}
+                  onHot={(on) => setHot(on ? { index: shown.length, description: moreShown.description } : null)}
+                  onKeyDown={onTileKey}
+                />
+              )}
+              {empty && (
+                <p className="dc-desk-empty" key={`${active!.id}:empty`}>
+                  {empty}
+                </p>
+              )}
+              {!catalog && shown.length === 0 && !empty && <div className="dc-desk-row-pending" />}
+            </div>
+
+            <p className="dc-desk-readout" aria-hidden="true" data-idle={hot ? undefined : 'true'}>
+              {hot ? hot.description : empty ? '' : active?.note}
+            </p>
+            {active?.aside && active.tiles.length > 0 && <div className="dc-desk-aside">{active.aside}</div>}
+
+            <nav className="dc-desk-ways" aria-label="More ways in">
+              <DeskWay
+                icon="file"
+                label="New file…"
+                hint="Choose where it’s saved, then draw"
+                keys={chord(mac, 'N', true)}
+                onClick={() => void controller.newCanvas()}
+              />
+              <span className="dc-desk-ways-rule" aria-hidden="true" />
+              <DeskWay icon="upload" label="Open file…" keys={chord(mac, 'O')} onClick={() => void controller.openFile()} />
+              <DeskWay icon="folder" label="Add project…" keys={chord(mac, 'O', true)} onClick={() => void controller.pickProject()} />
+              {history && <DeskWay icon="search" label="Find a diagram" keys={chord(mac, 'F')} onClick={() => setBrowse('all')} />}
+            </nav>
+          </>
+        )}
       </main>
 
-      <footer className="dc-desk-foot">
-        <TrayMark />
-        <span>
-          Lives in your {mac ? 'menu bar' : 'system tray'} — {chord(mac, 'N')} from anywhere. Only the files you choose; nothing you draw
-          leaves this computer.
-        </span>
-      </footer>
+      {state.listed && (
+        <footer className="dc-desk-foot">
+          {/* Only where the shell actually put an icon up: some Linux desktops have nowhere for one. */}
+          {state.tray && <TrayMark />}
+          <span>
+            {state.tray && `Available from your ${mac ? 'menu bar' : 'system tray'}. `}Your diagrams stay local.
+          </span>
+        </footer>
+      )}
 
       {browsing && (
         <StarterBrowser
@@ -286,6 +354,11 @@ export function DesktopHome() {
   );
 }
 
+/** There is something to come back to: a draft, a file opened before, a project. */
+function hasWork(state: DesktopState): boolean {
+  return state.recovery.length > 0 || state.projects.length > 0 || state.recents.some((item) => item.kind === 'file');
+}
+
 /**
  * The desk's connectors, in the canvas's own hand: the motto into the Quick Draft node, and one
  * trunk from it down to a bus with a drop into every tile — rounded orthogonal corners and small
@@ -295,11 +368,17 @@ export function DesktopHome() {
 function Connectors({ geometry, hot, dashedLast }: { geometry: DeskGeometry; hot: number | null; dashedLast: boolean }) {
   const { width, height, motto, actionTop, actionBottom, busY, tiles } = geometry;
   const routes = tiles.map((tile) => routeTo(actionBottom, busY, tile));
+  const gap = actionTop.y - 3 - (motto.y + 3);
   return (
     <svg className="dc-desk-wires" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" focusable="false">
-      <circle className="dc-desk-anchor" cx={motto.x} cy={motto.y} r={3} />
-      <path className="dc-desk-link" d={`M${motto.x} ${motto.y + 3}V${actionTop.y - 3}`} pathLength={1} />
-      <path className="dc-desk-arrow dc-desk-link-arrow" d={arrow(actionTop.x, actionTop.y - 3)} />
+      {/* Too short a link reads as a glitch, not a connector: then the two nodes simply stack. */}
+      {gap >= 14 && (
+        <>
+          <circle className="dc-desk-anchor" cx={motto.x} cy={motto.y} r={3} />
+          <path className="dc-desk-link" d={`M${motto.x} ${motto.y + 3}V${actionTop.y - 3}`} pathLength={1} />
+          <path className="dc-desk-arrow dc-desk-link-arrow" d={arrow(actionTop.x, actionTop.y - 3)} />
+        </>
+      )}
       {/* The lit route last, so the trunk and bus it shares with the others are drawn in its colour. */}
       {routes
         .map((route, i) => ({ route, i }))
@@ -340,34 +419,47 @@ function arrow(x: number, y: number): string {
   return `M${x - 4} ${y - 5}L${x} ${y}L${x + 4} ${y - 5}`;
 }
 
-/** How many tiles fit the stage's width, kept current as the window is resized. */
-function useCapacity(stageRef: RefObject<HTMLElement | null>): number {
+/** How many tiles of the given scale fit the stage's width, kept current as the window is resized. */
+function useCapacity(stageRef: RefObject<HTMLElement | null>, scale: number, gap: number, away: boolean): number {
   const [capacity, setCapacity] = useState(MAX_TILES);
   useLayoutEffect(() => {
     const stage = stageRef.current;
-    if (!stage || typeof ResizeObserver === 'undefined') return;
+    if (away || !stage || typeof ResizeObserver === 'undefined') return;
     const measure = () => {
-      const fit = Math.floor((stage.clientWidth + GAP) / (TILE + GAP));
+      const fit = Math.floor((stage.clientWidth + gap) / (TILE * scale + gap));
       setCapacity(Math.max(2, Math.min(MAX_TILES, fit)));
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(stage);
     return () => observer.disconnect();
-  }, [stageRef]);
+  }, [stageRef, scale, gap, away]);
   return capacity;
 }
 
-function DeskWay({ icon, label, keys, onClick }: { icon: 'upload' | 'folder' | 'file' | 'search'; label: string; keys: string; onClick: () => void }) {
+function DeskWay({
+  icon,
+  label,
+  hint,
+  keys,
+  onClick,
+}: {
+  icon: 'upload' | 'folder' | 'file' | 'search';
+  label: string;
+  /** What it does that its name alone doesn't say. */
+  hint?: string;
+  keys: string;
+  onClick: () => void;
+}) {
   return (
-    <Button variant="quiet" icon={icon} className="dc-desk-way" onClick={onClick}>
+    <Button variant="quiet" icon={icon} className="dc-desk-way" onClick={onClick} title={hint ? `${hint}  ${keys}` : keys}>
       {label}
       <kbd aria-hidden="true">{keys}</kbd>
     </Button>
   );
 }
 
-/** The menu-bar icon, drawn here so "lives in your menu bar" points at something you'll recognise. */
+/** The menu-bar icon, drawn here so "available from your menu bar" points at something you'll recognise. */
 function TrayMark() {
   return (
     <svg className="dc-desk-tray-mark" viewBox="3 3.5 26 26" width="14" height="14" aria-hidden="true" focusable="false">
@@ -389,33 +481,39 @@ function folderOf(file: ProjectFile): string {
 }
 
 /**
- * Everything the fan can point at, most pressing first: what isn't saved, what was open, the projects,
- * the starters. Four at most, however many projects there are: the Projects row shows the most recent,
- * and "All" opens every one of them in the browse view.
+ * Everything the fan can point at, most pressing first: the drafts, what was open, the projects, the
+ * starters. Four at most, however many projects there are: the Projects row shows the most recent,
+ * and "All" opens every one of them in the browse view. Once there is any work at all, Drafts and
+ * Recent keep their place even when empty, so the tabs don't shift as a draft is saved or discarded.
  */
 function sourcesFor(
   state: DesktopState,
   controller: DesktopController,
   featured: readonly ArchitectureStarter[],
+  returning: boolean,
   { showAll, browseStarters }: { showAll: (scope: BrowseScope) => void; browseStarters: () => void },
 ): Source[] {
   const sources: Source[] = [];
   const tiles = groupsFor(state, controller);
 
-  if (tiles.unsaved.length > 0) {
+  if (returning) {
     sources.push({
       id: 'unsaved',
-      label: 'Unsaved',
+      label: 'Drafts',
       tiles: tiles.unsaved,
-      more: { label: `All ${tiles.unsaved.length}`, description: 'Every draft that isn’t saved yet', run: () => showAll('unsaved') },
+      note: 'Drafts are saved locally. Save to a file whenever you’re ready.',
+      empty: 'No drafts. A Quick Draft you draw on waits here until you save it.',
+      more: { label: `All ${tiles.unsaved.length}`, description: 'Every draft not saved to a file yet', run: () => showAll('unsaved') },
     });
   }
 
-  if (tiles.recent.length > 0) {
+  if (returning) {
     sources.push({
       id: 'recent',
       label: 'Recent',
       tiles: tiles.recent,
+      note: 'Files you opened lately',
+      empty: 'Nothing opened lately. Files you open or save show up here.',
       more: { label: `All ${tiles.recent.length}`, description: 'Everything opened lately', run: () => showAll('recent') },
       aside: (
         <Button variant="quiet" className="dc-desk-aside-action" onClick={() => void controller.clearRecents()}>
@@ -430,6 +528,7 @@ function sourcesFor(
       id: 'projects',
       label: 'Projects',
       tiles: state.projects.map((project) => projectCard(project, () => showAll({ project: project.info.handle }), controller)),
+      note: 'Folders of diagrams you added',
       more: {
         label: `All ${state.projects.length}`,
         description: `Every project, and every diagram in them`,
@@ -451,6 +550,7 @@ function sourcesFor(
       haystack: starter.name.toLowerCase(),
       onOpen: () => void controller.newQuickDraft(starter.id),
     })),
+    note: 'Each starts a Quick Draft with it',
     more: { label: 'All starters', description: 'Every architecture and pattern Draft Canvas knows', run: browseStarters },
   });
 
@@ -476,10 +576,11 @@ function draftTile(entry: RecoveryEntry, controller: DesktopController): TileSpe
     entryKey: `draft:${entry.id}`,
     kind: 'document',
     name,
-    meta: fromFile ? `Unsaved · ${when}` : when,
+    // Changes to a file were left unsaved when the app closed without asking: that one is a warning.
+    meta: fromFile ? `Unsaved changes · ${when}` : when,
     edited: true,
-    label: `Recover ${name}`,
-    description: `${fromFile ? 'Unsaved changes' : 'Not saved yet'} · ${when}`,
+    label: fromFile ? `Recover unsaved changes to ${name}` : `Open ${name}, a draft not saved to a file`,
+    description: fromFile ? `Changes to ${name} that were never saved · ${when}` : `Saved locally, not to a file · ${when}`,
     haystack: name.toLowerCase(),
     thumbnail: { key: `draft:${entry.id}:${entry.updatedAt}`, load: () => controller.peek({ kind: 'draft', id: entry.id }) },
     onOpen: () => void controller.recover(entry.id),

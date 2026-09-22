@@ -153,11 +153,16 @@ export class DesktopController {
     this.store.update({
       ready: true,
       platform: boot.platform,
+      tray: boot.tray,
       settings: boot.settings,
       // Known by name only: each is listed when something shows it.
       projects: boot.projects.map((info) => ({ info, status: 'unscanned', files: [], truncated: false })),
     });
-    await Promise.all([this.refreshRecents(), this.refreshRecovery(), this.refreshUpdate()]);
+    const update = this.refreshUpdate();
+    // Each refresh reports its own failure, so Home still learns that listing is over.
+    await Promise.all([this.refreshRecents(), this.refreshRecovery()]);
+    this.store.update({ listed: true });
+    await update;
   }
 
   private async onHostEvent(event: HostEvent): Promise<void> {

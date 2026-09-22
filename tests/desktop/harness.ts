@@ -109,6 +109,7 @@ export function createHarness() {
         platform: 'macos' as const,
         settings: { closeBehavior: 'ask' as const, autoCheckUpdates: true },
         projects: listed.filter((handle) => !folders.get(handle)!.missing).map((handle) => folders.get(handle)!.info),
+        tray: true,
       };
     }),
     reportState: vi.fn(async (_state: DocState) => {}),

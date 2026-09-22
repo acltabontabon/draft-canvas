@@ -10,7 +10,7 @@ export interface DeskGeometry {
   motto: Point;
   actionTop: Point;
   actionBottom: Point;
-  /** Where the bus runs, just above the row. */
+  /** Where the bus runs, between the row's label and its drawings. */
   busY: number;
   /** The top-centre of each tile's drawing, left to right. */
   tiles: Point[];
@@ -42,19 +42,26 @@ export function useDeskGeometry(
       const at = (element: HTMLElement) => offsetWithin(element, stage);
       const m = at(motto);
       const a = at(action);
-      const tiles = [...row.querySelectorAll<HTMLElement>('.dc-starter-swatch')].map((swatch) => {
-        const s = at(swatch);
-        // The drawing sits 4px down in its swatch; the arrow stops just above it.
-        return { x: Math.round(s.x + swatch.offsetWidth / 2), y: Math.round(s.y + 2) };
+      // Each drop ends at its drawing's own selection frame — the way a connector meets a node — not at
+      // the top of the swatch, which is empty canvas above a short drawing. A row with nothing in it
+      // says so in words, and the connector ends at those instead.
+      const tiles = [...row.querySelectorAll<HTMLElement>('.dc-starter-swatch, .dc-desk-empty')].map((target) => {
+        const s = at(target);
+        const frame = target.querySelector<HTMLElement>('.dc-chrome');
+        return { x: Math.round(s.x + target.offsetWidth / 2), y: Math.round(s.y + (frame ? frame.offsetTop : 2)) };
       });
       const top = tiles.length > 0 ? Math.min(...tiles.map((tile) => tile.y)) : at(row).y;
+      // The bus runs a short way under the label above the row, leaving the longer part of the gap to
+      // the drops, so their arrowheads never crowd the bus; it clears both however tight the gap is.
+      const labelBottom = at(row).y - (parseFloat(getComputedStyle(row).marginTop) || 0);
+      const gap = Math.max(0, top - labelBottom);
       const next: DeskGeometry = {
         width: stage.clientWidth,
         height: stage.clientHeight,
         motto: { x: Math.round(m.x + motto.offsetWidth / 2), y: Math.round(m.y + motto.offsetHeight) },
         actionTop: { x: Math.round(a.x + action.offsetWidth / 2), y: Math.round(a.y) },
         actionBottom: { x: Math.round(a.x + action.offsetWidth / 2), y: Math.round(a.y + action.offsetHeight) },
-        busY: top - 22,
+        busY: Math.round(labelBottom + Math.min(14, gap * 0.4)),
         tiles,
       };
       setGeometry((current) => (current && same(current, next) ? current : next));

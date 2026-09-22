@@ -85,7 +85,7 @@ export function DeskBrowse({
   const make = groupsFor(state);
   const groups = ((): Group[] => {
     const list: Group[] = [];
-    if (make.unsaved.length > 0) list.push({ id: 'unsaved', title: 'Unsaved', meta: count(make.unsaved.length, 'draft'), tiles: make.unsaved });
+    if (make.unsaved.length > 0) list.push({ id: 'unsaved', title: 'Drafts', meta: count(make.unsaved.length, 'draft'), tiles: make.unsaved });
     if (make.recent.length > 0) {
       list.push({
         id: 'recent',
@@ -164,7 +164,7 @@ export function DeskBrowse({
 
   const scopes: { key: string; value: BrowseScope; label: string; count?: number }[] = [
     { key: 'all', value: 'all', label: 'Everything' },
-    ...(make.unsaved.length > 0 ? [{ key: 'unsaved', value: 'unsaved' as const, label: 'Unsaved', count: make.unsaved.length }] : []),
+    ...(make.unsaved.length > 0 ? [{ key: 'unsaved', value: 'unsaved' as const, label: 'Drafts', count: make.unsaved.length }] : []),
     ...(make.recent.length > 0 ? [{ key: 'recent', value: 'recent' as const, label: 'Recent', count: make.recent.length }] : []),
     ...state.projects.map((project) => ({
       key: `project:${project.info.handle}`,

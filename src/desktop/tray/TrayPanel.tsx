@@ -114,8 +114,8 @@ export function TrayPanel({ api }: { api: PanelApi }) {
 
       <div className="dc-tray-flow" key={shown}>
         {drafts.length > 0 && (
-          <section className="dc-tray-section" aria-label="Unsaved">
-            <h2 className="dc-tray-label">Unsaved</h2>
+          <section className="dc-tray-section" aria-label="Drafts">
+            <h2 className="dc-tray-label">Drafts</h2>
             <ul className="dc-tray-drafts">
               {drafts.map((draft, index) => (
                 <li key={draft.id} style={{ '--i': index } as CSSProperties}>
@@ -162,7 +162,7 @@ export function TrayPanel({ api }: { api: PanelApi }) {
       <nav className="dc-tray-ways" aria-label="More ways in">
         <Way glyph="open" label="Open…" keys={`${MOD}O`} onClick={() => choose('tray:open')} />
         <Way glyph="openProject" label="Project…" keys={`${SHIFT}${MOD}O`} onClick={() => choose('tray:open-project')} />
-        <Way glyph="newCanvas" label="New canvas" keys={`${SHIFT}${MOD}N`} onClick={() => choose('tray:new-canvas')} />
+        <Way glyph="newCanvas" label="New file…" keys={`${SHIFT}${MOD}N`} onClick={() => choose('tray:new-canvas')} />
       </nav>
     </div>
   );
