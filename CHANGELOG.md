@@ -12,6 +12,55 @@ and apply to the web app.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-22
+
+Draft Canvas Desktop leaves preview: the same editor in its own window, with your diagrams as files on
+your disk. Connectors are easier to pick out and click on every platform.
+
+### Shared
+
+#### Fixed
+
+- **Click a connector anywhere along it** — its straight runs, bends and curves, the gaps in a dashed or
+  dotted line, and its arrowhead now select it, labelled or not, at any zoom. Before, the last stretch of
+  every arrow sat under the shape's invisible connection points, and beside some lines half of the area
+  you could click didn't respond, so often only the label worked. <!-- highlight -->
+- Where connectors run close together, a click takes the one nearest the pointer instead of whichever
+  happened to be drawn last. Where several run as one line, click again for the next of them.
+- Two clicks near two arrowheads no longer draw a new connector between their shapes, and Shift-clicking a
+  connector adds it to the selection instead of starting a selection box.
+
+#### Added
+
+- **See which connector you're pointing at** — hovering one gives it a faint highlight and marks its two
+  ends, so it's clear what a click will select. It's quieter than selecting it, opens nothing, and stays out
+  of the way while you pan, drag or draw. <!-- highlight -->
+- **One label where connectors leave together** — when connectors leave a shape along the same line with
+  the same label, it's shown once on the stretch they share instead of once per connector. Each keeps its
+  own label in the file and in text exports, and is still selected and edited on its own: click the shared
+  label to pick one, and again for the next. Exported images show it once too. <!-- highlight -->
+
+### Desktop
+
+#### Fixed
+
+- **Projects with subfolders open reliably** — going back to a project's folders after opening a diagram
+  from one crashed the app with "Something went wrong". Diagrams now open from a project's top level or any
+  subfolder, and you come back to the folder you were in — including when files in different folders share
+  a name. <!-- highlight -->
+
+#### Changed
+
+- In dark mode, Home's dotted background is quieter, so the headline, **Quick Draft** and your diagrams
+  stand out against it. Light mode looks as it did.
+
+### Web
+
+#### Changed
+
+- In dark mode, the dotted canvas behind the welcome screen is quieter, so the starters and the words
+  around them come first. Light mode looks as it did.
+
 ## [1.10.0-alpha.2] - 2026-09-22
 
 ### Shared

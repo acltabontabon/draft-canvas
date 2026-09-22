@@ -6,7 +6,7 @@ kept on your computer, and when you're done it is a `.draftcanvas` file wherever
 
 Nothing about it needs an account, a server or a network connection. It is one of three ways to use
 Draft Canvas, and all three work on the same file: the [web app](getting-started.md), the
-[VS Code extension](vscode.md), and this. It is a preview, for macOS on Apple Silicon and Windows on x64.
+[VS Code extension](vscode.md), and this. It is for macOS on Apple Silicon and Windows on x64.
 
 ## Quick Draft
 

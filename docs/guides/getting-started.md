@@ -38,6 +38,11 @@ says it *publishes to* it, and reads in the direction the arrow points. To chang
 connector and pick another relationship from its popover; only those that make sense for that pair
 are offered. Nothing stops you drawing something unusual on purpose.
 
+Pointing at a connector highlights it faintly and marks its two ends, so you can see which one a click
+will select; click anywhere along its line, or on its arrowhead. When several connectors leave a shape
+along the same line with the same label, the label is shown once on the stretch they share. Click it to
+select one of them, and click again for the next.
+
 ![Orders API, a queue called orders and Fulfilment worker in a row. The connectors are labelled "publishes to" and "consumed by".](../media/guides/service-queue-worker.png)
 
 Some other ways to draw the same thing:
