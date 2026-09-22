@@ -73,15 +73,16 @@ pub(crate) fn remember_file(state: &AppState, path: &Path, name: &str) {
     remember_dir(state, path.parent());
 }
 
+/// A project picked or opened goes to the front of the project list (Recent is for files; the list is
+/// where projects live), and its folder is where the next dialog starts.
 pub(crate) fn remember_project(state: &AppState, root: &Path, name: &str) {
-    let _ = state.recents.add(RecentKind::Project, root, name, now_ms());
     if let Some(path) = root.to_str() {
-        let last = LastProject {
+        let project = LastProject {
             path: path.to_string(),
             name: name.to_string(),
         };
         let _ = state.settings.update(|s| {
-            s.last_project = Some(last);
+            s.remember_project(project);
             s.last_dir = Some(path.to_string());
         });
     }

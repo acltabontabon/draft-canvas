@@ -165,8 +165,67 @@ test('keeps the row to one line, with the rest one click away', async ({ page })
   const tops = await row.locator('.dc-desk-tile').evaluateAll((tiles) => new Set(tiles.map((tile) => (tile as HTMLElement).offsetTop)).size);
   expect(tops).toBe(1);
 
+  // The rest open in the browse view, scoped to Recent, drawn as the row draws them.
   await more.click();
-  await expect(page.locator('.dc-desk-all li')).toHaveCount(8);
+  const recent = page.getByRole('region', { name: 'Recent' });
+  await expect(recent.locator('.dc-desk-tile')).toHaveCount(8);
+  await expect(page.getByRole('button', { name: /^Recent/, pressed: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+});
+
+test('holds many projects: one Projects tab, a row of the newest, and everything one search away', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Flow', 3);
+  await page.addInitScript((text) => {
+    window.__shell.seed({
+      projects: Array.from({ length: 10 }, (_, p) => ({
+        name: `project-${p + 1}`,
+        diagrams: Array.from({ length: 200 }, (_, i) => ({ path: `${i % 4 === 0 ? 'flows/' : ''}p${p + 1}-diagram-${i + 1}.draftcanvas`, text, ago: (i + 1) * 60_000 })),
+      })),
+    });
+  }, text);
+  await page.reload();
+
+  // However many projects: one Projects tab, never a tab each.
+  await expect(page.getByRole('tab')).toHaveText(['Projects', 'Starters']);
+  await page.getByRole('tab', { name: 'Projects' }).click();
+  const row = page.locator('.dc-desk-row');
+  await expect(row.getByRole('button', { name: 'All 10' })).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Show the project-1 project' })).toContainText('200 diagrams');
+
+  // Only the projects in the row were listed, and nothing was read beyond their front drawings.
+  const called = () => page.evaluate(() => window.__shell.calls().map((call) => call.command));
+  const scans = (await called()).filter((command) => command === 'project_scan').length;
+  expect(scans).toBeLessThan(10);
+
+  // One project: its diagrams, drawn — but only the ones on screen are read.
+  await row.getByRole('button', { name: 'Show the project-2 project' }).click();
+  const group = page.getByRole('region', { name: 'project-2' });
+  await expect(group.locator('.dc-desk-tile')).toHaveCount(60);
+  await expect(group.getByRole('button', { name: 'Show all 200' })).toBeVisible();
+  await expect.poll(async () => (await called()).filter((command) => command === 'project_peek').length).toBeGreaterThan(5);
+  const peeks = (await called()).filter((command) => command === 'project_peek').length;
+  expect(peeks).toBeLessThan(80);
+
+  // Everything, then a search across all ten projects.
+  await page.getByRole('button', { name: /^Everything/ }).click();
+  await expect.poll(async () => (await called()).filter((command) => command === 'project_scan').length).toBeGreaterThanOrEqual(10);
+  await page.getByLabel('Find a diagram').fill('p7-diagram-12');
+  await expect(page.getByRole('status')).toHaveText(/^\d+ diagrams? match/);
+  await expect(page.locator('.dc-browse-group')).toHaveCount(1);
+  await expect(page.getByRole('region', { name: 'project-7' }).locator('.dc-desk-tile').first()).toContainText('p7-diagram-12');
+
+  // A diagram from the search opens from its own project.
+  await page.getByRole('button', { name: 'Open p7-diagram-12', exact: true }).click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  const opened = await page.evaluate(() =>
+    window.__shell
+      .calls()
+      .filter((call) => call.command === 'project_open_file')
+      .map((call) => (call.args as { relPath: string }).relPath),
+  );
+  expect(opened).toEqual(['p7-diagram-12.draftcanvas']);
 });
 
 test('opens a file, says when it has unsaved changes, and asks before leaving it', async ({ page }) => {

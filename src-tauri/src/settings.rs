@@ -38,9 +38,19 @@ pub struct Settings {
     /// Look for a newer version shortly after launch and once a day. Only ever looks: downloading and
     /// installing are always asked for. A file written before this existed reads as on.
     pub auto_check_updates: bool,
+    /// The project folders the person has added, most recently opened first. Written by Rust after a
+    /// folder is picked or opened, never by the page.
+    pub projects: Vec<LastProject>,
+    /// Before there could be several: the one project the last session had open. Read once into
+    /// `projects`, and never written again.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub last_project: Option<LastProject>,
     pub last_dir: Option<String>,
 }
+
+/// How many projects are remembered. Past this the oldest is let go; its folder is untouched, and adding
+/// it again brings it back.
+pub const PROJECTS_CAP: usize = 50;
 
 impl Default for Settings {
     fn default() -> Self {
@@ -48,9 +58,34 @@ impl Default for Settings {
             v: VERSION,
             close_behavior: CloseBehavior::default(),
             auto_check_updates: true,
+            projects: Vec::new(),
             last_project: None,
             last_dir: None,
         }
+    }
+}
+
+impl Settings {
+    /// Puts a project first, adding it if it's new, and keeps the list within its cap.
+    pub fn remember_project(&mut self, project: LastProject) {
+        self.projects.retain(|p| p.path != project.path);
+        self.projects.insert(0, project);
+        self.projects.truncate(PROJECTS_CAP);
+    }
+
+    /// Lets a project go from the list. Only the list: the folder and its files are never touched.
+    pub fn forget_project(&mut self, path: &str) {
+        self.projects.retain(|p| p.path != path);
+    }
+
+    /// A file written when there could only be one project becomes a list of one.
+    fn migrate(mut self) -> Self {
+        if let Some(last) = self.last_project.take() {
+            if !self.projects.iter().any(|p| p.path == last.path) {
+                self.projects.insert(0, last);
+            }
+        }
+        self
     }
 }
 
@@ -63,6 +98,7 @@ pub struct DesktopSettings {
 }
 
 impl Settings {
+    /// The part the page may see.
     pub fn public(&self) -> DesktopSettings {
         DesktopSettings {
             close_behavior: self.close_behavior,
@@ -132,7 +168,7 @@ impl SettingsStore {
             Err(_) => return self.set_aside(),
         };
         match serde_json::from_slice::<Settings>(&bytes) {
-            Ok(settings) if settings.v == VERSION => settings,
+            Ok(settings) if settings.v == VERSION => settings.migrate(),
             _ => self.set_aside(),
         }
     }
@@ -166,7 +202,7 @@ mod tests {
         let store = SettingsStore::new(&dir.path().join("config"));
         assert_eq!(store.get(), Settings::default());
         assert_eq!(store.get().close_behavior, CloseBehavior::Ask);
-        assert!(store.get().last_project.is_none() && store.get().last_dir.is_none());
+        assert!(store.get().projects.is_empty() && store.get().last_dir.is_none());
     }
 
     #[test]
@@ -272,10 +308,51 @@ mod tests {
         .unwrap();
         let settings = SettingsStore::new(dir.path()).get();
         assert_eq!(settings.close_behavior, CloseBehavior::Tray);
-        assert!(settings.last_project.is_none());
+        assert!(settings.projects.is_empty());
         // Written before the updater existed: it looks for updates, as a new install does.
         assert!(settings.auto_check_updates);
         assert!(!dir.path().join("settings.json.bad").exists());
+    }
+
+    #[test]
+    fn the_one_project_of_an_older_file_becomes_a_list_of_one() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("settings.json"),
+            r#"{"v":1,"lastProject":{"path":"/work/payments","name":"payments"}}"#,
+        )
+        .unwrap();
+        let store = SettingsStore::new(dir.path());
+        let settings = store.get();
+        assert_eq!(settings.projects.len(), 1);
+        assert_eq!(settings.projects[0].name, "payments");
+        assert!(settings.last_project.is_none());
+        // Once written back, the old key is gone.
+        store.update(|_| {}).unwrap();
+        let stored = fs::read_to_string(dir.path().join("settings.json")).unwrap();
+        assert!(!stored.contains("lastProject"));
+    }
+
+    #[test]
+    fn projects_are_most_recent_first_without_duplicates_and_capped() {
+        let mut settings = Settings::default();
+        let project = |n: usize| LastProject {
+            path: format!("/p/{n}"),
+            name: format!("p{n}"),
+        };
+        for n in 0..PROJECTS_CAP + 5 {
+            settings.remember_project(project(n));
+        }
+        assert_eq!(settings.projects.len(), PROJECTS_CAP);
+        assert_eq!(
+            settings.projects[0].path,
+            format!("/p/{}", PROJECTS_CAP + 4)
+        );
+        settings.remember_project(project(10));
+        assert_eq!(settings.projects[0].path, "/p/10");
+        assert_eq!(settings.projects.len(), PROJECTS_CAP);
+        settings.forget_project("/p/10");
+        assert!(settings.projects.iter().all(|p| p.path != "/p/10"));
     }
 
     #[test]
@@ -297,7 +374,7 @@ mod tests {
         let store = SettingsStore::new(dir.path());
         let settings = store
             .update(|s| {
-                s.last_project = Some(LastProject {
+                s.remember_project(LastProject {
                     path: "/p".into(),
                     name: "p".into(),
                 });
@@ -307,7 +384,7 @@ mod tests {
             serde_json::from_slice(&fs::read(dir.path().join("settings.json")).unwrap()).unwrap();
         assert_eq!(
             stored,
-            json!({"v": 1, "closeBehavior": "ask", "autoCheckUpdates": true, "lastProject": {"path": "/p", "name": "p"}, "lastDir": null})
+            json!({"v": 1, "closeBehavior": "ask", "autoCheckUpdates": true, "projects": [{"path": "/p", "name": "p"}], "lastDir": null})
         );
         assert_eq!(
             serde_json::to_value(settings.public()).unwrap(),

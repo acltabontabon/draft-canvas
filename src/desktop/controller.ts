@@ -17,7 +17,7 @@ import {
   type UpdateSnapshot,
 } from './api';
 import type { HostLink } from './channel';
-import type { DesktopDoc, DesktopStore } from './store';
+import type { DesktopDoc, DesktopStore, ProjectState } from './store';
 
 /** What the controller needs from the app around it, kept out of here so this stays free of React. */
 export interface DesktopUi {
@@ -150,9 +150,14 @@ export class DesktopController {
 
   async start(): Promise<void> {
     const boot = await this.api.hostReady((event) => void this.onHostEvent(event));
-    this.store.update({ ready: true, platform: boot.platform, settings: boot.settings });
+    this.store.update({
+      ready: true,
+      platform: boot.platform,
+      settings: boot.settings,
+      // Known by name only: each is listed when something shows it.
+      projects: boot.projects.map((info) => ({ info, status: 'unscanned', files: [], truncated: false })),
+    });
     await Promise.all([this.refreshRecents(), this.refreshRecovery(), this.refreshUpdate()]);
-    if (boot.lastProject) await this.showProject(boot.lastProject);
   }
 
   private async onHostEvent(event: HostEvent): Promise<void> {
@@ -364,10 +369,8 @@ export class DesktopController {
     await this.swap('Couldn’t open the file', async () => this.switchTo(await this.api.openHandle(handle)));
   }
 
-  async openProjectFile(relPath: string): Promise<void> {
-    const project = this.store.getSnapshot().project;
-    if (!project) return;
-    await this.swap('Couldn’t open the file', async () => this.switchTo(await this.api.projectOpenFile(project.info.handle, relPath)));
+  async openProjectFile(project: Handle, relPath: string): Promise<void> {
+    await this.swap('Couldn’t open the file', async () => this.switchTo(await this.api.projectOpenFile(project, relPath)));
   }
 
   /** Makes `opened` the open document, once whatever is open now has been settled. Returns whether it did. */
@@ -454,6 +457,17 @@ export class DesktopController {
         return;
       }
       await this.switchTo(await this.api.openHandle(saved.handle));
+    });
+  }
+
+  /** A blank canvas made straight into a project folder, under the first free "Untitled canvas" name. */
+  async newCanvasIn(project: Handle): Promise<void> {
+    await this.swap('Couldn’t create the canvas', async () => {
+      if (!(await this.settleBeforeLeaving())) return;
+      const blank = encoder.encode(serializeDocument(createDocument()));
+      const saved = await this.api.projectSaveNew(project, 'Untitled canvas', blank);
+      await this.switchTo(await this.api.openHandle(saved.handle));
+      void this.scanProjects([project], { again: true });
     });
   }
 
@@ -573,17 +587,20 @@ export class DesktopController {
     if (saved) await this.becomeFile(saved, text);
   }
 
-  /** "Move into Project…": a Quick Draft becomes a file in the open folder, without a dialog. */
-  async moveIntoProject(): Promise<void> {
+  /**
+   * "Move into Project…": a Quick Draft becomes a file in a project folder, without a dialog — the one
+   * named, or the most recent, or one picked now.
+   */
+  async moveIntoProject(handle?: Handle): Promise<void> {
     await this.flushApp();
     if (this.session.kind !== 'quick') return;
     await this.swap('Couldn’t move the draft', async () => {
-      const project = this.store.getSnapshot().project?.info ?? (await this.pickProject());
+      const project = this.projects.find((candidate) => candidate.info.handle === handle)?.info ?? this.projects[0]?.info ?? (await this.pickProject());
       const text = this.latestText ?? this.savedText;
       if (!project || text === null) return;
       const saved = await this.api.projectSaveNew(project.handle, this.suggestedName(text), encoder.encode(text));
       await this.becomeFile(saved, text);
-      await this.refreshProject();
+      await this.scanProjects([project.handle], { again: true });
     });
   }
 
@@ -724,7 +741,7 @@ export class DesktopController {
     this.publish();
     void this.refreshRecents();
     void this.refreshRecovery();
-    void this.refreshProject();
+    void this.refreshProjects();
   }
 
   // ─── Recovery snapshots ─────────────────────────────────────────────────────────────
@@ -823,7 +840,7 @@ export class DesktopController {
   private async onFocus(): Promise<void> {
     const session = this.session;
     if (session.kind === 'none') {
-      await this.refreshProject();
+      await this.refreshProjects();
       return;
     }
     if (session.kind !== 'file' || this.saving) return;
@@ -846,41 +863,81 @@ export class DesktopController {
 
   // ─── Projects, recents, settings ────────────────────────────────────────────────────
 
+  /** Picks a folder and puts it first on the project list, scanned. */
   async pickProject(): Promise<ProjectInfo | null> {
     let info: ProjectInfo | null = null;
-    await this.guard('Couldn’t open the project', async () => {
+    await this.guard('Couldn’t add the project', async () => {
       info = await this.api.pickProject();
-      if (info) await this.showProject(info);
+      if (info) await this.bringForward(info);
     });
     return info;
   }
 
+  /** A project chosen from somewhere (an old Recent entry, Home): first on the list, scanned. */
   async openProject(handle: Handle): Promise<void> {
-    await this.guard('Couldn’t open the project', async () => this.showProject(await this.api.openProject(handle)));
+    await this.guard('Couldn’t open the project', async () => this.bringForward(await this.api.openProject(handle)));
   }
 
-  private async showProject(info: ProjectInfo): Promise<void> {
-    this.store.update({ project: { info, files: [], truncated: false, loading: true } });
-    await this.refreshProject();
-    void this.refreshRecents();
+  /** Takes a project off the list. The folder and its files are left exactly as they are. */
+  async forgetProject(handle: Handle): Promise<void> {
+    await this.guard('Couldn’t remove the project', async () => {
+      await this.api.projectForget(handle);
+      this.setProjects(this.projects.filter((project) => project.info.handle !== handle));
+    });
   }
 
-  /** The folder's file list: names and dates only, never the diagrams themselves. */
-  async refreshProject(): Promise<void> {
-    const project = this.store.getSnapshot().project;
-    if (!project) return;
-    try {
-      const scan = await this.api.projectScan(project.info.handle);
-      this.store.update({ project: { ...project, files: scan.files, truncated: scan.truncated, loading: false } });
-    } catch (error) {
-      logDiagnostic(error, { operation: 'desktop-project-scan' });
-      // A folder that has gone away is no longer the project.
-      this.store.update({ project: null });
-    }
+  private get projects() {
+    return this.store.getSnapshot().projects;
   }
 
-  closeProject(): void {
-    this.store.update({ project: null });
+  private setProjects(projects: ProjectState[]): void {
+    this.store.update({ projects });
+  }
+
+  private async bringForward(info: ProjectInfo): Promise<void> {
+    const known = this.projects.find((project) => project.info.handle === info.handle);
+    this.setProjects([
+      known ? { ...known, info } : { info, status: 'unscanned', files: [], truncated: false },
+      ...this.projects.filter((project) => project.info.handle !== info.handle),
+    ]);
+    await this.scanProjects([info.handle], { again: true });
+  }
+
+  /**
+   * Lists the diagrams in these projects: names and dates only, never the diagrams themselves. A
+   * project already listed isn't listed again unless `again`, so whatever shows a project can ask
+   * for it freely. Two folders at a time: a slow drive holds up one lane, not the window.
+   */
+  async scanProjects(handles: Handle[], { again = false }: { again?: boolean } = {}): Promise<void> {
+    const wanted = handles.filter((handle) => {
+      const project = this.projects.find((candidate) => candidate.info.handle === handle);
+      return project && project.status !== 'scanning' && (again || project.status === 'unscanned');
+    });
+    if (wanted.length === 0) return;
+    this.setProjects(this.projects.map((project) => (wanted.includes(project.info.handle) ? { ...project, status: 'scanning' } : project)));
+    const queue = [...wanted];
+    const lane = async () => {
+      for (let handle = queue.shift(); handle !== undefined; handle = queue.shift()) {
+        let next: Pick<ProjectState, 'status' | 'files' | 'truncated'>;
+        try {
+          const scan = await this.api.projectScan(handle);
+          next = { status: 'ready', files: scan.files, truncated: scan.truncated };
+        } catch (error) {
+          logDiagnostic(error, { operation: 'desktop-project-scan' });
+          // Gone for now (an unplugged drive, a deleted checkout): still on the list, shown as missing.
+          next = { status: 'missing', files: [], truncated: false };
+        }
+        const done = handle;
+        this.setProjects(this.projects.map((project) => (project.info.handle === done ? { ...project, ...next } : project)));
+      }
+    };
+    await Promise.all([lane(), lane()]);
+  }
+
+  /** Every project that has been listed, listed again: after a save, or coming back to the window. */
+  async refreshProjects(): Promise<void> {
+    const shown = this.projects.filter((project) => project.status !== 'unscanned').map((project) => project.info.handle);
+    await this.scanProjects(shown, { again: true });
   }
 
   /**
@@ -888,12 +945,13 @@ export class DesktopController {
    * and anything that can't be looked at is `null` rather than an error — the tile shows a blank
    * sheet, and opening the file for real is what reports the problem.
    */
-  async peek(target: { kind: 'recent'; handle: Handle } | { kind: 'project'; relPath: string } | { kind: 'draft'; id: string }): Promise<string | null> {
+  async peek(
+    target: { kind: 'recent'; handle: Handle } | { kind: 'project'; project: Handle; relPath: string } | { kind: 'draft'; id: string },
+  ): Promise<string | null> {
     try {
       if (target.kind === 'draft') return await this.api.recoveryRead(target.id);
       if (target.kind === 'recent') return await this.api.peekDocument(target.handle);
-      const project = this.store.getSnapshot().project;
-      return project ? await this.api.projectPeek(project.info.handle, target.relPath) : null;
+      return await this.api.projectPeek(target.project, target.relPath);
     } catch {
       return null;
     }

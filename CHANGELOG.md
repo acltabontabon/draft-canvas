@@ -7,6 +7,20 @@ ahead of the release it leads to. Draft Canvas for VS Code has its own changelog
 
 ## [Unreleased]
 
+### Added
+
+- **Desktop:** keep as many projects as you work in. **Add project…** puts a folder on Home, and it stays
+  there beside the others until you remove it; opening another no longer closes the last.
+- **Desktop:** Home's **Projects** row shows each project as a small stack of its diagrams, with how many
+  and when it last changed. Choose one to see every diagram in it, drawn.
+- **Desktop:** **Find a diagram** (`⌘F`) searches every project, your recent files and your unsaved
+  drafts at once, by name or folder.
+
+### Changed
+
+- **Desktop:** Home stays quick however much you have: a project is only listed once something shows
+  it, and a diagram is only drawn once it's on screen.
+
 ## [1.10.0-alpha.1] - 2026-09-22
 
 The first alpha of Draft Canvas Desktop, a preview of what ships in 1.10.0: the same canvas as the web

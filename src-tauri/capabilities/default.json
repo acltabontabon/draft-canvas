@@ -23,6 +23,7 @@
     "allow-project-peek",
     "allow-pick-project",
     "allow-open-project",
+    "allow-project-forget",
     "allow-project-scan",
     "allow-project-open-file",
     "allow-project-save-new",

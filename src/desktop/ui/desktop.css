@@ -99,8 +99,7 @@
 .dc-desk-motto,
 .dc-desk-readout,
 .dc-desk-ways,
-.dc-desk-foot,
-.dc-desk-all {
+.dc-desk-foot {
   background: radial-gradient(closest-side, var(--dc-canvas) 72%, color-mix(in srgb, var(--dc-canvas) 0%, transparent));
 }
 
@@ -378,8 +377,37 @@
   opacity: 0.7;
 }
 
+/* A project: a stack of sheets, its newest diagram drawn small on the front one. The two drawings share
+   the swatch's one cell. */
+.dc-desk-tile[data-kind='project'] .dc-starter-swatch > .dc-starter-glyph {
+  grid-area: 1 / 1;
+}
+
+.dc-desk-tile[data-kind='project'] .dc-starter-glyph:not(.dc-desk-stack) {
+  transform: translate(-4px, 4px) scale(0.6);
+}
+
+.dc-desk-stack-sheet {
+  fill: var(--dc-canvas);
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.dc-desk-stack-sheet[data-depth='0'] {
+  opacity: 0.9;
+}
+
+.dc-desk-stack-sheet[data-depth='2'] {
+  opacity: 0.35;
+}
+
+.dc-desk-tile[data-missing] .dc-starter {
+  opacity: 0.45;
+}
+
 /* Still being read: only the canvas shows, so nothing flashes a blank page first. */
-.dc-desk-tile [data-thumbnail='loading'] .dc-starter-glyph {
+.dc-desk-tile [data-thumbnail='loading'] .dc-starter-glyph:not(.dc-desk-stack) {
   opacity: 0;
 }
 
@@ -501,54 +529,248 @@
   letter-spacing: 0.02em;
 }
 
-/* "All 12": the whole set, as a plain list, when the row can't hold it. */
-.dc-desk-all {
-  width: min(560px, 100%);
-  margin-top: 28px;
-  animation: dc-fade-in 160ms ease both;
+/* ---- browsing: everything, grouped, searchable --------------------------- */
+
+.dc-browse {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 0 32px 72px;
 }
 
-.dc-desk-all ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/* The search and the scopes stay put while the groups scroll under them. */
+.dc-browse-head,
+.dc-browse-scopes {
+  position: sticky;
+  z-index: 3;
+  background: color-mix(in srgb, var(--dc-canvas) 92%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
-.dc-desk-all li + li {
-  border-top: 1px solid var(--dc-border);
-}
-
-.dc-desk-all button {
+.dc-browse-head {
+  top: 0;
   display: flex;
-  align-items: baseline;
-  gap: 16px;
-  width: 100%;
-  padding: 9px 4px;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 0 12px;
+}
+
+.dc-browse-back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px 0 6px;
   border: 0;
-  background: none;
-  color: var(--dc-text);
+  border-radius: var(--dc-radius);
+  background: transparent;
+  color: var(--dc-text-muted);
   font: inherit;
-  text-align: left;
+  font-size: 13px;
   cursor: pointer;
 }
 
-.dc-desk-all button:hover .dc-desk-all-name {
-  color: var(--dc-selection);
+.dc-browse-back:hover {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
 }
 
-.dc-desk-all-name {
-  flex-shrink: 0;
+.dc-browse-search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  max-width: 560px;
+  height: 38px;
+  margin: 0 auto;
+  padding: 0 8px 0 13px;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+  background: var(--dc-surface);
+  color: var(--dc-text-faint);
+  transition:
+    border-color 120ms ease,
+    box-shadow 160ms ease;
+}
+
+.dc-browse-search:focus-within {
+  border-color: var(--dc-selection);
+  box-shadow: 0 0 0 4px var(--dc-selection-soft);
+}
+
+.dc-browse-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
   font-size: 14px;
-  font-weight: 550;
 }
 
-.dc-desk-all-meta {
+.dc-browse-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.dc-browse-search kbd {
+  padding: 0 6px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  font-family: var(--dc-font);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.dc-browse-add {
+  flex: none;
+}
+
+.dc-browse-scopes {
+  top: 70px;
+  display: flex;
+  gap: 6px;
+  padding: 4px 0 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--dc-border) 70%, transparent);
+}
+
+.dc-browse-scopes::-webkit-scrollbar {
+  display: none;
+}
+
+.dc-browse-scope {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: var(--dc-radius-pill);
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dc-browse-scope:hover {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+.dc-browse-scope[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--dc-selection) 45%, var(--dc-border));
+  background: var(--dc-selection-soft);
+  color: var(--dc-text);
+}
+
+.dc-browse-count {
+  color: var(--dc-text-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-browse-summary {
+  margin: 28px 0 0;
+  color: var(--dc-text-muted);
+  font-size: 13px;
+}
+
+.dc-browse-group {
+  margin-top: 34px;
+}
+
+.dc-browse-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 18px;
+}
+
+.dc-browse-group-head h2 {
+  flex: none;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dc-browse-meta {
   min-width: 0;
   overflow: hidden;
   color: var(--dc-text-faint);
-  font-size: 12px;
+  font-size: 12.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A group's own actions, out of the way until the group is under the pointer or focus. */
+.dc-browse-actions {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  margin-left: auto;
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+
+.dc-browse-group:hover .dc-browse-actions,
+.dc-browse-group:focus-within .dc-browse-actions {
+  opacity: 1;
+}
+
+.dc-browse-action {
+  font-size: 12px;
+}
+
+.dc-browse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: 30px 16px;
+  justify-items: center;
+}
+
+.dc-browse-more,
+.dc-browse-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-selection);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.dc-browse-more {
+  display: block;
+  margin: 22px auto 0;
+}
+
+.dc-browse-more:hover,
+.dc-browse-link:hover {
+  text-decoration: underline;
+}
+
+.dc-browse-empty {
+  margin: 0;
+  color: var(--dc-text-faint);
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .dc-browse {
+    padding: 0 16px 56px;
+  }
+
+  .dc-browse-add {
+    display: none;
+  }
 }
 
 /* ---- the foot ----------------------------------------------------------- */
@@ -693,6 +915,12 @@
 
 .dc-desk-tile {
   animation-delay: calc(300ms + var(--i, 0) * 45ms);
+}
+
+/* Browsing isn't an entrance: a grid of results is there at once, each drawing fading in as it's read. */
+.dc-browse .dc-desk-tile {
+  animation: dc-fade-in 140ms ease both;
+  animation-delay: 0s;
 }
 
 .dc-desk-readout,

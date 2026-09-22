@@ -21,6 +21,7 @@ const COMMANDS: &[&str] = &[
     "project_peek",
     "pick_project",
     "open_project",
+    "project_forget",
     "project_scan",
     "project_open_file",
     "project_save_new",

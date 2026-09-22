@@ -138,8 +138,8 @@ export interface HostBoot {
   version: string;
   platform: 'macos' | 'windows' | 'linux';
   settings: DesktopSettings;
-  /** The folder the last session had open, if it is still there. Nothing is opened from it on its own. */
-  lastProject: ProjectInfo | null;
+  /** The project folders the person has added that are still there, most recently opened first. */
+  projects: ProjectInfo[];
 }
 
 export type DocState =
@@ -221,9 +221,13 @@ export interface DesktopApi {
    */
   peekDocument(handle: Handle): Promise<string | null>;
 
-  // Projects: a folder the user picked
+  // Projects: folders the user picked, kept on a list until they let one go
+  /** Picks a folder and adds it to the front of the project list. */
   pickProject(): Promise<ProjectInfo | null>;
+  /** Moves a project to the front of the list. */
   openProject(handle: Handle): Promise<ProjectInfo>;
+  /** Takes a project off the list; the folder and its files are left as they are. */
+  projectForget(handle: Handle): Promise<void>;
   projectScan(handle: Handle): Promise<ProjectScan>;
   projectOpenFile(projectHandle: Handle, relPath: string): Promise<OpenedDoc>;
   /** `peekDocument`, for a file in the open project. */

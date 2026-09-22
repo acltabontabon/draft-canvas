@@ -16,7 +16,7 @@ canvas at once: there is no name to pick, no folder to choose, nothing to set up
 A Quick Draft has no file yet. Until you save it, Draft Canvas keeps a working copy in its own data folder,
 so closing the window, quitting, or a crash doesn't lose it. It shows up under **Unsaved** on Home until you:
 
-- **Save** it (`⌘S`), which asks where the file goes, or **Move into Project…** to put it in the folder you have open;
+- **Save** it (`⌘S`), which asks where the file goes, or **Move into Project…** to put it in your most recent project;
 - **Discard** it, from Home; or
 - **Export** it, as an image or any other format, like any diagram.
 
@@ -44,8 +44,9 @@ Home offers them back the next time. The file itself isn't touched until you sav
 
 ## Folders as projects
 
-A project is a folder. **Open Project…** shows the diagrams in it, subfolders included, and opening one is
-opening the file. There is nothing to import and no project file: the folder is the project.
+A project is a folder. **Add project…** (`⌘⇧O`) adds one to Home, and it stays there, beside every other project
+you've added, until you choose **Remove from Home** (which forgets it and leaves the folder alone). There is
+nothing to import and no project file: the folder is the project, and opening a diagram is opening the file.
 
 ```text
 payments/
@@ -55,11 +56,18 @@ payments/
     └── reconciliation.draftcanvas
 ```
 
+Home's **Projects** row shows the ones you used last, each as a small stack of its diagrams with the newest on
+top. Choose one to see everything in it, drawn, grouped under its folders. **Find a diagram** (`⌘F`) searches
+every project, your recent files and your unsaved drafts at once, by name or folder, and the chips along the top
+narrow it to one of them. A project whose folder isn't there right now (on a drive that isn't plugged in, say)
+stays on the list, marked as missing, and comes back when the folder does.
+
 Home finds a folder's diagrams by name and date alone, so a large folder is as quick as a small one. It skips
 hidden folders and the usual build folders (`node_modules`, `target`, `dist`), stops at a depth and a count that
-a project never reaches, and says so if a folder holds more than it lists. Only the handful of files on screen
-are looked inside, to draw each one as its diagram: shapes only, never the words, and looking isn't opening, so
-nothing is added to Recent and nothing is written.
+a project never reaches, and says so if a folder holds more than it lists. A project is only listed once
+something shows it, so fifty projects cost nothing until you look. Only the files on screen are looked inside,
+to draw each one as its diagram: shapes only, never the words, and looking isn't opening, so nothing is added to
+Recent and nothing is written.
 
 Because they're plain files, the same diagrams can live in a repository beside the code they describe:
 
@@ -130,10 +138,11 @@ The desktop adds the file shortcuts, in the menu as well:
 | `⌘N` / `Ctrl+N` | New Quick Draft |
 | `⌘⇧N` / `Ctrl+Shift+N` | New canvas… |
 | `⌘O` / `Ctrl+O` | Open… |
-| `⌘⇧O` / `Ctrl+Shift+O` | Open Project… |
+| `⌘⇧O` / `Ctrl+Shift+O` | Add Project… |
 | `⌘S` / `Ctrl+S` | Save |
 | `⌘⇧S` / `Ctrl+Shift+S` | Save As… |
 | `⌘W` / `Ctrl+W` | Close the window (it stays in the menu bar or tray) |
+| `⌘F` / `Ctrl+F` | Find a diagram, on Home: every project, recent file and draft |
 | `⌘,` / `Ctrl+,` | Settings |
 | `⌘Q` / `Ctrl+Q` | Quit |
 

@@ -35,8 +35,7 @@ pub(crate) fn project_info(state: &AppState, root: &Path) -> Result<ProjectInfo,
     })
 }
 
-/// Opening a project is also remembering it: it goes into Recent, and it is where the next launch
-/// offers to pick up.
+/// Opening a project is also remembering it: it goes to the front of the project list.
 fn open_project_at(state: &AppState, root: &Path) -> Result<ProjectInfo, AppError> {
     let info = project_info(state, root)?;
     remember_project(state, &state.project(&info.handle)?.root, &info.name);
@@ -66,6 +65,22 @@ pub async fn open_project(app: AppHandle, handle: String) -> Result<ProjectInfo,
         Ok(info)
     })
     .await
+}
+
+/// Takes a project off the list. Only the list: the folder and every file in it are left as they are.
+fn forget_project(state: &AppState, handle: &str) -> Result<(), AppError> {
+    let root = state.project(handle)?.root;
+    let path = root
+        .to_str()
+        .ok_or_else(AppError::invalid_handle)?
+        .to_string();
+    state.settings.update(|s| s.forget_project(&path))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn project_forget(app: AppHandle, handle: String) -> Result<(), AppError> {
+    run_blocking(&app, move |_, state| forget_project(state, &handle)).await
 }
 
 #[tauri::command]
@@ -140,7 +155,6 @@ mod tests {
     use crate::commands::testing::{doc, test_state};
     use crate::docio::{check_stamp, StampCheck};
     use crate::errors::ErrorKind;
-    use crate::recents::RecentKind;
     use serde_json::json;
     use std::fs;
 
@@ -157,16 +171,46 @@ mod tests {
             dunce::canonicalize(&folder).unwrap()
         );
 
-        let recents = state.recents.list().unwrap().items;
-        assert_eq!(
-            (recents[0].kind, recents[0].name.as_str()),
-            (RecentKind::Project, "Payments")
-        );
+        // A project lives on the project list; Recent is for files.
+        assert!(state.recents.list().unwrap().items.is_empty());
         let settings = state.settings.get();
-        assert_eq!(settings.last_project.unwrap().name, "Payments");
+        assert_eq!(settings.projects[0].name, "Payments");
         assert_eq!(
             settings.last_dir.as_deref(),
             dunce::canonicalize(&folder).unwrap().to_str()
+        );
+    }
+
+    #[test]
+    fn several_projects_are_kept_and_one_can_be_let_go_without_touching_it() {
+        let (dir, state) = test_state();
+        for name in ["Payments", "Search", "Billing"] {
+            fs::create_dir(dir.path().join(name)).unwrap();
+        }
+        let payments = open_project_at(&state, &dir.path().join("Payments")).unwrap();
+        open_project_at(&state, &dir.path().join("Search")).unwrap();
+        open_project_at(&state, &dir.path().join("Billing")).unwrap();
+        let names = |state: &AppState| {
+            state
+                .settings
+                .get()
+                .projects
+                .iter()
+                .map(|p| p.name.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(&state), ["Billing", "Search", "Payments"]);
+
+        // Opening one again brings it to the front.
+        open_project_at(&state, &dir.path().join("Payments")).unwrap();
+        assert_eq!(names(&state), ["Payments", "Billing", "Search"]);
+
+        forget_project(&state, &payments.handle).unwrap();
+        assert_eq!(names(&state), ["Billing", "Search"]);
+        assert!(dir.path().join("Payments").is_dir());
+        assert_eq!(
+            forget_project(&state, "h_unknown").err().unwrap().kind,
+            ErrorKind::InvalidHandle
         );
     }
 

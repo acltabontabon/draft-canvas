@@ -9,6 +9,7 @@ import {
   type FileFilter,
   type HostEvent,
   type OpenedDoc,
+  type ProjectInfo,
   type QuitDecision,
   type RecentItem,
   type RecoveryEntry,
@@ -73,10 +74,42 @@ export function createHarness() {
     return handle;
   };
 
+  // Project folders: a name, and diagrams in it by path. `listed` is the shell's project list, most
+  // recent first; a folder can be on it and gone (`missing`).
+  interface FakeProject {
+    info: ProjectInfo;
+    files: Map<string, { text: string; mtimeMs: number }>;
+    missing: boolean;
+  }
+  const folders = new Map<string, FakeProject>();
+  let listed: string[] = [];
+  let pickedProject: string | null = null;
+  const addProject = (name: string, diagrams: string[] = []): string => {
+    const handle = `p_${nextHandle++}`;
+    const at = Date.now();
+    folders.set(handle, {
+      info: { handle, name, displayPath: `~/work/${name}` },
+      files: new Map(diagrams.map((path, i) => [path, { text: documentText(path.replace(/\.draftcanvas$/, '')), mtimeMs: at - i * 60_000 }])),
+      missing: false,
+    });
+    return handle;
+  };
+  const folder = (handle: string) => {
+    const found = folders.get(handle);
+    if (!found || found.missing) throw new DesktopError('NotFound', 'That folder is no longer there.');
+    return found;
+  };
+  const toFront = (handle: string) => void (listed = [handle, ...listed.filter((known) => known !== handle)]);
+
   const api = {
     hostReady: vi.fn(async (onEvent: (event: HostEvent) => void) => {
       hostEvents = onEvent;
-      return { version: '1.9.4', platform: 'macos' as const, settings: { closeBehavior: 'ask' as const, autoCheckUpdates: true }, lastProject: null };
+      return {
+        version: '1.9.4',
+        platform: 'macos' as const,
+        settings: { closeBehavior: 'ask' as const, autoCheckUpdates: true },
+        projects: listed.filter((handle) => !folders.get(handle)!.missing).map((handle) => folders.get(handle)!.info),
+      };
     }),
     reportState: vi.fn(async (_state: DocState) => {}),
     quitAck: vi.fn(async (_decision: QuitDecision) => {}),
@@ -113,17 +146,44 @@ export function createHarness() {
     sidecarWrite: vi.fn(async (handle: string, mime: string, base64: string) => void sidecars.set(handle, { mime, base64 })),
     sidecarRemove: vi.fn(async (handle: string) => void sidecars.delete(handle)),
     peekDocument: vi.fn(async (handle: string) => files.get(handle)?.text ?? null),
-    projectPeek: vi.fn(async (): Promise<string | null> => null),
-    pickProject: vi.fn(async () => null),
-    openProject: vi.fn(async () => {
-      throw new Error('not used');
+    projectPeek: vi.fn(async (project: string, relPath: string): Promise<string | null> => folders.get(project)?.files.get(relPath)?.text ?? null),
+    pickProject: vi.fn(async (): Promise<ProjectInfo | null> => {
+      if (!pickedProject) return null;
+      toFront(pickedProject);
+      return folder(pickedProject).info;
     }),
-    projectScan: vi.fn(async () => ({ files: [], truncated: false })),
-    projectOpenFile: vi.fn(async () => {
-      throw new Error('not used');
+    openProject: vi.fn(async (handle: string) => {
+      toFront(handle);
+      return folder(handle).info;
     }),
-    projectSaveNew: vi.fn(async () => {
-      throw new Error('not used');
+    projectForget: vi.fn(async (handle: string) => void (listed = listed.filter((known) => known !== handle))),
+    projectScan: vi.fn(async (handle: string) => {
+      const project = folder(handle);
+      return {
+        files: [...project.files].map(([relPath, file]) => ({
+          relPath,
+          name: relPath.slice(relPath.lastIndexOf('/') + 1).replace(/\.draftcanvas$/, ''),
+          mtimeMs: file.mtimeMs,
+          size: file.text.length,
+        })),
+        truncated: false,
+      };
+    }),
+    projectOpenFile: vi.fn(async (project: string, relPath: string) => {
+      const text = folder(project).files.get(relPath)?.text;
+      if (text === undefined) throw new DesktopError('NotFound', 'Draft Canvas couldn’t find that file.');
+      const name = relPath.slice(relPath.lastIndexOf('/') + 1).replace(/\.draftcanvas$/, '');
+      const handle = `h_${nextHandle++}`;
+      files.set(handle, { name, displayPath: `${folder(project).info.displayPath}/${relPath}`, text, version: 1 });
+      return opened(handle, files.get(handle)!);
+    }),
+    projectSaveNew: vi.fn(async (project: string, name: string, bytes: Uint8Array) => {
+      const relPath = `${name}.draftcanvas`;
+      folder(project).files.set(relPath, { text: decoder.decode(bytes), mtimeMs: Date.now() });
+      const handle = `h_${nextHandle++}`;
+      const displayPath = `${folder(project).info.displayPath}/${relPath}`;
+      files.set(handle, { name, displayPath, text: decoder.decode(bytes), version: 1 });
+      return { handle, name, displayPath, stamp: stampOf(files.get(handle)!) };
     }),
     recentsList: vi.fn(async (): Promise<RecentItem[]> => []),
     recentsRemove: vi.fn(async () => {}),
@@ -226,6 +286,15 @@ export function createHarness() {
     pickFile: (handle: string | null) => void (pickedFile = handle),
     saveAsTo: (target: { name: string; displayPath: string } | null) => void (saveAsPath = target),
     hostEvent: (event: HostEvent) => hostEvents(event),
+    /** A project folder with these diagrams (paths inside it), not yet on the list. */
+    addProject,
+    /** Puts projects on the shell's list, as an earlier session left it (first is most recent). */
+    listProjects: (...handles: string[]) => void (listed = [...handles]),
+    listedProjects: () => [...listed],
+    /** What the next folder dialog picks (`null` cancels it). */
+    pickFolder: (handle: string | null) => void (pickedProject = handle),
+    /** The folder goes away (an unplugged drive), or comes back. */
+    setMissing: (handle: string, missing: boolean) => void (folders.get(handle)!.missing = missing),
     /** What the shell's updater answers with from now on. */
     setUpdate: (next: UpdateSnapshot) => void (update = next),
     /** What the app says: a committed edit. */

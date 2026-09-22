@@ -20,13 +20,20 @@ pub struct HostBoot {
     pub version: String,
     pub platform: Platform,
     pub settings: DesktopSettings,
-    pub last_project: Option<ProjectInfo>,
+    /// Every project on the list whose folder is still there, most recent first.
+    pub projects: Vec<ProjectInfo>,
 }
 
-/// The folder the last session had open, if it is still there. Only offered: nothing is opened from it.
-fn last_project(state: &AppState) -> Option<ProjectInfo> {
-    let last = state.settings.get().last_project?;
-    project_info(state, Path::new(&last.path)).ok()
+/// The project folders the person has added and that still exist, each with a handle. A folder that has
+/// gone (an unplugged drive, a deleted checkout) is left off, but stays on the list for when it's back.
+pub(crate) fn projects(state: &AppState) -> Vec<ProjectInfo> {
+    state
+        .settings
+        .get()
+        .projects
+        .iter()
+        .filter_map(|project| project_info(state, Path::new(&project.path)).ok())
+        .collect()
 }
 
 /// The page's first call. It attaches the event channel (and receives anything the OS asked us to open
@@ -42,7 +49,7 @@ pub async fn host_ready(
             version: app.package_info().version.to_string(),
             platform: Platform::current(),
             settings: state.settings.get().public(),
-            last_project: last_project(state),
+            projects: projects(state),
         };
         show_main(app);
         if let Some(ready) = lock(&state.smoke_ready).take() {
@@ -143,11 +150,11 @@ mod tests {
                 close_behavior: crate::settings::CloseBehavior::Ask,
                 auto_check_updates: true,
             },
-            last_project: Some(ProjectInfo {
+            projects: vec![ProjectInfo {
                 handle: "h_1".into(),
                 name: "P".into(),
                 display_path: "~/P".into(),
-            }),
+            }],
         };
         assert_eq!(
             serde_json::to_value(boot).unwrap(),
@@ -155,71 +162,53 @@ mod tests {
                 "version": "1.10.0",
                 "platform": "macos",
                 "settings": {"closeBehavior": "ask", "autoCheckUpdates": true},
-                "lastProject": {"handle": "h_1", "name": "P", "displayPath": "~/P"}
+                "projects": [{"handle": "h_1", "name": "P", "displayPath": "~/P"}]
             })
-        );
-        let bare = HostBoot {
-            version: "1".into(),
-            platform: Platform::Windows,
-            settings: DesktopSettings {
-                close_behavior: crate::settings::CloseBehavior::Quit,
-                auto_check_updates: false,
-            },
-            last_project: None,
-        };
-        assert_eq!(
-            serde_json::to_value(bare).unwrap()["lastProject"],
-            json!(null)
         );
     }
 
-    #[test]
-    fn the_last_project_is_offered_only_while_it_still_exists() {
-        let (dir, state) = test_state();
-        assert!(last_project(&state).is_none());
-
-        let folder = dir.path().join("Payments");
-        fs::create_dir(&folder).unwrap();
-        let path = dunce::canonicalize(&folder)
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
+    fn add(state: &AppState, folder: &std::path::Path) {
+        let path = folder.to_str().unwrap().to_string();
+        let name = folder.file_name().unwrap().to_str().unwrap().to_string();
         state
             .settings
-            .update(|s| {
-                s.last_project = Some(LastProject {
-                    path,
-                    name: "Payments".into(),
-                })
-            })
+            .update(|s| s.remember_project(LastProject { path, name }))
             .unwrap();
-        let info = last_project(&state).unwrap();
-        assert_eq!(info.name, "Payments");
-        assert!(
-            state.project(&info.handle).is_ok(),
-            "the handle is usable straight away"
-        );
-
-        fs::remove_dir(&folder).unwrap();
-        assert!(last_project(&state).is_none());
     }
 
     #[test]
-    fn a_last_project_that_is_now_a_file_is_not_offered() {
+    fn every_project_still_there_is_offered_most_recent_first() {
+        let (dir, state) = test_state();
+        assert!(projects(&state).is_empty());
+
+        let payments = dunce::canonicalize(dir.path()).unwrap().join("Payments");
+        let search = dunce::canonicalize(dir.path()).unwrap().join("Search");
+        fs::create_dir(&payments).unwrap();
+        fs::create_dir(&search).unwrap();
+        add(&state, &payments);
+        add(&state, &search);
+
+        let listed = projects(&state);
+        let names: Vec<&str> = listed.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["Search", "Payments"]);
+        assert!(
+            listed.iter().all(|p| state.project(&p.handle).is_ok()),
+            "each handle is usable straight away"
+        );
+
+        // A folder that's gone is left off, and back when it is.
+        fs::remove_dir(&payments).unwrap();
+        assert_eq!(projects(&state).len(), 1);
+        fs::create_dir(&payments).unwrap();
+        assert_eq!(projects(&state).len(), 2);
+    }
+
+    #[test]
+    fn a_project_that_is_now_a_file_is_not_offered() {
         let (dir, state) = test_state();
         let file = dir.path().join("not-a-folder");
         fs::write(&file, "x").unwrap();
-        let path = file.to_str().unwrap().to_string();
-        state
-            .settings
-            .update(|s| {
-                s.last_project = Some(LastProject {
-                    path,
-                    name: "x".into(),
-                })
-            })
-            .unwrap();
-        assert!(last_project(&state).is_none());
+        add(&state, &file);
+        assert!(projects(&state).is_empty());
     }
 }

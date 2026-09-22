@@ -14,13 +14,26 @@ export type DesktopDoc =
       outside?: 'changed' | 'missing';
     };
 
+/**
+ * One project folder: its name and place, and — once something has shown it — the diagrams in it, by
+ * name and date. `unscanned` until then, so a list of fifty projects costs nothing until it's looked at.
+ */
+export interface ProjectState {
+  info: ProjectInfo;
+  status: 'unscanned' | 'scanning' | 'ready' | 'missing';
+  files: ProjectFile[];
+  /** The folder held more than a scan lists. */
+  truncated: boolean;
+}
+
 export interface DesktopState {
   /** The shell has answered `host_ready`; Home has what it needs to draw. */
   ready: boolean;
   platform: 'macos' | 'windows' | 'linux' | null;
   doc: DesktopDoc;
   saving: boolean;
-  project: { info: ProjectInfo; files: ProjectFile[]; truncated: boolean; loading: boolean } | null;
+  /** Every project on the list, most recently opened first. Each is scanned only when something shows it. */
+  projects: ProjectState[];
   recents: RecentItem[];
   recovery: RecoveryEntry[];
   settings: DesktopSettings;
@@ -36,7 +49,7 @@ const INITIAL: DesktopState = {
   platform: null,
   doc: { kind: 'none' },
   saving: false,
-  project: null,
+  projects: [],
   recents: [],
   recovery: [],
   settings: { closeBehavior: 'ask', autoCheckUpdates: true },

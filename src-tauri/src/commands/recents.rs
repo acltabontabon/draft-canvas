@@ -91,8 +91,8 @@ pub async fn recents_clear(app: AppHandle) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::remember_file;
     use crate::commands::testing::{doc, test_state};
-    use crate::commands::{remember_file, remember_project};
     use crate::docio::MAX_DOC_BYTES;
     use crate::errors::ErrorKind;
     use serde_json::json;
@@ -106,7 +106,17 @@ mod tests {
         fs::create_dir(&folder).unwrap();
         remember_file(&state, &dunce::canonicalize(&file).unwrap(), "a");
         std::thread::sleep(std::time::Duration::from_millis(3));
-        remember_project(&state, &dunce::canonicalize(&folder).unwrap(), "proj");
+        // Projects no longer go into Recent (they have their own list), but a Recent written by an
+        // earlier version has them, and they still come back usable.
+        state
+            .recents
+            .add(
+                RecentKind::Project,
+                &dunce::canonicalize(&folder).unwrap(),
+                "proj",
+                crate::util::now_ms(),
+            )
+            .unwrap();
 
         let (items, pruned) = recent_items(&state).unwrap();
         assert!(!pruned);

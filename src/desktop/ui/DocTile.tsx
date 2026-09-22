@@ -1,4 +1,4 @@
-import type { CSSProperties, FocusEvent, KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent, type RefObject } from 'react';
 import { Icon } from '../../ui/common/Icon';
 import { SelectionChrome } from '../../ui/Library/SelectionChrome';
 import { StarterGlyph } from '../../ui/Library/StarterGlyph';
@@ -13,8 +13,15 @@ export interface DocTileProps {
   label: string;
   /** Position in the row, for the arrival stagger. */
   index: number;
-  /** A document is drawn from its own contents; a folder as a folder; `more` is the row's last word. */
-  kind: 'document' | 'folder' | 'more';
+  /**
+   * A document is drawn from its own contents; a folder as a folder; `more` is the row's last word; a
+   * project as a stack of sheets, its newest diagram (the thumbnail) on top.
+   */
+  kind: 'document' | 'folder' | 'more' | 'project';
+  /** For a project: how many diagrams are in it, which is how many sheets (up to three) are stacked. */
+  stack?: number;
+  /** The file or folder isn't there right now: drawn faint, still openable to say so. */
+  missing?: boolean;
   /** A drawing already in hand (a starter's), instead of one read from the file. */
   glyph?: StarterShape;
   /** What the thumbnail is read with, and what says it has changed since it was last read. */
@@ -34,14 +41,20 @@ export interface DocTileProps {
  * its name under it. The drawing is the diagram's — read once the tile is shown, reduced to a
  * silhouette with no words in it — so "the checkout one" is recognisable before it is opened.
  */
-export function DocTile({ entryKey, name, meta, label, index, kind, glyph, thumbnail, onOpen, action, edited, onHot, onKeyDown }: DocTileProps) {
-  const read = useThumbnail(thumbnail?.key ?? `none:${entryKey}`, thumbnail?.load ?? (async () => null), Boolean(thumbnail));
+export function DocTile({ entryKey, name, meta, label, index, kind, stack = 0, missing, glyph, thumbnail, onOpen, action, edited, onHot, onKeyDown }: DocTileProps) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  // A drawing is read once its tile is on screen or nearly: a project of five hundred reads the few
+  // in view, not five hundred.
+  const seen = useSeen(buttonRef);
+  const read = useThumbnail(thumbnail?.key ?? `none:${entryKey}`, thumbnail?.load ?? (async () => null), Boolean(thumbnail) && seen);
   const drawn = glyph ?? (read.state === 'drawn' ? read.shape : null);
-  const state = glyph ? 'drawn' : kind === 'document' ? (thumbnail ? read.state : 'blank') : kind;
+  const drawsItself = kind === 'document' || kind === 'project';
+  const state = glyph ? 'drawn' : drawsItself ? (thumbnail ? read.state : 'blank') : kind;
 
   return (
-    <div className="dc-desk-tile" data-kind={kind} style={{ '--i': index } as CSSProperties}>
+    <div className="dc-desk-tile" data-kind={kind} data-missing={missing ? '' : undefined} style={{ '--i': index } as CSSProperties}>
       <button
+        ref={buttonRef}
         type="button"
         className="dc-starter"
         data-entry={entryKey}
@@ -57,7 +70,10 @@ export function DocTile({ entryKey, name, meta, label, index, kind, glyph, thumb
         <span
           className="dc-starter-swatch"
           style={
-            drawn
+            kind === 'project'
+              ? // The frame hugs the stack of sheets, whatever is drawn on the front one.
+                ({ '--bx': '26px', '--by': '-1px', '--bw': '92px', '--bh': '70px' } as CSSProperties)
+              : drawn
               ? ({
                   '--cx': `${Math.round(drawn.centerX * 100)}%`,
                   '--bx': `${drawn.bounds.x}px`,
@@ -68,7 +84,8 @@ export function DocTile({ entryKey, name, meta, label, index, kind, glyph, thumb
               : ({ '--bx': '46px', '--by': '14px', '--bw': '52px', '--bh': '48px' } as CSSProperties)
           }
         >
-          {drawn ? <StarterGlyph starter={drawn} /> : kind === 'folder' ? <FolderGlyph /> : kind === 'more' ? <MoreGlyph /> : <SheetGlyph />}
+          {kind === 'project' && <StackGlyph sheets={Math.min(3, Math.max(1, stack))} />}
+          {drawn ? <StarterGlyph starter={drawn} /> : kind === 'folder' ? <FolderGlyph /> : kind === 'more' ? <MoreGlyph /> : kind === 'project' ? null : <SheetGlyph />}
           <SelectionChrome />
         </span>
         <span className="dc-starter-name">
@@ -83,6 +100,41 @@ export function DocTile({ entryKey, name, meta, label, index, kind, glyph, thumb
         </button>
       )}
     </div>
+  );
+}
+
+/** Whether the element has come within reach of the screen: once it has, it stays seen. */
+function useSeen(ref: RefObject<HTMLElement | null>): boolean {
+  const [seen, setSeen] = useState(() => typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    const element = ref.current;
+    if (seen || !element) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setSeen(true);
+        observer.disconnect();
+      },
+      // A screen's height ahead, so a drawing is ready by the time it scrolls in.
+      { rootMargin: '100% 0px' },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref, seen]);
+  return seen;
+}
+
+/**
+ * A project: its diagrams as a small stack of sheets, one to three deep, the newest drawn on the front
+ * one (by the tile, over this). A project with nothing in it yet is one empty sheet.
+ */
+function StackGlyph({ sheets }: { sheets: number }) {
+  return (
+    <svg className="dc-starter-glyph dc-desk-stack" viewBox={`0 0 ${GLYPH_WIDTH} ${GLYPH_HEIGHT}`} width={GLYPH_WIDTH} height={GLYPH_HEIGHT} aria-hidden="true" focusable="false">
+      {sheets >= 3 && <rect className="dc-desk-stack-sheet" data-depth="2" x="34" y="3" width="84" height="62" rx="5" />}
+      {sheets >= 2 && <rect className="dc-desk-stack-sheet" data-depth="1" x="30" y="7" width="84" height="62" rx="5" />}
+      <rect className="dc-desk-stack-sheet" data-depth="0" x="26" y="11" width="84" height="62" rx="5" />
+    </svg>
   );
 }
 

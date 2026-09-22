@@ -27,7 +27,14 @@ export interface ShellHandle {
    * What an earlier session left behind, set before the app starts: recent files and unsaved drafts,
    * each `ago` milliseconds old.
    */
-  seed(history: { recents?: { name: string; text: string; ago: number }[]; drafts?: { title: string; text: string; ago: number }[] }): void;
+  seed(history: {
+    recents?: { name: string; text: string; ago: number }[];
+    drafts?: { title: string; text: string; ago: number }[];
+    /** Project folders on the list, most recent first: each diagram by its path in the folder. */
+    projects?: { name: string; diagrams: { path: string; text: string; ago: number }[] }[];
+  }): void;
+  /** What the next folder dialog picks: a project by name (from `seed`), or `null` to cancel. */
+  nextFolder(name: string | null): void;
   /** Something the shell tells the app on its own: a menu pick, a file the OS opened. */
   emit(event: unknown): void;
   /** Where the updater stands from now on; the page hears of it as the shell would tell it. */
@@ -105,12 +112,24 @@ export async function installMockShell(page: Page): Promise<void> {
       return header ? (JSON.parse(decodeURIComponent(header)) as Record<string, unknown>) : {};
     };
 
+    // Project folders, by handle, and the shell's list of them (most recent first).
+    const folders = new Map<string, { info: { handle: string; name: string; displayPath: string }; files: Map<string, { text: string; mtimeMs: number }> }>();
+    let listedProjects: string[] = [];
+    let pickedFolder: string | null = null;
+    const folder = (handle: string) => {
+      const found = folders.get(handle);
+      if (!found) throw { kind: 'NotFound', message: 'That folder is no longer there.' };
+      return found;
+    };
+    const stemOf = (relPath: string) => relPath.slice(relPath.lastIndexOf('/') + 1).replace(/\.draftcanvas$/, '');
+    const toFront = (handle: string) => void (listedProjects = [handle, ...listedProjects.filter((known) => known !== handle)]);
+
     // Each handler names the arguments it reads; `never` lets them all live in one table.
     const commands: Record<string, (args: never, options?: unknown) => unknown> = {
       host_ready: (args: { onEvent: ChannelLike }) => {
         events = args.onEvent;
         eventIndex = 0;
-        return { version: '1.9.4', platform: 'macos', settings, lastProject: null };
+        return { version: '1.9.4', platform: 'macos', settings, projects: listedProjects.map((handle) => folder(handle).info) };
       },
       report_state: () => null,
       quit_ack: () => null,
@@ -160,8 +179,30 @@ export async function installMockShell(page: Page): Promise<void> {
       sidecar_write: (args: { handle: string; mime: string; base64: string }) => void sidecars.set(args.handle, args),
       sidecar_remove: (args: { handle: string }) => void sidecars.delete(args.handle),
       peek_document: (args: { handle: string }) => files.get(args.handle)?.text ?? null,
-      project_peek: () => null,
-      pick_project: () => null,
+      project_peek: (args: { projectHandle: string; relPath: string }) => folders.get(args.projectHandle)?.files.get(args.relPath)?.text ?? null,
+      pick_project: () => {
+        if (!pickedFolder) return null;
+        toFront(pickedFolder);
+        return folder(pickedFolder).info;
+      },
+      open_project: (args: { handle: string }) => {
+        toFront(args.handle);
+        return folder(args.handle).info;
+      },
+      project_forget: (args: { handle: string }) => void (listedProjects = listedProjects.filter((known) => known !== args.handle)),
+      project_scan: (args: { handle: string }) => ({
+        files: [...folder(args.handle).files].map(([relPath, file]) => ({ relPath, name: stemOf(relPath), mtimeMs: file.mtimeMs, size: file.text.length })),
+        truncated: false,
+      }),
+      project_open_file: (args: { projectHandle: string; relPath: string }) => {
+        const project = folder(args.projectHandle);
+        const text = project.files.get(args.relPath)?.text;
+        if (text === undefined) throw { kind: 'NotFound', message: 'Draft Canvas couldn’t find that file.' };
+        const handle = `h_${(handles += 1)}`;
+        files.set(handle, { name: stemOf(args.relPath), displayPath: `${project.info.displayPath}/${args.relPath}`, text, version: 1 });
+        touch(handle, files.get(handle)!);
+        return opened(handle, files.get(handle)!);
+      },
       recents_list: () => recents,
       recents_remove: (args: { handle: string }) => {
         const at = recents.findIndex((item) => item.handle === args.handle);
@@ -245,7 +286,15 @@ export async function installMockShell(page: Page): Promise<void> {
       answer: (...choices) => void answers.push(...choices),
       cancelNextExport: () => void (cancelExport = true),
       trayArt: () => trayArt,
-      seed: ({ recents: seeded = [], drafts = [] }) => {
+      seed: ({ recents: seeded = [], drafts = [], projects = [] }) => {
+        for (const project of projects) {
+          const handle = `p_${(handles += 1)}`;
+          folders.set(handle, {
+            info: { handle, name: project.name, displayPath: `~/work/${project.name}` },
+            files: new Map(project.diagrams.map((diagram) => [diagram.path, { text: diagram.text, mtimeMs: Date.now() - diagram.ago }])),
+          });
+          listedProjects.push(handle);
+        }
         for (const item of seeded) {
           const handle = addFile(item.name, item.text);
           const file = files.get(handle)!;
@@ -258,6 +307,9 @@ export async function installMockShell(page: Page): Promise<void> {
             entry: { id, title: draft.title, updatedAt: Date.now() - draft.ago, bytes: draft.text.length, origin: { kind: 'quick' } },
           });
         });
+      },
+      nextFolder: (name) => {
+        pickedFolder = name === null ? null : ([...folders.values()].find((project) => project.info.name === name)?.info.handle ?? null);
       },
       emit,
       setUpdate: (snapshot) => {

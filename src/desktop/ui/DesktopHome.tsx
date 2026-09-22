@@ -10,11 +10,12 @@ import { LibraryBrand } from '../../ui/Library/LibraryBrand';
 import { starterShape } from '../../ui/Library/starterShapes';
 import { useSpotlight } from '../../ui/Library/useSpotlight';
 import { useStarters } from '../../ui/Library/useStarters';
-import type { ProjectFile, RecentItem, RecoveryEntry } from '../api';
+import type { ProjectFile, ProjectInfo, RecentItem, RecoveryEntry } from '../api';
 import type { DesktopController } from '../controller';
-import type { DesktopState } from '../store';
+import type { DesktopState, ProjectState } from '../store';
 import { useDesktopController, useDesktopState } from '../useDesktop';
-import { DocTile, type DocTileProps } from './DocTile';
+import { DeskBrowse, type BrowseScope, type BrowseTile } from './DeskBrowse';
+import { DocTile } from './DocTile';
 import { UpdateChip } from './Updates';
 import { useDeskGeometry, type DeskGeometry } from './useDeskGeometry';
 import './desktop.css';
@@ -25,7 +26,7 @@ const GAP = 36;
 /** However wide the window, one row stays one glance. */
 const MAX_TILES = 6;
 
-type TileSpec = Omit<DocTileProps, 'index' | 'onHot' | 'onKeyDown'> & { description: string };
+type TileSpec = BrowseTile;
 
 /** One thing the fan can point at: the drafts, the recent files, the open project, the starters. */
 interface Source {
@@ -63,12 +64,12 @@ export function DesktopHome() {
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hot, setHot] = useState<{ index: number; description: string } | null>(null);
-  const [listing, setListing] = useState<string | null>(null);
+  const [browse, setBrowse] = useState<BrowseScope | null>(null);
   const [browsing, setBrowsing] = useState(false);
   const capacity = useCapacity(stageRef);
 
   const sources = sourcesFor(state, controller, catalog?.FEATURED_STARTERS ?? [], {
-    showAll: (id) => setListing((open) => (open === id ? null : id)),
+    showAll: (scope) => setBrowse(scope),
     browseStarters: () => setBrowsing(true),
   });
   const active = sources.find((source) => source.id === activeId) ?? sources[0];
@@ -81,9 +82,22 @@ export function DesktopHome() {
   const moreShown = overflow && active?.more ? active.more : undefined;
   const geometry = useDeskGeometry(stageRef, mottoRef, actionRef, rowRef, `${active?.id}:${shown.map((tile) => tile.entryKey).join('|')}:${moreShown ? 1 : 0}`);
 
-  // Enter on an otherwise unfocused page starts drawing.
+  // The projects in the row are listed (names and dates) so their stacks can be drawn; the rest wait.
+  const rowProjects = active?.id === 'projects' ? shown.map((tile) => tile.entryKey.slice('projects:'.length)).join('|') : '';
   useEffect(() => {
+    if (rowProjects) void controller.scanProjects(rowProjects.split('|'));
+  }, [controller, rowProjects]);
+
+  // Enter on an otherwise unfocused page starts drawing; ⌘F finds a diagram in everything.
+  useEffect(() => {
+    if (browse) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'f' && (mac ? event.metaKey : event.ctrlKey) && !document.querySelector('[role="dialog"]')) {
+        event.preventDefault();
+        setBrowse('all');
+        requestAnimationFrame(() => rootRef.current?.querySelector<HTMLInputElement>('.dc-browse-search input')?.focus());
+        return;
+      }
       if (event.key !== 'Enter' || event.repeat || event.defaultPrevented || isImeKeyEvent(event)) return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (event.target !== document.body && event.target !== document.documentElement) return;
@@ -93,12 +107,11 @@ export function DesktopHome() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [controller]);
+  }, [controller, browse, mac]);
 
   const choose = (id: string) => {
     setActiveId(id);
     setHot(null);
-    setListing(null);
   };
 
   /** ←/→ walk the row; ↑ goes back to the label that chose it. */
@@ -133,7 +146,22 @@ export function DesktopHome() {
     }
   };
 
-  const list = listing && active?.id === listing ? active : null;
+  if (browse) {
+    return (
+      <div className="dc-desk" ref={rootRef} data-browsing="">
+        <div className="dc-desk-canvas" ref={canvasRef} aria-hidden="true" />
+        <UpdateChip placement="home" />
+        <DeskBrowse
+          state={state}
+          controller={controller}
+          scope={browse}
+          groupsFor={(current) => groupsFor(current, controller)}
+          onClose={() => setBrowse(null)}
+          mac={mac}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="dc-desk" ref={rootRef} onPointerMove={spotlight.move} onPointerLeave={spotlight.leave}>
@@ -231,27 +259,10 @@ export function DesktopHome() {
 
         <nav className="dc-desk-ways" aria-label="More ways in">
           <DeskWay icon="upload" label="Open file…" keys={chord(mac, 'O')} onClick={() => void controller.openFile()} />
-          <DeskWay icon="folder" label="Open project…" keys={chord(mac, 'O', true)} onClick={() => void controller.pickProject()} />
+          <DeskWay icon="folder" label="Add project…" keys={chord(mac, 'O', true)} onClick={() => void controller.pickProject()} />
           <DeskWay icon="file" label="New canvas…" keys={chord(mac, 'N', true)} onClick={() => void controller.newCanvas()} />
+          {history && <DeskWay icon="search" label="Find a diagram" keys={chord(mac, 'F')} onClick={() => setBrowse('all')} />}
         </nav>
-
-        {list && (
-          <section className="dc-desk-all" aria-label={`All of ${list.label}`}>
-            <ul>
-              {list.tiles.map((tile) => (
-                <li key={tile.entryKey}>
-                  <button type="button" onClick={tile.onOpen} title={tile.description}>
-                    <span className="dc-desk-all-name">
-                      {tile.edited && <span className="dc-desk-edited" aria-hidden="true" />}
-                      {tile.name}
-                    </span>
-                    <span className="dc-desk-all-meta">{tile.description}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
       </main>
 
       <footer className="dc-desk-foot">
@@ -347,7 +358,7 @@ function useCapacity(stageRef: RefObject<HTMLElement | null>): number {
   return capacity;
 }
 
-function DeskWay({ icon, label, keys, onClick }: { icon: 'upload' | 'folder' | 'file'; label: string; keys: string; onClick: () => void }) {
+function DeskWay({ icon, label, keys, onClick }: { icon: 'upload' | 'folder' | 'file' | 'search'; label: string; keys: string; onClick: () => void }) {
   return (
     <Button variant="quiet" icon={icon} className="dc-desk-way" onClick={onClick}>
       {label}
@@ -377,31 +388,35 @@ function folderOf(file: ProjectFile): string {
   return file.relPath.includes('/') ? file.relPath.slice(0, file.relPath.lastIndexOf('/')) : '';
 }
 
-/** Everything the fan can point at, most pressing first: what isn't saved, what was open, the open folder, the starters. */
+/**
+ * Everything the fan can point at, most pressing first: what isn't saved, what was open, the projects,
+ * the starters. Four at most, however many projects there are: the Projects row shows the most recent,
+ * and "All" opens every one of them in the browse view.
+ */
 function sourcesFor(
   state: DesktopState,
   controller: DesktopController,
   featured: readonly ArchitectureStarter[],
-  { showAll, browseStarters }: { showAll: (id: string) => void; browseStarters: () => void },
+  { showAll, browseStarters }: { showAll: (scope: BrowseScope) => void; browseStarters: () => void },
 ): Source[] {
   const sources: Source[] = [];
+  const tiles = groupsFor(state, controller);
 
-  if (state.recovery.length > 0) {
+  if (tiles.unsaved.length > 0) {
     sources.push({
       id: 'unsaved',
       label: 'Unsaved',
-      tiles: state.recovery.map((entry) => draftTile(entry, controller)),
-      more: { label: `All ${state.recovery.length}`, description: 'Every draft that isn’t saved yet', run: () => showAll('unsaved') },
+      tiles: tiles.unsaved,
+      more: { label: `All ${tiles.unsaved.length}`, description: 'Every draft that isn’t saved yet', run: () => showAll('unsaved') },
     });
   }
 
-  const recent = state.recents.filter((item) => item.displayPath !== state.project?.info.displayPath);
-  if (recent.length > 0) {
+  if (tiles.recent.length > 0) {
     sources.push({
       id: 'recent',
       label: 'Recent',
-      tiles: recent.map((item) => recentTile(item, controller)),
-      more: { label: `All ${recent.length}`, description: 'Everything opened lately', run: () => showAll('recent') },
+      tiles: tiles.recent,
+      more: { label: `All ${tiles.recent.length}`, description: 'Everything opened lately', run: () => showAll('recent') },
       aside: (
         <Button variant="quiet" className="dc-desk-aside-action" onClick={() => void controller.clearRecents()}>
           Clear recent
@@ -410,28 +425,16 @@ function sourcesFor(
     });
   }
 
-  const project = state.project;
-  if (project) {
-    const newest = [...project.files].sort((a, b) => b.mtimeMs - a.mtimeMs);
+  if (state.projects.length > 0) {
     sources.push({
-      id: 'project',
-      label: project.info.name,
-      tiles: project.loading ? [] : newest.length > 0 ? newest.map((file) => projectTile(file, project.info.name, controller)) : [firstInProject(project.info.name, controller)],
-      more: { label: `All ${project.files.length}`, description: `Every diagram in ${project.info.name}`, run: () => showAll('project') },
-      aside: (
-        <>
-          <span className="dc-desk-aside-path" title={project.info.displayPath}>
-            {project.info.displayPath}
-          </span>
-          <Button variant="quiet" className="dc-desk-aside-action" onClick={() => void controller.refreshProject()}>
-            Refresh
-          </Button>
-          <Button variant="quiet" className="dc-desk-aside-action" onClick={() => controller.closeProject()}>
-            Close project
-          </Button>
-          {project.truncated && <span className="dc-desk-aside-path">Some subfolders weren’t listed.</span>}
-        </>
-      ),
+      id: 'projects',
+      label: 'Projects',
+      tiles: state.projects.map((project) => projectCard(project, () => showAll({ project: project.info.handle }), controller)),
+      more: {
+        label: `All ${state.projects.length}`,
+        description: `Every project, and every diagram in them`,
+        run: () => showAll('all'),
+      },
     });
   }
 
@@ -445,12 +448,24 @@ function sourcesFor(
       label: `Start from ${starter.name}`,
       glyph: starterShape(starter),
       description: `${starter.description} — starts a Quick Draft with it`,
+      haystack: starter.name.toLowerCase(),
       onOpen: () => void controller.newQuickDraft(starter.id),
     })),
     more: { label: 'All starters', description: 'Every architecture and pattern Draft Canvas knows', run: browseStarters },
   });
 
   return sources;
+}
+
+/** The tiles for every group, shared by Home's row and the browse view so each diagram looks the same in both. */
+function groupsFor(state: DesktopState, controller: DesktopController) {
+  return {
+    unsaved: state.recovery.map((entry) => draftTile(entry, controller)),
+    // Projects have their own list now; a Recent written by an earlier version may still name some.
+    recent: state.recents.filter((item) => item.kind === 'file').map((item) => recentTile(item, controller)),
+    project: (project: ProjectState) =>
+      [...project.files].sort((a, b) => b.mtimeMs - a.mtimeMs).map((file) => projectTile(file, project.info, controller)),
+  };
 }
 
 function draftTile(entry: RecoveryEntry, controller: DesktopController): TileSpec {
@@ -465,6 +480,7 @@ function draftTile(entry: RecoveryEntry, controller: DesktopController): TileSpe
     edited: true,
     label: `Recover ${name}`,
     description: `${fromFile ? 'Unsaved changes' : 'Not saved yet'} · ${when}`,
+    haystack: name.toLowerCase(),
     thumbnail: { key: `draft:${entry.id}:${entry.updatedAt}`, load: () => controller.peek({ kind: 'draft', id: entry.id }) },
     onOpen: () => void controller.recover(entry.id),
     action: { label: `Discard ${name}`, icon: 'trash', run: () => void controller.discardRecovery(entry.id) },
@@ -472,42 +488,66 @@ function draftTile(entry: RecoveryEntry, controller: DesktopController): TileSpe
 }
 
 function recentTile(item: RecentItem, controller: DesktopController): TileSpec {
-  const folder = item.kind === 'project';
   return {
     entryKey: `recent:${item.handle}`,
-    kind: folder ? 'folder' : 'document',
+    kind: 'document',
     name: item.name,
-    meta: folder ? 'Project' : relativeTime(item.lastOpenedMs),
-    label: folder ? `Open the ${item.name} project` : `Open ${item.name}`,
+    meta: relativeTime(item.lastOpenedMs),
+    label: `Open ${item.name}`,
     description: `${item.displayPath} · opened ${relativeTime(item.lastOpenedMs)}`,
-    thumbnail: folder ? undefined : { key: `${item.displayPath}:${item.lastOpenedMs}`, load: () => controller.peek({ kind: 'recent', handle: item.handle }) },
-    onOpen: () => void (folder ? controller.openProject(item.handle) : controller.openHandle(item.handle)),
+    haystack: `${item.name} ${item.displayPath}`.toLowerCase(),
+    thumbnail: { key: `${item.displayPath}:${item.lastOpenedMs}`, load: () => controller.peek({ kind: 'recent', handle: item.handle }) },
+    onOpen: () => void controller.openHandle(item.handle),
     action: { label: `Remove ${item.name} from Recent`, icon: 'close', run: () => void controller.forgetRecent(item.handle) },
   };
 }
 
-function projectTile(file: ProjectFile, projectName: string, controller: DesktopController): TileSpec {
-  const key = `project:${file.relPath}`;
+function projectTile(file: ProjectFile, project: ProjectInfo, controller: DesktopController): TileSpec {
+  const key = `project:${project.handle}:${file.relPath}`;
+  const folder = folderOf(file);
   return {
     entryKey: key,
     kind: 'document',
     name: file.name,
-    meta: relativeTime(file.mtimeMs),
+    meta: folder ? `${folder} · ${relativeTime(file.mtimeMs)}` : relativeTime(file.mtimeMs),
     label: `Open ${file.name}`,
-    description: `${folderOf(file) || projectName} · edited ${relativeTime(file.mtimeMs)}`,
-    thumbnail: { key: `${key}:${file.mtimeMs}:${file.size}`, load: () => controller.peek({ kind: 'project', relPath: file.relPath }) },
-    onOpen: () => void controller.openProjectFile(file.relPath),
+    description: `${folder || project.name} · edited ${relativeTime(file.mtimeMs)}`,
+    haystack: `${file.relPath} ${project.name}`.toLowerCase(),
+    thumbnail: { key: `${key}:${file.mtimeMs}:${file.size}`, load: () => controller.peek({ kind: 'project', project: project.handle, relPath: file.relPath }) },
+    onOpen: () => void controller.openProjectFile(project.handle, file.relPath),
   };
 }
 
-function firstInProject(projectName: string, controller: DesktopController): TileSpec {
+/** A project in Home's row: a stack of its diagrams, the newest drawn on top; it opens in the browse view. */
+function projectCard(project: ProjectState, open: () => void, controller: DesktopController): TileSpec {
+  const { info } = project;
+  const newest = project.files.reduce<ProjectFile | null>((best, file) => (!best || file.mtimeMs > best.mtimeMs ? file : best), null);
+  const meta =
+    project.status === 'missing'
+      ? 'Not found'
+      : project.status !== 'ready'
+        ? ' '
+        : newest
+          ? `${project.files.length} ${project.files.length === 1 ? 'diagram' : 'diagrams'} · ${relativeTime(newest.mtimeMs)}`
+          : 'No diagrams yet';
   return {
-    entryKey: 'project:new',
-    kind: 'document',
-    name: 'New canvas…',
-    meta: 'The first one here',
-    label: `New canvas in ${projectName}`,
-    description: `Nothing in ${projectName} yet — start its first diagram`,
-    onOpen: () => void controller.newCanvas(),
+    entryKey: `projects:${info.handle}`,
+    kind: 'project',
+    stack: project.files.length,
+    missing: project.status === 'missing',
+    name: info.name,
+    meta,
+    label: `Show the ${info.name} project`,
+    description: project.status === 'missing' ? `${info.displayPath} isn’t there right now` : info.displayPath,
+    haystack: info.name.toLowerCase(),
+    ...(newest
+      ? {
+          thumbnail: {
+            key: `project:${info.handle}:${newest.relPath}:${newest.mtimeMs}:${newest.size}`,
+            load: () => controller.peek({ kind: 'project', project: info.handle, relPath: newest.relPath }),
+          },
+        }
+      : {}),
+    onOpen: open,
   };
 }

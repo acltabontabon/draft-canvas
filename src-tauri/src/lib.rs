@@ -61,6 +61,7 @@ pub fn run() {
             commands::peek::project_peek,
             commands::projects::pick_project,
             commands::projects::open_project,
+            commands::projects::project_forget,
             commands::projects::project_scan,
             commands::projects::project_open_file,
             commands::projects::project_save_new,

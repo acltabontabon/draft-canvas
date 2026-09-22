@@ -78,6 +78,7 @@ export function createTauriApi(): DesktopApi {
     projectScan: (handle) => call('project_scan', { handle }),
     projectOpenFile: (projectHandle, relPath) => call('project_open_file', { projectHandle, relPath }),
     projectPeek: (projectHandle, relPath) => call('project_peek', { projectHandle, relPath }),
+    projectForget: (handle) => call('project_forget', { handle }),
     projectSaveNew: (projectHandle, name, bytes) => callRaw('project_save_new', { projectHandle, name }, bytes),
 
     recentsList: () => call('recents_list'),

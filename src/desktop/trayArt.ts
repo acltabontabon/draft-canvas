@@ -147,7 +147,7 @@ export function startTrayArt(api: DesktopApi, store: DesktopStore, controller: D
       const drafts = recovery.slice(0, DRAFTS);
       const drawn = async (key: string, load: () => Promise<string | null>) => {
         const thumbnail = await loadThumbnail(key, load);
-        return thumbnail.state === 'drawn' ? silhouette(thumbnail.shape, ink) : null;
+        return thumbnail?.state === 'drawn' ? silhouette(thumbnail.shape, ink) : null;
       };
       const art: TrayArt = {
         actions: Object.fromEntries(
