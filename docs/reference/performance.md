@@ -18,16 +18,16 @@ between the markers is written by that script, so edit the prose around it, not 
 <!-- performance-results:start -->
 ### At rest
 
-On a typical architecture diagram (~90 nodes — services, databases, queues, boundaries), Draft Canvas loads in about 478 ms and settles at about 17 MiB of memory. A larger, more detailed diagram (~225 nodes) loads in about 747 ms and uses about 32 MiB.
+On a typical architecture diagram (~90 nodes — services, databases, queues, boundaries), Draft Canvas loads in about 494 ms and settles at about 18 MiB of memory. A larger, more detailed diagram (~225 nodes) loads in about 778 ms and uses about 33 MiB.
 
 | Diagram | Size | Load time | Memory (JS heap) | 40-step drag |
 |---|---|---|---|---|
-| Typical | 90 nodes / 79 connections | 478 ms | 17 MiB | 680 ms |
-| Large | 225 nodes / 192 connections | 747 ms | 32 MiB | 681 ms |
+| Typical | 90 nodes / 79 connections | 494 ms | 18 MiB | 687 ms |
+| Large | 225 nodes / 192 connections | 778 ms | 33 MiB | 676 ms |
 
 Measured against the production build in Chromium, on real architecture diagrams (not synthetic shapes) built from Draft Canvas's own starter catalog. These are reference-machine numbers, not a guarantee for every device. The drag column is how long a scripted 40-step drag takes end to end — one step per frame at 60 Hz, so it is the length of the gesture rather than any lag in it; how each frame fares is in the next table.
 
-Measured on: Apple M2 Pro, macOS 27.0.0, Chromium 153.0.8010.12, Draft Canvas 1.8.0.
+Measured on: Apple M2 Pro, macOS 27.0.0, Chromium 153.0.8010.12, Draft Canvas 1.10.0.
 
 ![JS heap vs. diagram size](../../benchmark/memory-chart.svg)
 
@@ -37,9 +37,9 @@ How long a frame takes while panning, zooming, selecting and dragging in a big d
 
 | Diagram | Pan | Zoom | Select a shape | Drag | Longest freeze after an edit |
 |---|---|---|---|---|---|
-| Medium — 200 shapes / 300 connectors | 16.8 ms | 16.8 ms | 16.8 ms | 16.7 ms | none over 50 ms |
-| Large — 500 shapes / 800 connectors | 16.8 ms | 33.2 ms | 16.8 ms | 16.8 ms | 115 ms |
-| Stress — 1,000 shapes / 1,500 connectors | 33.4 ms | 66.7 ms | 66.7 ms | 50.0 ms | 230 ms |
+| Medium — 200 shapes / 300 connectors | 16.8 ms | 16.8 ms | 16.8 ms | 16.8 ms | none over 50 ms |
+| Large — 500 shapes / 800 connectors | 50.1 ms | 33.3 ms | 133.3 ms | 50.0 ms | 125 ms |
+| Stress — 1,000 shapes / 1,500 connectors | 150.0 ms | 116.7 ms | 283.3 ms | 150.0 ms | 201 ms |
 
 These diagrams are generated, deliberately dense ones: boundaries nested three deep, connectors that cross boundaries and each other, notes and code on shapes and connectors, and shapes with a room inside. Measured with real mouse input against the production build (new headless Chromium 153.0.8010.12, 1600×1000 @1x, 3 runs each).
 
@@ -49,12 +49,12 @@ How long a diagram takes to appear after you choose it, the longest stretch the 
 
 | Diagram | Opens in | Longest freeze while opening | Export |
 |---|---|---|---|
-| Small — 50 shapes / 75 connectors | 475 ms | 91 ms | – |
-| Medium — 200 shapes / 300 connectors | 882 ms | 448 ms | 76 ms / 867 ms |
-| Large — 500 shapes / 800 connectors | 2.6 s | 2.1 s | 77 ms / 1.7 s |
-| Stress — 1,000 shapes / 1,500 connectors | 9.0 s | 8.4 s | 156 ms / 2.0 s |
+| Small — 50 shapes / 75 connectors | 481 ms | 95 ms | – |
+| Medium — 200 shapes / 300 connectors | 866 ms | 441 ms | 84 ms / 882 ms |
+| Large — 500 shapes / 800 connectors | 2.6 s | 2.1 s | 122 ms / 2.1 s |
+| Stress — 1,000 shapes / 1,500 connectors | 9.2 s | 8.4 s | 182 ms / 2.0 s |
 
-100 saved diagrams show up in the library in 77 ms. Switching between diagrams 25 times grew the JS heap by 0.5 MiB in total, and left no DOM nodes or listeners behind. Dragging a shape out and back 150 times on the large diagram — enough to fill the undo history — took the heap from 86 MiB to 118 MiB, where it stopped growing.
+100 saved diagrams show up in the library in 81 ms. Switching between diagrams 25 times grew the JS heap by 0.7 MiB in total, and left no DOM nodes or listeners behind. Dragging a shape out and back 150 times on the large diagram — enough to fill the undo history — took the heap from 99 MiB to 100 MiB, where it stopped growing.
 
 <!-- performance-results:end -->
 

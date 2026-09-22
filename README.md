@@ -111,14 +111,14 @@ saves with on HTTPS or `localhost`, so over plain `http://192.168.x.x` it can't 
 <!-- performance:start -->
 ## Performance
 
-On a typical architecture diagram (~90 nodes — services, databases, queues, boundaries), Draft Canvas loads in about 478 ms and settles at about 17 MiB of memory. A larger, more detailed diagram (~225 nodes) loads in about 747 ms and uses about 32 MiB.
+On a typical architecture diagram (~90 nodes — services, databases, queues, boundaries), Draft Canvas loads in about 494 ms and settles at about 18 MiB of memory. A larger, more detailed diagram (~225 nodes) loads in about 778 ms and uses about 33 MiB.
 
 | Diagram | Size | Load time | Memory (JS heap) |
 |---|---|---|---|
-| Typical | 90 nodes / 79 connections | 478 ms | 17 MiB |
-| Large | 225 nodes / 192 connections | 747 ms | 32 MiB |
+| Typical | 90 nodes / 79 connections | 494 ms | 18 MiB |
+| Large | 225 nodes / 192 connections | 778 ms | 33 MiB |
 
-Measured on: Apple M2 Pro, macOS 27.0.0, Chromium 153.0.8010.12, Draft Canvas 1.8.0. Reference-machine numbers on real architecture diagrams, not a guarantee for every device.
+Measured on: Apple M2 Pro, macOS 27.0.0, Chromium 153.0.8010.12, Draft Canvas 1.10.0. Reference-machine numbers on real architecture diagrams, not a guarantee for every device.
 
 Frame times while you pan, zoom and drag in diagrams of up to 1,000 shapes, how long big diagrams take to open, and how to reproduce all of it: [`docs/reference/performance.md`](docs/reference/performance.md).
 <!-- performance:end -->
