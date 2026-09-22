@@ -48,7 +48,7 @@ libc = "0.2"
 tempfile = "3"
 # Tauri's own menu library: used only to check that every shortcut string in menu.rs actually parses.
 # Tauri drops an unparseable shortcut without a word.
-muda = { version = "0.19", default-features = false }
+muda = { version = "0.20", default-features = false }
 
 [profile.release]
 panic = "abort"
