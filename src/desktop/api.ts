@@ -99,6 +99,38 @@ export type CloseBehavior = 'ask' | 'tray' | 'quit';
 
 export interface DesktopSettings {
   closeBehavior: CloseBehavior;
+  /** Look for a newer version shortly after launch and once a day. Only ever looks. */
+  autoCheckUpdates: boolean;
+}
+
+/** What a release is, as far as the page says. */
+export interface UpdateInfo {
+  version: string;
+  /** The release's section of the changelog, as Markdown. */
+  notes: string | null;
+}
+
+/** Where an update stands (`updater::Phase` in Rust). */
+export type UpdatePhase =
+  | { phase: 'idle' }
+  | { phase: 'checking' }
+  | { phase: 'up-to-date'; checkedMs: number }
+  | { phase: 'available'; info: UpdateInfo }
+  /** `total` is null when the server didn't say: show movement, not a percentage that lies. */
+  | { phase: 'downloading'; info: UpdateInfo; received: number; total: number | null }
+  | { phase: 'ready'; info: UpdateInfo }
+  | { phase: 'installing'; info: UpdateInfo }
+  | { phase: 'unavailable'; reason: string };
+
+/** Everything the page needs about updating, sent whole on every change. */
+export interface UpdateSnapshot {
+  currentVersion: string;
+  state: UpdatePhase;
+  /** "Later" was said to the version on offer, this run. */
+  dismissed: boolean;
+  /** Why the last install didn't go ahead: the person chose to keep working. */
+  held: string | null;
+  error: { stage: 'check' | 'download' | 'install'; message: string; manual: boolean } | null;
 }
 
 export interface HostBoot {
@@ -139,6 +171,9 @@ export type HostEvent =
   | { type: 'recover-draft'; id: string }
   | { type: 'menu'; command: MenuCommand }
   | { type: 'quit-requested' }
+  /** The quit question, asked before an update replaces the app. */
+  | { type: 'update-requested' }
+  | { type: 'update'; snapshot: UpdateSnapshot }
   | { type: 'window-focused' }
   | { type: 'recents-changed' }
   | { type: 'notice'; message: string };
@@ -223,4 +258,13 @@ export interface DesktopApi {
 
   // The tray
   trayDecorate(art: TrayArt): Promise<void>;
+
+  // Updates. Each returns the whole snapshot; the same arrives as an `update` event on every change.
+  updateStatus(): Promise<UpdateSnapshot>;
+  /** `manual` when a person asked: only then is a failure worth showing. */
+  updateCheck(manual: boolean): Promise<UpdateSnapshot>;
+  updateDownload(): Promise<UpdateSnapshot>;
+  /** Asks the quit question first; when it works the app is replaced and relaunched. */
+  updateInstall(): Promise<UpdateSnapshot>;
+  updateDismiss(): Promise<UpdateSnapshot>;
 }

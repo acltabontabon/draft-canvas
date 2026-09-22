@@ -2,10 +2,24 @@ import { Modal } from '../../ui/common/Modal';
 import type { CloseBehavior } from '../api';
 import { desktopStore } from '../store';
 import { useDesktopController, useDesktopState } from '../useDesktop';
+import { UpdatePanel, UpdateSettings } from './Updates';
 import './desktop.css';
 
-/** The one setting the desktop app has: what closing the window does. Everything else follows the OS. */
+/**
+ * The desktop app's own dialogs: Settings, and the update panel the update chip opens. Everything else
+ * follows the OS.
+ */
 export function DesktopSettings() {
+  return (
+    <>
+      <SettingsDialog />
+      <UpdatePanel />
+    </>
+  );
+}
+
+/** What closing the window does, and updates. */
+function SettingsDialog() {
   const { settingsOpen, settings, platform } = useDesktopState();
   const controller = useDesktopController();
   if (!settingsOpen) return null;
@@ -18,7 +32,7 @@ export function DesktopSettings() {
   ];
 
   return (
-    <Modal title="Settings" onClose={() => desktopStore.update({ settingsOpen: false })} width={480}>
+    <Modal title="Settings" onClose={() => desktopStore.update({ settingsOpen: false })} width={500}>
       <fieldset className="dc-settings-group">
         <legend>When I close the window</legend>
         {choices.map((choice) => (
@@ -36,6 +50,7 @@ export function DesktopSettings() {
           </label>
         ))}
       </fieldset>
+      <UpdateSettings />
     </Modal>
   );
 }

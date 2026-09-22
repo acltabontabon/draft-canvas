@@ -15,6 +15,7 @@ import type { DesktopController } from '../controller';
 import type { DesktopState } from '../store';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { DocTile, type DocTileProps } from './DocTile';
+import { UpdateChip } from './Updates';
 import { useDeskGeometry, type DeskGeometry } from './useDeskGeometry';
 import './desktop.css';
 
@@ -137,6 +138,7 @@ export function DesktopHome() {
   return (
     <div className="dc-desk" ref={rootRef} onPointerMove={spotlight.move} onPointerLeave={spotlight.leave}>
       <div className="dc-desk-canvas" ref={canvasRef} aria-hidden="true" />
+      <UpdateChip placement="home" />
 
       <header className="dc-desk-top">
         <LibraryBrand />

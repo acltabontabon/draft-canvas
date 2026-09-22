@@ -287,6 +287,57 @@ test('a file that is not a diagram is refused without leaving Home', async ({ pa
   expect(calls).toContain('show_error');
 });
 
+test('an update is offered quietly, and nothing happens to it until it is asked for', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  await expect(page.locator('.dc-update-chip')).toHaveCount(0);
+
+  const info = { version: '1.10.0', notes: '### Added\n- Draft Canvas keeps itself **up to date**.' };
+  await page.evaluate(
+    (info) => window.__shell.setUpdate({ currentVersion: '1.9.4', state: { phase: 'available', info }, dismissed: false, held: null, error: null }),
+    info,
+  );
+  const chip = page.getByRole('button', { name: 'Update available · 1.10.0' });
+  await expect(chip).toBeVisible();
+  const called = () => page.evaluate(() => window.__shell.calls().map((call) => call.command));
+  expect(await called()).not.toContain('update_download');
+
+  await chip.click();
+  const dialog = page.getByRole('dialog', { name: 'A new version of Draft Canvas' });
+  await expect(dialog.getByText('up to date')).toBeVisible();
+  await expect(dialog.getByLabel('From version 1.9.4 to version 1.10.0')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Download' }).click();
+  await expect.poll(called).toContain('update_download');
+  expect(await called()).not.toContain('update_install');
+
+  await page.evaluate(
+    (info) => window.__shell.setUpdate({ currentVersion: '1.9.4', state: { phase: 'ready', info }, dismissed: false, held: null, error: null }),
+    info,
+  );
+  await expect(page.getByRole('button', { name: 'Restart to update' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Update and restart' }).click();
+  await expect.poll(called).toContain('update_install');
+});
+
+test('Settings has the update switch, and turning it off tells the shell', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'settings' }));
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  const auto = settings.getByRole('checkbox', { name: /Check for updates automatically/ });
+  await expect(auto).toBeChecked();
+  await auto.uncheck();
+  await expect(auto).not.toBeChecked();
+  const patches = await page.evaluate(() =>
+    window.__shell
+      .calls()
+      .filter((call) => call.command === 'settings_set')
+      .map((call) => (call.args as { patch: unknown }).patch),
+  );
+  expect(patches).toContainEqual({ autoCheckUpdates: false });
+  await expect(settings.getByRole('button', { name: 'Check for updates' })).toBeVisible();
+});
+
 test('the tray panel draws each diagram and chooses only through the shell', async ({ page }) => {
   await page.goto('/');
   const text = await documentText(page, 'Payments', 3);

@@ -20,6 +20,10 @@ tauri-plugin-single-instance = "2.4"
 tauri-plugin-dialog = "2.7"
 tauri-plugin-window-state = "2.4"
 tauri-plugin-opener = "2.5"
+# The official updater, driven from Rust only (`src/updater/`); the page gets no updater permission.
+tauri-plugin-updater = "2.12"
+semver = "1"
+tokio = { version = "1", features = ["sync", "time"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
@@ -37,6 +41,8 @@ windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32
 objc2-app-kit = "0.3"
 objc2-foundation = "0.3"
 objc2-quartz-core = { version = "0.3", default-features = false, features = ["std", "CALayer", "objc2-core-foundation"] }
+# Whether the folder holding the app can be written to before an update tries (`updater/backend.rs`).
+libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3"

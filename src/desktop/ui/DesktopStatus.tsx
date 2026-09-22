@@ -1,11 +1,13 @@
 import { Button } from '../../ui/common/Button';
 import { Icon } from '../../ui/common/Icon';
 import { useDesktopController, useDesktopState } from '../useDesktop';
+import { UpdateChip } from './Updates';
 
 /**
  * The desktop's stand-in for the browser's "Saved locally" indicator. The file is the document
  * here, so it says where the file is and whether what's on screen is in it — and for a Quick Draft,
- * which has no file yet, where the work is being kept until it does.
+ * which has no file yet, where the work is being kept until it does. An update, when there is one,
+ * waits at the end of the line.
  */
 export function DesktopStatus() {
   const { doc, saving } = useDesktopState();
@@ -21,11 +23,18 @@ export function DesktopStatus() {
         <Button variant="quiet" onClick={() => void controller.save()}>
           Save…
         </Button>
+        <UpdateChip placement="status" />
       </div>
     );
   }
 
-  if (doc.kind !== 'file') return <div className="dc-status-left" />;
+  if (doc.kind !== 'file') {
+    return (
+      <div className="dc-status-left">
+        <UpdateChip placement="status" />
+      </div>
+    );
+  }
 
   const state = saving ? 'saving' : doc.dirty ? 'dirty' : 'saved';
   return (
@@ -58,6 +67,7 @@ export function DesktopStatus() {
               ? `${doc.displayPath} · read-only`
               : doc.displayPath}
       </span>
+      <UpdateChip placement="status" />
     </div>
   );
 }

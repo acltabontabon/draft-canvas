@@ -14,6 +14,7 @@ mod recovery;
 mod settings;
 mod state;
 mod tray;
+mod updater;
 mod util;
 mod window;
 #[cfg(test)]
@@ -30,6 +31,8 @@ pub fn run() {
             lifecycle::second_instance,
         ))
         .plugin(tauri_plugin_dialog::init())
+        // Driven from Rust only (`updater/`): the page is given no updater permission.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // Size, position and maximised state only. Restoring visibility would show the window before
         // the page has drawn, and the app decides that moment itself (see `host_ready`).
         .plugin(
@@ -76,6 +79,11 @@ pub fn run() {
             commands::tray::tray_panel,
             commands::tray::tray_choose,
             commands::tray::tray_panel_fit,
+            commands::updates::update_status,
+            commands::updates::update_check,
+            commands::updates::update_download,
+            commands::updates::update_install,
+            commands::updates::update_dismiss,
         ])
         .setup(lifecycle::setup)
         .build(tauri::generate_context!())

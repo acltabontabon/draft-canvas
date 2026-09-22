@@ -14,6 +14,7 @@ import {
   type RecoveryEntry,
   type SavedAs,
   type TrayArt,
+  type UpdateSnapshot,
 } from '../../src/desktop/api';
 import type { HostLink } from '../../src/desktop/channel';
 import { DesktopController, type DesktopUi } from '../../src/desktop/controller';
@@ -54,6 +55,7 @@ export function createHarness() {
   let saveAsPath: { name: string; displayPath: string } | null = null;
   let hostEvents: (event: HostEvent) => void = () => {};
   let nextHandle = 1;
+  let update: UpdateSnapshot = { currentVersion: '1.9.4', state: { phase: 'idle' }, dismissed: false, held: null, error: null };
 
   const stampOf = (file: FakeFile) => `v1:${file.version}`;
   const opened = (handle: string, file: FakeFile): OpenedDoc => ({
@@ -74,7 +76,7 @@ export function createHarness() {
   const api = {
     hostReady: vi.fn(async (onEvent: (event: HostEvent) => void) => {
       hostEvents = onEvent;
-      return { version: '1.9.4', platform: 'macos' as const, settings: { closeBehavior: 'ask' as const }, lastProject: null };
+      return { version: '1.9.4', platform: 'macos' as const, settings: { closeBehavior: 'ask' as const, autoCheckUpdates: true }, lastProject: null };
     }),
     reportState: vi.fn(async (_state: DocState) => {}),
     quitAck: vi.fn(async (_decision: QuitDecision) => {}),
@@ -144,8 +146,11 @@ export function createHarness() {
     recoveryList: vi.fn(async () => [...recovery.values()].map((held) => held.entry)),
     recoveryRead: vi.fn(async (id: string) => recovery.get(id)!.text),
     recoveryDiscard: vi.fn(async (id: string) => void recovery.delete(id)),
-    settingsGet: vi.fn(async () => ({ closeBehavior: 'ask' as const })),
-    settingsSet: vi.fn(async (patch: { closeBehavior?: 'ask' | 'tray' | 'quit' }) => ({ closeBehavior: patch.closeBehavior ?? ('ask' as const) })),
+    settingsGet: vi.fn(async () => ({ closeBehavior: 'ask' as const, autoCheckUpdates: true })),
+    settingsSet: vi.fn(async (patch: { closeBehavior?: 'ask' | 'tray' | 'quit'; autoCheckUpdates?: boolean }) => ({
+      closeBehavior: patch.closeBehavior ?? ('ask' as const),
+      autoCheckUpdates: patch.autoCheckUpdates ?? true,
+    })),
     ask: vi.fn(async (title: string, message: string, buttons: string[]) => {
       asked.push({ title, message, buttons });
       // An unscripted box is closed the way Escape closes it: the last button, which changes nothing.
@@ -153,6 +158,12 @@ export function createHarness() {
     }),
     showError: vi.fn(async (title: string, message: string) => void errors.push({ title, message })),
     trayDecorate: vi.fn(async (_art: TrayArt) => {}),
+    // The shell decides everything about updates; the fake just answers with whatever the test set.
+    updateStatus: vi.fn(async () => update),
+    updateCheck: vi.fn(async (_manual: boolean) => update),
+    updateDownload: vi.fn(async () => update),
+    updateInstall: vi.fn(async () => update),
+    updateDismiss: vi.fn(async () => ({ ...update, dismissed: true })),
   } satisfies DesktopApi;
 
   const link: HostLink = {
@@ -215,6 +226,8 @@ export function createHarness() {
     pickFile: (handle: string | null) => void (pickedFile = handle),
     saveAsTo: (target: { name: string; displayPath: string } | null) => void (saveAsPath = target),
     hostEvent: (event: HostEvent) => hostEvents(event),
+    /** What the shell's updater answers with from now on. */
+    setUpdate: (next: UpdateSnapshot) => void (update = next),
     /** What the app says: a committed edit. */
     edit: (text: string, baseSeq?: number) => link.onMessage({ type: 'draft-canvas:change', text, ...(baseSeq !== undefined ? { baseSeq } : {}) }),
   };

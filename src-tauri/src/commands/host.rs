@@ -12,7 +12,7 @@ use crate::window::{apply_state, show_main, Platform, ReportedState};
 use serde::Serialize;
 use std::path::Path;
 use tauri::ipc::Channel;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,10 +89,18 @@ pub async fn settings_set(
     app: AppHandle,
     patch: SettingsPatch,
 ) -> Result<DesktopSettings, AppError> {
-    run_blocking(&app, move |_, state| {
+    let turned_on = patch.auto_check_updates == Some(true);
+    let settings = run_blocking(&app, move |_, state| {
         Ok(state.settings.apply(patch)?.public())
     })
-    .await
+    .await?;
+    // Checking was switched back on: look now rather than tomorrow.
+    if turned_on {
+        if let Some(wake) = app.try_state::<std::sync::Arc<crate::updater::CheckWake>>() {
+            wake.wake();
+        }
+    }
+    Ok(settings)
 }
 
 /// The one message box the page uses for every question. All its wording is the page's.
@@ -133,6 +141,7 @@ mod tests {
             platform: Platform::Macos,
             settings: DesktopSettings {
                 close_behavior: crate::settings::CloseBehavior::Ask,
+                auto_check_updates: true,
             },
             last_project: Some(ProjectInfo {
                 handle: "h_1".into(),
@@ -145,7 +154,7 @@ mod tests {
             json!({
                 "version": "1.10.0",
                 "platform": "macos",
-                "settings": {"closeBehavior": "ask"},
+                "settings": {"closeBehavior": "ask", "autoCheckUpdates": true},
                 "lastProject": {"handle": "h_1", "name": "P", "displayPath": "~/P"}
             })
         );
@@ -154,6 +163,7 @@ mod tests {
             platform: Platform::Windows,
             settings: DesktopSettings {
                 close_behavior: crate::settings::CloseBehavior::Quit,
+                auto_check_updates: false,
             },
             last_project: None,
         };

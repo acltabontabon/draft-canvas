@@ -101,8 +101,24 @@ menu, `⌘Q`) really quits. Logging out or shutting down never waits on Draft Ca
 kept.
 
 While hidden, Draft Canvas does nothing. It doesn't watch your keyboard, mouse, screen, meetings or other apps,
-doesn't look through your disk for diagrams, and doesn't use the network. It only ever touches the files and
-folders you choose, and its own data folder.
+and doesn't look through your disk for diagrams. It only ever touches the files and folders you choose, and its
+own data folder. The one thing it asks the network is whether there's a newer version (below), and it can be
+turned off.
+
+## Updates
+
+Draft Canvas looks for a newer version shortly after it starts and once a day after that. That's all it does
+on its own: it reads one small file from this project's GitHub releases, and sends nothing about you or your
+diagrams.
+
+When there's a newer version, a small **Update available** appears in Home's corner and in the status bar.
+It opens what's new, with **Download** and **Later**. Downloading doesn't interrupt anything, and every
+download is checked against a signature built into the app before it can be installed. When it's ready,
+**Update and restart** keeps anything unsaved first, and asks about a file with changes, exactly as quitting
+would. Choose **Cancel** there and you keep working; the update waits.
+
+**Settings → Updates** has **Check for updates automatically** (on unless you turn it off) and **Check for
+updates**. How updates are built, signed and published is in [Desktop updates](desktop-updates.md).
 
 ## Keyboard
 
@@ -144,7 +160,8 @@ tray, native dialogs and safe file writes.
 ## Releasing
 
 Desktop releases come from a `desktop-vX.Y.Z` tag, where `X.Y.Z` is the version in `package.json`: the desktop app
-has no version of its own, so it can't drift from the web app's. `.github/workflows/desktop-release.yml` verifies
+has no version of its own, so it can't drift from the web app's. A prerelease (`desktop-v1.10.0-alpha.1`) may lead
+it, for the version the desktop app will ship in. `.github/workflows/desktop-release.yml` verifies
 that, builds the macOS (Apple Silicon) `.dmg` and the Windows (x64) installer, and publishes them, with a
 checksum file and a build attestation, as a prerelease on the repository's Releases page.
 
@@ -156,4 +173,5 @@ therefore warns the first time, and the release notes say how to continue:
   administrator rights.
 
 Signing can be added later without changing anything else; there is deliberately nothing about it in the workflow
-today. There is no automatic updater yet either: a new version is a new download.
+today. Every release is also an update installed copies are offered, signed with the project's own update key;
+[Desktop updates](desktop-updates.md) has the one-time setup and what the workflow checks.

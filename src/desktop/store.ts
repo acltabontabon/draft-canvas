@@ -1,4 +1,4 @@
-import type { DesktopSettings, ProjectFile, ProjectInfo, RecentItem, RecoveryEntry } from './api';
+import type { DesktopSettings, ProjectFile, ProjectInfo, RecentItem, RecoveryEntry, UpdateSnapshot } from './api';
 
 /** What the open document is, for the status bar, the window title and Home. */
 export type DesktopDoc =
@@ -25,6 +25,10 @@ export interface DesktopState {
   recovery: RecoveryEntry[];
   settings: DesktopSettings;
   settingsOpen: boolean;
+  /** Where an update stands, as the shell last said. Null until it has. */
+  update: UpdateSnapshot | null;
+  /** The update panel is open. */
+  updateOpen: boolean;
 }
 
 const INITIAL: DesktopState = {
@@ -35,8 +39,10 @@ const INITIAL: DesktopState = {
   project: null,
   recents: [],
   recovery: [],
-  settings: { closeBehavior: 'ask' },
+  settings: { closeBehavior: 'ask', autoCheckUpdates: true },
   settingsOpen: false,
+  update: null,
+  updateOpen: false,
 };
 
 /**

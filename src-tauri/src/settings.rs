@@ -1,4 +1,5 @@
-//! `settings.json` in the app's config folder. The page can read and change only `closeBehavior`;
+//! `settings.json` in the app's config folder. The page can read and change only `closeBehavior` and
+//! `autoCheckUpdates`;
 //! the last project and last dialog folder are written by Rust after a dialog, never by the page.
 
 use crate::docio::write_private;
@@ -34,6 +35,9 @@ pub struct LastProject {
 pub struct Settings {
     pub v: u32,
     pub close_behavior: CloseBehavior,
+    /// Look for a newer version shortly after launch and once a day. Only ever looks: downloading and
+    /// installing are always asked for. A file written before this existed reads as on.
+    pub auto_check_updates: bool,
     pub last_project: Option<LastProject>,
     pub last_dir: Option<String>,
 }
@@ -43,6 +47,7 @@ impl Default for Settings {
         Self {
             v: VERSION,
             close_behavior: CloseBehavior::default(),
+            auto_check_updates: true,
             last_project: None,
             last_dir: None,
         }
@@ -54,12 +59,14 @@ impl Default for Settings {
 #[serde(rename_all = "camelCase")]
 pub struct DesktopSettings {
     pub close_behavior: CloseBehavior,
+    pub auto_check_updates: bool,
 }
 
 impl Settings {
     pub fn public(&self) -> DesktopSettings {
         DesktopSettings {
             close_behavior: self.close_behavior,
+            auto_check_updates: self.auto_check_updates,
         }
     }
 }
@@ -70,6 +77,7 @@ impl Settings {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SettingsPatch {
     pub close_behavior: Option<CloseBehavior>,
+    pub auto_check_updates: Option<bool>,
 }
 
 /// The file is read once and then kept in memory: this app is its only writer, and `get` is called
@@ -108,6 +116,9 @@ impl SettingsStore {
         self.update(|s| {
             if let Some(behavior) = patch.close_behavior {
                 s.close_behavior = behavior;
+            }
+            if let Some(auto) = patch.auto_check_updates {
+                s.auto_check_updates = auto;
             }
         })
     }
@@ -168,6 +179,7 @@ mod tests {
         let after = store
             .apply(SettingsPatch {
                 close_behavior: Some(CloseBehavior::Tray),
+                ..Default::default()
             })
             .unwrap();
         assert_eq!(after.close_behavior, CloseBehavior::Tray);
@@ -213,6 +225,7 @@ mod tests {
         store
             .apply(SettingsPatch {
                 close_behavior: Some(CloseBehavior::Quit),
+                ..Default::default()
             })
             .unwrap();
         assert_eq!(store.get().close_behavior, CloseBehavior::Quit);
@@ -241,6 +254,7 @@ mod tests {
         let err = store
             .apply(SettingsPatch {
                 close_behavior: Some(CloseBehavior::Quit),
+                ..Default::default()
             })
             .err()
             .unwrap();
@@ -259,7 +273,22 @@ mod tests {
         let settings = SettingsStore::new(dir.path()).get();
         assert_eq!(settings.close_behavior, CloseBehavior::Tray);
         assert!(settings.last_project.is_none());
+        // Written before the updater existed: it looks for updates, as a new install does.
+        assert!(settings.auto_check_updates);
         assert!(!dir.path().join("settings.json.bad").exists());
+    }
+
+    #[test]
+    fn checking_for_updates_can_be_turned_off_and_stays_off() {
+        let dir = tempdir().unwrap();
+        let store = SettingsStore::new(dir.path());
+        let patch: SettingsPatch =
+            serde_json::from_value(json!({"autoCheckUpdates": false})).unwrap();
+        assert!(!store.apply(patch).unwrap().auto_check_updates);
+        assert!(!SettingsStore::new(dir.path()).get().auto_check_updates);
+        assert!(
+            serde_json::from_value::<SettingsPatch>(json!({"autoCheckUpdates": "no"})).is_err()
+        );
     }
 
     #[test]
@@ -278,11 +307,11 @@ mod tests {
             serde_json::from_slice(&fs::read(dir.path().join("settings.json")).unwrap()).unwrap();
         assert_eq!(
             stored,
-            json!({"v": 1, "closeBehavior": "ask", "lastProject": {"path": "/p", "name": "p"}, "lastDir": null})
+            json!({"v": 1, "closeBehavior": "ask", "autoCheckUpdates": true, "lastProject": {"path": "/p", "name": "p"}, "lastDir": null})
         );
         assert_eq!(
             serde_json::to_value(settings.public()).unwrap(),
-            json!({"closeBehavior": "ask"})
+            json!({"closeBehavior": "ask", "autoCheckUpdates": true})
         );
     }
 }

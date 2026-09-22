@@ -11,6 +11,7 @@ pub mod raw;
 pub mod recents;
 pub mod recovery;
 pub mod tray;
+pub mod updates;
 
 use crate::errors::AppError;
 use crate::recents::RecentKind;

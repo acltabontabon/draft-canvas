@@ -38,6 +38,8 @@ pub fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         // No status area (some Linux desktops): the app still runs, and closing the window quits.
         Err(e) => eprintln!("Draft Canvas: no tray icon ({e})"),
     }
+    // Returns at once; the first look for an update is well after the window is up.
+    crate::updater::start(&handle);
 
     #[cfg(not(target_os = "macos"))]
     {
@@ -95,6 +97,15 @@ pub fn on_run_event(app: &AppHandle, event: RunEvent) {
             WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) => open_paths(app, paths),
             _ => {}
         },
+        // The app is being replaced by an update: a Quit or a shutdown waits, or it would stop halfway.
+        // The install's own relaunch carries Tauri's restart code and goes through.
+        RunEvent::ExitRequested { code, api, .. }
+            if app
+                .try_state::<crate::updater::Updater>()
+                .is_some_and(|updater| crate::updater::defers_exit(updater.installing(), code)) =>
+        {
+            api.prevent_exit();
+        }
         // Last window gone with nobody having chosen to quit: stay alive in the tray. Exits Rust asks
         // for itself (`code` is set) and the quit flow's own (`is_quitting`) go through.
         RunEvent::ExitRequested {

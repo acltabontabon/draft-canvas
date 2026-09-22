@@ -39,6 +39,11 @@ const COMMANDS: &[&str] = &[
     "tray_panel",
     "tray_choose",
     "tray_panel_fit",
+    "update_status",
+    "update_check",
+    "update_download",
+    "update_install",
+    "update_dismiss",
 ];
 
 fn main() {

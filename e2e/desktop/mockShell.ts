@@ -30,6 +30,8 @@ export interface ShellHandle {
   seed(history: { recents?: { name: string; text: string; ago: number }[]; drafts?: { title: string; text: string; ago: number }[] }): void;
   /** Something the shell tells the app on its own: a menu pick, a file the OS opened. */
   emit(event: unknown): void;
+  /** Where the updater stands from now on; the page hears of it as the shell would tell it. */
+  setUpdate(snapshot: unknown): void;
   /** Every command the app called, in order. */
   calls(): { command: string; args: unknown }[];
   exports(): { name: string; text: string }[];
@@ -68,6 +70,8 @@ export async function installMockShell(page: Page): Promise<void> {
     let saveTarget: { name: string } | null = null;
     let cancelExport = false;
     let trayArt: unknown = null;
+    let update: Record<string, unknown> = { currentVersion: '1.9.4', state: { phase: 'idle' }, dismissed: false, held: null, error: null };
+    let settings: Record<string, unknown> = { closeBehavior: 'ask', autoCheckUpdates: true };
     let events: ChannelLike | null = null;
     let eventIndex = 0;
     const decode = (bytes: unknown) => new TextDecoder().decode(bytes as Uint8Array);
@@ -106,7 +110,7 @@ export async function installMockShell(page: Page): Promise<void> {
       host_ready: (args: { onEvent: ChannelLike }) => {
         events = args.onEvent;
         eventIndex = 0;
-        return { version: '1.9.4', platform: 'macos', settings: { closeBehavior: 'ask' }, lastProject: null };
+        return { version: '1.9.4', platform: 'macos', settings, lastProject: null };
       },
       report_state: () => null,
       quit_ack: () => null,
@@ -184,8 +188,8 @@ export async function installMockShell(page: Page): Promise<void> {
       recovery_list: () => [...recovery.values()].map((held) => held.entry),
       recovery_read: (args: { id: string }) => ({ text: recovery.get(args.id)!.text }),
       recovery_discard: (args: { id: string }) => void recovery.delete(args.id),
-      settings_get: () => ({ closeBehavior: 'ask' }),
-      settings_set: (args: { patch: Record<string, unknown> }) => ({ closeBehavior: 'ask', ...args.patch }),
+      settings_get: () => settings,
+      settings_set: (args: { patch: Record<string, unknown> }) => (settings = { ...settings, ...args.patch }),
       ask: (args: { title: string; message: string; buttons: string[] }) => {
         asked.push(args);
         return answers.shift() ?? args.buttons.length - 1;
@@ -207,6 +211,12 @@ export async function installMockShell(page: Page): Promise<void> {
       }),
       tray_choose: () => null,
       tray_panel_fit: () => null,
+      // The updater: it answers with whatever the test set; what each step does is Rust's, tested there.
+      update_status: () => update,
+      update_check: () => update,
+      update_download: () => update,
+      update_install: () => update,
+      update_dismiss: () => (update = { ...update, dismissed: true }),
     };
 
     // What `@tauri-apps/api/core` needs of the page: a way to register the callbacks a `Channel` calls back into.
@@ -250,6 +260,10 @@ export async function installMockShell(page: Page): Promise<void> {
         });
       },
       emit,
+      setUpdate: (snapshot) => {
+        update = snapshot as Record<string, unknown>;
+        emit({ type: 'update', snapshot });
+      },
       calls: () => calls,
       exports: () => exported,
       recoveryIds: () => [...recovery.keys()],

@@ -62,6 +62,12 @@ pub enum HostEvent {
         command: MenuCommand,
     },
     QuitRequested,
+    /// The same question as `QuitRequested`, asked before an update replaces the app.
+    UpdateRequested,
+    /// Where an update is now; sent whole on every change.
+    Update {
+        snapshot: crate::updater::Snapshot,
+    },
     WindowFocused,
     RecentsChanged,
     Notice {
@@ -159,6 +165,8 @@ pub struct AppState {
     pub smoke_ready: Mutex<Option<Sender<()>>>,
     /// What the page drew for the tray menu (see `tray_decorate`).
     pub tray_art: Mutex<crate::tray::TrayArt>,
+    /// Waiting to hear how the conversation before an update ended (see `quit::request_update`).
+    pub update_gate: Mutex<Option<crate::quit::UpdateGate>>,
 }
 
 impl AppState {
@@ -174,6 +182,7 @@ impl AppState {
             tray_ready: AtomicBool::new(false),
             smoke_ready: Mutex::new(None),
             tray_art: Mutex::default(),
+            update_gate: Mutex::new(None),
         }
     }
 

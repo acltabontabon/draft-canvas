@@ -40,6 +40,18 @@ jobs:
             echo "::error::src-tauri/CHANGELOG.md has no dated '## [${{ steps.version.outputs.version }}] - YYYY-MM-DD' section."
             exit 1
           fi
+      # Every release is also an update installed copies will be offered. That takes the update signing
+      # key in the repository's secrets and its public half in tauri.conf.json; a release without them
+      # isn't a smaller release, it's one nobody can update from. See docs/guides/desktop-updates.md.
+      - name: The updater can ship
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo '::error::TAURI_SIGNING_PRIVATE_KEY is not set as a repository secret. See docs/guides/desktop-updates.md.'
+            exit 1
+          fi
+          node scripts/update-manifest.mjs check-config
 
   # One draft release the matrix jobs upload into, so they can't race to create it.
   draft:
@@ -88,19 +100,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `update` is what the in-app updater downloads, signed beside it: the app bundle as .app.tar.gz
+        # on macOS (the updater replaces the bundle; it can't use a disk image), and on Windows the
+        # installer itself, run passively.
         include:
           - name: macOS arm64
             os: macos-latest
-            args: --target aarch64-apple-darwin
+            args: --target aarch64-apple-darwin --bundles app,dmg
             target: aarch64-apple-darwin
             installer: Draft-Canvas_VERSION_macOS_arm64.dmg
             extension: .dmg
+            update: Draft-Canvas_VERSION_macOS_arm64.app.tar.gz
+            update-extension: .app.tar.gz
           - name: Windows x64
             os: windows-latest
-            args: ''
+            args: --bundles nsis
             target: ''
             installer: Draft-Canvas_VERSION_Windows_x64.exe
             extension: .exe
+            update: Draft-Canvas_VERSION_Windows_x64.exe
+            update-extension: -setup.exe
           # Intel Macs: add { os: macos-13, args: --target x86_64-apple-darwin, ... } here. Nothing else
           # in the pipeline is specific to arm64.
     steps:
@@ -116,34 +135,72 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
-      - name: Build the installer
-        id: tauri
-        uses: tauri-apps/tauri-action@v1
-        with:
-          args: ${{ matrix.args }}
-      # tauri-action names files after the product ("Draft Canvas_1.9.4_x64-setup.exe"); the release
-      # gets names a person can read and a script can predict.
-      - name: Name and upload the installer
+      # The app is built as the version being released: package.json's for a release, the tag's for a
+      # prerelease that leads it (check-desktop-version.mjs allows only that).
+      - name: Build as this version
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          node -e 'require("fs").writeFileSync("src-tauri/tauri.version.conf.json", JSON.stringify({ version: process.env.VERSION }))'
+          cat src-tauri/tauri.version.conf.json
+      # The one secret, in this step only. It signs the update packages for the in-app updater (Tauri's
+      # own minisign signing); it does not sign the app for the operating system, which stays unsigned.
+      # The signature records the version, which the app insists on, so a package can't be paired with
+      # another version's manifest.
+      - name: Build the installer and the signed update package
+        id: tauri
+        uses: tauri-apps/tauri-action@v1
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          args: ${{ matrix.args }} --config src-tauri/tauri.updater.conf.json --config src-tauri/tauri.version.conf.json
+      # tauri-action names files after the product ("Draft Canvas_1.9.4_x64-setup.exe"); the release
+      # gets names a person can read and a script can predict.
+      - name: Name the installer and the update package
+        shell: bash
+        env:
           VERSION: ${{ needs.verify.outputs.version }}
           INSTALLER: ${{ matrix.installer }}
           EXTENSION: ${{ matrix.extension }}
+          UPDATE: ${{ matrix.update }}
+          UPDATE_EXTENSION: ${{ matrix.update-extension }}
           ARTIFACTS: ${{ steps.tauri.outputs.artifactPaths }}
         run: |
           node -e '
-            const { copyFileSync, mkdirSync } = require("node:fs");
-            const source = JSON.parse(process.env.ARTIFACTS).find((file) => file.endsWith(process.env.EXTENSION));
-            if (!source) { console.error("No " + process.env.EXTENSION + " installer was built."); process.exit(1); }
+            const { copyFileSync, existsSync, mkdirSync } = require("node:fs");
+            const { VERSION, INSTALLER, EXTENSION, UPDATE, UPDATE_EXTENSION, ARTIFACTS } = process.env;
+            const built = JSON.parse(ARTIFACTS);
+            const find = (suffix, what) => {
+              const found = built.find((file) => file.endsWith(suffix));
+              if (!found) { console.error("::error::No " + what + " was built (" + suffix + ")."); process.exit(1); }
+              return found;
+            };
             mkdirSync("installers", { recursive: true });
-            copyFileSync(source, "installers/" + process.env.INSTALLER.replace("VERSION", process.env.VERSION));
+            copyFileSync(find(EXTENSION, "installer"), "installers/" + INSTALLER.replace("VERSION", VERSION));
+            const update = find(UPDATE_EXTENSION, "update package");
+            if (!existsSync(update + ".sig")) { console.error("::error::" + update + " was not signed for updates."); process.exit(1); }
+            copyFileSync(update, "installers/" + UPDATE.replace("VERSION", VERSION));
+            copyFileSync(update + ".sig", "installers/" + UPDATE.replace("VERSION", VERSION) + ".sig");
           '
-          node scripts/check-desktop-version.mjs --artifacts installers
-          gh release upload "$GITHUB_REF_NAME" installers/* --clobber
+          node scripts/check-desktop-version.mjs --tag "$GITHUB_REF_NAME" --artifacts installers
+      # Checked on the machine that made it, against the public key compiled into the app: the earliest
+      # point the wrong key, a missing signature or an unbound version can be caught.
+      - name: Check the update signature
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          UPDATE: ${{ matrix.update }}
+        run: node scripts/update-manifest.mjs check-artifact "installers/${UPDATE/VERSION/$VERSION}" "$VERSION"
+      - name: Upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" installers/* --clobber
 
-  # Checksums and a build attestation, then the release goes out — as a prerelease, and never as the
-  # "Latest" release (that stays the web app's).
+  # Checksums, the update manifest and a build attestation, then the release goes out — as a
+  # prerelease, and never as the "Latest" release (that stays the web app's).
   publish:
     needs: [verify, build]
     runs-on: ubuntu-latest
@@ -152,17 +209,42 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir assets
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir assets --pattern 'Draft-Canvas_*'
-          (cd assets && sha256sum Draft-Canvas_* > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          # What people download; the .sig files are for the updater, which checks them itself.
+          (cd assets && find . -maxdepth 1 -name 'Draft-Canvas_*' ! -name '*.sig' -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt && cat SHA256SUMS.txt)
+      # Built from the signatures the builds made, then checked against the packages themselves: every
+      # platform, every address the one this release will have, every signature made with the key in
+      # the app, for this version, and valid for the exact bytes being published. Nothing goes public
+      # until it passes.
+      - name: Build and check the update manifest
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          node scripts/update-manifest.mjs build "$VERSION" assets > assets/latest.json
+          node scripts/update-manifest.mjs verify assets/latest.json "$VERSION" --artifacts assets
+          cat assets/latest.json
       - uses: actions/attest-build-provenance@v3
         with:
           subject-path: assets/Draft-Canvas_*
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "$GITHUB_REF_NAME" assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$GITHUB_REF_NAME" assets/SHA256SUMS.txt assets/latest.json --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+
+  # Only now, with the release public, are installed copies told about it.
+  channels:
+    needs: publish
+    permissions:
+      contents: write
+    uses: ./.github/workflows/desktop-update-pointer.yml
+    with:
+      tag: ${{ github.ref_name }}

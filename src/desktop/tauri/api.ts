@@ -5,6 +5,7 @@ import {
   type DesktopApi,
   type DesktopSettings,
   type HostBoot,
+  type UpdateSnapshot,
   type HostEvent,
 } from '../api';
 
@@ -95,5 +96,10 @@ export function createTauriApi(): DesktopApi {
     ask: (title, message, buttons) => call('ask', { title, message, buttons }),
     showError: (title, message) => call('show_error', { title, message }),
     trayDecorate: (art) => call('tray_decorate', { art }),
+    updateStatus: () => call<UpdateSnapshot>('update_status'),
+    updateCheck: (manual) => call<UpdateSnapshot>('update_check', { manual }),
+    updateDownload: () => call<UpdateSnapshot>('update_download'),
+    updateInstall: () => call<UpdateSnapshot>('update_install'),
+    updateDismiss: () => call<UpdateSnapshot>('update_dismiss'),
   };
 }

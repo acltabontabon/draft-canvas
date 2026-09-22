@@ -14,6 +14,7 @@ import {
   type ProjectInfo,
   type RecoveryEntry,
   type SavedAs,
+  type UpdateSnapshot,
 } from './api';
 import type { HostLink } from './channel';
 import type { DesktopDoc, DesktopStore } from './store';
@@ -150,7 +151,7 @@ export class DesktopController {
   async start(): Promise<void> {
     const boot = await this.api.hostReady((event) => void this.onHostEvent(event));
     this.store.update({ ready: true, platform: boot.platform, settings: boot.settings });
-    await Promise.all([this.refreshRecents(), this.refreshRecovery()]);
+    await Promise.all([this.refreshRecents(), this.refreshRecovery(), this.refreshUpdate()]);
     if (boot.lastProject) await this.showProject(boot.lastProject);
   }
 
@@ -171,7 +172,11 @@ export class DesktopController {
       case 'notice':
         return this.ui.notify(event.message);
       case 'quit-requested':
-        return this.onQuitRequested();
+        return this.onQuitRequested('quit');
+      case 'update-requested':
+        return this.onQuitRequested('update');
+      case 'update':
+        return void this.store.update({ update: event.snapshot });
       case 'menu':
         return this.onMenu(event.command);
     }
@@ -775,11 +780,12 @@ export class DesktopController {
   // ─── Quit, focus ────────────────────────────────────────────────────────────────────
 
   /**
-   * The user asked to quit. Anything unsaved is snapshotted first, so this only ever waits on a
-   * question about a named file — a Quick Draft never asks. Logging out or shutting down never
-   * reaches here: the shell doesn't get to wait then, and the snapshot is what covers it.
+   * The user asked to quit, or to restart into an update. Anything unsaved is snapshotted first, so
+   * this only ever waits on a question about a named file — a Quick Draft never asks. Logging out or
+   * shutting down never reaches here: the shell doesn't get to wait then, and the snapshot is what
+   * covers it.
    */
-  private async onQuitRequested(): Promise<void> {
+  private async onQuitRequested(reason: 'quit' | 'update'): Promise<void> {
     try {
       await this.flushApp();
       const session = this.session;
@@ -792,8 +798,12 @@ export class DesktopController {
       if (!this.dirty) return void (await this.api.quitAck('ready'));
       await this.api.quitAck('prompting');
       const choice = await this.api.ask(
-        `Save the changes to ${session.name}.draftcanvas?`,
-        'Your changes will be lost if you don’t save them.',
+        reason === 'update'
+          ? `Save the changes to ${session.name}.draftcanvas before updating?`
+          : `Save the changes to ${session.name}.draftcanvas?`,
+        reason === 'update'
+          ? 'Draft Canvas restarts to finish the update. Your changes will be lost if you don’t save them.'
+          : 'Your changes will be lost if you don’t save them.',
         ['Save', 'Don’t Save', 'Cancel'],
       );
       if (choice === 2) return void (await this.api.quitAck('cancel'));
@@ -902,6 +912,45 @@ export class DesktopController {
   async setCloseBehavior(closeBehavior: 'ask' | 'tray' | 'quit'): Promise<void> {
     const settings = await this.api.settingsSet({ closeBehavior });
     this.store.update({ settings });
+  }
+
+  async setAutoCheckUpdates(autoCheckUpdates: boolean): Promise<void> {
+    const settings = await this.api.settingsSet({ autoCheckUpdates });
+    this.store.update({ settings });
+  }
+
+  // ─── Updates ────────────────────────────────────────────────────────────────────────
+  // The shell decides everything; these only ask, and take the snapshot it answers with. A failure is
+  // in the snapshot, worded for a person, so none of these throws at the interface.
+
+  checkForUpdate(): Promise<void> {
+    return this.updateStep(() => this.api.updateCheck(true));
+  }
+
+  downloadUpdate(): Promise<void> {
+    return this.updateStep(() => this.api.updateDownload());
+  }
+
+  /** Asks the quit question first; when the answer is to go ahead, this process ends. */
+  installUpdate(): Promise<void> {
+    return this.updateStep(() => this.api.updateInstall());
+  }
+
+  dismissUpdate(): Promise<void> {
+    this.store.update({ updateOpen: false });
+    return this.updateStep(() => this.api.updateDismiss());
+  }
+
+  private async refreshUpdate(): Promise<void> {
+    await this.updateStep(() => this.api.updateStatus());
+  }
+
+  private async updateStep(run: () => Promise<UpdateSnapshot>): Promise<void> {
+    try {
+      this.store.update({ update: await run() });
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-update' });
+    }
   }
 
   private async refreshRecents(): Promise<void> {
