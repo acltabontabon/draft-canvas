@@ -13,6 +13,13 @@ import './styles/canvas.css';
 const container = document.getElementById('root');
 if (!container) throw new Error('Missing #root element.');
 
+// In the desktop app the shell is up before the first paint, so the first thing shown is Home or
+// the file the OS opened. `__DESKTOP__` is false in the web build, which drops all of this.
+if (__DESKTOP__) {
+  const { bootDesktop } = await import('./desktop/boot');
+  await bootDesktop();
+}
+
 createRoot(container).render(
   <StrictMode>
     <App />

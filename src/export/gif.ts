@@ -222,5 +222,5 @@ export async function exportFlowGifFile(
   options.signal?.throwIfAborted();
   gif.finish();
   const blob = new Blob([new Uint8Array(gif.bytes())], { type: 'image/gif' });
-  downloadBlob(blob, fileNameFor(document.metadata.title, '.gif'));
+  await downloadBlob(blob, fileNameFor(document.metadata.title, '.gif'));
 }

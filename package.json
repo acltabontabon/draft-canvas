@@ -39,7 +39,15 @@
     "perf:lifecycle": "tsx benchmark/lifecycle-cli.ts",
     "perf:save-baseline": "tsx benchmark/cli.ts --save-baseline",
     "perf:regen-fixtures": "tsx benchmark/workloads/regen-fixtures.ts",
-    "perf:publish": "tsx benchmark/publish-results.ts"
+    "perf:publish": "tsx benchmark/publish-results.ts",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:web": "tsc -b && vite build --mode desktop",
+    "desktop:build": "tauri build",
+    "desktop:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
+    "desktop:version": "node scripts/check-desktop-version.mjs",
+    "desktop:check": "npm run desktop:web && npm run desktop:rust && npm run desktop:version",
+    "e2e:desktop": "playwright test --config=playwright.desktop.config.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.6",
@@ -52,6 +60,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/cli": "^2.11.5",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",

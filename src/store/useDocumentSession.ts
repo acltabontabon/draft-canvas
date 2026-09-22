@@ -4,7 +4,7 @@ import { cloneDocumentAsNew, createDocument } from '../document/factory';
 import { freeOriginFor, openingViewportFor } from '../document/geometry';
 import { createId } from '../document/ids';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
-import { embeddedHost } from '../host/embeddedHost';
+import { hostKind } from '../host/hostInfo';
 import { logDiagnostic } from '../lib/diagnostics';
 import type { StarterId } from '../starters';
 import { loadStarters } from '../starters/load';
@@ -137,7 +137,7 @@ export function useDocumentSession(): DocumentSession {
         notify('Could not read your local diagrams. Try reloading the page.', 'error');
       }
       setReady(true);
-      if (!repo.durable && !embeddedHost) {
+      if (!repo.durable && !hostKind()) {
         notify(
           'This browser is not allowing local storage, so diagrams are kept in memory only. Export before closing the tab.',
           'error',

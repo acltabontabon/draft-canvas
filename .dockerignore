@@ -1,6 +1,7 @@
 # Rebuilt inside the image
 node_modules
 dist
+dist-desktop
 dist-ssr
 .vite
 *.tsbuildinfo
@@ -22,10 +23,13 @@ benchmark
 demo
 e2e
 vscode-extension
+# The desktop app is built by its own workflow; cargo's target/ alone is gigabytes.
+src-tauri
 .playwright
 test-results
 playwright-report
 playwright-report-offline
+playwright-report-desktop
 coverage
 
 # Secrets never belong in a build context

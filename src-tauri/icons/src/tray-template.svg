@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="3 3.5 26 26">
+  <!-- macOS menu-bar template: black on transparent, the system tints it for light and dark bars.
+       Heavier strokes than the app icon, which would go faint at 22pt. -->
+  <g fill="none" stroke="#000" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="6" y="8" width="11" height="7" rx="2" stroke-width="2.4"/>
+    <rect x="15" y="18" width="11" height="7" rx="2" stroke-width="2.4"/>
+    <path d="M11.5 15.5v3.5h4" stroke-width="2"/>
+  </g>
+</svg>

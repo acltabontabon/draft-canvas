@@ -27,4 +27,6 @@ declare module '/src/*' {
   export const renderDocumentSvg: (doc: any, options?: Record<string, unknown>) => { svg: string };
   // oxlint-disable-next-line typescript/no-explicit-any
   export const deserializeDocument: (text: string) => { document: any };
+  // oxlint-disable-next-line typescript/no-explicit-any
+  export const serializeDocument: (doc: any) => string;
 }

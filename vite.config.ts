@@ -42,62 +42,94 @@ function contentSecurityPolicy(): Plugin {
   };
 }
 
+/**
+ * The desktop app has no Service Worker: its files ship inside the installer, and a custom-scheme
+ * webview refuses to register one anyway. Rather than fork `initServiceWorker`, the desktop build
+ * resolves the plugin's virtual module to one that does nothing, so no update is ever "ready".
+ */
+function withoutServiceWorker(): Plugin {
+  const virtualId = 'virtual:pwa-register';
+  return {
+    name: 'draft-canvas:desktop-no-service-worker',
+    resolveId: (source) => (source === virtualId ? `\0${virtualId}` : null),
+    load: (id) => (id === `\0${virtualId}` ? 'export function registerSW() { return async () => {}; }' : null),
+  };
+}
+
 // `base` stays relative so the built bundle can be served from any path
 // (e.g. /workbench/draft-canvas/) without a rebuild.
-export default defineConfig({
-  base: './',
-  plugins: [
-    react(),
-    contentSecurityPolicy(),
-    // Offline app-shell caching (Phase 6). `generateSW` means Workbox builds
-    // the whole Service Worker from this config — no hand-written SW source,
-    // so the plugin stays a devDependency and no new runtime dependency is
-    // added. `manifest: false` keeps this an offline-availability feature,
-    // not an installable one (no manifest, no install prompt, no Home Screen
-    // icon — that stays a deliberate non-goal). `skipWaiting`/`clientsClaim`
-    // are false so a downloaded update never activates over a running
-    // session — see src/lib/serviceWorker.ts for the user-triggered path.
-    VitePWA({
-      registerType: 'prompt',
-      injectRegister: null,
-      manifest: false,
-      strategies: 'generateSW',
-      workbox: {
-        skipWaiting: false,
-        clientsClaim: false,
-        cleanupOutdatedCaches: true,
-        navigateFallback: 'index.html',
-      },
-    }),
-  ],
-  server: { port: 5180 },
-  build: {
-    target: 'es2022',
-    sourcemap: true,
-    rollupOptions: {
-      output: {
-        // The canvas engine and the syntax highlighter are both large and
-        // rarely change; splitting them keeps the app chunk small and cacheable.
-        // React gets its own chunk too: left unassigned it was folded into
-        // `xyflow` (its first big importer), which then had to be preloaded by
-        // the Library screen — where React Flow is never used. Its stylesheet
-        // is imported up front (so app.css can override it) and must not drag
-        // the JavaScript chunk along with it.
-        manualChunks(id) {
-          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react';
-          if (id.includes('node_modules/@xyflow') && !id.endsWith('.css')) return 'xyflow';
-          if (id.includes('node_modules/refractor')) return 'refractor';
-          return undefined;
+//
+// `--mode desktop` builds the same app for the Tauri shell (src-tauri/): no PWA, no meta CSP (Tauri
+// sets the CSP itself, and `connect-src 'self'` would block its IPC), no source maps in the
+// installer, and `__DESKTOP__` true so the web build can drop the desktop code entirely.
+export default defineConfig(({ mode }) => {
+  const desktop = mode === 'desktop';
+  return {
+    base: './',
+    define: { __DESKTOP__: JSON.stringify(desktop) },
+    plugins: [
+      react(),
+      ...(desktop
+        ? [withoutServiceWorker()]
+        : [
+            contentSecurityPolicy(),
+            // Offline app-shell caching (Phase 6). `generateSW` means Workbox builds
+            // the whole Service Worker from this config — no hand-written SW source,
+            // so the plugin stays a devDependency and no new runtime dependency is
+            // added. `manifest: false` keeps this an offline-availability feature,
+            // not an installable one (no manifest, no install prompt, no Home Screen
+            // icon — that stays a deliberate non-goal). `skipWaiting`/`clientsClaim`
+            // are false so a downloaded update never activates over a running
+            // session — see src/lib/serviceWorker.ts for the user-triggered path.
+            VitePWA({
+              registerType: 'prompt',
+              injectRegister: null,
+              manifest: false,
+              strategies: 'generateSW',
+              workbox: {
+                skipWaiting: false,
+                clientsClaim: false,
+                cleanupOutdatedCaches: true,
+                navigateFallback: 'index.html',
+              },
+            }),
+          ]),
+    ],
+    server: {
+      // `tauri dev` needs a fixed port (5180 belongs to the web dev server and its e2e suite), and
+      // the watcher must skip src-tauri/: cargo's target/ holds more files than it can watch.
+      ...(desktop ? { port: 5198, strictPort: true } : { port: 5180 }),
+      watch: { ignored: ['**/src-tauri/**'] },
+    },
+    build: {
+      target: 'es2022',
+      outDir: desktop ? 'dist-desktop' : 'dist',
+      sourcemap: !desktop,
+      rollupOptions: {
+        output: {
+          // The canvas engine and the syntax highlighter are both large and
+          // rarely change; splitting them keeps the app chunk small and cacheable.
+          // React gets its own chunk too: left unassigned it was folded into
+          // `xyflow` (its first big importer), which then had to be preloaded by
+          // the Library screen — where React Flow is never used. Its stylesheet
+          // is imported up front (so app.css can override it) and must not drag
+          // the JavaScript chunk along with it.
+          manualChunks(id) {
+            if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react';
+            if (id.includes('node_modules/@xyflow') && !id.endsWith('.css')) return 'xyflow';
+            if (id.includes('node_modules/refractor')) return 'refractor';
+            return undefined;
+          },
         },
       },
     },
-  },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./tests/setup.ts'],
-    css: false,
-    include: ['tests/**/*.test.{ts,tsx}'],
-    exclude: ['e2e/**', 'node_modules/**'],
-  },
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: ['./tests/setup.ts'],
+      css: false,
+      include: ['tests/**/*.test.{ts,tsx}'],
+      exclude: ['e2e/**', 'node_modules/**'],
+    },
+  };
 });

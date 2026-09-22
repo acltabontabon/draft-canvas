@@ -1,0 +1,47 @@
+/* The desktop app's own bits. Everything else on its screens is the Library's and the editor's. */
+
+/* Home has several lists, each under its own heading; the Library has one. */
+.dc-library-list > .dc-library-list-head:not(:first-child) {
+  margin-top: 32px;
+}
+
+/* A heading's own actions ("Refresh", "Clear") belong to no row, so there is nothing to hover to reveal them. */
+.dc-library-list-head .dc-library-item-actions {
+  opacity: 1;
+}
+
+.dc-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dc-settings-group legend {
+  padding: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dc-text-muted);
+}
+
+.dc-settings-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.dc-settings-choice input {
+  margin-top: 3px;
+  accent-color: var(--dc-selection);
+}
+
+.dc-settings-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+}

@@ -150,6 +150,36 @@ as ⌘P is named to VS Code so it can run its own command. A canvas background i
 for the extension to save beside the file, and asked for again when the file is opened. None of it
 leaves VS Code's window.
 
+### The desktop app
+
+Draft Canvas Desktop (`src-tauri/`) is this same app in a window of its own, built with the editor
+bundled inside it. It makes no network requests for editing, has no account, and sends no telemetry
+or analytics. The editor is loaded from the app's own files, not from a website, so nothing about the
+diagram you draw needs a connection.
+
+Like the VS Code extension, the desktop app treats a `.draftcanvas` file as the storage: the browser's
+IndexedDB is never opened, and nothing is shared with the web app's library. What it touches on your
+computer is limited to:
+
+- **Files and folders you choose**: the ones you pick in an Open, Save or folder dialog, that the OS opens
+  with the app (a double-click, drag and drop), or that appear in Recent. The app never holds a path it could
+  hand back: the native side gives out opaque handles for those and accepts only them, so a file you didn't
+  choose can't be read or written. It doesn't scan your disk for diagrams; the diagrams in a folder are found
+  by listing that folder, to a limited depth and count, and reading names and dates only.
+- **Its own data folder**: a small list of recent files and folders, its settings (what closing the window
+  does), and recovery copies of work that isn't in a file yet (Quick Drafts, and unsaved changes to a file).
+  The recovery copies are plain `.draftcanvas` text, like the file they'd become, so they're as private as
+  any file in your user folder. They're removed when you save or discard.
+- **A background image**, if the canvas has one, is written beside the `.draftcanvas` file, as the VS Code
+  extension does.
+
+It asks for no special permission, and it doesn't watch your keyboard, mouse, screen, other apps or meetings.
+While its window is hidden in the menu bar or tray it does nothing at all. A link in the app (About, for
+example) opens in your browser, and only `http`, `https` and `mailto` links are ever passed on.
+
+The installers are unsigned: see [Draft Canvas Desktop](../guides/desktop.md#releasing) for what your operating
+system will say the first time, and how to check a download against its published checksum.
+
 ## What this does not protect you from
 
 Being honest about the limits:

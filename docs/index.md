@@ -14,6 +14,7 @@ New here? Start with [Getting started](guides/getting-started.md). It takes a fe
 | [Keyboard shortcuts and the command palette](guides/keyboard-and-commands.md) | Draw quickly without the mouse |
 | [Saving, backing up and sharing](guides/saving-and-sharing.md) | Know what is saved for you, what isn't, and how to move a diagram between browsers |
 | [Working with `.draftcanvas` files in VS Code](guides/vscode.md) | Keep diagrams in your repository and edit them in an editor tab |
+| [Draft Canvas Desktop](guides/desktop.md) | Start a Quick Draft from the menu bar or tray, keep diagrams as files and folders, and build the app |
 
 Inside the app, **Learn Draft Canvas** (in the toolbar's More menu, or `⌘K` and then *Learn*) has short
 animated recipes for individual moves. The guides here are the longer walkthroughs, and Learn is the

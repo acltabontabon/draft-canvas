@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- The favicon's mark (index.html), on the inset rounded square macOS and Windows both expect. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#14161a"/>
+  <g transform="translate(100 100) scale(25.75)" fill="none">
+    <rect x="6" y="8" width="11" height="7" rx="2" stroke="#5fd6c9" stroke-width="2"/>
+    <rect x="15" y="18" width="11" height="7" rx="2" stroke="#6b7280" stroke-width="2"/>
+    <path d="M11.5 15.5v3.5h4" stroke="#5fd6c9" stroke-width="1.6"/>
+  </g>
+</svg>

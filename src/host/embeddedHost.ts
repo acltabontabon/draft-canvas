@@ -52,7 +52,24 @@ export type ToHostMessage =
   /** Since protocol 6, likewise: the canvas no longer has a background image. */
   | { type: 'draft-canvas:background-remove' }
   /** Since protocol 6, likewise: asks for the file's stored image, answered by a `BackgroundMessage` with this `id`. */
-  | { type: 'draft-canvas:background-read'; id: number };
+  | { type: 'draft-canvas:background-read'; id: number }
+  /**
+   * The next two are only ever sent to the desktop shell, which lives in the same page: they never
+   * cross VS Code's bridge, whose allow-list would drop them. The open document was closed — Home is showing.
+   */
+  | { type: 'draft-canvas:closed' }
+  /** The answer to a `flush` command, once the app has posted every edit still pending. */
+  | { type: 'draft-canvas:flushed'; id: number };
+
+/**
+ * Desktop shell to app. `flush` has the app let go of a field still being typed in and post what is
+ * pending, so the shell acts on exactly what is on screen; `close` leaves the open document for Home.
+ */
+export interface CommandMessage {
+  type: 'draft-canvas:command';
+  command: 'flush' | 'close';
+  id?: number;
+}
 
 /** The host's answer to `background-read`: the stored image (base64), or none when the file has no image beside it. */
 export interface BackgroundMessage {

@@ -1,4 +1,4 @@
-import { embeddedHost } from '../host/embeddedHost';
+import { hostKind } from '../host/hostInfo';
 import { IndexedDbRepository } from './IndexedDbRepository';
 import { MemoryRepository } from './MemoryRepository';
 import type { DraftRepository } from './DraftRepository';
@@ -9,11 +9,11 @@ let cached: Promise<DraftRepository> | null = null;
  * Returns the best available local store, falling back to memory rather than
  * failing. The caller can check `repository.durable` to warn the user.
  *
- * Embedded in a host, the host's file is the store, so memory only holds the open document and the
- * browser's own library is never opened.
+ * With a host (VS Code, or the desktop app), the host's file is the store, so memory only holds the
+ * open document and the browser's own library is never opened.
  */
 export function getRepository(): Promise<DraftRepository> {
-  if (embeddedHost) return (cached ??= Promise.resolve(new MemoryRepository()));
+  if (hostKind()) return (cached ??= Promise.resolve(new MemoryRepository()));
   cached ??= IndexedDbRepository.open().catch((error) => {
     console.warn('[draft-canvas] Falling back to in-memory storage.', error);
     return new MemoryRepository();

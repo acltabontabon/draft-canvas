@@ -23,10 +23,10 @@ export function sequenceSourceFor(document: DraftDocument, format: SequenceForma
   return format === 'mermaid' ? toMermaid(model) : toPlantUml(model);
 }
 
-export function exportSequenceMermaidFile(document: DraftDocument): void {
-  downloadText(sequenceSourceFor(document, 'mermaid'), fileNameFor(document.metadata.title, MERMAID_EXTENSION), SEQUENCE_MIME);
+export function exportSequenceMermaidFile(document: DraftDocument): Promise<void> {
+  return downloadText(sequenceSourceFor(document, 'mermaid'), fileNameFor(document.metadata.title, MERMAID_EXTENSION), SEQUENCE_MIME);
 }
 
-export function exportSequencePlantUmlFile(document: DraftDocument): void {
-  downloadText(sequenceSourceFor(document, 'plantuml'), fileNameFor(document.metadata.title, PLANTUML_EXTENSION), SEQUENCE_MIME);
+export function exportSequencePlantUmlFile(document: DraftDocument): Promise<void> {
+  return downloadText(sequenceSourceFor(document, 'plantuml'), fileNameFor(document.metadata.title, PLANTUML_EXTENSION), SEQUENCE_MIME);
 }

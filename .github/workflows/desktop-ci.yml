@@ -1,0 +1,119 @@
+name: Desktop CI
+
+# The desktop app is the web editor in a Tauri window (src-tauri/), so a change to the shared
+# source can break it too: `src/**` is in the filter on purpose. The web app's own CI (ci.yml) is
+# untouched and runs on everything.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'tests/desktop/**'
+      - 'e2e/desktop/**'
+      - 'scripts/check-desktop-version.mjs'
+      - 'playwright.desktop.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig*.json'
+      - 'index.html'
+      - '.github/workflows/desktop-*.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'tests/desktop/**'
+      - 'e2e/desktop/**'
+      - 'scripts/check-desktop-version.mjs'
+      - 'playwright.desktop.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig*.json'
+      - 'index.html'
+      - '.github/workflows/desktop-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Everything that needs no window: the frontend the desktop app bundles, and that it is the
+  # only place Tauri appears.
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck:tooling
+      - run: npm test
+      - run: npm run desktop:web
+      - run: node scripts/check-desktop-version.mjs
+      # The web build must carry no desktop code at all: it is what everyone else runs.
+      - name: The web bundle holds no desktop code
+        run: |
+          npm run build
+          if grep -rlE "__TAURI|@tauri-apps|host_ready|DesktopController" dist/assets/*.js; then
+            echo "::error::The web bundle contains desktop code."
+            exit 1
+          fi
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e:desktop
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report-desktop
+          path: playwright-report-desktop/
+          retention-days: 7
+
+  # The Rust side, and a real build of the app on both first-release platforms: compile, package
+  # (a .dmg on macOS, an NSIS installer on Windows) and launch the result.
+  rust:
+    name: rust (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS arm64, os: macos-latest, binary: src-tauri/target/debug/draft-canvas }
+          - { name: Windows x64, os: windows-latest, binary: src-tauri/target/debug/draft-canvas.exe }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      # The app bundles this build; the Rust side won't compile without it.
+      - run: npm run desktop:web
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Build and package
+        run: npx tauri build --debug --ci
+      - name: The packaged app starts
+        shell: bash
+        env:
+          DRAFT_CANVAS_SMOKE: '1'
+        run: |
+          output="$(${{ matrix.binary }})"
+          echo "$output"
+          echo "$output" | grep -q DRAFT_CANVAS_SMOKE_OK

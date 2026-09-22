@@ -309,6 +309,41 @@ build, connect, undo, reload, export, delete, import, edit.
 
 ---
 
+## Desktop
+
+The desktop app is a third *host* for the same editor, not a second editor. There is one React
+application; what differs is who owns the document.
+
+| Host | The document lives in | It talks to the app through |
+| --- | --- | --- |
+| Web | the browser (IndexedDB, `DraftRepository`) | nothing: the app owns it |
+| VS Code | the `.draftcanvas` file, owned by the extension | `postMessage` across the webview's frame |
+| Desktop | the `.draftcanvas` file, owned by the desktop shell | the same messages, in the same page |
+
+A host that owns a file speaks the protocol in `src/host/embeddedHost.ts`: it sends the file's text, the app
+sends back every committed edit as the whole serialized document, and saving is the host's. `useHostDocument`
+is the app's side of that conversation and knows only a `HostChannel` (`src/host/channel.ts`). VS Code's
+channel is the frame; the desktop's (`src/desktop/channel.ts`) hands the message across in-process.
+
+The other end of the desktop's channel is `DesktopController` (`src/desktop/controller.ts`), which plays the
+part of VS Code's extension: it knows what file is open, whether it has unsaved changes, and how to save it,
+and it keeps a recoverable copy of any work that isn't in a file yet. It has no React and no Tauri in it, and
+talks to the shell only through the `DesktopApi` interface (`src/desktop/api.ts`). Exactly one module
+implements that interface with Tauri calls, `src/desktop/tauri/`, and a test fails if any other imports
+`@tauri-apps/*`. The web build is compiled with `__DESKTOP__` false and contains none of it.
+
+The Rust side (`src-tauri/`) is small on purpose. It does what a web page can't: windows, the tray and the
+menu bar, native dialogs, single-instance and file association, and file writes that survive a crash. It never
+sees a diagram's contents as anything but bytes, and the app never holds a path: the shell hands out opaque
+handles for files and folders the user picked (or the OS opened) and accepts only those back, so no path that
+didn't come from the user can be read or written.
+
+The browser's storage is untouched. `DraftRepository`, `Autosave` and the encrypted IndexedDB store are the web
+host's, and the desktop app doesn't open them: a file the user picked is only ever written by an explicit
+Save, and unsaved work goes to recovery copies in the app's own data folder.
+
+---
+
 ## Deliberately not built
 
 ```

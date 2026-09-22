@@ -9,6 +9,17 @@ updates:
       minor-and-patch:
         update-types: [minor, patch]
 
+  # The desktop app's Rust dependencies. The tauri crate and @tauri-apps/api move together (see
+  # scripts/check-desktop-version.mjs), so a bump to one needs the other.
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

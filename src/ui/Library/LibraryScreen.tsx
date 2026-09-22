@@ -12,6 +12,7 @@ import { Icon } from '../common/Icon';
 import { Modal } from '../common/Modal';
 import { FirstRunHome } from './FirstRunHome';
 import { count } from '../../lib/plural';
+import { relativeTime } from '../../lib/relativeTime';
 import { Fingerprint } from './Fingerprint';
 import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
@@ -599,28 +600,6 @@ function RenameDialog({
       </label>
     </Modal>
   );
-}
-
-const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ['second', 1000],
-  ['minute', 60_000],
-  ['hour', 3_600_000],
-  ['day', 86_400_000],
-];
-
-/** Built once: a formatter per row per keystroke of search adds up on a long library. */
-const RELATIVE_TIME = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-
-function relativeTime(at: number): string {
-  const delta = at - Date.now();
-  const absolute = Math.abs(delta);
-  if (absolute < 45_000) return 'just now';
-
-  for (let i = UNITS.length - 1; i >= 0; i -= 1) {
-    const [unit, ms] = UNITS[i]!;
-    if (absolute >= ms) return RELATIVE_TIME.format(Math.round(delta / ms), unit);
-  }
-  return 'just now';
 }
 
 /** Only an empty list shows starters, so only an empty list waits for the catalog. */

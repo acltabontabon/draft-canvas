@@ -88,6 +88,30 @@ describe('nothing on the canvas can reach a network', () => {
       expect(name).not.toMatch(/analytics|telemetry|sentry|tracking|posthog|mixpanel|segment/i);
     }
   });
+
+  // The desktop app's Tauri packages are development dependencies on purpose: they are bundled only
+  // into the desktop build (`vite --mode desktop`), and never reach what the web serves.
+  it('keeps the desktop shell’s packages out of the web app’s dependencies', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    expect(Object.keys(pkg.dependencies ?? {}).filter((name) => name.startsWith('@tauri-apps/'))).toEqual([]);
+  });
+});
+
+describe('the desktop shell is reached from one place', () => {
+  // The rest of the app must not care which host it runs in: it talks to `src/desktop/api.ts`, and
+  // only `src/desktop/tauri/` turns that into calls to Tauri.
+  it('imports Tauri only from src/desktop/tauri/', () => {
+    const tauriDir = join(SRC, 'desktop', 'tauri');
+    const offenders = sourceFiles(SRC).filter(
+      (file) => !file.startsWith(tauriDir) && /from\s+['"]@tauri-apps\//.test(readFileSync(file, 'utf8')),
+    );
+    expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
+  });
+
+  it('never reaches for the Tauri globals directly', () => {
+    const offenders = sourceFiles(SRC).filter((file) => /__TAURI|window\.isTauri|globalThis\.isTauri/.test(readFileSync(file, 'utf8')));
+    expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
+  });
 });
 
 describe('localStorage holds preferences only', () => {

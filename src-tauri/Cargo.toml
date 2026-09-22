@@ -1,0 +1,50 @@
+[package]
+name = "draft-canvas"
+# Placeholder on purpose: tauri.conf.json points `version` at ../package.json, which is the one real version.
+version = "0.0.0"
+description = "Draft Canvas Desktop"
+edition = "2021"
+rust-version = "1.77.2"
+publish = false
+
+[lib]
+name = "draft_canvas_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
+tauri-plugin-single-instance = "2.4"
+tauri-plugin-dialog = "2.7"
+tauri-plugin-window-state = "2.4"
+tauri-plugin-opener = "2.5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+base64 = "0.22"
+dunce = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
+
+# Same major versions Tauri already resolves, for the "edited" dot and proxy icon on the window.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = "0.3"
+objc2-foundation = "0.3"
+
+[dev-dependencies]
+tempfile = "3"
+# Tauri's own menu library: used only to check that every shortcut string in menu.rs actually parses.
+# Tauri drops an unparseable shortcut without a word.
+muda = { version = "0.19", default-features = false }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

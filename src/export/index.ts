@@ -11,14 +11,14 @@ export * from './secureProject';
 export * from './gif';
 export * from './sequence';
 
-export function exportProjectFile(document: DraftDocument): void {
-  downloadText(serializeDocument(document), fileNameFor(document.metadata.title), FILE_MIME);
+export function exportProjectFile(document: DraftDocument): Promise<void> {
+  return downloadText(serializeDocument(document), fileNameFor(document.metadata.title), FILE_MIME);
 }
 
 export async function exportSvgFile(document: DraftDocument, options: ExportOptions = {}): Promise<void> {
   const background = await resolveExportBackground(document, options.includeBackground !== false);
   const { svg } = renderDocumentSvg(document, { ...options, background });
-  downloadText(svg, fileNameFor(document.metadata.title, '.svg'), 'image/svg+xml');
+  await downloadText(svg, fileNameFor(document.metadata.title, '.svg'), 'image/svg+xml');
 }
 
 export async function exportPngFile(
@@ -33,5 +33,5 @@ export async function exportPngFile(
     scale: options.scale ?? 2,
     background: options.transparent ? undefined : themeFor(options.theme ?? 'dark').canvas,
   });
-  downloadBlob(blob, fileNameFor(document.metadata.title, '.png'));
+  await downloadBlob(blob, fileNameFor(document.metadata.title, '.png'));
 }

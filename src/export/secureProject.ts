@@ -21,7 +21,7 @@ export async function exportSecureProjectFile(document: DraftDocument, passphras
   // Like the plain export, without the project it's filed under here: that id means nothing anywhere else.
   const { projectId: _local, ...metadata } = document.metadata;
   const text = await encryptForExport({ ...document, metadata }, passphrase);
-  downloadText(text, fileNameFor(document.metadata.title, SECURE_EXPORT_FILE_EXTENSION), SECURE_EXPORT_MIME);
+  await downloadText(text, fileNameFor(document.metadata.title, SECURE_EXPORT_FILE_EXTENSION), SECURE_EXPORT_MIME);
 }
 
 /**

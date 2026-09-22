@@ -1,5 +1,6 @@
 import { Suspense, useEffect } from 'react';
 import { embeddedHost } from './host/embeddedHost';
+import { currentDesktopHost, hostKind, returnHome } from './host/hostInfo';
 import { useHostDocument } from './host/useHostDocument';
 import { useDocumentSession } from './store/useDocumentSession';
 import { LibraryScreen } from './ui/Library/LibraryScreen';
@@ -24,6 +25,14 @@ const EditorChunk = retryableLazy(() => loadEditor().then((module) => ({ default
 // About (and every release's notes with it) is opened now and then, from Home or the editor — fetched
 // the first time, so neither screen's first chunk carries it.
 const AboutChunk = retryableLazy(() => import('./ui/common/AboutDialog').then((module) => ({ default: module.AboutDialog })));
+// The desktop app's Home takes the Library's place. `__DESKTOP__` is false in the web build, which
+// drops this — and everything under src/desktop/ — from it.
+const DesktopHomeChunk = __DESKTOP__
+  ? retryableLazy(() => import('./desktop/ui/DesktopHome').then((module) => ({ default: module.DesktopHome })))
+  : null;
+const DesktopSettingsChunk = __DESKTOP__
+  ? retryableLazy(() => import('./desktop/ui/SettingsDialog').then((module) => ({ default: module.DesktopSettings })))
+  : null;
 
 function LazyAboutDialog() {
   const open = useUiStore((state) => state.aboutOpen);
@@ -54,7 +63,7 @@ function LazyAboutDialog() {
  */
 function Shell() {
   const session = useDocumentSession();
-  const host = useHostDocument(session);
+  const host = useHostDocument(session, currentDesktopHost()?.channel);
 
   // Keys older builds left behind (a pinned theme, the old Learn mode's hints) — see
   // `RETIRED_PREFERENCE_KEYS`. Documents are never touched: they live in IndexedDB.
@@ -79,7 +88,7 @@ function Shell() {
         resetKey={session.openId}
         actions={[
           ...(session.openId && !embeddedHost
-            ? [{ label: 'Return home', onClick: () => void session.closeDocument() }]
+            ? [{ label: 'Return home', onClick: () => returnHome(session.closeDocument) }]
             : []),
           { label: 'Reload app', onClick: () => window.location.reload() },
         ]}
@@ -91,6 +100,10 @@ function Shell() {
         {session.openId ? (
           <Suspense fallback={<div className="dc-editor-loading" aria-busy="true" />}>
             <EditorChunk.Component session={session} />
+          </Suspense>
+        ) : hostKind() === 'desktop' && DesktopHomeChunk ? (
+          <Suspense fallback={<div className="dc-editor-loading" aria-busy="true" />}>
+            <DesktopHomeChunk.Component />
           </Suspense>
         ) : embeddedHost ? (
           // The host's file is the only document there is, so there's no Library to fall back to.
@@ -109,6 +122,11 @@ function Shell() {
       )}
       <Toasts />
       <LazyAboutDialog />
+      {DesktopSettingsChunk && hostKind() === 'desktop' && (
+        <Suspense fallback={null}>
+          <DesktopSettingsChunk.Component />
+        </Suspense>
+      )}
     </>
   );
 }

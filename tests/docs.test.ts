@@ -20,7 +20,8 @@ function markdownFiles(dir: string): string[] {
   for (const entry of readdirSync(dir)) {
     // Dot-directories are tooling (`.git`, `.vscode-test` holds a downloaded copy of VS Code) —
     // except `.github`, whose issue and PR templates are Markdown a reader lands on.
-    if (['node_modules', 'dist', 'test-results', 'playwright-report'].includes(entry)) continue;
+    // `target` is cargo's build output (src-tauri/), `gen` the schemas Tauri regenerates there.
+    if (['node_modules', 'dist', 'dist-desktop', 'target', 'gen', 'test-results', 'playwright-report'].includes(entry)) continue;
     if (entry.startsWith('.') && entry !== '.github') continue;
     const path = join(dir, entry);
     if (statSync(path).isDirectory()) out.push(...markdownFiles(path));

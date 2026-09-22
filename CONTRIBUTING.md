@@ -27,6 +27,13 @@ and go.
 | `npm run e2e` | Browser tests (Playwright — run `npm run e2e:install` once first) |
 | `npm run e2e:offline` | The same suite against a built, offline-served app |
 | `npm run check` | Lint, type-check the e2e/benchmark/demo tooling, build, and unit tests together — **run this before opening a PR** |
+| `npm run desktop:dev` | The desktop app (`src-tauri/`) with hot reload. Needs [Rust and Tauri's prerequisites](docs/guides/desktop.md#building-it-yourself) |
+| `npm run desktop:build` | An installer for the desktop app |
+| `npm run desktop:check` | The desktop build, the Rust checks (`fmt`, `clippy`, `test`) and the version check |
+| `npm run e2e:desktop` | The desktop screens in the browser, against a faked shell. No Rust needed |
+
+The desktop commands are only for work on the desktop app. Changes to the editor itself are checked by the rows
+above, and don't need Rust installed.
 
 Focused runs, when you're iterating on one thing:
 
@@ -124,6 +131,11 @@ along on its own. Give it a look when a release changes what the product is.
 
 Draft Canvas for VS Code (`vscode-extension/`) is released separately, from `extension-vX.Y.Z` tags,
 with its own version and changelog — see [`vscode-extension/RELEASING.md`](vscode-extension/RELEASING.md).
+
+Draft Canvas Desktop (`src-tauri/`) is released from `desktop-vX.Y.Z` tags, but has no version of its own:
+the tag must equal the `version` in `package.json`, so cut it from a commit whose web version is the one to ship
+(`scripts/check-desktop-version.mjs` enforces it). Its notes are in `src-tauri/CHANGELOG.md`, which needs a dated
+`## [X.Y.Z]` section before the tag. See [Releasing](docs/guides/desktop.md#releasing).
 
 ## Documentation
 

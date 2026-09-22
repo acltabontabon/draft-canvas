@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="3 3.5 26 26">
+  <!-- Windows tray: it doesn't invert an icon for a light or dark taskbar, so both boxes are mid-tones
+       that read on either. -->
+  <g fill="none" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="6" y="8" width="11" height="7" rx="2" stroke="#1fb5a5" stroke-width="2.4"/>
+    <rect x="15" y="18" width="11" height="7" rx="2" stroke="#8b93a1" stroke-width="2.4"/>
+    <path d="M11.5 15.5v3.5h4" stroke="#1fb5a5" stroke-width="2"/>
+  </g>
+</svg>

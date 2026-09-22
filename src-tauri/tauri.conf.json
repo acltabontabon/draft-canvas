@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Draft Canvas",
+  "version": "../package.json",
+  "identifier": "com.acltabontabon.draft-canvas",
+  "mainBinaryName": "draft-canvas",
+  "build": {
+    "beforeDevCommand": "npm run dev -- --mode desktop",
+    "devUrl": "http://localhost:5198",
+    "beforeBuildCommand": "npm run desktop:web",
+    "frontendDist": "../dist-desktop"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "title": "Draft Canvas",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 560,
+        "visible": false,
+        "useHttpsScheme": true,
+        "dragDropEnabled": true,
+        "backgroundThrottling": "suspend"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src ipc: http://ipc.localhost https://ipc.localhost; object-src 'none'; base-uri 'self'; form-action 'none'",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src ipc: http://ipc.localhost https://ipc.localhost http://localhost:5198 ws://localhost:5198; object-src 'none'; base-uri 'self'; form-action 'none'",
+      "dangerousDisableAssetCspModification": ["style-src"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "12.0"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    },
+    "fileAssociations": [
+      {
+        "ext": ["draftcanvas"],
+        "name": "Draft Canvas Diagram",
+        "description": "Draft Canvas diagram",
+        "mimeType": "application/vnd.draftcanvas+json",
+        "role": "Editor",
+        "rank": "Owner",
+        "exportedType": {
+          "identifier": "com.acltabontabon.draft-canvas.document",
+          "conformsTo": ["public.json"]
+        }
+      }
+    ]
+  }
+}

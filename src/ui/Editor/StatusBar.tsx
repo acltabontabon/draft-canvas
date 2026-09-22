@@ -9,7 +9,9 @@ import { Icon } from '../common/Icon';
 import { motionMs } from '../../lib/motion';
 import { RECALL_FLOOR_MS, RECALL_MS } from '../../takeaways/recall';
 import { usePopoverPresence } from '../../canvas/usePopoverPresence';
+import { DesktopStatus } from '../../desktop/ui/DesktopStatus';
 import { embeddedHost } from '../../host/embeddedHost';
+import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';
 
 /** The nudge leaves by folding down into the chip, which wants a beat longer than a fade. */
@@ -86,7 +88,9 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
 
   return (
     <footer className="dc-status">
-      {embeddedHost ? (
+      {__DESKTOP__ && hostKind() === 'desktop' ? (
+        <DesktopStatus />
+      ) : embeddedHost ? (
         // The host saves the file and shows whether it's dirty; this browser's storage isn't involved.
         <div className="dc-status-left">
           <span className="dc-muted dc-status-hint">This diagram is the open file. Nothing you draw is uploaded.</span>

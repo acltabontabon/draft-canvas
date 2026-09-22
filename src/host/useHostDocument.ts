@@ -1,23 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createDocument } from '../document/factory';
 import { deserializeDocument, serializeDocument } from '../export/project';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { useUiStore } from '../store/uiStore';
 import type { DocumentSession } from '../store/useDocumentSession';
+import type { HostChannel } from './channel';
 import {
   chordOf,
   embeddedHost,
-  HOST_PROTOCOL,
-  isHostOrigin,
   type BackgroundMessage,
   type ClipboardMessage,
+  type CommandMessage,
   type LoadMessage,
   type ToHostMessage,
 } from './embeddedHost';
 import { hostClipboard, setHostClipboard, type HostClipboard } from './hostClipboard';
 import { base64ToBlob, blobToBase64 } from './hostBackground';
 import { handleTextChord } from './hostTextEditing';
+import { vscodeChannel } from './vscodeChannel';
 
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
 const CLIPBOARD_READ_TIMEOUT_MS = 1500;
@@ -32,7 +33,9 @@ export interface HostDocumentState {
 }
 
 /**
- * Connects the open document to the host's file when the app is embedded (see `embeddedHost`).
+ * Connects the open document to the host's file when a host owns it: VS Code framing the app (see
+ * `embeddedHost`), or the desktop shell in this same page. Which one is the `channel`'s business;
+ * what is said across it is the same for both.
  *
  * The host sends the file's text; every committed edit goes straight back as the whole serialized
  * document. There's no debounce: the host can remove the frame at any moment (closing its tab never
@@ -40,20 +43,43 @@ export interface HostDocumentState {
  * key pressed inside a cross-origin frame never reaches the host's own shortcuts — and neither do the
  * others the host lists (⌘P, ⌘W), nor Select All, Copy, Cut, Paste and Undo in a text field, which the
  * app does itself. Links to other sites go to the host too, since the frame isn't allowed to open a window.
+ *
+ * With no `channel` given, VS Code's is used when the app is framed by it, and nothing happens otherwise.
  */
-export function useHostDocument(session: DocumentSession): HostDocumentState {
+export function useHostDocument(session: DocumentSession, channel?: HostChannel | null): HostDocumentState {
   const [state, setState] = useState<HostDocumentState>({ error: null, invalidWhileOpen: false });
   const { ready, repository, openDocument } = session;
+  const framed = useMemo(() => (embeddedHost ? vscodeChannel() : null), []);
+  const host = channel ?? framed;
+
+  // Read through a ref: the session is a new object on every render, and putting it in the effect's
+  // dependencies would tear the host down and set it up again on each one.
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  });
+
+  // Only the desktop shell needs to hear that Home is showing again (its own Back button is one way
+  // there, an error screen another): it settles what it holds for the file that was open.
+  const openId = session.openId;
+  const shownOpenId = useRef<string | null>(null);
+  useEffect(() => {
+    const was = shownOpenId.current;
+    shownOpenId.current = openId;
+    if (host?.kind === 'desktop' && was && !openId) host.post({ type: 'draft-canvas:closed' });
+  }, [openId, host]);
 
   useEffect(() => {
-    if (!embeddedHost || !ready || !repository) return;
+    if (!host || !ready || !repository) return;
 
-    let hostOrigin: string | null = null;
     // The text the host holds right now, so reopening or echoing it back never dirties the file.
     let hostText: string | null = null;
     // The `seq` of the load the canvas is showing, echoed on every change so the host can drop an
     // edit made to contents it has since replaced (see `LoadMessage.seq`).
     let shownSeq: number | undefined;
+    // The document on screen. A host that opens file after file (the desktop's Home) would otherwise
+    // leave every earlier one, and its background image, in memory for as long as the app runs.
+    let shownId: string | null = null;
     let opened = false;
     // Set while the file's text isn't a diagram: an edit here would overwrite what the user is typing.
     let invalid = false;
@@ -68,9 +94,7 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
     let loading = false;
     let loads = Promise.resolve();
 
-    const post = (message: ToHostMessage) => {
-      if (hostOrigin) window.parent.postMessage(message, hostOrigin);
-    };
+    const post = (message: ToHostMessage) => host.post(message);
 
     // What the host said it does for the app (see `LoadMessage`): none of it is used until then.
     let textEditing = false;
@@ -196,6 +220,11 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       await restoreBackground(document);
       await openDocument(document.metadata.id);
       if (disposed) return;
+      const previousId = shownId;
+      shownId = document.metadata.id;
+      if (previousId && previousId !== shownId) {
+        await repository.remove(previousId).catch((error: unknown) => logDiagnostic(error, { operation: 'host-forget' }));
+      }
       opened = true;
       invalid = false;
       shownSeq = seq;
@@ -209,6 +238,7 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       // exception: it gets its first contents now.
       hostText = blank ? null : serializeDocument(fileWithLiveViewport(useEditorStore.getState()));
       if (blank) await sendChange();
+      if (hostText !== null) host.opened?.({ text: hostText, seq });
     };
 
     const openNewest = async () => {
@@ -223,9 +253,9 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       }
     };
 
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== window.parent || !isHostOrigin(event.origin)) return;
-      const reply = event.data as (Partial<ClipboardMessage> & Partial<BackgroundMessage>) | null;
+    // What the channel hands over has already passed its check of who sent it.
+    const onMessage = (message: unknown) => {
+      const reply = message as (Partial<ClipboardMessage> & Partial<BackgroundMessage>) | null;
       if (reply?.type === 'draft-canvas:clipboard') {
         if (typeof reply.id === 'number') clipboardReads.get(reply.id)?.(typeof reply.text === 'string' ? reply.text : null);
         return;
@@ -234,17 +264,28 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
         if (typeof reply.id === 'number') backgroundReads.get(reply.id)?.(reply);
         return;
       }
-      const data = event.data as Partial<LoadMessage> | null;
+      const command = message as Partial<CommandMessage> | null;
+      if (command?.type === 'draft-canvas:command') {
+        if (command.command === 'flush' && typeof command.id === 'number') {
+          const id = command.id;
+          void flush().then(() => post({ type: 'draft-canvas:flushed', id }));
+        } else if (command.command === 'close') {
+          void sessionRef.current.closeDocument();
+        }
+        return;
+      }
+      const data = message as Partial<LoadMessage> | null;
       if (data?.type !== 'draft-canvas:load' || typeof data.text !== 'string') return;
-      hostOrigin = event.origin;
       if (data.clipboard === true) setHostClipboard(clipboard);
       textEditing = data.clipboard === true && data.textEditing === true;
       hostKeepsBackground = data.background === true;
       hostKeys = new Set(Array.isArray(data.keys) ? data.keys.filter((chord): chord is string => typeof chord === 'string') : []);
       const seq = typeof data.seq === 'number' ? data.seq : undefined;
-      if (data.text === hostText && !queued && !invalid) {
+      // Only while a document is open: after Home has been showing, the same text is a file to open again.
+      if (data.text === hostText && !queued && !invalid && sessionRef.current.openId !== null) {
         // Already showing it (the host re-sent what it got from here): only the numbering moves on.
         shownSeq = seq;
+        host.opened?.({ text: hostText, seq });
         return;
       }
       window.clearTimeout(pending);
@@ -311,16 +352,15 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       post({ type: 'draft-canvas:open-external', url: link.href });
     };
 
-    window.addEventListener('message', onMessage);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('click', onLinkClick, true);
     window.addEventListener('auxclick', onLinkClick, true);
-    // No data in it, so any parent may hear it; the document only ever goes to the host's origin.
-    window.parent.postMessage({ type: 'draft-canvas:ready', protocol: HOST_PROTOCOL } satisfies ToHostMessage, '*');
+    // Starting the channel is what tells the host the app is ready to be sent a file.
+    const stop = host.start(onMessage);
 
     return () => {
       disposed = true;
-      window.removeEventListener('message', onMessage);
+      stop();
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('click', onLinkClick, true);
       window.removeEventListener('auxclick', onLinkClick, true);
@@ -330,7 +370,7 @@ export function useHostDocument(session: DocumentSession): HostDocumentState {
       for (const settle of [...clipboardReads.values()]) settle(null);
       for (const settle of [...backgroundReads.values()]) settle({});
     };
-  }, [ready, repository, openDocument]);
+  }, [ready, repository, openDocument, host]);
 
   return state;
 }

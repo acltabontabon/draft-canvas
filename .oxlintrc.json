@@ -15,5 +15,5 @@
       "rules": { "no-console": "off" }
     }
   ],
-  "ignorePatterns": ["dist", "node_modules", "playwright-report", "test-results"]
+  "ignorePatterns": ["dist", "dist-desktop", "node_modules", "playwright-report", "playwright-report-desktop", "src-tauri", "test-results"]
 }

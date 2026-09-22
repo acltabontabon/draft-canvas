@@ -1,0 +1,219 @@
+import type { Page } from '@playwright/test';
+
+/**
+ * A stand-in for the desktop shell (`src-tauri/`), installed into the page before the app loads:
+ * the app's calls into Tauri (`window.__TAURI_INTERNALS__.invoke`) are answered from memory, so the
+ * whole desktop flow — Home, Quick Draft, Save, recovery, the native menu — runs in Chromium against
+ * the real editor. What it cannot show is the shell itself (windows, tray, dialogs, the OS), which
+ * `cargo test` and the packaging job cover instead.
+ *
+ * Tests reach the shell through `window.__shell`, typed below.
+ */
+export interface ShellHandle {
+  /** Adds a file to the fake disk. */
+  addFile(name: string, text: string): string;
+  file(handle: string): { name: string; text: string; version: number } | undefined;
+  /** What the next Open dialog picks (`null` cancels it). */
+  nextOpen(handle: string | null): void;
+  /** Where the next Save dialog saves (`null` cancels it). */
+  nextSaveAs(target: { name: string } | null): void;
+  /** Answers for the native message boxes, in order: the index of the button pressed. */
+  answer(...choices: number[]): void;
+  /** The next export's Save dialog is cancelled. */
+  cancelNextExport(): void;
+  /** Something the shell tells the app on its own: a menu pick, a file the OS opened. */
+  emit(event: unknown): void;
+  /** Every command the app called, in order. */
+  calls(): { command: string; args: unknown }[];
+  exports(): { name: string; text: string }[];
+  recoveryIds(): string[];
+  /** What the message boxes said. */
+  asked(): { title: string; message: string; buttons: string[] }[];
+}
+
+declare global {
+  interface Window {
+    __shell: ShellHandle;
+  }
+}
+
+export async function installMockShell(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    interface Held {
+      name: string;
+      displayPath: string;
+      text: string;
+      version: number;
+    }
+    interface ChannelLike {
+      id: number;
+    }
+    const files = new Map<string, Held>();
+    const recovery = new Map<string, { entry: Record<string, unknown>; text: string }>();
+    const sidecars = new Map<string, { mime: string; base64: string }>();
+    const calls: { command: string; args: unknown }[] = [];
+    const exported: { name: string; text: string }[] = [];
+    const asked: { title: string; message: string; buttons: string[] }[] = [];
+    const answers: number[] = [];
+    const recents: { handle: string; kind: string; name: string; displayPath: string; lastOpenedMs: number }[] = [];
+    let handles = 0;
+    let pickedOpen: string | null = null;
+    let saveTarget: { name: string } | null = null;
+    let cancelExport = false;
+    let events: ChannelLike | null = null;
+    let eventIndex = 0;
+    const decode = (bytes: unknown) => new TextDecoder().decode(bytes as Uint8Array);
+    const stamp = (file: Held) => `v1:${file.version}`;
+    const win = window as unknown as Record<string, unknown>;
+
+    const opened = (handle: string, file: Held) => ({
+      handle,
+      name: file.name,
+      displayPath: file.displayPath,
+      text: file.text,
+      stamp: stamp(file),
+      readOnly: false,
+    });
+    const touch = (handle: string, file: Held) => {
+      const at = recents.findIndex((item) => item.handle === handle);
+      if (at >= 0) recents.splice(at, 1);
+      recents.unshift({ handle, kind: 'file', name: file.name, displayPath: file.displayPath, lastOpenedMs: Date.now() });
+    };
+    const addFile = (name: string, text: string) => {
+      const handle = `h_${(handles += 1)}`;
+      files.set(handle, { name, displayPath: `~/work/${name}.draftcanvas`, text, version: 1 });
+      return handle;
+    };
+    const emit = (event: unknown) => {
+      if (!events) return;
+      (win[`_${events.id}`] as (message: unknown) => void)({ message: event, index: eventIndex++ });
+    };
+    const meta = (options: unknown) => {
+      const header = (options as { headers?: Record<string, string> } | undefined)?.headers?.['x-meta'];
+      return header ? (JSON.parse(decodeURIComponent(header)) as Record<string, unknown>) : {};
+    };
+
+    // Each handler names the arguments it reads; `never` lets them all live in one table.
+    const commands: Record<string, (args: never, options?: unknown) => unknown> = {
+      host_ready: (args: { onEvent: ChannelLike }) => {
+        events = args.onEvent;
+        eventIndex = 0;
+        return { version: '1.9.4', platform: 'macos', settings: { closeBehavior: 'ask' }, lastProject: null };
+      },
+      report_state: () => null,
+      quit_ack: () => null,
+      quit_now: () => null,
+      open_dialog: () => {
+        if (!pickedOpen) return null;
+        const file = files.get(pickedOpen)!;
+        touch(pickedOpen, file);
+        return opened(pickedOpen, file);
+      },
+      open_handle: (args: { handle: string }) => {
+        const file = files.get(args.handle);
+        if (!file) throw { kind: 'InvalidHandle', message: 'That file is no longer available.' };
+        touch(args.handle, file);
+        return opened(args.handle, file);
+      },
+      save_document: (bytes: unknown, options: unknown) => {
+        const { handle, expectedStamp } = meta(options) as { handle: string; expectedStamp?: string };
+        const file = files.get(handle)!;
+        if (expectedStamp !== undefined && expectedStamp !== stamp(file)) return { outcome: 'conflict' };
+        file.text = decode(bytes);
+        file.version += 1;
+        return { outcome: 'saved', stamp: stamp(file) };
+      },
+      save_as: (bytes: unknown) => {
+        if (!saveTarget) return null;
+        const handle = addFile(saveTarget.name, decode(bytes));
+        const file = files.get(handle)!;
+        touch(handle, file);
+        return { handle, name: file.name, displayPath: file.displayPath, stamp: stamp(file) };
+      },
+      check_stamp: (args: { handle: string; stamp: string }) => {
+        const file = files.get(args.handle);
+        return !file ? 'missing' : args.stamp === stamp(file) ? 'unchanged' : 'changed';
+      },
+      reveal: () => null,
+      export_file: (bytes: unknown, options: unknown) => {
+        if (cancelExport) {
+          cancelExport = false;
+          return false;
+        }
+        exported.push({ name: (meta(options) as { name: string }).name, text: decode(bytes) });
+        return true;
+      },
+      open_external: () => null,
+      sidecar_read: (args: { handle: string }) => sidecars.get(args.handle) ?? null,
+      sidecar_write: (args: { handle: string; mime: string; base64: string }) => void sidecars.set(args.handle, args),
+      sidecar_remove: (args: { handle: string }) => void sidecars.delete(args.handle),
+      pick_project: () => null,
+      recents_list: () => recents,
+      recents_remove: (args: { handle: string }) => {
+        const at = recents.findIndex((item) => item.handle === args.handle);
+        if (at >= 0) recents.splice(at, 1);
+        return null;
+      },
+      recents_clear: () => void (recents.length = 0),
+      recovery_write: (bytes: unknown, options: unknown) => {
+        const { id, origin, title } = meta(options) as { id: string; origin: { kind: string; handle?: string }; title: string };
+        const file = origin.kind === 'file' ? files.get(origin.handle!) : undefined;
+        const text = decode(bytes);
+        recovery.set(id, {
+          text,
+          entry: {
+            id,
+            title,
+            updatedAt: Date.now(),
+            bytes: text.length,
+            origin: file ? { kind: 'file', name: file.name, displayPath: file.displayPath, handle: origin.handle } : { kind: 'quick' },
+          },
+        });
+        return null;
+      },
+      recovery_list: () => [...recovery.values()].map((held) => held.entry),
+      recovery_read: (args: { id: string }) => ({ text: recovery.get(args.id)!.text }),
+      recovery_discard: (args: { id: string }) => void recovery.delete(args.id),
+      settings_get: () => ({ closeBehavior: 'ask' }),
+      settings_set: (args: { patch: Record<string, unknown> }) => ({ closeBehavior: 'ask', ...args.patch }),
+      ask: (args: { title: string; message: string; buttons: string[] }) => {
+        asked.push(args);
+        return answers.shift() ?? args.buttons.length - 1;
+      },
+      show_error: () => null,
+    };
+
+    // What `@tauri-apps/api/core` needs of the page: a way to register the callbacks a `Channel` calls back into.
+    let callbacks = 0;
+    win.__TAURI_INTERNALS__ = {
+      transformCallback: (callback: (value: unknown) => void) => {
+        const id = (callbacks += 1);
+        win[`_${id}`] = callback;
+        return id;
+      },
+      unregisterCallback: (id: number) => void delete win[`_${id}`],
+      convertFileSrc: (path: string) => path,
+      invoke: async (command: string, args: unknown, options: unknown) => {
+        calls.push({ command, args: args instanceof Uint8Array ? { bytes: args.length, ...meta(options) } : args });
+        const handler = commands[command];
+        if (!handler) throw { kind: 'Io', message: `The mock shell has no command “${command}”.` };
+        return (handler as (args: unknown, options?: unknown) => unknown)(args, options);
+      },
+    };
+
+    const shell: ShellHandle = {
+      addFile,
+      file: (handle) => files.get(handle),
+      nextOpen: (handle) => void (pickedOpen = handle),
+      nextSaveAs: (target) => void (saveTarget = target),
+      answer: (...choices) => void answers.push(...choices),
+      cancelNextExport: () => void (cancelExport = true),
+      emit,
+      calls: () => calls,
+      exports: () => exported,
+      recoveryIds: () => [...recovery.keys()],
+      asked: () => asked,
+    };
+    win.__shell = shell;
+  });
+}
