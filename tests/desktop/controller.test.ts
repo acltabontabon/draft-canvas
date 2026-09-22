@@ -243,6 +243,68 @@ describe('Save As', () => {
   });
 });
 
+describe('renaming the open file', () => {
+  it('updates the handle, name and path without touching text or dirty state', async () => {
+    await openFile('plan');
+    h.edit(edited('Plan'));
+
+    const renamed = await h.controller.renameOpenFile('roadmap');
+
+    expect(renamed.name).toBe('roadmap');
+    expect(doc()).toMatchObject({ kind: 'file', name: 'roadmap', dirty: true });
+  });
+
+  it('leaves the original path and state untouched when the target already exists', async () => {
+    await openFile('plan');
+    h.addFile('roadmap');
+
+    await expect(h.controller.renameOpenFile('roadmap')).rejects.toThrow();
+
+    expect(doc()).toMatchObject({ kind: 'file', name: 'plan' });
+  });
+
+  it('refuses when nothing is open to rename', async () => {
+    await expect(h.controller.renameOpenFile('roadmap')).rejects.toThrow();
+    expect(h.api.renameFile).not.toHaveBeenCalled();
+  });
+
+  it('waits for a save already in flight before renaming', async () => {
+    await openFile('plan');
+    h.edit(edited('Plan'));
+    let resolveSave!: (result: { outcome: 'saved'; stamp: string }) => void;
+    h.api.saveDocument.mockImplementationOnce(() => new Promise((resolve) => (resolveSave = resolve)));
+
+    const saving = h.controller.save();
+    const renaming = h.controller.renameOpenFile('roadmap');
+    await h.settle();
+    expect(h.api.renameFile).not.toHaveBeenCalled();
+
+    resolveSave({ outcome: 'saved', stamp: 'v1:2' });
+    await Promise.all([saving, renaming]);
+
+    expect(h.api.saveDocument.mock.invocationCallOrder[0]!).toBeLessThan(h.api.renameFile.mock.invocationCallOrder[0]!);
+    expect(doc()).toMatchObject({ kind: 'file', name: 'roadmap' });
+  });
+
+  it('a save that starts during a rename waits for it, so it writes under the new name', async () => {
+    await openFile('plan');
+    h.edit(edited('Plan'));
+    let resolveRename!: (result: { handle: string; name: string; displayPath: string }) => void;
+    h.api.renameFile.mockImplementationOnce(() => new Promise((resolve) => (resolveRename = resolve)));
+
+    const renaming = h.controller.renameOpenFile('roadmap');
+    const saving = h.controller.save();
+    await h.settle();
+    expect(h.api.saveDocument).not.toHaveBeenCalled();
+
+    resolveRename({ handle: 'h_renamed', name: 'roadmap', displayPath: '~/work/roadmap.draftcanvas' });
+    await Promise.all([renaming, saving]);
+
+    expect(h.api.renameFile.mock.invocationCallOrder[0]!).toBeLessThan(h.api.saveDocument.mock.invocationCallOrder[0]!);
+    expect(h.api.saveDocument.mock.calls[0]![0]).toBe('h_renamed');
+  });
+});
+
 describe('Quick Draft', () => {
   it('opens a blank diagram at once, with no file behind it', async () => {
     await h.controller.newQuickDraft();

@@ -41,6 +41,19 @@ describe('many projects', () => {
     expect(h.api.projectScan).toHaveBeenCalledTimes(2);
   });
 
+  it('renaming a file from its project lists the project again, so its tile opens the new name', async () => {
+    const payments = h.addProject('payments', ['flows/checkout.draftcanvas', 'overview.draftcanvas']);
+    h.listProjects(payments);
+    await h.controller.start();
+    await h.controller.scanProjects([payments]);
+
+    await h.controller.renameProjectFile(payments, 'flows/checkout.draftcanvas', 'checkout-v2');
+
+    expect(projects()[0]!.files.map((file) => file.relPath).sort()).toEqual(['flows/checkout-v2.draftcanvas', 'overview.draftcanvas']);
+    await h.controller.openProjectFile(payments, 'flows/checkout-v2.draftcanvas');
+    expect(h.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'checkout-v2' });
+  });
+
   it('lists many projects two at a time', async () => {
     const handles = Array.from({ length: 12 }, (_, i) => h.addProject(`p${i}`, [`d${i}.draftcanvas`]));
     h.listProjects(...handles);
@@ -117,6 +130,112 @@ describe('many projects', () => {
 
     expect(h.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'index' });
     expect(h.api.projectOpenFile).toHaveBeenCalledWith(search, 'index.draftcanvas');
+  });
+
+  describe('creating a canvas in a project or folder', () => {
+    it('opens the editor at once, without writing a file', async () => {
+      const payments = h.addProject('payments');
+      h.listProjects(payments);
+      await h.controller.start();
+
+      await h.controller.newCanvasIn(payments, 'flows');
+      await h.settle();
+
+      expect(h.loads()).toHaveLength(1);
+      expect(h.api.projectSaveNew).not.toHaveBeenCalled();
+      expect(h.store.getSnapshot().doc).toEqual({ kind: 'quick', dirty: false });
+    });
+
+    it('remembers the folder for the first Save dialog', async () => {
+      const payments = h.addProject('payments');
+      h.listProjects(payments);
+      await h.controller.start();
+      await h.controller.newCanvasIn(payments, 'flows');
+      await h.settle();
+      h.saveAsTo(null);
+
+      await h.controller.save();
+
+      expect(h.lastSaveAsStartIn()).toEqual({ projectHandle: payments, relPath: 'flows' });
+    });
+
+    it('still asks every time, until the first save lands', async () => {
+      const payments = h.addProject('payments');
+      h.listProjects(payments);
+      await h.controller.start();
+      await h.controller.newCanvasIn(payments);
+      await h.settle();
+
+      h.saveAsTo(null);
+      await h.controller.save();
+      expect(h.api.saveAs).toHaveBeenCalledTimes(1);
+      expect(h.store.getSnapshot().doc).toEqual({ kind: 'quick', dirty: false });
+
+      await h.controller.save();
+      expect(h.api.saveAs).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not open a second dialog or write twice for a second request while one is pending', async () => {
+      const payments = h.addProject('payments');
+      h.listProjects(payments);
+      await h.controller.start();
+      await h.controller.newCanvasIn(payments);
+      await h.settle();
+      h.saveAsTo({ name: 'meeting', displayPath: '~/work/payments/meeting.draftcanvas' });
+
+      await Promise.all([h.controller.save(), h.controller.save()]);
+
+      expect(h.api.saveAs).toHaveBeenCalledTimes(1);
+    });
+
+    it('canceling the first save leaves the canvas open, dirty, and file-less', async () => {
+      const payments = h.addProject('payments');
+      h.listProjects(payments);
+      await h.controller.start();
+      await h.controller.newCanvasIn(payments);
+      await h.settle();
+      const doc = createDocument('Untitled canvas');
+      doc.nodes.push(createNode({ type: 'service', x: 0, y: 0 }));
+      h.edit(serializeDocument(doc));
+      h.saveAsTo(null);
+
+      await h.controller.save();
+
+      expect(h.store.getSnapshot().doc).toEqual({ kind: 'quick', dirty: true });
+      expect(h.api.projectSaveNew).not.toHaveBeenCalled();
+    });
+
+    it('a subsequent save writes the same file without reopening the dialog', async () => {
+      const payments = h.addProject('payments');
+      h.listProjects(payments);
+      await h.controller.start();
+      await h.controller.newCanvasIn(payments);
+      await h.settle();
+      h.saveAsTo({ name: 'meeting', displayPath: '~/work/payments/meeting.draftcanvas' });
+      await h.controller.save();
+      expect(h.api.saveAs).toHaveBeenCalledTimes(1);
+
+      const doc = createDocument('meeting');
+      doc.nodes.push(createNode({ type: 'service', x: 0, y: 0 }));
+      h.edit(serializeDocument(doc));
+      await h.controller.save();
+
+      expect(h.api.saveAs).toHaveBeenCalledTimes(1);
+      expect(h.api.saveDocument).toHaveBeenCalledTimes(1);
+    });
+
+    it('Save As from a pending canvas keeps it open, same as from a Quick Draft', async () => {
+      const payments = h.addProject('payments');
+      h.listProjects(payments);
+      await h.controller.start();
+      await h.controller.newCanvasIn(payments);
+      await h.settle();
+      h.saveAsTo({ name: 'meeting', displayPath: '~/work/payments/meeting.draftcanvas' });
+
+      await h.controller.saveAs();
+
+      expect(h.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'meeting', dirty: false });
+    });
   });
 
   it('moves a Quick Draft into the most recent project, or the one named', async () => {

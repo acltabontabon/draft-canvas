@@ -1,4 +1,14 @@
-import type { DesktopSettings, ProjectFile, ProjectInfo, RecentItem, RecoveryEntry, UpdateSnapshot } from './api';
+import type { DesktopSettings, Handle, ProjectFile, ProjectInfo, RecentItem, RecoveryEntry, UpdateSnapshot } from './api';
+
+/**
+ * "Rename file…", wherever it was asked for: the file open right now (its name comes from `doc`, not
+ * carried here), a Recent entry, or a file Find a Diagram has only ever scanned. One dialog, rendered
+ * once, reads whichever of these is set.
+ */
+export type RenameTarget =
+  | { kind: 'open' }
+  | { kind: 'recent'; handle: Handle; name: string }
+  | { kind: 'project'; project: Handle; relPath: string; name: string };
 
 /** What the open document is, for the status bar, the window title and Home. */
 export type DesktopDoc =
@@ -22,8 +32,9 @@ export interface ProjectState {
   info: ProjectInfo;
   status: 'unscanned' | 'scanning' | 'ready' | 'missing';
   files: ProjectFile[];
-  /** The folder held more than a scan lists. */
-  truncated: boolean;
+  /** The relative path of every folder whose contents weren't fully listed because a limit was hit — the
+   * project root itself is `''`. Empty when nothing was cut off. */
+  truncatedDirs: string[];
 }
 
 export interface DesktopState {
@@ -45,6 +56,7 @@ export interface DesktopState {
   recovery: RecoveryEntry[];
   settings: DesktopSettings;
   settingsOpen: boolean;
+  renameTarget: RenameTarget | null;
   /** Where an update stands, as the shell last said. Null until it has. */
   update: UpdateSnapshot | null;
   /** The update panel is open. */
@@ -63,6 +75,7 @@ const INITIAL: DesktopState = {
   recovery: [],
   settings: { closeBehavior: 'ask', autoCheckUpdates: true },
   settingsOpen: false,
+  renameTarget: null,
   update: null,
   updateOpen: false,
 };

@@ -228,15 +228,18 @@ describe('release notes', () => {
     expect(unwrap(changelogSection(changelog, '1.10.0-alpha.1')!)).toBe('The first alpha, a preview of 1.10.0.\n\n- A bullet that wraps.');
   });
 
-  it('lead a release with the ways to get it, and a desktop preview with only its section', () => {
+  it('lead a release with the ways to get it, and a desktop preview with its own reel', () => {
     const release = releaseBody('v1.10.0', changelog);
-    expect(release).toMatch(/^!\[Draft Canvas demo\]\(https:\/\/raw\.githubusercontent\.com\/acltabontabon\/draft-canvas\/v1\.10\.0\//);
+    expect(release).toMatch(/^!\[Draft Canvas demo\]\(https:\/\/raw\.githubusercontent\.com\/acltabontabon\/draft-canvas\/v1\.10\.0\/docs\/media\/demo\.gif\)/);
     expect(release).toContain('### Get it');
     expect(release).toContain('acltabontabon/draft-canvas:1.10.0');
     expect(release).toContain('### Opening the desktop app the first time');
 
     const preview = releaseBody('desktop-v1.10.0-alpha.1', changelog);
-    expect(preview.startsWith('The first alpha, a preview of 1.10.0.')).toBe(true);
+    expect(preview).toMatch(
+      /^!\[Draft Canvas Desktop demo\]\(https:\/\/raw\.githubusercontent\.com\/acltabontabon\/draft-canvas\/desktop-v1\.10\.0-alpha\.1\/docs\/media\/desktop-demo\.gif\)/,
+    );
+    expect(preview).toContain('The first alpha, a preview of 1.10.0.');
     expect(preview).not.toContain('### Get it');
     expect(preview).toContain('### Opening the desktop app the first time');
 

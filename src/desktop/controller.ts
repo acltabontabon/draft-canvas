@@ -13,6 +13,7 @@ import {
   type OpenedDoc,
   type ProjectInfo,
   type RecoveryEntry,
+  type RenamedFile,
   type SavedAs,
   type UpdateSnapshot,
 } from './api';
@@ -25,6 +26,9 @@ export interface DesktopUi {
   openShortcuts(): void;
   openSettings(): void;
   notify(message: string): void;
+  /** "Rename file…"/"Rename draft" from the menu: what it offers depends on whether the open document
+   * has a file yet, which only the app layer (holding `DesktopState.doc`) can tell. */
+  openRename(): void;
   /** Undo, Redo and Select All from the native Edit menu: see `dispatchEditCommand`. */
   editCommand(command: 'undo' | 'redo' | 'select-all'): void;
 }
@@ -47,6 +51,13 @@ type Session =
   | { kind: 'none' }
   /** A Quick Draft has no file: its working copy is a recovery entry, and `id` is that entry's. */
   | { kind: 'quick'; id: string }
+  /**
+   * A canvas made from a project or folder ("New canvas here"): open at once, with nowhere on disk yet.
+   * `project`/`relPath` are the folder it remembers as its destination, offered to the first Save dialog
+   * — never written to until the person actually saves. `id` is its recovery entry's, exactly like a
+   * Quick Draft's, since until it is saved that is exactly what it is.
+   */
+  | { kind: 'pending'; id: string; project: Handle; relPath: string }
   | { kind: 'file'; handle: Handle; name: string; displayPath: string; stamp: string; readOnly: boolean; recoveryId: string };
 
 /** The app was last heard from this long ago is when a snapshot is taken: quiet for `SNAPSHOT_QUIET_MS`, or `SNAPSHOT_MAX_MS` into a steady stream of edits. */
@@ -128,6 +139,9 @@ export class DesktopController {
   private snapshotTimer: unknown = null;
   private snapshotFirstAt: number | null = null;
   private saving: Promise<void> | null = null;
+  /** A "Rename file…" in flight; saves and snapshots wait for it so a delayed write can't recreate the
+   * file under its old name once the rename has moved it. */
+  private renaming: Promise<void> | null = null;
   private flushCount = 0;
   private readonly flushes = new Map<number, () => void>();
   private lastReported = '';
@@ -156,7 +170,7 @@ export class DesktopController {
       tray: boot.tray,
       settings: boot.settings,
       // Known by name only: each is listed when something shows it.
-      projects: boot.projects.map((info) => ({ info, status: 'unscanned', files: [], truncated: false })),
+      projects: boot.projects.map((info) => ({ info, status: 'unscanned', files: [], truncatedDirs: [] })),
     });
     const update = this.refreshUpdate();
     // Each refresh reports its own failure, so Home still learns that listing is over.
@@ -208,6 +222,8 @@ export class DesktopController {
         return this.reveal();
       case 'revert':
         return this.revert();
+      case 'rename':
+        return this.ui.openRename();
       case 'settings':
         return this.ui.openSettings();
       case 'about':
@@ -260,7 +276,7 @@ export class DesktopController {
     if (this.session.kind === 'none') return;
     if (baseSeq !== undefined && baseSeq < this.seq) return;
     this.latestText = text;
-    if (this.session.kind === 'quick') this.edited = true;
+    if (this.session.kind === 'quick' || this.session.kind === 'pending') this.edited = true;
     this.publish();
     this.scheduleSnapshot();
   }
@@ -287,7 +303,7 @@ export class DesktopController {
   // ─── Document state ─────────────────────────────────────────────────────────────────
 
   private get dirty(): boolean {
-    if (this.session.kind === 'quick') return this.edited;
+    if (this.session.kind === 'quick' || this.session.kind === 'pending') return this.edited;
     if (this.session.kind !== 'file') return false;
     return this.savedText === null || this.latestText !== this.savedText;
   }
@@ -311,7 +327,9 @@ export class DesktopController {
         ...(this.outside ? { outside: this.outside } : {}),
       };
       state = { kind: 'file', dirty: this.dirty, name: session.name, handle: session.handle };
-    } else if (session.kind === 'quick') {
+    } else if (session.kind === 'quick' || session.kind === 'pending') {
+      // A pending canvas has no file yet either, so it shows and is reported exactly like a Quick
+      // Draft: the folder it remembers is an implementation detail of the next Save, not shell state.
       doc = { kind: 'quick', dirty: this.dirty };
       state = { kind: 'quick', dirty: this.dirty };
     } else {
@@ -465,14 +483,18 @@ export class DesktopController {
     });
   }
 
-  /** A blank canvas made straight into a project folder, under the first free "Untitled canvas" name. */
-  async newCanvasIn(project: Handle): Promise<void> {
+  /**
+   * A blank canvas that opens at once, with the given folder remembered as where it belongs — nothing is
+   * written until the person actually saves. `relPath` is empty for the project's root.
+   */
+  async newCanvasIn(project: Handle, relPath = ''): Promise<void> {
     await this.swap('Couldn’t create the canvas', async () => {
       if (!(await this.settleBeforeLeaving())) return;
-      const blank = encoder.encode(serializeDocument(createDocument()));
-      const saved = await this.api.projectSaveNew(project, 'Untitled canvas', blank);
-      await this.switchTo(await this.api.openHandle(saved.handle));
-      void this.scanProjects([project], { again: true });
+      const document = createDocument();
+      this.session = { kind: 'pending', id: `q_${uuid()}`, project, relPath };
+      this.edited = false;
+      this.load(serializeDocument(document), document.metadata.title, { baseline: true });
+      this.publish();
     });
   }
 
@@ -527,10 +549,17 @@ export class DesktopController {
   }
 
   private async saveNow(): Promise<void> {
+    // Captured before anything here awaits: only a rename already running when this save *started*
+    // is waited for. Re-checking `this.renaming` after an await could see a rename that began later
+    // and is itself waiting on this very save — a cycle neither would ever wake up from.
+    const waitForRename = this.renaming;
     await this.flushApp();
+    if (waitForRename) await waitForRename;
     const session = this.session;
     if (session.kind === 'none') return;
-    if (session.kind === 'quick') {
+    if (session.kind === 'quick' || session.kind === 'pending') {
+      // Every Cmd/Ctrl+S before the first save opens the dialog — a pending canvas's folder is only
+      // ever a suggestion for it, never a reason to skip it.
       await this.guard('Couldn’t save', () => this.saveAsFlow());
       return;
     }
@@ -574,12 +603,15 @@ export class DesktopController {
   }
 
   private async saveAsNow(): Promise<void> {
+    // See `saveNow`'s comment on why this is captured before anything here awaits.
+    const waitForRename = this.renaming;
     await this.flushApp();
+    if (waitForRename) await waitForRename;
     if (this.session.kind === 'none') return;
     await this.guard('Couldn’t save', () => this.saveAsFlow());
   }
 
-  /** Save As for a file, and the first Save of a Quick Draft. */
+  /** Save As for a file, and the first Save of a Quick Draft or a pending canvas. */
   private async saveAsFlow(): Promise<void> {
     const session = this.session;
     const text = this.latestText ?? this.savedText;
@@ -588,6 +620,7 @@ export class DesktopController {
       this.suggestedName(text),
       encoder.encode(text),
       session.kind === 'file' && !this.pendingBackground ? session.handle : undefined,
+      session.kind === 'pending' ? { projectHandle: session.project, relPath: session.relPath } : undefined,
     );
     if (saved) await this.becomeFile(saved, text);
   }
@@ -626,7 +659,7 @@ export class DesktopController {
     this.edited = false;
     this.clearSnapshotTimer();
     this.outside = null;
-    if (before.kind === 'quick') await this.discard(before.id);
+    if (before.kind === 'quick' || before.kind === 'pending') await this.discard(before.id);
     else if (before.kind === 'file') await this.discard(before.recoveryId);
     this.publish();
     void this.refreshRecents();
@@ -695,6 +728,56 @@ export class DesktopController {
     await this.guard('Couldn’t show the file', () => this.api.reveal(handle));
   }
 
+  /** "Rename file…" from the menu, for the file that's open right now. */
+  async renameOpenFile(newStem: string): Promise<RenamedFile> {
+    if (this.session.kind !== 'file') throw new DesktopError('InvalidHandle', 'Nothing is open to rename.');
+    return this.renameFile(this.session.handle, newStem);
+  }
+
+  /** "Rename file…" from Find a Diagram, for a file that's only ever been scanned, not opened. */
+  async renameProjectFile(project: Handle, relPath: string, newStem: string): Promise<RenamedFile> {
+    const handle = await this.api.projectGrantFile(project, relPath);
+    const renamed = await this.renameFile(handle, newStem);
+    // The project's listing still names the old file — and opening that tile would look for a path
+    // that's gone. Listed again before the dialog closes, so the tile it returns to is the new one.
+    await this.scanProjects([project], { again: true });
+    return renamed;
+  }
+
+  /**
+   * "Rename file…": changes a file's name in place. `handle` need not be the open document's — Find a
+   * Diagram can rename any file it has a handle for, open or not. Waits for a save already in flight
+   * first, so the rename never lands mid-write; a save or autosave that starts while this is running
+   * waits for it in turn (`renaming`, checked at the top of `saveNow`/`saveAsNow`/`snapshotNow`), so a
+   * delayed write can never recreate the file under its old name. Application state — the open
+   * session's handle, name and path — is only ever touched after the filesystem rename has succeeded.
+   */
+  async renameFile(handle: Handle, newStem: string): Promise<RenamedFile> {
+    // `this.renaming` must be set before anything here awaits, in the same tick this is called on —
+    // otherwise a `save()` issued right after this returns could run its own "wait for a rename"
+    // check before this has had a chance to record that one is starting.
+    const waitFor = this.saving;
+    const task = (async (): Promise<RenamedFile> => {
+      if (waitFor) await waitFor;
+      const renamed = await this.api.renameFile(handle, newStem);
+      if (this.session.kind === 'file' && this.session.handle === handle) {
+        this.session = { ...this.session, handle: renamed.handle, name: renamed.name, displayPath: renamed.displayPath };
+        this.publish();
+      }
+      void this.refreshRecents();
+      return renamed;
+    })();
+    this.renaming = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    try {
+      return await task;
+    } finally {
+      this.renaming = null;
+    }
+  }
+
   // ─── Leaving the open document ──────────────────────────────────────────────────────
 
   /**
@@ -705,7 +788,7 @@ export class DesktopController {
     await this.flushApp();
     const session = this.session;
     if (session.kind === 'none') return true;
-    if (session.kind === 'quick') {
+    if (session.kind === 'quick' || session.kind === 'pending') {
       if (this.edited) await this.snapshotNow();
       else await this.discard(session.id);
       return true;
@@ -752,7 +835,7 @@ export class DesktopController {
   // ─── Recovery snapshots ─────────────────────────────────────────────────────────────
 
   private get recoveryId(): string | null {
-    if (this.session.kind === 'quick') return this.session.id;
+    if (this.session.kind === 'quick' || this.session.kind === 'pending') return this.session.id;
     return this.session.kind === 'file' ? this.session.recoveryId : null;
   }
 
@@ -774,15 +857,17 @@ export class DesktopController {
   private async snapshotNow(): Promise<void> {
     this.clearSnapshotTimer();
     this.snapshotFirstAt = null;
+    if (this.renaming) await this.renaming;
     const session = this.session;
     const id = this.recoveryId;
     const text = this.latestText;
     if (session.kind === 'none' || !id || text === null || !this.dirty) return;
     try {
+      const fileless = session.kind === 'quick' || session.kind === 'pending';
       await this.api.recoveryWrite(
         id,
-        session.kind === 'quick' ? { kind: 'quick' } : { kind: 'file', handle: session.handle, baseStamp: session.stamp },
-        session.kind === 'quick' ? (titleOf(text) ?? QUICK_DRAFT_TITLE) : this.displayName,
+        fileless ? { kind: 'quick' } : { kind: 'file', handle: session.handle, baseStamp: session.stamp },
+        fileless ? (titleOf(text) ?? QUICK_DRAFT_TITLE) : this.displayName,
         encoder.encode(text),
       );
     } catch (error) {
@@ -812,7 +897,7 @@ export class DesktopController {
       await this.flushApp();
       const session = this.session;
       if (session.kind === 'none') return void (await this.api.quitAck('ready'));
-      if (session.kind === 'quick') {
+      if (session.kind === 'quick' || session.kind === 'pending') {
         if (this.edited) await this.snapshotNow();
         return void (await this.api.quitAck('ready'));
       }
@@ -902,7 +987,7 @@ export class DesktopController {
   private async bringForward(info: ProjectInfo): Promise<void> {
     const known = this.projects.find((project) => project.info.handle === info.handle);
     this.setProjects([
-      known ? { ...known, info } : { info, status: 'unscanned', files: [], truncated: false },
+      known ? { ...known, info } : { info, status: 'unscanned', files: [], truncatedDirs: [] },
       ...this.projects.filter((project) => project.info.handle !== info.handle),
     ]);
     await this.scanProjects([info.handle], { again: true });
@@ -923,14 +1008,14 @@ export class DesktopController {
     const queue = [...wanted];
     const lane = async () => {
       for (let handle = queue.shift(); handle !== undefined; handle = queue.shift()) {
-        let next: Pick<ProjectState, 'status' | 'files' | 'truncated'>;
+        let next: Pick<ProjectState, 'status' | 'files' | 'truncatedDirs'>;
         try {
           const scan = await this.api.projectScan(handle);
-          next = { status: 'ready', files: scan.files, truncated: scan.truncated };
+          next = { status: 'ready', files: scan.files, truncatedDirs: scan.truncatedDirs };
         } catch (error) {
           logDiagnostic(error, { operation: 'desktop-project-scan' });
           // Gone for now (an unplugged drive, a deleted checkout): still on the list, shown as missing.
-          next = { status: 'missing', files: [], truncated: false };
+          next = { status: 'missing', files: [], truncatedDirs: [] };
         }
         const done = handle;
         this.setProjects(this.projects.map((project) => (project.info.handle === done ? { ...project, ...next } : project)));

@@ -79,6 +79,15 @@
   padding: clamp(8px, 2vh, 24px) 0 clamp(24px, 4vh, 48px);
 }
 
+/* Only mounted while Home's own stage is showing (Browse renders in its place, see DesktopHome.tsx),
+   so this fires exactly on arriving here from Browse or the editor — never on switching its own tabs.
+   `dc-screen-in` is defined once, in app.css, and shared with `.dc-editor` and `.dc-browse`. */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-desk-stage {
+    animation: dc-screen-in 160ms var(--dc-ease-out) both;
+  }
+}
+
 .dc-desk-stage > :not(.dc-desk-wires) {
   position: relative;
   z-index: 1;
@@ -546,10 +555,15 @@
   opacity: 0;
 }
 
-.dc-desk-tile-action {
+.dc-desk-tile-actions {
   position: absolute;
   top: 0;
   right: 4px;
+  display: flex;
+  gap: 2px;
+}
+
+.dc-desk-tile-action {
   display: grid;
   place-items: center;
   width: 22px;
@@ -676,6 +690,14 @@
   width: min(1180px, 100%);
   margin: 0 auto;
   padding: 0 32px 72px;
+}
+
+/* Mounts fresh each time Browse opens (Home's stage takes its place when it closes) — see the note
+   by `.dc-desk-stage` above. */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-browse {
+    animation: dc-screen-in 160ms var(--dc-ease-out) both;
+  }
 }
 
 /* The search and the scopes stay put while the groups scroll under them. */
@@ -873,7 +895,7 @@
 .dc-browse-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
-  gap: 30px 16px;
+  gap: 22px 16px;
   justify-items: center;
 }
 
@@ -902,6 +924,74 @@
   margin: 0;
   color: var(--dc-text-faint);
   font-size: 13px;
+}
+
+.dc-browse-note {
+  margin: 10px 0 0;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+/* The folder trail under the scope tabs, inside a project: quiet text, the current folder unclickable. */
+.dc-browse-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 0 0;
+  color: var(--dc-text-faint);
+  font-size: 12.5px;
+}
+
+.dc-browse-crumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dc-browse-crumb-item svg {
+  opacity: 0.5;
+}
+
+.dc-browse-crumb {
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dc-browse-crumb:hover {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+.dc-browse-crumb-current {
+  padding: 2px 4px;
+  color: var(--dc-text);
+  font-weight: 500;
+}
+
+/* ---- "Rename file…" -------------------------------------------------------- */
+
+.dc-rename-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dc-rename-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dc-rename-ext {
+  flex: none;
+  color: var(--dc-text-faint);
+  font-size: 12.5px;
+  white-space: nowrap;
 }
 
 @media (max-width: 720px) {

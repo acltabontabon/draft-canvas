@@ -14,6 +14,7 @@ import {
   type RecentItem,
   type RecoveryEntry,
   type SavedAs,
+  type StartLocation,
   type TrayArt,
   type UpdateSnapshot,
 } from '../../src/desktop/api';
@@ -54,6 +55,7 @@ export function createHarness() {
   const notices: string[] = [];
   let pickedFile: string | null = null;
   let saveAsPath: { name: string; displayPath: string } | null = null;
+  let lastSaveAsStartIn: StartLocation | null = null;
   let hostEvents: (event: HostEvent) => void = () => {};
   let nextHandle = 1;
   let update: UpdateSnapshot = { currentVersion: '1.9.4', state: { phase: 'idle' }, dismissed: false, held: null, error: null };
@@ -84,6 +86,8 @@ export function createHarness() {
   const folders = new Map<string, FakeProject>();
   let listed: string[] = [];
   let pickedProject: string | null = null;
+  /** Handles granted for a file inside a project, and which file. */
+  const granted = new Map<string, { project: string; relPath: string }>();
   const addProject = (name: string, diagrams: string[] = []): string => {
     const handle = `p_${nextHandle++}`;
     const at = Date.now();
@@ -130,10 +134,36 @@ export function createHarness() {
       file.version += 1;
       return { outcome: 'saved' as const, stamp: stampOf(file) };
     }),
-    saveAs: vi.fn(async (_suggested: string, bytes: Uint8Array): Promise<SavedAs | null> => {
+    saveAs: vi.fn(async (_suggested: string, bytes: Uint8Array, _copySidecarFrom?: string, startIn?: StartLocation): Promise<SavedAs | null> => {
+      lastSaveAsStartIn = startIn ?? null;
       if (!saveAsPath) return null;
       const handle = addFile(saveAsPath.name, decoder.decode(bytes));
       return { handle, name: saveAsPath.name, displayPath: files.get(handle)!.displayPath, stamp: stampOf(files.get(handle)!) };
+    }),
+    renameFile: vi.fn(async (handle: string, newStem: string) => {
+      const file = files.get(handle);
+      if (!file) throw new DesktopError('InvalidHandle', 'Draft Canvas no longer has access to that file.');
+      const dir = file.displayPath.slice(0, file.displayPath.lastIndexOf('/'));
+      const displayPath = `${dir}/${newStem}.draftcanvas`;
+      if ([...files.values()].some((other) => other !== file && other.displayPath === displayPath)) {
+        throw new DesktopError('AlreadyExists', `A file named ${newStem}.draftcanvas already exists there. Pick another name.`);
+      }
+      const newHandle = `h_${nextHandle++}`;
+      files.delete(handle);
+      files.set(newHandle, { ...file, name: newStem, displayPath });
+      // Inside a project, the file moves in that folder's listing too, as it would on disk.
+      const grant = granted.get(handle);
+      if (grant) {
+        const listing = folder(grant.project).files;
+        const entry = listing.get(grant.relPath);
+        const at = grant.relPath.lastIndexOf('/');
+        if (entry) {
+          listing.delete(grant.relPath);
+          listing.set(`${at >= 0 ? grant.relPath.slice(0, at + 1) : ''}${newStem}.draftcanvas`, entry);
+        }
+        granted.delete(handle);
+      }
+      return { handle: newHandle, name: newStem, displayPath };
     }),
     checkStamp: vi.fn(async (handle: string, stamp: string) => {
       const file = files.get(handle);
@@ -167,7 +197,7 @@ export function createHarness() {
           mtimeMs: file.mtimeMs,
           size: file.text.length,
         })),
-        truncated: false,
+        truncatedDirs: [],
       };
     }),
     projectOpenFile: vi.fn(async (project: string, relPath: string) => {
@@ -177,6 +207,15 @@ export function createHarness() {
       const handle = `h_${nextHandle++}`;
       files.set(handle, { name, displayPath: `${folder(project).info.displayPath}/${relPath}`, text, version: 1 });
       return opened(handle, files.get(handle)!);
+    }),
+    projectGrantFile: vi.fn(async (project: string, relPath: string) => {
+      const text = folder(project).files.get(relPath)?.text;
+      if (text === undefined) throw new DesktopError('NotFound', 'Draft Canvas couldn’t find that file.');
+      const name = relPath.slice(relPath.lastIndexOf('/') + 1).replace(/\.draftcanvas$/, '');
+      const handle = `h_${nextHandle++}`;
+      files.set(handle, { name, displayPath: `${folder(project).info.displayPath}/${relPath}`, text, version: 1 });
+      granted.set(handle, { project, relPath });
+      return handle;
     }),
     projectSaveNew: vi.fn(async (project: string, name: string, bytes: Uint8Array) => {
       const relPath = `${name}.draftcanvas`;
@@ -250,6 +289,7 @@ export function createHarness() {
     openSettings: vi.fn(),
     notify: (message) => void notices.push(message),
     editCommand: vi.fn(),
+    openRename: vi.fn(),
   };
 
   const store = new DesktopStore();
@@ -286,6 +326,8 @@ export function createHarness() {
     answer: (...choices: number[]) => void answers.push(...choices),
     pickFile: (handle: string | null) => void (pickedFile = handle),
     saveAsTo: (target: { name: string; displayPath: string } | null) => void (saveAsPath = target),
+    /** What the last `saveAs` call was asked to start in, or `null` if none was given. */
+    lastSaveAsStartIn: () => lastSaveAsStartIn,
     hostEvent: (event: HostEvent) => hostEvents(event),
     /** A project folder with these diagrams (paths inside it), not yet on the list. */
     addProject,

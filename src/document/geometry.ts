@@ -95,3 +95,41 @@ export function openingViewportFor(
   const zoom = clamp(fit, 0.1, 1);
   return { x: screen.width / 2, y: screen.height / 2, zoom };
 }
+
+/** Breathing room around a diagram's content when it is fit to view on opening, in CSS pixels. */
+export const OPEN_FIT_PADDING = 48;
+
+/** The zoom floor `<ReactFlow>` itself enforces (`Canvas.tsx`'s `minZoom` prop) — a fit that asked
+ *  for anything further out would just have `<ReactFlow>` clamp it there anyway. */
+export const OPEN_FIT_MIN_ZOOM = 0.1;
+
+/**
+ * The viewport that shows all of `bounds` when an existing diagram is opened: centred, at 100% if
+ * it already fits, or zoomed out just enough to show all of it with `padding` to spare otherwise —
+ * never zoomed in past 100% for a diagram smaller than the screen. `null` when there is nothing to
+ * fit (an empty diagram, or a screen not yet measured) — the caller's own starting viewport stands.
+ *
+ * Deliberately not `frameFor` (`Canvas.tsx`'s equivalent for stepping into a room): that one keeps
+ * its own padding and zoom floor, chosen for a camera move the user is already mid-navigation for,
+ * and the two are free to diverge from each other without either needing to change.
+ */
+export function openFitViewport(
+  bounds: Bounds | null,
+  screen: { width: number; height: number },
+  padding = OPEN_FIT_PADDING,
+): { x: number; y: number; zoom: number } | null {
+  if (!bounds || screen.width <= 0 || screen.height <= 0) return null;
+  const zoom = clamp(
+    Math.min(
+      (screen.width - padding * 2) / Math.max(bounds.width, 1),
+      (screen.height - padding * 2) / Math.max(bounds.height, 1),
+    ),
+    OPEN_FIT_MIN_ZOOM,
+    1,
+  );
+  return {
+    x: (screen.width - bounds.width * zoom) / 2 - bounds.x * zoom,
+    y: (screen.height - bounds.height * zoom) / 2 - bounds.y * zoom,
+    zoom,
+  };
+}

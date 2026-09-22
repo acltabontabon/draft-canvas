@@ -276,7 +276,9 @@ test('holds many projects: one Projects tab, a row of the newest, and everything
   await row.getByRole('button', { name: 'Show the project-2 project' }).click();
   const group = page.getByRole('region', { name: 'project-2' });
   await expect(group.locator('.dc-desk-tile')).toHaveCount(60);
-  await expect(group.getByRole('button', { name: 'Show all 200' })).toBeVisible();
+  // 150 files directly at the root, plus one tile for the "flows" folder a quarter of them sit in —
+  // browsing a project's root only shows what's directly in it, not everything below it.
+  await expect(group.getByRole('button', { name: 'Show all 151' })).toBeVisible();
   await expect.poll(async () => (await called()).filter((command) => command === 'project_peek').length).toBeGreaterThan(5);
   const peeks = (await called()).filter((command) => command === 'project_peek').length;
   expect(peeks).toBeLessThan(80);
@@ -286,8 +288,9 @@ test('holds many projects: one Projects tab, a row of the newest, and everything
   await expect.poll(async () => (await called()).filter((command) => command === 'project_scan').length).toBeGreaterThanOrEqual(10);
   await page.getByLabel('Find a diagram').fill('p7-diagram-12');
   await expect(page.getByRole('status')).toHaveText(/^\d+ diagrams? match/);
+  // Everything is one combined list, not grouped by project — the match shows up in it directly.
   await expect(page.locator('.dc-browse-group')).toHaveCount(1);
-  await expect(page.getByRole('region', { name: 'project-7' }).locator('.dc-desk-tile').first()).toContainText('p7-diagram-12');
+  await expect(page.getByRole('region', { name: 'Everything' }).locator('.dc-desk-tile').first()).toContainText('p7-diagram-12');
 
   // A diagram from the search opens from its own project.
   await page.getByRole('button', { name: 'Open p7-diagram-12', exact: true }).click();
@@ -299,6 +302,78 @@ test('holds many projects: one Projects tab, a row of the newest, and everything
       .map((call) => (call.args as { relPath: string }).relPath),
   );
   expect(opened).toEqual(['p7-diagram-12.draftcanvas']);
+});
+
+test('browses a project’s folders one level at a time, with breadcrumbs back up', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Flow', 1);
+  await page.addInitScript((text) => {
+    window.__shell.seed({
+      projects: [
+        {
+          name: 'Shop',
+          diagrams: [
+            { path: 'home.draftcanvas', text, ago: 60_000 },
+            { path: 'cart.draftcanvas', text, ago: 120_000 },
+            { path: 'checkout/step-1.draftcanvas', text, ago: 30_000 },
+            { path: 'checkout/step-2.draftcanvas', text, ago: 20_000 },
+          ],
+        },
+      ],
+    });
+  }, text);
+  await page.reload();
+
+  const row = page.locator('.dc-desk-row');
+  await row.getByRole('button', { name: 'Show the Shop project' }).click();
+  const group = page.getByRole('region', { name: 'Shop' });
+
+  // At the root: the two files there, and one tile for the folder — not its contents.
+  await expect(group.locator('.dc-desk-tile')).toHaveCount(3);
+  await expect(group.getByRole('button', { name: 'Open home', exact: true })).toBeVisible();
+  await expect(group.getByRole('button', { name: 'Open the checkout folder' })).toBeVisible();
+
+  // A search from the root still reaches into the folder, unlike browsing it.
+  await page.getByLabel('Find a diagram').fill('step-1');
+  await expect(page.getByRole('status')).toHaveText(/^\d+ diagrams? match/);
+  await expect(group.getByRole('button', { name: 'Open step-1', exact: true })).toBeVisible();
+  await page.getByLabel('Find a diagram').fill('');
+
+  // Into the folder: breadcrumbs name the way back, and only its own two files show.
+  await group.getByRole('button', { name: 'Open the checkout folder' }).click();
+  const crumbs = page.getByRole('navigation', { name: 'Folder' });
+  await expect(crumbs).toContainText('Shop');
+  await expect(crumbs).toContainText('checkout');
+  await expect(group.locator('.dc-desk-tile')).toHaveCount(2);
+  await expect(group.getByRole('button', { name: 'Open step-1', exact: true })).toBeVisible();
+  await expect(group.getByRole('button', { name: 'Open home', exact: true })).toHaveCount(0);
+
+  // The breadcrumb goes back to the root, with everything there again.
+  await crumbs.getByRole('button', { name: 'Shop' }).click();
+  await expect(group.locator('.dc-desk-tile')).toHaveCount(3);
+});
+
+test('renames the open file in place, from the File menu', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Payments', 1);
+  const handle = await page.evaluate((text) => window.__shell.addFile('payments', text), text);
+  await page.evaluate(
+    (handle) => window.__shell.emit({ type: 'open', handle, name: 'payments', displayPath: '~/work/payments.draftcanvas' }),
+    handle,
+  );
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await expect(status(page)).toContainText('~/work/payments.draftcanvas');
+
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'rename' }));
+  const dialog = page.getByRole('dialog', { name: 'Rename File' });
+  await expect(dialog).toBeVisible();
+  const input = dialog.locator('input');
+  await expect(input).toHaveValue('payments');
+  await input.fill('invoices');
+  await dialog.getByRole('button', { name: 'Rename' }).click();
+
+  await expect(dialog).toBeHidden();
+  await expect(status(page)).toContainText('~/work/invoices.draftcanvas');
 });
 
 test('opens a file, says when it has unsaved changes, and asks before leaving it', async ({ page }) => {
@@ -315,7 +390,11 @@ test('opens a file, says when it has unsaved changes, and asks before leaving it
   await expect(status(page)).toContainText('Saved');
   await expect(status(page)).toContainText('~/work/payments.draftcanvas');
 
-  await drawService(page, { x: 600, y: 300 });
+  // Opening an existing diagram now frames its content, so the one node here sits centred in the
+  // pane rather than near its old default position — draw well into a corner instead of a fixed
+  // centre-ish point, so this doesn't land back on top of it.
+  const pane = await page.locator(CANVAS).boundingBox();
+  await drawService(page, { x: pane!.width - 60, y: pane!.height - 60 });
   await expect(status(page)).toContainText('Unsaved changes');
 
   // Cancel: stay, with the changes still there.

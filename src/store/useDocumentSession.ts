@@ -38,8 +38,16 @@ async function loadEditorStore(): Promise<EditorStoreModule> {
  * `presenting` is always false here: `setDocument` forces `mode: 'edit'`. The card checks it again
  * while it is up, for a presentation started during those few seconds.
  */
-export function arriveWith(document: DraftDocument, context: { reopening: boolean }): void {
+export function arriveWith(document: DraftDocument, context: { reopening: boolean; fresh?: boolean }): void {
   const ui = useUiStore.getState();
+  // A canvas just created (blank, or seeded by a Starter) already opens at the right viewport —
+  // a blank one at the ordinary default, a seeded one computed before the editor ever mounted (see
+  // `openingViewportFor`) — so only a genuinely *opened* diagram needs `Canvas.tsx` to fit it.
+  if (!context.reopening && !context.fresh) ui.requestOpenFit(document.metadata.id);
+  // Reopening (or recreating) the same id a still-unresolved fit request was waiting on — the pane
+  // never got measured before this arrival superseded it — must not let that stale request fit the
+  // canvas out from under whatever camera this arrival means to show instead.
+  else ui.clearOpenFit(document.metadata.id);
   const recall = shouldRecall({
     reopening: context.reopening,
     presenting: false,
@@ -61,7 +69,7 @@ export interface DocumentSession {
   /** A blank canvas, or — given a `starterId` — one already holding that
    *  Architecture Starter, titled after it unless `title` says otherwise. */
   newDocument: (title?: string, starterId?: StarterId) => Promise<void>;
-  adoptDocument: (document: DraftDocument) => Promise<void>;
+  adoptDocument: (document: DraftDocument, options?: { fresh?: boolean }) => Promise<void>;
   closeDocument: () => Promise<void>;
   /**
    * After another tab deleted or changed the open canvas: `keep` saves this tab's copy over it;
@@ -316,7 +324,7 @@ export function useDocumentSession(): DocumentSession {
   );
 
   const adoptDocument = useCallback(
-    async (incoming: DraftDocument) => {
+    async (incoming: DraftDocument, options?: { fresh?: boolean }) => {
       if (!repository) return;
       const request = (navigation.current += 1);
       // A `projectId` from a document authored in a different browser
@@ -345,7 +353,7 @@ export function useDocumentSession(): DocumentSession {
         // Saved either way — it's in the Library — but only the latest open/create takes the editor.
         if (request === navigation.current) {
           useEditorStore.getState().setDocument(document);
-          arriveWith(document, { reopening: false });
+          arriveWith(document, { reopening: false, fresh: options?.fresh });
           setOpenId(document.metadata.id);
         }
         await refreshLibrary();
@@ -383,7 +391,7 @@ export function useDocumentSession(): DocumentSession {
         const starter = starterId ? catalog?.starterById(starterId) : undefined;
         const document =
           starter && catalog ? catalog.starterDocument(starter, title) : createDocument(title ?? 'Untitled canvas');
-        await adoptDocument(document);
+        await adoptDocument(document, { fresh: true });
       } finally {
         creating.current = false;
       }

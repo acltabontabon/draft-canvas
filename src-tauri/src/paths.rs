@@ -1,8 +1,12 @@
+use crate::errors::AppError;
 use std::path::{Path, PathBuf};
 
 pub const DOC_EXT: &str = "draftcanvas";
 const DEFAULT_STEM: &str = "Untitled canvas";
 const MAX_STEM_CHARS: usize = 120;
+/// The characters `sanitize_stem` rewrites to `-` for an auto-derived suggestion; a person-typed rename
+/// refuses the same set outright instead, since silently mangling what they typed would surprise them.
+const RESERVED_CHARS: [char; 9] = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
 
 /// Case-insensitive, because Finder and Explorer both let a user (or a sync client) hand us `.DraftCanvas`.
 pub fn has_doc_ext(path: &Path) -> bool {
@@ -63,6 +67,39 @@ pub fn sanitize_stem(name: &str) -> String {
     }
 }
 
+/// A name a person typed for "Rename file…": unlike `sanitize_stem`, which quietly rewrites whatever an
+/// auto-derived suggestion contains, this refuses what it can't use, so a rename never silently produces
+/// a different name than the one the person saw in the box. A redundant `.draftcanvas` they typed is
+/// stripped rather than refused, since re-typing the visible extension is a natural mistake, not an error.
+pub fn validate_rename_stem(stem: &str) -> Result<String, AppError> {
+    let trimmed = strip_doc_ext(stem.trim());
+    if trimmed.is_empty() {
+        return Err(AppError::invalid_path("Type a name for the file."));
+    }
+    if let Some(bad) = trimmed.chars().find(|c| RESERVED_CHARS.contains(c)) {
+        return Err(AppError::invalid_path(format!(
+            "A file name can't contain \u{2018}{bad}\u{2019}."
+        )));
+    }
+    if trimmed.chars().any(|c| c.is_control()) {
+        return Err(AppError::invalid_path(
+            "That name contains a character Draft Canvas can't use.",
+        ));
+    }
+    let cleaned = trimmed.trim_matches(|c: char| c == '.' || c.is_whitespace());
+    if cleaned.is_empty() {
+        return Err(AppError::invalid_path(
+            "A file name can't be made up of only dots or spaces.",
+        ));
+    }
+    if cleaned.chars().count() > MAX_STEM_CHARS {
+        return Err(AppError::invalid_path(format!(
+            "That name is too long (the limit is {MAX_STEM_CHARS} characters)."
+        )));
+    }
+    Ok(cleaned.to_string())
+}
+
 fn strip_doc_ext(name: &str) -> &str {
     let suffix = format!(".{DOC_EXT}");
     match name.len().checked_sub(suffix.len()) {
@@ -105,6 +142,7 @@ fn home_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::errors::ErrorKind;
 
     #[test]
     fn extension_check_ignores_case() {
@@ -152,6 +190,65 @@ mod tests {
         assert_eq!(sanitize_stem(" ... "), "Untitled canvas");
         assert_eq!(
             sanitize_stem(&"x".repeat(400)).chars().count(),
+            MAX_STEM_CHARS
+        );
+    }
+
+    #[test]
+    fn rename_stems_are_trimmed_and_a_redundant_extension_is_stripped() {
+        assert_eq!(
+            validate_rename_stem("  payment flow  ").unwrap(),
+            "payment flow"
+        );
+        assert_eq!(
+            validate_rename_stem("payment flow.draftcanvas").unwrap(),
+            "payment flow"
+        );
+        assert_eq!(
+            validate_rename_stem("payment flow.DraftCanvas").unwrap(),
+            "payment flow"
+        );
+        assert_eq!(validate_rename_stem("plan.v2").unwrap(), "plan.v2");
+    }
+
+    #[test]
+    fn rename_stems_refuse_what_sanitize_stem_would_silently_rewrite() {
+        for bad in [
+            "a/b", "a\\b", "a:b", "a*b", "a?b", "a\"b", "a<b", "a>b", "a|b",
+        ] {
+            assert_eq!(
+                validate_rename_stem(bad).err().unwrap().kind,
+                ErrorKind::InvalidPath
+            );
+        }
+        assert_eq!(
+            validate_rename_stem("").err().unwrap().kind,
+            ErrorKind::InvalidPath
+        );
+        assert_eq!(
+            validate_rename_stem("   ").err().unwrap().kind,
+            ErrorKind::InvalidPath
+        );
+        assert_eq!(
+            validate_rename_stem("...").err().unwrap().kind,
+            ErrorKind::InvalidPath
+        );
+        assert_eq!(
+            validate_rename_stem(".draftcanvas").err().unwrap().kind,
+            ErrorKind::InvalidPath
+        );
+        assert_eq!(
+            validate_rename_stem(&"x".repeat(MAX_STEM_CHARS + 1))
+                .err()
+                .unwrap()
+                .kind,
+            ErrorKind::InvalidPath
+        );
+        assert_eq!(
+            validate_rename_stem(&"x".repeat(MAX_STEM_CHARS))
+                .unwrap()
+                .chars()
+                .count(),
             MAX_STEM_CHARS
         );
     }

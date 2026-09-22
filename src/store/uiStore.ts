@@ -289,6 +289,15 @@ export interface UiStore {
    */
   jumpFlashId: string | null;
   /**
+   * The id of a document that has just arrived and still needs its opening viewport computed —
+   * set once as it arrives (see `arriveWith` in `useDocumentSession.ts`) for a genuine new open,
+   * never for reopening the canvas already on screen or for a freshly created one (which already
+   * carries the right viewport, or none is needed). `Canvas.tsx` consumes it — clears it back to
+   * `null` — the moment it can measure the pane and fit the diagram, so it can never re-fire from
+   * an edit, an autosave, or an ordinary rerender.
+   */
+  openFitDocumentId: string | null;
+  /**
    * A one-shot request for the Export dialog to open with "Selection only" already checked —
    * how the palette's "Export selection…" reaches a dialog that otherwise owns that toggle
    * locally. Consumed (cleared) by `ExportDialog` the moment it opens.
@@ -430,6 +439,11 @@ export interface UiStore {
   openCommandPaletteAt: (query: string) => void;
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
+  /** Marks `documentId` as just arrived and awaiting its opening viewport fit. */
+  requestOpenFit: (documentId: string) => void;
+  /** Consumes the pending fit for `documentId` — a no-op if a newer request has already replaced
+   *  it, so a stale caller can never clear a request that isn't its own. */
+  clearOpenFit: (documentId: string) => void;
   /** Opens Learn — on `recipeId` when given (a deep link always wins), else where it was left. */
   openLearn: (recipeId?: string) => void;
   closeLearn: () => void;
@@ -518,6 +532,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   commandPaletteQuery: '',
   exportSelectionRequested: false,
   jumpFlashId: null,
+  openFitDocumentId: null,
   learnOpen: false,
   learnRecipeId: null,
   learnQuery: '',
@@ -693,6 +708,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   requestExportSelection: (exportSelectionRequested) => set({ exportSelectionRequested }),
   setJumpFlashId: (jumpFlashId) =>
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
+  requestOpenFit: (documentId) => set({ openFitDocumentId: documentId }),
+  clearOpenFit: (documentId) =>
+    set((state) => (state.openFitDocumentId === documentId ? { openFitDocumentId: null } : state)),
   openLearn: (recipeId) =>
     set((state) => ({
       learnOpen: true,

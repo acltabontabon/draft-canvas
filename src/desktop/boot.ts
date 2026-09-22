@@ -34,6 +34,24 @@ const ui: DesktopUi = {
   openSettings: () => desktopStore.update({ settingsOpen: true }),
   notify: (message) => useUiStore.getState().notify(message),
   editCommand: dispatchEditCommand,
+  openRename: () => {
+    const { doc } = desktopStore.getSnapshot();
+    if (doc.kind === 'file') {
+      desktopStore.update({ renameTarget: { kind: 'open' } });
+      return;
+    }
+    // A draft has no file to rename yet: its name is its diagram title, so "Rename draft" is editing
+    // that, the same field Home's suggestion for the first Save reads from.
+    if (doc.kind === 'quick') {
+      const input = document.querySelector<HTMLInputElement>('.dc-title-input');
+      if (input) {
+        input.focus();
+        input.select();
+      } else {
+        useUiStore.getState().notify('Nothing is open to rename yet.');
+      }
+    }
+  },
 };
 
 /**

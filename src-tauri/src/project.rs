@@ -47,14 +47,15 @@ pub struct ProjectFile {
 #[derive(Debug, Serialize)]
 pub struct Scan {
     pub files: Vec<ProjectFile>,
-    /// Some limit stopped the walk, so the list may be missing files.
-    pub truncated: bool,
+    /// The `rel_path` (project-relative, `/`-separated) of every folder whose contents weren't fully
+    /// listed because a limit was hit — the root itself is `""`. Empty when nothing was cut off.
+    pub truncated_dirs: Vec<String>,
 }
 
 pub fn scan(root: &Path, limits: &Limits) -> Result<Scan, AppError> {
     let started = Instant::now();
     let mut files = Vec::new();
-    let mut truncated = false;
+    let mut truncated_dirs: Vec<String> = Vec::new();
     let mut visited = 0usize;
     let mut pending = vec![(root.to_path_buf(), String::new(), 0usize)];
 
@@ -71,7 +72,7 @@ pub fn scan(root: &Path, limits: &Limits) -> Result<Scan, AppError> {
             let Ok(entry) = entry else { continue };
             visited += 1;
             if visited > limits.max_entries || started.elapsed() >= limits.max_duration {
-                truncated = true;
+                mark_truncated(&mut truncated_dirs, &rel);
                 break 'walk;
             }
             let os_name = entry.file_name();
@@ -100,13 +101,13 @@ pub fn scan(root: &Path, limits: &Limits) -> Result<Scan, AppError> {
                     continue;
                 }
                 if depth >= limits.max_depth {
-                    truncated = true;
+                    mark_truncated(&mut truncated_dirs, &child_rel);
                     continue;
                 }
                 pending.push((entry.path(), child_rel, depth + 1));
             } else if kind.is_file() && has_doc_ext(Path::new(name)) {
                 if files.len() >= limits.max_results {
-                    truncated = true;
+                    mark_truncated(&mut truncated_dirs, &rel);
                     break 'walk;
                 }
                 let Ok(meta) = entry.metadata() else { continue };
@@ -131,7 +132,16 @@ pub fn scan(root: &Path, limits: &Limits) -> Result<Scan, AppError> {
             .cmp(&b.rel_path.to_lowercase())
             .then_with(|| a.rel_path.cmp(&b.rel_path))
     });
-    Ok(Scan { files, truncated })
+    Ok(Scan {
+        files,
+        truncated_dirs,
+    })
+}
+
+fn mark_truncated(truncated_dirs: &mut Vec<String>, rel: &str) {
+    if !truncated_dirs.iter().any(|d| d == rel) {
+        truncated_dirs.push(rel.to_string());
+    }
 }
 
 #[cfg(test)]
@@ -164,7 +174,7 @@ mod tests {
             touch(dir.path(), rel);
         }
         let scan = scan(dir.path(), &Limits::default()).unwrap();
-        assert!(!scan.truncated);
+        assert!(scan.truncated_dirs.is_empty());
         assert_eq!(
             rels(&scan),
             [
@@ -225,7 +235,7 @@ mod tests {
         .unwrap();
         let scan = scan(dir.path(), &Limits::default()).unwrap();
         assert_eq!(rels(&scan), ["real.draftcanvas"]);
-        assert!(!scan.truncated);
+        assert!(scan.truncated_dirs.is_empty());
     }
 
     #[test]
@@ -239,7 +249,7 @@ mod tests {
         };
         let scan = scan(dir.path(), &limits).unwrap();
         assert_eq!(rels(&scan), ["a/near.draftcanvas"]);
-        assert!(scan.truncated);
+        assert_eq!(scan.truncated_dirs, ["a/b/c"]);
 
         let roomy = Limits {
             max_depth: 3,
@@ -250,7 +260,24 @@ mod tests {
             rels(&scan),
             ["a/b/c/deep.draftcanvas", "a/near.draftcanvas"]
         );
-        assert!(!scan.truncated);
+        assert!(scan.truncated_dirs.is_empty());
+    }
+
+    #[test]
+    fn depth_truncation_names_the_specific_folder_cut_off_not_a_global_flag() {
+        let dir = tempdir().unwrap();
+        touch(dir.path(), "a/deep/x.draftcanvas");
+        touch(dir.path(), "b/deep/y.draftcanvas");
+        touch(dir.path(), "shallow.draftcanvas");
+        let limits = Limits {
+            max_depth: 1,
+            ..Limits::default()
+        };
+        let scan = scan(dir.path(), &limits).unwrap();
+        assert_eq!(rels(&scan), ["shallow.draftcanvas"]);
+        let mut truncated = scan.truncated_dirs.clone();
+        truncated.sort();
+        assert_eq!(truncated, ["a/deep", "b/deep"]);
     }
 
     #[test]
@@ -268,7 +295,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(scan5.files.len(), 5);
-        assert!(!scan5.truncated, "exactly at the cap is not truncated");
+        assert!(
+            scan5.truncated_dirs.is_empty(),
+            "exactly at the cap is not truncated"
+        );
         let scan3 = scan(
             dir.path(),
             &Limits {
@@ -278,7 +308,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(scan3.files.len(), 3);
-        assert!(scan3.truncated);
+        assert_eq!(scan3.truncated_dirs, [""]);
     }
 
     #[test]
@@ -295,7 +325,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(scan.truncated);
+        assert_eq!(scan.truncated_dirs, [""]);
     }
 
     #[test]
@@ -310,7 +340,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(scan.truncated);
+        assert_eq!(scan.truncated_dirs, [""]);
         assert!(scan.files.is_empty());
     }
 
@@ -318,7 +348,7 @@ mod tests {
     fn an_unreadable_root_is_an_error_but_an_empty_one_is_not() {
         let dir = tempdir().unwrap();
         let empty = scan(dir.path(), &Limits::default()).unwrap();
-        assert!(empty.files.is_empty() && !empty.truncated);
+        assert!(empty.files.is_empty() && empty.truncated_dirs.is_empty());
         let err = scan(&dir.path().join("gone"), &Limits::default())
             .err()
             .unwrap();

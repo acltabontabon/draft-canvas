@@ -131,6 +131,7 @@ pub fn action_for_id(id: &str) -> Option<Action> {
         "app:save" => menu_event(MenuCommand::Save),
         "app:save-as" => menu_event(MenuCommand::SaveAs),
         "app:revert" => menu_event(MenuCommand::Revert),
+        "app:rename" => menu_event(MenuCommand::Rename),
         "app:reveal" => menu_event(MenuCommand::Reveal),
         "app:undo" => menu_event(MenuCommand::Undo),
         "app:redo" => menu_event(MenuCommand::Redo),
@@ -178,6 +179,7 @@ pub fn app_menu(platform: Platform) -> Vec<Spec> {
         item("app:save", "Save", Some("CmdOrCtrl+S")),
         item("app:save-as", "Save As\u{2026}", Some("CmdOrCtrl+Shift+S")),
         item("app:revert", "Revert to Saved\u{2026}", None),
+        item("app:rename", "Rename File\u{2026}", None),
         Spec::Separator,
         item("app:reveal", reveal_text, None),
         Spec::Separator,
@@ -578,6 +580,7 @@ mod tests {
             assert_eq!(find(&bar, id), (text, Some(accel)), "{id}");
         }
         assert_eq!(find(&bar, "app:revert"), ("Revert to Saved\u{2026}", None));
+        assert_eq!(find(&bar, "app:rename"), ("Rename File\u{2026}", None));
     }
 
     #[test]
@@ -885,6 +888,10 @@ mod tests {
         assert_eq!(
             action_for_id("app:save"),
             Some(menu_event(MenuCommand::Save))
+        );
+        assert_eq!(
+            action_for_id("app:rename"),
+            Some(menu_event(MenuCommand::Rename))
         );
         assert_eq!(action_for_id("app:close-window"), Some(Action::CloseWindow));
         assert_eq!(action_for_id("app:quit"), Some(Action::Quit));

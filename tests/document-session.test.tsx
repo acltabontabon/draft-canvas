@@ -447,6 +447,62 @@ describe('useDocumentSession — newDocument', () => {
   });
 });
 
+describe('useDocumentSession — opening viewport fit request', () => {
+  beforeEach(() => {
+    useUiStore.setState({ openFitDocumentId: null });
+  });
+
+  it('asks Canvas to fit the view when opening an existing document', async () => {
+    const doc = createDocument('Existing');
+    const repository = stubRepository({ load: async (id) => (id === doc.metadata.id ? doc : null) });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    await act(async () => {
+      await session().openDocument(doc.metadata.id);
+    });
+
+    expect(useUiStore.getState().openFitDocumentId).toBe(doc.metadata.id);
+  });
+
+  it('asks for a fit when adopting an imported document, but not a freshly created one', async () => {
+    const imported = createDocument('Imported');
+    const repository = stubRepository({ save: async () => {} });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    await act(async () => {
+      await session().adoptDocument(imported);
+    });
+    expect(useUiStore.getState().openFitDocumentId).toBe(imported.metadata.id);
+
+    useUiStore.setState({ openFitDocumentId: null });
+    await act(async () => {
+      await session().newDocument(undefined, 'microservices');
+    });
+    expect(useUiStore.getState().openFitDocumentId).toBeNull();
+  });
+
+  it('does not re-ask, and clears a still-unresolved request, when reopening the canvas already on screen', async () => {
+    const doc = createDocument('Existing');
+    const repository = stubRepository({ load: async (id) => (id === doc.metadata.id ? doc : null) });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    await act(async () => {
+      await session().openDocument(doc.metadata.id);
+    });
+    expect(useUiStore.getState().openFitDocumentId).toBe(doc.metadata.id);
+
+    // Canvas hasn't consumed it yet (say, still mid-load) when the same file is opened again —
+    // taking another tab's copy, or a host reloading it after an outside edit.
+    await act(async () => {
+      await session().openDocument(doc.metadata.id);
+    });
+    expect(useUiStore.getState().openFitDocumentId).toBeNull();
+  });
+});
+
 describe('useDocumentSession — refresh on return', () => {
   it('re-reads the library when the tab becomes visible, but only while no canvas is open', async () => {
     let lists = 0;

@@ -10,12 +10,14 @@ import { LibraryBrand } from '../../ui/Library/LibraryBrand';
 import { starterShape } from '../../ui/Library/starterShapes';
 import { useSpotlight } from '../../ui/Library/useSpotlight';
 import { useStarters } from '../../ui/Library/useStarters';
-import type { ProjectFile, ProjectInfo, RecentItem, RecoveryEntry } from '../api';
+import type { ProjectFile } from '../api';
+import { recallBrowse } from '../browseMemory';
 import type { DesktopController } from '../controller';
 import type { DesktopState, ProjectState } from '../store';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { DeskBrowse, type BrowseScope, type BrowseTile } from './DeskBrowse';
 import { DocTile } from './DocTile';
+import { draftTile, everythingTiles, recentTile } from './tiles';
 import { UpdateChip } from './Updates';
 import { useDeskGeometry, type DeskGeometry } from './useDeskGeometry';
 import './desktop.css';
@@ -80,7 +82,8 @@ export function DesktopHome() {
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hot, setHot] = useState<{ index: number; description: string } | null>(null);
-  const [browse, setBrowse] = useState<BrowseScope | null>(null);
+  // Reopening Browse (after a diagram closed and Home remounted) lands back where it was left.
+  const [browse, setBrowse] = useState<BrowseScope | null>(() => recallBrowse()?.scope ?? null);
   const [browsing, setBrowsing] = useState(false);
   // Browsing unmounts the stage; coming back is a new one to measure and observe.
   const capacity = useCapacity(stageRef, scale, gap, browse !== null);
@@ -476,10 +479,6 @@ function chord(mac: boolean, key: string, shift = false): string {
   return `Ctrl+${shift ? 'Shift+' : ''}${key}`;
 }
 
-function folderOf(file: ProjectFile): string {
-  return file.relPath.includes('/') ? file.relPath.slice(0, file.relPath.lastIndexOf('/')) : '';
-}
-
 /**
  * Everything the fan can point at, most pressing first: the drafts, what was open, the projects, the
  * starters. Four at most, however many projects there are: the Projects row shows the most recent,
@@ -494,16 +493,19 @@ function sourcesFor(
   { showAll, browseStarters }: { showAll: (scope: BrowseScope) => void; browseStarters: () => void },
 ): Source[] {
   const sources: Source[] = [];
-  const tiles = groupsFor(state, controller);
+  // Home's row never shows "Everything" — only Browse does — so this skips building it (it costs a
+  // pass over every diagram in every project, which a returning-home render pays for on its own).
+  const unsaved = state.recovery.map((entry) => draftTile(entry, controller));
+  const recent = state.recents.filter((item) => item.kind === 'file').map((item) => recentTile(item, controller));
 
   if (returning) {
     sources.push({
       id: 'unsaved',
       label: 'Drafts',
-      tiles: tiles.unsaved,
+      tiles: unsaved,
       note: 'Drafts are saved locally. Save to a file whenever you’re ready.',
       empty: 'No drafts. A Quick Draft you draw on waits here until you save it.',
-      more: { label: `All ${tiles.unsaved.length}`, description: 'Every draft not saved to a file yet', run: () => showAll('unsaved') },
+      more: { label: `All ${unsaved.length}`, description: 'Every draft not saved to a file yet', run: () => showAll('unsaved') },
     });
   }
 
@@ -511,10 +513,10 @@ function sourcesFor(
     sources.push({
       id: 'recent',
       label: 'Recent',
-      tiles: tiles.recent,
+      tiles: recent,
       note: 'Files you opened lately',
       empty: 'Nothing opened lately. Files you open or save show up here.',
-      more: { label: `All ${tiles.recent.length}`, description: 'Everything opened lately', run: () => showAll('recent') },
+      more: { label: `All ${recent.length}`, description: 'Everything opened lately', run: () => showAll('recent') },
       aside: (
         <Button variant="quiet" className="dc-desk-aside-action" onClick={() => void controller.clearRecents()}>
           Clear recent
@@ -527,7 +529,7 @@ function sourcesFor(
     sources.push({
       id: 'projects',
       label: 'Projects',
-      tiles: state.projects.map((project) => projectCard(project, () => showAll({ project: project.info.handle }), controller)),
+      tiles: state.projects.map((project) => projectCard(project, () => showAll({ project: project.info.handle, relPath: '' }), controller)),
       note: 'Folders of diagrams you added',
       more: {
         label: `All ${state.projects.length}`,
@@ -563,59 +565,7 @@ function groupsFor(state: DesktopState, controller: DesktopController) {
     unsaved: state.recovery.map((entry) => draftTile(entry, controller)),
     // Projects have their own list now; a Recent written by an earlier version may still name some.
     recent: state.recents.filter((item) => item.kind === 'file').map((item) => recentTile(item, controller)),
-    project: (project: ProjectState) =>
-      [...project.files].sort((a, b) => b.mtimeMs - a.mtimeMs).map((file) => projectTile(file, project.info, controller)),
-  };
-}
-
-function draftTile(entry: RecoveryEntry, controller: DesktopController): TileSpec {
-  const fromFile = entry.origin.kind === 'file';
-  const name = entry.origin.kind === 'file' ? entry.origin.name : entry.title;
-  const when = relativeTime(entry.updatedAt);
-  return {
-    entryKey: `draft:${entry.id}`,
-    kind: 'document',
-    name,
-    // Changes to a file were left unsaved when the app closed without asking: that one is a warning.
-    meta: fromFile ? `Unsaved changes · ${when}` : when,
-    edited: true,
-    label: fromFile ? `Recover unsaved changes to ${name}` : `Open ${name}, a draft not saved to a file`,
-    description: fromFile ? `Changes to ${name} that were never saved · ${when}` : `Saved locally, not to a file · ${when}`,
-    haystack: name.toLowerCase(),
-    thumbnail: { key: `draft:${entry.id}:${entry.updatedAt}`, load: () => controller.peek({ kind: 'draft', id: entry.id }) },
-    onOpen: () => void controller.recover(entry.id),
-    action: { label: `Discard ${name}`, icon: 'trash', run: () => void controller.discardRecovery(entry.id) },
-  };
-}
-
-function recentTile(item: RecentItem, controller: DesktopController): TileSpec {
-  return {
-    entryKey: `recent:${item.handle}`,
-    kind: 'document',
-    name: item.name,
-    meta: relativeTime(item.lastOpenedMs),
-    label: `Open ${item.name}`,
-    description: `${item.displayPath} · opened ${relativeTime(item.lastOpenedMs)}`,
-    haystack: `${item.name} ${item.displayPath}`.toLowerCase(),
-    thumbnail: { key: `${item.displayPath}:${item.lastOpenedMs}`, load: () => controller.peek({ kind: 'recent', handle: item.handle }) },
-    onOpen: () => void controller.openHandle(item.handle),
-    action: { label: `Remove ${item.name} from Recent`, icon: 'close', run: () => void controller.forgetRecent(item.handle) },
-  };
-}
-
-function projectTile(file: ProjectFile, project: ProjectInfo, controller: DesktopController): TileSpec {
-  const key = `project:${project.handle}:${file.relPath}`;
-  const folder = folderOf(file);
-  return {
-    entryKey: key,
-    kind: 'document',
-    name: file.name,
-    meta: folder ? `${folder} · ${relativeTime(file.mtimeMs)}` : relativeTime(file.mtimeMs),
-    label: `Open ${file.name}`,
-    description: `${folder || project.name} · edited ${relativeTime(file.mtimeMs)}`,
-    haystack: `${file.relPath} ${project.name}`.toLowerCase(),
-    thumbnail: { key: `${key}:${file.mtimeMs}:${file.size}`, load: () => controller.peek({ kind: 'project', project: project.handle, relPath: file.relPath }) },
-    onOpen: () => void controller.openProjectFile(project.handle, file.relPath),
+    everything: everythingTiles(state, controller),
   };
 }
 

@@ -4,12 +4,12 @@ use super::raw::raw_request;
 use super::{last_dir, recents_changed, remember_dir, remember_file, run_blocking};
 use crate::dialogs::{self, FileFilter};
 use crate::docio::{
-    self, ensure_document_size, is_read_only, read_document, write_atomic, write_unconditional,
-    StampCheck, WriteOutcome, MAX_SIDECAR_BYTES,
+    self, ensure_document_size, is_read_only, read_document, rename_atomic, write_atomic,
+    write_unconditional, StampCheck, WriteOutcome, MAX_SIDECAR_BYTES,
 };
 use crate::errors::{AppError, ErrorKind, Verb};
 use crate::grants::{FileGrant, Handle};
-use crate::paths::{display_path, force_doc_ext, sanitize_stem, DOC_EXT};
+use crate::paths::{display_path, force_doc_ext, sanitize_stem, validate_rename_stem, DOC_EXT};
 use crate::state::{AppState, HostEvent};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -126,9 +126,20 @@ pub async fn save_document(app: AppHandle, request: Request<'_>) -> Result<SaveR
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct StartLocation {
+    project_handle: Handle,
+    rel_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SaveAsMeta {
     suggested_name: String,
     copy_sidecar_from: Option<Handle>,
+    /// Where a canvas created inside a project (but never written to disk) remembers it should be saved:
+    /// the dialog opens there when the folder still exists, and falls back to the last-used folder
+    /// otherwise — a missing destination is never a reason to refuse the dialog itself.
+    start_in: Option<StartLocation>,
 }
 
 /// Saves to the path the person chose, grants it, and (if asked) brings the background image along.
@@ -166,6 +177,22 @@ fn finish_save_as(
     Ok((saved, warning))
 }
 
+/// Where the Save As dialog should open: the folder a pending canvas remembers, when it can still be
+/// resolved (the project is still registered and the folder still exists), or the last folder used
+/// otherwise. A remembered folder that no longer resolves is never a reason to refuse the dialog.
+fn resolve_start_dir(
+    state: &AppState,
+    start_in: Option<&StartLocation>,
+) -> Option<std::path::PathBuf> {
+    start_in
+        .and_then(|start| {
+            state
+                .resolve_folder_in_project(&start.project_handle, &start.rel_path)
+                .ok()
+        })
+        .or_else(|| last_dir(state))
+}
+
 #[tauri::command]
 pub async fn save_as(app: AppHandle, request: Request<'_>) -> Result<Option<SavedAs>, AppError> {
     let (meta, bytes) = raw_request::<SaveAsMeta>(&request)?;
@@ -182,7 +209,8 @@ pub async fn save_as(app: AppHandle, request: Request<'_>) -> Result<Option<Save
             name: "Draft Canvas diagram".to_string(),
             extensions: vec![DOC_EXT.to_string()],
         }];
-        let Some(chosen) = dialogs::save_file(app, last_dir(state), &suggestion, &filters) else {
+        let start_dir = resolve_start_dir(state, meta.start_in.as_ref());
+        let Some(chosen) = dialogs::save_file(app, start_dir, &suggestion, &filters) else {
             return Ok(None);
         };
         let (saved, warning) = finish_save_as(state, &chosen, &bytes, source.as_ref())?;
@@ -191,6 +219,58 @@ pub async fn save_as(app: AppHandle, request: Request<'_>) -> Result<Option<Save
         }
         recents_changed(app);
         Ok(Some(saved))
+    })
+    .await
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenamedFile {
+    pub handle: Handle,
+    pub name: String,
+    pub display_path: String,
+}
+
+/// "Rename file…": changes the file's name in place, in the same folder. Never a move (the target is
+/// always the source's own parent), never an overwrite of a different document, and never a touch of the
+/// document's own `metadata.title` — only what the filesystem calls it.
+fn rename_file_now(
+    state: &AppState,
+    handle: &str,
+    new_stem: &str,
+) -> Result<RenamedFile, AppError> {
+    let grant = state.file(handle)?;
+    let stem = validate_rename_stem(new_stem)?;
+    let target = grant.path.with_file_name(format!("{stem}.{DOC_EXT}"));
+    rename_atomic(&grant.path, &target)?;
+    // The old handle now names a path that is gone; a fresh one is minted for the new path, and the page
+    // is the one that swaps it in for whatever session was using the old one.
+    let new_handle = state.grant_file(&target)?;
+    let new_grant = state.file(&new_handle)?;
+    if let Some(sidecar) = docio::sidecar_read(&grant.path).unwrap_or(None) {
+        let _ = docio::sidecar_write(&new_grant.path, sidecar.mime, &sidecar.bytes);
+        let _ = docio::sidecar_remove(&grant.path);
+    }
+    state
+        .recents
+        .rename(&grant.path, &new_grant.path, &new_grant.name)?;
+    Ok(RenamedFile {
+        handle: new_handle,
+        display_path: display_path(&new_grant.path),
+        name: new_grant.name,
+    })
+}
+
+#[tauri::command]
+pub async fn rename_file(
+    app: AppHandle,
+    handle: String,
+    new_stem: String,
+) -> Result<RenamedFile, AppError> {
+    run_blocking(&app, move |app, state| {
+        let renamed = rename_file_now(state, &handle, &new_stem)?;
+        recents_changed(app);
+        Ok(renamed)
     })
     .await
 }
@@ -473,6 +553,38 @@ mod tests {
     }
 
     #[test]
+    fn save_as_starts_in_the_folder_a_pending_canvas_remembered() {
+        let (dir, state) = test_state();
+        fs::create_dir_all(dir.path().join("proj/sub")).unwrap();
+        let project = state.grant_project(&dir.path().join("proj")).unwrap();
+        let start = StartLocation {
+            project_handle: project,
+            rel_path: "sub".to_string(),
+        };
+        assert_eq!(
+            resolve_start_dir(&state, Some(&start)).unwrap(),
+            dunce::canonicalize(dir.path().join("proj/sub")).unwrap()
+        );
+    }
+
+    #[test]
+    fn save_as_falls_back_to_last_dir_when_the_remembered_folder_no_longer_exists() {
+        let (dir, state) = test_state();
+        fs::create_dir(dir.path().join("proj")).unwrap();
+        let project = state.grant_project(&dir.path().join("proj")).unwrap();
+        state
+            .settings
+            .update(|s| s.last_dir = dir.path().to_str().map(str::to_string))
+            .unwrap();
+        let start = StartLocation {
+            project_handle: project,
+            rel_path: "gone".to_string(),
+        };
+        assert_eq!(resolve_start_dir(&state, Some(&start)).unwrap(), dir.path());
+        assert_eq!(resolve_start_dir(&state, None).unwrap(), dir.path());
+    }
+
+    #[test]
     fn save_as_forces_the_extension_grants_and_remembers() {
         let (dir, state) = test_state();
         let chosen = dir.path().join("plan.v2");
@@ -537,6 +649,109 @@ mod tests {
     }
 
     #[test]
+    fn renames_the_file_on_disk_and_regrants_the_handle() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "plan.draftcanvas", "{\"x\":1}");
+        let handle = state.grant_file(&path).unwrap();
+        let renamed = rename_file_now(&state, &handle, "roadmap").unwrap();
+        assert_eq!(renamed.name, "roadmap");
+        assert!(renamed.display_path.ends_with("roadmap.draftcanvas"));
+        assert_ne!(renamed.handle, handle);
+        assert!(!path.exists());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("roadmap.draftcanvas")).unwrap(),
+            "{\"x\":1}"
+        );
+        assert_eq!(state.file(&renamed.handle).unwrap().name, "roadmap");
+        // The old handle no longer resolves to anything.
+        assert!(state.file(&handle).is_err() || state.file(&handle).unwrap().path != path);
+    }
+
+    #[test]
+    fn rejects_a_new_name_containing_a_path_separator() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "plan.draftcanvas", "{}");
+        let handle = state.grant_file(&path).unwrap();
+        let err = rename_file_now(&state, &handle, "sub/plan").err().unwrap();
+        assert_eq!(err.kind, ErrorKind::InvalidPath);
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn rejects_renaming_onto_an_existing_different_file() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "plan.draftcanvas", "mine");
+        doc(&dir, "roadmap.draftcanvas", "someone else's");
+        let handle = state.grant_file(&path).unwrap();
+        let err = rename_file_now(&state, &handle, "roadmap").err().unwrap();
+        assert_eq!(err.kind, ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "mine");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("roadmap.draftcanvas")).unwrap(),
+            "someone else's"
+        );
+        // The stale handle still resolves to the untouched original file.
+        assert_eq!(
+            state.file(&handle).unwrap().path,
+            dunce::canonicalize(&path).unwrap()
+        );
+    }
+
+    #[test]
+    fn allows_renaming_a_file_onto_itself_with_only_a_case_change() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "plan.draftcanvas", "content");
+        let handle = state.grant_file(&path).unwrap();
+        let renamed = rename_file_now(&state, &handle, "Plan").unwrap();
+        assert_eq!(renamed.name, "Plan");
+        let entries: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries.len(), 1);
+    }
+
+    #[test]
+    fn strips_a_redundant_dot_draftcanvas_the_user_typed_in_the_new_name() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "plan.draftcanvas", "{}");
+        let handle = state.grant_file(&path).unwrap();
+        let renamed = rename_file_now(&state, &handle, "roadmap.draftcanvas").unwrap();
+        assert_eq!(renamed.name, "roadmap");
+        assert!(dir.path().join("roadmap.draftcanvas").exists());
+    }
+
+    #[test]
+    fn updates_a_matching_recents_entry_in_place_and_leaves_its_mru_position() {
+        let (dir, state) = test_state();
+        let a = doc(&dir, "a.draftcanvas", "{}");
+        let b = doc(&dir, "b.draftcanvas", "{}");
+        opened_doc(&state, &a).unwrap();
+        opened_doc(&state, &b).unwrap();
+        let handle = state.grant_file(&a).unwrap();
+        rename_file_now(&state, &handle, "renamed").unwrap();
+        let items = state.recents.list().unwrap().items;
+        assert_eq!(items.len(), 2);
+        // Still the older (second) entry, not bumped to the front by the rename.
+        assert_eq!(items[1].name, "renamed");
+        assert!(items[1].path.ends_with("renamed.draftcanvas"));
+    }
+
+    #[test]
+    fn leaves_the_original_file_and_state_untouched_when_the_target_already_exists() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "plan.draftcanvas", "{}");
+        doc(&dir, "roadmap.draftcanvas", "{}");
+        let handle = state.grant_file(&path).unwrap();
+        assert!(rename_file_now(&state, &handle, "roadmap").is_err());
+        assert_eq!(state.file(&handle).unwrap().name, "plan");
+        assert_eq!(
+            state.file(&handle).unwrap().path,
+            dunce::canonicalize(&path).unwrap()
+        );
+    }
+
+    #[test]
     fn the_wire_shapes_match_the_typescript_types() {
         assert_eq!(
             serde_json::to_value(SaveResult::Saved {
@@ -583,6 +798,15 @@ mod tests {
             serde_json::to_value(StampCheck::Missing).unwrap(),
             json!("missing")
         );
+        let renamed = RenamedFile {
+            handle: "h_2".into(),
+            name: "roadmap".into(),
+            display_path: "~/roadmap.draftcanvas".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(renamed).unwrap(),
+            json!({"handle": "h_2", "name": "roadmap", "displayPath": "~/roadmap.draftcanvas"})
+        );
     }
 
     #[test]
@@ -601,6 +825,17 @@ mod tests {
                 save_as.copy_sidecar_from.as_deref()
             ),
             ("Plan", Some("h_2"))
+        );
+        assert!(save_as.start_in.is_none());
+        let with_start: SaveAsMeta = serde_json::from_value(json!({
+            "suggestedName": "Plan",
+            "startIn": {"projectHandle": "h_3", "relPath": "a/b"}
+        }))
+        .unwrap();
+        let start = with_start.start_in.unwrap();
+        assert_eq!(
+            (start.project_handle.as_str(), start.rel_path.as_str()),
+            ("h_3", "a/b")
         );
         let export: ExportMeta = serde_json::from_value(
             json!({"name": "a.png", "filters": [{"name": "PNG", "extensions": ["png"]}]}),

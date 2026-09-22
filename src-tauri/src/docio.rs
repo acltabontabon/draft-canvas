@@ -228,6 +228,45 @@ pub fn create_new_atomic(target: &Path, bytes: &[u8]) -> Result<String, AppError
     stamp_after_write(target, bytes).map_err(io_err)
 }
 
+/// Renames `old` to `new` in place: a person-driven "Rename file…", not a move. `new` must not already
+/// exist as a *different* file — a rename never silently replaces another document. The one exception is
+/// a change of case only (`Plan.draftcanvas` -> `plan.draftcanvas`): on a case-insensitive filesystem
+/// (the default on macOS and on Windows) `old` and `new` name the same file, so a plain `fs::rename` can
+/// silently no-op there; renaming through a temporary sibling name forces the change through everywhere.
+pub fn rename_atomic(old: &Path, new: &Path) -> Result<(), AppError> {
+    let io_err = |e: io::Error| AppError::from_io(&e, Verb::Save, Subject::Path(new));
+    if old == new {
+        return Ok(());
+    }
+    // Whether `new` already exists is decided by canonicalizing both sides, not by comparing strings: on
+    // a case-insensitive filesystem `new` resolving to the same real entry as `old` is the rename's own
+    // target, not a collision, however the two names differ in case.
+    let same_entry = dunce::canonicalize(old)
+        .ok()
+        .zip(dunce::canonicalize(new).ok())
+        .is_some_and(|(a, b)| a == b);
+    if !same_entry && fs::symlink_metadata(new).is_ok() {
+        return Err(AppError::already_exists(new));
+    }
+    if paths_equal_ignoring_case(old, new) {
+        // A plain rename can silently no-op when only the case differs, on a filesystem that ignores it
+        // (the default on macOS and Windows); hopping through a temporary sibling name forces it through.
+        let hop = temp_path(new.parent().unwrap_or(Path::new(".")), new);
+        fs::rename(old, &hop).map_err(io_err)?;
+        fs::rename(&hop, new).map_err(io_err)?;
+    } else {
+        fs::rename(old, new).map_err(io_err)?;
+    }
+    if let Some(dir) = new.parent().filter(|p| !p.as_os_str().is_empty()) {
+        sync_dir(dir);
+    }
+    Ok(())
+}
+
+fn paths_equal_ignoring_case(a: &Path, b: &Path) -> bool {
+    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+}
+
 /// Writes one of the app's own files (settings, recents, recovery copies): same atomic swap, but
 /// private to the account, and `subject` words a failure without exposing an internal file name.
 pub fn write_private(target: &Path, bytes: &[u8], subject: Subject<'_>) -> Result<(), AppError> {
@@ -819,6 +858,57 @@ mod tests {
         let err = create_new_atomic(&path, b"second").err().unwrap();
         assert_eq!(err.kind, ErrorKind::AlreadyExists);
         assert_eq!(fs::read(&path).unwrap(), b"first");
+    }
+
+    #[test]
+    fn rename_moves_the_file_on_disk() {
+        let dir = tempdir().unwrap();
+        let old = dir.path().join("plan.draftcanvas");
+        let new = dir.path().join("roadmap.draftcanvas");
+        fs::write(&old, "content").unwrap();
+        rename_atomic(&old, &new).unwrap();
+        assert!(!old.exists());
+        assert_eq!(fs::read_to_string(&new).unwrap(), "content");
+    }
+
+    #[test]
+    fn rename_refuses_to_replace_a_different_existing_file() {
+        let dir = tempdir().unwrap();
+        let old = dir.path().join("plan.draftcanvas");
+        let other = dir.path().join("roadmap.draftcanvas");
+        fs::write(&old, "mine").unwrap();
+        fs::write(&other, "someone else's").unwrap();
+        let err = rename_atomic(&old, &other).err().unwrap();
+        assert_eq!(err.kind, ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&old).unwrap(), "mine");
+        assert_eq!(fs::read_to_string(&other).unwrap(), "someone else's");
+    }
+
+    #[test]
+    fn rename_to_the_same_path_is_a_no_op() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("plan.draftcanvas");
+        fs::write(&path, "content").unwrap();
+        rename_atomic(&path, &path).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "content");
+    }
+
+    #[test]
+    fn rename_can_change_only_the_case_of_a_name() {
+        let dir = tempdir().unwrap();
+        let old = dir.path().join("plan.draftcanvas");
+        let new = dir.path().join("Plan.draftcanvas");
+        fs::write(&old, "content").unwrap();
+        rename_atomic(&old, &new).unwrap();
+        // On a case-insensitive filesystem `old` and `new` name the same entry; on a case-sensitive one
+        // the rename produced exactly `new` and nothing named `old` remains from before the rename either
+        // way, since `old` and `new` are the same file with a different name.
+        let entries: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(fs::read_to_string(&new).unwrap(), "content");
     }
 
     #[test]

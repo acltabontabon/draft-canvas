@@ -144,6 +144,35 @@ pub fn resolve_in_root(root: &Path, rel: &str) -> Result<PathBuf, AppError> {
     Ok(canonical)
 }
 
+/// `rel` (a folder inside a project, `/`-separated, possibly empty for the project root) joined onto
+/// `root` and checked the same way `resolve_in_root` checks a file: a plain relative path whose real
+/// location, symlinks resolved, is still inside the root, and which names a folder rather than a file.
+/// Unlike `resolve_in_root`, an empty `rel` is accepted (the root itself) and no `.draftcanvas` extension
+/// is required, since this resolves a *destination folder*, not a document to open.
+pub fn resolve_folder_in_root(root: &Path, rel: &str) -> Result<PathBuf, AppError> {
+    let outside = || AppError::invalid_path("That folder isn't inside the project that is open.");
+    if rel.is_empty() {
+        return Ok(root.to_path_buf());
+    }
+    if rel.contains('\0') {
+        return Err(outside());
+    }
+    let rel_path = Path::new(rel);
+    let plain = !rel_path.is_absolute()
+        && rel_path
+            .components()
+            .all(|c| matches!(c, Component::Normal(_)));
+    if !plain {
+        return Err(outside());
+    }
+    let canonical = dunce::canonicalize(root.join(rel_path))
+        .map_err(|e| AppError::from_io(&e, Verb::Open, Subject::Path(rel_path)))?;
+    if !canonical.starts_with(root) || !canonical.is_dir() {
+        return Err(outside());
+    }
+    Ok(canonical)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,6 +353,38 @@ mod tests {
                 .kind,
             ErrorKind::InvalidPath
         );
+    }
+
+    #[test]
+    fn resolve_folder_in_root_accepts_the_root_itself_for_an_empty_rel_path() {
+        let dir = tempdir().unwrap();
+        let root = canonical(&dir);
+        assert_eq!(resolve_folder_in_root(&root, "").unwrap(), root);
+    }
+
+    #[test]
+    fn resolve_folder_in_root_accepts_a_nested_folder_and_refuses_a_file() {
+        let dir = tempdir().unwrap();
+        let root = canonical(&dir);
+        fs::create_dir_all(root.join("a/b")).unwrap();
+        fs::write(root.join("a/f.draftcanvas"), "").unwrap();
+        assert_eq!(
+            resolve_folder_in_root(&root, "a/b").unwrap(),
+            root.join("a/b")
+        );
+        assert!(resolve_folder_in_root(&root, "a/f.draftcanvas").is_err());
+        assert!(resolve_folder_in_root(&root, "nope").is_err());
+        assert!(resolve_folder_in_root(&root, "../escape").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_folder_in_root_refuses_a_folder_that_escapes_the_root_via_symlink() {
+        let dir = tempdir().unwrap();
+        let root = canonical(&dir);
+        let outside = tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.join("linked")).unwrap();
+        assert!(resolve_folder_in_root(&root, "linked").is_err());
     }
 
     #[cfg(unix)]

@@ -18,7 +18,8 @@ It gives you architecture-aware shapes, familiar technical relationships, and sm
 
 **[Try it →](https://acltabontabon.com/draft-canvas/)** Nothing you draw leaves your browser.
 
-Also lives [in VS Code](#in-vs-code), next to your code, and [in Docker](#running-it-yourself), on your own server.
+Also lives [in VS Code](#in-vs-code), next to your code, [on your desktop](#desktop-alpha), as an alpha
+preview, and [in Docker](#running-it-yourself), on your own server.
 
 **Documentation:** [Getting started](docs/guides/getting-started.md) ·
 [All guides](docs/index.md) ·
@@ -73,6 +74,21 @@ Install [Draft Canvas for VS Code](https://marketplace.visualstudio.com/items?it
 open any `.draftcanvas` file, draw, and `⌘S`. The diagram saves back to that file as plain JSON, so
 it shows up in a pull request like everything else. `Draft Canvas: New Diagram` starts a fresh one.
 More in [Working with `.draftcanvas` files in VS Code](docs/guides/vscode.md).
+
+---
+
+## Desktop (alpha)
+
+<img width="100%" alt="A run through Draft Canvas Desktop: Home, a Quick Draft, finding a diagram across projects and folders, and renaming a file in place." src="docs/media/desktop-demo.gif">
+
+The same editor in a window of its own: a click away in your menu bar or system tray, with your diagrams
+as ordinary `.draftcanvas` files on disk — one file per diagram, folders of them as projects, no account
+and no server.
+
+Download the latest preview from [Releases](https://github.com/acltabontabon/draft-canvas/releases) — a
+`.dmg` for macOS (Apple Silicon) or an installer for Windows (x64). It's an early preview and the installer
+isn't signed yet, so the OS will warn the first time; [the Desktop guide](docs/guides/desktop.md) says what
+to do about that, and covers everything else it can do.
 
 ---
 

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -18,6 +18,7 @@ import {
   type XYPosition,
 } from '@xyflow/react';
 import { defaultTextFor, maxSizeFor, minSizeFor } from '../document/factory';
+import { openFitViewport } from '../document/geometry';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode, DraftViewport, Side } from '../document/types';
 import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
@@ -490,6 +491,41 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     if (framed) void setViewport(framed, { duration });
     else void fitView({ padding: 0.4, duration, maxZoom: 1 });
   }, [path, fitView, setViewport]);
+
+  // The same `state.width`/`state.height` `useCommandContext.ts`'s `viewWidth`/`viewHeight` read —
+  // zero until the pane's own `ResizeObserver` has measured it, which is exactly the "layout is
+  // ready" signal `openFitDocumentId` below needs, with no observer of our own to set up or tear down.
+  const openFitWidth = useStore((state) => state.width);
+  const openFitHeight = useStore((state) => state.height);
+  const openFitDocumentId = useUiStore((state) => state.openFitDocumentId);
+  // Refines where an *opened* diagram starts, in a `useLayoutEffect` so it lands before the first
+  // paint rather than after a visible frame at the saved (or default) camera — see `arriveWith` in
+  // `useDocumentSession.ts` for who asks for this and why a mere reopen or a freshly created canvas
+  // never does. One-shot: consuming `openFitDocumentId` back to `null` the moment it can run is what
+  // keeps every later edit, autosave, or rerender of this same document from ever running it again.
+  useLayoutEffect(() => {
+    // Not a top-level open, or asking for a document that isn't (or is no longer) this one — a
+    // second open racing ahead already pointed this at something else.
+    if (path.length > 0 || openFitDocumentId !== document.metadata.id) return;
+    // The user (or the room-arrival effect above) already moved the camera since this document
+    // arrived: nothing left here to override.
+    if (useEditorStore.getState().liveViewport) {
+      useUiStore.getState().clearOpenFit(document.metadata.id);
+      return;
+    }
+    const bounds = boundsOf(document.nodes);
+    if (!bounds) {
+      // Nothing to fit — an empty diagram keeps its ordinary starting position.
+      useUiStore.getState().clearOpenFit(document.metadata.id);
+      return;
+    }
+    // The pane hasn't been measured yet. Leave the request pending rather than fit against a stale
+    // zero — this effect runs again the moment `openFitWidth`/`openFitHeight` have real values.
+    if (openFitWidth <= 0 || openFitHeight <= 0) return;
+    const viewport = openFitViewport(bounds, { width: openFitWidth, height: openFitHeight });
+    if (viewport) void setViewport(viewport, { duration: 0 });
+    useUiStore.getState().clearOpenFit(document.metadata.id);
+  }, [path, openFitDocumentId, document, openFitWidth, openFitHeight, setViewport]);
 
   const interactive = mode === 'edit';
   useContinuation(interactive);

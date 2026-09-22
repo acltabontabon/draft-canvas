@@ -3,7 +3,8 @@
 
 use crate::errors::AppError;
 use crate::grants::{
-    resolve_in_root, validate_file, validate_folder, FileGrant, Grants, Handle, ProjectGrant,
+    resolve_folder_in_root, resolve_in_root, validate_file, validate_folder, FileGrant, Grants,
+    Handle, ProjectGrant,
 };
 use crate::paths::display_path;
 use crate::quit::QuitMachine;
@@ -31,6 +32,7 @@ pub enum MenuCommand {
     NewCanvas,
     Reveal,
     Revert,
+    Rename,
     Settings,
     About,
     Shortcuts,
@@ -208,6 +210,12 @@ impl AppState {
         resolve_in_root(&self.project(project)?.root, rel)
     }
 
+    /// The folder a pending canvas remembers as its destination, resolved fresh each time it's needed
+    /// (the project may have been moved or the folder deleted since the canvas was created).
+    pub fn resolve_folder_in_project(&self, project: &str, rel: &str) -> Result<PathBuf, AppError> {
+        resolve_folder_in_root(&self.project(project)?.root, rel)
+    }
+
     /// The events that tell the page to open `handles`: the first file, and a notice for any others.
     fn open_events(&self, handles: &[Handle]) -> Vec<HostEvent> {
         let mut events = Vec::new();
@@ -330,6 +338,7 @@ mod tests {
             (MenuCommand::NewCanvas, "new-canvas"),
             (MenuCommand::Reveal, "reveal"),
             (MenuCommand::Revert, "revert"),
+            (MenuCommand::Rename, "rename"),
             (MenuCommand::Settings, "settings"),
             (MenuCommand::About, "about"),
             (MenuCommand::Shortcuts, "shortcuts"),

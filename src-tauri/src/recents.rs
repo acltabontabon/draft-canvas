@@ -99,6 +99,28 @@ impl Recents {
         self.store(&items)
     }
 
+    /// A file's Recent entry, if it has one, keeps its place in the list but takes the renamed path and
+    /// name — rewriting it in place rather than removing and re-adding, which would send it to the back.
+    pub fn rename(&self, old_path: &Path, new_path: &Path, new_name: &str) -> Result<(), AppError> {
+        let Some(new_path) = new_path.to_str() else {
+            return Ok(());
+        };
+        let _held = lock(&self.guard);
+        let mut items = self.load();
+        let mut changed = false;
+        for entry in &mut items {
+            if Path::new(&entry.path) == old_path {
+                entry.path = new_path.to_string();
+                entry.name = new_name.to_string();
+                changed = true;
+            }
+        }
+        if changed {
+            self.store(&items)?;
+        }
+        Ok(())
+    }
+
     pub fn remove(&self, path: &Path) -> Result<(), AppError> {
         let _held = lock(&self.guard);
         let mut items = self.load();
@@ -308,6 +330,29 @@ mod tests {
         )
         .unwrap();
         assert!(f.recents.list().unwrap().items.is_empty());
+    }
+
+    #[test]
+    fn rename_rewrites_a_matching_entry_in_place_without_losing_its_position() {
+        let f = fixture();
+        let (a, b) = (file(&f, "a.draftcanvas"), file(&f, "b.draftcanvas"));
+        f.recents.add(RecentKind::File, &a, "a", 1).unwrap();
+        f.recents.add(RecentKind::File, &b, "b", 2).unwrap();
+        assert_eq!(paths(&f), ["b", "a"]);
+        let renamed = f.root.join("renamed.draftcanvas");
+        fs::rename(&a, &renamed).unwrap();
+        f.recents.rename(&a, &renamed, "renamed").unwrap();
+        // Still in the same (second) slot, not moved to the front.
+        assert_eq!(paths(&f), ["b", "renamed"]);
+        assert_eq!(
+            f.recents.list().unwrap().items[1].path,
+            renamed.to_str().unwrap()
+        );
+        // Renaming a path with no matching entry is a harmless no-op.
+        f.recents
+            .rename(&f.root.join("nope"), &f.root.join("also-nope"), "x")
+            .unwrap();
+        assert_eq!(paths(&f), ["b", "renamed"]);
     }
 
     #[test]

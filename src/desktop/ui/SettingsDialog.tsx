@@ -2,20 +2,42 @@ import { Modal } from '../../ui/common/Modal';
 import type { CloseBehavior } from '../api';
 import { desktopStore } from '../store';
 import { useDesktopController, useDesktopState } from '../useDesktop';
+import { RenameFileDialog } from './RenameFileDialog';
 import { UpdatePanel, UpdateSettings } from './Updates';
 import './desktop.css';
 
 /**
- * The desktop app's own dialogs: Settings, and the update panel the update chip opens. Everything else
- * follows the OS.
+ * The desktop app's own dialogs: Settings, the update panel the update chip opens, and "Rename file…",
+ * however it was asked for (the menu, or a file's own action in Find a Diagram) — one dialog, reading
+ * whichever target is set. Everything else follows the OS.
  */
 export function DesktopSettings() {
   return (
     <>
       <SettingsDialog />
+      <RenameTargetDialog />
       <UpdatePanel />
     </>
   );
+}
+
+function RenameTargetDialog() {
+  const { renameTarget, doc } = useDesktopState();
+  const controller = useDesktopController();
+  if (!renameTarget) return null;
+  const onClose = () => desktopStore.update({ renameTarget: null });
+
+  if (renameTarget.kind === 'open') {
+    // The open document may have closed (or changed) between the menu firing and this rendering.
+    if (doc.kind !== 'file') return null;
+    return <RenameFileDialog currentName={doc.name} onSubmit={(newStem) => controller.renameOpenFile(newStem)} onClose={onClose} />;
+  }
+  if (renameTarget.kind === 'recent') {
+    const { handle, name } = renameTarget;
+    return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameFile(handle, newStem)} onClose={onClose} />;
+  }
+  const { project, relPath, name } = renameTarget;
+  return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameProjectFile(project, relPath, newStem)} onClose={onClose} />;
 }
 
 /** What closing the window does, and updates. */

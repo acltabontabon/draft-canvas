@@ -88,10 +88,12 @@ test.describe('editing', () => {
     await page.reload();
     await page.locator('.dc-library-item', { hasText: 'Resizing top-left' }).click();
 
+    // Reopening now frames the diagram to fit, so the camera (and the node's screen position with
+    // it) is not the same one this was resized under — only its size is comparable across that, the
+    // same as the sibling "keeps the new size" test above.
     const restored = (await page.locator('.dc-node').first().boundingBox())!;
-    expect(Math.abs(restored.x - after.x)).toBeLessThan(4);
-    expect(Math.abs(restored.y - after.y)).toBeLessThan(4);
     expect(Math.abs(restored.width - after.width)).toBeLessThan(4);
+    expect(Math.abs(restored.height - after.height)).toBeLessThan(4);
   });
 
   test('a resize is one undo step', async ({ page }) => {

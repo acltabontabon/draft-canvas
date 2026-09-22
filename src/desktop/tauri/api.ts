@@ -63,7 +63,9 @@ export function createTauriApi(): DesktopApi {
     openDialog: () => call('open_dialog'),
     openHandle: (handle) => call('open_handle', { handle }),
     saveDocument: (handle, bytes, expectedStamp) => callRaw('save_document', { handle, expectedStamp }, bytes),
-    saveAs: (suggestedName, bytes, copySidecarFrom) => callRaw('save_as', { suggestedName, copySidecarFrom }, bytes),
+    saveAs: (suggestedName, bytes, copySidecarFrom, startIn) =>
+      callRaw('save_as', { suggestedName, copySidecarFrom, startIn }, bytes),
+    renameFile: (handle, newStem) => call('rename_file', { handle, newStem }),
     checkStamp: (handle, stamp) => call('check_stamp', { handle, stamp }),
     reveal: (handle) => call('reveal', { handle }),
     exportFile: (name, filters, bytes) => callRaw('export_file', { name, filters }, bytes),
@@ -78,6 +80,7 @@ export function createTauriApi(): DesktopApi {
     projectScan: (handle) => call('project_scan', { handle }),
     projectOpenFile: (projectHandle, relPath) => call('project_open_file', { projectHandle, relPath }),
     projectPeek: (projectHandle, relPath) => call('project_peek', { projectHandle, relPath }),
+    projectGrantFile: (projectHandle, relPath) => call('project_grant_file', { projectHandle, relPath }),
     projectForget: (handle) => call('project_forget', { handle }),
     projectSaveNew: (projectHandle, name, bytes) => callRaw('project_save_new', { projectHandle, name }, bytes),
 

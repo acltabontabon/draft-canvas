@@ -6,7 +6,8 @@
 // A `vX.Y.Z` tag is a Draft Canvas release: the web app, the Docker image and the desktop app, one
 // version. Its body leads with the demo and the ways to get it, then the version's changelog section,
 // then how to open the desktop installers the first time. A `desktop-vX.Y.Z-alpha.N` tag is a desktop
-// preview ahead of the release it leads to, so it has only the section and the first-launch steps.
+// preview ahead of the release it leads to, so it leads with the desktop reel instead and has no
+// "Get it" (there's nothing yet to `docker run` or open on the web).
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -84,9 +85,10 @@ export function releaseBody(tag, changelog) {
   const version = tag.replace(/^desktop-v|^v/, '');
   const section = changelogSection(changelog, version);
   if (!section) throw new Error(`CHANGELOG.md has no "## [${version}]" section.`);
-  const parts = desktopPreview
-    ? [unwrap(section), FIRST_LAUNCH]
-    : [`![Draft Canvas demo](https://raw.githubusercontent.com/${REPO}/${tag}/docs/media/demo.gif)`, getIt(version), unwrap(section), FIRST_LAUNCH];
+  const demoFile = desktopPreview ? 'desktop-demo.gif' : 'demo.gif';
+  const demoAlt = desktopPreview ? 'Draft Canvas Desktop demo' : 'Draft Canvas demo';
+  const demo = `![${demoAlt}](https://raw.githubusercontent.com/${REPO}/${tag}/docs/media/${demoFile})`;
+  const parts = desktopPreview ? [demo, unwrap(section), FIRST_LAUNCH] : [demo, getIt(version), unwrap(section), FIRST_LAUNCH];
   return `${parts.join('\n\n')}\n`;
 }
 

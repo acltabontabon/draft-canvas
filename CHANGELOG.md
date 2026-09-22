@@ -7,6 +7,8 @@ ahead of the release it leads to. Draft Canvas for VS Code has its own changelog
 
 ## [Unreleased]
 
+## [1.10.0-alpha.2] - 2026-09-22
+
 ### Added
 
 - **Desktop:** keep as many projects as you work in. **Add project…** puts a folder on Home, and it stays
@@ -15,6 +17,26 @@ ahead of the release it leads to. Draft Canvas for VS Code has its own changelog
   and when it last changed. Choose one to see every diagram in it, drawn.
 - **Desktop:** **Find a diagram** (`⌘F`) searches every project, your recent files and your unsaved
   drafts at once, by name or folder.
+- **Desktop:** **Find a diagram** can browse into a project's subfolders — folders show as tiles, with
+  breadcrumbs back up, and **New canvas here** for whichever one you're in. Searching inside a folder
+  covers everything below it; searching Everything covers every project, your recents and your drafts,
+  and says so, so it's never a guess how far a search reaches.
+- **Desktop:** rename a file in place, from **Rename File…** on the File menu or from its own action in
+  Find a Diagram — without leaving Draft Canvas or touching the diagram's own title.
+
+### Fixed
+
+- **Desktop:** starting a canvas from inside a project ("New canvas here", or a project's **Start one**)
+  no longer writes an `Untitled canvas.draftcanvas` file to disk before you've drawn anything. The canvas
+  opens at once; the folder you started in is only offered to the Save dialog once you actually save.
+- **Desktop:** **Everything** in Find a Diagram no longer lists the same diagram twice when it's both a
+  project file and a recent one — it shows once, with its project and folder.
+- **Desktop:** closing a diagram and returning to Find a Diagram leaves it exactly where you left it —
+  same scope, same search, same scroll position.
+- **Desktop:** switching scope, or a folder, in Find a Diagram now starts the new list at the top, instead
+  of wherever the last one happened to leave the scroll.
+- Opening a diagram now frames it — centred, zoomed to fit — instead of starting wherever the file's
+  camera was last left, which could put its content off to the side or out of view entirely.
 
 ### Changed
 
@@ -28,7 +50,11 @@ ahead of the release it leads to. Draft Canvas for VS Code has its own changelog
   footer only mentions the menu bar or system tray when the icon is actually there, and **About** says what
   the app does and doesn't send: nothing you draw, only a look for updates you can turn off.
 - **Desktop:** Home stays quick however much you have: a project is only listed once something shows
-  it, and a diagram is only drawn once it's on screen.
+  it, and a diagram is only drawn once it's on screen. Building the full list across every project — what
+  Find a Diagram's Everything needs — no longer happens on Home's own render, or on every keystroke while
+  browsing a single project.
+- **Desktop:** moving between Home, Find a Diagram and a diagram now eases in, instead of cutting straight
+  across — off entirely if your system asks for less motion.
 
 ## [1.10.0-alpha.1] - 2026-09-22
 

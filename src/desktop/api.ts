@@ -55,6 +55,18 @@ export interface SavedAs {
   stamp: string;
 }
 
+/** Where a canvas created inside a project (but never written to disk) remembers it should be saved. */
+export interface StartLocation {
+  projectHandle: Handle;
+  relPath: string;
+}
+
+export interface RenamedFile {
+  handle: Handle;
+  name: string;
+  displayPath: string;
+}
+
 export type StampCheck = 'unchanged' | 'changed' | 'missing';
 
 export interface ProjectInfo {
@@ -73,8 +85,9 @@ export interface ProjectFile {
 
 export interface ProjectScan {
   files: ProjectFile[];
-  /** The folder held more than the scan is willing to list. */
-  truncated: boolean;
+  /** The relative path of every folder whose contents weren't fully listed because a limit was hit — the
+   * project root itself is `''`. Empty when nothing was cut off. */
+  truncatedDirs: string[];
 }
 
 export interface RecentItem {
@@ -157,6 +170,7 @@ export type MenuCommand =
   | 'new-canvas'
   | 'reveal'
   | 'revert'
+  | 'rename'
   | 'settings'
   | 'about'
   | 'shortcuts'
@@ -209,7 +223,9 @@ export interface DesktopApi {
   openDialog(): Promise<OpenedDoc | null>;
   openHandle(handle: Handle): Promise<OpenedDoc>;
   saveDocument(handle: Handle, bytes: Uint8Array, expectedStamp: string | undefined): Promise<SaveResult>;
-  saveAs(suggestedName: string, bytes: Uint8Array, copySidecarFrom?: Handle): Promise<SavedAs | null>;
+  saveAs(suggestedName: string, bytes: Uint8Array, copySidecarFrom?: Handle, startIn?: StartLocation): Promise<SavedAs | null>;
+  /** "Rename file…": changes the file's name in place. Never touches the document's own title. */
+  renameFile(handle: Handle, newStem: string): Promise<RenamedFile>;
   checkStamp(handle: Handle, stamp: string): Promise<StampCheck>;
   reveal(handle: Handle): Promise<void>;
   exportFile(name: string, filters: FileFilter[], bytes: Uint8Array): Promise<boolean>;
@@ -234,6 +250,9 @@ export interface DesktopApi {
   projectOpenFile(projectHandle: Handle, relPath: string): Promise<OpenedDoc>;
   /** `peekDocument`, for a file in the open project. */
   projectPeek(projectHandle: Handle, relPath: string): Promise<string | null>;
+  /** A handle for a file in a project's scan, without opening it — what renaming a file Find a Diagram
+   * has only ever listed (never opened) needs. */
+  projectGrantFile(projectHandle: Handle, relPath: string): Promise<Handle>;
   projectSaveNew(projectHandle: Handle, name: string, bytes: Uint8Array): Promise<SavedAs>;
 
   // Recents

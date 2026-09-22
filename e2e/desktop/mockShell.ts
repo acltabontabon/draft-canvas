@@ -115,6 +115,8 @@ export async function installMockShell(page: Page): Promise<void> {
     // Project folders, by handle, and the shell's list of them (most recent first).
     const folders = new Map<string, { info: { handle: string; name: string; displayPath: string }; files: Map<string, { text: string; mtimeMs: number }> }>();
     let listedProjects: string[] = [];
+    /** Handles granted for a file inside a project, and which file. */
+    const granted = new Map<string, { project: string; relPath: string }>();
     let pickedFolder: string | null = null;
     const folder = (handle: string) => {
       const found = folders.get(handle);
@@ -145,6 +147,38 @@ export async function installMockShell(page: Page): Promise<void> {
         if (!file) throw { kind: 'InvalidHandle', message: 'That file is no longer available.' };
         touch(args.handle, file);
         return opened(args.handle, file);
+      },
+      rename_file: (args: { handle: string; newStem: string }) => {
+        const file = files.get(args.handle);
+        if (!file) throw { kind: 'InvalidHandle', message: 'That file is no longer available.' };
+        const dir = file.displayPath.slice(0, file.displayPath.lastIndexOf('/') + 1);
+        files.delete(args.handle);
+        const handle = `h_${(handles += 1)}`;
+        const renamed: Held = { name: args.newStem, displayPath: `${dir}${args.newStem}.draftcanvas`, text: file.text, version: file.version };
+        files.set(handle, renamed);
+        if (recents.some((item) => item.handle === args.handle)) touch(handle, renamed);
+        // A file inside a project moves in that project's listing too, as it would on disk.
+        const grant = granted.get(args.handle);
+        if (grant) {
+          const listing = folder(grant.project).files;
+          const entry = listing.get(grant.relPath);
+          const at = grant.relPath.lastIndexOf('/');
+          if (entry) {
+            listing.delete(grant.relPath);
+            listing.set(`${at >= 0 ? grant.relPath.slice(0, at + 1) : ''}${args.newStem}.draftcanvas`, entry);
+          }
+          granted.delete(args.handle);
+        }
+        return { handle, name: renamed.name, displayPath: renamed.displayPath };
+      },
+      project_grant_file: (args: { projectHandle: string; relPath: string }) => {
+        const project = folder(args.projectHandle);
+        const file = project.files.get(args.relPath);
+        if (!file) throw { kind: 'NotFound', message: 'Draft Canvas couldn’t find that file.' };
+        const handle = `h_${(handles += 1)}`;
+        files.set(handle, { name: stemOf(args.relPath), displayPath: `${project.info.displayPath}/${args.relPath}`, text: file.text, version: 1 });
+        granted.set(handle, { project: args.projectHandle, relPath: args.relPath });
+        return handle;
       },
       save_document: (bytes: unknown, options: unknown) => {
         const { handle, expectedStamp } = meta(options) as { handle: string; expectedStamp?: string };
@@ -192,7 +226,7 @@ export async function installMockShell(page: Page): Promise<void> {
       project_forget: (args: { handle: string }) => void (listedProjects = listedProjects.filter((known) => known !== args.handle)),
       project_scan: (args: { handle: string }) => ({
         files: [...folder(args.handle).files].map(([relPath, file]) => ({ relPath, name: stemOf(relPath), mtimeMs: file.mtimeMs, size: file.text.length })),
-        truncated: false,
+        truncatedDirs: [],
       }),
       project_open_file: (args: { projectHandle: string; relPath: string }) => {
         const project = folder(args.projectHandle);

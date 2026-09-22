@@ -34,6 +34,8 @@ A diagram is a `.draftcanvas` file, like any other file on your computer.
   **Revert to Saved…** puts back what is on disk.
 - **New File…** (`⌘⇧N`) asks where the file goes first, then opens it blank.
 - The window title is the file's name, and **Reveal in Finder** / **File Explorer** shows where it is.
+- **Rename File…**, from the File menu or a file's own action in Find a Diagram, changes its name in place —
+  no need to leave Draft Canvas, and the diagram's own title is untouched.
 
 Saving is careful. The diagram is written to a temporary file next to the original and swapped in only once it
 is complete, so an interrupted save can't leave a half-written diagram. If something else changed the file
@@ -58,10 +60,14 @@ payments/
 ```
 
 Home's **Projects** row shows the ones you used last, each as a small stack of its diagrams with the newest on
-top. Choose one to see everything in it, drawn, grouped under its folders. **Find a diagram** (`⌘F`) searches
-every project, your recent files and your drafts at once, by name or folder, and the chips along the top
-narrow it to one of them. A project whose folder isn't there right now (on a drive that isn't plugged in, say)
-stays on the list, marked as missing, and comes back when the folder does.
+top. Choose one to see everything in it, drawn. **Find a diagram** (`⌘F`) searches every project, your recent
+files and your drafts at once, by name or folder, and the chips along the top narrow it to one of them. A
+project whose folder isn't there right now (on a drive that isn't plugged in, say) stays on the list, marked
+as missing, and comes back when the folder does.
+
+Inside a project, subfolders show as tiles of their own — open one to see just what's in it, with breadcrumbs
+back up, and **New canvas here** for wherever you are. Searching descends into every folder below the one
+you're in; browsing doesn't, so a large project stays a folder at a time rather than one long list.
 
 Home finds a folder's diagrams by name and date alone, so a large folder is as quick as a small one. It skips
 hidden folders and the usual build folders (`node_modules`, `target`, `dist`), stops at a depth and a count that

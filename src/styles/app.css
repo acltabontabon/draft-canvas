@@ -2098,6 +2098,26 @@ kbd {
   background: var(--dc-canvas);
 }
 
+/* A screen settling in, never blocking input while it does: opacity and a few pixels of drift, not
+   a transform on anything that pans or zooms. `.dc-editor` mounting is arriving from Home, Browse, or
+   another diagram; `dc-screen-in` is shared with the desktop shell's own screens (see `desktop.css`). */
+@keyframes dc-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-editor {
+    animation: dc-screen-in 160ms var(--dc-ease-out) both;
+  }
+}
+
 /* Embedded in a host: waiting for its file, or saying why the file isn't a diagram. */
 .dc-host-waiting {
   display: grid;

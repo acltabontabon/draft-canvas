@@ -106,6 +106,29 @@ pub async fn project_open_file(
     .await
 }
 
+/// A handle for a file in a project's scan, without opening it: not read, not added to Recent. What
+/// "Rename file…" in Find a Diagram needs for a file it has only ever scanned, never opened.
+fn grant_file_in_project(
+    state: &AppState,
+    project_handle: &str,
+    rel_path: &str,
+) -> Result<Handle, AppError> {
+    let path = state.resolve_in_project(project_handle, rel_path)?;
+    state.grant_file(&path)
+}
+
+#[tauri::command]
+pub async fn project_grant_file(
+    app: AppHandle,
+    project_handle: String,
+    rel_path: String,
+) -> Result<Handle, AppError> {
+    run_blocking(&app, move |_, state| {
+        grant_file_in_project(state, &project_handle, &rel_path)
+    })
+    .await
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NewInProjectMeta {
@@ -257,6 +280,31 @@ mod tests {
     }
 
     #[test]
+    fn grant_file_hands_back_a_handle_without_reading_or_remembering() {
+        let (dir, state) = test_state();
+        doc(&dir, "proj/a.draftcanvas", "{\"a\":1}");
+        let info = open_project_at(&state, &dir.path().join("proj")).unwrap();
+        let handle = grant_file_in_project(&state, &info.handle, "a.draftcanvas").unwrap();
+        assert_eq!(state.file(&handle).unwrap().name, "a");
+        // Granting reuses the same handle `open_project_file`/`opened_doc` would (same canonical path).
+        assert_eq!(
+            handle,
+            state
+                .grant_file(
+                    &state
+                        .resolve_in_project(&info.handle, "a.draftcanvas")
+                        .unwrap()
+                )
+                .unwrap()
+        );
+        assert!(state.recents.list().unwrap().items.is_empty());
+        assert!(
+            grant_file_in_project(&state, &info.handle, "../escape.draftcanvas").is_err(),
+            "still refuses to leave the project"
+        );
+    }
+
+    #[test]
     fn new_canvases_take_the_first_free_name_and_never_overwrite() {
         let (dir, state) = test_state();
         fs::create_dir(dir.path().join("proj")).unwrap();
@@ -301,6 +349,43 @@ mod tests {
             state.file(&second.handle).unwrap().name,
             "Untitled canvas 2"
         );
+    }
+
+    #[test]
+    fn a_project_registered_as_both_parent_and_child_scans_without_error() {
+        let (dir, state) = test_state();
+        doc(&dir, "parent/child/a.draftcanvas", "{\"a\":1}");
+        doc(&dir, "parent/b.draftcanvas", "{\"b\":2}");
+        let parent = open_project_at(&state, &dir.path().join("parent")).unwrap();
+        let child = open_project_at(&state, &dir.path().join("parent/child")).unwrap();
+        assert_ne!(parent.handle, child.handle);
+
+        let parent_scan = scan(
+            &state.project(&parent.handle).unwrap().root,
+            &Limits::default(),
+        )
+        .unwrap();
+        let parent_rels: Vec<&str> = parent_scan
+            .files
+            .iter()
+            .map(|f| f.rel_path.as_str())
+            .collect();
+        assert_eq!(parent_rels, ["b.draftcanvas", "child/a.draftcanvas"]);
+
+        let child_scan = scan(
+            &state.project(&child.handle).unwrap().root,
+            &Limits::default(),
+        )
+        .unwrap();
+        let child_rels: Vec<&str> = child_scan
+            .files
+            .iter()
+            .map(|f| f.rel_path.as_str())
+            .collect();
+        assert_eq!(child_rels, ["a.draftcanvas"]);
+
+        // Both registrations are kept: neither one is dropped for overlapping the other.
+        assert_eq!(state.settings.get().projects.len(), 2);
     }
 
     #[test]
