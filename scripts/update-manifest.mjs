@@ -18,15 +18,18 @@
 // that isn't there, or a signature made with the wrong key, is an update that fails on every machine.
 //
 //   node scripts/update-manifest.mjs check-config
-//   node scripts/update-manifest.mjs build <version> <artifacts-dir> [--base-url <url>] > latest.json
+//   node scripts/update-manifest.mjs build <version> <artifacts-dir> [--tag <tag>] [--base-url <url>] > latest.json
 //   node scripts/update-manifest.mjs check-artifact <file> <version>
-//   node scripts/update-manifest.mjs verify <latest.json> <version> [--artifacts <dir>] [--base-url <url>]
+//   node scripts/update-manifest.mjs verify <latest.json> <version> [--tag <tag>] [--artifacts <dir>] [--base-url <url>]
 //   node scripts/update-manifest.mjs channels <version> --existing <dir> [--force]
 
 import { createHash, createPublicKey, verify as edVerify } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { changelogSection, unwrap } from './release-notes.mjs';
+
+export { changelogSection };
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const REPO = 'acltabontabon/draft-canvas';
@@ -48,9 +51,15 @@ export const PLATFORMS = [
   { key: 'windows-x86_64', label: 'Windows (x64)', file: (version) => `Draft-Canvas_${version}_Windows_x64.exe` },
 ];
 
+/**
+ * The tag a version is released under: a release is `vX.Y.Z` (web, Docker and desktop together), a
+ * desktop preview ahead of one is `desktop-vX.Y.Z-alpha.N`. The workflows pass the tag they run for.
+ */
+export const releaseTag = (version) => (isPrerelease(version) ? `desktop-v${version}` : `v${version}`);
+
 /** Where a release's file lives. `baseUrl` is only for testing against a local server. */
-export const assetUrl = (version, file, baseUrl = null) =>
-  `${baseUrl ? baseUrl.replace(/\/+$/, '') : `https://github.com/${REPO}/releases/download/desktop-v${version}`}/${file}`;
+export const assetUrl = (version, file, baseUrl = null, tag = releaseTag(version)) =>
+  `${baseUrl ? baseUrl.replace(/\/+$/, '') : `https://github.com/${REPO}/releases/download/${tag}`}/${file}`;
 
 // ---- versions -------------------------------------------------------------------------------------
 
@@ -162,23 +171,8 @@ export function verifySignature(data, signature, pubkey) {
 
 // ---- the manifest ---------------------------------------------------------------------------------
 
-/** The release's section of the desktop changelog, without its heading, or null. */
-export function changelogSection(changelog, version) {
-  const out = [];
-  let found = false;
-  for (const line of changelog.split(/\r?\n/)) {
-    if (line.startsWith('## [')) {
-      if (found) break;
-      found = line.startsWith(`## [${version}]`);
-      continue;
-    }
-    if (found) out.push(line);
-  }
-  return found ? out.join('\n').trim() : null;
-}
-
 /** The manifest for one release. Throws when anything the release needs is missing. */
-export function buildManifest({ version, notes, pubDate, signatures, baseUrl = null }) {
+export function buildManifest({ version, notes, pubDate, signatures, baseUrl = null, tag = releaseTag(version) }) {
   if (!parseVersion(version)) throw new Error(`"${version}" is not a semantic version`);
   const platforms = {};
   for (const platform of PLATFORMS) {
@@ -186,13 +180,13 @@ export function buildManifest({ version, notes, pubDate, signatures, baseUrl = n
     if (typeof signature !== 'string' || signature.trim() === '') {
       throw new Error(`no signature for ${platform.label} (${platform.file(version)}.sig)`);
     }
-    platforms[platform.key] = { signature: signature.trim(), url: assetUrl(version, platform.file(version), baseUrl) };
+    platforms[platform.key] = { signature: signature.trim(), url: assetUrl(version, platform.file(version), baseUrl, tag) };
   }
   return { version, notes: notes ?? '', pub_date: pubDate, platforms };
 }
 
 /** Everything wrong with a manifest, as sentences. Empty means it can be published. */
-export function manifestProblems(manifest, { version, pubkey, artifacts = null, requireSignedVersion = true, baseUrl = null }) {
+export function manifestProblems(manifest, { version, pubkey, artifacts = null, requireSignedVersion = true, baseUrl = null, tag = releaseTag(version) }) {
   const problems = [];
   const add = (text) => problems.push(text);
   if (!manifest || typeof manifest !== 'object') return ['the manifest is not an object'];
@@ -226,7 +220,7 @@ export function manifestProblems(manifest, { version, pubkey, artifacts = null, 
       continue;
     }
     const file = platform.file(version);
-    const wantUrl = assetUrl(version, file, baseUrl);
+    const wantUrl = assetUrl(version, file, baseUrl, tag);
     if (typeof entry.url !== 'string' || (!baseUrl && !entry.url.startsWith('https://'))) add(`${name}: the URL is not https`);
     else if (entry.url !== wantUrl) add(`${name}: the URL is ${entry.url}, expected ${wantUrl}`);
 
@@ -330,6 +324,7 @@ function main() {
   const [command, ...rest] = process.argv.slice(2);
   const { positional, named } = flags(rest);
   const baseUrl = typeof named['base-url'] === 'string' ? named['base-url'] : null;
+  const tagFor = (version) => (typeof named.tag === 'string' ? named.tag : releaseTag(version));
 
   switch (command) {
     case 'check-config': {
@@ -346,9 +341,17 @@ function main() {
         const path = join(dir, `${platform.file(version)}.sig`);
         if (existsSync(path)) signatures[platform.key] = readFileSync(path, 'utf8');
       }
-      const changelog = readFileSync(join(root, 'src-tauri/CHANGELOG.md'), 'utf8');
+      const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
       try {
-        const manifest = buildManifest({ version, notes: changelogSection(changelog, version) ?? '', pubDate: new Date().toISOString(), signatures, baseUrl });
+        const manifest = buildManifest({
+          version,
+          // Unwrapped, as the release page shows it: the in-app panel reads it the same way.
+          notes: unwrap(changelogSection(changelog, version) ?? ''),
+          pubDate: new Date().toISOString(),
+          signatures,
+          baseUrl,
+          tag: tagFor(version),
+        });
         process.stdout.write(`${JSON.stringify(manifest, null, 2)}\n`);
       } catch (error) {
         fail(error.message);
@@ -387,6 +390,7 @@ function main() {
         artifacts: typeof named.artifacts === 'string' ? named.artifacts : null,
         requireSignedVersion: updater?.requireSignedVersion === true,
         baseUrl,
+        tag: tagFor(version),
       });
       if (problems.length) fail(problems);
       console.error(`${file} is complete: ${PLATFORMS.length} platforms, every signature checked${named.artifacts ? ' against its file' : ''}.`);

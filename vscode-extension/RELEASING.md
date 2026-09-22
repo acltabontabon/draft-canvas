@@ -4,7 +4,8 @@ This repository ships two products, each on its own schedule:
 
 | Tag | Releases | Version | Changelog | Workflow |
 | --- | --- | --- | --- | --- |
-| `vX.Y.Z` | Draft Canvas web app: GitHub Release, Pages, Docker | root `package.json` | `CHANGELOG.md` | `release.yml`, `pages.yml` |
+| `vX.Y.Z` | Draft Canvas: GitHub Release, Pages, Docker and the desktop app | root `package.json` | `CHANGELOG.md` | `release.yml`, `pages.yml`, `desktop-release.yml` |
+| `desktop-vX.Y.Z-alpha.N` | A desktop preview ahead of a `vX.Y.Z` release | the tag | `CHANGELOG.md` | `desktop-release.yml` |
 | `extension-vX.Y.Z` | Draft Canvas for VS Code: GitHub Release with the VSIX, then a Marketplace upload by hand | `vscode-extension/package.json` | `vscode-extension/CHANGELOG.md` | `vscode-release.yml` |
 
 Neither tag triggers the other lane, and the two versions never need to match. Don't use a

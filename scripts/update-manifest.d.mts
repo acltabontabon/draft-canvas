@@ -18,7 +18,8 @@ export const CHANNELS_TAG: string;
 export const CHANNELS: string[];
 export const ENDPOINT: string;
 export const PLATFORMS: Platform[];
-export function assetUrl(version: string, file: string, baseUrl?: string | null): string;
+export function releaseTag(version: string): string;
+export function assetUrl(version: string, file: string, baseUrl?: string | null, tag?: string): string;
 export function parseVersion(text: string): { major: number; minor: number; patch: number; pre: string[] } | null;
 export function compareVersions(a: string, b: string): -1 | 0 | 1;
 export function isPrerelease(version: string): boolean;
@@ -36,10 +37,18 @@ export function buildManifest(options: {
   pubDate: string;
   signatures: Record<string, string>;
   baseUrl?: string | null;
+  tag?: string;
 }): Manifest;
 export function manifestProblems(
   manifest: unknown,
-  options: { version: string; pubkey: string; artifacts?: string | null; requireSignedVersion?: boolean; baseUrl?: string | null },
+  options: {
+    version: string;
+    pubkey: string;
+    artifacts?: string | null;
+    requireSignedVersion?: boolean;
+    baseUrl?: string | null;
+    tag?: string;
+  },
 ): string[];
 export function channelsToWrite(options: {
   version: string;

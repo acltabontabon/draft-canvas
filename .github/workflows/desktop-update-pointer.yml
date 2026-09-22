@@ -29,7 +29,7 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: The release tag, such as desktop-v1.10.0.
+        description: The release tag, such as v1.10.0 or desktop-v1.10.0-alpha.2.
         required: true
         type: string
       force:
@@ -39,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: The release tag, such as desktop-v1.10.0.
+        description: The release tag, such as v1.10.0 or desktop-v1.10.0-alpha.2.
         required: true
         type: string
       force:
@@ -83,12 +83,13 @@ jobs:
         run: |
           set -euo pipefail
           case "$TAG" in
-            desktop-v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "::error::$TAG is not a desktop release tag."; exit 1 ;;
+            desktop-v[0-9]*.[0-9]*.[0-9]*-*) version="${TAG#desktop-v}" ;;
+            v[0-9]*.[0-9]*.[0-9]*) version="${TAG#v}" ;;
+            *) echo "::error::$TAG is neither a release (vX.Y.Z) nor a desktop preview (desktop-vX.Y.Z-alpha.N)."; exit 1 ;;
           esac
           draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
           [ "$draft" = false ] || { echo "::error::$TAG is not published."; exit 1; }
-          echo "version=${TAG#desktop-v}" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Fetch what installed copies will fetch, and check it
         env:
@@ -106,7 +107,7 @@ jobs:
             echo "  $url"
             curl -fsSL --retry 5 --retry-delay 3 -o "fetched/$(basename "$url")" "$url"
           done
-          node scripts/update-manifest.mjs verify fetched/latest.json "$VERSION" --artifacts fetched
+          node scripts/update-manifest.mjs verify fetched/latest.json "$VERSION" --tag "$TAG" --artifacts fetched
 
       - name: Decide which channels move
         id: decide
@@ -144,7 +145,7 @@ jobs:
           if ! gh release view "$CHANNELS_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$CHANNELS_TAG" --repo "$GITHUB_REPOSITORY" \
               --title 'Draft Canvas Desktop updates' \
-              --notes 'Not a download. Installed copies of Draft Canvas Desktop read stable.json or alpha.json from here to learn whether a newer version exists. The releases to install from are the desktop-v… ones.' \
+              --notes 'Not a download. Installed copies of Draft Canvas Desktop read stable.json or alpha.json from here to learn whether a newer version exists. To install Draft Canvas, use the other releases.' \
               --prerelease --latest=false
           fi
 

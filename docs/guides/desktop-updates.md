@@ -43,11 +43,11 @@ launch ──15 s──▶ look ──(daily)──▶ look …
 
 ## Versions
 
-A release is the web app's version: tag `desktop-vX.Y.Z` where `X.Y.Z` is `package.json`'s. A prerelease
-may lead it — `desktop-v1.10.0-alpha.1` while the web app is at 1.9.4 — since the desktop app's alphas come
-before the version it ships in; its `X.Y.Z` can't be older than `package.json`'s. The release workflow builds
-the app as the tag's version either way. Each prerelease needs a dated `## [X.Y.Z-alpha.N] - YYYY-MM-DD`
-section in `src-tauri/CHANGELOG.md`, like a release.
+The desktop app ships in every Draft Canvas release: tag `vX.Y.Z`, where `X.Y.Z` is `package.json`'s — one
+version for the web app, Docker and desktop, one GitHub release. A desktop preview ahead of a release is tagged
+`desktop-vX.Y.Z-alpha.N`, and may lead `package.json` — `desktop-v1.10.0-alpha.1` while the web app is at 1.9.4
+— though its `X.Y.Z` can't be older. The release workflow builds the app as the tag's version either way. Every
+version needs a dated `## [X.Y.Z] - YYYY-MM-DD` section in `CHANGELOG.md`, previews included.
 
 ## The three kinds of signing
 
@@ -91,7 +91,8 @@ commit it. Until then, builds say updates are unavailable, and the release workf
 
 ## What a release does
 
-`desktop-release.yml`, on a `desktop-vX.Y.Z` tag:
+`desktop-release.yml` — called by `release.yml` for a `vX.Y.Z` release, after it has created the release,
+or run by a `desktop-vX.Y.Z-alpha.N` tag, which makes its own prerelease:
 
 1. **verify** — the tag, version and changelog agree; the signing secret exists; the key in
    `tauri.conf.json` is real, the endpoint is the channel template, and `requireSignedVersion` is on.
@@ -100,7 +101,7 @@ commit it. Until then, builds say updates are unavailable, and the release workf
    Each signature is checked on the machine that made it, against the app's key and this version.
 3. **publish** — `latest.json` is built from the signatures and verified against the packages
    themselves: every platform, every address this release's, every signature valid for the exact bytes.
-   Only then does the release go public.
+   Only then is it uploaded (and a preview's draft made public).
 4. **channels** (`desktop-update-pointer.yml`) — downloads `latest.json` and every package from the
    public addresses installed copies will use, verifies them again, and only then copies it to the rolling
    `desktop-updates` release as `stable.json` and `alpha.json` (a release) or `alpha.json` only (a

@@ -13,8 +13,10 @@ import {
   compareVersions,
   configProblems,
   manifestProblems,
+  releaseTag,
   verifySignature,
 } from '../../scripts/update-manifest.mjs';
+import { releaseBody, unwrap } from '../../scripts/release-notes.mjs';
 
 /**
  * A minisign key and signatures made the way the Tauri bundler makes them — prehashed ("ED"), with the
@@ -62,10 +64,18 @@ describe('the update manifest', () => {
     const { signatures } = release();
     const manifest = buildManifest({ version: VERSION, notes: '### Added', pubDate: '2026-09-22T00:00:00.000Z', signatures });
     expect(Object.keys(manifest.platforms).sort()).toEqual(['darwin-aarch64', 'windows-x86_64']);
+    // A release is the one vX.Y.Z release the web app and Docker share.
     expect(manifest.platforms['darwin-aarch64']!.url).toBe(
-      'https://github.com/acltabontabon/draft-canvas/releases/download/desktop-v1.10.0/Draft-Canvas_1.10.0_macOS_arm64.app.tar.gz',
+      'https://github.com/acltabontabon/draft-canvas/releases/download/v1.10.0/Draft-Canvas_1.10.0_macOS_arm64.app.tar.gz',
     );
     expect(manifest.platforms['windows-x86_64']!.url).toBe(assetUrl(VERSION, 'Draft-Canvas_1.10.0_Windows_x64.exe'));
+  });
+
+  it('addresses a desktop preview under its own tag', () => {
+    expect(releaseTag('1.10.0')).toBe('v1.10.0');
+    expect(releaseTag('1.10.0-alpha.2')).toBe('desktop-v1.10.0-alpha.2');
+    expect(assetUrl('1.10.0-alpha.2', 'x.exe')).toBe('https://github.com/acltabontabon/draft-canvas/releases/download/desktop-v1.10.0-alpha.2/x.exe');
+    expect(assetUrl('1.11.0-rc.1', 'x.exe', null, 'v1.11.0-rc.1')).toBe('https://github.com/acltabontabon/draft-canvas/releases/download/v1.11.0-rc.1/x.exe');
   });
 
   it('refuses to build without every signature', () => {
@@ -182,10 +192,60 @@ describe('the app’s updater configuration', () => {
 });
 
 describe('release notes', () => {
-  const changelog = '# Changelog\n\n## [Unreleased]\n\n- Next\n\n## [1.10.0] - 2026-09-22\n\n### Added\n\n- Updates.\n\n## [1.9.4] - 2026-09-21\n\n- Older.\n';
+  const changelog = [
+    '# Changelog',
+    '',
+    '## [Unreleased]',
+    '',
+    '- Next',
+    '',
+    '## [1.10.0-alpha.1] - 2026-09-22',
+    '',
+    'The first alpha, a preview',
+    'of 1.10.0.',
+    '',
+    '- A bullet that',
+    '  wraps.',
+    '',
+    '## [1.10.0] - 2026-09-30',
+    '',
+    '### Added',
+    '',
+    '- Updates.',
+    '',
+    '## [1.9.4] - 2026-09-21',
+    '',
+    '- Older.',
+    '',
+  ].join('\n');
 
-  it('are the release’s own section of the desktop changelog', () => {
+  it('are the version’s own section of the one changelog', () => {
     expect(changelogSection(changelog, '1.10.0')).toBe('### Added\n\n- Updates.');
     expect(changelogSection(changelog, '9.9.9')).toBeNull();
+  });
+
+  it('flow wrapped lines back together, since a release page breaks at every newline', () => {
+    expect(unwrap(changelogSection(changelog, '1.10.0-alpha.1')!)).toBe('The first alpha, a preview of 1.10.0.\n\n- A bullet that wraps.');
+  });
+
+  it('lead a release with the ways to get it, and a desktop preview with only its section', () => {
+    const release = releaseBody('v1.10.0', changelog);
+    expect(release).toMatch(/^!\[Draft Canvas demo\]\(https:\/\/raw\.githubusercontent\.com\/acltabontabon\/draft-canvas\/v1\.10\.0\//);
+    expect(release).toContain('### Get it');
+    expect(release).toContain('acltabontabon/draft-canvas:1.10.0');
+    expect(release).toContain('### Opening the desktop app the first time');
+
+    const preview = releaseBody('desktop-v1.10.0-alpha.1', changelog);
+    expect(preview.startsWith('The first alpha, a preview of 1.10.0.')).toBe(true);
+    expect(preview).not.toContain('### Get it');
+    expect(preview).toContain('### Opening the desktop app the first time');
+
+    expect(() => releaseBody('v9.9.9', changelog)).toThrow(/no "## \[9\.9\.9\]" section/);
+  });
+
+  it('exist for every version the changelog lists', () => {
+    const real = readFileSync(join(__dirname, '../../CHANGELOG.md'), 'utf8');
+    expect(() => releaseBody('desktop-v1.10.0-alpha.1', real)).not.toThrow();
+    expect(() => releaseBody('v1.9.4', real)).not.toThrow();
   });
 });

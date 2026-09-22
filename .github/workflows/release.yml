@@ -1,10 +1,11 @@
 name: Release
 
+# A Draft Canvas release: the web app (Pages, from pages.yml on the same tag), the Docker image and the
+# desktop app, one version and one GitHub release. The VS Code extension releases from extension-vX.Y.Z
+# tags in vscode-release.yml; a desktop preview (desktop-vX.Y.Z-alpha.N) from desktop-release.yml.
 on:
   push:
     tags:
-      # Web app releases only: vX.Y.Z and prereleases like vX.Y.Z-rc.1. The VS Code extension
-      # releases from extension-vX.Y.Z tags in vscode-release.yml.
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
 
@@ -18,76 +19,27 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
 
-      # Pulls the section of CHANGELOG.md whose heading matches this tag's
-      # version (e.g. tag v0.2.0 -> "## [0.2.0]") and uses it as the release
-      # body, so the changelog is the single source of truth for release
-      # notes instead of writing them twice. The demo gif leads the body,
-      # pinned to this tag's copy of docs/media so it can't drift from what
-      # the release actually looks like. (An .mp4 linked by URL doesn't embed
-      # as a playable video in a release body — only a gif/png/etc. renders
-      # inline — so the gif is what carries the demo here.)
-      - name: Extract changelog section for this tag
+      # The body is this tag's section of CHANGELOG.md — the one source of truth for what changed — led
+      # by the demo and the ways to get it, and followed by how to open the desktop installers the first
+      # time (scripts/release-notes.mjs). Without a section, GitHub's own notes stand in.
+      - name: Write the release notes
         id: changelog
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          MEDIA_BASE="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/docs/media"
-
-          {
-            echo "![Draft Canvas demo](${MEDIA_BASE}/demo.gif)"
-            echo
-          } > release-notes.md
-
-          awk -v ver="$VERSION" '
-            /^## \[/ {
-              if (found) exit
-              if (index($0, "[" ver "]") > 0) { found=1; next }
-              next
-            }
-            found { print }
-          ' CHANGELOG.md > changelog-section.md
-
-          # CHANGELOG.md hard-wraps each bullet across lines for readability
-          # as a file. A release body isn't rendered as a file, though — it's
-          # rendered like a comment, where a single newline is a hard break —
-          # so without this, every wrapped line would show up as its own
-          # forced line instead of flowing as one sentence. Re-join each
-          # bullet's continuation lines before they become the release body.
-          python3 -c '
-          import re
-          with open("changelog-section.md") as f:
-              lines = f.read().splitlines()
-          out, buf = [], None
-          for line in lines:
-              if line.strip() == "":
-                  if buf is not None:
-                      out.append(buf)
-                      buf = None
-                  out.append("")
-              elif line.startswith("#") or line.lstrip().startswith("- ") or not line.startswith(" "):
-                  if buf is not None:
-                      out.append(buf)
-                  buf = line
-              else:
-                  buf = line.strip() if buf is None else buf + " " + line.strip()
-          if buf is not None:
-              out.append(buf)
-          with open("changelog-section.md", "w") as f:
-              f.write("\n".join(out) + "\n")
-          '
-
-          cat changelog-section.md >> release-notes.md
-
-          if [ -s changelog-section.md ]; then
+          echo "title=Draft Canvas ${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          if node scripts/release-notes.mjs "$GITHUB_REF_NAME" > release-notes.md; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No CHANGELOG.md section found for [$VERSION] — falling back to GitHub's auto-generated notes." >&2
+            echo "![Draft Canvas demo](https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/docs/media/demo.gif)" > release-notes.md
           fi
 
       - uses: softprops/action-gh-release@v3
         with:
-          name: ${{ github.ref_name }}
+          name: ${{ steps.changelog.outputs.title }}
           body_path: release-notes.md
           generate_release_notes: ${{ steps.changelog.outputs.found != 'true' }}
           # v1.3.0-rc.1 and friends are marked as prereleases on GitHub too.
@@ -104,3 +56,18 @@ jobs:
       tag: ${{ github.ref_name }}
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # Builds the desktop installers and signed update packages into the Release above, then tells
+  # installed copies about it. Only this job receives the update signing key.
+  desktop:
+    needs: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}

@@ -159,11 +159,14 @@ tray, native dialogs and safe file writes.
 
 ## Releasing
 
-Desktop releases come from a `desktop-vX.Y.Z` tag, where `X.Y.Z` is the version in `package.json`: the desktop app
-has no version of its own, so it can't drift from the web app's. A prerelease (`desktop-v1.10.0-alpha.1`) may lead
-it, for the version the desktop app will ship in. `.github/workflows/desktop-release.yml` verifies
-that, builds the macOS (Apple Silicon) `.dmg` and the Windows (x64) installer, and publishes them, with a
-checksum file and a build attestation, as a prerelease on the repository's Releases page.
+The desktop app has no version or release of its own: every Draft Canvas release (`vX.Y.Z`, the version in
+`package.json`) includes it. `.github/workflows/release.yml` creates the release, and
+`.github/workflows/desktop-release.yml` builds the macOS (Apple Silicon) `.dmg` and the Windows (x64) installer
+into it, with a checksum file and a build attestation.
+
+Before a release, the desktop app can have previews: a `desktop-vX.Y.Z-alpha.N` tag builds a prerelease of its
+own, titled "Draft Canvas Desktop …", whose `X.Y.Z` may lead `package.json`'s. Its notes are its dated section of
+`CHANGELOG.md`, like any release's.
 
 The installers are **not signed or notarized**: that needs paid developer certificates. The operating system
 therefore warns the first time, and the release notes say how to continue:

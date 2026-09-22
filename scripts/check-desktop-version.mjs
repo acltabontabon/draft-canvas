@@ -3,7 +3,7 @@
 // everything else either points at it or is checked against it here.
 //
 //   node scripts/check-desktop-version.mjs                       what CI runs on every change
-//   node scripts/check-desktop-version.mjs --tag desktop-v1.9.4  the release: the tag must be the version
+//   node scripts/check-desktop-version.mjs --tag v1.9.4          a release: the tag must be the version
 //   node scripts/check-desktop-version.mjs --tag … --artifacts <dir>  …and every installer must carry it
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -43,28 +43,31 @@ else if (crateVersion && minor(apiVersion) !== minor(crateVersion)) {
   problems.push(`@tauri-apps/api ${apiVersion} and the tauri crate ${crateVersion} must share a major.minor; update them together.`);
 }
 
-// A release is the web app's version. A prerelease (desktop-v1.10.0-alpha.1) may lead it: the desktop app's
-// alphas come before the version it ships in, so its X.Y.Z may be package.json's or a later one, never an
-// earlier one. The release workflow builds it with the tag's version.
+// Two kinds of tag build the desktop app:
+//   vX.Y.Z (or vX.Y.Z-rc.N)   a Draft Canvas release — web, Docker and desktop, one version: package.json's.
+//   desktop-vX.Y.Z-alpha.N     a desktop preview ahead of the release it leads to. Its X.Y.Z may be
+//                              package.json's or a later one, never an earlier one; the release workflow
+//                              builds it as the tag's version.
 const tag = option('--tag');
 if (tag) {
-  const tagged = /^desktop-v(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$/.exec(tag);
-  const core = (text) => text.split('-')[0].split('.').map(Number);
-  const [a, b, c] = core(version);
-  const leads = tagged && (Number(tagged[1]) - a || Number(tagged[2]) - b || Number(tagged[3]) - c) >= 0;
+  const tagged = /^(desktop-)?v(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$/.exec(tag);
+  const [a, b, c] = version.split('-')[0].split('.').map(Number);
+  const leads = tagged && (Number(tagged[2]) - a || Number(tagged[3]) - b || Number(tagged[4]) - c) >= 0;
   if (!tagged) {
-    problems.push(`The tag ${tag} is not desktop-vX.Y.Z or desktop-vX.Y.Z-<prerelease>.`);
-  } else if (!tagged[4] && tag !== `desktop-v${version}`) {
-    problems.push(`The tag ${tag} must be desktop-v${version}: the desktop release is the web app's version, so bump package.json first.`);
-  } else if (tagged[4] && !leads) {
-    problems.push(`The prerelease ${tag} is older than the web app's ${version}: a desktop prerelease leads the version it ships in.`);
+    problems.push(`The tag ${tag} is neither vX.Y.Z (a release) nor desktop-vX.Y.Z-<prerelease> (a desktop preview).`);
+  } else if (!tagged[1] && tag !== `v${version}`) {
+    problems.push(`The tag ${tag} must be v${version}: bump package.json first.`);
+  } else if (tagged[1] && !tagged[5]) {
+    problems.push(`${tag} is a stable desktop tag; the desktop app is released with everything else, from v${tag.slice('desktop-v'.length)}.`);
+  } else if (tagged[1] && !leads) {
+    problems.push(`The preview ${tag} is older than ${version}: a desktop preview leads the release it ships in.`);
   }
 }
 
 // The installers carry the version being released: the tag's, when there is one.
 const artifacts = option('--artifacts');
 if (artifacts) {
-  const released = tag ? tag.slice('desktop-v'.length) : version;
+  const released = tag ? tag.replace(/^desktop-v|^v/, '') : version;
   const found = readdirSync(artifacts).filter((name) => statSync(join(artifacts, name)).isFile());
   if (found.length === 0) problems.push(`No installers found in ${artifacts}.`);
   for (const name of found) {

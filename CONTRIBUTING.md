@@ -118,9 +118,12 @@ When preparing a release:
 4. Bump the version through the normal release process, then ship. Once `package.json`'s version
    reaches what you wrote, About → What's New picks it up on its own — no other wiring needed.
 
-Pushing the `vX.Y.Z` tag does the rest. It creates the GitHub Release, deploys Pages, and, once the
+Pushing the `vX.Y.Z` tag does the rest: one version, one GitHub Release, everything in it. It creates
+the Release (titled "Draft Canvas X.Y.Z", its body led by how to get it), deploys Pages, and, once the
 Release exists, publishes `acltabontabon/draft-canvas` to Docker Hub (see
-`.github/workflows/docker-publish.yml`).
+`.github/workflows/docker-publish.yml`) and builds the desktop installers into it, then tells installed
+desktop copies about the update (`desktop-release.yml`, about 15 minutes after the rest). Desktop-only
+changes go in the same `CHANGELOG.md` section as everything else.
 
 The Docker Hub page's own description is edited on Docker Hub, under **Repository → Edit**, and is
 the one part of a release that cannot be automated: Docker Hub answers the description API with 403
@@ -132,10 +135,11 @@ along on its own. Give it a look when a release changes what the product is.
 Draft Canvas for VS Code (`vscode-extension/`) is released separately, from `extension-vX.Y.Z` tags,
 with its own version and changelog — see [`vscode-extension/RELEASING.md`](vscode-extension/RELEASING.md).
 
-Draft Canvas Desktop (`src-tauri/`) is released from `desktop-vX.Y.Z` tags, but has no version of its own:
-the tag must equal the `version` in `package.json`, so cut it from a commit whose web version is the one to ship
-(`scripts/check-desktop-version.mjs` enforces it). Its notes are in `src-tauri/CHANGELOG.md`, which needs a dated
-`## [X.Y.Z]` section before the tag. See [Releasing](docs/guides/desktop.md#releasing).
+Draft Canvas Desktop (`src-tauri/`) has no version or release of its own: it ships in every `vX.Y.Z`
+release above. The one exception is a desktop preview ahead of a release, from a
+`desktop-vX.Y.Z-alpha.N` tag: its own prerelease titled "Draft Canvas Desktop …", with a dated
+`## [X.Y.Z-alpha.N]` section in `CHANGELOG.md`; its `X.Y.Z` may lead `package.json`'s
+(`scripts/check-desktop-version.mjs` enforces both). See [Releasing](docs/guides/desktop.md#releasing).
 
 ## Documentation
 
