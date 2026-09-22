@@ -1,60 +1,74 @@
 # Changelog
 
-All notable changes to Draft Canvas are documented here. The web app, the Docker image and the desktop
-app share one version and are released together; a `-alpha.N` section is a preview of the desktop app
-ahead of the release it leads to. Draft Canvas for VS Code has its own changelog in
+All notable changes to Draft Canvas are documented here, once. The web app, the Docker image and the
+desktop app share one version and are released together; a `-alpha.N` section is a preview of the
+desktop app ahead of the release it leads to. Draft Canvas for VS Code has its own changelog in
 [`vscode-extension/`](vscode-extension/CHANGELOG.md).
+
+Each version says who a change is for — **Shared** (the web and desktop apps both), **Desktop** or
+**Web** — and every release note and the in-app What's New are generated from here. How to write an
+entry is in [CONTRIBUTING.md](CONTRIBUTING.md#release-notes). Versions before 1.10.0 predate that split
+and apply to the web app.
 
 ## [Unreleased]
 
 ## [1.10.0-alpha.2] - 2026-09-22
 
-### Added
+### Shared
 
-- **Desktop:** keep as many projects as you work in. **Add project…** puts a folder on Home, and it stays
-  there beside the others until you remove it; opening another no longer closes the last.
-- **Desktop:** Home's **Projects** row shows each project as a small stack of its diagrams, with how many
-  and when it last changed. Choose one to see every diagram in it, drawn.
-- **Desktop:** **Find a diagram** (`⌘F`) searches every project, your recent files and your unsaved
-  drafts at once, by name or folder.
-- **Desktop:** **Find a diagram** can browse into a project's subfolders — folders show as tiles, with
-  breadcrumbs back up, and **New canvas here** for whichever one you're in. Searching inside a folder
-  covers everything below it; searching Everything covers every project, your recents and your drafts,
-  and says so, so it's never a guess how far a search reaches.
-- **Desktop:** rename a file in place, from **Rename File…** on the File menu or from its own action in
-  Find a Diagram — without leaving Draft Canvas or touching the diagram's own title.
+- **Diagrams open framed to fit** — opening one now centres it and zooms to show all of it, instead of
+  starting wherever the file's camera was last left, which could put its content off to the side or out
+  of view entirely. <!-- highlight -->
+- The editor now eases in as a diagram opens, instead of cutting straight to it — off entirely if your
+  system asks for less motion.
 
-### Fixed
+### Desktop
 
-- **Desktop:** starting a canvas from inside a project ("New canvas here", or a project's **Start one**)
-  no longer writes an `Untitled canvas.draftcanvas` file to disk before you've drawn anything. The canvas
-  opens at once; the folder you started in is only offered to the Save dialog once you actually save.
-- **Desktop:** **Everything** in Find a Diagram no longer lists the same diagram twice when it's both a
-  project file and a recent one — it shows once, with its project and folder.
-- **Desktop:** closing a diagram and returning to Find a Diagram leaves it exactly where you left it —
-  same scope, same search, same scroll position.
-- **Desktop:** switching scope, or a folder, in Find a Diagram now starts the new list at the top, instead
-  of wherever the last one happened to leave the scroll.
-- Opening a diagram now frames it — centred, zoomed to fit — instead of starting wherever the file's
-  camera was last left, which could put its content off to the side or out of view entirely.
+#### Added
 
-### Changed
+- **Every project, on Home** — keep as many projects as you work in. **Add project…** puts a folder on
+  Home, and it stays there beside the others until you remove it; opening another no longer closes the
+  last. <!-- highlight -->
+- Home's **Projects** row shows each project as a small stack of its diagrams, with how many and when it
+  last changed. Choose one to see every diagram in it, drawn.
+- **Find a diagram** — `⌘F` searches every project, your recent files and your unsaved drafts at once, by
+  name or folder. <!-- highlight -->
+- **Find a diagram** can browse into a project's subfolders — folders show as tiles, with breadcrumbs back
+  up, and **New canvas here** for whichever one you're in. Searching inside a folder covers everything
+  below it; searching Everything covers every project, your recents and your drafts, and says so, so it's
+  never a guess how far a search reaches.
+- **Rename in place** — from **Rename File…** on the File menu or from its own action in Find a Diagram,
+  without leaving Draft Canvas or touching the diagram's own title. <!-- highlight -->
 
-- **Desktop:** Home makes room for your work once there is some: the motto steps down to one line, and your
-  drafts and recent files are drawn larger, right under **Quick Draft**. A first visit keeps the full welcome.
-- **Desktop:** **Unsaved** on Home and in the menu bar is now **Drafts**, since a Quick Draft is kept on this
-  computer until you save it. **New Canvas…** is now **New File…**, which says what's different about it: it
-  asks where the file goes before you draw.
-- **Desktop:** an empty Drafts or Recent row says what would be there, instead of disappearing.
-- **Desktop:** Home no longer says `⌘N` works "from anywhere": it works while Draft Canvas is in front. Its
-  footer only mentions the menu bar or system tray when the icon is actually there, and **About** says what
-  the app does and doesn't send: nothing you draw, only a look for updates you can turn off.
-- **Desktop:** Home stays quick however much you have: a project is only listed once something shows
-  it, and a diagram is only drawn once it's on screen. Building the full list across every project — what
-  Find a Diagram's Everything needs — no longer happens on Home's own render, or on every keystroke while
+#### Fixed
+
+- Starting a canvas from inside a project ("New canvas here", or a project's **Start one**) no longer
+  writes an `Untitled canvas.draftcanvas` file to disk before you've drawn anything. The canvas opens at
+  once; the folder you started in is only offered to the Save dialog once you actually save.
+- **Everything** in Find a Diagram no longer lists the same diagram twice when it's both a project file
+  and a recent one — it shows once, with its project and folder.
+- Closing a diagram and returning to Find a Diagram leaves it exactly where you left it — same scope,
+  same search, same scroll position.
+- Switching scope, or a folder, in Find a Diagram now starts the new list at the top, instead of wherever
+  the last one happened to leave the scroll.
+
+#### Changed
+
+- Home makes room for your work once there is some: the motto steps down to one line, and your drafts
+  and recent files are drawn larger, right under **Quick Draft**. A first visit keeps the full welcome.
+- **Unsaved** on Home and in the menu bar is now **Drafts**, since a Quick Draft is kept on this computer
+  until you save it. **New Canvas…** is now **New File…**, which says what's different about it: it asks
+  where the file goes before you draw.
+- An empty Drafts or Recent row says what would be there, instead of disappearing.
+- Home no longer says `⌘N` works "from anywhere": it works while Draft Canvas is in front. Its footer only
+  mentions the menu bar or system tray when the icon is actually there, and **About** says what the app
+  does and doesn't send: nothing you draw, only a look for updates you can turn off.
+- Home stays quick however much you have: a project is only listed once something shows it, and a
+  diagram is only drawn once it's on screen. Building the full list across every project — what Find a
+  Diagram's Everything needs — no longer happens on Home's own render, or on every keystroke while
   browsing a single project.
-- **Desktop:** moving between Home, Find a Diagram and a diagram now eases in, instead of cutting straight
-  across — off entirely if your system asks for less motion.
+- Moving between Home and Find a Diagram now eases in, instead of cutting straight across — off entirely
+  if your system asks for less motion.
 
 ## [1.10.0-alpha.1] - 2026-09-22
 
@@ -62,18 +76,21 @@ The first alpha of Draft Canvas Desktop, a preview of what ships in 1.10.0: the 
 app, in its own window, a click away in your menu bar, with your diagrams as ordinary files on your
 disk. It's early — expect rough edges, and please tell us about them.
 
-### Start drawing in a second
+### Desktop
+
+#### Start drawing in a second
 
 - **Quick Draft** (`⌘N` / `Ctrl+N`, or from the menu bar) opens a blank canvas with nothing to name or
   choose. It's kept on your computer as you draw, and offered back if the app closes before you save it.
+  <!-- highlight -->
 - **Home is itself a diagram**: New Quick Draft at its centre, a connector running to your unsaved
   drafts, recent files, open project or the starters — each drawn as the diagram it is, so you know "the
   checkout one" before you open it.
 - **The menu bar icon opens a small panel**: New Quick Draft, your drafts and recent files as
   silhouettes, and the other ways in. On Windows, right-click the tray icon for the same things as a
-  plain menu. The icon wears a dot while a draft is unsaved.
+  plain menu. The icon wears a dot while a draft is unsaved. <!-- highlight -->
 
-### Your diagrams are files
+#### Your diagrams are files
 
 - **Open, Save and Save As** work with `.draftcanvas` files, and so do drag and drop, recent files, and
   double-clicking a file in Finder or Explorer.
@@ -83,17 +100,17 @@ disk. It's early — expect rough edges, and please tell us about them.
 - **Nothing unsaved is lost**: quitting, restarting and updating all keep it first, and a file with
   changes asks before it closes.
 
-### Stays out of your way
+#### Stays out of your way
 
 - **Closing the window keeps Draft Canvas in the menu bar or tray**, so the next diagram is instant.
   Quit really quits, and Settings lets you choose.
 - **Updates itself, only when you say so**: it looks for a newer version once a day (you can turn that
   off), shows a small notice when there is one, and downloads and restarts only when you choose. Every
-  download is checked against a signature built into the app before it can be installed.
+  download is checked against a signature built into the app before it can be installed. <!-- highlight -->
 - **Private by design**: it never looks through your disk, never uploads what you draw, and touches only
   the files and folders you choose.
 
-### Good to know
+#### Good to know
 
 - For macOS on Apple Silicon and Windows (x64).
 - The installers aren't signed with a paid certificate, so your OS asks once before opening it — see

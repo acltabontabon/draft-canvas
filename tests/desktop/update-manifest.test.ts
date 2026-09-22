@@ -243,7 +243,7 @@ describe('release notes', () => {
     expect(preview).not.toContain('### Get it');
     expect(preview).toContain('### Opening the desktop app the first time');
 
-    expect(() => releaseBody('v9.9.9', changelog)).toThrow(/no "## \[9\.9\.9\]" section/);
+    expect(() => releaseBody('v9.9.9', changelog)).toThrow(/no "## \[9\.9\.9\] - YYYY-MM-DD" section/);
   });
 
   it('exist for every version the changelog lists', () => {

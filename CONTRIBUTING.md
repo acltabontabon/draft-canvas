@@ -94,36 +94,95 @@ Concretely:
 - Don't add a feature — semantic or otherwise — merely because another diagramming tool has it.
   Draft Canvas is deliberately not draw.io, Lucidchart, or a UML/BPMN tool.
 
+## Release notes
+
+Write a user-facing change **once**, in `CHANGELOG.md`. Everything that tells someone what changed is
+generated from it, filtered to who it's for:
+
+| Generated | From | Covers |
+| --- | --- | --- |
+| A `vX.Y.Z` GitHub release (web, Docker and desktop together) | `scripts/release-notes.mjs` | Shared, Desktop and Web — everything since the previous `vX.Y.Z`, prereleases included |
+| A `desktop-vX.Y.Z-alpha.N` GitHub prerelease | `scripts/release-notes.mjs` | Shared and Desktop, from that section only |
+| The desktop app's "Update available" notes (`latest.json`) | `scripts/update-manifest.mjs` | Shared and Desktop |
+| About → What's New in the web build | `vite.config.ts` at build time | Shared and Web highlights |
+| About → What's New in the desktop build | `vite.config.ts` at build time | Shared and Desktop highlights |
+
+Nothing fetches notes at runtime, and nothing is written twice: the install steps, downloads and
+signing caveats around each release body are fixed templates in `release-notes.mjs`, not changelog text.
+
+### Where a change goes
+
+Under `## [Unreleased]`, in whichever of these fits — leave out any that would be empty:
+
+```markdown
+## [Unreleased]
+
+### Shared
+- Changes both apps get: the editor, shapes, export, starters, the canvas itself.
+
+### Desktop
+- Only the desktop app: files and project folders, Home, Find a Diagram, the menu bar / tray,
+  updates, installers and packaging.
+
+### Web
+- Only the web app: browser storage and the Library, the offline app, Pages, the Docker image.
+```
+
+Decide by where the change actually runs, not where its code lives. Shared source often behaves on
+one platform only (a style for a desktop-only screen, say); code under `src/desktop/` or `src-tauri/`
+is always Desktop. `####` sub-headings (Added, Fixed, Changed) are fine inside any of the three; any
+other `###` heading beside them is an error.
+
+A version may open with one short intro paragraph, which What's New shows as the release's summary.
+
+### Highlights for What's New
+
+What's New shows a handful of a release's bullets, not all of them. Mark the ones worth telling
+someone using the app by leading with a **bold title** and ending with `<!-- highlight -->`:
+
+```markdown
+- **Rename in place** — from Rename File… on the File menu, without leaving Draft Canvas.
+  <!-- highlight -->
+```
+
+The marker is invisible on GitHub and dropped from every release body. A release's What's New is its
+own highlights plus its prereleases' — nobody runs an alpha's version number — so an alpha's highlights
+first appear in the app when the release they lead to ships.
+
+What's New for 1.9.4 and earlier is frozen as it was written, in `src/releases/productReleases.ts`
+(`ARCHIVED_RELEASES`). Don't add to it.
+
+### Previewing
+
+```bash
+npm run release:notes -- desktop-v1.10.0-alpha.3               # what that desktop prerelease would say
+npm run release:notes -- v1.10.0 --platform web                # one platform's part of a release
+npm run release:notes -- v1.10.0 --draft                       # a release whose section isn't written yet
+npm run release:whats-new -- desktop --draft 1.10.0            # What's New as the desktop build shows it
+```
+
+A missing or duplicated version, a heading that isn't a version, mixed headings, a highlight without a
+title, or a release with nothing for the platform it's publishing all fail loudly, naming what to fix —
+the release workflows would stop rather than publish empty or wrong notes. `tests/changelog.test.ts`
+covers the rules; `npm test` runs the real changelog through them.
+
 ## Release workflow
-
-Two different documents record a release, for two different readers:
-
-- **`CHANGELOG.md`** is the engineering-oriented historical record — every notable change, in
-  detail, for every version. Keep adding to it as you normally would.
-- **`src/releases/productReleases.ts`** is curated, user-facing "What's New" copy — the small set
-  of things worth telling someone using the app, in plain language, not a mirror of the changelog.
-  Not every changelog entry earns a highlight; a release of internal fixes can reasonably have no
-  entry there at all.
 
 When preparing a release:
 
-1. Keep `CHANGELOG.md`'s `[Unreleased]` section current as you go, like always.
-2. Before cutting the release, look at what's accumulated in `[Unreleased]` and write a small
-   `ProductRelease` entry for it in `productReleases.ts` — 4-8 highlights, each a short title and
-   one sentence, in the app's own voice (see the existing entries for tone). Skip anything not
-   worth a user's attention.
-3. It's fine to write that entry — even for the *next* version — before the release itself ships:
-   `applicableReleases` (in that same file) only ever shows a release once the running app version
-   actually reaches it, so a prepared entry can't be shown early or presented as installed.
-4. Bump the version through the normal release process, then ship. Once `package.json`'s version
-   reaches what you wrote, About → What's New picks it up on its own — no other wiring needed.
+1. Keep `CHANGELOG.md`'s `[Unreleased]` section current as you go, in the shape above, marking the
+   highlights you'd want in What's New.
+2. Before cutting the release, rename `[Unreleased]` to the version with today's date
+   (`## [1.10.0] - 2026-10-01`), leave a fresh `## [Unreleased]` above it, and preview the notes.
+3. Bump the version through the normal release process, then ship. Once `package.json`'s version
+   reaches that section, About → What's New shows it on its own — no other wiring needed.
 
 Pushing the `vX.Y.Z` tag does the rest: one version, one GitHub Release, everything in it. It creates
 the Release (titled "Draft Canvas X.Y.Z", its body led by how to get it), deploys Pages, and, once the
 Release exists, publishes `acltabontabon/draft-canvas` to Docker Hub (see
 `.github/workflows/docker-publish.yml`) and builds the desktop installers into it, then tells installed
 desktop copies about the update (`desktop-release.yml`, about 15 minutes after the rest). Desktop-only
-changes go in the same `CHANGELOG.md` section as everything else.
+changes go in the same `CHANGELOG.md` section as everything else, under its `### Desktop`.
 
 The Docker Hub page's own description is edited on Docker Hub, under **Repository → Edit**, and is
 the one part of a release that cannot be automated: Docker Hub answers the description API with 403

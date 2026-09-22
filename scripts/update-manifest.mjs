@@ -27,9 +27,26 @@ import { createHash, createPublicKey, verify as edVerify } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { changelogSection, unwrap } from './release-notes.mjs';
+import { ChangelogError, findEntry, changelogUrl, parseChangelog, releaseNotes, unwrap } from './changelog.mjs';
+import { changelogSection } from './release-notes.mjs';
 
 export { changelogSection };
+
+/**
+ * What an installed desktop copy is told about `version`: the changes that reach the desktop app
+ * (Web and desktop, then Desktop), as the release page words them. A release with nothing for the
+ * desktop still gets an update — it's the same version — so it says that, with the link, rather
+ * than nothing. A version with no changelog section at all is still an error.
+ */
+export function desktopNotes(changelog, version, tag) {
+  try {
+    return unwrap(releaseNotes(changelog, { version, platform: 'desktop', tag }));
+  } catch (error) {
+    if (!(error instanceof ChangelogError) || !/has nothing for/.test(error.message)) throw error;
+    const entry = findEntry(parseChangelog(changelog), version);
+    return `Nothing desktop-specific in this release. Full changelog: [${version}](${changelogUrl(entry, tag)})`;
+  }
+}
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const REPO = 'acltabontabon/draft-canvas';
@@ -346,7 +363,7 @@ function main() {
         const manifest = buildManifest({
           version,
           // Unwrapped, as the release page shows it: the in-app panel reads it the same way.
-          notes: unwrap(changelogSection(changelog, version) ?? ''),
+          notes: desktopNotes(changelog, version, tagFor(version)),
           pubDate: new Date().toISOString(),
           signatures,
           baseUrl,

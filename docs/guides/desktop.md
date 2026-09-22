@@ -183,7 +183,8 @@ into it, with a checksum file and a build attestation.
 
 Before a release, the desktop app can have previews: a `desktop-vX.Y.Z-alpha.N` tag builds a prerelease of its
 own, titled "Draft Canvas X.Y.Z-alpha.N", whose `X.Y.Z` may lead `package.json`'s. Its notes are its dated section of
-`CHANGELOG.md`, like any release's.
+`CHANGELOG.md` — the Shared and Desktop parts of it, generated the same way as any release's (see
+[Release notes](../../CONTRIBUTING.md#release-notes)).
 
 The installers are **not signed or notarized**: that needs paid developer certificates. The operating system
 therefore warns the first time, and the release notes say how to continue:

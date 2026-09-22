@@ -50,6 +50,15 @@ function ReleaseHighlights({ highlights }: { highlights: ProductReleaseHighlight
   );
 }
 
+function ChangelogLink({ release }: { release: ProductRelease }) {
+  if (!release.changelogUrl) return null;
+  return (
+    <a className="dc-whats-new-changelog" href={release.changelogUrl} target="_blank" rel="noreferrer">
+      Everything in v{release.version} →
+    </a>
+  );
+}
+
 /** A single dense, clickable metadata row — never the release's own body. Shared by the quick
  *  "Previous releases" list (What's New) and the full index (Release History) so both browse the
  *  same way: pick a version, land on its detail. */
@@ -106,6 +115,7 @@ function WhatsNewView({
       {latest.date && <p className="dc-whats-new-date-full">{formatReleaseDate(latest.date, 'long')}</p>}
       {latest.summary && <p className="dc-whats-new-summary">{latest.summary}</p>}
       <ReleaseHighlights highlights={latest.highlights} />
+      <ChangelogLink release={latest} />
 
       {recent.length > 0 && (
         <div className="dc-whats-new-recent">
@@ -180,6 +190,7 @@ function DetailView({ release, headingRef }: { release: ProductRelease | undefin
       {release.date && <p className="dc-whats-new-date-full">{formatReleaseDate(release.date, 'long')}</p>}
       {release.summary && <p className="dc-whats-new-summary">{release.summary}</p>}
       <ReleaseHighlights highlights={release.highlights} />
+      <ChangelogLink release={release} />
     </div>
   );
 }

@@ -46,6 +46,8 @@
     "desktop:build": "tauri build",
     "desktop:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
     "desktop:version": "node scripts/check-desktop-version.mjs",
+    "release:notes": "node scripts/release-notes.mjs",
+    "release:whats-new": "node scripts/whats-new.mjs",
     "desktop:check": "npm run desktop:web && npm run desktop:rust && npm run desktop:version",
     "e2e:desktop": "playwright test --config=playwright.desktop.config.ts"
   },

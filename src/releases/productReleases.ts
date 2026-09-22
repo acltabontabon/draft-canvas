@@ -1,3 +1,5 @@
+import changelogReleases from 'virtual:release-highlights';
+import { headingAnchor } from '../../scripts/changelog.mjs';
 import { compareVersions, isVersionNewer } from '../lib/semver';
 import type { ProductRelease } from './types';
 
@@ -5,21 +7,20 @@ export type { ProductRelease, ProductReleaseHighlight } from './types';
 // The notes themselves stay here; what's cheap enough for the Library's first paint lives in `seen.ts`.
 export { hasUnreadRelease, markLastSeenRelease, readLastSeenRelease } from './seen';
 
+const REPO = 'acltabontabon/draft-canvas';
+
 /**
- * Curated, user-facing release notes for the About → What's New view. Newest release goes first
- * by convention, but nothing downstream relies on that — `applicableReleases` always re-sorts.
- *
- * Entries may be written ahead of the release that carries them (see CONTRIBUTING.md's "Release
- * workflow"), curated from CHANGELOG.md's `[Unreleased]` section. A prepared entry carries no
- * `date`, and `applicableReleases` filters it out entirely until the running app version genuinely
- * reaches it — it can never be shown as installed early.
+ * What's New for every release through 1.9.4, as it was written at the time — frozen. From 1.10.0 on,
+ * a release's What's New is read out of CHANGELOG.md instead (the bullets marked `<!-- highlight -->`,
+ * filtered to this build's platform; see `releaseHighlights` in vite.config.ts), so the words are
+ * written once. Nothing is added here any more: a shipped release's notes don't change.
  *
  * History only goes back to `0.1.0` ("the first production-ready release," per CHANGELOG.md) —
  * the `alpha`/`beta` milestones before it were never a real release anyone upgraded from, and a
  * point release with nothing user-facing to say (`0.3.1`, a one-line copy tweak) simply has no
  * entry at all rather than an empty one.
  */
-export const PRODUCT_RELEASES: ProductRelease[] = [
+export const ARCHIVED_RELEASES: ProductRelease[] = [
   {
     version: '1.9.4',
     date: '2026-09-21',
@@ -680,6 +681,15 @@ export const PRODUCT_RELEASES: ProductRelease[] = [
     ],
   },
 ];
+
+/** A shipped release's section of the changelog, as of its own tag (the heading GitHub anchors). */
+const archivedLink = (release: ProductRelease): ProductRelease =>
+  release.date
+    ? { ...release, changelogUrl: `https://github.com/${REPO}/blob/v${release.version}/CHANGELOG.md#${headingAnchor(`[${release.version}] - ${release.date}`)}` }
+    : release;
+
+/** Every release What's New knows: the changelog's own, then the archive before it. */
+export const PRODUCT_RELEASES: ProductRelease[] = [...changelogReleases, ...ARCHIVED_RELEASES.map(archivedLink)];
 
 /**
  * Releases the given app version is actually entitled to show, newest first. This is the one

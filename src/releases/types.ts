@@ -9,15 +9,17 @@ export interface ProductReleaseHighlight {
 }
 
 /**
- * One release's curated, user-facing notes. Deliberately separate from CHANGELOG.md (see
- * CONTRIBUTING.md's "Release workflow") — a release with nothing worth telling a user simply has
- * no entry here.
+ * One release's user-facing notes: its summary and the few highlights worth telling someone using
+ * the app. From 1.10.0 these are read out of CHANGELOG.md (see CONTRIBUTING.md's "Release notes");
+ * a release that marked no highlights simply has no entry.
  */
 export interface ProductRelease {
   version: string;
-  /** ISO date it actually shipped. Omitted for a release prepared ahead of time — see
-   *  `productReleases.ts` — so nothing here implies it has happened yet. */
+  /** ISO date it shipped. Omitted for a version whose changelog section isn't dated yet, so nothing
+   *  here implies it has happened. */
   date?: string;
   summary?: string;
   highlights: ProductReleaseHighlight[];
+  /** Its full section of CHANGELOG.md, pinned to the release's own tag. */
+  changelogUrl?: string;
 }

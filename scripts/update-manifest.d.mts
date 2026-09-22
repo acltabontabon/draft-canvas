@@ -31,6 +31,7 @@ export function verifySignature(
   pubkey: string,
 ): { ok: true; trustedComment: string; version: string | null } | { ok: false; reason: string };
 export function changelogSection(changelog: string, version: string): string | null;
+export function desktopNotes(changelog: string, version: string, tag: string): string;
 export function buildManifest(options: {
   version: string;
   notes?: string | null;

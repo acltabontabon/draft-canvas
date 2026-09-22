@@ -1,8 +1,30 @@
 /// <reference types="vitest/config" />
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { whatsNew } from './scripts/changelog.mjs';
+
+/**
+ * About → What's New, read out of CHANGELOG.md at build time — never a second copy of the words, and
+ * never a fetch at startup. `virtual:release-highlights` is this build's releases and their marked
+ * highlights, already filtered to the platform it's for: the web build carries no desktop copy and
+ * the desktop build no web copy. A malformed changelog fails the build, naming the line.
+ */
+function releaseHighlights(platform: 'desktop' | 'web'): Plugin {
+  const id = 'virtual:release-highlights';
+  const changelog = fileURLToPath(new URL('./CHANGELOG.md', import.meta.url));
+  return {
+    name: 'draft-canvas-release-highlights',
+    resolveId: (source) => (source === id ? `\0${id}` : undefined),
+    load(source) {
+      if (source !== `\0${id}`) return undefined;
+      this.addWatchFile(changelog);
+      return `export default ${JSON.stringify(whatsNew(readFileSync(changelog, 'utf8'), platform))};`;
+    },
+  };
+}
 
 /**
  * The privacy promise, enforced by the browser rather than by good intentions.
@@ -70,6 +92,7 @@ export default defineConfig(({ mode }) => {
     define: { __DESKTOP__: JSON.stringify(desktop) },
     plugins: [
       react(),
+      releaseHighlights(desktop ? 'desktop' : 'web'),
       ...(desktop
         ? [withoutServiceWorker()]
         : [

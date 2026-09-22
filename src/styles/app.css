@@ -4829,6 +4829,27 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   border-top: 1px solid var(--dc-border);
 }
 
+/* The release's whole section of CHANGELOG.md: What's New shows the highlights, this is everything. */
+.dc-whats-new-changelog {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--dc-text-faint);
+  text-decoration: none;
+  transition: color 90ms ease;
+}
+
+.dc-whats-new-changelog:hover,
+.dc-whats-new-changelog:focus-visible {
+  color: var(--dc-selection);
+}
+
+.dc-whats-new-changelog:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+  border-radius: var(--dc-radius-sm);
+}
+
 .dc-whats-new-history-link {
   display: inline-block;
   margin-top: 10px;
