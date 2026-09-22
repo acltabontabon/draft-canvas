@@ -137,7 +137,7 @@ with its own version and changelog — see [`vscode-extension/RELEASING.md`](vsc
 
 Draft Canvas Desktop (`src-tauri/`) has no version or release of its own: it ships in every `vX.Y.Z`
 release above. The one exception is a desktop preview ahead of a release, from a
-`desktop-vX.Y.Z-alpha.N` tag: its own prerelease titled "Draft Canvas Desktop …", with a dated
+`desktop-vX.Y.Z-alpha.N` tag: its own prerelease titled "Draft Canvas X.Y.Z-alpha.N", with a dated
 `## [X.Y.Z-alpha.N]` section in `CHANGELOG.md`; its `X.Y.Z` may lead `package.json`'s
 (`scripts/check-desktop-version.mjs` enforces both). See [Releasing](docs/guides/desktop.md#releasing).
 

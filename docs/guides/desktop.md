@@ -165,7 +165,7 @@ The desktop app has no version or release of its own: every Draft Canvas release
 into it, with a checksum file and a build attestation.
 
 Before a release, the desktop app can have previews: a `desktop-vX.Y.Z-alpha.N` tag builds a prerelease of its
-own, titled "Draft Canvas Desktop …", whose `X.Y.Z` may lead `package.json`'s. Its notes are its dated section of
+own, titled "Draft Canvas X.Y.Z-alpha.N", whose `X.Y.Z` may lead `package.json`'s. Its notes are its dated section of
 `CHANGELOG.md`, like any release's.
 
 The installers are **not signed or notarized**: that needs paid developer certificates. The operating system

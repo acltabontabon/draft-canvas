@@ -7,8 +7,8 @@ name: Desktop Release
 #                                       version (package.json's). release.yml creates the release; this
 #                                       only adds the desktop files to it.
 #   a desktop-vX.Y.Z-alpha.N tag        A desktop preview ahead of the release it leads to. This creates
-#                                       its own prerelease, titled "Draft Canvas Desktop …", since there is
-#                                       nothing new on the web in it.
+#                                       its own prerelease, "Draft Canvas X.Y.Z-alpha.N"; its notes say it
+#                                       is the desktop app's.
 #
 # The installers are NOT signed or notarized (no paid certificates). The release notes say how to
 # open them anyway, and ship checksums and a build attestation so they can still be verified.
@@ -98,7 +98,7 @@ jobs:
           node scripts/release-notes.mjs "$TAG" > notes.md
           gh release create "$TAG" \
             --draft --prerelease --verify-tag \
-            --title "Draft Canvas Desktop $VERSION" \
+            --title "Draft Canvas $VERSION" \
             --notes-file notes.md
 
   build:
