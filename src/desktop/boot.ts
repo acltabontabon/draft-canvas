@@ -8,6 +8,7 @@ import { dispatchEditCommand } from './commands';
 import { DesktopController, type DesktopUi } from './controller';
 import { desktopStore } from './store';
 import { createTauriApi } from './tauri/api';
+import { startTrayArt } from './trayArt';
 import { setDesktopController } from './useDesktop';
 
 /** Exports go through the shell's Save dialog. Cancelling it rejects the way the export dialog expects a cancel to. */
@@ -49,6 +50,8 @@ export async function bootDesktop(): Promise<void> {
     registerDesktopHost({ channel, returnHome: () => void controller.returnHome() });
     setFileSaver(fileSaverFor(api));
     await controller.start();
+    // The tray menu's drawings follow Home's lists from here on; it runs for the life of the app.
+    startTrayArt(api, desktopStore, controller);
   } catch (error) {
     logDiagnostic(error, { operation: 'desktop-boot' });
     setDesktopController(null);

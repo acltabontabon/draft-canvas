@@ -38,7 +38,16 @@ export function starterShape(starter: ArchitectureStarter): StarterShape {
   const cached = cache.get(starter.id);
   if (cached) return cached;
   const { nodes, edges } = buildStarter(starter, { x: 0, y: 0 });
-  const shape = libraryShapeOf(nodes, edges);
+  const result = glyphShapeOf(libraryShapeOf(nodes, edges));
+  cache.set(starter.id, result);
+  return result;
+}
+
+/**
+ * Any topology laid out as a tile glyph. Starters come through here, and so do the desktop Home's
+ * own files, so a diagram someone drew and a starter they might pick are drawn in one hand.
+ */
+export function glyphShapeOf(shape: LibraryShape): StarterShape {
   const boxes = layoutShape(shape, GLYPH_WIDTH, GLYPH_HEIGHT, GLYPH_PAD);
   const drawn = boxes.length > 0;
   const left = drawn ? Math.min(...boxes.map((box) => box.x)) : 0;
@@ -47,9 +56,7 @@ export function starterShape(starter: ArchitectureStarter): StarterShape {
   const bottom = drawn ? Math.max(...boxes.map((box) => box.y + box.h)) : GLYPH_HEIGHT;
   const centerX = (left + right) / 2 / GLYPH_WIDTH;
   const bounds = { x: left, y: top, width: right - left, height: bottom - top };
-  const result = { shape, depths: edgeDepths(shape), boxes, centerX, bounds };
-  cache.set(starter.id, result);
-  return result;
+  return { shape, depths: edgeDepths(shape), boxes, centerX, bounds };
 }
 
 /**

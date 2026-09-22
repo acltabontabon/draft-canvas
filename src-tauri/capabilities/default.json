@@ -19,6 +19,8 @@
     "allow-sidecar-read",
     "allow-sidecar-write",
     "allow-sidecar-remove",
+    "allow-peek-document",
+    "allow-project-peek",
     "allow-pick-project",
     "allow-open-project",
     "allow-project-scan",
@@ -34,6 +36,7 @@
     "allow-settings-get",
     "allow-settings-set",
     "allow-ask",
-    "allow-show-error"
+    "allow-show-error",
+    "allow-tray-decorate"
   ]
 }

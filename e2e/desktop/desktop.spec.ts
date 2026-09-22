@@ -40,7 +40,10 @@ test('opens on its own Home, not the browser’s library', async ({ page }) => {
 
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open file…' })).toBeVisible();
-  await expect(page.getByText('Nothing open.')).toBeVisible();
+  // With nothing opened yet, the fan points only at starters, and its label says so.
+  await expect(page.getByText('or cheat a little')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start from Microservices' })).toBeVisible();
+  await expect(page.getByRole('tab')).toHaveCount(0);
   // Nothing of the browser's storage-backed Library.
   await expect(page.getByRole('button', { name: 'Import' })).toHaveCount(0);
   await expect(page.getByPlaceholder('Search diagrams…')).toHaveCount(0);
@@ -82,13 +85,88 @@ test('what is unsaved is kept, and offered back from Home', async ({ page }) => 
   await expect.poll(() => page.evaluate(() => window.__shell.recoveryIds().length)).toBe(1);
 
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
-  await expect(page.getByRole('heading', { name: 'Unsaved' })).toBeVisible();
+  // Home opens on what isn't saved, drawn as the diagram it is.
+  await expect(page.getByRole('tab', { name: 'Unsaved' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Starters' })).toBeVisible();
+  const tile = page.getByRole('button', { name: 'Recover Quick Draft' });
+  await expect(tile).toHaveAttribute('data-thumbnail', 'drawn');
   // A Quick Draft is not asked about on the way out.
   expect(await page.evaluate(() => window.__shell.asked())).toEqual([]);
 
-  await page.locator('.dc-library-item', { hasText: 'Quick Draft' }).click();
+  await tile.click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   await expect(page.locator('.dc-node')).toHaveCount(1);
+});
+
+test('recent files are drawn from their own contents, without being opened', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Payments', 3);
+  await page.evaluate((text) => {
+    const handle = window.__shell.addFile('payments', text);
+    window.__shell.nextOpen(handle);
+  }, text);
+  await page.getByRole('button', { name: 'Open file…' }).click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+
+  await expect(page.getByRole('tab', { name: 'Recent' })).toHaveAttribute('aria-selected', 'true');
+  const tile = page.getByRole('button', { name: 'Open payments' });
+  await expect(tile).toHaveAttribute('data-thumbnail', 'drawn');
+  // Three services on the canvas, three marks on the tile.
+  await expect(tile.locator('.dc-fingerprint-service')).toHaveCount(3);
+  // Drawing it was a look, not an open: nothing but the one real open reached the shell.
+  const opens = await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'open_dialog' || call.command === 'open_handle').length);
+  expect(opens).toBe(1);
+
+  // A starter makes a Quick Draft already holding it.
+  await page.getByRole('tab', { name: 'Starters' }).click();
+  await page.getByRole('button', { name: 'Start from Microservices' }).click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await expect(page.locator('.dc-status-left')).toContainText('Quick Draft');
+  expect(await page.locator('.dc-node').count()).toBeGreaterThan(3);
+});
+
+test('draws the tray menu: the actions, and each file and draft as its own diagram', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Flow', 3);
+  await page.addInitScript((text) => {
+    window.__shell.seed({
+      recents: [{ name: 'payment-flow', text, ago: 60_000 }],
+      drafts: [{ title: 'Auth rework', text, ago: 60_000 }],
+    });
+  }, text);
+  await page.reload();
+
+  type Art = { actions: Record<string, string>; files: { handle: string; png: string }[]; drafts: { id: string; title: string; png?: string }[] };
+  await expect.poll(() => page.evaluate(() => (window.__shell.trayArt() as Art | null)?.files.length ?? 0)).toBe(1);
+  const art = (await page.evaluate(() => window.__shell.trayArt())) as Art;
+  expect(Object.keys(art.actions).sort()).toEqual(['newCanvas', 'open', 'openProject', 'quickDraft']);
+  expect(art.drafts).toEqual([expect.objectContaining({ title: 'Auth rework', png: expect.any(String) })]);
+  // Real PNGs, and by handle: nothing in what the page sends names a path.
+  for (const image of [...Object.values(art.actions), art.files[0]!.png, art.drafts[0]!.png!]) {
+    expect(Buffer.from(image, 'base64').subarray(1, 4).toString()).toBe('PNG');
+  }
+  expect(JSON.stringify(art)).not.toContain('/work/');
+});
+
+test('keeps the row to one line, with the rest one click away', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Flow', 2);
+  await page.addInitScript((text) => {
+    window.__shell.seed({ recents: Array.from({ length: 8 }, (_, i) => ({ name: `diagram-${i + 1}`, text, ago: (i + 1) * 60_000 })) });
+  }, text);
+  await page.reload();
+
+  await expect(page.getByRole('tab', { name: 'Recent' })).toHaveAttribute('aria-selected', 'true');
+  const row = page.locator('.dc-desk-row');
+  const more = row.getByRole('button', { name: 'All 8' });
+  await expect(more).toBeVisible();
+  // Every tile in one row: nothing wraps under the connectors.
+  const tops = await row.locator('.dc-desk-tile').evaluateAll((tiles) => new Set(tiles.map((tile) => (tile as HTMLElement).offsetTop)).size);
+  expect(tops).toBe(1);
+
+  await more.click();
+  await expect(page.locator('.dc-desk-all li')).toHaveCount(8);
 });
 
 test('opens a file, says when it has unsaved changes, and asks before leaving it', async ({ page }) => {
@@ -207,4 +285,42 @@ test('a file that is not a diagram is refused without leaving Home', async ({ pa
   await expect(page.locator('.dc-editor')).toHaveCount(0);
   const calls = await page.evaluate(() => window.__shell.calls().map((call) => call.command));
   expect(calls).toContain('show_error');
+});
+
+test('the tray panel draws each diagram and chooses only through the shell', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Payments', 3);
+  await page.addInitScript((text) => {
+    window.__shell.seed({
+      recents: [
+        { name: 'payment-flow', text, ago: 60_000 },
+        { name: 'checkout', text, ago: 120_000 },
+      ],
+      drafts: [{ title: 'Auth rework', text, ago: 60_000 }],
+    });
+  }, text);
+  await page.goto('/tray.html');
+
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  const recent = page.getByRole('region', { name: 'Recent' });
+  await expect(recent.getByRole('button')).toHaveCount(2);
+  // Each file is drawn as itself, read by its handle.
+  await expect(recent.locator('.dc-tray-thumb[data-state="drawn"]')).toHaveCount(2);
+  await expect(page.getByRole('region', { name: 'Unsaved' }).getByRole('button', { name: /Auth rework/ })).toBeVisible();
+
+  const chosen = () =>
+    page.evaluate(() =>
+      window.__shell
+        .calls()
+        .filter((call) => call.command === 'tray_choose')
+        .map((call) => (call.args as { choice: string }).choice),
+    );
+  await recent.getByRole('button', { name: /payment-flow/ }).click();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Open…' }).click();
+  expect(await chosen()).toEqual(['recent:h_1', 'panel:dismiss', 'tray:open']);
+
+  // It told the shell how tall it came out, and never asked for anything a panel shouldn't.
+  const commands = await page.evaluate(() => [...new Set(window.__shell.calls().map((call) => call.command))].sort());
+  expect(commands).toEqual(['peek_document', 'recovery_read', 'tray_choose', 'tray_panel', 'tray_panel_fit']);
 });

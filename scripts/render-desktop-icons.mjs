@@ -12,6 +12,8 @@ const outputs = [
   { svg: 'app.svg', png: 'src/app.png', size: 1024 },
   { svg: 'tray-template.svg', png: 'tray-template.png', size: 44 },
   { svg: 'tray-color.svg', png: 'tray-color.png', size: 64 },
+  { svg: 'tray-template-unsaved.svg', png: 'tray-template-unsaved.png', size: 44 },
+  { svg: 'tray-color-unsaved.svg', png: 'tray-color-unsaved.png', size: 64 },
 ];
 
 const browser = await chromium.launch();

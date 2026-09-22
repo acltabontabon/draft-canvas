@@ -8,11 +8,17 @@
 use crate::grants::Handle;
 use crate::state::{AppState, HostEvent, MenuCommand};
 use crate::window::{show_main, Platform};
-use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
+use std::sync::Arc;
+use tauri::image::Image;
+use tauri::menu::{IconMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager, Runtime};
 
 pub const DOCS_URL: &str = "https://github.com/acltabontabon/draft-canvas/tree/main/docs";
 const RECENT_PREFIX: &str = "recent:";
+const DRAFT_PREFIX: &str = "draft:";
+
+/// A PNG the page drew for a menu item, shared rather than copied each time the menu is rebuilt.
+pub type Icon = Arc<Vec<u8>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Predefined {
@@ -33,6 +39,7 @@ pub enum Spec {
         text: String,
         accelerator: Option<&'static str>,
         enabled: bool,
+        icon: Option<Icon>,
     },
     Separator,
     Predefined(Predefined),
@@ -48,7 +55,34 @@ fn item(id: &str, text: &str, accelerator: Option<&'static str>) -> Spec {
         text: text.to_string(),
         accelerator,
         enabled: true,
+        icon: None,
     }
+}
+
+fn icon_item(id: &str, text: &str, accelerator: Option<&'static str>, icon: Option<&Icon>) -> Spec {
+    Spec::Item {
+        id: id.to_string(),
+        text: text.to_string(),
+        accelerator,
+        enabled: true,
+        icon: icon.cloned(),
+    }
+}
+
+/// A section's name: a disabled line, the way macOS labels a group inside a menu.
+fn label(text: &str) -> Spec {
+    Spec::Item {
+        id: format!("label:{}", text.to_lowercase()),
+        text: text.to_string(),
+        accelerator: None,
+        enabled: false,
+        icon: None,
+    }
+}
+
+/// `&` marks a keyboard mnemonic in native menus, so a file called "R&D" needs it doubled.
+fn menu_text(text: &str) -> String {
+    text.replace('&', "&&")
 }
 
 fn submenu(text: &str, items: Vec<Spec>) -> Spec {
@@ -79,6 +113,14 @@ fn menu_event(command: MenuCommand) -> Action {
 pub fn action_for_id(id: &str) -> Option<Action> {
     if let Some(handle) = id.strip_prefix(RECENT_PREFIX) {
         return Some(Action::OpenRecent(handle.to_string()));
+    }
+    if let Some(draft) = id.strip_prefix(DRAFT_PREFIX) {
+        // Only ever an id the tray itself listed; anything else is not a draft.
+        return crate::recovery::is_valid_id(draft).then(|| {
+            Action::Emit(HostEvent::RecoverDraft {
+                id: draft.to_string(),
+            })
+        });
     }
     Some(match id {
         "app:new-quick-draft" | "tray:new-quick-draft" => Action::Emit(HostEvent::NewQuickDraft),
@@ -211,45 +253,111 @@ pub fn app_menu(platform: Platform) -> Vec<Spec> {
 pub struct TrayRecent {
     pub handle: Handle,
     pub name: String,
+    /// The diagram's own silhouette, as the page drew it for the Home tile (see `tray_decorate`).
+    pub icon: Option<Icon>,
 }
 
-const TRAY_RECENTS: usize = 8;
+/// A draft that isn't in a file yet, as the tray lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrayDraft {
+    pub id: String,
+    pub title: String,
+    pub icon: Option<Icon>,
+}
 
-pub fn tray_menu(recents: &[TrayRecent]) -> Vec<Spec> {
-    let recent_items = if recents.is_empty() {
-        vec![Spec::Item {
-            id: "tray:no-recents".to_string(),
-            text: "No recent files".to_string(),
+/// The line icons the page drew for the tray's actions, in the ink of the current appearance.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TrayActionIcons {
+    pub quick_draft: Option<Icon>,
+    pub new_canvas: Option<Icon>,
+    pub open: Option<Icon>,
+    pub open_project: Option<Icon>,
+}
+
+/// How many recent files sit in the menu itself; the rest are one level down.
+const TRAY_INLINE_RECENTS: usize = 5;
+const TRAY_RECENTS: usize = 12;
+const TRAY_DRAFTS: usize = 5;
+
+/// The tray menu: the one thing to do first, then whatever isn't saved, then the files you had open,
+/// each drawn as the diagram it is, then the rest. Sections appear only when they have something in
+/// them, so a first launch is four actions and Quit.
+pub fn tray_menu(
+    recents: &[TrayRecent],
+    drafts: &[TrayDraft],
+    icons: &TrayActionIcons,
+) -> Vec<Spec> {
+    let mut menu = vec![
+        icon_item(
+            "tray:new-quick-draft",
+            "New Quick Draft",
+            Some("CmdOrCtrl+N"),
+            icons.quick_draft.as_ref(),
+        ),
+        icon_item(
+            "tray:new-canvas",
+            "New Canvas\u{2026}",
+            Some("CmdOrCtrl+Shift+N"),
+            icons.new_canvas.as_ref(),
+        ),
+    ];
+
+    if !drafts.is_empty() {
+        menu.push(Spec::Separator);
+        menu.push(label("Unsaved"));
+        menu.extend(drafts.iter().take(TRAY_DRAFTS).map(|d| Spec::Item {
+            id: format!("{DRAFT_PREFIX}{}", d.id),
+            text: menu_text(&d.title),
             accelerator: None,
-            enabled: false,
-        }]
-    } else {
-        recents
-            .iter()
-            .take(TRAY_RECENTS)
-            .map(|r| Spec::Item {
-                id: format!("{RECENT_PREFIX}{}", r.handle),
-                // `&` marks a keyboard mnemonic in native menus, so a file called "R&D" needs it doubled.
-                text: r.name.replace('&', "&&"),
-                accelerator: None,
-                enabled: true,
-            })
-            .collect()
-    };
-    vec![
-        item("tray:new-quick-draft", "New Quick Draft", None),
-        item("tray:new-canvas", "New Canvas\u{2026}", None),
+            enabled: true,
+            icon: d.icon.clone(),
+        }));
+    }
+
+    if !recents.is_empty() {
+        let entry = |r: &TrayRecent| Spec::Item {
+            id: format!("{RECENT_PREFIX}{}", r.handle),
+            text: menu_text(&r.name),
+            accelerator: None,
+            enabled: true,
+            icon: r.icon.clone(),
+        };
+        menu.push(Spec::Separator);
+        menu.push(label("Recent"));
+        let listed: Vec<&TrayRecent> = recents.iter().take(TRAY_RECENTS).collect();
+        menu.extend(listed.iter().take(TRAY_INLINE_RECENTS).map(|r| entry(r)));
+        if listed.len() > TRAY_INLINE_RECENTS {
+            menu.push(submenu(
+                "More Recent",
+                listed[TRAY_INLINE_RECENTS..]
+                    .iter()
+                    .map(|r| entry(r))
+                    .collect(),
+            ));
+        }
+    }
+
+    menu.extend([
         Spec::Separator,
-        submenu("Recent", recent_items),
-        Spec::Separator,
-        item("tray:open", "Open File\u{2026}", None),
-        item("tray:open-project", "Open Project\u{2026}", None),
+        icon_item(
+            "tray:open",
+            "Open File\u{2026}",
+            Some("CmdOrCtrl+O"),
+            icons.open.as_ref(),
+        ),
+        icon_item(
+            "tray:open-project",
+            "Open Project\u{2026}",
+            Some("CmdOrCtrl+Shift+O"),
+            icons.open_project.as_ref(),
+        ),
         Spec::Separator,
         item("tray:show", "Show Draft Canvas", None),
-        item("tray:settings", "Settings\u{2026}", None),
+        item("tray:settings", "Settings\u{2026}", Some("CmdOrCtrl+,")),
         Spec::Separator,
-        item("tray:quit", "Quit Draft Canvas", None),
-    ]
+        item("tray:quit", "Quit Draft Canvas", Some("CmdOrCtrl+Q")),
+    ]);
+    menu
 }
 
 // --- turning specs into native menus -----------------------------------------------------------
@@ -264,13 +372,25 @@ fn realize_one<R: Runtime, M: Manager<R>>(
             text,
             accelerator,
             enabled,
-        } => Box::new(MenuItem::with_id(
-            manager,
-            id.as_str(),
-            text,
-            *enabled,
-            *accelerator,
-        )?),
+            icon,
+        } => match icon.as_deref().and_then(|png| Image::from_bytes(png).ok()) {
+            // An icon that won't decode is dropped, not the item: the words are what matters.
+            Some(image) => Box::new(IconMenuItem::with_id(
+                manager,
+                id.as_str(),
+                text,
+                *enabled,
+                Some(image),
+                *accelerator,
+            )?),
+            None => Box::new(MenuItem::with_id(
+                manager,
+                id.as_str(),
+                text,
+                *enabled,
+                *accelerator,
+            )?),
+        },
         Spec::Separator => Box::new(PredefinedMenuItem::separator(manager)?),
         Spec::Predefined(kind) => match kind {
             Predefined::Cut => Box::new(PredefinedMenuItem::cut(manager, None)?),
@@ -359,6 +479,7 @@ mod tests {
                     text,
                     accelerator,
                     enabled,
+                    ..
                 } => Some((id.as_str(), text.as_str(), *accelerator, *enabled)),
                 _ => None,
             })
@@ -409,12 +530,14 @@ mod tests {
                 );
             }
         }
-        let tray = tray_menu(&[TrayRecent {
-            handle: "h_1".into(),
-            name: "a".into(),
-        }]);
-        for (id, ..) in items(&tray) {
-            if id != "tray:no-recents" {
+        let tray = tray_menu(
+            &recents(8),
+            &[draft("Auth rework")],
+            &TrayActionIcons::default(),
+        );
+        for (id, _, _, enabled) in items(&tray) {
+            // A disabled line is a section's name, not something to choose.
+            if enabled {
                 assert!(action_for_id(id).is_some(), "{id} does nothing");
             }
         }
@@ -569,25 +692,51 @@ mod tests {
         }
     }
 
-    #[test]
-    fn the_tray_menu_is_laid_out_as_documented() {
-        let tray = tray_menu(&[]);
-        let shape: Vec<String> = tray
+    const DRAFT_ID: &str = "q_0123abcd-0000-4000-8000-000000000000";
+
+    fn recents(n: usize) -> Vec<TrayRecent> {
+        (0..n)
+            .map(|i| TrayRecent {
+                handle: format!("h_{i}"),
+                name: format!("file {i}"),
+                icon: None,
+            })
+            .collect()
+    }
+
+    fn draft(title: &str) -> TrayDraft {
+        TrayDraft {
+            id: DRAFT_ID.into(),
+            title: title.into(),
+            icon: None,
+        }
+    }
+
+    fn shape(specs: &[Spec]) -> Vec<String> {
+        specs
             .iter()
             .map(|s| match s {
+                Spec::Item {
+                    text,
+                    enabled: false,
+                    ..
+                } => format!("<{text}>"),
                 Spec::Item { text, .. } => text.clone(),
                 Spec::Separator => "-".into(),
                 Spec::Submenu { text, .. } => format!("[{text}]"),
                 Spec::Predefined(_) => "?".into(),
             })
-            .collect();
+            .collect()
+    }
+
+    #[test]
+    fn a_first_launch_tray_is_just_the_actions() {
+        let tray = tray_menu(&[], &[], &TrayActionIcons::default());
         assert_eq!(
-            shape,
+            shape(&tray),
             [
                 "New Quick Draft",
                 "New Canvas\u{2026}",
-                "-",
-                "[Recent]",
                 "-",
                 "Open File\u{2026}",
                 "Open Project\u{2026}",
@@ -601,29 +750,54 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_recent_list_shows_a_disabled_placeholder() {
-        let tray = tray_menu(&[]);
-        let recent = submenu_items(&tray, "Recent");
-        assert_eq!(recent.len(), 1);
+    fn unsaved_drafts_come_first_then_recent_files_inline() {
+        let tray = tray_menu(
+            &recents(3),
+            &[draft("Auth rework")],
+            &TrayActionIcons::default(),
+        );
         assert_eq!(
-            items(recent),
-            [("tray:no-recents", "No recent files", None, false)]
+            shape(&tray),
+            [
+                "New Quick Draft",
+                "New Canvas\u{2026}",
+                "-",
+                "<Unsaved>",
+                "Auth rework",
+                "-",
+                "<Recent>",
+                "file 0",
+                "file 1",
+                "file 2",
+                "-",
+                "Open File\u{2026}",
+                "Open Project\u{2026}",
+                "-",
+                "Show Draft Canvas",
+                "Settings\u{2026}",
+                "-",
+                "Quit Draft Canvas"
+            ]
+        );
+        assert_eq!(
+            action_for_id(&format!("draft:{DRAFT_ID}")),
+            Some(Action::Emit(HostEvent::RecoverDraft {
+                id: DRAFT_ID.into()
+            }))
         );
     }
 
     #[test]
-    fn recent_files_are_capped_at_eight_and_carry_their_handle() {
-        let recents: Vec<TrayRecent> = (0..12)
-            .map(|i| TrayRecent {
-                handle: format!("h_{i}"),
-                name: format!("file {i}"),
-            })
+    fn past_five_recent_files_the_rest_are_one_level_down_and_capped() {
+        let tray = tray_menu(&recents(20), &[], &TrayActionIcons::default());
+        let inline: Vec<_> = items(&tray)
+            .into_iter()
+            .filter(|(id, ..)| id.starts_with("recent:"))
             .collect();
-        let tray = tray_menu(&recents);
-        let listed = items(submenu_items(&tray, "Recent"));
-        assert_eq!(listed.len(), 8);
-        assert_eq!(listed[0], ("recent:h_0", "file 0", None, true));
-        assert_eq!(listed[7].0, "recent:h_7");
+        // Five in the menu itself, seven more under "More Recent": twelve in all.
+        assert_eq!(inline.len(), 12);
+        assert_eq!(inline[0], ("recent:h_0", "file 0", None, true));
+        assert_eq!(items(submenu_items(&tray, "More Recent")).len(), 7);
         assert_eq!(
             action_for_id("recent:h_3"),
             Some(Action::OpenRecent("h_3".into()))
@@ -631,12 +805,45 @@ mod tests {
     }
 
     #[test]
+    fn the_actions_wear_their_icons_and_their_shortcuts() {
+        let png: Icon = Arc::new(vec![1, 2, 3]);
+        let icons = TrayActionIcons {
+            quick_draft: Some(png.clone()),
+            ..Default::default()
+        };
+        let tray = tray_menu(&[], &[], &icons);
+        let Spec::Item {
+            icon, accelerator, ..
+        } = &tray[0]
+        else {
+            panic!("not an item")
+        };
+        assert_eq!(icon.as_ref(), Some(&png));
+        assert_eq!(*accelerator, Some("CmdOrCtrl+N"));
+        for (id, _, accel, _) in items(&tray) {
+            if let Some(accel) = accel {
+                assert!(accel.parse::<Accelerator>().is_ok(), "{id}: {accel:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_draft_id_that_isnt_one_is_not_an_action() {
+        assert_eq!(action_for_id("draft:../../etc"), None);
+        assert_eq!(action_for_id("draft:"), None);
+    }
+
+    #[test]
     fn an_ampersand_in_a_file_name_is_escaped_so_it_is_not_a_mnemonic() {
-        let tray = tray_menu(&[TrayRecent {
+        let named = vec![TrayRecent {
             handle: "h_1".into(),
             name: "R&D plan".into(),
-        }]);
-        assert_eq!(items(submenu_items(&tray, "Recent"))[0].1, "R&&D plan");
+            icon: None,
+        }];
+        let tray = tray_menu(&named, &[draft("Q&A")], &TrayActionIcons::default());
+        let texts: Vec<_> = items(&tray).into_iter().map(|(_, text, ..)| text).collect();
+        assert!(texts.contains(&"R&&D plan"));
+        assert!(texts.contains(&"Q&&A"));
     }
 
     #[test]

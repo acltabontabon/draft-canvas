@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type PointerEvent, type RefObject } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { canEncryptLocally } from '../../crypto/availability';
 import { PRODUCT } from '../../product';
 import type { StarterId } from '../../starters';
@@ -11,6 +11,7 @@ import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { SelectionChrome } from './SelectionChrome';
 import { StarterShelf } from './StarterShelf';
+import { useSpotlight } from './useSpotlight';
 import { useStarters } from './useStarters';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 
@@ -148,7 +149,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
  * The big line, set as setup and punchline: every sentence but the last quieter, the last one on
  * its own line at full strength — so the eye lands on the instruction.
  */
-function Motto({ text }: { text: string }) {
+export function Motto({ text }: { text: string }) {
   const sentences = text.match(/[^.!?]+[.!?]+/g)?.map((sentence) => sentence.trim()) ?? [text];
   const punchline = sentences.pop() ?? text;
   return (
@@ -157,41 +158,4 @@ function Motto({ text }: { text: string }) {
       <span className="dc-home-motto-punch">{punchline}</span>
     </p>
   );
-}
-
-/**
- * The dots under the pointer brighten, as if the canvas noticed you. A mouse-only nicety: two
- * custom properties written straight to the element at most once a frame, no React state, and
- * the stylesheet drops it entirely under reduced motion.
- */
-function useSpotlight(target: RefObject<HTMLElement | null>) {
-  const frame = useRef<number | null>(null);
-  const point = useRef({ x: 0, y: 0 });
-
-  useEffect(
-    () => () => {
-      if (frame.current !== null) cancelAnimationFrame(frame.current);
-    },
-    [],
-  );
-
-  return {
-    move: (event: PointerEvent<HTMLElement>) => {
-      if (event.pointerType !== 'mouse') return;
-      const rect = event.currentTarget.getBoundingClientRect();
-      point.current = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-      if (frame.current !== null) return;
-      frame.current = requestAnimationFrame(() => {
-        frame.current = null;
-        const element = target.current;
-        if (!element) return;
-        element.style.setProperty('--x', `${point.current.x}px`);
-        element.style.setProperty('--y', `${point.current.y}px`);
-      });
-    },
-    leave: () => {
-      if (frame.current !== null) cancelAnimationFrame(frame.current);
-      frame.current = null;
-    },
-  };
 }

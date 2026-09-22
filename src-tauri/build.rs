@@ -17,6 +17,8 @@ const COMMANDS: &[&str] = &[
     "sidecar_read",
     "sidecar_write",
     "sidecar_remove",
+    "peek_document",
+    "project_peek",
     "pick_project",
     "open_project",
     "project_scan",
@@ -33,6 +35,10 @@ const COMMANDS: &[&str] = &[
     "settings_set",
     "ask",
     "show_error",
+    "tray_decorate",
+    "tray_panel",
+    "tray_choose",
+    "tray_panel_fit",
 ];
 
 fn main() {

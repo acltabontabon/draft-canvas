@@ -20,7 +20,8 @@ export function StarterBrowser({
   onClose: () => void;
 }) {
   return (
-    <Modal title="Starters" width={900} onClose={onClose} className="dc-modal-starters">
+    <Modal title="Starters" width={1080} onClose={onClose} className="dc-modal-starters">
+      <p className="dc-starters-lede">The shapes a conversation usually starts from. Everything they draw is ordinary and yours to change.</p>
       <StarterShelf
         starters={ARCHITECTURE_STARTERS}
         mode="all"

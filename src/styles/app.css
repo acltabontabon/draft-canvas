@@ -1452,11 +1452,14 @@ kbd {
 }
 
 /*
- * The Browse-all dialog: every starter at once, so the shelf has to stay quiet until someone
- * shows interest. At rest a tile is a drawing and a name; hover or focus lifts the drawing, lays
- * a faint patch of surface behind the whole tile so all of it reads as the thing you click, and
- * reveals the description in place. The description is always laid out, only invisible, so a
- * row is already as tall as its longest one and nothing moves when it appears.
+ * The Browse-all dialog: every starter at once, and all of it on one screen. The seven
+ * architectures run along the top; the two smaller categories share the band under them, side by
+ * side, so the whole catalog reads as one tidy sheet rather than a page to scroll.
+ *
+ * Each starter is drawn on its own small patch of canvas — a rounded plate with a faint grid —
+ * with its name under it. Hover or focus lights the plate's edge and the drawing, and reveals the
+ * description in place. The description is always laid out, only invisible, so every row is
+ * already as tall as its longest one and nothing moves when it appears.
  */
 .dc-modal.dc-modal-starters {
   max-height: min(880px, calc(100vh - 48px));
@@ -1464,63 +1467,157 @@ kbd {
 }
 
 .dc-modal-starters .dc-modal-header {
-  padding-left: 20px;
+  padding: 16px 14px 14px 24px;
+  border-bottom: 0;
+}
+
+.dc-modal-starters .dc-modal-header h2 {
+  font-size: 16px;
+  letter-spacing: -0.01em;
 }
 
 .dc-modal-starters .dc-modal-body {
-  padding: 14px 20px 10px;
+  padding: 2px 24px 24px;
 }
 
-/* Every row already carries the invisible room its descriptions will need, so the space between
-   categories has to be clearly larger than that for the groups to still read as groups. */
+.dc-starters-lede {
+  margin: 0 0 22px;
+  color: var(--dc-text-muted);
+  font-size: 13px;
+}
+
+/* One set of seven columns for the whole sheet: the architectures fill them, and the two smaller
+   categories take three each beneath, with the middle column left as the air between them — so
+   every plate is the same size and each sits exactly under the one above it. */
 .dc-shelf[data-mode='all'] .dc-shelf-categories {
-  gap: 34px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 26px 12px;
 }
 
-/* A divider more than a heading: the label and a hairline running out to the edge, so the eye
-   resets between groups without another block of type to read. */
-.dc-shelf[data-mode='all'] .dc-shelf-label::after {
-  content: '';
-  flex: 1;
-  align-self: center;
-  height: 1px;
-  margin-left: 4px;
-  background: var(--dc-border);
+.dc-shelf[data-mode='all'] .dc-shelf-categories > * {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: span 3;
+  align-content: start;
 }
 
-/* Pulled out by the tiles' own padding, so the drawings line up with the labels above them and
-   only the hover surface reaches into the margin. `auto-fill` keeps the empty tracks, so a
-   three-starter category sits on the same columns as a seven-starter one. */
+.dc-shelf[data-mode='all'] .dc-shelf-categories > :first-child {
+  grid-column: 1 / -1;
+}
+
+.dc-shelf[data-mode='all'] .dc-shelf-categories > :nth-child(3) {
+  grid-column: 5 / span 3;
+}
+
+.dc-shelf[data-mode='all'] .dc-shelf-label {
+  grid-column: 1 / -1;
+  margin-left: 2px;
+  color: var(--dc-text-faint);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
 .dc-shelf[data-mode='all'] .dc-shelf-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(184px, 100%), 1fr));
-  gap: 0;
-  margin: 4px -10px 0;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  gap: 14px 12px;
+  margin: 10px 0 0;
 }
 
-/* Side padding is the selection frame's overhang (see `.dc-starter-swatch .dc-chrome`), so the
-   handles of the widest drawings still land inside the hover surface. */
 .dc-shelf[data-mode='all'] .dc-starter {
-  gap: 2px;
-  padding: 8px 10px 6px;
-  border-radius: var(--dc-radius);
-  transition: background-color 120ms ease;
+  gap: 7px;
+  padding: 0;
+  border-radius: 12px;
 }
 
-.dc-shelf[data-mode='all'] .dc-starter:hover,
-.dc-shelf[data-mode='all'] .dc-starter:focus-visible {
-  background: color-mix(in srgb, var(--dc-text) 4%, transparent);
+/* The plate: a small canvas the drawing sits on. */
+.dc-shelf[data-mode='all'] .dc-starter-swatch {
+  width: 100%;
+  height: 92px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--dc-border) 80%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--dc-canvas) 55%, var(--dc-surface));
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 180ms ease;
 }
 
+.dc-shelf[data-mode='all'] .dc-starter-swatch::before {
+  background-size: 11px 11px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 72% at 50% 50%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 70% 72% at 50% 50%, #000 30%, transparent 100%);
+  opacity: 0.5;
+}
+
+/* The plate's own edge does what the selection frame does elsewhere. */
+.dc-shelf[data-mode='all'] .dc-chrome {
+  display: none;
+}
+
+.dc-shelf[data-mode='all'] .dc-starter:hover .dc-starter-swatch,
+.dc-shelf[data-mode='all'] .dc-starter:focus-visible .dc-starter-swatch {
+  border-color: color-mix(in srgb, var(--dc-selection) 62%, transparent);
+  background: var(--dc-canvas);
+  box-shadow: 0 10px 28px -18px var(--dc-selection);
+}
+
+.dc-shelf[data-mode='all'] .dc-starter:focus-visible .dc-starter-swatch {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+/* Drawn a size down, so seven fit a row and every drawing keeps air inside its plate. */
 .dc-shelf[data-mode='all'] .dc-starter-glyph {
-  opacity: 0.78;
+  width: 112px;
+  height: 60px;
+  opacity: 0.82;
   transition:
     color 120ms ease,
     opacity 120ms ease;
 }
 
+.dc-shelf[data-mode='all'] .dc-starter-name {
+  padding: 0 2px;
+  color: var(--dc-text);
+  font-size: 13px;
+  line-height: 17px;
+  white-space: normal;
+  text-wrap: balance;
+}
+
 .dc-shelf[data-mode='all'] .dc-starter:hover .dc-starter-glyph,
 .dc-shelf[data-mode='all'] .dc-starter:focus-visible .dc-starter-glyph {
   opacity: 1;
+}
+
+/* Always the whole sentence: every row is already laid out with room for its longest one, so
+   revealing it moves nothing. */
+.dc-shelf[data-mode='all'] .dc-starter-description {
+  margin-top: -3px;
+  font-size: 11.5px;
+  line-height: 15px;
+}
+
+/* Narrower than the sheet was drawn for: the categories stack, each wrapping onto its own rows. */
+@media (max-width: 1100px) {
+  .dc-shelf[data-mode='all'] .dc-shelf-categories {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dc-shelf[data-mode='all'] .dc-shelf-categories > *,
+  .dc-shelf[data-mode='all'] .dc-shelf-categories > :first-child,
+  .dc-shelf[data-mode='all'] .dc-shelf-categories > :nth-child(3) {
+    display: block;
+    grid-column: auto;
+  }
+
+  /* Plates keep the size they have on the full sheet; the row wraps rather than stretching them. */
+  .dc-shelf[data-mode='all'] .dc-shelf-grid {
+    grid-template-columns: repeat(auto-fill, minmax(128px, 150px));
+  }
 }
 
 .dc-starter-description {
@@ -2036,11 +2133,17 @@ kbd {
 }
 
 /* Beside Learn when it's docked (`ui/learn/learn.css`), which is why it can't assume the full width. */
+/* Nothing on the canvas is page text to select. Without this, WebKit (Safari, and the desktop app's
+   webview) turns a box-select drag into a native text selection too, painting edge labels and whole
+   layers in the system highlight and flickering as the drag moves. The pieces that are meant to be
+   selected — a field being typed in, a callout's note or code — opt back in with `user-select: text`. */
 .dc-editor-canvas {
   position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Three tracks. The outer two are equal fractions and the middle is intrinsic, so the create
@@ -3961,6 +4064,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
   transition:
     border-color 120ms ease,
@@ -4305,6 +4409,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
   transition:
     background-color 120ms ease,
@@ -5162,6 +5267,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-text);
   font-size: 13.5px;
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
 }
 

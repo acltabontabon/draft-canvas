@@ -13,6 +13,7 @@ import {
   type RecentItem,
   type RecoveryEntry,
   type SavedAs,
+  type TrayArt,
 } from '../../src/desktop/api';
 import type { HostLink } from '../../src/desktop/channel';
 import { DesktopController, type DesktopUi } from '../../src/desktop/controller';
@@ -109,6 +110,8 @@ export function createHarness() {
     sidecarRead: vi.fn(async (handle: string) => sidecars.get(handle) ?? null),
     sidecarWrite: vi.fn(async (handle: string, mime: string, base64: string) => void sidecars.set(handle, { mime, base64 })),
     sidecarRemove: vi.fn(async (handle: string) => void sidecars.delete(handle)),
+    peekDocument: vi.fn(async (handle: string) => files.get(handle)?.text ?? null),
+    projectPeek: vi.fn(async (): Promise<string | null> => null),
     pickProject: vi.fn(async () => null),
     openProject: vi.fn(async () => {
       throw new Error('not used');
@@ -149,6 +152,7 @@ export function createHarness() {
       return answers.shift() ?? buttons.length - 1;
     }),
     showError: vi.fn(async (title: string, message: string) => void errors.push({ title, message })),
+    trayDecorate: vi.fn(async (_art: TrayArt) => {}),
   } satisfies DesktopApi;
 
   const link: HostLink = {

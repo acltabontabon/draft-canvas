@@ -55,9 +55,11 @@ payments/
     └── reconciliation.draftcanvas
 ```
 
-Home lists names and dates only, and never opens a diagram to draw its row, so a large folder is as quick as a
-small one. It skips hidden folders and the usual build folders (`node_modules`, `target`, `dist`), stops at a
-depth and a count that a project never reaches, and says so if a folder holds more than it lists.
+Home finds a folder's diagrams by name and date alone, so a large folder is as quick as a small one. It skips
+hidden folders and the usual build folders (`node_modules`, `target`, `dist`), stops at a depth and a count that
+a project never reaches, and says so if a folder holds more than it lists. Only the handful of files on screen
+are looked inside, to draw each one as its diagram: shapes only, never the words, and looking isn't opening, so
+nothing is added to Recent and nothing is written.
 
 Because they're plain files, the same diagrams can live in a repository beside the code they describe:
 
@@ -81,12 +83,17 @@ open those in the browser version. (The desktop app can still create them, from 
 
 ## The menu bar and system tray
 
-Draft Canvas stays a click away. On macOS it has a menu-bar icon, on Windows a system-tray icon:
+Draft Canvas stays a click away. On macOS it has a menu-bar icon, on Windows a system-tray icon. Clicking it opens
+a small panel beside it, Home in miniature:
 
-- **New Quick Draft**, **New Canvas…**
-- **Recent**: the last few files
-- **Open File…**, **Open Project…**
-- **Show Draft Canvas**, **Settings…**, **Quit**
+- **New Quick Draft**
+- **Unsaved**: drafts waiting to be carried on with, and **Recent**: your last few files, each drawn as the
+  diagram it is
+- **Open…**, **Project…**, **New canvas**
+- the name at the top brings the window forward; **Settings** and **Quit** sit beside it
+
+Clicking anywhere else, or `Esc`, puts the panel away. On Windows, right-clicking the icon opens the same things as
+a plain menu. The icon wears a small dot while a draft is unsaved.
 
 Closing the window hides it rather than quitting, so the next Quick Draft is instant. The first time, Draft Canvas
 tells you where it went and asks whether that's what you want; **Settings** changes it later. **Quit** (from the

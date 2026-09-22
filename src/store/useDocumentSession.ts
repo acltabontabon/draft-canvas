@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { canEncryptLocally } from '../crypto/availability';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
-import { freeOriginFor, openingViewportFor } from '../document/geometry';
 import { createId } from '../document/ids';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { hostKind } from '../host/hostInfo';
@@ -382,18 +381,8 @@ export function useDocumentSession(): DocumentSession {
           return;
         }
         const starter = starterId ? catalog?.starterById(starterId) : undefined;
-        let document = createDocument(title ?? starter?.name ?? 'Untitled canvas');
-        if (starter) {
-          // The starter is the canvas's initial state, not an edit: there is
-          // nothing to undo, exactly as with an imported file. Same origin the
-          // palette uses for an empty canvas, plus a viewport that shows it —
-          // see `openingViewportFor` for why the editor won't do that itself.
-          const size = catalog!.starterSize(starter);
-          const { nodes, edges, flows } = catalog!.buildStarter(starter, freeOriginFor(document, size));
-          const screen =
-            typeof window === 'undefined' ? null : { width: window.innerWidth, height: window.innerHeight };
-          document = { ...document, nodes, edges, flows, ...(screen ? { viewport: openingViewportFor(size, screen) } : {}) };
-        }
+        const document =
+          starter && catalog ? catalog.starterDocument(starter, title) : createDocument(title ?? 'Untitled canvas');
         await adoptDocument(document);
       } finally {
         creating.current = false;

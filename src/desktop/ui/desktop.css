@@ -1,14 +1,715 @@
-/* The desktop app's own bits. Everything else on its screens is the Library's and the editor's. */
+/*
+ * The desktop's Home (`DesktopHome.tsx`) is itself a diagram: a selected text node, a connector,
+ * one node to press, a fan-out to a row of the person's own work. Canvas vocabulary only — dot
+ * grid, selection frame and handles, orthogonal connectors with small arrowheads, an edge label —
+ * and one solid colour, on the one thing to do.
+ */
 
-/* Home has several lists, each under its own heading; the Library has one. */
-.dc-library-list > .dc-library-list-head:not(:first-child) {
-  margin-top: 32px;
+.dc-desk {
+  /* The editor's grid dot, a step quieter than the web home's: here it runs behind the words too. */
+  --dc-home-dot: color-mix(in srgb, var(--dc-text-faint) 22%, transparent);
+  --x: 50%;
+  --y: 40%;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--dc-canvas);
 }
 
-/* A heading's own actions ("Refresh", "Clear") belong to no row, so there is nothing to hover to reveal them. */
-.dc-library-list-head .dc-library-item-actions {
+/* ---- the canvas under everything ---------------------------------------- */
+
+.dc-desk-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.dc-desk-canvas::before,
+.dc-desk-canvas::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-position: center top;
+  background-size: 18px 18px;
+}
+
+/* The whole window is the canvas, fading toward its edges so the page has a middle. */
+.dc-desk-canvas::before {
+  background-image: radial-gradient(circle, var(--dc-home-dot) 1.1px, transparent 1.5px);
+  -webkit-mask-image: radial-gradient(ellipse 70% 72% at 50% 44%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 70% 72% at 50% 44%, #000 30%, transparent 100%);
+}
+
+/* …and it notices the pointer: the dots nearest it light up in the selection colour. */
+.dc-desk-canvas::after {
+  background-image: radial-gradient(circle, var(--dc-selection) 1.1px, transparent 1.5px);
+  -webkit-mask-image: radial-gradient(circle 140px at var(--x) var(--y), rgba(0, 0, 0, 0.32), transparent);
+  mask-image: radial-gradient(circle 140px at var(--x) var(--y), rgba(0, 0, 0, 0.32), transparent);
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+@media (hover: hover) {
+  .dc-desk:hover .dc-desk-canvas::after {
+    opacity: 1;
+  }
+}
+
+.dc-desk-top {
+  flex-shrink: 0;
+  padding: 18px 26px 0;
+}
+
+/* ---- the stage ---------------------------------------------------------- */
+
+.dc-desk-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(1120px, calc(100% - 48px));
+  margin: auto;
+  padding: clamp(8px, 2vh, 24px) 0 clamp(24px, 4vh, 48px);
+}
+
+.dc-desk-stage > :not(.dc-desk-wires) {
+  position: relative;
+  z-index: 1;
+}
+
+.dc-desk-wires {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: visible;
+  fill: none;
+  stroke: var(--dc-edge);
+  stroke-width: 1.25;
+  pointer-events: none;
+}
+
+/* ---- the motto: a text node, just placed, still selected ---------------- */
+
+/* Words sit on clean canvas: the grid fades out behind every block of text rather than running
+   through it, the way a text node on the canvas covers the dots beneath it. */
+.dc-desk-motto,
+.dc-desk-readout,
+.dc-desk-ways,
+.dc-desk-foot,
+.dc-desk-all {
+  background: radial-gradient(closest-side, var(--dc-canvas) 72%, color-mix(in srgb, var(--dc-canvas) 0%, transparent));
+}
+
+.dc-desk-motto {
+  padding: 22px 38px 26px;
+  background: var(--dc-canvas);
+  text-align: center;
+}
+
+.dc-desk-motto h1 {
+  margin: 0;
+  color: var(--dc-text);
+  font-size: clamp(40px, 3.4vw + 12px, 66px);
+  font-weight: 650;
+  letter-spacing: -0.036em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.dc-desk-motto p {
+  margin: 14px 0 0;
+  color: var(--dc-text-muted);
+  font-size: 16px;
+}
+
+.dc-desk-motto-frame {
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 34%, transparent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.dc-desk-motto-frame span {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 70%, transparent);
+  border-radius: 1.5px;
+  background: var(--dc-canvas);
+}
+
+.dc-desk-motto-frame [data-at='nw'] {
+  top: -4px;
+  left: -4px;
+}
+
+.dc-desk-motto-frame [data-at='ne'] {
+  top: -4px;
+  right: -4px;
+}
+
+.dc-desk-motto-frame [data-at='se'] {
+  right: -4px;
+  bottom: -4px;
+}
+
+.dc-desk-motto-frame [data-at='sw'] {
+  bottom: -4px;
+  left: -4px;
+}
+
+/* ---- the one thing to do ------------------------------------------------ */
+
+.dc-desk-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 50px;
+  margin-top: 46px;
+  padding: 0 12px 0 19px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--dc-selection);
+  color: var(--dc-canvas);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.16) inset,
+    0 14px 38px -16px var(--dc-selection);
+  transition:
+    transform 80ms ease,
+    filter 120ms ease,
+    box-shadow 200ms ease;
+}
+
+.dc-desk-action:hover {
+  filter: brightness(1.06);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.16) inset,
+    0 18px 46px -16px var(--dc-selection);
+}
+
+.dc-desk-action:active {
+  transform: translateY(1px);
+  filter: brightness(0.98);
+}
+
+.dc-desk-action:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 4px;
+}
+
+.dc-desk-action kbd {
+  min-width: 0;
+  margin-left: 4px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: color-mix(in srgb, var(--dc-canvas) 16%, transparent);
+  color: inherit;
+  font-family: var(--dc-font);
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  line-height: 22px;
+}
+
+/* ---- the connector's label: where the row is chosen --------------------- */
+
+.dc-desk-label {
+  margin-top: 26px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  /* An edge label: a halo of canvas behind the words, so the connector runs under them. */
+  background: var(--dc-canvas);
+}
+
+.dc-desk-label [role='tablist'] {
+  display: flex;
+  gap: 2px;
+}
+
+.dc-desk-label [role='tab'] {
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.dc-desk-label [role='tab']:hover {
+  color: var(--dc-text);
+}
+
+.dc-desk-label [role='tab'][aria-selected='true'] {
+  background: var(--dc-selection-soft);
+  color: var(--dc-text);
+}
+
+.dc-desk-label [role='tab']:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-desk-caption {
+  display: block;
+  padding: 3px 6px;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* ---- the row ------------------------------------------------------------ */
+
+.dc-desk-row {
+  display: flex;
+  justify-content: center;
+  gap: 36px;
+  min-height: 132px;
+  margin-top: 46px;
+}
+
+.dc-desk-row-pending {
+  width: 1px;
+}
+
+/* Drawing and name on clean canvas: the tile's own background sits under both, so the grid
+   fades out behind them rather than running through the words. */
+.dc-desk-tile {
+  position: relative;
+  width: 144px;
+  min-width: 0;
+  background: radial-gradient(ellipse 62% 56% at 50% 50%, var(--dc-canvas) 62%, color-mix(in srgb, var(--dc-canvas) 0%, transparent));
+}
+
+.dc-desk-tile > .dc-starter {
+  align-items: center;
+  width: 100%;
+  text-align: center;
+}
+
+/* The page is already canvas: a tile lifts its drawing off the grid instead of adding its own. */
+.dc-desk .dc-starter-swatch::before {
+  background: none;
+  -webkit-mask-image: none;
+  mask-image: none;
   opacity: 1;
 }
+
+.dc-desk .dc-starter-name {
+  max-width: 100%;
+}
+
+.dc-desk-tile-meta {
+  max-width: 100%;
+  margin-top: -4px;
+  overflow: hidden;
+  color: var(--dc-text-faint);
+  font-size: 11.5px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A draft holds work no file does yet: the dot macOS puts in a window's close button. */
+.dc-desk-edited {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 7px 1px 0;
+  border-radius: 50%;
+  background: var(--dc-accent-amber-chip);
+  vertical-align: middle;
+}
+
+/* A file's own drawing lands with a fade, not a pop: it was read after the tile appeared. */
+.dc-desk-tile [data-thumbnail='drawn'] .dc-starter-glyph {
+  animation: dc-fade-in 240ms ease both;
+}
+
+.dc-desk-sheet path,
+.dc-desk-folder path,
+.dc-desk-folder-doc,
+.dc-desk-more-glyph rect {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.dc-desk-sheet path {
+  opacity: 0.55;
+  stroke-dasharray: 2.5 2.5;
+}
+
+.dc-desk-folder path:first-child {
+  opacity: 0.7;
+}
+
+.dc-desk-folder-doc,
+.dc-desk-folder-edge {
+  opacity: 0.5;
+}
+
+.dc-desk-more-glyph rect {
+  fill: var(--dc-canvas);
+  opacity: 0.9;
+}
+
+.dc-desk-more-glyph circle {
+  fill: currentColor;
+  stroke: none;
+  opacity: 0.7;
+}
+
+/* Still being read: only the canvas shows, so nothing flashes a blank page first. */
+.dc-desk-tile [data-thumbnail='loading'] .dc-starter-glyph {
+  opacity: 0;
+}
+
+.dc-desk-tile-action {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
+  color: var(--dc-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.dc-desk-tile:hover .dc-desk-tile-action,
+.dc-desk-tile:focus-within .dc-desk-tile-action {
+  opacity: 1;
+}
+
+.dc-desk-tile-action:hover {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+}
+
+.dc-desk-tile-action:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 0;
+}
+
+@media (hover: none) {
+  .dc-desk-tile-action {
+    opacity: 1;
+  }
+}
+
+/* ---- under the row ------------------------------------------------------ */
+
+.dc-desk-readout {
+  max-width: 100%;
+  min-height: 20px;
+  margin: 10px 0 0;
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  line-height: 20px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-desk-readout[data-idle] {
+  color: var(--dc-text-faint);
+  font-family: var(--dc-mono);
+  font-size: 11.5px;
+  word-spacing: 0.1em;
+}
+
+.dc-desk-aside {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 2px 4px;
+  margin-top: 4px;
+  animation: dc-fade-in 160ms ease both;
+}
+
+.dc-desk-aside-action {
+  height: 26px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-desk-aside-path {
+  max-width: 100%;
+  padding: 0 8px;
+  overflow: hidden;
+  color: var(--dc-text-faint);
+  font-family: var(--dc-mono);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Everything else there is to do, as one quiet line. */
+.dc-desk-ways {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 10px;
+  margin-top: clamp(26px, 5vh, 52px);
+}
+
+.dc-desk-way {
+  height: 30px;
+  color: var(--dc-text-muted);
+}
+
+.dc-desk-way kbd {
+  min-width: 0;
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-faint);
+  font-family: var(--dc-font);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+/* "All 12": the whole set, as a plain list, when the row can't hold it. */
+.dc-desk-all {
+  width: min(560px, 100%);
+  margin-top: 28px;
+  animation: dc-fade-in 160ms ease both;
+}
+
+.dc-desk-all ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-desk-all li + li {
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-desk-all button {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  width: 100%;
+  padding: 9px 4px;
+  border: 0;
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-desk-all button:hover .dc-desk-all-name {
+  color: var(--dc-selection);
+}
+
+.dc-desk-all-name {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.dc-desk-all-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- the foot ----------------------------------------------------------- */
+
+.dc-desk-foot {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px 18px;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.dc-desk-tray-mark {
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* ---- the connectors ----------------------------------------------------- */
+
+.dc-desk-link,
+.dc-desk-route-line {
+  stroke-dasharray: 1;
+}
+
+.dc-desk-arrow {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dc-desk-anchor {
+  fill: var(--dc-canvas);
+  stroke-width: 1.5;
+}
+
+.dc-desk-junction {
+  fill: var(--dc-edge);
+  stroke: none;
+}
+
+.dc-desk-route {
+  transition: opacity 140ms ease;
+}
+
+/* The way to "more" is a promise, not a place: drawn dashed. */
+.dc-desk-route[data-dashed] .dc-desk-route-line {
+  stroke-dasharray: 0.012 0.018;
+}
+
+/* The route to what the pointer is on, lit end to end, and one pulse travelling down it. */
+.dc-desk-route[data-hot] .dc-desk-route-line,
+.dc-desk-route[data-hot] .dc-desk-arrow {
+  stroke: var(--dc-selection);
+}
+
+.dc-desk-route-pulse {
+  stroke: var(--dc-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 0.08 2;
+  stroke-dashoffset: 0.08;
+  opacity: 0;
+}
+
+.dc-desk-route[data-hot] .dc-desk-route-pulse {
+  animation: dc-desk-pulse 560ms var(--dc-ease-out) 1 both;
+}
+
+@keyframes dc-desk-pulse {
+  0% {
+    stroke-dashoffset: 0.08;
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -1;
+    opacity: 0;
+  }
+}
+
+/* ---- arrival: the diagram draws itself, once ----------------------------- */
+
+@keyframes dc-desk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.dc-desk-motto h1,
+.dc-desk-motto p,
+.dc-desk-action,
+.dc-desk-label,
+.dc-desk-tile,
+.dc-desk-readout,
+.dc-desk-ways {
+  animation: dc-desk-rise 300ms var(--dc-ease-out) both;
+}
+
+.dc-desk-motto p {
+  animation-delay: 40ms;
+}
+
+.dc-desk-motto-frame {
+  animation: dc-fade-in 240ms ease 140ms both;
+}
+
+.dc-desk-action {
+  animation-delay: 80ms;
+}
+
+.dc-desk-link {
+  animation: dc-draw-in 220ms var(--dc-ease-out) 160ms both;
+}
+
+.dc-desk-label {
+  animation-delay: 200ms;
+}
+
+.dc-desk-route-line {
+  animation: dc-draw-in 360ms var(--dc-ease-out) 240ms both;
+}
+
+.dc-desk-route[data-dashed] .dc-desk-route-line {
+  animation: dc-fade-in 300ms ease 360ms both;
+}
+
+.dc-desk-link-arrow,
+.dc-desk-route .dc-desk-arrow,
+.dc-desk-junction {
+  animation: dc-fade-in 160ms ease 420ms both;
+}
+
+.dc-desk-tile {
+  animation-delay: calc(300ms + var(--i, 0) * 45ms);
+}
+
+.dc-desk-readout,
+.dc-desk-ways {
+  animation-delay: 480ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-desk *,
+  .dc-desk *::before,
+  .dc-desk *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---- settings ----------------------------------------------------------- */
 
 .dc-settings-group {
   display: flex;

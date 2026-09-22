@@ -844,6 +844,7 @@ dependencies = [
  "muda",
  "objc2-app-kit",
  "objc2-foundation",
+ "objc2-quartz-core",
  "serde",
  "serde_json",
  "sha2",

@@ -5,10 +5,12 @@
 
 pub mod documents;
 pub mod host;
+pub mod peek;
 pub mod projects;
 pub mod raw;
 pub mod recents;
 pub mod recovery;
+pub mod tray;
 
 use crate::errors::AppError;
 use crate::recents::RecentKind;

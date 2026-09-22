@@ -21,6 +21,13 @@ export interface ShellHandle {
   answer(...choices: number[]): void;
   /** The next export's Save dialog is cancelled. */
   cancelNextExport(): void;
+  /** What the app last drew for the tray menu. */
+  trayArt(): unknown;
+  /**
+   * What an earlier session left behind, set before the app starts: recent files and unsaved drafts,
+   * each `ago` milliseconds old.
+   */
+  seed(history: { recents?: { name: string; text: string; ago: number }[]; drafts?: { title: string; text: string; ago: number }[] }): void;
   /** Something the shell tells the app on its own: a menu pick, a file the OS opened. */
   emit(event: unknown): void;
   /** Every command the app called, in order. */
@@ -60,6 +67,7 @@ export async function installMockShell(page: Page): Promise<void> {
     let pickedOpen: string | null = null;
     let saveTarget: { name: string } | null = null;
     let cancelExport = false;
+    let trayArt: unknown = null;
     let events: ChannelLike | null = null;
     let eventIndex = 0;
     const decode = (bytes: unknown) => new TextDecoder().decode(bytes as Uint8Array);
@@ -147,6 +155,8 @@ export async function installMockShell(page: Page): Promise<void> {
       sidecar_read: (args: { handle: string }) => sidecars.get(args.handle) ?? null,
       sidecar_write: (args: { handle: string; mime: string; base64: string }) => void sidecars.set(args.handle, args),
       sidecar_remove: (args: { handle: string }) => void sidecars.delete(args.handle),
+      peek_document: (args: { handle: string }) => files.get(args.handle)?.text ?? null,
+      project_peek: () => null,
       pick_project: () => null,
       recents_list: () => recents,
       recents_remove: (args: { handle: string }) => {
@@ -181,6 +191,22 @@ export async function installMockShell(page: Page): Promise<void> {
         return answers.shift() ?? args.buttons.length - 1;
       },
       show_error: () => null,
+      tray_decorate: (args: { art: unknown }) => void (trayArt = args.art),
+      // The tray panel's own three (`capabilities/tray.json`), answered the way the shell would.
+      tray_panel: () => ({
+        recents: recents
+          .filter((item) => item.kind === 'file')
+          .slice(0, 6)
+          .map((item) => ({ choice: `recent:${item.handle}`, handle: item.handle, name: item.name, openedMs: item.lastOpenedMs })),
+        drafts: [...recovery.values()].slice(0, 3).map(({ entry }) => ({
+          choice: `draft:${entry.id as string}`,
+          id: entry.id,
+          title: entry.title,
+          updatedMs: entry.updatedAt,
+        })),
+      }),
+      tray_choose: () => null,
+      tray_panel_fit: () => null,
     };
 
     // What `@tauri-apps/api/core` needs of the page: a way to register the callbacks a `Channel` calls back into.
@@ -208,6 +234,21 @@ export async function installMockShell(page: Page): Promise<void> {
       nextSaveAs: (target) => void (saveTarget = target),
       answer: (...choices) => void answers.push(...choices),
       cancelNextExport: () => void (cancelExport = true),
+      trayArt: () => trayArt,
+      seed: ({ recents: seeded = [], drafts = [] }) => {
+        for (const item of seeded) {
+          const handle = addFile(item.name, item.text);
+          const file = files.get(handle)!;
+          recents.push({ handle, kind: 'file', name: file.name, displayPath: file.displayPath, lastOpenedMs: Date.now() - item.ago });
+        }
+        drafts.forEach((draft, i) => {
+          const id = `q_0000000${i}-0000-4000-8000-000000000000`;
+          recovery.set(id, {
+            text: draft.text,
+            entry: { id, title: draft.title, updatedAt: Date.now() - draft.ago, bytes: draft.text.length, origin: { kind: 'quick' } },
+          });
+        });
+      },
       emit,
       calls: () => calls,
       exports: () => exported,

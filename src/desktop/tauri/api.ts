@@ -70,11 +70,13 @@ export function createTauriApi(): DesktopApi {
     sidecarRead: (handle) => call('sidecar_read', { handle }),
     sidecarWrite: (handle, mime, base64) => call('sidecar_write', { handle, mime, base64 }),
     sidecarRemove: (handle) => call('sidecar_remove', { handle }),
+    peekDocument: (handle) => call('peek_document', { handle }),
 
     pickProject: () => call('pick_project'),
     openProject: (handle) => call('open_project', { handle }),
     projectScan: (handle) => call('project_scan', { handle }),
     projectOpenFile: (projectHandle, relPath) => call('project_open_file', { projectHandle, relPath }),
+    projectPeek: (projectHandle, relPath) => call('project_peek', { projectHandle, relPath }),
     projectSaveNew: (projectHandle, name, bytes) => callRaw('project_save_new', { projectHandle, name }, bytes),
 
     recentsList: () => call('recents_list'),
@@ -92,5 +94,6 @@ export function createTauriApi(): DesktopApi {
     settingsSet: (patch) => call<DesktopSettings>('settings_set', { patch }),
     ask: (title, message, buttons) => call('ask', { title, message, buttons }),
     showError: (title, message) => call('show_error', { title, message }),
+    trayDecorate: (art) => call('tray_decorate', { art }),
   };
 }

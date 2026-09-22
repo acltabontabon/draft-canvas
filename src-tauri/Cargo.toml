@@ -31,10 +31,12 @@ dunce = "1"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
 
-# Same major versions Tauri already resolves, for the "edited" dot and proxy icon on the window.
+# Same major versions Tauri already resolves, for the "edited" dot and proxy icon on the window, and
+# the tray panel's rounded corners.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = "0.3"
 objc2-foundation = "0.3"
+objc2-quartz-core = { version = "0.3", default-features = false, features = ["std", "CALayer", "objc2-core-foundation"] }
 
 [dev-dependencies]
 tempfile = "3"

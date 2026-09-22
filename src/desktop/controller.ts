@@ -2,6 +2,8 @@ import { createDocument } from '../document/factory';
 import { deserializeDocument, fileNameFor, serializeDocument } from '../export/project';
 import type { CommandMessage, LoadMessage, ToHostMessage } from '../host/embeddedHost';
 import { logDiagnostic } from '../lib/diagnostics';
+import type { StarterId } from '../starters';
+import { loadStarters } from '../starters/load';
 import {
   DesktopError,
   type DesktopApi,
@@ -69,6 +71,23 @@ function uuid(): string {
   bytes[8] = (bytes[8]! & 0x3f) | 0x80;
   const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * A document's title, from its text, without parsing a whole diagram every few seconds: the
+ * serializer writes `metadata` right after the format marker, so the title is always within the
+ * first few hundred bytes. A draft is listed on Home under this, so two of them aren't both just
+ * "Quick Draft".
+ */
+export function titleOf(text: string): string | null {
+  const match = /"metadata":\s*\{\s*"id":\s*"(?:[^"\\]|\\.)*",\s*"title":\s*("(?:[^"\\]|\\.)*")/.exec(text.slice(0, 4096));
+  if (!match) return null;
+  try {
+    const title = (JSON.parse(match[1]!) as string).trim();
+    return title || null;
+  } catch {
+    return null;
+  }
 }
 
 /** The message a person can act on, for whatever a command rejected with. */
@@ -143,6 +162,8 @@ export class DesktopController {
         return this.newQuickDraft();
       case 'new-canvas':
         return this.newCanvas();
+      case 'recover-draft':
+        return this.recover(event.id);
       case 'window-focused':
         return this.onFocus();
       case 'recents-changed':
@@ -398,12 +419,20 @@ export class DesktopController {
     return true;
   }
 
-  async newQuickDraft(): Promise<void> {
+  /**
+   * A blank canvas at once — or, from Home's starters, one already holding that starter. Either way
+   * nothing is kept until it is drawn on: a starter left untouched is one click from coming back.
+   */
+  async newQuickDraft(starterId?: StarterId): Promise<void> {
     await this.swap('Couldn’t start a Quick Draft', async () => {
+      // Fetched before anything is settled, so a starter that can't load leaves the open document alone.
+      const catalog = starterId ? await loadStarters() : null;
+      const starter = starterId ? catalog?.starterById(starterId) : undefined;
       if (!(await this.settleBeforeLeaving())) return;
+      const document = starter && catalog ? catalog.starterDocument(starter) : createDocument(QUICK_DRAFT_TITLE);
       this.session = { kind: 'quick', id: `q_${uuid()}` };
       this.edited = false;
-      this.load(serializeDocument(createDocument(QUICK_DRAFT_TITLE)), QUICK_DRAFT_TITLE, { baseline: true });
+      this.load(serializeDocument(document), document.metadata.title, { baseline: true });
       this.publish();
     });
   }
@@ -726,7 +755,7 @@ export class DesktopController {
       await this.api.recoveryWrite(
         id,
         session.kind === 'quick' ? { kind: 'quick' } : { kind: 'file', handle: session.handle, baseStamp: session.stamp },
-        this.displayName,
+        session.kind === 'quick' ? (titleOf(text) ?? QUICK_DRAFT_TITLE) : this.displayName,
         encoder.encode(text),
       );
     } catch (error) {
@@ -842,6 +871,22 @@ export class DesktopController {
 
   closeProject(): void {
     this.store.update({ project: null });
+  }
+
+  /**
+   * The text Home draws a tile's thumbnail from. Looking, never opening: nothing goes into Recent,
+   * and anything that can't be looked at is `null` rather than an error — the tile shows a blank
+   * sheet, and opening the file for real is what reports the problem.
+   */
+  async peek(target: { kind: 'recent'; handle: Handle } | { kind: 'project'; relPath: string } | { kind: 'draft'; id: string }): Promise<string | null> {
+    try {
+      if (target.kind === 'draft') return await this.api.recoveryRead(target.id);
+      if (target.kind === 'recent') return await this.api.peekDocument(target.handle);
+      const project = this.store.getSnapshot().project;
+      return project ? await this.api.projectPeek(project.info.handle, target.relPath) : null;
+    } catch {
+      return null;
+    }
   }
 
   async forgetRecent(handle: Handle): Promise<void> {

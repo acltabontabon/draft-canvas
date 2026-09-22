@@ -135,6 +135,8 @@ export type HostEvent =
   | { type: 'open'; handle: Handle; name: string; displayPath: string }
   | { type: 'new-quick-draft' }
   | { type: 'new-canvas' }
+  /** A draft chosen from the tray's Unsaved section. */
+  | { type: 'recover-draft'; id: string }
   | { type: 'menu'; command: MenuCommand }
   | { type: 'quit-requested' }
   | { type: 'window-focused' }
@@ -142,6 +144,17 @@ export type HostEvent =
   | { type: 'notice'; message: string };
 
 export type QuitDecision = 'ready' | 'prompting' | 'cancel';
+
+/**
+ * What the page draws for the tray menu, as base64 PNGs: the action icons, each recent file's
+ * silhouette and each unsaved draft's, in the ink of the current appearance. Files go by handle,
+ * drafts by recovery id — nothing here names a path.
+ */
+export interface TrayArt {
+  actions: Partial<Record<'quickDraft' | 'newCanvas' | 'open' | 'openProject', string>>;
+  files: { handle: Handle; png: string }[];
+  drafts: { id: string; title: string; png?: string }[];
+}
 
 export interface FileFilter {
   name: string;
@@ -167,12 +180,19 @@ export interface DesktopApi {
   sidecarRead(handle: Handle): Promise<{ mime: string; base64: string } | null>;
   sidecarWrite(handle: Handle, mime: string, base64: string): Promise<void>;
   sidecarRemove(handle: Handle): Promise<void>;
+  /**
+   * A file's text for Home to draw its thumbnail from — looking, not opening: nothing goes into
+   * Recent. `null` when it can't be looked at (gone, unreadable, too large for a thumbnail).
+   */
+  peekDocument(handle: Handle): Promise<string | null>;
 
   // Projects: a folder the user picked
   pickProject(): Promise<ProjectInfo | null>;
   openProject(handle: Handle): Promise<ProjectInfo>;
   projectScan(handle: Handle): Promise<ProjectScan>;
   projectOpenFile(projectHandle: Handle, relPath: string): Promise<OpenedDoc>;
+  /** `peekDocument`, for a file in the open project. */
+  projectPeek(projectHandle: Handle, relPath: string): Promise<string | null>;
   projectSaveNew(projectHandle: Handle, name: string, bytes: Uint8Array): Promise<SavedAs>;
 
   // Recents
@@ -200,4 +220,7 @@ export interface DesktopApi {
    */
   ask(title: string, message: string, buttons: string[]): Promise<number>;
   showError(title: string, message: string): Promise<void>;
+
+  // The tray
+  trayDecorate(art: TrayArt): Promise<void>;
 }

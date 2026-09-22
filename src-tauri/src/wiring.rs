@@ -7,6 +7,17 @@ use std::collections::BTreeSet;
 const LIB: &str = include_str!("lib.rs");
 const BUILD: &str = include_str!("../build.rs");
 const CAPABILITY: &str = include_str!("../capabilities/default.json");
+const PANEL_CAPABILITY: &str = include_str!("../capabilities/tray.json");
+/// The tray panel's own commands: the main window has no use for them.
+const PANEL_ONLY: [&str; 3] = ["tray_panel", "tray_choose", "tray_panel_fit"];
+/// Everything the tray panel may call, and nothing more.
+const PANEL_GRANTS: [&str; 5] = [
+    "tray_panel",
+    "tray_choose",
+    "tray_panel_fit",
+    "peek_document",
+    "recovery_read",
+];
 const CONFIG: &str = include_str!("../tauri.conf.json");
 
 fn in_handler() -> BTreeSet<String> {
@@ -36,8 +47,8 @@ fn in_manifest() -> BTreeSet<String> {
         .collect()
 }
 
-fn in_capability() -> BTreeSet<String> {
-    let json: serde_json::Value = serde_json::from_str(CAPABILITY).expect("capability JSON");
+fn in_capability(capability: &str) -> BTreeSet<String> {
+    let json: serde_json::Value = serde_json::from_str(capability).expect("capability JSON");
     json["permissions"]
         .as_array()
         .expect("a permissions list")
@@ -54,29 +65,46 @@ fn in_capability() -> BTreeSet<String> {
 #[test]
 fn the_handler_the_manifest_and_the_capability_list_the_same_commands() {
     let handler = in_handler();
-    assert_eq!(handler.len(), 31, "{handler:?}");
+    assert_eq!(handler.len(), 37, "{handler:?}");
     assert_eq!(
         handler,
         in_manifest(),
         "lib.rs handler vs build.rs COMMANDS"
     );
+    let main: BTreeSet<String> = handler
+        .iter()
+        .filter(|command| !PANEL_ONLY.contains(&command.as_str()))
+        .cloned()
+        .collect();
     assert_eq!(
-        handler,
-        in_capability(),
+        main,
+        in_capability(CAPABILITY),
         "lib.rs handler vs capabilities/default.json"
     );
+    let panel = in_capability(PANEL_CAPABILITY);
+    assert_eq!(
+        panel,
+        PANEL_GRANTS.iter().map(|c| c.to_string()).collect(),
+        "capabilities/tray.json"
+    );
+    assert!(panel.is_subset(&handler));
 }
 
 #[test]
-fn the_window_is_granted_only_its_own_commands() {
-    let json: serde_json::Value = serde_json::from_str(CAPABILITY).expect("capability JSON");
-    assert_eq!(json["windows"], serde_json::json!(["main"]));
-    for permission in json["permissions"].as_array().unwrap() {
-        let permission = permission.as_str().unwrap();
-        assert!(
-            !permission.contains(':'),
-            "{permission} is a plugin or core permission; the page may not have one"
-        );
+fn each_window_is_granted_only_its_own_commands() {
+    for (capability, window) in [
+        (CAPABILITY, crate::window::MAIN),
+        (PANEL_CAPABILITY, crate::panel::PANEL),
+    ] {
+        let json: serde_json::Value = serde_json::from_str(capability).expect("capability JSON");
+        assert_eq!(json["windows"], serde_json::json!([window]));
+        for permission in json["permissions"].as_array().unwrap() {
+            let permission = permission.as_str().unwrap();
+            assert!(
+                !permission.contains(':'),
+                "{permission} is a plugin or core permission; the page may not have one"
+            );
+        }
     }
 }
 

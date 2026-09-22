@@ -5,6 +5,7 @@ mod errors;
 mod grants;
 mod lifecycle;
 mod menu;
+mod panel;
 mod paths;
 mod project;
 mod quit;
@@ -53,6 +54,8 @@ pub fn run() {
             commands::documents::sidecar_read,
             commands::documents::sidecar_write,
             commands::documents::sidecar_remove,
+            commands::peek::peek_document,
+            commands::peek::project_peek,
             commands::projects::pick_project,
             commands::projects::open_project,
             commands::projects::project_scan,
@@ -69,6 +72,10 @@ pub fn run() {
             commands::host::settings_set,
             commands::host::ask,
             commands::host::show_error,
+            commands::tray::tray_decorate,
+            commands::tray::tray_panel,
+            commands::tray::tray_choose,
+            commands::tray::tray_panel_fit,
         ])
         .setup(lifecycle::setup)
         .build(tauri::generate_context!())
