@@ -46,6 +46,7 @@ pub enum SaveResult {
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SidecarPayload {
     pub mime: String,
     pub base64: String,
