@@ -245,7 +245,7 @@ jobs:
           node scripts/update-manifest.mjs build "$VERSION" assets --tag "$TAG" > assets/latest.json
           node scripts/update-manifest.mjs verify assets/latest.json "$VERSION" --tag "$TAG" --artifacts assets
           cat assets/latest.json
-      - uses: actions/attest-build-provenance@v3
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: assets/Draft-Canvas_*
       - env:
