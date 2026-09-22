@@ -16,7 +16,8 @@ It gives you architecture-aware shapes, familiar technical relationships, and sm
 
 <img width="100%" alt="A run through Draft Canvas: drawing a Service, Queue and Worker with the keyboard, dropping in a composed CQRS architecture, attaching a note to a connector, presenting a flow step by step, looking inside a shape with Cmd+Down, and opening the Learn handbook." src="docs/media/demo.gif">
 
-**[Try it →](https://acltabontabon.com/draft-canvas/)** Nothing you draw leaves your browser.
+**[Try it →](https://acltabontabon.com/draft-canvas/editor/)** Nothing you draw leaves your browser.
+There's a [landing page](https://acltabontabon.com/draft-canvas/) too, if you'd rather read about it first.
 
 Also lives [in VS Code](#in-vs-code), next to your code, [on your desktop](#desktop), in a window of its
 own, and [in Docker](#running-it-yourself), on your own server.
@@ -45,7 +46,7 @@ Diagrams live in one browser on one device. [Export anything you'd mind losing](
 
 ## Try it
 
-The quickest way is the [hosted app](https://acltabontabon.com/draft-canvas/). Press **New canvas**, then `S` to drop a service under your cursor. [Getting started](docs/guides/getting-started.md) takes you from there to a presented, exported diagram.
+The quickest way is the [hosted app](https://acltabontabon.com/draft-canvas/editor/). Press **New canvas**, then `S` to drop a service under your cursor. [Getting started](docs/guides/getting-started.md) takes you from there to a presented, exported diagram.
 
 Or run it from source:
 

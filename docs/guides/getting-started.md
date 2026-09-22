@@ -3,7 +3,7 @@
 In a few minutes you'll draw a small system, annotate it, walk someone through it, and export
 it. The system is an API that puts orders on a queue for a worker to process.
 
-You need the app open: the [hosted version](https://acltabontabon.com/draft-canvas/), a
+You need the app open: the [hosted version](https://acltabontabon.com/draft-canvas/editor/), a
 [Docker copy](../../README.md#running-it-yourself), or the
 [VS Code extension](vscode.md). Nothing here needs an account, and nothing you draw leaves your
 browser.

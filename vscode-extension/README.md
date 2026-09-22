@@ -2,7 +2,7 @@
 
 Architecture diagrams that live next to your code.
 
-Open a `.draftcanvas` file and you're straight in the [Draft Canvas](https://acltabontabon.com/draft-canvas/)
+Open a `.draftcanvas` file and you're straight in the [Draft Canvas](https://acltabontabon.com/draft-canvas/editor/)
 editor. Draw, hit ⌘S / Ctrl+S, and the diagram is saved back to that file: plain JSON you can diff,
 review and commit.
 
@@ -37,7 +37,7 @@ still holds the whole picture, from the big one down to the detail.
 - Copy and Paste go through VS Code's clipboard: shapes between diagrams, and text in the canvas's
   text fields. The app asks for the clipboard's text only when you paste.
 
-The app is loaded from `https://acltabontabon.com/draft-canvas/`, so the first open needs a network
+The app is loaded from `https://acltabontabon.com/draft-canvas/editor/`, so the first open needs a network
 connection. After that, the app's offline cache usually lets it open without one.
 
 ## Known limits

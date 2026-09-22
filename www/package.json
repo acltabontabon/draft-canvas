@@ -1,0 +1,17 @@
+{
+  "name": "draft-canvas-www",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The marketing site for Draft Canvas. Deliberately separate from the app's own dependencies.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "clips": "node scripts/clips.mjs",
+    "social": "node scripts/social-card.mjs"
+  },
+  "devDependencies": {
+    "vite": "^8.3.0"
+  }
+}

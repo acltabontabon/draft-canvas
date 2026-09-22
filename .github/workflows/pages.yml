@@ -1,5 +1,19 @@
 name: Deploy to Pages
 
+# Publishes one artifact holding both halves of the web deploy:
+#
+#   https://acltabontabon.com/draft-canvas/         the landing page (www/)
+#   https://acltabontabon.com/draft-canvas/editor/  the editor (the same dist/ as always)
+#
+# The apex belongs to the acltabontabon.github.io repository and GitHub applies a user site's
+# custom domain to every project site of the same account — so this repository needs no CNAME file
+# and no custom-domain setting of its own, and the /draft-canvas/ prefix comes from the repository
+# name. Adding a CNAME here would try to claim the apex from the root site.
+#
+# This is the only workflow that deploys. pages-site.yml calls it rather than building its own
+# copy, so there is exactly one definition of what gets published and the two triggers cannot
+# publish different things.
+
 on:
   push:
     tags:
@@ -8,6 +22,7 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -31,10 +46,15 @@ jobs:
           node-version: 22.14.0
           cache: npm
       - run: npm ci
-      - run: npm run build
+      # The site has its own lockfile and shares no dependency with the app on purpose.
+      - run: npm ci
+        working-directory: www
+      # Builds the editor, builds the site, and assembles dist-web/ — failing loudly if either
+      # half is missing a file the deploy needs.
+      - run: npm run build:web
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: dist/
+          path: dist-web/
       - id: deploy
         uses: actions/deploy-pages@v5

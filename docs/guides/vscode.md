@@ -58,7 +58,7 @@ anywhere. The only files it touches are the diagram you open and, if the canvas 
 image, the image saved beside it. The file goes from VS Code to the app inside the editor tab and back. The app itself makes no network
 requests with your diagram (see [Privacy](../reference/privacy.md#embedded-in-vs-code)).
 
-The extension doesn't bundle the app. It loads it from `https://acltabontabon.com/draft-canvas/`, so
+The extension doesn't bundle the app. It loads it from `https://acltabontabon.com/draft-canvas/editor/`, so
 the first open needs a network connection. After that the app's offline cache usually lets it open
 without one. If it can't load, the tab says *Draft Canvas couldn't be loaded* and offers **Retry** and
 **Open in browser**.

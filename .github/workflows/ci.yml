@@ -19,13 +19,19 @@ jobs:
           node-version: 22.14.0
           cache: npm
       - run: npm ci
+      # The site is a separate project with its own lockfile; a break in it should fail here, not
+      # at deploy time.
+      - run: npm ci
+        working-directory: www
       - run: npm run lint
       - run: npm run typecheck:tooling
-      - run: npm run build
+      # Builds the editor, the site, and the assembled dist-web/ the deploy publishes.
+      - run: npm run build:web
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
       - run: npm run e2e:offline
+      - run: npm run e2e:web
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -33,4 +39,5 @@ jobs:
           path: |
             playwright-report/
             playwright-report-offline/
+            playwright-report-web/
           retention-days: 7

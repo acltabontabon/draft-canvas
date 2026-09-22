@@ -184,6 +184,13 @@ Release exists, publishes `acltabontabon/draft-canvas` to Docker Hub (see
 desktop copies about the update (`desktop-release.yml`, about 15 minutes after the rest). Desktop-only
 changes go in the same `CHANGELOG.md` section as everything else, under its `### Desktop`.
 
+The landing page at <https://acltabontabon.com/draft-canvas/> needs nothing from you at release time.
+Its desktop download links are built from the root `package.json` version when it is deployed, so
+cutting the tag updates them; only a *new* platform — a build for an architecture that has never
+shipped before — needs a line added, in `www/index.html` beside the two that are there. A change to
+the page's words deploys on its own, on a push to `main` that touches `www/`, without waiting for a
+release. [`docs/reference/website.md`](docs/reference/website.md) has the rest.
+
 The Docker Hub page's own description is edited on Docker Hub, under **Repository → Edit**, and is
 the one part of a release that cannot be automated: Docker Hub answers the description API with 403
 for an access token however it is scoped, and only the account password reaches it, which is not

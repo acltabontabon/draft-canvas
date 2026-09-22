@@ -1,6 +1,17 @@
 import * as vscode from 'vscode';
 
-const APP_URL = 'https://acltabontabon.com/draft-canvas/';
+/**
+ * The hosted editor.
+ *
+ * Every version released before this one pointed at https://acltabontabon.com/draft-canvas/, which
+ * is now the landing page. Those copies keep working: that page ships a small script that forwards
+ * a `?host=vscode` frame — the only URL parameter the app has ever understood — on to the editor,
+ * and the webview CSP below permits it because a `frame-src` whose path ends in `/` matches by
+ * prefix. Changing this constant only removes that hop for people who update.
+ */
+const APP_URL = 'https://acltabontabon.com/draft-canvas/editor/';
+/** Where to send someone who asks to open Draft Canvas in a browser: the front door, not the app. */
+const SITE_URL = 'https://acltabontabon.com/draft-canvas/';
 const VIEW_TYPE = 'draftCanvas.editor';
 const EXTENSION = '.draftcanvas';
 const LANGUAGE_ID = 'draftcanvas';
@@ -230,7 +241,7 @@ class DraftCanvasEditor implements vscode.CustomTextEditorProvider {
             break;
           }
           case 'openInBrowser':
-            void vscode.env.openExternal(vscode.Uri.parse(APP_URL));
+            void vscode.env.openExternal(vscode.Uri.parse(SITE_URL));
             break;
         }
       }),

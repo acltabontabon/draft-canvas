@@ -12,6 +12,22 @@ and apply to the web app.
 
 ## [Unreleased]
 
+### Web
+
+#### Added
+
+- **A front door.** <https://acltabontabon.com/draft-canvas/> is now a page about Draft Canvas — what
+  it is, what it draws, and where to get it — instead of opening straight into the editor. <!-- highlight -->
+
+#### Changed
+
+- **The editor has its own address**, <https://acltabontabon.com/draft-canvas/editor/>. Your diagrams
+  are untouched: they are saved per browser, not per address, so everything you have drawn is still
+  there and nothing needs re-importing. If you had the old address bookmarked, the new page will tell
+  you where the editor went and take you straight to your work. <!-- highlight -->
+- Draft Canvas for VS Code keeps working without being updated — every version already published is
+  sent on to the editor's new address automatically.
+
 ## [1.10.0] - 2026-09-22
 
 Draft Canvas Desktop leaves preview: the same editor in its own window, with your diagrams as files on

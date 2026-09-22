@@ -11,9 +11,9 @@
   },
   "overrides": [
     {
-      "files": ["benchmark/**", "demo/**"],
+      "files": ["benchmark/**", "demo/**", "scripts/**", "www/scripts/**"],
       "rules": { "no-console": "off" }
     }
   ],
-  "ignorePatterns": ["dist", "dist-desktop", "node_modules", "playwright-report", "playwright-report-desktop", "src-tauri", "test-results"]
+  "ignorePatterns": ["dist", "dist-desktop", "dist-web", "www/dist", ".preview-web", "www/.shots", "node_modules", "playwright-report", "playwright-report-desktop", "playwright-report-offline", "playwright-report-web", "src-tauri", "test-results"]
 }

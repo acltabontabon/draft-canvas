@@ -10,6 +10,14 @@
  * Runs its own dev server on a port of its own (never 5180, which the e2e suite shares, and never
  * a name-based kill: this working copy is used by several sessions at once), in a light theme, and
  * a clean browser profile, so the Library it captures holds only what this script drew.
+ *
+ * The marketing site (`www/`) shows the same real UI in the theme it ships in, so it asks for the
+ * same walkthrough in the dark palette and keeps it somewhere else — one harness, two palettes,
+ * rather than a second script that would drift:
+ *
+ *   npm run site:shots          # === npx tsx e2e/docs-screenshots.ts --theme dark --out www/public/shots
+ *
+ * The guides' own set is what you get with no arguments, unchanged.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -19,7 +27,14 @@ import { fileURLToPath } from 'node:url';
 import { chromium, expect, type Locator, type Page } from '@playwright/test';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = join(REPO_ROOT, 'docs/media/guides');
+
+function flag(name: string): string | undefined {
+  const at = process.argv.indexOf(`--${name}`);
+  return at === -1 ? undefined : process.argv[at + 1];
+}
+
+const THEME = flag('theme') === 'dark' ? 'dark' : 'light';
+const OUT = join(REPO_ROOT, flag('out') ?? 'docs/media/guides');
 const PORT = 5391;
 const URL = `http://localhost:${PORT}`;
 const VIEWPORT = { width: 1200, height: 640 };
@@ -141,13 +156,14 @@ async function connectNodes(page: Page, from: number, to: number) {
 
 async function main() {
   mkdirSync(OUT, { recursive: true });
+  log(`${THEME} theme -> ${OUT}`);
   const stop = await startServer();
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext({
       viewport: VIEWPORT,
       deviceScaleFactor: 2,
-      colorScheme: 'light',
+      colorScheme: THEME,
       acceptDownloads: true,
     });
     const page = await context.newPage();

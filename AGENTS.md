@@ -12,6 +12,9 @@ npm run lint       # oxlint
 npm test           # vitest run
 npm run e2e        # playwright (npm run e2e:install once first)
 npm run check      # lint + e2e/benchmark/demo typecheck + build + unit tests — run this before calling work done
+npm run site:dev   # the landing page (www/) alone, on :5281
+npm run build:web  # editor + landing page, assembled into dist-web/ the way Pages serves it
+npm run e2e:web    # the assembled artifact, served at /draft-canvas/ like production
 ```
 
 Single test / focused runs:
@@ -123,6 +126,15 @@ Each of these has a failure mode that is silent, delayed, or both.
 Dependencies point one way: `ui/` → `canvas/` → `document/`, with `storage/` and `export/`
 hanging off the document model. Library and editor are two states of one screen (`src/App.tsx`,
 no router) — that's what lets `dist/` be served from any path (`base: './'`).
+
+`www/` is the landing page at <https://acltabontabon.com/draft-canvas/> — a separate Vite project with
+its own lockfile and no dependency in common with the app, which is what keeps a marketing stylesheet
+out of the editor and a `fetch` out of `src/`. The editor deploys by copying `dist/` into
+`dist-web/editor/` unchanged; `vite.config.ts` knows nothing about any of it, and must not.
+`tests/site-isolation.test.ts` fails if either of those stops being true, and
+[`docs/reference/website.md`](docs/reference/website.md) explains how the editor's move off
+`/draft-canvas/` was made safe for saved diagrams, released VS Code extensions and the old service
+worker.
 
 `src/starters/` sits beside `document/` (it imports only that, and is not part of the file format);
 `store/` and `commands/` consume it. `src/continuation/` sits there too (it imports `document/` and

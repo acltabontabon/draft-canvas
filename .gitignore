@@ -2,12 +2,16 @@ node_modules
 dist
 dist-desktop
 dist-ssr
+# The assembled web deploy: the marketing site with the editor nested under editor/.
+dist-web
+.preview-web
 coverage
 *.local
 .DS_Store
 .vite
 playwright-report
 playwright-report-offline
+playwright-report-web
 test-results
 .playwright
 *.tsbuildinfo

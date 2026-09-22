@@ -64,8 +64,17 @@ describe('nothing on the canvas can reach a network', () => {
 
   it('declares no remote origin in the built HTML', () => {
     const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
-    // The favicon is an inline data URI; nothing else may point outward.
-    expect(html).not.toMatch(/(src|href)\s*=\s*["']https?:/);
+    // What this is guarding is a *fetched subresource*: a script, a stylesheet, a font, an image
+    // the browser goes and gets while loading the app. The favicon is an inline data URI, and
+    // nothing else may point outward.
+    //
+    // `rel="canonical"` is exempt, and only that. It is metadata for a crawler — the browser never
+    // requests it — in the same category as the og:image URL two lines below it, which has always
+    // been allowed because it sits in a `content` attribute rather than an `href`. It exists
+    // because the app is served one level under the landing page and should not be indexed as a
+    // second copy of it.
+    const fetched = html.replace(/<link\s[^>]*rel=["']canonical["'][^>]*>/g, '');
+    expect(fetched).not.toMatch(/(src|href)\s*=\s*["']https?:/);
   });
 
   it('pulls in no analytics or telemetry package', () => {
@@ -141,5 +150,33 @@ describe('localStorage holds preferences only', () => {
     const source = readFileSync(join(SRC, 'lib/preferences.ts'), 'utf8');
     expect(source).toMatch(/MAX_LENGTH\s*=\s*\d+/);
     expect(source).toContain('setItem');
+  });
+});
+
+describe('where a diagram is stored does not depend on where the app is served from', () => {
+  const files = sourceFiles(SRC);
+
+  /*
+   * The editor moved from /draft-canvas/ to /draft-canvas/editor/ without anyone re-importing a
+   * diagram, and that only held because no storage name is derived from the URL: the IndexedDB
+   * databases and the localStorage prefix are plain constants, so they are per-origin and the path
+   * is irrelevant. This is what keeps that true. A key built from `location.pathname` or
+   * `import.meta.env.BASE_URL` would orphan every existing diagram the next time the app is served
+   * from somewhere else — silently, and only for people who already had work saved.
+   */
+  const PATH_DERIVED = /(?:indexedDB\.open|DB_NAME|KEY_DB_NAME|PREFIX)[^;\n]*(?:location\.|BASE_URL)/;
+
+  it('names no database or preference key after the URL', () => {
+    const offenders = files.filter((file) => PATH_DERIVED.test(readFileSync(file, 'utf8')));
+    expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
+  });
+
+  it('keeps the database names constant', () => {
+    expect(readFileSync(join(SRC, 'storage/IndexedDbRepository.ts'), 'utf8')).toContain(
+      "const DB_NAME = 'draft-canvas'",
+    );
+    expect(readFileSync(join(SRC, 'crypto/keyStore.ts'), 'utf8')).toContain(
+      "const KEY_DB_NAME = 'draft-canvas-keys'",
+    );
   });
 });

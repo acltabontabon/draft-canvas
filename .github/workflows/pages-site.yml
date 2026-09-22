@@ -1,0 +1,27 @@
+name: Deploy site changes
+
+# A sentence rewritten on the landing page should not have to wait for a release.
+#
+# Deliberately a second file rather than a second trigger on pages.yml: a `push` filtered by both
+# refs and paths requires every filter to match, so adding a path filter there would also gate the
+# release tags and silently stop deploying releases. This calls pages.yml instead of repeating it,
+# so both routes publish the identical artifact, and they share its `pages` concurrency group, so
+# they queue behind each other rather than racing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'www/**'
+      - 'scripts/assemble-web.mjs'
+      - '.github/workflows/pages.yml'
+      - '.github/workflows/pages-site.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/pages.yml

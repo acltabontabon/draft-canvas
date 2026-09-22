@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The same mark the app and the installers use (src-tauri/icons/src/app.svg), at favicon size. -->
+  <rect width="32" height="32" rx="7" fill="#14161a"/>
+  <rect x="6" y="8" width="11" height="7" rx="2" fill="none" stroke="#5fd6c9" stroke-width="2"/>
+  <rect x="15" y="18" width="11" height="7" rx="2" fill="none" stroke="#6b7280" stroke-width="2"/>
+  <path d="M11.5 15.5v3.5h4" fill="none" stroke="#5fd6c9" stroke-width="1.6"/>
+</svg>
