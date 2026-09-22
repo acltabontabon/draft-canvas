@@ -62,6 +62,27 @@
   }
 }
 
+/* Dark mode only: against a near-black window the same dot reads louder than it does on white and
+   competed with the drawings, the headline and the row beneath them. Half the ink, a hair smaller,
+   and a quieter spotlight keep it a texture. The light palette is deliberately left as it was. */
+:root[data-theme='dark'] .dc-desk {
+  --dc-home-dot: color-mix(in srgb, var(--dc-text-faint) 9%, transparent);
+}
+
+:root[data-theme='dark'] .dc-desk-canvas::before {
+  background-image: radial-gradient(circle, var(--dc-home-dot) 1px, transparent 1.4px);
+}
+
+:root[data-theme='dark'] .dc-desk-canvas::after {
+  background-image: radial-gradient(circle, var(--dc-selection) 1px, transparent 1.4px);
+}
+
+@media (hover: hover) {
+  :root[data-theme='dark'] .dc-desk:hover .dc-desk-canvas::after {
+    opacity: 0.5;
+  }
+}
+
 .dc-desk-top {
   flex-shrink: 0;
   padding: 18px 26px 0;

@@ -410,6 +410,34 @@ test('opens diagrams from a project’s root and its subfolders, namesakes and n
   expect(errors).toEqual([]);
 });
 
+test('Home’s dotted canvas is quieter in dark mode, and exactly as it was in light — before and after switching', async ({ page }) => {
+  const dots = () =>
+    page.locator('.dc-desk-canvas').evaluate((el) => {
+      const before = getComputedStyle(el, '::before');
+      return { ink: getComputedStyle(el).getPropertyValue('--dc-home-dot').trim(), dot: before.backgroundImage, size: before.backgroundSize };
+    });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto('/');
+  await expect(page.locator('.dc-desk-canvas')).toHaveCount(1);
+  const light = await dots();
+  // The light canvas's own values, untouched: 17% of the faint ink, 1.1px dots on an 18px grid.
+  expect(light.ink).toMatch(/^color-mix\(in srgb, \S+ 17%, transparent\)$/);
+  expect(light.dot).toMatch(/1\.1px, (rgba\(0, 0, 0, 0\)|transparent) 1\.5px/);
+  expect(light.size).toBe('18px 18px');
+
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator(':root[data-theme="dark"]')).toHaveCount(1);
+  const dark = await dots();
+  expect(dark.ink).toMatch(/^color-mix\(in srgb, \S+ 9%, transparent\)$/);
+  expect(dark.dot).toMatch(/ 1px, (rgba\(0, 0, 0, 0\)|transparent) 1\.4px/);
+  // Spacing stays: only the ink and the dot's size move.
+  expect(dark.size).toBe('18px 18px');
+
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator(':root[data-theme="light"]')).toHaveCount(1);
+  expect(await dots()).toEqual(light);
+});
+
 test('renames the open file in place, from the File menu', async ({ page }) => {
   await page.goto('/');
   const text = await documentText(page, 'Payments', 1);

@@ -869,6 +869,23 @@ kbd {
   opacity: 0.55;
 }
 
+/* Dark mode only: on the near-black canvas the home's dots read far louder than on white and
+   pulled at the starters and the words around them. Half the ink and a softer spotlight keep the
+   sheet a canvas without making it the loudest thing on screen. Light is left exactly as it was. */
+:root[data-theme='dark'] .dc-home {
+  --dc-home-dot: color-mix(in srgb, var(--dc-text-faint) 21%, transparent);
+}
+
+@media (hover: hover) {
+  :root[data-theme='dark'] .dc-sheet:hover::after {
+    opacity: 0.55;
+  }
+}
+
+:root[data-theme='dark'] .dc-sheet:focus-visible::after {
+  opacity: 0.4;
+}
+
 /* Crop marks, not a box: where the page is, not a frame around it. */
 .dc-sheet-crops span {
   position: absolute;
