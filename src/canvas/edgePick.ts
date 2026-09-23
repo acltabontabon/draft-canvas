@@ -77,6 +77,15 @@ function distanceTo(edge: Element, aim: Point): number | null {
   return best;
 }
 
+/**
+ * Something with no connector to look through to — a node's body, its title, a resize grip: the loop
+ * in `pickEdgeAt` would stop on it with nothing found. What that loop does with a stack's first element.
+ */
+function ownsThePoint(element: Element, clientX: number, clientY: number): boolean {
+  if (element.closest(OVERLAY_SELECTOR) || element.closest(EDGE_SELECTOR)) return false;
+  return !seeThrough(element, clientX, clientY) && !element.matches(BACKDROP_SELECTOR);
+}
+
 function overlayPick(overlay: Element, element: Element): EdgePick | null {
   const id = overlay.getAttribute('data-edge-overlay');
   if (!id) return null;
@@ -95,11 +104,15 @@ function overlayPick(overlay: Element, element: Element): EdgePick | null {
  * @param zoom The canvas zoom, so "equally close" means the same thing on screen at every zoom.
  */
 export function pickEdgeAt(clientX: number, clientY: number, aim: Point, zoom: number): EdgePick | null {
-  const stack = document.elementsFromPoint(clientX, clientY);
-  const top = stack[0];
+  // The topmost element alone settles the commonest cases — a shape's body, a panel — and the browser
+  // finds it without visiting everything else at the point. The full stack means stroke-testing every
+  // connector's hit path there: 20 ms a click on a large diagram, for an answer already known.
+  const top = document.elementFromPoint(clientX, clientY);
   // A panel, toolbar or popover over the canvas: whatever it covers can't be seen or aimed at.
   if (!top || !top.closest('.react-flow') || top.closest('[class*="dc-popover"], .dc-context-menu')) return null;
+  if (ownsThePoint(top, clientX, clientY)) return null;
 
+  const stack = document.elementsFromPoint(clientX, clientY);
   const candidates: { id: string; distance: number; order: number }[] = [];
   const seen = new Set<string>();
   for (const element of stack) {

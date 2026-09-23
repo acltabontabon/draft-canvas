@@ -12,6 +12,26 @@ and apply to the web app.
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-09-24
+
+Big diagrams open in a fraction of the time, and stay quicker to point at once they are open.
+
+### Shared
+
+#### Changed
+
+- **Large diagrams open much faster.** A diagram of 500 shapes opens in under a second instead of
+  nearly three, and one of 1,000 in about a second instead of ten, without the page freezing while
+  it appears. <!-- highlight -->
+- **Pointing at a large diagram does less work.** Clicking a shape selects it sooner, and moving
+  the pointer over connectors no longer costs a few milliseconds on every move.
+
+#### Fixed
+
+- A shape's connection points no longer react before the pointer reaches the shape: the empty canvas
+  just outside it stopped showing a connect cursor for handles you couldn't see. They appear as soon
+  as you point at the shape or select it, as before.
+
 ## [1.11.0] - 2026-09-24
 
 Walk a room through several flows without leaving presentation mode, and every connector keeps the
@@ -1483,7 +1503,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...main
+[1.11.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.4...v1.10.0
 [1.10.0-alpha.2]: https://github.com/acltabontabon/draft-canvas/compare/desktop-v1.10.0-alpha.1...desktop-v1.10.0-alpha.2

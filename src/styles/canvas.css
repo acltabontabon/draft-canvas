@@ -182,11 +182,19 @@
   border-radius: 50%;
   background: var(--dc-canvas);
   opacity: 0;
+  /* Hidden, not only transparent, until something reveals it. Every handle is positioned, so each
+     is a layer the browser visits on every hit test — every pointer move, every click — and at
+     twelve a shape that was 3–4 ms a test at 500 shapes, wherever the pointer was. A hidden one is
+     skipped, and still laid out, so React Flow measures it and connectors still end on it. It also
+     stops an invisible ring past a shape's edge from claiming the pointer over empty canvas. Each
+     reveal below sets `visibility` with `opacity`; `visibility` transitions discretely, so the fade
+     still runs both ways. */
+  visibility: hidden;
   /* Grown by size, never `transform`/`scale`: React Flow centres every handle on its anchor with
      `transform: translate(±50%, ±50%)`. A transform rule replaces that (the dot jumps 4.5px off its
      anchor); `scale` composes but multiplies the translate too. A percentage translate of a bigger
      box stays centred exactly. */
-  transition: opacity 90ms ease, width 90ms ease, height 90ms ease;
+  transition: opacity 90ms ease, visibility 90ms, width 90ms ease, height 90ms ease;
 }
 
 /* An invisible hit ring that stays a comfortable size on screen as the canvas zooms out — the
@@ -257,6 +265,7 @@
 .dc-node:hover .dc-handle,
 .dc-node[data-selected='true'] .dc-handle {
   opacity: 1;
+  visibility: visible;
 }
 
 .dc-handle:hover {
@@ -269,6 +278,7 @@
    flight, so aiming at a 9px dot is never required. */
 .react-flow.connecting .dc-handle {
   opacity: 1;
+  visibility: visible;
 }
 
 /* Repointing an existing connector's endpoint (`DraftEdgeView.tsx`'s
@@ -277,6 +287,7 @@
    machinery — this is that gesture's own reveal trigger. */
 .dc-editor[data-reconnecting='true'] .dc-handle {
   opacity: 1;
+  visibility: visible;
 }
 
 /*
@@ -294,6 +305,7 @@
 .dc-handle.connectingto.valid,
 .dc-handle[data-armed='true'] {
   opacity: 1;
+  visibility: visible;
   width: 14px;
   height: 14px;
   background: var(--dc-selection);
@@ -304,6 +316,7 @@
 /* Present mode keeps the handles in the DOM but out of sight. */
 .dc-editor[data-mode='present'] .dc-handle {
   opacity: 0 !important;
+  visibility: hidden !important;
   pointer-events: none;
 }
 
@@ -364,8 +377,10 @@
 }
 
 /* A node's connection handle sits over the last stretch of every arrow; while the pointer is really
-   on the connector there (see `edgePick.ts`), the cursor says so instead of offering a new one. */
-.dc-canvas[data-edge-hover] .react-flow__handle {
+   on the connector there (see `edgePick.ts`), the cursor says so instead of offering a new one. The
+   attribute sits on that one handle (`Canvas.tsx`'s `setHover`), never on the canvas: every handle in
+   the diagram would be restyled each time it came or went. */
+.dc-canvas .react-flow__handle[data-edge-hover] {
   cursor: pointer;
 }
 

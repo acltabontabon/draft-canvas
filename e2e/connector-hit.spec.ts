@@ -93,6 +93,18 @@ async function routePoints(page: Page, edgeId: string, fractions: number[], offs
 }
 
 /** A point `pixels` back along the route from where it meets its target: on the arrowhead. */
+/** What the browser has in front at a point: a connector (by id), a node's handle, and its cursor. */
+function underPointer(page: Page, at: { x: number; y: number }) {
+  return page.evaluate(({ x, y }) => {
+    const top = document.elementFromPoint(x, y);
+    return {
+      edge: top?.closest('.react-flow__edge')?.getAttribute('data-id') ?? null,
+      handle: Boolean(top?.closest('.react-flow__handle')),
+      cursor: top ? getComputedStyle(top).cursor : '',
+    };
+  }, at);
+}
+
 async function arrowheadPoint(page: Page, edgeId: string, pixels = 5) {
   return page.locator(`.react-flow__edge[data-id="${edgeId}"] .dc-edge-hit`).first().evaluate((el, pixels) => {
     const path = el as SVGPathElement;
@@ -247,12 +259,15 @@ test.describe('hovering a connector', () => {
     await expect(hovered).toHaveAttribute('data-id', 'dotted');
     await expect(page.locator('.dc-edge-endpoint-hint')).toHaveCount(2);
     await expect(page.locator('.dc-edge-endpoint')).toHaveCount(0);
+    // The target's handles aren't showing, so nothing of the shape is in front of its arrowhead.
+    expect(await underPointer(page, tip)).toEqual({ edge: 'dotted', handle: false, cursor: 'pointer' });
     // Hovering opens nothing.
     await expect(page.locator('[class*="dc-popover"]')).toHaveCount(0);
 
     await page.mouse.move(8, 300);
     await expect(hovered).toHaveCount(0);
     await expect(page.locator('.dc-edge-endpoint-hint')).toHaveCount(0);
+    await expect(page.locator('[data-edge-hover]')).toHaveCount(0);
 
     // Selected is its own look: the real endpoint handles, no hover hints.
     const [mid] = await routePoints(page, 'dotted', [0.5]);
@@ -260,6 +275,18 @@ test.describe('hovering a connector', () => {
     await expect(page.locator('.dc-edge-endpoint')).toHaveCount(2);
     await expect(page.locator('.dc-edge[data-selected="true"][data-hovered="true"]')).toHaveCount(0);
     await expect(page.locator('.dc-edge-endpoint-hint')).toHaveCount(0);
+
+    // A selected shape shows its handles, and one sits in front of the arrowhead: it still offers
+    // the connector (not a new one), and it alone is told so.
+    const target = (await page.locator('.react-flow__node[data-id="d"]').boundingBox())!;
+    await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+    await expect(page.locator('.react-flow__node[data-id="d"] .dc-node')).toHaveAttribute('data-selected', 'true');
+    await page.mouse.move(tip.x, tip.y);
+    await expect(hovered).toHaveAttribute('data-id', 'dotted');
+    await expect.poll(() => underPointer(page, tip)).toEqual({ edge: null, handle: true, cursor: 'pointer' });
+    await expect(page.locator('[data-edge-hover]')).toHaveCount(1);
+    await page.mouse.move(8, 300);
+    await expect(page.locator('[data-edge-hover]')).toHaveCount(0);
   });
 
   test('stands down while panning or dragging a shape, and for an armed tool', async ({ page }) => {

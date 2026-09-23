@@ -1628,11 +1628,17 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
    */
   const hoverFrame = useRef<number | null>(null);
   const hoverAt = useRef<{ clientX: number; clientY: number } | null>(null);
-  const setHover = useCallback((id: string | null) => {
+  const hoverHandle = useRef<Element | null>(null);
+  const setHover = useCallback((id: string | null, at?: { clientX: number; clientY: number }) => {
     useUiStore.getState().setHoveredEdge(id);
-    // A connection handle in front of the line keeps its own crosshair unless told otherwise.
-    const pane = paneRef.current;
-    if (pane) pane.toggleAttribute('data-edge-hover', id !== null);
+    // A connection handle in front of the line keeps its own crosshair unless told otherwise. Only
+    // the handle under the pointer is told: an attribute on the canvas restyled every handle in the
+    // diagram (twelve a shape) each time the pointer met or left a connector — 18 ms at 500 shapes.
+    const handle = id !== null && at ? (window.document.elementFromPoint(at.clientX, at.clientY)?.closest('.react-flow__handle') ?? null) : null;
+    if (handle === hoverHandle.current) return;
+    hoverHandle.current?.removeAttribute('data-edge-hover');
+    handle?.setAttribute('data-edge-hover', '');
+    hoverHandle.current = handle;
   }, []);
   const scheduleHover = useCallback(
     (event: React.PointerEvent) => {
@@ -1649,7 +1655,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         const at = hoverAt.current;
         if (!at) return;
         const pick = edgeAtEvent(at);
-        setHover(pick?.part === 'label' && pick.group ? edgeToSelect(pick, useEditorStore.getState().selection.edges) : (pick?.id ?? null));
+        setHover(pick?.part === 'label' && pick.group ? edgeToSelect(pick, useEditorStore.getState().selection.edges) : (pick?.id ?? null), at);
       });
     },
     [edgeAtEvent, setHover],
@@ -1709,7 +1715,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         const id = event.detail > 1 ? (current.edges.length === 1 ? current.edges[0]! : pick.id) : edgeToSelect(pick, current.nodes.length === 0 ? current.edges : []);
         editor.setSelection({ nodes: [], edges: [id] });
       }
-      setHover(pick.group ? edgeToSelect(pick, useEditorStore.getState().selection.edges) : pick.id);
+      setHover(pick.group ? edgeToSelect(pick, useEditorStore.getState().selection.edges) : pick.id, event);
     },
     [edgeAtEvent, interactive, setHover],
   );

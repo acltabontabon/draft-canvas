@@ -118,6 +118,15 @@ Each of these has a failure mode that is silent, delayed, or both.
   all main-thread time on a large diagram. Use `src/canvas/EdgeLabels.tsx` (one lookup, shared through
   context) rather than the library component, and treat any new per-element `useStore` selector that
   touches the DOM, allocates, or scans as a bug.
+- **Nothing a node does on mount may update React Flow's store.** The converse of the rule above: a
+  store update costs every subscriber, so one per node is quadratic. `DraftNodeView`'s
+  `updateNodeInternals(id)` ran on mount as well as on resize, and opening 1,000 shapes froze for
+  9 s. React Flow measures new nodes itself, in one batch; re-measure only on a real size change.
+- **A handle nobody can see stays `visibility: hidden`, not just transparent.** Every handle is
+  positioned, so each is a layer the browser visits on every hit test — every pointer move and
+  click — and twelve a shape made that 3–4 ms a test at 500 shapes. Hidden, it is skipped and still
+  laid out, so React Flow still measures it. Anything new that reveals handles sets `visibility:
+  visible` beside `opacity: 1` (`canvas.css`); `display: none` would delete every connector.
 - **A memoized plan must not close over its scratch work.** Undo history keeps a snapshot per step,
   and each snapshot keeps its `routingPlan` / `crossingPlan` alive. V8 gives every closure made in
   a function one shared scope, so a lookup built *inside* the planner (`crossingsFor: (id) =>

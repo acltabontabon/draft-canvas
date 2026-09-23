@@ -117,6 +117,54 @@ test.describe('editing', () => {
       .toBeLessThan(4);
   });
 
+  test('a connector stays on the border of a shape that is resized, and of one put back by undo', async ({ page }) => {
+    await newCanvas(page, 'Resize connector');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Service', { x: 800, y: 300 });
+    await connect(page, 0, 1);
+    await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+
+    // How far the connector's nearer end is from the source shape's border, on screen.
+    const gap = () =>
+      page.evaluate(() => {
+        const path = document.querySelector<SVGPathElement>('.react-flow__edge .dc-edge-hit')!;
+        const matrix = path.getScreenCTM()!;
+        const ends = [0, path.getTotalLength()].map((at) => {
+          const p = path.getPointAtLength(at);
+          return { x: p.x * matrix.a + p.y * matrix.c + matrix.e, y: p.x * matrix.b + p.y * matrix.d + matrix.f };
+        });
+        const box = document.querySelectorAll('.dc-node')[0]!.getBoundingClientRect();
+        const outside = ({ x, y }: { x: number; y: number }) => {
+          const dx = Math.max(box.left - x, 0, x - box.right);
+          const dy = Math.max(box.top - y, 0, y - box.bottom);
+          const inside = Math.min(x - box.left, box.right - x, y - box.top, box.bottom - y);
+          return dx > 0 || dy > 0 ? Math.hypot(dx, dy) : inside;
+        };
+        return Math.min(...ends.map(outside));
+      });
+    const initial = await gap();
+    expect(initial).toBeLessThan(6);
+
+    const node = page.locator('.dc-node').first();
+    await node.click();
+    const before = (await node.boundingBox())!;
+    const handles = page.locator('.dc-resize-handle');
+    await expect(handles).toHaveCount(4);
+    const corner = (await handles.nth(3).boundingBox())!;
+    await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(corner.x + 120, corner.y + 80, { steps: 12 });
+    await page.mouse.up();
+    await expect.poll(async () => (await node.boundingBox())!.width).toBeGreaterThan(before.width + 80);
+    await expect.poll(gap).toBeLessThan(6);
+    await page.waitForTimeout(200);
+
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
+    await expect.poll(async () => Math.abs((await node.boundingBox())!.width - before.width)).toBeLessThan(4);
+    await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+    await expect.poll(gap).toBeLessThan(6);
+  });
+
   test('resizes live: content and the dimension indicator track the pointer mid-gesture', async ({
     page,
   }) => {

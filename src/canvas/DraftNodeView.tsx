@@ -123,9 +123,15 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     [],
   );
 
-  // Handles move with the node's size, so React Flow has to re-measure them.
+  // Handles move with the node's size, so React Flow has to re-measure them — when the size changes,
+  // not when the node mounts: React Flow measures a new node itself, every node that appeared in one
+  // batch. Asking here on mount as well made opening a diagram one store update per node, and every
+  // update re-runs every handle's and connector's selector: a 2.2 s freeze opening 500 shapes, 9 s at 1,000.
+  const measuredSize = useRef<string | null>(null);
   useEffect(() => {
-    updateNodeInternals(id);
+    const size = `${node?.width}x${node?.height}`;
+    if (measuredSize.current !== null && measuredSize.current !== size) updateNodeInternals(id);
+    measuredSize.current = size;
   }, [id, node?.width, node?.height, updateNodeInternals]);
 
   // `Enter` asks a node to start editing — there is no ref-based imperative
