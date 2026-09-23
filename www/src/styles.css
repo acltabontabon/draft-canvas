@@ -1330,52 +1330,97 @@ main > *:not(.spine) {
 }
 
 /*
- * Three rows, not three columns.
+ * Three columns in one frame, the way it was drawn — the 1px gaps are the dividers, which is why
+ * every column stretches to the tallest.
  *
- * As cards they had to be read side by side, so the tallest set the height for all of them —
- * Desktop, carrying a download control and its release metadata, left Browser and VS Code holding
- * a band of empty space underneath. Read as rows there is no shared height to fight over: each one
- * is as tall as its own words, and the three line up on their columns instead.
+ * That stretch is only kind when the three carry about the same amount. It wasn't: Desktop laid
+ * three download tiles and the signing notice out flat, set a height half again as tall as its
+ * neighbours, and `margin-top: auto` on the action spent the difference as a void between each
+ * short description and its own button. The fix was the content, not the composition — the builds
+ * fold into one control and the notice is one footnote under all three — so the columns now come
+ * out within a line or two of each other and the actions can align across them on purpose.
  */
 .dists {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--rule);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: var(--paper);
+  overflow: hidden;
 }
 
 .dist {
-  display: grid;
-  grid-template-columns: minmax(200px, 0.85fr) minmax(0, 1.6fr) minmax(200px, auto);
-  align-items: start;
-  gap: 10px clamp(22px, 3vw, 44px);
-  padding: 24px clamp(20px, 2vw, 28px);
+  display: flex;
+  flex-direction: column;
+  padding: 28px 26px 26px;
+  background: var(--paper);
 }
 
-.dist + .dist {
-  border-top: 1px solid var(--rule);
+.dist-lead {
+  background: var(--paper-2);
 }
 
-.dist-id h3 {
-  margin: 8px 0 0;
-  font-size: 1.15rem;
+.dist h3 {
+  margin: 10px 0 12px;
+  font-size: 1.28rem;
 }
 
-.dist-body p {
+.dist > p {
   margin: 0;
   font-size: 0.95rem;
   color: var(--ink-soft);
 }
 
-.dist-body .dist-fine {
-  margin: 8px 0 0;
+/*
+ * The actions line up across the three columns. `auto` here is the same property that used to open
+ * the void — it only reads as alignment because the columns are now within a line or two of each
+ * other, and it is what turns the frame's leftover into one straight row of buttons instead of
+ * three that start wherever their paragraph happened to end.
+ */
+.dist-act {
+  margin: 22px 0 0;
+  padding: 0;
 }
 
-/* The action column: one control, and whatever metadata belongs to it. */
-.dist-act {
+.dist-act:not(:last-child) {
+  margin-bottom: 0;
+}
+
+.dist > .dist-act {
+  margin-top: auto;
+  padding-top: 22px;
+}
+
+.dist-fine {
+  margin: 14px 0 0;
+  font-size: 0.83rem;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+
+.dist-meta {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+/*
+ * Side by side, every column's closing line reserves two lines of its own type. The actions are
+ * pushed down to meet it, so what decides where they land is this one rhythm rather than whether a
+ * particular sentence happened to wrap — which is the difference between three buttons in a row and
+ * three that each stop wherever their paragraph ran out. Stacked, there is no row to keep, and the
+ * reservation would only add space, so it is scoped to the widths that have one.
+ */
+@media (min-width: 681px) {
+  .dist > .dist-fine:last-child {
+    min-height: 2lh;
+  }
+}
+
+.dist-meta span {
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
 }
 
 /* One footnote for the one thing that needed saying twice, said once and at full width. */
@@ -1742,14 +1787,9 @@ main > *:not(.spine) {
 /* ── Narrower ────────────────────────────────────────────────────────────────────────────── */
 
 @media (max-width: 1080px) {
-  /* The action no longer has room beside the words: it goes under them, still its own column so
-     the three rows keep lining up. */
-  .dist {
-    grid-template-columns: minmax(0, 1fr) minmax(170px, auto);
-  }
-
-  .dist-id { grid-column: 1 / -1; }
-
+  /* Two columns, the lead across the top: three would be too narrow to read. */
+  .dists { grid-template-columns: 1fr 1fr; }
+  .dist-lead { grid-column: 1 / -1; }
   .starters { grid-template-columns: repeat(3, 1fr); }
 }
 
@@ -1782,16 +1822,14 @@ main > *:not(.spine) {
 }
 
 @media (max-width: 680px) {
-  .starters { grid-template-columns: 1fr; }
+  .dists, .starters { grid-template-columns: 1fr; }
+  .dist-lead { grid-column: auto; }
 
-  /* Label, then description, then action — one column, in reading order. */
-  .dist {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    padding: 22px 18px;
+  /* Stacked, there is no row of buttons to line up with — the action follows its own paragraph. */
+  .dist > .dist-act {
+    margin-top: 0;
+    padding-top: 18px;
   }
-
-  .dist-id { grid-column: auto; }
   .starters svg { max-width: 190px; }
   .formats li { grid-template-columns: 1fr; gap: 2px; }
   .moved { padding: 22px 46px 20px 20px; }
