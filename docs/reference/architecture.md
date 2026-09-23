@@ -198,6 +198,11 @@ flowchart LR
 So two flows share early steps and diverge later, and one diagram carries both stories. Playback,
 the lens, step badges, GIF export and sequence export are all readings of that same ordered list.
 
+Moving *between* flows is the same reading again: `nextFlow`/`previousFlow` are `pickFlow` with a
+different index into the document's own `flows` order, so a switch is a fresh start at the
+destination's step 1 and there is no second ordering to keep in step. It never wraps — the end of
+the last flow is the end of the walkthrough, not a loop back to the first.
+
 While a flow plays, the step's attachments tell the story beside it. The pipeline is derived, not
 scheduled: step → who speaks (`presentation/presentationAttachments.ts`: the step's connectors,
 spotlighted nodes, then the node a connector first arrives at) → presence (current callout plus at

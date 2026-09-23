@@ -12,59 +12,52 @@ and apply to the web app.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-09-24
+
+Walk a room through several flows without leaving presentation mode, and every connector keeps the
+words it was already showing.
+
 ### Shared
 
 #### Added
 
-- **Walk several flows in one presentation.** The bar now names the flow you are in and where it
-  sits — `Payment processing · Flow 2 of 4` — and moving to another one no longer means going back
-  to the editor. `Shift+→` starts the next flow, `Shift+←` the previous one, and clicking the
-  title (or `Shift+F`) opens the list to jump straight to any of them. On the last step of a flow,
-  the control beside the title names the one that follows, so the hand-off is there when you need
-  it; at the end of the last flow it simply says **End**, and nothing ever loops back round to the
-  beginning. <!-- highlight -->
+- **Move between flows without leaving presentation mode.** The bar names the flow you are in and
+  where it sits — `Payment processing · Flow 2 of 4`. `Shift+→` and `Shift+←` move to the next and
+  previous flow, and the title (or `Shift+F`) opens the list to jump straight to any of them. At the
+  end of a flow the next one names itself, so you can hand over mid-sentence; at the end of the last
+  it says **End**, and never loops back round. <!-- highlight -->
 
 #### Fixed
 
-- **A connector keeps its words once it joins a flow.** Adding a connector to a flow used to strip
-  the relationship it was already showing — "writes to", "publishes to", "after 3 attempts" —
-  leaving only a step number, on the canvas and in every exported image and GIF. The two now sit
-  side by side, so what you explain while presenting says exactly what the editor says. <!-- highlight -->
-- The presentation bar and the Flows panel spell out what a step is about, instead of going blank
-  on any connector whose meaning comes from its relationship rather than typed text.
-- **Fit to view** now frames the flow you are presenting, rather than zooming out to the whole
-  diagram.
-- Leaving a presentation returns you to the view you were editing, with the same selection.
-- Losing the last step of the flow you are showing no longer ends the presentation when there are
-  other flows left to show.
+- **Default arrow labels now stay visible while presenting.** Adding a connector to a flow used to
+  replace what it said — "writes to", "publishes to", "after 3 attempts" — with a bare step number,
+  on the canvas and in exported images and GIFs. The words and the number now sit side by side, and
+  the presentation bar and Flows panel say the same thing. <!-- highlight -->
+- **Fit to view** frames the flow you are presenting instead of the whole diagram, and leaving a
+  presentation returns you to the view and selection you were editing.
+- Losing the last step of the flow on screen no longer ends the presentation when other flows remain.
 - A connector that shares its label with others keeps its step number visible.
-
-- **A panel that won't open because the app has moved on now says so, and offers the fix.** Leaving
-  Draft Canvas open across an update left the page asking for files the new version no longer has,
-  so About, Export and Learn would fail to open and go on failing however many times you tried.
-  They now offer a Reload, which saves your work first. It bit hardest in Draft Canvas for VS Code,
-  where the editor is kept alive deliberately and so never reloaded on its own.
+- A panel that won't open because Draft Canvas has been updated now offers a Reload, instead of
+  failing every time you try. It saves your work first.
 
 #### Changed
 
-- `Shift+→` and `Shift+←` change flow while presenting. They used to move one step, the same as the
-  plain arrow keys.
+- While presenting, `Shift+→` and `Shift+←` change flow. They used to move a step, like the plain
+  arrow keys.
 
 ### Web
 
 #### Added
 
-- **A front door.** <https://acltabontabon.com/draft-canvas/> is now a page about Draft Canvas — what
-  it is, what it draws, and where to get it — instead of opening straight into the editor. <!-- highlight -->
+- **A front door.** <https://acltabontabon.com/draft-canvas/> is now a page about Draft Canvas —
+  what it is, what it draws, and where to get it. The editor has moved behind it, to
+  <https://acltabontabon.com/draft-canvas/editor/>. <!-- highlight -->
 
 #### Changed
 
-- **The editor has its own address**, <https://acltabontabon.com/draft-canvas/editor/>. Your diagrams
-  are untouched: they are saved per browser, not per address, so everything you have drawn is still
-  there and nothing needs re-importing. If you had the old address bookmarked, the new page will tell
-  you where the editor went and take you straight to your work. <!-- highlight -->
-- Draft Canvas for VS Code keeps working without being updated — every version already published is
-  sent on to the editor's new address automatically.
+- Your diagrams are untouched by the move: they are saved per browser, not per address. A bookmark
+  to the old address lands on the new page, which takes you straight to your work.
+- Draft Canvas for VS Code keeps working without being updated.
 
 ## [1.10.0] - 2026-09-22
 

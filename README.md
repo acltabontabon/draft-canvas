@@ -14,7 +14,7 @@ It gives you architecture-aware shapes, familiar technical relationships, and sm
 [![VS Code](https://img.shields.io/badge/VS%20Code-Marketplace-007ACC)](https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas)
 [![GitHub Release](https://img.shields.io/github/v/release/acltabontabon/draft-canvas)](https://github.com/acltabontabon/draft-canvas/releases)
 
-<img width="100%" alt="A run through Draft Canvas: drawing a Service, Queue and Worker with the keyboard, dropping in a composed CQRS architecture, attaching a note to a connector, presenting a flow step by step, looking inside a shape with Cmd+Down, and opening the Learn handbook." src="docs/media/demo.gif">
+<img width="100%" alt="A run through Draft Canvas: drawing a Service, Queue and Worker with the keyboard, dropping in a composed CQRS architecture, attaching a note to a connector, presenting a flow step by step and moving to the next flow without leaving, looking inside a shape with Cmd+Down, and opening the Learn handbook." src="docs/media/demo.gif">
 
 **[Try it →](https://acltabontabon.com/draft-canvas/editor/)** Nothing you draw leaves your browser.
 There's a [landing page](https://acltabontabon.com/draft-canvas/) too, if you'd rather read about it first.
@@ -34,7 +34,7 @@ own, and [in Docker](#running-it-yourself), on your own server.
 
 - **Architecture-aware shapes**: Service, Data Store, Queue/Topic, Actor and Boundary know what they mean, so connectors label themselves (*publishes to*, *reads from*) and the app can suggest a sensible next shape
 - **C4-aware depth**: look inside a Service or Component to draw what runs there, and [explain a system at different levels](docs/guides/depth.md)
-- **Flows and presentations**: group connectors into a flow and present it one step at a time; export a flow as a Mermaid or PlantUML sequence diagram
+- **Flows and presentations**: group connectors into a flow and present it one step at a time, moving between flows without leaving the presentation; export a flow as a Mermaid or PlantUML sequence diagram
 - **Keyboard-first**: press a letter to drop a shape, `Tab` to accept a suggestion, `⌘K` for everything else
 - **Starters**: compose a known architecture from the command palette: Monolith, Microservices, Event-Driven, Hexagonal, CQRS, Saga, Outbox, Medallion and more
 - **Local by default**: diagrams are saved in your browser (IndexedDB) and encrypted at rest; no backend and no account. It works offline once loaded, and a build-time test fails on any network call in the app's code

@@ -227,4 +227,27 @@ describe('useFlowPlayback — moving between flows', () => {
     expect(after.history.past).toHaveLength(past);
     expect(after.history.future).toHaveLength(0);
   });
+
+  it('tells two flows with the same name apart, because it moves by id and not by title', () => {
+    // Nothing stops a diagram having two "Checkout"s, and the bar shows the title — so the
+    // position beside it is what makes them distinguishable, and the id is what makes them
+    // reachable.
+    const edge = connectedPair();
+    const state = useEditorStore.getState();
+    const first = state.createFlow('Checkout')!;
+    const second = state.createFlow('Checkout')!;
+    state.addEdgeToFlow(first, edge.id);
+    state.addEdgeToFlow(second, edge.id);
+
+    const { result, rerender } = mount();
+    act(() => result.current.pickFlow(first));
+    rerender();
+    expect(result.current.flowIndex).toBe(0);
+
+    act(() => result.current.nextFlow());
+    rerender();
+    expect(result.current.flow?.id).toBe(second);
+    expect(result.current.flowIndex).toBe(1);
+    expect(result.current.flows.map((f) => f.title)).toEqual(['Checkout', 'Checkout']);
+  });
 });

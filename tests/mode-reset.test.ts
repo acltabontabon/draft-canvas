@@ -111,3 +111,58 @@ describe('per-canvas UI state does not leak', () => {
     expect(useUiStore.getState().openAttachmentDetail).toBeNull();
   });
 });
+
+/**
+ * Leaving a presentation puts the editor back where it was — the same view and the same selection.
+ * That memory is per-session and per-document: it must never follow you into a diagram it was not
+ * taken from, and it must not survive a round trip as a stale selection of shapes that are gone.
+ */
+describe('what presenting remembers to go back to', () => {
+  beforeEach(reset);
+
+  it('puts the selection back on the way out, and forgets it once spent', () => {
+    const node = store.getState().addNode({ type: 'service', x: 0, y: 0, text: 'Gateway' });
+    store.getState().setSelection({ nodes: [node.id], edges: [] });
+
+    store.getState().setMode('present');
+    // Nothing is selected while presenting: a ring with nothing to explain it reads as a stray mark.
+    expect(store.getState().selection.nodes).toEqual([]);
+
+    store.getState().setMode('edit');
+    expect(store.getState().selection.nodes).toEqual([node.id]);
+    expect(store.getState().editReturn).toBeNull();
+  });
+
+  it('does not carry a selection into a diagram it was never taken from', () => {
+    const node = store.getState().addNode({ type: 'service', x: 0, y: 0, text: 'Gateway' });
+    store.getState().setSelection({ nodes: [node.id], edges: [] });
+    store.getState().setMode('present');
+
+    // Opening another diagram mid-presentation: the shapes the memory names do not exist here.
+    store.getState().setDocument(createDocument('B'));
+    expect(store.getState().editReturn).toBeNull();
+    expect(store.getState().selection.nodes).toEqual([]);
+  });
+
+  it('remembers the view it was entered from, not the one the walkthrough ended on', () => {
+    const camera = { x: 120, y: 40, zoom: 0.65 };
+    store.getState().setMode('present', camera);
+    expect(store.getState().editReturn?.viewport).toEqual(camera);
+
+    // Re-entering present while already presenting must not overwrite it with the flow's framing.
+    store.getState().setMode('present', { x: 999, y: 999, zoom: 2 });
+    expect(store.getState().editReturn?.viewport).toEqual(camera);
+  });
+
+  it('survives presenting over and over without accumulating anything', () => {
+    const node = store.getState().addNode({ type: 'service', x: 0, y: 0, text: 'Gateway' });
+    store.getState().setSelection({ nodes: [node.id], edges: [] });
+    for (let i = 0; i < 5; i += 1) {
+      store.getState().setMode('present', { x: i, y: i, zoom: 1 });
+      store.getState().setMode('edit');
+    }
+    expect(store.getState().selection.nodes).toEqual([node.id]);
+    expect(store.getState().editReturn).toBeNull();
+    expect(store.getState().mode).toBe('edit');
+  });
+});
