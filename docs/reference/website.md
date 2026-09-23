@@ -18,7 +18,7 @@ and one stylesheet, and no dependency shared with the app. That is deliberate ra
 in `src/`, so the two cannot leak into each other by accident.
 
 ```bash
-npm run site:dev        # the site alone, on :5281, with hot reload
+npm run site:dev        # the site alone, on :5280, with hot reload
 npm run build:web       # builds the editor, builds the site, assembles dist-web/
 npm run site:preview    # the above, staged under /draft-canvas/ and served like GitHub Pages
 npm run e2e:web         # the checks that only make sense against the assembled artifact
@@ -65,8 +65,13 @@ palette — rather than a second one that would drift away from it.
 
 `pages.yml` is the only workflow that deploys. It runs on a `vX.Y.Z` tag, on demand, and through
 `workflow_call`; `pages-site.yml` calls it on a push to `main` that touches `www/`, so a rewritten
-sentence does not have to wait for a release. Both publish the identical artifact and share the
-`pages` concurrency group.
+sentence does not have to wait for a release. The two share the `pages` concurrency group.
+
+The editor half only ever changes on a release. On a `vX.Y.Z` tag, both halves come from that tag.
+Anywhere else — a site-only push, or a run on demand from a branch — `pages.yml` checks out the
+newest stable `vX.Y.Z`, lays the commit's `www/` and `scripts/assemble-web.mjs` over it, and builds
+that. So `/draft-canvas/editor/`, which installed VS Code extensions load, never serves unreleased
+code, and the site's download links carry a version whose installers exist.
 
 They are two files rather than two triggers on one because a `push` filtered by both refs and paths
 requires every filter to match — adding a path filter to `pages.yml` would also gate the release tags
@@ -96,8 +101,9 @@ still running the old editor keeps running it until it navigates. So a returning
 stale editor load at `/draft-canvas/` before the worker retires. Their work is autosaved throughout,
 and the next visit is the landing page.
 
-**Released VS Code extensions.** Every version published so far frames
-`https://acltabontabon.com/draft-canvas/?host=vscode`, and those copies will never be updated. The
+**Released VS Code extensions.** Every version up to 0.1.6 frames
+`https://acltabontabon.com/draft-canvas/?host=vscode` (0.1.7 frames `/draft-canvas/editor/` directly),
+and copies that are never updated will keep doing so. The
 landing page carries a small inline script that forwards a `?host=vscode` frame — the only URL
 parameter the app has ever understood — on to the editor. The webview's own CSP is
 `frame-src https://acltabontabon.com/draft-canvas/`, and a source expression whose path ends in `/`

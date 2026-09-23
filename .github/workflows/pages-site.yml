@@ -5,8 +5,10 @@ name: Deploy site changes
 # Deliberately a second file rather than a second trigger on pages.yml: a `push` filtered by both
 # refs and paths requires every filter to match, so adding a path filter there would also gate the
 # release tags and silently stop deploying releases. This calls pages.yml instead of repeating it,
-# so both routes publish the identical artifact, and they share its `pages` concurrency group, so
-# they queue behind each other rather than racing.
+# so there is one definition of the deploy, and they share its `pages` concurrency group, so they
+# queue behind each other rather than racing. Called from here, pages.yml builds the landing page
+# from this commit and the editor from the latest vX.Y.Z release: a site edit never ships
+# unreleased editor code.
 
 on:
   push:

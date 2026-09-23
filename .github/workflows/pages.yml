@@ -11,8 +11,9 @@ name: Deploy to Pages
 # name. Adding a CNAME here would try to claim the apex from the root site.
 #
 # This is the only workflow that deploys. pages-site.yml calls it rather than building its own
-# copy, so there is exactly one definition of what gets published and the two triggers cannot
-# publish different things.
+# copy, so there is exactly one definition of what gets published. On a release tag both halves
+# come from that tag; anywhere else the landing page comes from the commit and the editor from the
+# latest vX.Y.Z (see the first step), so the editor only ever changes on a release.
 
 on:
   push:
@@ -41,6 +42,27 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+      # The editor half is only ever a release. A site-only push (pages-site.yml) or a run on demand
+      # from a branch would otherwise build main's unreleased editor into /draft-canvas/editor/ —
+      # the page installed VS Code extensions load — and stamp the site's download links with a
+      # package.json version that has no installers yet. So off a tag, check out the newest stable
+      # vX.Y.Z and lay this commit's www/ (and the script that assembles it) over it.
+      - name: Build the editor from the latest release
+        if: github.ref_type != 'tag'
+        run: |
+          site="$(git rev-parse HEAD)"
+          tag="$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          if [ -z "$tag" ]; then
+            echo "::error::No vX.Y.Z release tag to build the editor from."
+            exit 1
+          fi
+          git fetch --no-tags --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"
+          git checkout --quiet --detach "$tag"
+          git rm -rq --cached --ignore-unmatch www
+          rm -rf www
+          git checkout "$site" -- www scripts/assemble-web.mjs
+          echo "::notice::Editor from $tag, landing page from ${site:0:7}."
       - uses: actions/setup-node@v7
         with:
           node-version: 22.14.0
