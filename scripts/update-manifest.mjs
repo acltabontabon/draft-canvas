@@ -65,6 +65,7 @@ export const ENDPOINT = `https://github.com/${REPO}/releases/download/${CHANNELS
  */
 export const PLATFORMS = [
   { key: 'darwin-aarch64', label: 'macOS (Apple silicon)', file: (version) => `Draft-Canvas_${version}_macOS_arm64.app.tar.gz` },
+  { key: 'darwin-x86_64', label: 'macOS (Intel)', file: (version) => `Draft-Canvas_${version}_macOS_x64.app.tar.gz` },
   { key: 'windows-x86_64', label: 'Windows (x64)', file: (version) => `Draft-Canvas_${version}_Windows_x64.exe` },
 ];
 

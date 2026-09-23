@@ -45,6 +45,13 @@ words it was already showing.
 - While presenting, `Shift+→` and `Shift+←` change flow. They used to move a step, like the plain
   arrow keys.
 
+### Desktop
+
+#### Added
+
+- **Draft Canvas Desktop now runs on Intel Macs.** The Releases page carries a second `.dmg`, and
+  Intel copies update themselves like any other. <!-- highlight -->
+
 ### Web
 
 #### Added

@@ -97,7 +97,8 @@ or run by a `desktop-vX.Y.Z-alpha.N` tag, which makes its own prerelease:
 1. **verify** — the tag, version and changelog agree; the signing secret exists; the key in
    `tauri.conf.json` is real, the endpoint is the channel template, and `requireSignedVersion` is on.
 2. **build** — with `src-tauri/tauri.updater.conf.json`: the installers **and** the signed update
-   packages (`Draft-Canvas_X.Y.Z_macOS_arm64.app.tar.gz` and the Windows installer, each with a `.sig`).
+   packages (`Draft-Canvas_X.Y.Z_macOS_arm64.app.tar.gz`, its `_macOS_x64` twin, and the Windows
+   installer, each with a `.sig`).
    Each signature is checked on the machine that made it, against the app's key and this version.
 3. **publish** — `latest.json` is built from the signatures and verified against the packages
    themselves: every platform, every address this release's, every signature valid for the exact bytes.

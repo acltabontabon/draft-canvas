@@ -87,7 +87,7 @@ as ordinary `.draftcanvas` files on disk — one file per diagram, folders of th
 and no server.
 
 Download it from [Releases](https://github.com/acltabontabon/draft-canvas/releases/latest) — a `.dmg` for
-macOS (Apple Silicon) or an installer for Windows (x64). The installer isn't signed yet, so the OS will warn
+macOS (Apple Silicon or Intel) or an installer for Windows (x64). The installer isn't signed yet, so the OS will warn
 the first time; [the Desktop guide](docs/guides/desktop.md) says what to do about that, and covers everything
 else it can do.
 

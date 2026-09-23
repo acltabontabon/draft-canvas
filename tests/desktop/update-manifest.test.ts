@@ -63,10 +63,15 @@ describe('the update manifest', () => {
   it('names every platform’s package at the address the release will have', () => {
     const { signatures } = release();
     const manifest = buildManifest({ version: VERSION, notes: '### Added', pubDate: '2026-09-22T00:00:00.000Z', signatures });
-    expect(Object.keys(manifest.platforms).sort()).toEqual(['darwin-aarch64', 'windows-x86_64']);
+    expect(Object.keys(manifest.platforms).sort()).toEqual(['darwin-aarch64', 'darwin-x86_64', 'windows-x86_64']);
     // A release is the one vX.Y.Z release the web app and Docker share.
     expect(manifest.platforms['darwin-aarch64']!.url).toBe(
       'https://github.com/acltabontabon/draft-canvas/releases/download/v1.10.0/Draft-Canvas_1.10.0_macOS_arm64.app.tar.gz',
+    );
+    // The two Macs are separate builds and separate packages: an Intel copy that was handed the
+    // Apple Silicon bundle would fail to launch, having already replaced itself.
+    expect(manifest.platforms['darwin-x86_64']!.url).toBe(
+      'https://github.com/acltabontabon/draft-canvas/releases/download/v1.10.0/Draft-Canvas_1.10.0_macOS_x64.app.tar.gz',
     );
     expect(manifest.platforms['windows-x86_64']!.url).toBe(assetUrl(VERSION, 'Draft-Canvas_1.10.0_Windows_x64.exe'));
   });

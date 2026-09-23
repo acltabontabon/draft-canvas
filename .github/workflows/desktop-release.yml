@@ -125,6 +125,18 @@ jobs:
             extension: .dmg
             update: Draft-Canvas_VERSION_macOS_arm64.app.tar.gz
             update-extension: .app.tar.gz
+          # Built on the same arm64 runner as the entry above rather than on a native Intel one:
+          # `macos-13` is the last Intel image GitHub offers and is on its way out, while
+          # arm64 -> x86_64 is an ordinary Rust cross-compile that the Apple SDK on the runner
+          # already supports. The bundler runs on the host and cares only about the target triple.
+          - name: macOS x64
+            os: macos-latest
+            args: --target x86_64-apple-darwin --bundles app,dmg
+            target: x86_64-apple-darwin
+            installer: Draft-Canvas_VERSION_macOS_x64.dmg
+            extension: .dmg
+            update: Draft-Canvas_VERSION_macOS_x64.app.tar.gz
+            update-extension: .app.tar.gz
           - name: Windows x64
             os: windows-latest
             args: --bundles nsis
@@ -133,8 +145,6 @@ jobs:
             extension: .exe
             update: Draft-Canvas_VERSION_Windows_x64.exe
             update-extension: -setup.exe
-          # Intel Macs: add { os: macos-13, args: --target x86_64-apple-darwin, ... } here. Nothing else
-          # in the pipeline is specific to arm64.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

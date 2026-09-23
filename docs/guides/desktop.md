@@ -6,7 +6,7 @@ kept on your computer, and when you're done it is a `.draftcanvas` file wherever
 
 Nothing about it needs an account, a server or a network connection. It is one of three ways to use
 Draft Canvas, and all three work on the same file: the [web app](getting-started.md), the
-[VS Code extension](vscode.md), and this. It is for macOS on Apple Silicon and Windows on x64.
+[VS Code extension](vscode.md), and this. It is for macOS, on Apple Silicon or Intel, and Windows on x64.
 
 ## Quick Draft
 
@@ -178,8 +178,10 @@ tray, native dialogs and safe file writes.
 
 The desktop app has no version or release of its own: every Draft Canvas release (`vX.Y.Z`, the version in
 `package.json`) includes it. `.github/workflows/release.yml` creates the release, and
-`.github/workflows/desktop-release.yml` builds the macOS (Apple Silicon) `.dmg` and the Windows (x64) installer
-into it, with a checksum file and a build attestation.
+`.github/workflows/desktop-release.yml` builds the two macOS `.dmg`s (Apple Silicon and Intel) and the
+Windows (x64) installer into it, with a checksum file and a build attestation. The Intel build is
+cross-compiled on the same arm64 runner as the Apple Silicon one, which is why there is no third
+machine in the matrix.
 
 Before a release, the desktop app can have previews: a `desktop-vX.Y.Z-alpha.N` tag builds a prerelease of its
 own, titled "Draft Canvas X.Y.Z-alpha.N", whose `X.Y.Z` may lead `package.json`'s. Its notes are its dated section of

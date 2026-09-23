@@ -14,8 +14,10 @@
  * In the order someone scanning the list would want them, and the order they appear in the markup.
  *
  * A browser will say it is on a Mac. It will not reliably say whether that Mac is Apple silicon or
- * Intel — and it does not matter here, because there is no Intel build to offer: the row says
- * "Apple silicon" in words rather than implying it covers every Mac.
+ * Intel, and both builds now exist — so a Mac highlights the Apple silicon row, which is what all
+ * but a shrinking few are on, and the Intel row sits right beneath it saying "Intel" in words.
+ * Guessing wrong here would send someone to a build that will not run; saying which is which, and
+ * leaving both a click away, cannot.
  */
 const TARGETS = [
   { slug: 'macos-arm64', match: /Mac|iPhone|iPad/i },
