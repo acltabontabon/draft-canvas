@@ -43,13 +43,27 @@ body:
         - "Haven't tried"
     validations:
       required: true
+  - type: dropdown
+    id: distribution
+    attributes:
+      label: Where are you running Draft Canvas?
+      options:
+        - Web app (acltabontabon.com)
+        - Docker image
+        - Desktop (macOS)
+        - Desktop (Windows)
+        - VS Code extension
+        - Built from source
+    validations:
+      required: true
   - type: input
     id: browser
     attributes:
       label: Browser
+      description: For the web app or the Docker image.
       placeholder: e.g. Chrome 141, Safari 18, Firefox 133
     validations:
-      required: true
+      required: false
   - type: input
     id: os
     attributes:
@@ -61,7 +75,7 @@ body:
     id: version
     attributes:
       label: Draft Canvas version or commit
-      description: Shown in the About dialog, or the commit you're running if built from source.
+      description: Shown in the About dialog (for the VS Code extension, its version in the Extensions view), or the commit you're running if built from source.
     validations:
       required: false
   - type: textarea

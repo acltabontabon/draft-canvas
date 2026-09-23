@@ -37,10 +37,27 @@ own, and [in Docker](#running-it-yourself), on your own server.
 - **Flows and presentations**: group connectors into a flow and present it one step at a time, moving between flows without leaving the presentation; export a flow as a Mermaid or PlantUML sequence diagram
 - **Keyboard-first**: press a letter to drop a shape, `Tab` to accept a suggestion, `⌘K` for everything else
 - **Starters**: compose a known architecture from the command palette: Monolith, Microservices, Event-Driven, Hexagonal, CQRS, Saga, Outbox, Medallion and more
-- **Local by default**: diagrams are saved in your browser (IndexedDB) and encrypted at rest; no backend and no account. It works offline once loaded, and a build-time test fails on any network call in the app's code
+- **Local by default**: diagrams are saved in your browser (IndexedDB) and encrypted at rest; no backend and no account. It works offline once loaded, and a test in the suite fails on any network API in the editor's source ([what's stored, and where](docs/reference/privacy.md))
 - **Export**: editable `.draftcanvas` JSON, passphrase-encrypted `.dcenc`, PNG, SVG, GIF, and Mermaid or PlantUML source
 
 Diagrams live in one browser on one device. [Export anything you'd mind losing](docs/guides/saving-and-sharing.md#what-you-have-to-do).
+
+---
+
+## Where it runs
+
+One editor, four ways to open it. The web app, the Docker image and the desktop app share a version
+and ship together in each [release](https://github.com/acltabontabon/draft-canvas/releases).
+
+| | Runs on | Saves to | Status |
+| --- | --- | --- | --- |
+| [Web app](https://acltabontabon.com/draft-canvas/editor/) | A modern browser | The browser (IndexedDB), encrypted | Stable |
+| [Docker](#running-it-yourself) | Your own server, behind HTTPS | The visitor's browser, as above | Stable |
+| [Desktop](#desktop) | macOS (Apple Silicon, Intel), Windows x64 | `.draftcanvas` files and folders | Stable, with unsigned installers; `desktop-v…-alpha` tags are previews |
+| [VS Code](#in-vs-code) | VS Code 1.100 or later | The `.draftcanvas` file you opened | 0.x; loads the hosted editor, so it needs to reach `acltabontabon.com` |
+
+There's no Linux desktop build. Nothing is synced between them; a `.draftcanvas` file is how a
+diagram moves. Ideas and planned work are in [Issues](https://github.com/acltabontabon/draft-canvas/issues).
 
 ---
 
@@ -87,7 +104,7 @@ as ordinary `.draftcanvas` files on disk — one file per diagram, folders of th
 and no server.
 
 Download it from [Releases](https://github.com/acltabontabon/draft-canvas/releases/latest) — a `.dmg` for
-macOS (Apple Silicon or Intel) or an installer for Windows (x64). The installer isn't signed yet, so the OS will warn
+macOS (Apple Silicon or Intel) or an installer for Windows (x64). The installers aren't signed yet, so the OS will warn
 the first time; [the Desktop guide](docs/guides/desktop.md) says what to do about that, and covers everything
 else it can do.
 
@@ -101,8 +118,9 @@ The same static app as the hosted version, served by nginx. No backend, nothing 
 docker run -d --name draft-canvas -p 8080:80 acltabontabon/draft-canvas
 ```
 
-Then open http://localhost:8080. `latest` follows stable releases; pin a tag like
-`acltabontabon/draft-canvas:1.9.0` to stay put.
+Then open http://localhost:8080. `latest` follows stable releases; pin a
+[version tag](https://hub.docker.com/r/acltabontabon/draft-canvas/tags) (`X.Y.Z`, or `X.Y` for its
+patches) to stay put.
 
 Serving it to other machines? Put it behind HTTPS. Browsers only allow the encryption Draft Canvas
 saves with on HTTPS or `localhost`, so over plain `http://192.168.x.x` it can't save anything.
@@ -128,9 +146,11 @@ Frame times while you pan, zoom and drag in diagrams of up to 1,000 shapes, how 
 
 ## Contributing
 
-Draft Canvas is small and opinionated. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers setup, the checks
-to run, and what kinds of change fit; [`docs/reference/architecture.md`](docs/reference/architecture.md)
-explains why it is built the way it is. Security concerns: [`SECURITY.md`](SECURITY.md). Release notes:
+Draft Canvas is small and opinionated. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers setup, a map of
+the repository, the checks to run for each part of it, and what kinds of change fit;
+[`docs/reference/architecture.md`](docs/reference/architecture.md) explains why it is built the way it
+is. Found a bug or have an idea? [Open an issue](https://github.com/acltabontabon/draft-canvas/issues/new/choose).
+Security concerns go privately, as [`SECURITY.md`](SECURITY.md) describes. Release notes:
 [`CHANGELOG.md`](CHANGELOG.md).
 
 Draft Canvas is licensed under [Apache 2.0](LICENSE).

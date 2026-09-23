@@ -305,7 +305,7 @@ export function configProblems(updater) {
     const { keyId } = decodePublicKey(updater.pubkey ?? '');
     if (keyId.every((byte) => byte === 0)) problems.push('the public key has an empty key id');
   } catch {
-    problems.push('plugins.updater.pubkey is not a real public key yet — see docs/guides/desktop-updates.md');
+    problems.push('plugins.updater.pubkey is not a real public key yet — see docs/reference/desktop-updates.md');
   }
   const endpoints = updater.endpoints ?? [];
   if (endpoints.length !== 1 || endpoints[0] !== ENDPOINT) problems.push(`the one endpoint must be ${ENDPOINT}`);

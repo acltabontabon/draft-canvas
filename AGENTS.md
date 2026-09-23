@@ -1,7 +1,10 @@
 # Draft Canvas — working notes
 
 Draft Canvas is a local-first React + TypeScript SPA (Vite) for explaining software visually.
-No backend, no accounts, no network calls.
+No backend, no accounts, and no network calls in the editor's code. The same editor ships as the web
+app, a Docker image, a Tauri 2 desktop app (`src-tauri/` + `src/desktop/`) and a VS Code extension
+(`vscode-extension/`). [`CONTRIBUTING.md`](CONTRIBUTING.md) has the repository map and how each
+platform saves a document.
 
 ## Commands
 
@@ -12,9 +15,12 @@ npm run lint       # oxlint
 npm test           # vitest run
 npm run e2e        # playwright (npm run e2e:install once first)
 npm run check      # lint + e2e/benchmark/demo typecheck + build + unit tests — run this before calling work done
-npm run site:dev   # the landing page (www/) alone, on :5281
+npm run site:dev   # the landing page (www/) alone, on :5280
 npm run build:web  # editor + landing page, assembled into dist-web/ the way Pages serves it
 npm run e2e:web    # the assembled artifact, served at /draft-canvas/ like production
+npm run desktop:dev    # the desktop app with hot reload (needs Rust + Tauri prerequisites)
+npm run desktop:check  # desktop web build + cargo fmt/clippy/test + version check
+npm run e2e:desktop    # the desktop screens against a faked shell, no Rust needed
 ```
 
 Single test / focused runs:
@@ -51,6 +57,10 @@ Each of these has a failure mode that is silent, delayed, or both.
   the app's own assets and checks for updates in the background; it never touches IndexedDB or
   canvas content. No webfonts either — an SVG rasterized through `<canvas>` cannot resolve them,
   so every PNG would export in the wrong typeface.
+- **Only `src/desktop/tauri/` imports `@tauri-apps/*`.** Everything else reaches the native side through
+  the `DesktopApi` interface (`src/desktop/api.ts`), which is what lets `e2e/desktop/` and
+  `tests/desktop/` run the desktop screens against a fake. `tests/privacy.test.ts` enforces it, and
+  desktop-only code sits behind `__DESKTOP__` so the web build compiles it out.
 - **`localStorage` is only for tiny preferences**, and only through `src/lib/preferences.ts`.
   Documents go in IndexedDB.
 - **`src/starters/` is data, not behaviour.** An Architecture Starter declares nodes, edges and
@@ -167,6 +177,8 @@ design and reference material lives in `docs/reference/`:
 - `docs/reference/schema.md` — schema version history and the migration/import-validation contract
 - `docs/reference/privacy.md` — what is stored, where, and what leaves the machine
 - `docs/reference/performance.md` — benchmark methodology and the published results
+- `docs/reference/website.md` — the landing page, and how Pages is built and deployed
+- `docs/reference/desktop-updates.md` — the desktop updater's signing key and release checks
 - `SECURITY.md` — threat model and key lifecycle
 - `CHANGELOG.md` — user-facing release notes
 

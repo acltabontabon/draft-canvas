@@ -208,6 +208,17 @@ describe('the real changelog and release configuration', () => {
     }
   });
 
+  // The bracketed headings are reference links; without a definition they render as literal
+  // "[1.11.0]" on GitHub. They went four releases stale before this check existed.
+  it('links every version heading, and [Unreleased] compares from the newest release', () => {
+    const defined = new Set([...changelog.matchAll(/^\[([^\]]+)\]: https:\/\/github\.com\//gm)].map((match) => match[1]));
+    const versions = parseChangelog(changelog).map((entry) => entry.version);
+    const missing = versions.filter((version) => !defined.has(version));
+    expect(missing, `add a "[X.Y.Z]: https://github.com/acltabontabon/draft-canvas/compare/…" line to the end of CHANGELOG.md for: ${missing.join(', ')}`).toEqual([]);
+    const newest = versions.find((version) => !version.includes('-'));
+    expect(changelog).toContain(`[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v${newest}...main`);
+  });
+
   it('1.10.0-alpha.2’s desktop notes carry its shared and desktop changes, and its web notes no desktop ones', () => {
     const desktop = releaseBody('desktop-v1.10.0-alpha.2', changelog);
     const web = releaseBody('desktop-v1.10.0-alpha.2', changelog, { platform: 'web' });

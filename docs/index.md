@@ -1,7 +1,7 @@
 # Draft Canvas documentation
 
 Draft Canvas is a tool for drawing and explaining software quickly, with modest architectural
-assistance. It runs entirely in your browser (or in VS Code), with no backend and no account.
+assistance. It runs in your browser, in VS Code, or as a desktop app, with no backend and no account.
 
 New here? Start with [Getting started](guides/getting-started.md). It takes a few minutes.
 
@@ -27,7 +27,7 @@ Running your own copy, and installing the VS Code extension, are covered in the
 
 | Document | Read it to |
 | --- | --- |
-| [Contributing](../CONTRIBUTING.md) | Set up, run the checks, and send a change |
+| [Contributing](../CONTRIBUTING.md) | Set up, find your way around the repository, run the checks, and send a change |
 | [`AGENTS.md`](../AGENTS.md) | Learn the rules that are load-bearing before touching core code |
 | [Architecture](reference/architecture.md) | Understand why it is built this way: one renderer, the canvas/store boundary, persistence, and what is deliberately not built |
 | [Architecture semantics](reference/semantics.md) | See what Draft Canvas understands about a diagram: node categories, the connector capability matrix, suggestion rules |
@@ -35,6 +35,7 @@ Running your own copy, and installing the VS Code extension, are covered in the
 | [Privacy](reference/privacy.md) | See exactly what is stored, where, and what leaves your machine |
 | [Performance](reference/performance.md) | Read the benchmark methodology and the latest results |
 | [The website](reference/website.md) | Build, preview and deploy the landing page, and see how the editor's move was made safe |
+| [Desktop updates](reference/desktop-updates.md) | Set up and check the desktop app's signed updates (maintainers) |
 | [Security](../SECURITY.md) | Read the threat model, key lifecycle and how to report a concern |
 | [Changelog](../CHANGELOG.md) | See what changed in each release |
 | [VS Code extension release process](../vscode-extension/RELEASING.md) | Release the extension |

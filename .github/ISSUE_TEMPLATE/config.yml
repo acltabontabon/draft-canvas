@@ -3,3 +3,6 @@ contact_links:
   - name: Report a security vulnerability
     url: https://github.com/acltabontabon/draft-canvas/security/advisories/new
     about: Please don't open a public issue for security reports — see SECURITY.md.
+  - name: Documentation
+    url: https://github.com/acltabontabon/draft-canvas/blob/main/docs/index.md
+    about: Guides for using Draft Canvas, and reference material for changing it.

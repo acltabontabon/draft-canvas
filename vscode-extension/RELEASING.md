@@ -4,7 +4,7 @@ This repository ships two products, each on its own schedule:
 
 | Tag | Releases | Version | Changelog | Workflow |
 | --- | --- | --- | --- | --- |
-| `vX.Y.Z` | Draft Canvas: GitHub Release, Pages, Docker and the desktop app | root `package.json` | `CHANGELOG.md` | `release.yml`, `pages.yml`, `desktop-release.yml` |
+| `vX.Y.Z` | Draft Canvas: GitHub Release, Pages, Docker and the desktop app | root `package.json` | `CHANGELOG.md` | `release.yml` (which calls `docker-publish.yml` and `desktop-release.yml`), `pages.yml` |
 | `desktop-vX.Y.Z-alpha.N` | A desktop preview ahead of a `vX.Y.Z` release | the tag | `CHANGELOG.md` | `desktop-release.yml` |
 | `extension-vX.Y.Z` | Draft Canvas for VS Code: GitHub Release with the VSIX, then a Marketplace upload by hand | `vscode-extension/package.json` | `vscode-extension/CHANGELOG.md` | `vscode-release.yml` |
 
@@ -13,12 +13,15 @@ Neither tag triggers the other lane, and the two versions never need to match. D
 
 ## How the extension depends on the web app
 
-The extension doesn't bundle Draft Canvas. It opens `https://acltabontabon.com/draft-canvas/?host=vscode`
-in the editor tab, and the app's host mode (`src/host/`) takes it from there. So:
+The extension doesn't bundle Draft Canvas. It opens `https://acltabontabon.com/draft-canvas/editor/?host=vscode`
+(`APP_URL` in `src/extension.ts`) in the editor tab, and the app's host mode (`src/host/`) takes it
+from there. So:
 
 - Changes in `vscode-extension/` ship with an extension release alone.
 - Changes to the editor itself, host mode included, reach VS Code users when the **web app** is
-  released. No extension release is needed.
+  released. No extension release is needed. The hosted editor changes only on a `vX.Y.Z` tag: a
+  landing-page deploy between releases rebuilds the editor from the latest release, not from `main`
+  (see [The website](../docs/reference/website.md#deploying)).
 - Any change to the messages between them (`src/host/embeddedHost.ts` ↔ `vscode-extension/src/extension.ts`)
   must stay backward compatible, because the site and installed extensions update at different
   times. Add messages; don't change or remove existing ones.

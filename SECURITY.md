@@ -82,6 +82,37 @@ The portable, share-anywhere alternative to a plain `.draftcanvas` file:
   untrusted-input validator every import goes through — a `.dcenc` file gets no more trust than a
   plain one once it's decrypted.
 
+## Beyond the browser
+
+The encryption above is how the **web app** stores diagrams in the browser. The other ways to run
+Draft Canvas store them differently, and have their own trust boundaries:
+
+- **Desktop** (`src-tauri/`) keeps each diagram as a plain `.draftcanvas` file where you save it, plus
+  plain recovery copies of unsaved work in its own data folder — as private as any file in your user
+  folder, and no more; there is no encryption at rest. The native side hands the editor opaque handles
+  rather than paths, so it can only read or write files you chose. It checks this project's GitHub
+  releases for updates, and installs an update only if its signature matches the public key built into
+  the app (`plugins.updater.pubkey` in `src-tauri/tauri.conf.json`). The installers themselves are not
+  code-signed or notarized; verify a download against the release's `SHA256SUMS.txt` and build
+  attestation. Details: [privacy](docs/reference/privacy.md#the-desktop-app) and
+  [Desktop updates](docs/reference/desktop-updates.md).
+- **VS Code** (`vscode-extension/`) doesn't bundle the editor: it frames the hosted one from
+  `acltabontabon.com` and hands it one file over `postMessage`. So the code editing your file is what
+  that site serves at the time, and it changes only on a Draft Canvas release. The file is plain JSON,
+  written by VS Code.
+- **Docker** serves the same static web app, so the browser threat model above applies. Serve it over
+  HTTPS: browsers only allow the Web Crypto encryption on HTTPS or `localhost`.
+
+## Supported versions
+
+Fixes, security fixes included, ship in the next release; older versions don't get backports.
+
+| Distribution | Supported |
+| --- | --- |
+| Web app (hosted), Docker image, Desktop | The latest `vX.Y.Z` release. They share one version and ship together. |
+| Desktop previews (`desktop-vX.Y.Z-alpha.N`) | Only until the next alpha or the release it leads to |
+| VS Code extension | The latest `extension-vX.Y.Z` release on the Marketplace |
+
 ## Reporting a concern
 
 There's no bug bounty program or dedicated security contact — this is a small, local-first tool,
@@ -89,6 +120,6 @@ not a service with a security team. For a genuine vulnerability (not a threat-mo
 already listed above) — including an accidental secret exposure, unsafe import/export behavior, or
 a local data/privacy issue — the preferred path is GitHub's private vulnerability reporting: on this
 repository, go to the **Security** tab → **Report a vulnerability**. That reaches the maintainer
-directly without a public issue. If you'd rather not use that, open a regular issue and say it's
-sensitive; a maintainer will follow up privately. Either way, there's no formal SLA — this is
-maintained by one person, not a team, so response time is best-effort.
+directly without a public issue. If you can't use that, open a regular issue that asks for a private
+channel — without any details of the problem — and the maintainer will follow up. Either way, there's
+no formal SLA — this is maintained by one person, not a team, so response time is best-effort.

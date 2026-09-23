@@ -91,6 +91,12 @@ neither React nor React Flow. That single rule is what makes the file format sur
 | `depth/` | the tree of rooms a shape can hold (`tree.ts`) and the view level each one shows (`level.ts`) |
 | `starters/` `continuation/` `sequence/` `presentation/` | capabilities derived from the model |
 | `learn/` · `ui/learn/` | the Learn handbook: recipes, search and scene data (pure) · the drawer and scene renderer (its own lazy chunk) |
+| `export/` | `.draftcanvas` / `.dcenc` files, SVG, PNG, GIF, sequence diagrams, and the seam that saves a download |
+| `history/` | the undo/redo stack |
+| `takeaways/` | actions, decisions and questions derived from a diagram's notes |
+| `host/` | the protocol with a host that owns the file — VS Code or the desktop app ([Desktop](#desktop)) |
+| `desktop/` | the desktop app's own screens and its only route to Tauri (`desktop/tauri/`), compiled out of the web build |
+| `ui/` · `lib/` · `releases/` | everything around the canvas · small shared utilities and preferences · What's New data |
 
 Library and editor are two states of one screen (`src/App.tsx`, no router) — which is why the build
 can be served from any path.
@@ -322,7 +328,7 @@ application; what differs is who owns the document.
 | Host | The document lives in | It talks to the app through |
 | --- | --- | --- |
 | Web | the browser (IndexedDB, `DraftRepository`) | nothing: the app owns it |
-| VS Code | the `.draftcanvas` file, owned by the extension | `postMessage` across the webview's frame |
+| VS Code | the `.draftcanvas` file, owned by the extension, which frames the hosted editor (`APP_URL` in `vscode-extension/src/extension.ts`) rather than bundling it | `postMessage` across the webview's frame |
 | Desktop | the `.draftcanvas` file, owned by the desktop shell | the same messages, in the same page |
 
 A host that owns a file speaks the protocol in `src/host/embeddedHost.ts`: it sends the file's text, the app

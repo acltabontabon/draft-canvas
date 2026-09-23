@@ -1,7 +1,7 @@
 # Desktop updates
 
 How Draft Canvas Desktop updates itself, and the one-time setup a maintainer does before the first
-release that can be updated from. For what a person sees, see [Draft Canvas Desktop](desktop.md#updates).
+release that can be updated from. For what a person sees, see [Draft Canvas Desktop](../guides/desktop.md#updates).
 
 ## How it works
 

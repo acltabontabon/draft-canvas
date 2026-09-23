@@ -133,7 +133,7 @@ download is checked against a signature built into the app before it can be inst
 would. Choose **Cancel** there and you keep working; the update waits.
 
 **Settings → Updates** has **Check for updates automatically** (on unless you turn it off) and **Check for
-updates**. How updates are built, signed and published is in [Desktop updates](desktop-updates.md).
+updates**. How updates are built, signed and published is in [Desktop updates](../reference/desktop-updates.md).
 
 ## Keyboard
 
@@ -197,4 +197,4 @@ therefore warns the first time, and the release notes say how to continue:
 
 Signing can be added later without changing anything else; there is deliberately nothing about it in the workflow
 today. Every release is also an update installed copies are offered, signed with the project's own update key;
-[Desktop updates](desktop-updates.md) has the one-time setup and what the workflow checks.
+[Desktop updates](../reference/desktop-updates.md) has the one-time setup and what the workflow checks.
