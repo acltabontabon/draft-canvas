@@ -77,7 +77,10 @@ export type SceneOverlay =
   | { kind: 'picker'; at: ScenePoint; items: readonly string[]; highlight?: string; title?: string }
   | { kind: 'pill'; at: ScenePoint; text: string; keys?: readonly KeyName[] }
   | { kind: 'palette'; query: string; rows: readonly { title: string; hint?: string }[]; highlight?: number }
-  | { kind: 'flowbar'; step: number; total: number; caption: string }
+  /** Presentation Mode's control bar. `flow` is the bar's left-hand group, present only when the
+   *  document has more than one flow to present — as on screen, where a single-flow walkthrough
+   *  shows no position and nowhere to skip to. */
+  | { kind: 'flowbar'; step: number; total: number; caption: string; flow?: { title: string; index: number; total: number } }
   | { kind: 'code'; at: ScenePoint; title: string; lines: readonly string[] }
   | { kind: 'marquee'; at: ScenePoint; width: number; height: number }
   /** The depth map in the canvas corner: the whole canvas first, down to the room you are in. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode, minSizeFor } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
-import { addFlow, createFlow } from '../src/document/flow';
+import { addFlow, addStepToFlow, createFlow } from '../src/document/flow';
 import { NODE_TYPES } from '../src/document/types';
 import { describeContext, describeNode } from '../src/nodes/describe';
 import type { Shape } from '../src/render/displayList';
@@ -495,6 +495,43 @@ describe('SVG export — request/response connectors', () => {
     // (`route.labelX`) — the response line drifts to its positive (right) side, so the caption
     // must land to the left of it, not past it.
     expect(Number(caption!.getAttribute('x'))).toBeLessThan(route.labelX);
+  });
+
+  /**
+   * Being a numbered step of a flow must not change what a connector says. It used to: the step
+   * badge suppressed the relationship caption outright, so presenting a flow — which selects it —
+   * silently stripped the words off every connector in the story, on screen and in every exported
+   * frame. Only the badge actually landing on the caption may drop it now (`badgeCrowds`).
+   */
+  function flowOverPair(target: { x: number; y: number }) {
+    const a = createNode({ type: 'service', x: 0, y: 0, text: 'Gateway' });
+    const b = createNode({ type: 'service', x: target.x, y: target.y, text: 'Ledger' });
+    // No `label` — the words have to come from the relationship, which is the case that broke.
+    const edge = createEdge({ source: a.id, target: b.id, semantic: 'writes' });
+    const flow = createFlow({ title: 'Checkout' });
+    const doc = addStepToFlow(
+      addFlow(addEdges(addNodes(createDocument('Numbered'), [a, b]), [edge]), flow),
+      flow.id,
+      edge.id,
+    );
+    return { texts: () => [...parseSvg(renderDocumentSvg(doc, { selectedFlowId: flow.id }).svg).querySelectorAll('text')].map((t) => t.textContent) };
+  }
+
+  it('keeps a connector\'s relationship caption when it becomes a numbered step of a flow', () => {
+    // Both, not one or the other: the number says where in the story this is, the caption says
+    // what the connector does.
+    const texts = flowOverPair({ x: 460, y: 0 }).texts();
+    expect(texts).toContain('writes to');
+    expect(texts).toContain('1');
+  });
+
+  it('drops the caption only where the step badge would actually sit on it', () => {
+    // Stacked close enough that `badgePoint`'s fixed 22-unit walk out of the source lands on the
+    // caption's own point — see `badgeCrowds`, which is the only reason a step may cost a
+    // connector its words.
+    const texts = flowOverPair({ x: 0, y: 120 }).texts();
+    expect(texts).not.toContain('writes to');
+    expect(texts).toContain('1');
   });
 });
 

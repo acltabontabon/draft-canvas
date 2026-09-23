@@ -40,6 +40,12 @@ const PATHS = {
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.35-4.35',
   image: 'M4 4h16v16H4z M8 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z M4 16l5-5 4 4 3-3 4 4',
   code: 'M9 6l-6 6 6 6 M15 6l6 6-6 6',
+  // Chevron-into-a-bar, the universal "skip to the previous/next thing". Deliberately *not* the
+  // plain `back`/`forward` chevrons the presentation's step controls use: in Presentation Mode the
+  // two pairs sit on the same bar, and the bar is what tells a presenter mid-sentence whether they
+  // are about to move one step or leave this flow for another one.
+  flowPrevious: 'M16 5l-7 7 7 7 M6 5v14',
+  flowNext: 'M8 5l7 7-7 7 M18 5v14',
   // A stepped route with an arrowhead — the same orthogonal elbow the canvas draws connectors
   // with, so the glyph is the product's own vocabulary rather than a generic "path" pictogram.
   flow: 'M4 7h4a3 3 0 0 1 3 3v4a3 3 0 0 0 3 3h4 M15 14l3 3-3 3',

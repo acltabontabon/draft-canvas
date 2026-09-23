@@ -9,6 +9,7 @@ export function stubPlayback(overrides: Partial<FlowPlaybackController> = {}): F
   return {
     flows: [],
     flow: null,
+    flowIndex: -1,
     steps: [],
     step: 0,
     current: null,
@@ -21,6 +22,8 @@ export function stubPlayback(overrides: Partial<FlowPlaybackController> = {}): F
     next: vi.fn(),
     previous: vi.fn(),
     goTo: vi.fn(),
+    nextFlow: vi.fn(),
+    previousFlow: vi.fn(),
     ...overrides,
   };
 }
@@ -41,6 +44,7 @@ export function stubContext(overrides: Partial<CommandContext> = {}): CommandCon
       viewHeight: 800,
     },
     playback: stubPlayback(),
+    onPresent: vi.fn(),
     createAt: (preset, position) =>
       useEditorStore.getState().addNode({
         type: preset.type,

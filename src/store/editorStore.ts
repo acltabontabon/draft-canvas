@@ -276,6 +276,18 @@ export interface EditorStore {
   save: SaveState;
   mode: EditorMode;
   flowPlayback: FlowPlaybackState;
+  /**
+   * What the editor was looking at when the presentation started, so leaving one puts the
+   * presenter back rather than wherever the last flow happened to end. Transient session state:
+   * never saved, never in history, and dropped by `resetViewSession` so a different document can
+   * never be handed a selection from this one. `null` whenever nothing is being presented.
+   *
+   * The selection half is restored here — `setMode` is the one door every exit goes through. The
+   * camera lives in React Flow rather than the store, so `EditorScreen` captures and restores that
+   * half; this carries it only so the two can't disagree about whether there is anything to go
+   * back to.
+   */
+  editReturn: { selection: Selection; viewport: DraftViewport | null } | null;
   focus: FocusState;
   /** The active flow: which flow's step badges show on the canvas, which the Flows panel
    *  highlights, and which a connector's "Add to …" chip appends to. Independent of playback;
@@ -550,7 +562,9 @@ export interface EditorStore {
   setSaveState: (state: SaveState) => void;
   /** Takes on a title/project changed in another tab, without an undo step or a new save. */
   adoptStoredMetadata: (documentId: string, metadata: SharedMetadata) => void;
-  setMode: (mode: EditorMode) => void;
+  /** Switches between editing and presenting. `viewport` is the camera to come back to when the
+   *  presentation ends — passed only by the one entry point that starts a presentation. */
+  setMode: (mode: EditorMode, viewport?: DraftViewport) => void;
   setFlowPlayback: (playback: Partial<FlowPlaybackState>) => void;
 
   /* Focus mode */
@@ -920,7 +934,7 @@ export function viewLevel(state: FileState): ViewLevel | undefined {
  * and node ids survive both a reload of the same file and a step into another room. Deliberately
  * leaves `mode` alone — presenting is a way of looking at any room, not a property of one.
  */
-function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'focus' | 'selectedFlowId'> {
+function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'editReturn' | 'focus' | 'selectedFlowId'> {
   const ui = useUiStore.getState();
   ui.resetContinuation();
   ui.arm(null);
@@ -947,6 +961,8 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'f
   return {
     selection: EMPTY_SELECTION,
     flowPlayback: { active: false, flowId: null, step: 0 },
+    // Whatever was selected belonged to the canvas being left, not the one arriving.
+    editReturn: null,
     focus: { active: false, nodeIds: [], edgeIds: [] },
     selectedFlowId: null,
   };
@@ -970,9 +986,22 @@ export function lensFlow(
   return flow && flowHasMembers(state.document, flow) ? flow : undefined;
 }
 
-/** React Flow `fitView({ nodes })` input scoped to the lens flow, or `undefined` to fit everything. */
+/**
+ * React Flow `fitView({ nodes })` input scoped to the flow in view, or `undefined` to fit
+ * everything.
+ *
+ * The lens flow while editing — and, while presenting, the flow being presented. Deliberately
+ * *not* `lensFlow` alone: that one is the single source of truth for "is the dimming lens on", and
+ * it is off during playback because playback owns its own dimming. Fitting has no such conflict,
+ * so asking it "is the lens on?" quietly made "Fit" during a presentation frame the whole diagram
+ * instead of the story being told — which is the one moment scoping it matters most.
+ */
 export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefined {
-  const flow = lensFlow(state);
+  const flow =
+    lensFlow(state) ??
+    (state.flowPlayback.active && state.flowPlayback.flowId
+      ? findFlow(state.document, state.flowPlayback.flowId)
+      : undefined);
   if (!flow) return undefined;
   const ids = flowMemberNodeIds(state.document, flow);
   return ids.length > 0 ? ids.map((id) => ({ id })) : undefined;
@@ -1107,6 +1136,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   save: { status: 'idle' },
   mode: 'edit',
   flowPlayback: { active: false, flowId: null, step: 0 },
+  editReturn: null,
   focus: { active: false, nodeIds: [], edgeIds: [] },
   selectedFlowId: null,
   revision: 0,
@@ -2450,18 +2480,27 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
   },
 
-  setMode(mode) {
+  setMode(mode, viewport) {
     // A card left open from editing carries edit actions (Delete, Detach) that presentation must
     // never offer — while presenting, attachments speak through the callout instead.
     if (mode === 'present') useUiStore.getState().setOpenAttachmentDetail(null);
-    set((s) => ({
-      mode,
-      flowPlayback: mode === 'edit' ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
-      // A selection ring left over from editing has no meaning in a
-      // read-only presentation — nothing there can show why it is
-      // highlighted, so it just reads as a stray mark on one box.
-      selection: mode === 'present' ? EMPTY_SELECTION : s.selection,
-    }));
+    set((s) => {
+      const entering = mode === 'present' && s.mode !== 'present';
+      const leaving = mode === 'edit' && s.mode === 'present';
+      return {
+        mode,
+        flowPlayback: mode === 'edit' ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
+        // A selection ring left over from editing has no meaning in a
+        // read-only presentation — nothing there can show why it is
+        // highlighted, so it just reads as a stray mark on one box. It is put
+        // back on the way out: presenting is a way of looking at the diagram,
+        // not a thing that should cost you your place in it.
+        selection: entering ? EMPTY_SELECTION : leaving ? (s.editReturn?.selection ?? s.selection) : s.selection,
+        // Captured on the way in and spent on the way out, in the one place every entry and every
+        // one of the six exits already passes through.
+        editReturn: entering ? { selection: s.selection, viewport: viewport ?? null } : leaving ? null : s.editReturn,
+      };
+    });
   },
 
   setFlowPlayback(playback) {

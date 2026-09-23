@@ -123,7 +123,20 @@ same thing: start the flow and fit it to the view. Press `⌘Enter` again to lea
 
 Presenting is read-only. `→` or `Space` goes to the next step, `←` to the previous one, and `Esc`
 leaves. `⌘K` still works, and shows only presentation commands. `I` still opens the line for
-capturing an action. See [Getting started](getting-started.md#present-a-flow).
+capturing an action.
+
+With more than one flow, you can move between them without leaving the presentation — which is what
+makes it possible to follow a question from the room and carry on. `Shift+→` starts the next flow,
+`Shift+←` the previous one, and `Shift+F` opens the list so you can jump straight to any of them.
+The bar's title (`Payment processing · Flow 2 of 4`) opens the same list with a click. Flows run in
+the order the Flows panel lists them and never loop back round: at the last step of the last flow
+the bar simply says **End**.
+
+Only a flow with at least one step can be presented, so the count is over the flows you can actually
+reach — a document with five flows, two of them still empty, presents three.
+
+Leaving puts the editor back where you left it: the same view, and the same shape selected. See
+[Getting started](getting-started.md#present-a-flow).
 
 ## Learn the rest in the app
 

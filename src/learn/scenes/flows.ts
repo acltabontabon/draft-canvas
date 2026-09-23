@@ -49,20 +49,47 @@ export const addToFlow: Scene = {
 };
 
 export const presentFlow: Scene = {
-  label: 'Presentation starts; step 1 highlights Checkout placing the order, the right arrow key moves to step 2, Orders charging the card, and Escape ends it.',
+  label:
+    'Presentation starts; step 1 highlights Checkout placing the order, the right arrow key moves to step 2, Orders charging the card. Shift and the right arrow key then start the next flow, Restock, at its own step 1, and Escape ends it.',
   frames: [
     { ms: 1000, step: 'Start presenting', add: { nodes: NODES, edges: EDGES }, flow: ['e1', 'e2'], overlay: { kind: 'keys', keys: ['mod', 'enter'] } },
     {
       ms: 1900,
       step: 'Step through',
       dim: ['payments', 'e2', 'inventory', 'e3'],
-      overlay: { kind: 'flowbar', step: 1, total: 2, caption: 'Checkout → Orders · place order' },
+      overlay: {
+        kind: 'flowbar',
+        step: 1,
+        total: 2,
+        caption: 'Checkout → Orders · place order',
+        flow: { title: 'Place an order', index: 1, total: 2 },
+      },
     },
     { ms: 700, dim: ['payments', 'e2', 'inventory', 'e3'], overlay: { kind: 'keys', keys: ['right'] } },
     {
       ms: 2100,
       dim: ['checkout', 'inventory', 'e3'],
-      overlay: { kind: 'flowbar', step: 2, total: 2, caption: 'Orders → Payments · charge card' },
+      overlay: {
+        kind: 'flowbar',
+        step: 2,
+        total: 2,
+        caption: 'Orders → Payments · charge card',
+        flow: { title: 'Place an order', index: 1, total: 2 },
+      },
+    },
+    // The move this scene exists to teach: a question from the room, answered without stopping.
+    { ms: 900, step: 'Another flow, same breath', dim: ['checkout', 'inventory', 'e3'], overlay: { kind: 'keys', keys: ['shift', 'right'] } },
+    {
+      ms: 2100,
+      flow: ['e3'],
+      dim: ['checkout', 'payments', 'e1', 'e2'],
+      overlay: {
+        kind: 'flowbar',
+        step: 1,
+        total: 1,
+        caption: 'Orders → Inventory · writes to',
+        flow: { title: 'Restock', index: 2, total: 2 },
+      },
     },
     { ms: 1300, step: 'Esc to finish', overlay: { kind: 'keys', keys: ['esc'] } },
   ],

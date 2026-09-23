@@ -716,6 +716,10 @@ describe('flow hardening — empty flows, caps, and connector replacement', () =
 
     store.getState().setFlowPlayback({ active: true, flowId, step: 1 });
     expect(lensFlow(store.getState())).toBeUndefined();
+    // …but Fit still frames the story being told. The lens is off during playback because
+    // playback owns its own dimming; fitting has no such conflict, and asking `lensFlow` about it
+    // quietly made "Fit" mid-presentation zoom out to the whole diagram.
+    expect(flowFitViewNodes(store.getState())).toHaveLength(2);
   });
 
   it('ungrouping a boundary that a step spotlit prunes it from the step', () => {

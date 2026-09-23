@@ -7,6 +7,7 @@ import { ContextMenu } from '../../canvas/ContextMenu';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { canvasBounds, canvasCenter } from '../../canvas/canvasFrame';
+import type { DraftViewport } from '../../document/types';
 import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { nearestInDirection, nextRelationshipNeighbor, type Direction } from '../../canvas/spatialNav';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
@@ -168,7 +169,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
 
   const theme = useThemeValue();
   const playback = useFlowPlayback();
-  const { fitView, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
+  const { fitView, getViewport, setViewport, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
 
   // Bumped to force a clean remount of the boundary + Canvas below, e.g. from
   // the "Reload canvas" recovery action — a fresh `key` discards whatever
@@ -323,21 +324,59 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     [createAt, screenToFlowPosition],
   );
 
-  // One way to start presenting, shared by the toolbar's Present button and the ⌘Enter chord, so
-  // the chord does what the button (and the palette row that shows the same chord) does: start the
-  // flow and frame it, not just flip the mode.
-  const onPresent = useCallback(() => {
-    // Read before `playback.start()` flips `flowPlayback.active` — otherwise the fit-view
-    // guard would see playback as already active and skip scoping to the presented flow.
-    const nodes = flowFitViewNodes(useEditorStore.getState());
-    setMode('present');
-    if (playback.canStart) playback.start();
-    void fitView({ padding: 0.18, duration: motionMs(320), nodes });
-  }, [playback, fitView, setMode]);
+  // The one way to start presenting — the toolbar's Present button, the ⌘Enter chord, the palette
+  // and the Flows panel all come through here, so "Present" means the same thing wherever it is
+  // pressed: start the flow, frame it, and remember where the editing was left.
+  //
+  // With a `flowId`, that flow; without one, whatever `start()` decides (the active flow, the one
+  // playable flow, else the picker).
+  const onPresent = useCallback(
+    (requested?: string) => {
+      // Every consumer types this as `() => void`, so nothing stops a `onClick={onPresent}` from
+      // handing it a click event as the flow id — truthy, and the presentation would then start on
+      // a flow that doesn't exist and silently do nothing. Cheap to make impossible.
+      const flowId = typeof requested === 'string' ? requested : undefined;
+      // The camera has to be read before the fit below moves it. React Flow owns it, not the
+      // store, which is why it is handed over rather than picked up there.
+      setMode('present', getViewport());
+      if (flowId) playback.pickFlow(flowId);
+      else if (playback.canStart) playback.start();
+      void fitView({
+        // Read *after* the flow has started, not before: both paths write the flow they chose to
+        // the store synchronously, and `flowFitViewNodes` now follows the flow being presented as
+        // well as the lens — so this is the flow actually about to be shown. (It used to have to
+        // be read first, back when scoping the fit went dark the moment playback turned on.)
+        nodes: flowFitViewNodes(useEditorStore.getState()),
+        // Room for the arrowheads and captions at the edges of the flow, and — at the bottom —
+        // for the control bar, which is over the canvas rather than beside it.
+        padding: { top: '9%', right: '9%', bottom: '128px', left: '9%' },
+        duration: motionMs(320),
+      });
+    },
+    [playback, fitView, getViewport, setMode],
+  );
+
+  // Coming back out. The selection is restored by the store (`setMode` is the one door every exit
+  // goes through); the camera can only be restored here, because React Flow owns it. Keyed on the
+  // transition rather than on any one exit path, so all six of them — Escape, ⌘Enter, the bar's
+  // Exit, the corner control, the palette, opening another document — get it for free.
+  const presentedFrom = useRef<DraftViewport | null>(null);
+  useEffect(() => {
+    const remembered = useEditorStore.getState().editReturn?.viewport ?? null;
+    if (mode === 'present') {
+      presentedFrom.current = remembered;
+      return;
+    }
+    const going = presentedFrom.current;
+    presentedFrom.current = null;
+    // Nothing fights this: playback has stopped by the time the mode flips, so no step focus is
+    // in flight to animate over the top of it.
+    if (going) void setViewport(going, { duration: motionMs(320) });
+  }, [mode, setViewport]);
 
   useKeyboard({ createAtPointer, onPresent, playback });
 
-  const buildCommandContext = useCommandContext({ createAt, createAtPointer, playback });
+  const buildCommandContext = useCommandContext({ createAt, createAtPointer, playback, onPresent });
 
   // The empty canvas's starter row runs the palette's own command rather than calling the store
   // itself, so the two entry points can never drift apart — the same discipline the right-click
@@ -475,7 +514,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           <EmptyState onInsertStarter={insertStarter} />
           {!presenting && <ContinuationAnnouncer />}
           {!presenting && <Inspector />}
-          {!presenting && <FlowPanel playback={playback} />}
+          {!presenting && <FlowPanel onPresent={onPresent} />}
           {/* Ungated on purpose — the only surface here besides the flow bar that presentation
               lets through, and then only its one-line capture. See `TakeawaysPanel`. */}
           <TakeawaysPanel playback={playback} buildCommandContext={buildCommandContext} />
@@ -524,7 +563,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       )}
       <CanvasSettingsDialog />
       <ClipboardPermissionDialog />
-      <CommandPalette createAt={createAt} createAtPointer={createAtPointer} playback={playback} />
+      <CommandPalette createAt={createAt} createAtPointer={createAtPointer} playback={playback} onPresent={onPresent} />
 
       {/* Hidden control kept reachable for screen readers in presentation mode. */}
       {presenting && (

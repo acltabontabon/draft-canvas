@@ -2,9 +2,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FlowPanel } from '../src/ui/Editor/FlowPanel';
 import { createDocument } from '../src/document/factory';
-import type { FlowPlaybackController } from '../src/presentation/useFlowPlayback';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
+
 
 /**
  * The Flows panel is the one surface for flows, so its interaction contract is pinned here:
@@ -12,6 +12,7 @@ import { useUiStore } from '../src/store/uiStore';
  * select on click and on Enter, F2 renames, Delete deletes, and an empty flow can't be presented.
  */
 function reset() {
+  onPresent.mockClear();
   __resetInteraction();
   useEditorStore.setState({
     document: createDocument('Flow panel'),
@@ -27,27 +28,10 @@ function reset() {
   useUiStore.setState({ flowPanelOpen: true, flowRenameRequestId: null });
 }
 
-function playbackStub(): FlowPlaybackController {
-  return {
-    flows: [],
-    flow: null,
-    steps: [],
-    step: 0,
-    current: null,
-    active: false,
-    picking: false,
-    canStart: false,
-    start: vi.fn(),
-    pickFlow: vi.fn(),
-    stop: vi.fn(),
-    next: vi.fn(),
-    previous: vi.fn(),
-    goTo: vi.fn(),
-  };
-}
+const onPresent = vi.fn();
 
 function mount() {
-  return render(<FlowPanel playback={playbackStub()} />);
+  return render(<FlowPanel onPresent={onPresent} />);
 }
 
 function addConnectedPair() {

@@ -167,7 +167,10 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
               icon="present"
               variant="ghost"
               className="dc-toolbar-mode"
-              onClick={onPresent}
+              // Wrapped, never passed straight through: `onPresent` takes an optional flow id,
+              // and a bare `onClick={onPresent}` hands it the click event instead — truthy, so
+              // the presentation would start on a flow that doesn't exist and quietly do nothing.
+              onClick={() => onPresent()}
               aria-label={toolbarLabel('present')}
               {...tip}
             >

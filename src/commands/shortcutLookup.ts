@@ -95,6 +95,7 @@ function buildFixtureContext(selection: { nodes: string[]; edges: string[] }): C
     playback: {
       flows: [],
       flow: null,
+      flowIndex: -1,
       steps: [],
       step: 0,
       current: null,
@@ -107,6 +108,8 @@ function buildFixtureContext(selection: { nodes: string[]; edges: string[] }): C
       next: NOOP,
       previous: NOOP,
       goTo: NOOP,
+      nextFlow: NOOP,
+      previousFlow: NOOP,
     },
     createAt: () => NODE_A,
     createAtPointer: () => NODE_A,

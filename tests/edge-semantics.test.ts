@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
 import { normalizeDocument } from '../src/document/validate';
 import { DRAFT_FORMAT, CURRENT_VERSION } from '../src/document/types';
-import { relationshipCaptionLabel } from '../src/document/edgeSemantics';
+import { effectiveConnectorText, relationshipCaptionLabel } from '../src/document/edgeSemantics';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 describe('relationshipCaptionLabel', () => {
@@ -23,6 +23,37 @@ describe('relationshipCaptionLabel', () => {
     expect(relationshipCaptionLabel('deadLetters', { deliveryAttempts: 1 })).toBe('after 1 attempts');
     expect(relationshipCaptionLabel('deadLetters')).toBe('dead-letters to');
     expect(relationshipCaptionLabel('deadLetters', { deliveryAttempts: 0 })).toBe('dead-letters to');
+  });
+});
+
+/**
+ * The one answer to "what does this connector say?", shared by the canvas, the exporter, the
+ * presentation bar and the Flow panel. Its whole point is that the surfaces away from the canvas
+ * say the same words the canvas does — which is why it must go through `relationshipCaptionLabel`
+ * and not `relationLabel`/`edgeRelationLabel`, which skip both of its relabels.
+ */
+describe('effectiveConnectorText', () => {
+  it('prefers the user\'s own words, trimmed', () => {
+    expect(effectiveConnectorText({ label: '  saves order  ', semantic: 'writes' })).toBe('saves order');
+  });
+
+  it('falls back to the relationship the canvas draws, with its relabels intact', () => {
+    expect(effectiveConnectorText({ semantic: 'writes' })).toBe('writes to');
+    // The two cases `relationLabel` alone would get wrong — "calls" and "dead-letters to".
+    expect(effectiveConnectorText({ semantic: 'calls', hasResponse: true })).toBe('requests');
+    expect(effectiveConnectorText({ semantic: 'deadLetters', deliveryAttempts: 3 })).toBe('after 3 attempts');
+  });
+
+  it('reads the connector the way it is drawn — passive when the arrow starts at the store', () => {
+    expect(effectiveConnectorText({ semantic: 'reads' }, { source: 'database', target: 'service' })).toBe('read by');
+    expect(effectiveConnectorText({ semantic: 'reads' }, { source: 'service', target: 'database' })).toBe('reads from');
+  });
+
+  it('invents nothing for a connector that legitimately says nothing', () => {
+    expect(effectiveConnectorText({})).toBeUndefined();
+    // An all-whitespace label is a blank one everywhere else in the app, and so is blank here —
+    // with no semantic behind it, that means no text at all rather than a made-up word.
+    expect(effectiveConnectorText({ label: '   ' })).toBeUndefined();
   });
 });
 

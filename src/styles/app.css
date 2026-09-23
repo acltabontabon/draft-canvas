@@ -3391,7 +3391,11 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   box-shadow: var(--dc-shadow-panel);
 }
 
-.dc-explain-count {
+.dc-explain-count,
+/* Where this flow sits in the running order. Its own name rather than sharing `.dc-explain-count`:
+   the two numbers sit inches apart on one bar and mean entirely different things, and a single
+   class for both makes "which count is this?" unanswerable in CSS and in a test alike. */
+.dc-explain-flow-pos {
   color: var(--dc-text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -3417,13 +3421,67 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-selection);
 }
 
+/* The flow's name, now the picker's trigger rather than a caption above one: it is what the
+   presenter reads to know where they are, so it carries the bar's normal text weight and keeps its
+   own words instead of being shouted in uppercase. Long names ellipsis; the full one is the
+   button's `title`. */
 .dc-explain-flow-title {
-  color: var(--dc-text-muted);
-  font-size: 11.5px;
+  max-width: 200px;
+  overflow: hidden;
+  color: var(--dc-text);
+  font-size: 13px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The one control that opens the flow list. Quiet until it is wanted — the diagram is the thing
+   being looked at — but a real, focusable button at every size. */
+.dc-explain-flow-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 320px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.dc-explain-flow-pick:hover,
+.dc-explain-flow-pick[aria-expanded='true'] {
+  border-color: var(--dc-border);
+  background: var(--dc-surface-hover);
+}
+
+.dc-explain-flow-pick > svg {
+  flex: none;
+  color: var(--dc-text-muted);
+}
+
+/* At the end of a flow the skip control stops being an arrow and says where it goes, because that
+   is the sentence the presenter is about to speak. */
+.dc-explain-next-flow {
+  display: inline-block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+/* The last step of the last flow. A word, not a disabled arrow to keep pressing. */
+.dc-explain-end {
+  padding: 0 8px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .dc-explain-caption {
@@ -3461,9 +3519,97 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   background: var(--dc-selection);
 }
 
-.dc-flow-picker .dc-explain-bar {
-  flex-wrap: wrap;
+/* The flow list, above the bar in `.dc-explain`'s own column — the slot the code drawer already
+   uses, so it is over the canvas without a second stacking context to reason about. Scrolls rather
+   than growing: a diagram with a dozen flows must still be the thing on screen. */
+.dc-flow-picker {
+  width: min(340px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+}
+
+.dc-flow-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 8px 8px 14px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-flow-picker-title {
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dc-flow-picker-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.dc-flow-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-flow-picker-item:hover,
+.dc-flow-picker-item:focus-visible {
+  background: var(--dc-surface-hover);
+}
+
+.dc-flow-picker-item[aria-checked='true'] {
+  background: var(--dc-selection-soft);
+}
+
+/* The position in the running order, swapped for a tick on the one being presented — so the list
+   doubles as the answer to "where am I?" and not only "where could I go?". */
+.dc-flow-picker-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
   justify-content: center;
+  width: 18px;
+  color: var(--dc-text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-flow-picker-item[aria-checked='true'] .dc-flow-picker-mark {
+  color: var(--dc-selection);
+}
+
+.dc-flow-picker-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-flow-picker-steps {
+  flex: none;
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .dc-explain-detail {

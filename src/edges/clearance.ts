@@ -1,6 +1,6 @@
 import type { Bounds } from '../document/geometry';
 import { categoryOf } from '../document/connectorSemantics';
-import { relationshipCaptionLabel } from '../document/edgeSemantics';
+import { effectiveConnectorText } from '../document/edgeSemantics';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel } from './labelLayout';
 import { obstaclesForEdge } from './obstacles';
@@ -105,15 +105,10 @@ function labelBox(
   ends: { source: DraftNode; target: DraftNode },
   at: { x: number; y: number },
 ): Bounds | undefined {
-  const caption = edge.semantic
-    ? relationshipCaptionLabel(edge.semantic, {
-        hasResponse: edge.hasResponse,
-        deliveryAttempts: edge.deliveryAttempts,
-        source: categoryOf(ends.source),
-        target: categoryOf(ends.target),
-      })
-    : '';
-  const text = edge.label?.trim() || caption;
+  const text = effectiveConnectorText(edge, {
+    source: categoryOf(ends.source),
+    target: categoryOf(ends.target),
+  });
   if (!text) return undefined;
   const layout = layoutEdgeLabel(text);
   const width = layout.width + LABEL_PADDING_X * 2 + LABEL_LINE_GAP * 2;

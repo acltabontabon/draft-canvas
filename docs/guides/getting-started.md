@@ -81,15 +81,19 @@ A flow is a numbered path through connectors. It's how you say "first this happe
    ![The Flows panel listing "Place an order" with two steps, and numbered badges on the two connectors.](../media/guides/flows-panel.png)
 
 4. Click **Present** in the toolbar. The editor gets out of the way and the flow starts at step 1.
-   Press `→` or `Space` for the next step and `←` to go back. `Esc` returns to editing. `⌘Enter`
-   does the same as the button.
+   Press `→` or `Space` for the next step and `←` to go back. `Esc` returns to editing, to the same
+   view and the same selection you left. `⌘Enter` does the same as the button.
 
 While a step is showing, the notes attached to what it shows appear beside it. The note on the queue
 appears when the flow first reaches the queue.
 
 ![Presenting step 1 of 2: the first connector is highlighted, the rest of the diagram is faded, and the queue's note appears above it.](../media/guides/presenting.png)
 
-If you have more than one flow, Draft Canvas asks **Present which flow?** first.
+If you have more than one flow, Draft Canvas asks **Present which flow?** first — and you can change
+your mind later without stopping. The bar names the flow you are in and where it sits (`Place an
+order · Flow 2 of 4`); click it for the full list, or press `Shift+→` and `Shift+←` to move to the
+next and previous flow. On the last step of a flow, the button to the right of the title names the
+one that follows, so the hand-off is there when you need it.
 
 ## Export it
 

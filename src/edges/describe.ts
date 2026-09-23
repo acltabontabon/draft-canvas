@@ -27,7 +27,7 @@ import {
   type Side,
 } from './routing';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
-import { badgePoint } from './badgePoint';
+import { badgeCrowds, badgePoint } from './badgePoint';
 import { bridgePath } from './bridge';
 import type { Crossing } from './crossings';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
@@ -341,6 +341,11 @@ export function describeEdge(
   }
 
   const hasStep = ctx.showSequence && typeof ctx.stepIndex === 'number';
+  // The very point the canvas draws it at — one function, so the two can't drift apart.
+  const badgeAt = hasStep ? badgePoint(route, edge.routing) : null;
+  // Being a numbered step must never cost a connector its words; only the badge physically landing
+  // on them may. Mirrors `DraftEdgeView.tsx` — see `badgeCrowds`.
+  const badgeOverMidpoint = badgeAt !== null && badgeCrowds(badgeAt, { x: labelX, y: labelY });
 
   // A small glyph at the path's midpoint — event's dotted line alone doesn't
   // read as "an event" the way a tiny circle at the crossing point does, and
@@ -348,18 +353,21 @@ export function describeEdge(
   // `condition` chip (which is display-only and orthogonal to `kind`). Only
   // when nothing else already occupies that spot: the dash pattern is the
   // one differentiator that always applies, this is a bonus for the plain
-  // connector case, not something worth fighting a label or step badge over.
-  if (!edge.label && !hasStep) {
-    if (edge.kind === 'event') {
-      overlay.push({ t: 'ellipse', cx: labelX, cy: labelY, rx: 3, ry: 3, fill: color });
-    } else if (edge.kind === 'conditional') {
-      const s = 5;
-      overlay.push({
-        t: 'path',
-        d: `M${labelX},${labelY - s} L${labelX + s},${labelY} L${labelX},${labelY + s} L${labelX - s},${labelY} Z`,
-        fill: ctx.theme.edgeLabelBg,
-        stroke: { color, width: 1.3 },
-      });
+  // connector case, not something worth fighting a label over. A step badge
+  // only wins the spot when it is actually on it — see `badgeCrowds`.
+  if (!edge.label) {
+    if (!badgeOverMidpoint) {
+      if (edge.kind === 'event') {
+        overlay.push({ t: 'ellipse', cx: labelX, cy: labelY, rx: 3, ry: 3, fill: color });
+      } else if (edge.kind === 'conditional') {
+        const s = 5;
+        overlay.push({
+          t: 'path',
+          d: `M${labelX},${labelY - s} L${labelX + s},${labelY} L${labelX},${labelY + s} L${labelX - s},${labelY} Z`,
+          fill: ctx.theme.edgeLabelBg,
+          stroke: { color, width: 1.3 },
+        });
+      }
     }
     // A subtle caption of the relationship — independent of `kind`'s glyph
     // above, so a plain call/read/write connector reads just as clearly as
@@ -383,13 +391,6 @@ export function describeEdge(
         target: targetCategory,
       });
       const text = isUnusual ? `▲ ${label}` : label;
-      const captionLayout = layoutText(text, {
-        font: FONTS.connectorCaption,
-        maxWidth: 120,
-        lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
-        maxLines: 1,
-        measurer: ctx.measurer,
-      });
       const captionResponseAway = edge.hasResponse ? Math.sign(responseLaneFor(ctx.lane ?? 0)) : 0;
       // A bundle's members all share one relationship, so repeating its
       // caption down every branch is pure noise — the exact "calls / calls /
@@ -403,17 +404,28 @@ export function describeEdge(
       // siblings it isn't true of.
       const collapsed = Boolean(route.trunkLabel) && !isUnusual;
       const captionAt = collapsed ? route.trunkLabel! : { x: labelX, y: labelY };
-      const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
-      const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout.height, captionResponseAway);
-      overlay.push({
-        t: 'text',
-        x: caption.x,
-        y: caption.y,
-        layout: captionLayout,
-        font: FONTS.connectorCaption,
-        fill: isUnusual ? ctx.theme.accents.amber.text : ctx.theme.textFaint,
-        align: caption.align,
-      });
+      // A collapsed caption sits on the shared trunk, well clear of any member's own badge, so it
+      // is measured where it actually lands rather than at this connector's midpoint.
+      if (!(badgeAt !== null && badgeCrowds(badgeAt, captionAt))) {
+        const captionLayout = layoutText(text, {
+          font: FONTS.connectorCaption,
+          maxWidth: 120,
+          lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
+          maxLines: 1,
+          measurer: ctx.measurer,
+        });
+        const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
+        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout.height, captionResponseAway);
+        overlay.push({
+          t: 'text',
+          x: caption.x,
+          y: caption.y,
+          layout: captionLayout,
+          font: FONTS.connectorCaption,
+          fill: isUnusual ? ctx.theme.accents.amber.text : ctx.theme.textFaint,
+          align: caption.align,
+        });
+      }
     }
   }
 
@@ -513,7 +525,8 @@ export function describeEdge(
       align: 'middle',
     });
   } else if (hasStep) {
-    const at = badgePoint(route, edge.routing);
+    // Non-null by construction: `badgeAt` is computed from this same `hasStep`.
+    const at = badgeAt!;
     const layout = layoutText(String(ctx.stepIndex), {
       font: FONTS.sequenceBadge,
       maxWidth: 40,

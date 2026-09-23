@@ -165,11 +165,19 @@ test.describe('Flows', () => {
     await newCanvas(page, 'Checkout');
     await buildArchitecture(page);
 
+    // Every connector here says what it does without anyone typing a word — "calls", "publishes
+    // to" — and joining a flow must not take that away. It used to: the step badge replaced the
+    // relationship outright, so presenting stripped the meaning off the very connectors being
+    // explained.
+    const captionsBefore = await page.locator('.dc-edge-caption').count();
+    expect(captionsBefore).toBeGreaterThan(0);
+
     // Add all three connectors, in order, to one flow.
     await addToFlow(page, 0);
     await addToFlow(page, 1, 'Untitled flow');
     await addToFlow(page, 2, 'Untitled flow');
     await expect(page.locator('.dc-edge-step')).toHaveCount(3);
+    await expect(page.locator('.dc-edge-caption')).toHaveCount(captionsBefore);
 
     // Rename it in place, in the Flow panel.
     await openFlowPanel(page);
@@ -318,7 +326,57 @@ test.describe('Flows', () => {
     // Present the second flow explicitly from its own row.
     await page.locator('.dc-flow-item').nth(1).getByRole('button', { name: /^Present/ }).click();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Fast path');
+    await expect(page.locator('.dc-explain-flow-pos')).toContainText('Flow 2 of 2');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
+  });
+
+  test('moves between flows mid-presentation, and the presentation survives the picker', async ({ page }) => {
+    await newCanvas(page, 'Following a question');
+    await buildArchitecture(page);
+    await openFlowPanel(page);
+    // Two flows over one architecture, sharing their first connector — the shape a real diagram
+    // has, and the one where switching flows mid-sentence actually matters.
+    await addToFlow(page, 0, undefined, 'Happy path');
+    await addToFlow(page, 1, 'Happy path');
+    await addToFlow(page, 0, undefined, 'Payment retries');
+    await addToFlow(page, 2, 'Payment retries');
+
+    await page.locator('.dc-flow-item').nth(0).getByRole('button', { name: /^Present/ }).click();
+    await expect(page.locator('.dc-explain-flow-title')).toContainText('Happy path');
+
+    // Step within the flow, then leave it for the next one — the two must stay distinct.
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-count')).toContainText('Step 2 / 2');
+    await page.keyboard.press('Shift+ArrowRight');
+    await expect(page.locator('.dc-explain-flow-title')).toContainText('Payment retries');
+    // The destination starts at its own beginning, never in the middle of someone else's story.
+    await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
+
+    // The end of the last flow is the end of the walkthrough, and says so rather than wrapping.
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-count')).toContainText('Step 2 / 2');
+    await expect(page.locator('.dc-explain-end')).toHaveText('End');
+    await page.keyboard.press('Shift+ArrowRight');
+    await expect(page.locator('.dc-explain-flow-title')).toContainText('Payment retries');
+
+    // Jump straight back with the picker, which Escape must close *without* ending the
+    // presentation — `EditorScreen`'s Escape cascade owns the press otherwise.
+    await page.keyboard.press('Shift+F');
+    const picker = page.locator('.dc-flow-picker');
+    await expect(picker).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(picker).toHaveCount(0);
+    await expect(page.locator('.dc-explain-bar')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Previous flow' }).click();
+    await expect(page.locator('.dc-explain-flow-title')).toContainText('Happy path');
+
+    // Nothing about walking the flows was an edit.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-toolbar')).toBeVisible();
+    await openFlowPanel(page);
+    await expect(page.locator('.dc-flow-item').nth(0)).toContainText('2 steps');
+    await expect(page.locator('.dc-flow-item').nth(1)).toContainText('2 steps');
   });
 
   test('marks a connector async (dashed) and gives it a condition chip', async ({ page }) => {

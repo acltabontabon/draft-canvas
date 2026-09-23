@@ -101,13 +101,67 @@ describe('commandsFor — edit mode', () => {
     expect(stage && 'options' in stage ? stage.options.map((o) => o.title) : []).toEqual(['Refund', 'New flow']);
   });
 
-  it('Start presentation enters present mode and starts playback when a flow exists', () => {
+  it('Start presentation goes through the editor\'s one way in, rather than its own copy of it', () => {
+    // `onPresent` is where the framing, and the camera and selection to come back to, are decided.
+    // A palette command that flipped the mode itself would start a presentation that looks and
+    // exits differently from the toolbar's — which is exactly what it used to do.
     useEditorStore.getState().createFlow('Checkout');
-    const playback = stubPlayback({ canStart: true });
-    const ctx = stubContext({ playback });
+    const ctx = stubContext({ playback: stubPlayback({ canStart: true }) });
     commandsFor(ctx).find((command) => command.id === 'present')!.run(ctx);
-    expect(useEditorStore.getState().mode).toBe('present');
-    expect(playback.start).toHaveBeenCalledOnce();
+    expect(ctx.onPresent).toHaveBeenCalledWith();
+  });
+
+  it('Present flow… names the flow it starts, so the one entry point frames it', () => {
+    // Two, because with only one playable flow "Present" starts it directly and the stage that
+    // lets you choose isn't offered at all.
+    const flowId = useEditorStore.getState().createFlow('Checkout')!;
+    useEditorStore.getState().createFlow('Refund');
+    const flows = useEditorStore.getState().document.flows;
+    const ctx = stubContext({ playback: stubPlayback({ canStart: true, flows }) });
+    const stage = commandsFor(ctx).find((command) => command.id === 'present-flow')!.run(ctx);
+    const option = stage && 'options' in stage ? stage.options[0]! : null;
+    option?.run(ctx);
+    expect(ctx.onPresent).toHaveBeenCalledWith(flowId);
+  });
+});
+
+describe('commandsFor — moving between flows while presenting', () => {
+  beforeEach(reset);
+
+  function presenting(flowIndex: number, titles: string[]) {
+    // Each case is its own document: two calls in one test would otherwise stack their flows up.
+    reset();
+    useEditorStore.getState().setMode('present');
+    for (const title of titles) useEditorStore.getState().createFlow(title);
+    const flows = useEditorStore.getState().document.flows;
+    return stubContext({
+      playback: stubPlayback({ active: true, flow: flows[flowIndex]!, flows, flowIndex, steps: [], step: 1 }),
+    });
+  }
+
+  it('offers next/previous/switch only once there is somewhere else to go', () => {
+    const one = presenting(0, ['Checkout']);
+    expect(commandsFor(one).map((c) => c.id)).not.toContain('flow-next');
+
+    const many = presenting(0, ['Checkout', 'Refund']);
+    expect(commandsFor(many).map((c) => c.id)).toEqual(expect.arrayContaining(['flow-next', 'flow-previous', 'flow-switch']));
+  });
+
+  it('names the destination, and says plainly when there is not one', () => {
+    const first = presenting(0, ['Checkout', 'Refund']);
+    const commands = commandsFor(first);
+    expect(commands.find((c) => c.id === 'flow-next')!.hint).toBe('Next: Refund');
+    expect(commands.find((c) => c.id === 'flow-previous')!.hint).toBe('At the first flow');
+
+    const last = presenting(1, ['Checkout', 'Refund']);
+    expect(commandsFor(last).find((c) => c.id === 'flow-next')!.hint).toBe('At the last flow');
+  });
+
+  it('marks the flow being presented in the switch list', () => {
+    const ctx = presenting(1, ['Checkout', 'Refund']);
+    const stage = commandsFor(ctx).find((c) => c.id === 'flow-switch')!.run(ctx);
+    const options = stage && 'options' in stage ? stage.options : [];
+    expect(options.map((o) => o.hint)).toEqual(['Flow 1 · 0 steps', 'Current']);
   });
 });
 

@@ -78,6 +78,10 @@ export interface CommandContext {
   createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode | null;
   /** Under the pointer, or in the middle of the view — same placement the single-key shortcuts use. */
   createAtPointer: (preset: Preset) => DraftNode | null;
+  /** `EditorScreen`'s one way into a presentation, so the palette starts one exactly as the
+   *  toolbar does — same framing, and the same memory of the camera and selection to come back
+   *  to. With a flow id, that flow; without, whatever `playback.start()` decides. */
+  onPresent: (flowId?: string) => void;
 }
 
 /**

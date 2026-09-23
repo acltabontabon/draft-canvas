@@ -36,4 +36,37 @@ describe('FlowBar presentation keys', () => {
     expect(playback.next).not.toHaveBeenCalled();
     expect(playback.previous).not.toHaveBeenCalled();
   });
+
+  /**
+   * Stepping and switching flow share one axis on purpose — same arrows, bigger move — so the
+   * modifier has to be checked *before* the plain arrows. Until this existed `Shift+→` simply
+   * stepped, so this is the guard on a deliberate change of meaning as much as on the new feature.
+   */
+  it('moves between flows on Shift+arrow, and never also steps', () => {
+    const playback = stubPlayback({ active: true });
+    render(<FlowBar playback={playback} />);
+
+    fireEvent.keyDown(window, { key: 'ArrowRight', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'ArrowLeft', shiftKey: true });
+
+    expect(playback.nextFlow).toHaveBeenCalledTimes(1);
+    expect(playback.previousFlow).toHaveBeenCalledTimes(1);
+    expect(playback.next).not.toHaveBeenCalled();
+    expect(playback.previous).not.toHaveBeenCalled();
+  });
+
+  it('stands down entirely while a menu is open, which is what the flow picker is', () => {
+    // The picker renders as `role="menu"` precisely so `overlayAboveCanvasIsOpen` already covers
+    // it: neither stepping nor switching may happen underneath an open list of flows.
+    const playback = stubPlayback({ active: true });
+    render(<FlowBar playback={playback} />);
+    const menu = document.createElement('div');
+    menu.setAttribute('role', 'menu');
+    document.body.append(menu);
+
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    fireEvent.keyDown(window, { key: 'ArrowRight', shiftKey: true });
+    expect(playback.next).not.toHaveBeenCalled();
+    expect(playback.nextFlow).not.toHaveBeenCalled();
+  });
 });

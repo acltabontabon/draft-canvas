@@ -15,7 +15,9 @@ async function presentSubmitCommand(page: Page) {
   await page.getByRole('button', { name: 'Start from CQRS' }).click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   await page.getByRole('button', { name: 'Present', exact: true }).click();
-  await page.getByRole('button', { name: 'Submit command' }).click();
+  // The flow picker is a menu, and each flow one of its options — see `FlowBar.tsx`, where that
+  // role is what stands the walkthrough's own arrow keys down while the list is open.
+  await page.getByRole('menuitemradio', { name: 'Submit command' }).click();
   await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 6');
 }
 

@@ -48,7 +48,12 @@ function mount(playback = stubPlayback()) {
   const stubs = stubContext({ playback });
   return render(
     <ReactFlowProvider>
-      <CommandPalette createAt={stubs.createAt} createAtPointer={stubs.createAtPointer} playback={playback} />
+      <CommandPalette
+        createAt={stubs.createAt}
+        createAtPointer={stubs.createAtPointer}
+        playback={playback}
+        onPresent={stubs.onPresent}
+      />
     </ReactFlowProvider>,
   );
 }

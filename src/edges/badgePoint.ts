@@ -4,6 +4,9 @@ import type { RoutedEdge, Side } from './routing';
 /** How far along the connector, from where it leaves the source, its step badge sits. */
 const BADGE_OFFSET = 22;
 
+/** Half the drawn badge: 18px across on screen (`.dc-edge-step`), the same in exported units. */
+const BADGE_RADIUS = 9;
+
 const OUTWARD: Record<Side, { x: number; y: number }> = {
   top: { x: 0, y: -1 },
   bottom: { x: 0, y: 1 },
@@ -44,4 +47,28 @@ export function badgePoint(route: RoutedEdge, routing: EdgeRouting): { x: number
     x: route.source.x + normal.x * BADGE_OFFSET,
     y: route.source.y + normal.y * BADGE_OFFSET,
   };
+}
+
+/**
+ * Whether the step badge would sit on top of whatever the connector says at `captionAt` — its
+ * relationship caption, or the small glyph an event/conditional connector draws at the same point.
+ *
+ * This exists because "is this connector a numbered step?" used to stand in for the question, and
+ * that is far too coarse: the badge sits just clear of the *source* (`badgePoint` above) while a
+ * caption sits along the line, so on most connectors the two never meet — yet the words came off
+ * every one of them the moment it joined a flow. They genuinely do collide on a short stacked run,
+ * where `badgePoint`'s fixed 22-unit walk lands on the caption's own point, so the question is
+ * asked exactly, per connector, by both renderers.
+ */
+export function badgeCrowds(
+  badgeAt: { x: number; y: number },
+  captionAt: { x: number; y: number },
+): boolean {
+  // `captionAt` is the point *on the line*; `captionAnchor` then pushes the words a further
+  // `LABEL_LINE_GAP` clear of it (more, on a horizontal run). So the honest test is barely wider
+  // than the badge itself — measuring as though the caption sat on the line would take the words
+  // off ordinary connectors like a Client one shape above its Gateway, which is the very thing
+  // this was written to stop.
+  const clearance = BADGE_RADIUS + 3;
+  return Math.hypot(badgeAt.x - captionAt.x, badgeAt.y - captionAt.y) < clearance;
 }

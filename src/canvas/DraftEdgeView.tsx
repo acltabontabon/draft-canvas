@@ -30,7 +30,7 @@ import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } fr
 import { EdgeLabels } from './EdgeLabels';
 import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
 import { obstaclesForEdge, withoutNodes } from '../edges/obstacles';
-import { badgePoint } from '../edges/badgePoint';
+import { badgeCrowds, badgePoint } from '../edges/badgePoint';
 import { bridgePath } from '../edges/bridge';
 import { NO_CROSSINGS, crossingPlan, withoutMoving } from '../edges/crossings';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
@@ -478,6 +478,20 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const hasStep = showSequence && typeof stepNumber === 'number';
   // The very point the exporter puts it at — one function, so the two can't drift apart.
   const badgeAt = hasStep ? badgePoint(route, edge.routing) : null;
+  // A bundle's members all share one relationship, so repeating its caption down every branch is
+  // the exact "calls / calls / calls" column Smart Routing exists to remove: every member draws it
+  // at the same point on the shared stem instead, where the identical copies overdraw into one
+  // label. An architecturally unusual pairing keeps its own caption on its own branch — that
+  // warning is about this relationship, not its siblings. Mirrors `edges/describe.ts`.
+  const captionIsUnusual = relationshipStatus === 'unusual' || relationshipStatus === 'questionable';
+  const captionCollapsed = Boolean(route.trunkLabel) && !captionIsUnusual;
+  const captionAt = captionCollapsed ? route.trunkLabel! : { x: labelX, y: labelY };
+  // Being a numbered step must never cost a connector its words — only the step badge physically
+  // landing on them may, which is a question about two points and nothing else (`badgeCrowds`).
+  // The glyphs below sit at the midpoint whatever the bundle does; only the caption follows the
+  // trunk, so the two are measured separately.
+  const badgeOverCaption = badgeAt !== null && badgeCrowds(badgeAt, captionAt);
+  const badgeOverMidpoint = badgeAt !== null && badgeCrowds(badgeAt, { x: labelX, y: labelY });
   // The step being explained is the one thing that should stand out.
   // `style` renders as an inline attribute, which always wins over an
   // external stylesheet rule — so a selected connector's stroke and width
@@ -707,10 +721,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
       {/* A small glyph at the path's midpoint — see the matching comment in
           `edges/describe.ts`. Only when nothing else already occupies that spot. */}
-      {!hasLabel && !hasStep && edge.kind === 'event' && (
+      {!hasLabel && !badgeOverMidpoint && edge.kind === 'event' && (
         <circle cx={labelX} cy={labelY} r={3} fill={strokeColor} />
       )}
-      {!hasLabel && !hasStep && edge.kind === 'conditional' && (
+      {!hasLabel && !badgeOverMidpoint && edge.kind === 'conditional' && (
         <polygon
           points={`${labelX},${labelY - 5} ${labelX + 5},${labelY} ${labelX},${labelY + 5} ${labelX - 5},${labelY}`}
           fill={theme.edgeLabelBg}
@@ -762,18 +776,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           *what kind* of call, which is exactly what left a fresh Service→Service connector with
           no visible text at all. `captionAnchor`'s `responseAway` flag is what keeps this from
           landing on top of the response line's own label — see its own doc comment. */}
-      {!hasLabel && !hasStep && edge.semantic && (() => {
-        const isUnusual = relationshipStatus === 'unusual' || relationshipStatus === 'questionable';
-        // A bundle's members all share one relationship, so repeating its
-        // caption down every branch is the exact "calls / calls / calls"
-        // column Smart Routing exists to remove: every member draws it at the
-        // same point on the shared stem instead, where the identical copies
-        // overdraw into one label. An architecturally unusual pairing keeps
-        // its own caption on its own branch — that warning is about this
-        // relationship, not its siblings. Mirrors `edges/describe.ts`.
-        const collapsed = Boolean(route.trunkLabel) && !isUnusual;
-        const captionAt = collapsed ? route.trunkLabel! : { x: labelX, y: labelY };
-        const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
+      {!hasLabel && !badgeOverCaption && edge.semantic && (() => {
+        const captionSide = captionCollapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
         const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, edge.hasResponse ? Math.sign(responseLane) : 0);
         const label = relationshipCaptionLabel(edge.semantic, {
           hasResponse: edge.hasResponse,
@@ -788,10 +792,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             y={caption.y}
             textAnchor={caption.textAnchor}
             dominantBaseline={caption.dominantBaseline}
-            fill={isUnusual ? theme.accents.amber.text : theme.textFaint}
+            fill={captionIsUnusual ? theme.accents.amber.text : theme.textFaint}
             style={{ font: cssFont(FONTS.connectorCaption) }}
           >
-            {isUnusual ? `▲ ${label}` : label}
+            {captionIsUnusual ? `▲ ${label}` : label}
           </text>
         );
       })()}
@@ -907,8 +911,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         {/*
           A standalone badge only when there is no label to carry it. On a short
           connector the two would otherwise sit on top of each other.
+
+          `hidesOwnLabel` is the exception: a follower in a label group draws no chip of its own
+          (the group's leader draws the one label for all of them), so there is nothing to carry
+          its number and without this its step is invisible on screen — while `edges/describe.ts`
+          drew it anyway, which is exactly the silent drift the two-renderer split risks.
         */}
-        {hasStep && !hasLabel && !editing && (
+        {hasStep && (!hasLabel || hidesOwnLabel) && !editing && (
           <div
             className="dc-edge-step"
             data-active={isActiveStep ? 'true' : undefined}

@@ -91,6 +91,10 @@ export interface FlowPlaybackController {
    *  palette's "Present flow…" stage and `start()` choose from. An empty flow is never offered. */
   flows: DraftFlow[];
   flow: DraftFlow | null;
+  /** 0-based position of `flow` within `flows` — what "Flow 2 of 5" counts — or `-1` for none.
+   *  Deliberately an index into the *playable* list: that is the set `nextFlow` can reach, so a
+   *  denominator drawn from anywhere else would promise a move that doesn't happen. */
+  flowIndex: number;
   steps: FlowPlaybackStep[];
   step: number;
   current: FlowPlaybackStep | null;
@@ -104,6 +108,11 @@ export interface FlowPlaybackController {
   next: () => void;
   previous: () => void;
   goTo: (step: number) => void;
+  /** The next/previous flow in document order, started at its own step 1. Never wraps: running
+   *  off the end of the last flow is the end of the walkthrough, and silently looping back to the
+   *  beginning mid-sentence is the one thing a presenter can't recover from gracefully. */
+  nextFlow: () => void;
+  previousFlow: () => void;
 }
 
 /** Never zoom in so far on a single connection that context is lost. */
@@ -183,6 +192,12 @@ export function useFlowPlayback(): FlowPlaybackController {
       // Skip the animation when everything is already comfortably on screen.
       // Without this, stepping through a small diagram produces a constant,
       // faintly nauseating micro-pan.
+      //
+      // Known sharp edge: `getViewport()` reports the camera mid-flight while an earlier 380ms
+      // transition is still running, so a fast burst of moves can judge itself against a camera
+      // that is only halfway there and skip a reframe it needed. Rare when stepping; easier to
+      // provoke now that `nextFlow` exists. Left alone deliberately — the fix is a settled-camera
+      // signal React Flow doesn't offer, and guessing at one would cost the micro-pan cure above.
       if (isComfortablyVisible(bounds, getViewport(), viewWidth, viewHeight)) return;
 
       // `fitBounds` has no maximum zoom, so a step between two adjacent nodes
@@ -245,16 +260,44 @@ export function useFlowPlayback(): FlowPlaybackController {
   const next = useCallback(() => goTo(flowPlayback.step + 1), [flowPlayback.step, goTo]);
   const previous = useCallback(() => goTo(flowPlayback.step - 1), [flowPlayback.step, goTo]);
 
+  const flowIndex = flow ? playableFlows.findIndex((candidate) => candidate.id === flow.id) : -1;
+
+  // Moving between flows is `pickFlow` and nothing else: the destination starts at its own step 1
+  // with its own framing, which is also what resets the request/response phase and lets go of any
+  // reveal the presenter left open on the flow being left behind.
+  const goToFlow = useCallback(
+    (delta: -1 | 1) => {
+      // In the picker there is no "current" flow to move from, and the whole list is already on
+      // screen — stepping off it sideways would just pick one at random.
+      if (flowIndex === -1) return;
+      const destination = playableFlows[flowIndex + delta];
+      if (!destination) return;
+      pickFlow(destination.id);
+    },
+    [flowIndex, playableFlows, pickFlow],
+  );
+  const nextFlow = useCallback(() => goToFlow(1), [goToFlow]);
+  const previousFlow = useCallback(() => goToFlow(-1), [goToFlow]);
+
   // Deleting the connection you are standing on, or the flow itself, should
   // not strand playback in a broken state.
   useEffect(() => {
     if (!flowPlayback.active || flowPlayback.flowId === null) return; // Picker showing — nothing to reconcile yet.
     if (steps.length === 0) {
-      setFlowPlayback({ active: false, flowId: null, step: 0 });
+      // Losing the flow you were on is not a reason to lose the presentation. With other flows
+      // still worth showing, fall back to the picker — the presenter picks up on another story
+      // instead of being dropped back into the editor mid-sentence. Only with nothing left to
+      // present does playback end outright. (`flowId: null` is the picker, which this effect's
+      // own first line steps over, so there is no second pass.)
+      setFlowPlayback(
+        playableFlows.length > 0
+          ? { active: true, flowId: null, step: 0 }
+          : { active: false, flowId: null, step: 0 },
+      );
       return;
     }
     if (flowPlayback.step > steps.length) setFlowPlayback({ step: steps.length });
-  }, [flowPlayback.active, flowPlayback.flowId, flowPlayback.step, setFlowPlayback, steps.length]);
+  }, [flowPlayback.active, flowPlayback.flowId, flowPlayback.step, playableFlows.length, setFlowPlayback, steps.length]);
 
   // A step's own two-phase request/response pulse (see `DraftEdge.hasResponse`, `FlowPlaybackState.phase`).
   // Reset happens here, in exactly one place, keyed only on what actually identifies "a new step to
@@ -277,6 +320,7 @@ export function useFlowPlayback(): FlowPlaybackController {
     () => ({
       flows: playableFlows,
       flow,
+      flowIndex,
       steps,
       step: flowPlayback.step,
       current,
@@ -289,8 +333,10 @@ export function useFlowPlayback(): FlowPlaybackController {
       next,
       previous,
       goTo,
+      nextFlow,
+      previousFlow,
     }),
-    [playableFlows, flow, steps, flowPlayback, current, start, pickFlow, stop, next, previous, goTo],
+    [playableFlows, flow, flowIndex, steps, flowPlayback, current, start, pickFlow, stop, next, previous, goTo, nextFlow, previousFlow],
   );
 }
 

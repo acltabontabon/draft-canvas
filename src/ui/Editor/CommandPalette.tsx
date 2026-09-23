@@ -25,6 +25,7 @@ interface CommandPaletteProps {
   createAt: (preset: Preset, position: { x: number; y: number }) => DraftNode | null;
   createAtPointer: (preset: Preset) => DraftNode | null;
   playback: FlowPlaybackController;
+  onPresent: (flowId?: string) => void;
 }
 
 /** How many recently used commands lead an empty palette. */
@@ -54,7 +55,7 @@ export function CommandPalette(props: CommandPaletteProps) {
   return open ? <CommandPaletteBody {...props} /> : null;
 }
 
-function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPaletteProps) {
+function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: CommandPaletteProps) {
   const setOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
   // Reactive slices only so an open palette re-lists as the world changes underneath it — the
@@ -65,7 +66,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback }: CommandPale
   const focus = useEditorStore((state) => state.focus);
   const flowPlayback = useEditorStore((state) => state.flowPlayback);
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
-  const buildContext = useCommandContext({ createAt, createAtPointer, playback });
+  const buildContext = useCommandContext({ createAt, createAtPointer, playback, onPresent });
 
   // Whatever had focus (a toolbar button, the canvas) when ⌘K was pressed gets it back on close —
   // shared with `Modal` so the two dialogs can't drift on this.

@@ -1158,7 +1158,7 @@ body:has(.dc-modal-backdrop, .dc-palette-backdrop) .dc-learn-scrim {
   display: flex;
   align-items: center;
   gap: calc(10 * var(--u));
-  max-width: calc(470 * var(--u));
+  max-width: calc(560 * var(--u));
   height: calc(34 * var(--u));
   padding: 0 calc(14 * var(--u));
   border-radius: var(--dc-radius-pill);
@@ -1171,6 +1171,23 @@ body:has(.dc-modal-backdrop, .dc-palette-backdrop) .dc-learn-scrim {
   font-family: var(--dc-mono);
   font-size: calc(11.5 * var(--u));
   font-weight: 600;
+}
+
+/* The bar's left-hand group: which flow, and where it sits in the running order. Separated from
+   the step counter by the same hairline the real bar uses, because telling "move one step" from
+   "leave this flow" apart is the whole point of that grouping. */
+.dc-learn-flowbar-flow {
+  overflow: hidden;
+  color: var(--dc-text);
+  font-size: calc(11.5 * var(--u));
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.dc-learn-flowbar-rule {
+  width: 1px;
+  height: calc(14 * var(--u));
+  background: var(--dc-border);
 }
 
 .dc-learn-flowbar-dots {

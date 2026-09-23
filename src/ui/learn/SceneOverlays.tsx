@@ -155,6 +155,14 @@ export function Overlay({ overlay }: { overlay: SceneOverlay }) {
     case 'flowbar':
       return (
         <div className="dc-learn-ui dc-learn-flowbar">
+          {overlay.flow && (
+            <>
+              <span className="dc-learn-flowbar-flow">
+                {overlay.flow.title} · Flow {overlay.flow.index} of {overlay.flow.total}
+              </span>
+              <span className="dc-learn-flowbar-rule" aria-hidden="true" />
+            </>
+          )}
           <span className="dc-learn-flowbar-count">
             Step {overlay.step} / {overlay.total}
           </span>

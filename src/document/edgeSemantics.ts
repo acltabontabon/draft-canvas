@@ -40,6 +40,49 @@ export function relationshipCaptionLabel(semantic: EdgeSemantic, options: Captio
 }
 
 /**
+ * What a connector actually says on screen: the user's own label when there is one, otherwise the
+ * relationship caption the canvas draws for it, otherwise nothing at all.
+ *
+ * One function because the words have to match wherever they appear — the canvas, the SVG
+ * exporter, the presentation bar's caption and its spoken announcement, the Flow panel's step
+ * list. Before this, the surfaces away from the canvas read `edge.label` raw, so a connector whose
+ * meaning came from its `semantic` announced nothing while the canvas said "writes to".
+ *
+ * Three things it deliberately is not:
+ *
+ * - **Not `edgeRelationLabel`** (`connectorSemantics.ts`). That one calls `relationLabel`
+ *   directly and so misses both of `relationshipCaptionLabel`'s relabels: a request/response
+ *   `calls` connector reads "calls" there and "requests" on the canvas, and a dead-letter route
+ *   with `deliveryAttempts` reads "dead-letters to" instead of "after 3 attempts".
+ * - **Not junction-transparent.** Neither connector renderer resolves endpoints through a
+ *   junction (see `DraftEdgeView.tsx`'s own note), so neither does this — matching what is drawn
+ *   is the whole point.
+ * - **Not `sequence/label.ts`'s `resolveMessageLabel`.** That one adds two further tiers that
+ *   *invent* wording (the capability matrix's default relation, then a bare bucket word) because
+ *   a sequence diagram must name every message. A connector that legitimately says nothing must
+ *   keep saying nothing here.
+ */
+export function effectiveConnectorText(
+  edge: {
+    label?: string;
+    semantic?: EdgeSemantic;
+    hasResponse?: boolean;
+    deliveryAttempts?: number;
+  },
+  endpoints: { source?: NodeCategory; target?: NodeCategory } = {},
+): string | undefined {
+  const explicit = edge.label?.trim();
+  if (explicit) return explicit;
+  if (!edge.semantic) return undefined;
+  return relationshipCaptionLabel(edge.semantic, {
+    hasResponse: edge.hasResponse,
+    deliveryAttempts: edge.deliveryAttempts,
+    source: endpoints.source,
+    target: endpoints.target,
+  });
+}
+
+/**
  * What a caption needs beyond the semantic itself. `source`/`target` are the connector's endpoint
  * categories (resolved through junctions where the caller has the graph) — without them the
  * caption falls back to the active wording, which is right for every arrow a doer starts.

@@ -12,6 +12,38 @@ and apply to the web app.
 
 ## [Unreleased]
 
+### Shared
+
+#### Added
+
+- **Walk several flows in one presentation.** The bar now names the flow you are in and where it
+  sits — `Payment processing · Flow 2 of 4` — and moving to another one no longer means going back
+  to the editor. `Shift+→` starts the next flow, `Shift+←` the previous one, and clicking the
+  title (or `Shift+F`) opens the list to jump straight to any of them. On the last step of a flow,
+  the control beside the title names the one that follows, so the hand-off is there when you need
+  it; at the end of the last flow it simply says **End**, and nothing ever loops back round to the
+  beginning. <!-- highlight -->
+
+#### Fixed
+
+- **A connector keeps its words once it joins a flow.** Adding a connector to a flow used to strip
+  the relationship it was already showing — "writes to", "publishes to", "after 3 attempts" —
+  leaving only a step number, on the canvas and in every exported image and GIF. The two now sit
+  side by side, so what you explain while presenting says exactly what the editor says. <!-- highlight -->
+- The presentation bar and the Flows panel spell out what a step is about, instead of going blank
+  on any connector whose meaning comes from its relationship rather than typed text.
+- **Fit to view** now frames the flow you are presenting, rather than zooming out to the whole
+  diagram.
+- Leaving a presentation returns you to the view you were editing, with the same selection.
+- Losing the last step of the flow you are showing no longer ends the presentation when there are
+  other flows left to show.
+- A connector that shares its label with others keeps its step number visible.
+
+#### Changed
+
+- `Shift+→` and `Shift+←` change flow while presenting. They used to move one step, the same as the
+  plain arrow keys.
+
 ### Web
 
 #### Added

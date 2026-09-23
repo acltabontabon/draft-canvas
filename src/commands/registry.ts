@@ -123,10 +123,11 @@ export function pasteAtCommand(position: { x: number; y: number }): Command {
   };
 }
 
+/** `EditorScreen`'s own `onPresent`, not a second copy of it: starting a presentation has to mean
+ *  the same thing from the palette as from the toolbar — the same framing, and the same memory of
+ *  where the editing was left. */
 function startPresentation(ctx: CommandContext) {
-  ctx.editor.setMode('present');
-  if (ctx.playback.canStart) ctx.playback.start();
-  void ctx.camera.fitView({ padding: 0.18, duration: 320 });
+  ctx.onPresent();
 }
 
 function presentFlowStage(ctx: CommandContext): CommandStage {
@@ -137,10 +138,25 @@ function presentFlowStage(ctx: CommandContext): CommandStage {
       id: `present-flow:${flow.id}`,
       title: flow.title,
       hint: count(flow.steps.length, 'step'),
-      run: (inner) => {
-        inner.editor.setMode('present');
-        inner.playback.pickFlow(flow.id);
-      },
+      run: (inner) => inner.onPresent(flow.id),
+    })),
+  };
+}
+
+/** Jumping to another flow from inside a presentation — the palette's twin of the bar's own
+ *  picker. Already presenting, so this is `pickFlow`, not a fresh `onPresent`: the camera the
+ *  presenter will be put back into on the way out was captured when they started. */
+function switchFlowStage(ctx: CommandContext): CommandStage {
+  return {
+    prompt: 'Switch flow',
+    options: ctx.playback.flows.map((flow, index) => ({
+      id: `switch-to-flow:${flow.id}`,
+      title: flow.title,
+      hint:
+        flow.id === ctx.playback.flow?.id
+          ? 'Current'
+          : `Flow ${index + 1} · ${count(flow.steps.length, 'step')}`,
+      run: (inner) => inner.playback.pickFlow(flow.id),
     })),
   };
 }
@@ -184,6 +200,40 @@ function presentModeCommands(ctx: CommandContext): Command[] {
         }),
       },
     );
+    // Moving between flows, offered *while* a flow is playing — the whole point being that a
+    // question from the room doesn't have to end the presentation to be answered.
+    if (playback.flows.length > 1) {
+      const upcoming = playback.flows[playback.flowIndex + 1];
+      const previous = playback.flowIndex > 0 ? playback.flows[playback.flowIndex - 1] : undefined;
+      commands.push(
+        {
+          id: 'flow-next',
+          title: 'Next flow',
+          group: 'flow',
+          shortcut: 'Shift →',
+          keywords: ['switch', 'another', 'skip'],
+          hint: upcoming ? `Next: ${upcoming.title}` : 'At the last flow',
+          run: (inner) => inner.playback.nextFlow(),
+        },
+        {
+          id: 'flow-previous',
+          title: 'Previous flow',
+          group: 'flow',
+          shortcut: 'Shift ←',
+          keywords: ['switch', 'back'],
+          hint: previous ? `Back to: ${previous.title}` : 'At the first flow',
+          run: (inner) => inner.playback.previousFlow(),
+        },
+        {
+          id: 'flow-switch',
+          title: 'Switch flow…',
+          group: 'flow',
+          shortcut: 'Shift F',
+          keywords: ['jump', 'another', 'change', 'pick'],
+          run: switchFlowStage,
+        },
+      );
+    }
   } else if (playback.canStart) {
     commands.push({
       id: 'present-flow',

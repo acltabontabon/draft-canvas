@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { categoryOf } from '../../document/connectorSemantics';
+import { effectiveConnectorText } from '../../document/edgeSemantics';
 import { displayNameFor } from '../../document/factory';
 import { flowIsPlayable } from '../../document/flow';
 import type { DraftFlow, DraftFlowStep } from '../../document/types';
@@ -7,7 +9,6 @@ import { count } from '../../lib/plural';
 import { documentWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
-import type { FlowPlaybackController } from '../../presentation/useFlowPlayback';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { LearnLink } from '../learn/LearnLink';
@@ -27,7 +28,7 @@ import { LearnLink } from '../learn/LearnLink';
  * stopped, so `EditorScreen`'s canvas shortcuts never see a key this panel consumed — but
  * unhandled keys fall through exactly as they would from any focused toolbar button.
  */
-export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
+export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void }) {
   const open = useUiStore((state) => state.flowPanelOpen);
   const setOpen = useUiStore((state) => state.setFlowPanelOpen);
   const renameRequestId = useUiStore((state) => state.flowRenameRequestId);
@@ -97,10 +98,9 @@ export function FlowPanel({ playback }: { playback: FlowPlaybackController }) {
     beginRename(id);
   };
 
-  const present = (flow: DraftFlow) => {
-    useEditorStore.getState().setMode('present');
-    playback.pickFlow(flow.id);
-  };
+  // `EditorScreen`'s one door into a presentation, not a second copy of it: framing, and the
+  // camera and selection to come back to, are decided in exactly one place.
+  const present = (flow: DraftFlow) => onPresent(flow.id);
 
   // Closing from inside the panel hands focus back to the toggle that opens it, rather than
   // dropping it to <body> when the panel unmounts.
@@ -436,7 +436,17 @@ function StepRow({
   const extraEdges = (step.extraEdgeIds ?? [])
     .map((id) => edges.get(id))
     .filter((e): e is NonNullable<typeof e> => Boolean(e));
-  const detail = step.caption?.trim() || edge?.label?.trim();
+  // The step's own caption, else whatever the connector itself says on the canvas — its label when
+  // it has one, otherwise its relationship. Reading `edge.label` alone left every step of a flow
+  // built from plain connectors with a blank line here while the canvas said "writes to".
+  const detail =
+    step.caption?.trim() ||
+    (edge
+      ? effectiveConnectorText(edge, {
+          source: source ? categoryOf(source) : undefined,
+          target: target ? categoryOf(target) : undefined,
+        })
+      : undefined);
   const hasExtras = extraNodes.length > 0 || extraEdges.length > 0 || step.viewport !== undefined;
 
   return (

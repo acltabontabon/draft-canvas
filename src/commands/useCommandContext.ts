@@ -12,6 +12,7 @@ export interface UseCommandContextParams {
   createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode | null;
   createAtPointer: (preset: Preset) => DraftNode | null;
   playback: FlowPlaybackController;
+  onPresent: (flowId?: string) => void;
 }
 
 /**
@@ -21,7 +22,7 @@ export interface UseCommandContextParams {
  * context itself: every call reads fresh store state via `getState()`, so a command always acts on
  * whatever is true the instant it runs, not whatever was true when the menu opened.
  */
-export function useCommandContext({ createAt, createAtPointer, playback }: UseCommandContextParams): () => CommandContext {
+export function useCommandContext({ createAt, createAtPointer, playback, onPresent }: UseCommandContextParams): () => CommandContext {
   const { fitView, zoomIn, zoomOut, zoomTo, screenToFlowPosition, setViewport } = useReactFlow();
   // Selected separately, as `useFlowPlayback` does: an object literal from a store selector is a
   // new identity every time and would re-render forever.
@@ -47,12 +48,14 @@ export function useCommandContext({ createAt, createAtPointer, playback }: UseCo
         playback,
         createAt,
         createAtPointer,
+        onPresent,
       };
     },
     [
       createAt,
       createAtPointer,
       fitView,
+      onPresent,
       playback,
       screenToFlowPosition,
       setViewport,
