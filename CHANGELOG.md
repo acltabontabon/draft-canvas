@@ -39,6 +39,12 @@ and apply to the web app.
   other flows left to show.
 - A connector that shares its label with others keeps its step number visible.
 
+- **A panel that won't open because the app has moved on now says so, and offers the fix.** Leaving
+  Draft Canvas open across an update left the page asking for files the new version no longer has,
+  so About, Export and Learn would fail to open and go on failing however many times you tried.
+  They now offer a Reload, which saves your work first. It bit hardest in Draft Canvas for VS Code,
+  where the editor is kept alive deliberately and so never reloaded on its own.
+
 #### Changed
 
 - `Shift+→` and `Shift+←` change flow while presenting. They used to move one step, the same as the

@@ -8,6 +8,7 @@ import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { canvasBounds, canvasCenter } from '../../canvas/canvasFrame';
 import type { DraftViewport } from '../../document/types';
+import { loadFailureNotice } from '../../lib/staleChunk';
 import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { nearestInDirection, nextRelationshipNeighbor, type Direction } from '../../canvas/spatialNav';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
@@ -134,7 +135,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     ui.setExportOpen(false);
     // Otherwise a later plain ⌘⇧E would open still forced to "Selection only".
     ui.requestExportSelection(false);
-    ui.notify('Export couldn’t open. Check your connection and try again.', 'error');
+    const notice = loadFailureNotice(error, 'Export couldn’t open. Check your connection and try again.');
+    ui.notify(notice.message, 'error', notice.action);
   }, []);
   const onLearnFailed = useCallback((error: Error, componentStack: string) => {
     logDiagnostic(error, { operation: 'learn-panel' }, componentStack);
@@ -142,7 +144,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     setLearnMounted(false);
     const ui = useUiStore.getState();
     ui.closeLearn();
-    ui.notify('Learn couldn’t open. Check your connection and try again.', 'error');
+    const notice = loadFailureNotice(error, 'Learn couldn’t open. Check your connection and try again.');
+    ui.notify(notice.message, 'error', notice.action);
   }, []);
   const quickConnect = useUiStore((state) => state.quickConnect);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);

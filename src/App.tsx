@@ -7,6 +7,7 @@ import { LibraryScreen } from './ui/Library/LibraryScreen';
 import { ErrorBoundary } from './ui/common/ErrorBoundary';
 import { PanelBoundary } from './ui/common/PanelBoundary';
 import { retryableLazy } from './ui/common/retryableLazy';
+import { loadFailureNotice } from './lib/staleChunk';
 import { Toasts } from './ui/common/Toasts';
 import { ThemeProvider } from './ui/theme/ThemeProvider';
 import { PersonalityProvider } from './ui/personality/PersonalityProvider';
@@ -44,7 +45,8 @@ function LazyAboutDialog() {
         AboutChunk.reset();
         const ui = useUiStore.getState();
         ui.setAboutOpen(false);
-        ui.notify('About couldn’t open. Check your connection and try again.', 'error');
+        const notice = loadFailureNotice(error, 'About couldn’t open. Check your connection and try again.');
+        ui.notify(notice.message, 'error', notice.action);
       }}
     >
       <Suspense fallback={null}>

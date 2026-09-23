@@ -5,6 +5,7 @@ import { createId } from '../document/ids';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { hostKind } from '../host/hostInfo';
 import { logDiagnostic } from '../lib/diagnostics';
+import { loadFailureNotice } from '../lib/staleChunk';
 import type { StarterId } from '../starters';
 import { loadStarters } from '../starters/load';
 import { Autosave } from '../storage/autosave';
@@ -296,7 +297,8 @@ export function useDocumentSession(): DocumentSession {
         // The editor's chunk didn't arrive (offline, or a deploy replaced it): say so rather than
         // leaving the click to do nothing.
         logDiagnostic(error, { operation: 'load-editor', documentId: id });
-        notify('The editor could not be loaded. Check your connection and try again.', 'error');
+        const notice = loadFailureNotice(error, 'The editor could not be loaded. Check your connection and try again.');
+        notify(notice.message, 'error', notice.action);
         return;
       }
       if (request !== navigation.current) return;
@@ -385,7 +387,8 @@ export function useDocumentSession(): DocumentSession {
           // The starters chunk didn't arrive (offline, or a deploy replaced it) — say so, the way
           // `openDocument` does for the editor chunk, rather than leaving the click to do nothing.
           logDiagnostic(error, { operation: 'load-starters' });
-          notify('That starter could not be loaded. Check your connection and try again.', 'error');
+          const notice = loadFailureNotice(error, 'That starter could not be loaded. Check your connection and try again.');
+          notify(notice.message, 'error', notice.action);
           return;
         }
         const starter = starterId ? catalog?.starterById(starterId) : undefined;
