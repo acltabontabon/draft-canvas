@@ -1197,13 +1197,22 @@ main > *:not(.spine) {
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: minmax(0, auto) 180px minmax(0, 1fr);
-  align-items: center;
-  gap: clamp(20px, 3vw, 34px) clamp(10px, 1.6vw, 22px);
+  grid-template-columns: minmax(0, auto) minmax(90px, 180px) minmax(0, 1fr);
+  gap: clamp(22px, 3.4vw, 38px) clamp(10px, 1.6vw, 22px);
 }
 
+/*
+ * Each trade is a real box that happens to share the list's columns, rather than three loose cells.
+ * `display: contents` used to dissolve the `li` so its three children became grid items directly —
+ * which lined the arrows up beautifully and left nothing to group them, so the row gap fell between
+ * *every* child instead of between statements. Collapsed to one column that read as one run-on
+ * sentence: "completeness" sat directly on top of "opinion".
+ */
 .trades li {
-  display: contents;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
 }
 
 .trade-a,
@@ -1224,8 +1233,25 @@ main > *:not(.spine) {
   color: var(--ink);
 }
 
+/* The connector: its word above its line, both sized by the column they are given. */
+.trade-edge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.trade-edge-word {
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+
 .trade-wire {
-  width: 180px;
+  display: block;
+  width: 100%;
   height: auto;
   overflow: visible;
 }
@@ -1246,12 +1272,6 @@ main > *:not(.spine) {
   stroke-width: 0;
 }
 
-.trade-wire .t-edge {
-  fill: var(--ink-faint);
-  font-family: var(--sans);
-  font-size: 13px;
-  text-anchor: middle;
-}
 
 .manifesto-note {
   margin: 42px 0 0;
@@ -1260,21 +1280,47 @@ main > *:not(.spine) {
   color: var(--ink-faint);
 }
 
+/*
+ * Narrow: one column per trade, and no arrow.
+ *
+ * The arrow used to be the same horizontal one turned on its side with `transform: rotate(90deg)`.
+ * A transform does not change layout, so a 92x20 box kept reserving 20px of height while painting
+ * 92px of arrow across whatever sat beside it — and took its "over" label round with it, sideways,
+ * on top of the next line. The margins around it were an attempt to steer the overspill rather than
+ * stop it. Stacked, the word alone does the connector's job; the rule after it keeps the drawn
+ * character without anything to collide with.
+ */
 @media (max-width: 760px) {
   .trades {
     grid-template-columns: 1fr;
+    gap: clamp(26px, 6.5vw, 40px);
+  }
+
+  .trades li {
+    grid-template-columns: 1fr;
     justify-items: start;
-    gap: 0;
+    gap: 2px;
   }
 
   .trade-a { text-align: left; }
 
-  .trade-wire {
-    width: 92px;
-    transform: rotate(90deg);
-    transform-origin: left center;
-    margin: 14px 0 32px 18px;
+  .trade-edge {
+    flex-direction: row;
+    align-items: center;
+    gap: 9px;
+    padding: 1px 0 2px;
   }
+
+  .trade-edge-word::after {
+    content: '';
+    display: inline-block;
+    width: 26px;
+    margin-left: 9px;
+    border-top: 1px solid var(--edge);
+    vertical-align: 0.28em;
+  }
+
+  .trade-wire { display: none; }
 }
 
 /* ── Get it ──────────────────────────────────────────────────────────────────────────────── */
@@ -1283,72 +1329,120 @@ main > *:not(.spine) {
   margin-bottom: clamp(70px, 12vh, 140px);
 }
 
+/*
+ * Three rows, not three columns.
+ *
+ * As cards they had to be read side by side, so the tallest set the height for all of them —
+ * Desktop, carrying a download control and its release metadata, left Browser and VS Code holding
+ * a band of empty space underneath. Read as rows there is no shared height to fight over: each one
+ * is as tall as its own words, and the three line up on their columns instead.
+ */
 .dists {
-  display: grid;
-  grid-template-columns: 1.25fr 1fr 1fr;
-  gap: 1px;
-  background: var(--rule);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.dist {
-  display: flex;
-  flex-direction: column;
-  padding: 28px 26px 26px;
   background: var(--paper);
 }
 
-.dist-lead {
-  background: var(--paper-2);
+.dist {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.85fr) minmax(0, 1.6fr) minmax(200px, auto);
+  align-items: start;
+  gap: 10px clamp(22px, 3vw, 44px);
+  padding: 24px clamp(20px, 2vw, 28px);
 }
 
-.dist h3 {
-  margin: 10px 0 12px;
-  font-size: 1.28rem;
+.dist + .dist {
+  border-top: 1px solid var(--rule);
 }
 
-.dist p {
+.dist-id h3 {
+  margin: 8px 0 0;
+  font-size: 1.15rem;
+}
+
+.dist-body p {
+  margin: 0;
   font-size: 0.95rem;
   color: var(--ink-soft);
 }
 
-.dist-actions {
-  margin-top: auto;
-  padding-top: 8px;
+.dist-body .dist-fine {
+  margin: 8px 0 0;
 }
 
-.dist-fine,
-.dist-warn {
+/* The action column: one control, and whatever metadata belongs to it. */
+.dist-act {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* One footnote for the one thing that needed saying twice, said once and at full width. */
+.dist-note {
   margin: 14px 0 0;
   font-size: 0.83rem;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--ink-faint);
 }
 
-.dist-warn {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--rule-strong);
+.dist-note strong {
+  font-weight: 560;
+  color: var(--ink-soft);
+}
+
+.downloads {
+  margin: 0;
+}
+
+.downloads-summary {
+  display: inline-flex;
+  /* `.button` stacks a label over a sub-label, which put the caret on its own line here. */
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.downloads-summary::-webkit-details-marker {
+  display: none;
+}
+
+.downloads-caret {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.downloads[open] .downloads-caret {
+  transform: rotate(180deg);
 }
 
 .targets {
-  margin: 4px 0 0;
+  margin: 10px 0 0;
   padding: 0;
   list-style: none;
 }
 
 .targets li + li {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
+/* A row, not a tile: the platform leads and the architecture and file type follow it as the
+   secondary detail they are. Three of these now take about the height one of the old cards did. */
 .targets a {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  padding: 10px 14px 11px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding: 9px 13px;
   background: var(--paper-2);
   border: 1px solid var(--rule-strong);
   border-radius: 8px;
@@ -1370,6 +1464,7 @@ main > *:not(.spine) {
   font-size: 0.7rem;
   letter-spacing: 0.04em;
   color: var(--ink-faint);
+  white-space: nowrap;
 }
 
 .targets [aria-current='true'] {
@@ -1530,6 +1625,10 @@ main > *:not(.spine) {
 /* ── Motion ──────────────────────────────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: no-preference) {
+  .downloads-caret {
+    transition: transform 0.18s var(--ease);
+  }
+
   .reveal {
     opacity: 0;
     transform: translateY(14px);
@@ -1616,12 +1715,12 @@ main > *:not(.spine) {
   }
 
   .reveal .trade-wire .head,
-  .reveal .trade-wire .t-edge {
+  .reveal .trade-edge-word {
     opacity: 0;
   }
 
   .reveal.shown .trade-wire .head,
-  .reveal.shown .trade-wire .t-edge {
+  .reveal.shown .trade-edge-word {
     transition: opacity 0.4s var(--ease) 0.95s;
     opacity: 1;
   }
@@ -1643,8 +1742,14 @@ main > *:not(.spine) {
 /* ── Narrower ────────────────────────────────────────────────────────────────────────────── */
 
 @media (max-width: 1080px) {
-  .dists { grid-template-columns: 1fr 1fr; }
-  .dist-lead { grid-column: 1 / -1; }
+  /* The action no longer has room beside the words: it goes under them, still its own column so
+     the three rows keep lining up. */
+  .dist {
+    grid-template-columns: minmax(0, 1fr) minmax(170px, auto);
+  }
+
+  .dist-id { grid-column: 1 / -1; }
+
   .starters { grid-template-columns: repeat(3, 1fr); }
 }
 
@@ -1677,8 +1782,16 @@ main > *:not(.spine) {
 }
 
 @media (max-width: 680px) {
-  .dists, .starters { grid-template-columns: 1fr; }
-  .dist-lead { grid-column: auto; }
+  .starters { grid-template-columns: 1fr; }
+
+  /* Label, then description, then action — one column, in reading order. */
+  .dist {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 22px 18px;
+  }
+
+  .dist-id { grid-column: auto; }
   .starters svg { max-width: 190px; }
   .formats li { grid-template-columns: 1fr; gap: 2px; }
   .moved { padding: 22px 46px 20px 20px; }

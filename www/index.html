@@ -774,26 +774,32 @@
         <ul class="trades">
           <li class="reveal">
             <span class="trade-a">speed</span>
-            <svg class="trade-wire" viewBox="0 0 180 40" aria-hidden="true" focusable="false">
-              <text class="t-edge" x="90" y="14">over</text>
-              <path d="M4 26h158" /><path class="head" d="M155 21.5l8 4.5-8 4.5z" />
-            </svg>
+            <span class="trade-edge">
+              <span class="trade-edge-word">over</span>
+              <svg class="trade-wire" viewBox="0 0 180 22" aria-hidden="true" focusable="false">
+                <path d="M2 11h170" /><path class="head" d="M168 6.5l9 4.5-9 4.5z" />
+              </svg>
+            </span>
             <span class="trade-b">completeness</span>
           </li>
           <li class="reveal">
             <span class="trade-a">opinion</span>
-            <svg class="trade-wire" viewBox="0 0 180 40" aria-hidden="true" focusable="false">
-              <text class="t-edge" x="90" y="14">over</text>
-              <path d="M4 26h158" /><path class="head" d="M155 21.5l8 4.5-8 4.5z" />
-            </svg>
+            <span class="trade-edge">
+              <span class="trade-edge-word">over</span>
+              <svg class="trade-wire" viewBox="0 0 180 22" aria-hidden="true" focusable="false">
+                <path d="M2 11h170" /><path class="head" d="M168 6.5l9 4.5-9 4.5z" />
+              </svg>
+            </span>
             <span class="trade-b">configurability</span>
           </li>
           <li class="reveal">
             <span class="trade-a">throwaway</span>
-            <svg class="trade-wire" viewBox="0 0 180 40" aria-hidden="true" focusable="false">
-              <text class="t-edge" x="90" y="14">but</text>
-              <path class="dash" d="M4 26h158" /><path class="head" d="M155 21.5l8 4.5-8 4.5z" />
-            </svg>
+            <span class="trade-edge">
+              <span class="trade-edge-word">but</span>
+              <svg class="trade-wire" viewBox="0 0 180 22" aria-hidden="true" focusable="false">
+                <path class="dash" d="M2 11h170" /><path class="head" d="M168 6.5l9 4.5-9 4.5z" />
+              </svg>
+            </span>
             <span class="trade-b">exportable without disappointment</span>
           </li>
         </ul>
@@ -816,76 +822,92 @@
         </header>
 
         <div class="dists">
-          <article class="dist dist-lead reveal" id="web">
-            <p class="dist-kicker">01 · Browser</p>
-            <h3>Open a tab and draw</h3>
-            <p>
-              No account, no sign-up, no trial. Diagrams are saved into this browser's own storage —
-              the body of every one encrypted with a key that never leaves it — and once the page has
-              loaded, it keeps working with the network off.
-            </p>
-            <p class="dist-actions">
-              <a class="button button-primary button-lg" href="./editor/">Open live editor</a>
-            </p>
-            <p class="dist-fine">
-              Per browser and per device. Clearing site data clears your diagrams, so export anything
-              you want to keep.
-            </p>
+          <article class="dist reveal" id="web">
+            <div class="dist-id">
+              <p class="dist-kicker">01 · Browser</p>
+              <h3>Open a tab and draw</h3>
+            </div>
+            <div class="dist-body">
+              <p>
+                No account, no sign-up. Diagrams are saved in this browser's own storage, each one's
+                contents encrypted with a key that never leaves it, and the page keeps working once
+                it has loaded with the network off.
+              </p>
+              <p class="dist-fine">Clearing site data clears your diagrams — export anything you want to keep.</p>
+            </div>
+            <div class="dist-act">
+              <a class="button button-primary" href="./editor/">Open live editor</a>
+            </div>
           </article>
 
           <article class="dist reveal" id="desktop">
-            <p class="dist-kicker">02 · Desktop</p>
-            <h3>A window of its own</h3>
-            <p>
-              A Quick Draft from the menu bar or system tray, and your diagrams as ordinary
-              <code>.draftcanvas</code> files on disk — one file per diagram, folders as projects. It
-              updates itself, and it opens with no network at all.
-            </p>
-            <ul class="targets" id="targets">
-              <li>
-                <a data-slug="macos-arm64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_arm64.dmg">
-                  <strong>macOS</strong><span>Apple silicon · .dmg</span>
-                </a>
-              </li>
-              <li>
-                <a data-slug="macos-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_x64.dmg">
-                  <strong>macOS</strong><span>Intel · .dmg</span>
-                </a>
-              </li>
-              <li>
-                <a data-slug="windows-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___Windows_x64.exe">
-                  <strong>Windows</strong><span>x64 · installer</span>
-                </a>
-              </li>
-            </ul>
-            <p class="dist-fine">
-              Version __VERSION__, the current stable release.
-              <a href="https://github.com/acltabontabon/draft-canvas/releases">All releases</a>, including
-              the alpha channel.
-            </p>
-            <p class="dist-warn">
-              The installers are not code-signed. macOS and Windows will both warn you the first time;
-              <a href="https://github.com/acltabontabon/draft-canvas#desktop">the README says how to get past it</a>.
-            </p>
+            <div class="dist-id">
+              <p class="dist-kicker">02 · Desktop</p>
+              <h3>A window of its own</h3>
+            </div>
+            <div class="dist-body">
+              <p>
+                Your diagrams as ordinary <code>.draftcanvas</code> files on disk, one per diagram and
+                folders as projects, with a Quick Draft from the menu bar or system tray. It updates
+                itself, and opens with no network at all.
+              </p>
+            </div>
+            <div class="dist-act">
+              <details class="downloads" id="downloads">
+                <summary class="button downloads-summary">
+                  <span class="downloads-label">Download desktop</span>
+                  <svg class="downloads-caret" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M4 6.5l4 4 4-4" />
+                  </svg>
+                </summary>
+                <ul class="targets" id="targets">
+                  <li>
+                    <a data-slug="macos-arm64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_arm64.dmg">
+                      <strong>macOS</strong><span>Apple silicon · .dmg</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a data-slug="macos-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_x64.dmg">
+                      <strong>macOS</strong><span>Intel · .dmg</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a data-slug="windows-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___Windows_x64.exe">
+                      <strong>Windows</strong><span>x64 · installer</span>
+                    </a>
+                  </li>
+                </ul>
+              </details>
+              <p class="dist-meta">
+                <span>v__VERSION__ · stable</span>
+                <a href="https://github.com/acltabontabon/draft-canvas/releases">All releases</a>
+              </p>
+            </div>
           </article>
 
           <article class="dist reveal" id="vscode">
-            <p class="dist-kicker">03 · VS Code</p>
-            <h3>Next to the code it describes</h3>
-            <p>
-              Open a <code>.draftcanvas</code> file and you are in the editor, in a tab.
-              <kbd>⌘S</kbd> saves back to that file, so the diagram is reviewed in the same pull
-              request as the change it explains.
-            </p>
-            <p class="dist-actions">
+            <div class="dist-id">
+              <p class="dist-kicker">03 · VS Code</p>
+              <h3>Next to the code it describes</h3>
+            </div>
+            <div class="dist-body">
+              <p>
+                Open a <code>.draftcanvas</code> file from your workspace and you are in the editor, in
+                a tab. <kbd>⌘S</kbd> saves back to that same file, so the diagram is reviewed in the
+                pull request as the change it explains.
+              </p>
+              <p class="dist-fine">The editor loads in the panel, so this one needs a connection.</p>
+            </div>
+            <div class="dist-act">
               <a class="button" href="https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas">Get the extension</a>
-            </p>
-            <p class="dist-fine">
-              The extension loads the hosted editor in its panel, so it needs a connection; the file it
-              reads and writes is the one in your workspace.
-            </p>
+            </div>
           </article>
         </div>
+
+        <p class="dist-note">
+          <strong>Desktop installers are not code-signed.</strong> macOS and Windows warn you the first
+          time — <a href="https://github.com/acltabontabon/draft-canvas#desktop">the README says how to get past it</a>.
+        </p>
 
         <aside class="local reveal">
           <h3>What &ldquo;local-first&rdquo; means here, exactly</h3>
