@@ -4,6 +4,15 @@ All notable changes to Draft Canvas for VS Code are documented here.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-24
+
+### Changed
+
+- Opens the editor at its new address, <https://acltabontabon.com/draft-canvas/editor/>, instead of
+  being forwarded there from the old one. Earlier versions keep working without updating — the old
+  address sends them on — so this only saves the redirect.
+- **Open in Browser** now opens the Draft Canvas home page rather than the editor.
+
 ## [0.1.6] - 2026-09-21
 
 ### Fixed
