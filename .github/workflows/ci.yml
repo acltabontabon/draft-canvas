@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request supersedes the run before it. Runs on main always finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -41,3 +46,24 @@ jobs:
             playwright-report-offline/
             playwright-report-web/
           retention-days: 7
+
+  # The image is otherwise first built at release time (docker-publish.yml), so a broken Dockerfile,
+  # nginx.conf or base-image bump from Dependabot would only surface while publishing. One platform
+  # is enough here: the build stage runs on the build platform either way.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: docker build --tag draft-canvas:ci .
+      - name: The image serves the app
+        run: |
+          docker run --detach --name draft-canvas --publish 8080:80 draft-canvas:ci
+          for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">'
+          asset="$(curl -fsS http://127.0.0.1:8080/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -n 1)"
+          test -n "$asset"
+          curl -fsSI "http://127.0.0.1:8080/$asset" | grep -qi 'cache-control: public, max-age=31536000, immutable'
+          # No SPA fallback: an unknown path is a 404, not index.html (see nginx.conf).
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/nope/deeper)" = 404

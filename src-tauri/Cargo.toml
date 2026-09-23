@@ -4,7 +4,10 @@ name = "draft-canvas"
 version = "0.0.0"
 description = "Draft Canvas Desktop"
 edition = "2021"
-rust-version = "1.77.2"
+# The highest `rust-version` among the locked dependencies (darling, icu_*), so an older toolchain
+# fails up front with a clear message rather than deep in a dependency. CI builds with stable.
+rust-version = "1.88"
+license = "Apache-2.0"
 publish = false
 
 [lib]

@@ -9,6 +9,26 @@ updates:
       minor-and-patch:
         update-types: [minor, patch]
 
+  # The landing page and the VS Code extension each have their own lockfile and only a handful of
+  # dev dependencies, so one grouped PR a month apiece is enough.
+  - package-ecosystem: npm
+    directory: /www
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      site:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /vscode-extension
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      extension:
+        patterns: ['*']
+
   # The desktop app's Rust dependencies. The tauri crate and @tauri-apps/api move together (see
   # scripts/check-desktop-version.mjs), so a bump to one needs the other.
   - package-ecosystem: cargo

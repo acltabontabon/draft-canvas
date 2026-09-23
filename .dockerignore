@@ -1,5 +1,6 @@
 # Rebuilt inside the image
 node_modules
+**/node_modules
 dist
 dist-desktop
 dist-ssr
@@ -23,6 +24,10 @@ benchmark
 demo
 e2e
 vscode-extension
+# The landing page and the assembled Pages deploy are a separate build the image never serves.
+www
+dist-web
+.preview-web
 # The desktop app is built by its own workflow; cargo's target/ alone is gigabytes.
 src-tauri
 .playwright
@@ -30,6 +35,7 @@ test-results
 playwright-report
 playwright-report-offline
 playwright-report-desktop
+playwright-report-web
 coverage
 
 # Secrets never belong in a build context
