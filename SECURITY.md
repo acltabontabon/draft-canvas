@@ -96,6 +96,13 @@ Draft Canvas store them differently, and have their own trust boundaries:
   code-signed or notarized; verify a download against the release's `SHA256SUMS.txt` and build
   attestation. Details: [privacy](docs/reference/privacy.md#the-desktop-app) and
   [Desktop updates](docs/reference/desktop-updates.md).
+- **Desktop AI agents** (off by default) are served over a local socket or named pipe, never a network port.
+  The Unix socket is 0600 in a 0700 folder, with the peer's user id checked; the pipe rejects remote clients.
+  Each connection presents a random token from a 0600 file, compared in constant time and never shown to
+  the web page or logged. An agent reaches only diagrams in the project folders the person ticked, checked
+  on every call and every retry; its input is validated like an imported file. What an agent reads goes to
+  that agent's own model provider — the person's choice, outside Draft Canvas. Details:
+  [Agent integration](docs/reference/agent-integration.md#security).
 - **VS Code** (`vscode-extension/`) doesn't bundle the editor: it frames the hosted one from
   `acltabontabon.com` and hands it one file over `postMessage`. So the code editing your file is what
   that site serves at the time, and it changes only on a Draft Canvas release. The file is plain JSON,

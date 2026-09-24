@@ -138,7 +138,17 @@ Each of these has a failure mode that is silent, delayed, or both.
   same connector. A visual addition to a connector — a badge, a dash pattern, a chip — must be
   made in both, by hand; nothing enforces parity. See `docs/reference/architecture.md`. (Intent
   Continuation's ghost connector in `src/canvas/ContinuationGhost.tsx` is a preview, never
-  exported, and reuses the routing/dash/marker helpers rather than restating them — it is exempt.)
+  exported, and reuses the routing/dash/marker helpers rather than restating them — it is exempt,
+  and so is `src/canvas/AgentPreviewLayer.tsx`, which draws with the same ghost pieces.)
+- **An AI agent's preview never enters the document.** What an agent is preparing is shown from
+  `uiStore.agentPreview` (the provisional layer) and `src/desktop/agentActivity.ts` (the status line
+  and generation view) — never through the editor store, its history or autosave. Only the commit
+  (`host/agentBridge.ts`, one `applyToFile`) or the shell's file write changes a diagram; a preview
+  that reached the document would be saved, undoable and indistinguishable from the real change.
+- **The agent worker must load without a DOM.** `src/agent/worker.ts` shares the renderer's modules,
+  and a dependency that touches `document` as it loads makes the worker fail silently — every request
+  then runs on the main thread and freezes the editor. `workerSafeEntities` in `vite.config.ts` is the
+  one such fix so far; `e2e/desktop/agent-activity.spec.ts` checks the worker is actually used.
 
 ## Architecture
 
@@ -161,7 +171,13 @@ worker.
 `src/takeaways/` sits beside them too (it imports `document/` and `depth/` only) — what the
 discussion produced, derived from the notes already on the canvas plus the document's own
 `actions`; `commands/` and `ui/` consume it. `src/depth/` sits there as well (it imports `document/` only) — the tree of rooms inside shapes and
-the view levels they show; `store/`, `commands/`, `canvas/`, `history/`, `storage/` and `ui/` consume it. The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
+the view levels they show; `store/`, `commands/`, `canvas/`, `history/`, `storage/` and `ui/` consume it. `src/layout/` (it imports `document/` only) is the deterministic layered layout, and `src/agent/` (it imports
+`document/`, `depth/`, `continuation/`, `edges/`, `export/`, `layout/`, `nodes/`, `render/` and `starters/` —
+never React or the store) turns an AI agent's request into a document or a patch; `src/desktop/agent.ts` runs it and
+commits through the store. `src/depth/c4.ts` derives C4 role and scope, shared by both. The agent tool
+schemas are single-sourced in `src/agent/schema.ts`; `src-tauri/mcp/tools.json` is generated from it
+(`npm run agent:schemas`) and a test fails if they drift. An agent's heavy work runs on a worker
+(`src/agent/worker.ts`) — keep `src/agent/` free of anything that touches `document`/`window`. The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
 persistence, the crypto boundary, untrusted input, schema evolution — lives in
 [`docs/reference/architecture.md`](docs/reference/architecture.md). The rules above are the invariants that document
 distills into "never break this"; read that file for *why* each one holds.

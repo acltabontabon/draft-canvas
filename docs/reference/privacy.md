@@ -172,9 +172,18 @@ computer is limited to:
   any file in your user folder. They're removed when you save or discard.
 - **A background image**, if the canvas has one, is written beside the `.draftcanvas` file, as the VS Code
   extension does.
+- **AI agents, only if you turn them on** (Settings → AI agents, off by default). A coding agent on this
+  computer can then list, read, create and change diagrams in the project folders you tick, and no others,
+  through a connector that talks to the app over a user-only local socket or pipe. There is no network port.
+  The app keeps a small request log (`agent/ledger.jsonl`: request ids, fingerprints, receipts and file
+  paths, no diagram content) for 7 days so a retried request isn't applied twice. It also keeps a connection
+  file with a random secret, which is removed when you turn access off. Draft Canvas sends nothing anywhere,
+  but **your agent sends whatever it reads or writes to its own AI provider**, as it does with your code.
+  See [Agent integration](agent-integration.md#security).
 
 It asks for no special permission, and it doesn't watch your keyboard, mouse, screen, other apps or meetings.
-While its window is hidden in the menu bar or tray it does nothing at all. A link in the app (About, for
+While its window is hidden in the menu bar or tray it does nothing at all, unless you turned on AI agents, in
+which case it answers their requests. A link in the app (About, for
 example) opens in your browser, and only `http`, `https` and `mailto` links are ever passed on.
 
 The installers are unsigned: see [Draft Canvas Desktop](../guides/desktop.md#releasing) for what your operating

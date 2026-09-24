@@ -345,13 +345,36 @@ implements that interface with Tauri calls, `src/desktop/tauri/`, and a test fai
 
 The Rust side (`src-tauri/`) is small on purpose. It does what a web page can't: windows, the tray and the
 menu bar, native dialogs, single-instance and file association, and file writes that survive a crash. It never
-sees a diagram's contents as anything but bytes, and the app never holds a path: the shell hands out opaque
+sees a diagram's contents as anything but bytes (apart from the id and title an AI agent's broker reads to
+find diagrams, when agents are turned on), and the app never holds a path: the shell hands out opaque
 handles for files and folders the user picked (or the OS opened) and accepts only those back, so no path that
 didn't come from the user can be read or written.
 
 The browser's storage is untouched. `DraftRepository`, `Autosave` and the encrypted IndexedDB store are the web
 host's, and the desktop app doesn't open them: a file the user picked is only ever written by an explicit
-Save, and unsaved work goes to recovery copies in the app's own data folder.
+Save, and unsaved work goes to recovery copies in the app's own data folder. The one exception is an AI agent
+the person allowed (below), whose change to a document with no unsaved changes is saved for it.
+
+### AI agents
+
+When the person turns it on, the desktop app also answers a local MCP connector (`src-tauri/mcp/`, a separate
+binary an agent launches). The connector forwards tool calls over a user-only socket to a broker in the shell
+(`src-tauri/src/agent/`), which works as follows:
+
+- **Scope.** It checks access and folder scope. For this alone, the shell reads diagrams in the folders the
+  person allowed, as far as their `metadata.id` and title, to find and list them.
+- **Ledger.** It keeps the request ledger that makes retries safe.
+- **Forwarding.** It passes each request to the page as a `HostEvent`.
+- **The gate.** The page must pass a commit gate before it changes anything, so a request that timed out can
+  never be applied late.
+
+The page does the diagram work in `src/agent/` (validation, patching, reads) and `src/layout/` (a deterministic
+layered layout). Heavy work runs on a worker thread, measuring text the way the canvas does. An edit then
+reaches the open document through the same store and undo history as a manual one (`applyToFile`, one undo
+step). A new diagram is written by the shell with `create_new`, so it never replaces a file.
+
+`src/agent/` and `src/layout/` import no React. C4 role and scope are derived by `src/depth/c4.ts`, shared with
+the editor. The design, the guarantees, and what isn't supported: [Agent integration](agent-integration.md).
 
 ---
 

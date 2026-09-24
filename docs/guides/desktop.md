@@ -30,7 +30,8 @@ A diagram is a `.draftcanvas` file, like any other file on your computer.
 - **Open** (`⌘O`), drag a file onto the window, pick one from **Recent**, or double-click it in Finder or
   Explorer. If Draft Canvas is already running, the file opens in the running app.
 - **Save** (`⌘S`) writes the file. Draft Canvas never saves a file you chose behind your back: the status bar says
-  *Unsaved changes* until you do, and asks before closing something unsaved. **Save As…** is `⌘⇧S`.
+  *Unsaved changes* until you do, and asks before closing something unsaved. (The one exception is an
+  [AI agent](connect-an-ai-agent.md) you allowed: its change is saved only when you had no unsaved changes of your own.) **Save As…** is `⌘⇧S`.
   **Revert to Saved…** puts back what is on disk.
 - **New File…** (`⌘⇧N`) asks where the file goes first, then opens it blank.
 - The window title is the file's name, and **Reveal in Finder** / **File Explorer** shows where it is.

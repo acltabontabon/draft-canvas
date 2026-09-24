@@ -27,6 +27,30 @@ and apply to the web app.
 - A note chip on a connector no longer covers the connector's label when the label sits above the
   line.
 
+### Desktop
+
+#### Added
+
+- **AI agents can draw diagrams.** Turn it on in Settings → AI agents, choose the project folders an
+  agent may use, and connect a coding agent such as Claude Code. It describes the system; Draft Canvas
+  lays it out and draws an ordinary diagram you can edit — one undo step per change, never moving what
+  you arranged, and saved for you only when you had nothing unsaved. Off until you turn it on; nothing
+  leaves your computer from Draft Canvas. <!-- highlight -->
+- Follow-ups change the same diagram — add a queue, rename a service, explain something in a note,
+  add a flow — even when you have another one open. A change to a diagram that isn't open is saved to
+  its file without switching what you're looking at, and opening it shows the change as one undo step.
+- "Clean up the layout" re-arranges a diagram in place, keeping every shape, note and flow — the whole
+  diagram or one boundary.
+- Watch an agent work: a line above the status bar says what it is doing, with Cancel; a new diagram
+  can be watched as it is arranged, and a change to the open one is shown faintly on top of it until
+  it is applied.
+- Notes can sit beside a shape, inside a boundary, or be attached to a shape or connector, and flows
+  keep their details when an agent revises them.
+- Diagrams an agent draws read more cleanly: the main path runs straight, retry and dead-letter paths
+  step aside, a retry queue sits right by its worker, and a topic's fan-out is one trunk with one
+  caption.
+- An agent's layout work no longer holds up the editor while it runs.
+
 ## [1.11.1] - 2026-09-24
 
 Big diagrams open in a fraction of the time, and stay quicker to point at once they are open.

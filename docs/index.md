@@ -15,6 +15,7 @@ New here? Start with [Getting started](guides/getting-started.md). It takes a fe
 | [Saving, backing up and sharing](guides/saving-and-sharing.md) | Know what is saved for you, what isn't, and how to move a diagram between browsers |
 | [Working with `.draftcanvas` files in VS Code](guides/vscode.md) | Keep diagrams in your repository and edit them in an editor tab |
 | [Draft Canvas Desktop](guides/desktop.md) | Start a Quick Draft from the menu bar or tray, keep diagrams as files and folders, and build the app |
+| [Connect an AI agent](guides/connect-an-ai-agent.md) | Let a coding agent such as Claude Code draw and revise diagrams in the desktop app |
 
 Inside the app, **Learn Draft Canvas** (in the toolbar's More menu, or `⌘K` and then *Learn*) has short
 animated recipes for individual moves. The guides here are the longer walkthroughs, and Learn is the
@@ -35,6 +36,7 @@ Running your own copy, and installing the VS Code extension, are covered in the
 | [Privacy](reference/privacy.md) | See exactly what is stored, where, and what leaves your machine |
 | [Performance](reference/performance.md) | Read the benchmark methodology and the latest results |
 | [The website](reference/website.md) | Build, preview and deploy the landing page, and see how the editor's move was made safe |
+| [Agent integration](reference/agent-integration.md) | See how the desktop app's MCP connector works: tools, guarantees about retries and saving, layout, C4, security and limits |
 | [Desktop updates](reference/desktop-updates.md) | Set up and check the desktop app's signed updates (maintainers) |
 | [Security](../SECURITY.md) | Read the threat model, key lifecycle and how to report a concern |
 | [Changelog](../CHANGELOG.md) | See what changed in each release |

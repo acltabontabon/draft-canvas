@@ -62,6 +62,7 @@ either one distribution's own shell or tooling around the editor.
 | `src/` | The editor: React + TypeScript, built by Vite. Every distribution runs this code |
 | `src/desktop/` | The desktop app's screens and logic (Home, Browse, updates, the tray panel), compiled out of the web build |
 | `src-tauri/` | The desktop app's native side in Rust (Tauri 2): windows, tray, dialogs, file I/O, updater |
+| `src-tauri/mcp/` | `draft-canvas-mcp`, the MCP connector an AI agent launches; bundled inside the desktop app ([Agent integration](docs/reference/agent-integration.md)) |
 | `vscode-extension/` | Draft Canvas for VS Code: one source file that frames the hosted editor. Own version, changelog and [release process](vscode-extension/RELEASING.md) |
 | `www/` | The landing page at <https://acltabontabon.com/draft-canvas/>: a separate Vite project sharing no dependency with the app ([The website](docs/reference/website.md)) |
 | `tests/` | Vitest unit and integration tests; `tests/desktop/` for the desktop controller |
@@ -94,7 +95,8 @@ Enough to find the right file for a first change. The reasoning behind each boun
 React Flow, and `src/ui/` is everything around the canvas. What a shape looks like is described once,
 in `src/nodes/describe.ts` and `src/render/`, for both the screen and every export. Features that
 reason about a diagram — suggestions (`src/continuation/`), shapes inside shapes (`src/depth/`),
-starters (`src/starters/`) — import only `document/`.
+starters (`src/starters/`) — import only `document/`. AI agents' requests (desktop only) are validated,
+laid out and checked in `src/agent/`, with the layout itself in `src/layout/`; neither imports React.
 
 **Entry points.** `index.html` → `src/main.tsx` → `src/App.tsx`, which has no router: it shows the
 Library (web), Home (desktop), or the editor once a document is open. The desktop app starts with
@@ -131,6 +133,7 @@ reaches the canvas. Files arrive through `src/export/project.ts`.
 | --- | --- |
 | The editor (`src/`) | `npm run e2e` |
 | Anything only the desktop app uses (`src/desktop/`, `src-tauri/`, `tray.html`) | `npm run desktop:check` and `npm run e2e:desktop` |
+| AI agent support (`src/agent/`, `src/layout/`, `src-tauri/src/agent/`, `src-tauri/mcp/`) | The above, plus `npm run agent:schemas` if `src/agent/schema.ts` changed, and `npx tsx e2e/agent-gallery.ts --base <dev server> --out <dir>` to look at the layout gallery in both themes |
 | The landing page (`www/`) or `scripts/assemble-web.mjs` | `npm run e2e:web` |
 | The VS Code extension | In `vscode-extension/`: `npm run compile`, `npx vsce package`, `npm run check:vsix -- <file>.vsix`, and `npm run smoke -- <file>.vsix` (it downloads VS Code) |
 | `Dockerfile`, `nginx.conf` | `docker build .`, then run the image and open it |
