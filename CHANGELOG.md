@@ -12,6 +12,13 @@ and apply to the web app.
 
 ## [Unreleased]
 
+### Shared
+
+#### Fixed
+
+- A note chip on a connector no longer covers the connector's label when the label sits above the
+  line.
+
 ## [1.11.1] - 2026-09-24
 
 Big diagrams open in a fraction of the time, and stay quicker to point at once they are open.

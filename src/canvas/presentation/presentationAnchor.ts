@@ -9,6 +9,7 @@ import type { Box } from '../../presentation/calloutPlacement';
 import {
   ATTACHMENT_ROW_GAP,
   attachmentRowBelowsSourceOrTarget,
+  captionSideOf,
   edgeLabelPoint,
   rectOfInternal,
   type InternalNode,
@@ -52,7 +53,7 @@ export function edgeAnchor(
   const targetRect = rectOfInternal(target, types.get(edge.target));
   if (!sourceRect || !targetRect) return null;
   const labelPoint = edgeLabelPoint(document, edge, sourceRect, targetRect);
-  const preferBelow = attachmentRowBelowsSourceOrTarget(labelPoint.x, labelPoint.y, sourceRect, targetRect);
+  const preferBelow = attachmentRowBelowsSourceOrTarget(labelPoint.x, labelPoint.y, sourceRect, targetRect, captionSideOf(edge, labelPoint.side));
   const box = (rect: Rect): Box => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
   return {
     kind: 'edge',

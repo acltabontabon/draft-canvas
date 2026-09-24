@@ -28,7 +28,7 @@ import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { EdgeLabels } from './EdgeLabels';
-import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, rectOfInternal } from './edgeGeometry';
+import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, captionSideOf, rectOfInternal } from './edgeGeometry';
 import { obstaclesForEdge, withoutNodes } from '../edges/obstacles';
 import { badgeCrowds, badgePoint } from '../edges/badgePoint';
 import { bridgePath } from '../edges/bridge';
@@ -457,7 +457,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, laneOffset);
   const labelX = route.labelX + labelNudge.x;
   const labelY = route.labelY + labelNudge.y;
-  const attachmentFlipBelow = attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect);
+  const attachmentFlipBelow = attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect, captionSideOf(edge, route.labelSide));
 
   const hasLabel = Boolean(edge.label);
   // In a label group, the leader draws the one label at the group's point — along its own live line

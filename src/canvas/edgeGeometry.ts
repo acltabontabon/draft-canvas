@@ -6,7 +6,7 @@
  */
 import type { useInternalNode } from '@xyflow/react';
 import { anchorBandOf } from '../document/queueGeometry';
-import type { DraftEdge, DraftNode, DraftNodeType } from '../document/types';
+import type { DraftEdge, DraftNode, DraftNodeType, Side } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
@@ -46,7 +46,10 @@ export const ATTACHMENT_ROW_GAP = 12;
  */
 const NOMINAL_REACH = 150;
 
-export function attachmentRowBelowsSourceOrTarget(x: number, y: number, sourceRect: Rect, targetRect: Rect): boolean {
+export function attachmentRowBelowsSourceOrTarget(x: number, y: number, sourceRect: Rect, targetRect: Rect, captionSide?: Side): boolean {
+  // Words already above the line own that side: the row hangs below the line instead of on top of
+  // them (a caption placed above a horizontal line was covered by its own connector's chip row).
+  if (captionSide === 'top') return true;
   const bottom = y - ATTACHMENT_ROW_GAP;
   const top = bottom - NOMINAL_REACH;
   const overlapsRect = (rect: Rect) =>
@@ -67,7 +70,7 @@ export function edgeLabelPoint(
   sourceRect: Rect,
   targetRect: Rect,
   { interactionActive = false }: { interactionActive?: boolean } = {},
-): { x: number; y: number } {
+): { x: number; y: number; side: Side } {
   const lane = laneIndex(document.edges).get(edge.id)?.offset ?? 0;
   const route = routeBetween(sourceRect, targetRect, edge.routing, {
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
@@ -78,9 +81,16 @@ export function edgeLabelPoint(
   // A connector sharing one label with others (`edges/labelGroups.ts`) is pointed at where that one
   // label is drawn, not at the spot its own would have taken.
   const shared = interactionActive ? undefined : labelGroupPlan(document.nodes, document.edges).groupFor(edge.id);
-  if (shared) return { x: shared.x, y: shared.y };
+  if (shared) return { x: shared.x, y: shared.y, side: shared.side };
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, lane);
-  return { x: route.labelX + labelNudge.x, y: route.labelY + labelNudge.y };
+  return { x: route.labelX + labelNudge.x, y: route.labelY + labelNudge.y, side: route.labelSide };
+}
+
+/** Which side of its line a connector's label chip sits on, when it has one. A relationship caption
+ *  is not counted: `captionAnchor` draws it below a horizontal line whatever `labelSide` says, so
+ *  sending the chip row below for it would land the row on the caption instead. */
+export function captionSideOf(edge: DraftEdge, labelSide: Side): Side | undefined {
+  return edge.label ? labelSide : undefined;
 }
 
 export interface ScreenRect {
