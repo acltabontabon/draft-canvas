@@ -11,6 +11,7 @@
  */
 
 import type { DraftDocument } from '../document/types';
+import type { Selection } from '../history/HistoryStack';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { fileWithLiveViewport, isInteracting, useEditorStore } from '../store/editorStore';
 
@@ -22,8 +23,9 @@ export type AgentEditorRequest =
   | { kind: 'commit'; expectedRevision: string; file: DraftDocument; label: string };
 
 export type AgentEditorReply =
-  /** `path`: the room the person is looking at (element ids from the top), `[]` at the top. */
-  | { kind: 'snapshot'; file: DraftDocument; revision: string; path: string[]; busy?: string }
+  /** `path`: the room the person is looking at (element ids from the top), `[]` at the top.
+   *  `selection`: what they currently have selected, in that same room — read_selection's source. */
+  | { kind: 'snapshot'; file: DraftDocument; revision: string; path: string[]; selection: Selection; busy?: string }
   | { kind: 'committed'; revision: string }
   | { kind: 'refused'; code: 'REVISION_CONFLICT' | 'BUSY'; revision: string; reason?: string };
 
@@ -43,7 +45,14 @@ export function handleAgentRequest(request: AgentEditorRequest): AgentEditorRepl
   const state = useEditorStore.getState();
   if (request.kind === 'snapshot') {
     const busy = busyReason();
-    return { kind: 'snapshot', file: fileWithLiveViewport(state), revision: currentRevision(), path: [...state.path], ...(busy ? { busy } : {}) };
+    return {
+      kind: 'snapshot',
+      file: fileWithLiveViewport(state),
+      revision: currentRevision(),
+      path: [...state.path],
+      selection: { nodes: [...state.selection.nodes], edges: [...state.selection.edges] },
+      ...(busy ? { busy } : {}),
+    };
   }
   const revision = currentRevision();
   if (request.expectedRevision !== revision) return { kind: 'refused', code: 'REVISION_CONFLICT', revision };

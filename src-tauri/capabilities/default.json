@@ -52,6 +52,10 @@
     "allow-agent-progress",
     "allow-agent-respond",
     "allow-agent-status",
-    "allow-agent-configure"
+    "allow-agent-configure",
+    "allow-agent-proposal-list",
+    "allow-agent-proposal-get",
+    "allow-agent-proposal-begin-accept",
+    "allow-agent-proposal-resolve"
   ]
 }

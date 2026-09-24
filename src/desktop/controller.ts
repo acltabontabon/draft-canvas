@@ -11,6 +11,8 @@ import { loadStarters } from '../starters/load';
 import {
   DesktopError,
   type AgentPatch,
+  type Proposal,
+  type ProposalAction,
   type DesktopApi,
   type DocState,
   type Handle,
@@ -1334,6 +1336,38 @@ export class DesktopController {
       logDiagnostic(error, { operation: 'desktop-agent-configure' });
       this.ui.notify(`Couldn’t change agent access: ${describe(error)}`);
     }
+  }
+
+  // ─── Proposal review (`src/ui/Editor/ProposalPanel.tsx`) ───────────────────────────────────────
+  // Thin pass-throughs, not store-backed: a proposal's own lifecycle lives in `proposals.rs`, read
+  // fresh by the panel each time rather than mirrored into desktop store state.
+
+  async listProposals(diagramId?: string): Promise<Proposal[]> {
+    try {
+      return await this.api.agentProposalList(diagramId);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-agent-proposal-list' });
+      return [];
+    }
+  }
+
+  async getProposal(id: string): Promise<Proposal | null> {
+    try {
+      return await this.api.agentProposalGet(id);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-agent-proposal-get' });
+      return null;
+    }
+  }
+
+  /** Durably records `pending → accepting` before any document commit is attempted. The caller
+   *  (`ProposalPanel`) is the one place that goes on to actually commit — never this method. */
+  beginAcceptProposal(id: string, version: number, diagramId: string, path: string[]): Promise<ProposalAction> {
+    return this.api.agentProposalBeginAccept(id, version, diagramId, path);
+  }
+
+  resolveProposal(id: string, status: 'accepted' | 'rejected' | 'dismissed'): Promise<ProposalAction> {
+    return this.api.agentProposalResolve(id, status);
   }
 
   // ─── Updates ────────────────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import {
   type FileFilter,
   type HostEvent,
   type OpenedDoc,
+  type Proposal,
   type ProjectInfo,
   type QuitDecision,
   type RecentItem,
@@ -54,6 +55,9 @@ export function createHarness() {
     /** Stage phrases the page passed on for the requesting agent. */
     progress: [] as { id: number; message: string }[],
     responses: new Map<number, unknown>(),
+    /** In-memory stand-in for `proposals.rs`: enough of its rules (idempotent resolve, wrong-stage,
+     *  version/identity check at accept) to drive `ProposalPanel` through a real round trip in tests. */
+    proposals: new Map<string, Proposal>(),
     settings: {
       enabled: false,
       listening: false,
@@ -301,6 +305,35 @@ export function createHarness() {
     agentRespond: vi.fn(async (id: number, outcome: unknown) => void agent.responses.set(id, outcome)),
     agentStatus: vi.fn(async () => agent.settings),
     agentConfigure: vi.fn(async () => agent.settings),
+    agentProposalList: vi.fn(async (diagramId?: string) => {
+      const all = [...agent.proposals.values()].filter((p) => diagramId === undefined || p.diagramId === diagramId);
+      return all.sort((a, b) => b.updatedAt - a.updatedAt);
+    }),
+    agentProposalGet: vi.fn(async (id: string) => agent.proposals.get(id) ?? null),
+    agentProposalBeginAccept: vi.fn(async (id: string, version: number, diagramId: string, path: string[]) => {
+      const proposal = agent.proposals.get(id);
+      if (!proposal) return { ok: false, code: 'NOT_FOUND' } as const;
+      if (proposal.status !== 'pending' && proposal.status !== 'accepting') return { ok: false, code: 'WRONG_STAGE', status: proposal.status } as const;
+      if (proposal.version !== version || proposal.diagramId !== diagramId || JSON.stringify(proposal.path) !== JSON.stringify(path)) {
+        return { ok: false, code: 'PROPOSAL_CHANGED', proposal } as const;
+      }
+      const next = { ...proposal, status: 'accepting' as const };
+      agent.proposals.set(id, next);
+      return { ok: true, proposal: next } as const;
+    }),
+    agentProposalResolve: vi.fn(async (id: string, status: 'accepted' | 'rejected' | 'dismissed') => {
+      const proposal = agent.proposals.get(id);
+      if (!proposal) return { ok: false, code: 'NOT_FOUND' } as const;
+      if (proposal.status === status) return { ok: true, proposal } as const;
+      const terminal = new Set(['accepted', 'rejected', 'dismissed', 'informational', 'accept-failed']);
+      if (terminal.has(proposal.status)) return { ok: false, code: 'ALREADY_RESOLVED', status: proposal.status } as const;
+      const valid =
+        (proposal.status === 'accepting' && (status === 'accepted' || status === 'dismissed')) || (proposal.status === 'pending' && (status === 'rejected' || status === 'dismissed'));
+      if (!valid) return { ok: false, code: 'WRONG_STAGE', status: proposal.status } as const;
+      const next = { ...proposal, status, resolvedAt: Date.now() };
+      agent.proposals.set(id, next);
+      return { ok: true, proposal: next } as const;
+    }),
   } satisfies DesktopApi;
 
   const link: HostLink = {

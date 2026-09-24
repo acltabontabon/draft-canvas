@@ -3580,6 +3580,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   background: var(--dc-selection-soft);
 }
 
+/* A named variant (e.g. a failure path) sits right under its base flow, indented rather than
+   given a whole second visual system — it's still just a flow, only related to another one. */
+.dc-flow-picker-item-variant {
+  padding-left: 24px;
+}
+
 /* The position in the running order, swapped for a tick on the one being presented — so the list
    doubles as the answer to "where am I?" and not only "where could I go?". */
 .dc-flow-picker-mark {
@@ -3679,6 +3685,180 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 .dc-flow-panel-header strong {
   font-size: 13px;
+}
+
+/* Proposal review (`desktop/ui/ProposalPanel.tsx`, desktop only) — bottom-right, so it never
+   overlaps the Flows panel above it. */
+.dc-proposal-badge {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: var(--dc-z-chrome);
+  padding: 7px 14px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font-size: 13px;
+  box-shadow: var(--dc-shadow-panel);
+  cursor: pointer;
+}
+
+.dc-proposal-badge:hover {
+  background: var(--dc-surface-hover);
+}
+
+.dc-proposal-panel {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: var(--dc-z-chrome);
+  display: flex;
+  flex-direction: column;
+  width: min(360px, calc(100% - 24px));
+  max-height: min(560px, calc(100% - 24px));
+  overflow: auto;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-lg);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  padding-bottom: 8px;
+}
+
+.dc-proposal-panel-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 8px 10px 14px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-proposal-empty {
+  padding: 12px 14px;
+}
+
+.dc-proposal-list {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-proposal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-proposal-row:hover,
+.dc-proposal-row[data-selected='true'] {
+  background: var(--dc-surface-hover);
+}
+
+.dc-proposal-status {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.dc-proposal-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 0;
+  font-size: 13px;
+}
+
+.dc-proposal-list-block ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.dc-proposal-banner {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--dc-radius);
+  font-size: 12px;
+}
+
+.dc-proposal-banner-stale {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+}
+
+.dc-proposal-banner-conflict {
+  background: color-mix(in srgb, var(--dc-danger) 14%, transparent);
+  color: var(--dc-danger);
+}
+
+.dc-proposal-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-proposal-diff-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--dc-border-strong);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface-raised);
+}
+
+.dc-proposal-diff-added {
+  border-left-color: var(--dc-selection);
+}
+
+.dc-proposal-diff-removed {
+  border-left-color: var(--dc-danger);
+}
+
+.dc-proposal-diff-change {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--dc-text-muted);
+}
+
+.dc-proposal-diff-label {
+  font-weight: 500;
+}
+
+.dc-proposal-diff-fields {
+  margin: 2px 0 0;
+  padding-left: 14px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-proposal-diff-before {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.dc-proposal-diff-after {
+  color: var(--dc-text);
+}
+
+.dc-proposal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 14px 12px;
 }
 
 /* Learn's "?" — a quiet way into one recipe from a dense control (`ui/learn/LearnLink.tsx`). Styled

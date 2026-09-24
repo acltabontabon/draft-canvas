@@ -16,7 +16,7 @@ import { withDeadline } from './route';
 
 export type Job =
   | { kind: 'compose'; raw: unknown; diagramId: string }
-  | { kind: 'update'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown };
+  | { kind: 'update'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown; scope?: unknown };
 
 export type JobResult =
   | { kind: 'compose'; composed: Composed }
@@ -41,7 +41,7 @@ export function runJob(job: Job, deadline: number, report: Report = silent): Job
   if (job.kind === 'compose') return { kind: 'compose', composed: compose(job.raw, job.diagramId, { deadline, report }) };
   return withDeadline(deadline, () => {
     report('preparing');
-    const result = applyUpdate(job.file, job.path, job.ops, job.layout);
+    const result = applyUpdate(job.file, job.path, job.ops, job.layout, job.scope);
     const view = viewOf(result.file, job.path);
     // The edited view whole, as it would be committed: what the preview shows while it is checked.
     if (view && result.file !== job.file) report('routing', { nodes: view.nodes, edges: view.edges, flows: view.flows });

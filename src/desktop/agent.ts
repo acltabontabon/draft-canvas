@@ -33,6 +33,9 @@ import type { JobResult } from '../agent/jobs';
 import { runOffThread, type Progress } from '../agent/offThread';
 import { STAGE_TEXT } from '../agent/progress';
 import { readDiagram, viewPathOf } from '../agent/read';
+import { buildImplementationContext } from '../agent/context';
+import { prepareProposal } from '../agent/proposal';
+import { readSelectionContext } from '../agent/selection';
 import { viewOf } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 import { deserializeDocument } from '../export/project';
@@ -140,6 +143,10 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
       return capabilities(args);
     case 'read_diagram':
       return read(host, args, context);
+    case 'read_selection':
+      return readSelection(host, context);
+    case 'get_implementation_context':
+      return implementationContext(host, args, context);
     case 'active_context':
       return activeContext(host);
     case 'create_diagram': {
@@ -165,6 +172,8 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
       });
     case 'update_diagram':
       return host.inTurn(() => update(api, host, event));
+    case 'submit_proposal':
+      return host.inTurn(() => submitProposal(host, event));
     default:
       throw new AgentError('UNSUPPORTED', `Draft Canvas doesn't know the tool ${event.tool}.`);
   }
@@ -184,6 +193,37 @@ async function read(host: AgentHost, args: Record<string, unknown>, context: Age
   const parsed = deserializeDocument(context.text);
   if (!parsed.ok) throw new AgentError('UNSUPPORTED', `That file can't be read as a diagram: ${parsed.error}`);
   return readDiagram(parsed.document, args, fileRevision(context.stamp), diagramId);
+}
+
+async function implementationContext(host: AgentHost, args: Record<string, unknown>, context: AgentContext) {
+  const diagramId = context.diagramId ?? '';
+  const focus = (args.focus ?? {}) as { flow?: unknown; nodes?: unknown };
+  if (context.open) {
+    const snapshot = await host.inTurn(async () => {
+      await host.flush();
+      return host.askEditor({ kind: 'snapshot' });
+    });
+    if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
+    const path = viewPathOf(snapshot.file, args.view);
+    return buildImplementationContext(snapshot.file, path, revisionOfOpen(host, snapshot.revision), diagramId, focus);
+  }
+  if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
+  const parsed = deserializeDocument(context.text);
+  if (!parsed.ok) throw new AgentError('UNSUPPORTED', `That file can't be read as a diagram: ${parsed.error}`);
+  const path = viewPathOf(parsed.document, args.view);
+  return buildImplementationContext(parsed.document, path, fileRevision(context.stamp), diagramId, focus);
+}
+
+/** Only the open diagram has a selection; the broker already refused otherwise via `context.open`. */
+async function readSelection(host: AgentHost, context: AgentContext) {
+  const diagramId = context.diagramId ?? '';
+  if (!context.open) throw new AgentError('NOT_ACTIVE', 'That diagram is not open, so nothing is selected.', { hint: 'Ask the person to open it and select what to change, or read the whole view with read_diagram.' });
+  const snapshot = await host.inTurn(async () => {
+    await host.flush();
+    return host.askEditor({ kind: 'snapshot' });
+  });
+  if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
+  return readSelectionContext(snapshot.file, snapshot.path, snapshot.selection, revisionOfOpen(host, snapshot.revision), diagramId);
 }
 
 /**
@@ -280,7 +320,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
   // in the meantime turns this into a conflict rather than being overwritten.
   const path = viewPathOf(snapshot.file, args.view);
   agentActivity.begin({ id: event.id, tool: 'update_diagram', title: snapshot.file.metadata.title, target: 'open', path });
-  const result = await runOffThread({ kind: 'update', file: snapshot.file, path, ops: args.ops, layout: args.layout }, progressOf(api, event.id));
+  const result = await runOffThread({ kind: 'update', file: snapshot.file, path, ops: args.ops, layout: args.layout, scope: args.scope }, progressOf(api, event.id));
   if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
   if (result.problems.length) throw layoutConstrained(result);
   const title = result.file.metadata.title;
@@ -333,7 +373,7 @@ async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expe
 
   const path = viewPathOf(parsed.document, args.view);
   agentActivity.begin({ id: event.id, tool: 'update_diagram', title: parsed.document.metadata.title, target: 'file', path });
-  const result = await runOffThread({ kind: 'update', file: parsed.document, path, ops: args.ops, layout: args.layout }, progressOf(api, event.id));
+  const result = await runOffThread({ kind: 'update', file: parsed.document, path, ops: args.ops, layout: args.layout, scope: args.scope }, progressOf(api, event.id));
   if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
   if (result.problems.length) throw layoutConstrained(result);
   const title = result.file.metadata.title;
@@ -345,4 +385,62 @@ async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expe
   rememberPendingWrite(event.id, { title, before: context.text, after: text });
   // `write` is the shell's to carry out; it fills in the new revision and removes `write` itself.
   return { ...base, applied: true, where: 'file', undo: 'on-open', ...receiptCounts(result), write: { text } };
+}
+
+/**
+ * `submit_proposal`: validates a batch of ops against the current document (open or not) exactly as
+ * `update_diagram` would, but never commits — it hands the broker everything needed to persist a
+ * `Proposal` for later native review (Phase 4b), and never reaches `passGate`/the commit path at all.
+ * An empty `ops` is a "no architectural impact" finding, not an error.
+ */
+async function submitProposal(host: AgentHost, event: Request) {
+  const { args, context } = event;
+  const expected = typeof args.expectedRevision === 'string' ? args.expectedRevision : undefined;
+  if (!expected) throw new AgentError('INVALID_INPUT', 'expectedRevision is required: the revision from your last read or receipt.', { path: '/expectedRevision' });
+  const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
+  if (!summary) throw new AgentError('INVALID_INPUT', 'summary is required: what this proposal does, or why it has no architectural impact.', { path: '/summary' });
+
+  let file: DraftDocument;
+  let revision: string;
+  if (context.open) {
+    const snapshot = await host.inTurn(async () => {
+      await host.flush();
+      return host.askEditor({ kind: 'snapshot' });
+    });
+    if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
+    file = snapshot.file;
+    revision = revisionOfOpen(host, snapshot.revision);
+  } else {
+    if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
+    const parsed = deserializeDocument(context.text);
+    if (!parsed.ok) throw new AgentError('UNSUPPORTED', `That file can't be read as a diagram: ${parsed.error}`);
+    file = parsed.document;
+    revision = fileRevision(context.stamp);
+  }
+  if (expected !== revision) throw conflict(revision);
+
+  const path = viewPathOf(file, args.view);
+  const opsGiven = Array.isArray(args.ops) ? args.ops : [];
+  const noImpact = opsGiven.length === 0;
+  // Not committed, ever: `applyUpdate`'s resulting file is discarded here — only its validation,
+  // counts and preconditions survive, to be persisted as the proposal (see broker.rs).
+  const prepared = noImpact ? { counts: { added: 0, updated: 0, removed: 0 }, advisories: [], preconditions: { nodes: {}, edges: {} } } : prepareProposal(file, path, args.ops, args.layout, args.scope);
+
+  return {
+    diagramId: context.diagramId,
+    path: [...path],
+    baseRevision: revision,
+    ops: opsGiven,
+    layout: args.layout ?? null,
+    scope: args.scope ?? null,
+    noImpact,
+    counts: prepared.counts,
+    advisories: prepared.advisories,
+    preconditions: prepared.preconditions,
+    summary,
+    rationale: typeof args.rationale === 'string' ? args.rationale : '',
+    assumptions: Array.isArray(args.assumptions) ? args.assumptions.filter((a): a is string => typeof a === 'string') : [],
+    openQuestions: Array.isArray(args.openQuestions) ? args.openQuestions.filter((a): a is string => typeof a === 'string') : [],
+    sourceRef: args.sourceRef ?? null,
+  };
 }

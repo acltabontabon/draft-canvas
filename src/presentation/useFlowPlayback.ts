@@ -225,14 +225,25 @@ export function useFlowPlayback(): FlowPlaybackController {
       const { document } = useEditorStore.getState();
       const chosen = findFlow(document, flowId);
       if (!chosen || !flowIsPlayable(document, chosen)) return;
-      setFlowPlayback({ active: true, flowId, step: 1 });
+      // Switching to or from a named variant (e.g. a failure path) lands on the step sharing the
+      // connector being left, rather than always resetting to the first step — matched by the two
+      // flows actually sharing a connector, never by index: nothing says step 3 of one flow is the
+      // same moment as step 3 of another. Any other switch (including between two unrelated flows)
+      // keeps the original, simpler behaviour of always starting at step 1.
+      const isVariantSwitch = flow !== null && (chosen.variantOf === flow.id || flow.variantOf === chosen.id);
+      const leavingEdgeId = current?.edge?.id;
+      const matchedIndex = isVariantSwitch && leavingEdgeId ? chosen.steps.findIndex((s) => s.edgeId === leavingEdgeId) : -1;
+      setFlowPlayback({ active: true, flowId, step: matchedIndex >= 0 ? matchedIndex + 1 : 1 });
       // Canvas step badges follow whichever flow is being presented.
       useEditorStore.getState().setSelectedFlowId(flowId);
       // `steps` lags one render behind the store update above, so the first
       // step is resolved by hand rather than read from it.
       const edgesById = new Map(document.edges.map((e) => [e.id, e]));
       const nodesById = new Map(document.nodes.map((n) => [n.id, n]));
-      for (const stepEntry of chosen.steps) {
+      // The matched step first (the camera should land where the story continues), the natural
+      // order after — the original fallback search for whichever step actually resolves.
+      const candidates = matchedIndex >= 0 ? [chosen.steps[matchedIndex]!, ...chosen.steps] : chosen.steps;
+      for (const stepEntry of candidates) {
         const resolved = resolveFlowStep(stepEntry, 0, 1, edgesById, nodesById);
         if (resolved) {
           focusOn(resolved);
@@ -240,7 +251,7 @@ export function useFlowPlayback(): FlowPlaybackController {
         }
       }
     },
-    [focusOn, setFlowPlayback],
+    [current, flow, focusOn, setFlowPlayback],
   );
 
   const start = useCallback(() => {

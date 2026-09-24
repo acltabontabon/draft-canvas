@@ -728,15 +728,23 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   if (rawFlows.length > flowAllowance) {
     repairs.push(`${here} had too many flows; kept the first ${flowAllowance}.`);
   }
+  // A raw `variantOf` names another flow by its *authored* id, which may not survive (a duplicate is
+  // reassigned above just like any other id) — resolved against this once every flow in the room has
+  // its final id, so the hub-and-spoke check below sees the same ids the rest of the file will.
+  const flowIdRemap = new Map<string, string>();
+  const pendingVariantOf = new Map<string, string>();
 
   for (const candidateFlow of rawFlows.slice(0, flowAllowance)) {
     if (!isRecord(candidateFlow)) {
       droppedFlows += 1;
       continue;
     }
+    const rawId = typeof candidateFlow.id === 'string' ? candidateFlow.id : undefined;
     let id = safeId(candidateFlow.id) ?? createId('f');
     if (seenFlowIds.has(id)) id = createId('f');
     seenFlowIds.add(id);
+    if (rawId) flowIdRemap.set(rawId, id);
+    if (typeof candidateFlow.variantOf === 'string') pendingVariantOf.set(id, candidateFlow.variantOf);
     const title = text(candidateFlow.title, LIMITS.maxFlowTitleLength)?.trim() || 'Untitled flow';
     // Same discipline as a node/edge's own accent: absent or unrecognised
     // stays absent rather than being coerced to a fallback.
@@ -811,6 +819,19 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     if (flowAccent !== undefined) flow.accent = flowAccent;
     flows.push(flow);
   }
+
+  // Hub-and-spoke, enforced by construction rather than a cycle walk: a variant's target may never
+  // itself be a variant. Resolved in array order, so of two flows each naming the other, only the
+  // first to be processed keeps its `variantOf` — the second's target has one by the time it's checked.
+  const flowsById = new Map(flows.map((f) => [f.id, f]));
+  let droppedVariantOf = 0;
+  for (const [flowId, rawVariantOf] of pendingVariantOf) {
+    const targetId = flowIdRemap.get(rawVariantOf) ?? rawVariantOf;
+    const target = targetId === flowId ? undefined : flowsById.get(targetId);
+    if (target && target.variantOf === undefined) flowsById.get(flowId)!.variantOf = targetId;
+    else droppedVariantOf += 1;
+  }
+  if (droppedVariantOf > 0) repairs.push(`Dropped ${droppedVariantOf} flow variant link(s) that pointed at itself, at another variant, or at nothing.`);
 
   if (droppedFlows > 0) repairs.push(`Dropped ${droppedFlows} unreadable flow(s).`);
   if (droppedFlowSteps > 0) {

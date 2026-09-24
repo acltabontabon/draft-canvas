@@ -99,6 +99,9 @@ export interface FlowSpec {
   id: string;
   title: string;
   color?: Accent;
+  /** The flow this is a named alternative telling of (e.g. a failure path) — see `setFlowVariantOf`
+   *  for the hub-and-spoke rule this must still pass once the whole room has been read. */
+  variantOf?: string;
   steps: { relationship: string; caption?: string }[];
 }
 
@@ -483,6 +486,9 @@ export function readFlow(r: Reader, item: Json, at: string, taken: Set<string> |
   const id = taken ? r.newId(item.id, `${at}/id`, taken) : typeof item.id === 'string' ? item.id : undefined;
   const title = r.text(item.title, `${at}/title`, AGENT_LIMITS.flowTitleLength, { required: true, singleLine: true });
   const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
+  // Hub-and-spoke enforcement itself happens once the whole room is assembled (`setFlowVariantOf`
+  // needs to see every flow's final id and existing links); here it's only read through as a string.
+  const variantOf = typeof item.variantOf === 'string' ? item.variantOf : undefined;
   const steps: FlowSpec['steps'] = [];
   const seen = new Set<string>();
   r.array(item.steps, `${at}/steps`, AGENT_LIMITS.stepsPerFlow).forEach((s, j) => {
@@ -505,7 +511,7 @@ export function readFlow(r: Reader, item: Json, at: string, taken: Set<string> |
     steps.push({ relationship, ...(caption ? { caption } : {}) });
   });
   if (!id || !title) return undefined;
-  return { id, title, ...(color ? { color } : {}), steps };
+  return { id, title, ...(color ? { color } : {}), ...(variantOf ? { variantOf } : {}), steps };
 }
 
 export function readActions(r: Reader, value: unknown, path: string, taken: Set<string>, anchorable: Set<string>): ActionSpec[] {

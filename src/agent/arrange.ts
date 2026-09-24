@@ -91,7 +91,7 @@ export function readingDirectionOf(view: DraftDocument): 'right' | 'down' {
 }
 
 /** Ids a scope covers: a group and everything inside it, listed shapes (a listed group with its contents), or all. */
-function scopeOf(view: DraftDocument, scope: ArrangeRequest['scope']): Set<string> {
+export function scopeOf(view: DraftDocument, scope: ArrangeRequest['scope']): Set<string> {
   const byId = new Map(view.nodes.map((n) => [n.id, n]));
   const within = (node: DraftNode, roots: ReadonlySet<string>) => {
     const seen = new Set<string>();

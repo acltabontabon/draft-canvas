@@ -230,6 +230,10 @@ export interface UiStore {
   presentationReveal: PresentationReveal | null;
   /** Whether the Flows panel — the one surface for flows (`FlowPanel.tsx`) — is visible. */
   flowPanelOpen: boolean;
+  /** Whether the proposal review panel (`desktop/ui/ProposalPanel.tsx`, desktop only) is open, and
+   *  which proposal it's showing — `null` shows the list for the current diagram. */
+  proposalPanelOpen: boolean;
+  proposalPanelId: string | null;
   /**
    * Whether the Takeaways surface (`TakeawaysPanel.tsx`) is showing, and which of its two faces.
    * `'actions'` is the working list during the meeting; `'readout'` is everything the discussion
@@ -432,6 +436,8 @@ export interface UiStore {
   setPresentationReveal: (target: PresentationReveal | null) => void;
   setFlowPanelOpen: (open: boolean) => void;
   requestFlowRename: (flowId: string | null) => void;
+  /** Opens the proposal panel (optionally straight to one proposal), or closes it. */
+  setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
   /** Opens Takeaways on one of its two faces, or closes it. */
   setTakeawaysOpen: (open: boolean, view?: 'actions' | 'readout') => void;
   setTakeawaysView: (view: 'actions' | 'readout') => void;
@@ -544,6 +550,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   openAttachmentDetail: null,
   presentationReveal: null,
   flowPanelOpen: false,
+  proposalPanelOpen: false,
+  proposalPanelId: null,
   flowRenameRequestId: null,
   takeawaysOpen: false,
   takeawaysView: 'actions',
@@ -633,6 +641,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
+  setProposalPanelOpen: (proposalPanelOpen, proposalId = null) => set({ proposalPanelOpen, proposalPanelId: proposalPanelOpen ? proposalId : null }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
   // Opening Takeaways, or the capture line, by any route means the arrival note has done its job —
   // it exists to teach where they live — and both are drawn over the very corner it hangs in, so

@@ -8,6 +8,7 @@
 
 use super::ledger::{Begin, Entry, Stage};
 use super::page::{Budgets, Failure};
+use super::proposals::{Proposal, ProposalStatus};
 use super::scope::{self, enabled_projects, in_scope, Diagram, Lookup, Project};
 use super::{Agent, InflightGuard};
 use crate::docio::{
@@ -19,6 +20,7 @@ use crate::util::now_ms;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
@@ -74,8 +76,13 @@ const TOOLS: &[&str] = &[
     "get_capabilities",
     "list_diagrams",
     "read_diagram",
+    "read_selection",
+    "get_implementation_context",
     "create_diagram",
     "update_diagram",
+    "submit_proposal",
+    "get_proposal",
+    "list_proposals",
 ];
 
 /// The whole request, as stored for comparison: keys sorted at every level, `requestId` left out
@@ -150,8 +157,15 @@ pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) 
         "get_capabilities" => to_page(agent, &app, tool, &args, json!({}), calls).await,
         "list_diagrams" => list(agent, &app, &projects, &args, calls).await,
         "read_diagram" => read(agent, &app, &projects, &args, calls).await,
+        "read_selection" => read_selection(agent, &app, &projects, &args, calls).await,
+        "get_implementation_context" => {
+            implementation_context(agent, &app, &projects, &args, calls).await
+        }
         "create_diagram" => create(agent, &app, &projects, &args, calls).await,
         "update_diagram" => update(agent, &app, &projects, &args, calls).await,
+        "submit_proposal" => submit_proposal(agent, &app, &projects, &args, calls).await,
+        "get_proposal" => get_proposal(agent, &projects, &args),
+        "list_proposals" => list_proposals(agent, &projects, &args),
         _ => unreachable!(),
     }
 }
@@ -508,6 +522,8 @@ fn page_error(error: Option<&Value>) -> ToolError {
         "LAYOUT_FAILED",
         "LAYOUT_CONSTRAINED",
         "DUPLICATE_FLOW",
+        "OUT_OF_SCOPE",
+        "SCOPE_TARGET_MISSING",
         "CANCELLED",
         "NOT_ACTIVE",
         "DOCUMENT_BUSY",
@@ -587,6 +603,49 @@ async fn read(
     let diagram = locate(agent, projects, &id)?;
     let context = diagram_context(agent, &diagram, true)?;
     to_page(agent, app, "read_diagram", args, context, calls).await
+}
+
+// ─── read_selection ─────────────────────────────────────────────────────────────────────────────
+
+/// Only the diagram open in Draft Canvas right now has a selection at all; the page refuses
+/// (`NOT_ACTIVE`) when `context.open` says otherwise, so this doesn't need `diagram_context`'s
+/// on-disk text — nothing here is read from a closed file.
+async fn read_selection(
+    agent: &Agent,
+    app: &AppHandle,
+    projects: &[Project],
+    args: &Value,
+    calls: &CallRegistry,
+) -> ToolResult {
+    let id = diagram_id(args)?;
+    let diagram = locate(agent, projects, &id)?;
+    let context = diagram_context(agent, &diagram, false)?;
+    to_page(agent, app, "read_selection", args, context, calls).await
+}
+
+// ─── get_implementation_context ────────────────────────────────────────────────────────────────
+
+/// Read-only, and works on a closed diagram too (unlike `read_selection`) — reuses `diagram_context`'s
+/// on-disk text the same way `read_diagram` does.
+async fn implementation_context(
+    agent: &Agent,
+    app: &AppHandle,
+    projects: &[Project],
+    args: &Value,
+    calls: &CallRegistry,
+) -> ToolResult {
+    let id = diagram_id(args)?;
+    let diagram = locate(agent, projects, &id)?;
+    let context = diagram_context(agent, &diagram, true)?;
+    to_page(
+        agent,
+        app,
+        "get_implementation_context",
+        args,
+        context,
+        calls,
+    )
+    .await
 }
 
 // ─── create_diagram ─────────────────────────────────────────────────────────────────────────────
@@ -1135,6 +1194,293 @@ fn write_in_background(
     }
 }
 
+// ─── submit_proposal, get_proposal, list_proposals ─────────────────────────────────────────────────
+//
+// A proposal is never committed from this module — the page's `submit_proposal` handler only
+// validates and dry-runs (see `src/agent/proposal.ts`), and resolving one (accept/reject/dismiss) is
+// a Tauri command the review UI calls directly (Phase 4b's `agent_proposal_resolve`), never a tool in
+// `TOOLS` above and never reachable from `call()`'s dispatch — there is no wire path for an MCP
+// client to reach it, not merely an unadvertised one.
+
+async fn submit_proposal(
+    agent: &Agent,
+    app: &AppHandle,
+    projects: &[Project],
+    args: &Value,
+    calls: &CallRegistry,
+) -> ToolResult {
+    let id = diagram_id(args)?;
+    let diagram = locate(agent, projects, &id)?;
+
+    let admission = admit(agent, "submit_proposal", args, projects, |entry| {
+        recover_submit_proposal(agent, entry)
+    })
+    .await?;
+    let (key, fp, _guard) = match admission {
+        Admission::Replay(receipt) => return Ok(receipt),
+        Admission::Go { key, fp, guard } => (key, fp, guard),
+    };
+
+    // A revise is only ever checked here, on a *fresh* admission — a replay above already returned
+    // the original call's own receipt, whatever the proposal's status has become since.
+    let revises = args
+        .get("revises")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let existing = match &revises {
+        Some(rid) => {
+            match agent.with_proposals(|s| s.get(rid).cloned()).flatten() {
+                None => {
+                    let e = ToolError::new("NOT_FOUND", format!("No proposal with id {rid}."));
+                    fail(agent, &key, &e);
+                    return Err(e);
+                }
+                Some(p) if p.status != ProposalStatus::Pending => {
+                    let e = ToolError::new(
+                    "PROPOSAL_CLOSED",
+                    format!("That proposal is already {:?}; submit a new one instead of revising it.", p.status),
+                );
+                    fail(agent, &key, &e);
+                    return Err(e);
+                }
+                Some(p) => Some(p),
+            }
+        }
+        None => None,
+    };
+
+    // Minted (or reused, for a revise) before the page round-trip: the evidence a crash recovery
+    // looks for, the same discipline `create_diagram` uses for its own minted id (see `recover_create`).
+    let proposal_id = revises
+        .clone()
+        .unwrap_or_else(|| format!("p_{}", &uuid::Uuid::new_v4().simple().to_string()[..12]));
+    record(
+        agent,
+        Entry {
+            key: key.clone(),
+            tool: "submit_proposal".into(),
+            fingerprint: fp,
+            stage: Stage::Pending,
+            at: now_ms(),
+            diagram_id: Some(proposal_id.clone()),
+            path: Some(diagram.absolute.to_string_lossy().into()),
+            receipt: None,
+        },
+    )?;
+
+    let context = diagram_context(agent, &diagram, true)?;
+    let composed = match to_page(agent, app, "submit_proposal", args, context, calls).await {
+        Ok(v) => v,
+        Err(e) => {
+            fail(agent, &key, &e);
+            return Err(e);
+        }
+    };
+
+    let now = now_ms();
+    let version = existing.as_ref().map_or(1, |p| p.version + 1);
+    let created_at = existing.as_ref().map_or(now, |p| p.created_at);
+    let no_impact = composed
+        .get("noImpact")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let status = if no_impact {
+        ProposalStatus::Informational
+    } else {
+        ProposalStatus::Pending
+    };
+    let path: Vec<String> = composed
+        .get("path")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let strings = |key: &str| -> Vec<String> {
+        composed
+            .get(key)
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+
+    let proposal = Proposal {
+        id: proposal_id.clone(),
+        version,
+        diagram_id: id.clone(),
+        path,
+        status,
+        base_revision: composed
+            .get("baseRevision")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        ops: composed.get("ops").cloned().unwrap_or_else(|| json!([])),
+        layout: composed.get("layout").cloned().filter(|v| !v.is_null()),
+        counts: composed.get("counts").cloned().unwrap_or_else(|| json!({})),
+        preconditions: composed
+            .get("preconditions")
+            .cloned()
+            .unwrap_or_else(|| json!({})),
+        summary: composed
+            .get("summary")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        rationale: composed
+            .get("rationale")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        assumptions: strings("assumptions"),
+        open_questions: strings("openQuestions"),
+        source_ref: composed.get("sourceRef").cloned().filter(|v| !v.is_null()),
+        created_at,
+        updated_at: now,
+        resolved_at: if no_impact { Some(now) } else { None },
+    };
+
+    match agent.with_proposals(|s| s.put(proposal.clone())) {
+        Some(Ok(())) => {}
+        _ => {
+            let e = ToolError::new(
+                "INTERNAL",
+                "The proposal couldn't be saved. Nothing was recorded.",
+            )
+            .hint("Retry with the same requestId.");
+            fail(agent, &key, &e);
+            return Err(e);
+        }
+    }
+
+    let receipt = json!({
+        "proposalId": proposal_id,
+        "version": version,
+        "status": serde_json::to_value(status).unwrap_or(Value::Null),
+        "diagramId": id,
+        "revision": proposal.base_revision,
+        "counts": proposal.counts,
+        "advisories": composed.get("advisories").cloned().unwrap_or_else(|| json!([])),
+    });
+    let stored = receipt.clone();
+    let _ =
+        agent.with_ledger(|l| l.advance(&key, Stage::Committed, now, |e| e.receipt = Some(stored)));
+    Ok(receipt)
+}
+
+/// What an unfinished `submit_proposal` left behind, after a crash. Mirrors `recover_create`: the
+/// evidence is the proposal id minted for this request before anything was written — found, it proves
+/// the store write succeeded even though the ledger never heard; not found, nothing happened, and the
+/// request may run from scratch (the page round-trip has no side effect of its own to repeat safely).
+fn recover_submit_proposal(agent: &Agent, entry: &Entry) -> Option<Value> {
+    let proposal_id = entry.diagram_id.as_deref()?;
+    let proposal = agent
+        .with_proposals(|s| s.get(proposal_id).cloned())
+        .flatten()?;
+    Some(json!({
+        "proposalId": proposal.id,
+        "version": proposal.version,
+        "status": serde_json::to_value(proposal.status).unwrap_or(Value::Null),
+        "diagramId": proposal.diagram_id,
+        "revision": proposal.base_revision,
+        "counts": proposal.counts,
+        "recovered": true,
+    }))
+}
+
+fn get_proposal(agent: &Agent, projects: &[Project], args: &Value) -> ToolResult {
+    let proposal_id = args
+        .get("proposalId")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            ToolError::new("INVALID_INPUT", "proposalId is required.")
+                .details(json!({"path": "/proposalId"}))
+        })?;
+    let proposal = agent
+        .with_proposals(|s| s.get(proposal_id).cloned())
+        .flatten()
+        .ok_or_else(|| {
+            ToolError::new("NOT_FOUND", format!("No proposal with id {proposal_id}."))
+        })?;
+    // Re-checked on every read, not cached from submit time: a folder disabled since then hides it.
+    let diagram = locate(agent, projects, &proposal.diagram_id)?;
+    Ok(proposal_receipt(&proposal, &diagram))
+}
+
+fn list_proposals(agent: &Agent, projects: &[Project], args: &Value) -> ToolResult {
+    let diagram_filter = args.get("diagramId").and_then(Value::as_str);
+    let limit = args
+        .get("limit")
+        .and_then(Value::as_u64)
+        .map(|n| (n as usize).clamp(1, LIST_PAGE_MAX))
+        .unwrap_or(LIST_PAGE_MAX);
+    let offset = args
+        .get("cursor")
+        .and_then(Value::as_str)
+        .and_then(|c| c.strip_prefix("o:"))
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(0);
+    let all: Vec<Proposal> = agent
+        .with_proposals(|s| s.list(diagram_filter).into_iter().cloned().collect())
+        .unwrap_or_default();
+    // Only proposals whose diagram is still in a folder agents may use are visible — the same live
+    // scope re-check `get_proposal` makes, so nothing here trusts a grant from submit time.
+    let byid: HashMap<String, Diagram> = agent
+        .index
+        .list(projects)
+        .into_iter()
+        .map(|d| (d.diagram_id.clone(), d))
+        .collect();
+    let in_scope: Vec<&Proposal> = all
+        .iter()
+        .filter(|p| byid.contains_key(&p.diagram_id))
+        .collect();
+    let page: Vec<Value> = in_scope
+        .iter()
+        .skip(offset)
+        .take(limit)
+        .map(|p| proposal_summary(p, byid.get(&p.diagram_id)))
+        .collect();
+    let next = offset + page.len();
+    let mut result = json!({ "proposals": page, "complete": next >= in_scope.len() });
+    if next < in_scope.len() {
+        result["cursor"] = json!(format!("o:{next}"));
+    }
+    Ok(result)
+}
+
+fn proposal_receipt(proposal: &Proposal, diagram: &Diagram) -> Value {
+    json!({
+        "proposalId": proposal.id,
+        "version": proposal.version,
+        "status": serde_json::to_value(proposal.status).unwrap_or(Value::Null),
+        "diagramId": proposal.diagram_id,
+        "summary": proposal.summary,
+        "counts": proposal.counts,
+        "stale": proposal.base_revision != diagram.revision,
+        "createdAt": proposal.created_at,
+        "updatedAt": proposal.updated_at,
+    })
+}
+
+fn proposal_summary(proposal: &Proposal, diagram: Option<&Diagram>) -> Value {
+    json!({
+        "proposalId": proposal.id,
+        "diagramId": proposal.diagram_id,
+        "status": serde_json::to_value(proposal.status).unwrap_or(Value::Null),
+        "summary": proposal.summary,
+        "stale": diagram.is_some_and(|d| proposal.base_revision != d.revision),
+        "updatedAt": proposal.updated_at,
+    })
+}
+
 /// Called from `agent_progress`: a short stage phrase for the call working on `page_id`, passed to
 /// its agent as a progress frame. Best effort — a full or closed connection just misses one.
 pub fn progress(agent: &Agent, page_id: u64, message: &str) {
@@ -1267,5 +1613,179 @@ mod tests {
         let receipt = replay_receipt(&entry, &[]).unwrap();
         assert_eq!(receipt["replayed"], json!(true));
         assert_eq!(receipt["durability"], json!("unverified"));
+    }
+
+    fn stored_proposal(
+        id: &str,
+        diagram_id: &str,
+        status: ProposalStatus,
+        updated_at: u64,
+    ) -> Proposal {
+        Proposal {
+            id: id.into(),
+            version: 1,
+            diagram_id: diagram_id.into(),
+            path: vec![],
+            status,
+            base_revision: "o:1.1".into(),
+            ops: json!([{ "op": "update", "id": "a", "set": { "label": "New" } }]),
+            layout: None,
+            counts: json!({"added": 0, "updated": 1, "removed": 0}),
+            preconditions: json!({}),
+            summary: "Summary".into(),
+            rationale: String::new(),
+            assumptions: vec![],
+            open_questions: vec![],
+            source_ref: None,
+            created_at: updated_at,
+            updated_at,
+            resolved_at: None,
+        }
+    }
+
+    fn diagram_project(
+        dir: &std::path::Path,
+        name: &str,
+        title: &str,
+        diagram_id: &str,
+    ) -> Project {
+        std::fs::write(
+            dir.join(format!("{title}.draftcanvas")),
+            format!(r#"{{"format":"draft-canvas","version":15,"metadata":{{"id":"{diagram_id}","title":"{title}"}}}}"#),
+        )
+        .unwrap();
+        Project {
+            root: dunce::canonicalize(dir).unwrap(),
+            name: name.into(),
+        }
+    }
+
+    #[test]
+    fn a_pending_submit_proposal_recovers_by_its_minted_id_once_the_store_holds_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let entry = Entry {
+            key: "submit_proposal:r".into(),
+            tool: "submit_proposal".into(),
+            fingerprint: "f".into(),
+            stage: Stage::Pending,
+            at: 0,
+            diagram_id: Some("p_minted00001".into()),
+            path: None,
+            receipt: None,
+        };
+        // The crash came before the store write: nothing to recover, so the request may run again.
+        assert_eq!(recover_submit_proposal(&agent, &entry), None);
+        agent
+            .with_proposals(|s| {
+                s.put(stored_proposal(
+                    "p_minted00001",
+                    "d_1",
+                    ProposalStatus::Pending,
+                    1,
+                ))
+            })
+            .unwrap()
+            .unwrap();
+        // The crash came after the store write, before the ledger heard: found by the minted id.
+        let receipt = recover_submit_proposal(&agent, &entry).unwrap();
+        assert_eq!(receipt["recovered"], json!(true));
+        assert_eq!(receipt["proposalId"], json!("p_minted00001"));
+        assert_eq!(receipt["version"], json!(1));
+    }
+
+    #[test]
+    fn get_proposal_reports_status_and_staleness_against_the_live_diagram_revision() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let project = diagram_project(dir.path(), "P", "Orders", "d_orders0001");
+        agent
+            .with_proposals(|s| {
+                s.put(stored_proposal(
+                    "p1",
+                    "d_orders0001",
+                    ProposalStatus::Pending,
+                    1,
+                ))
+            })
+            .unwrap()
+            .unwrap();
+        let receipt = get_proposal(&agent, &[project], &json!({"proposalId": "p1"})).unwrap();
+        assert_eq!(receipt["status"], json!("pending"));
+        assert_eq!(receipt["summary"], json!("Summary"));
+        // The proposal's base revision won't match a freshly indexed file's own revision.
+        assert_eq!(receipt["stale"], json!(true));
+    }
+
+    #[test]
+    fn get_proposal_refuses_one_whose_diagram_left_the_enabled_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent
+            .with_proposals(|s| {
+                s.put(stored_proposal(
+                    "p1",
+                    "d_gone00001",
+                    ProposalStatus::Pending,
+                    1,
+                ))
+            })
+            .unwrap()
+            .unwrap();
+        let error = get_proposal(&agent, &[], &json!({"proposalId": "p1"})).unwrap_err();
+        assert_eq!(error.code, "NOT_ENABLED");
+    }
+
+    #[test]
+    fn list_proposals_paginates_and_hides_out_of_scope_diagrams() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let project = diagram_project(dir.path(), "P", "Orders", "d_orders0001");
+        agent
+            .with_proposals(|s| {
+                s.put(stored_proposal(
+                    "older",
+                    "d_orders0001",
+                    ProposalStatus::Pending,
+                    1,
+                ))?;
+                s.put(stored_proposal(
+                    "newer",
+                    "d_orders0001",
+                    ProposalStatus::Pending,
+                    2,
+                ))?;
+                s.put(stored_proposal(
+                    "hidden",
+                    "d_not_enabled",
+                    ProposalStatus::Pending,
+                    3,
+                ))
+            })
+            .unwrap()
+            .unwrap();
+        let result = list_proposals(&agent, &[project], &json!({"limit": 1})).unwrap();
+        let page = result["proposals"].as_array().unwrap();
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0]["proposalId"], json!("newer"), "newest first");
+        assert_eq!(result["complete"], json!(false));
+        let cursor = result["cursor"].as_str().unwrap().to_string();
+        let next = list_proposals(
+            &agent,
+            &[Project {
+                root: dunce::canonicalize(dir.path()).unwrap(),
+                name: "P".into(),
+            }],
+            &json!({"cursor": cursor}),
+        )
+        .unwrap();
+        let next_page = next["proposals"].as_array().unwrap();
+        assert_eq!(next_page.len(), 1);
+        assert_eq!(next_page[0]["proposalId"], json!("older"));
+        assert_eq!(
+            next["complete"],
+            json!(true),
+            "the out-of-scope proposal is excluded, not just hidden past the page"
+        );
     }
 }

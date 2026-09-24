@@ -54,6 +54,10 @@ const COMMANDS: &[&str] = &[
     "agent_respond",
     "agent_status",
     "agent_configure",
+    "agent_proposal_list",
+    "agent_proposal_get",
+    "agent_proposal_begin_accept",
+    "agent_proposal_resolve",
 ];
 
 fn main() {

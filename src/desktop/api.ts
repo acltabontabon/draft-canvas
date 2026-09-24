@@ -243,6 +243,43 @@ export interface AgentPatch {
   rotate?: boolean;
 }
 
+/** A batch of changes a coding agent submitted for a person to explicitly accept or reject — never
+ *  applied by `submit_proposal` itself. See `src-tauri/src/agent/proposals.rs`. */
+export interface Proposal {
+  proposalId: string;
+  /** Bumped on every revise-in-place; the review panel must re-check this hasn't moved on since it
+   *  loaded the proposal, immediately before accepting. */
+  version: number;
+  diagramId: string;
+  path: string[];
+  status: 'pending' | 'accepting' | 'accepted' | 'rejected' | 'dismissed' | 'informational' | 'accept-failed';
+  baseRevision: string;
+  ops: unknown[];
+  layout: unknown;
+  preconditions: { nodes: Record<string, { label: string; type: string; group?: string }>; edges: Record<string, { from: string; to: string; label?: string }> };
+  counts: { added: number; updated: number; removed: number; arranged?: number };
+  summary: string;
+  rationale: string;
+  assumptions: string[];
+  openQuestions: string[];
+  sourceRef: { url?: string; title?: string; baseCommit?: string; headCommit?: string } | null;
+  createdAt: number;
+  updatedAt: number;
+  resolvedAt: number | null;
+  /** `baseRevision` no longer matches the diagram's current revision — informational only; the
+   *  review panel always re-diffs against the live document rather than trusting this. */
+  stale: boolean;
+}
+
+/** What `agentProposalBeginAccept`/`agentProposalResolve` answer — a business outcome, not a thrown
+ *  error, since "already resolved" or "wrong stage" are expected, not exceptional. */
+export type ProposalAction =
+  | { ok: true; proposal: Proposal }
+  | { ok: false; code: 'NOT_FOUND' }
+  | { ok: false; code: 'WRONG_STAGE'; status: Proposal['status'] }
+  | { ok: false; code: 'PROPOSAL_CHANGED'; proposal: Proposal }
+  | { ok: false; code: 'ALREADY_RESOLVED'; status: Proposal['status'] };
+
 export type QuitDecision = 'ready' | 'prompting' | 'cancel';
 
 /**
@@ -353,4 +390,11 @@ export interface DesktopApi {
   agentRespond(id: number, outcome: unknown): Promise<void>;
   agentStatus(): Promise<AgentSettings>;
   agentConfigure(patch: AgentPatch): Promise<AgentSettings>;
+
+  // Proposal review (native UI only — see `agent/proposals.rs`; never reachable from the MCP bridge)
+  agentProposalList(diagramId?: string): Promise<Proposal[]>;
+  agentProposalGet(id: string): Promise<Proposal | null>;
+  /** Durably records `pending → accepting` before the document commit is attempted. */
+  agentProposalBeginAccept(id: string, version: number, diagramId: string, path: string[]): Promise<ProposalAction>;
+  agentProposalResolve(id: string, status: 'accepted' | 'rejected' | 'dismissed'): Promise<ProposalAction>;
 }

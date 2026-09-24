@@ -15,8 +15,19 @@ describe('MCP tool definitions', () => {
     expect(toolsJson()).toBe(`${JSON.stringify(TOOLS, null, 2)}\n`);
   });
 
-  it('name the five tools, each with an object input schema and annotations', () => {
-    expect(TOOLS.map((t) => t.name)).toEqual(['get_capabilities', 'list_diagrams', 'read_diagram', 'create_diagram', 'update_diagram']);
+  it('name the documented tools, each with an object input schema and annotations', () => {
+    expect(TOOLS.map((t) => t.name)).toEqual([
+      'get_capabilities',
+      'list_diagrams',
+      'read_diagram',
+      'read_selection',
+      'get_implementation_context',
+      'create_diagram',
+      'update_diagram',
+      'submit_proposal',
+      'get_proposal',
+      'list_proposals',
+    ]);
     for (const tool of TOOLS) {
       expect(tool.inputSchema.type).toBe('object');
       expect(tool.annotations).toBeDefined();
@@ -37,8 +48,11 @@ describe('MCP tool definitions', () => {
   });
 
   it('stay compact enough to sit in an agent\'s context', () => {
-    // The tool list goes to the model on every turn, as compact JSON: keep it under ~6k tokens
-    // (estimated as characters / 4).
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(24_000);
+    // The tool list goes to the model on every turn, as compact JSON: keep it under ~7.5k tokens
+    // (estimated as characters / 4). Raised from 24k when submit_proposal/get_proposal/list_proposals
+    // were added — a deliberate capability expansion, not drift — with submit_proposal's own `ops`
+    // kept intentionally loose (input.ts validates regardless) rather than repeating update_diagram's
+    // full room schema a second time.
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(30_000);
   });
 });

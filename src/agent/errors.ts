@@ -16,6 +16,8 @@ export type AgentErrorCode =
   | 'LAYOUT_FAILED'
   | 'LAYOUT_CONSTRAINED'
   | 'DUPLICATE_FLOW'
+  | 'OUT_OF_SCOPE'
+  | 'SCOPE_TARGET_MISSING'
   | 'CANCELLED'
   | 'NOT_ACTIVE'
   | 'DOCUMENT_BUSY'

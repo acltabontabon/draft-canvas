@@ -19,9 +19,13 @@ but agents can't reach them.
 2. Tick **Let coding agents on this computer draw diagrams**.
 3. Tick each project folder an agent may use. A folder appears here once you have opened it in Draft
    Canvas. Agents can list, read, create and change diagrams only in the folders you tick.
-4. Copy the setup for your agent from the same place:
+4. Set up your agent from the same place:
    - **Claude Code**: run the copied command, for example
      `claude mcp add draft-canvas -- "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"`.
+   - **Cursor**: click **Add to Cursor** — it opens Cursor and adds Draft Canvas to its MCP
+     configuration for you. If nothing opens (no `cursor://` links registered, or you'd rather add it
+     to a project's own configuration first), use **Or copy the config instead** and paste it into
+     `~/.cursor/mcp.json`, or a project's `.cursor/mcp.json`.
    - **Other agents**: add the copied `mcpServers` entry to the agent's MCP configuration.
 
 Draft Canvas must be running while the agent works: the connector talks to the running app. It
@@ -47,6 +51,19 @@ doesn't start the app for you, and it says so if the app isn't open.
   or connector so it moves with it. Flows walk through the connectors that are already there, and
   play in presentation mode.
 - **Read a diagram**, including what is inside a shape, a boundary or a flow on its own.
+- **Edit only what you selected.** Select a service and the thing downstream of it, then ask for "a
+  retry path around this selection, preserve everything else" — the agent reads exactly those ids and
+  a few neighbours for orientation, and edits only them, even if you click something else on screen
+  while it's working.
+- **Propose a change for you to review**, instead of applying it directly — the way it handles "review
+  this pull request against the diagram, show me the architectural impact, don't apply it yet." See
+  [Reviewing a proposal](#reviewing-a-proposal) below.
+- **Use a diagram as context for implementing something**, reading a flow's steps in the order they
+  actually happen, the notes and decisions around them, and the boundaries involved — for a request
+  like "use the selected flow as the design for implementing this in the repository."
+- **Walk through what happens if a step fails**, as a separately named flow built from the shapes
+  already there — "using the payment flow, show what happens if the charge times out after the order
+  was placed" — switchable against the normal flow without leaving presentation (`Shift+F`).
 - **Use C4.** Describe systems at context, container and component level, with a technology and a
   one-line description on each element; they appear under its name. You can edit both in the
   element's **Details**.
@@ -86,6 +103,25 @@ A request that takes more than a moment shows a line above the status bar — "A
   *Applying…*, it's too late to cancel — use Undo.
 
 Nothing you see while an agent works is saved or undoable until it is actually applied.
+
+## Reviewing a proposal
+
+When you ask an agent to review a change against a diagram rather than apply it directly, it submits
+a **proposal** instead — Draft Canvas never fetches or reads the pull request itself, only the
+structured description of the change the agent sends. A small **N proposal(s) to review** button
+appears over the diagram; click it to open the review panel.
+
+The panel shows the agent's summary and reasoning, its assumptions and open questions, and every
+addition, modification and removal apart from each other — for a modification, the actual before and
+after values, not just a highlighted shape. **Accept** applies the whole thing as one ordinary undo
+step (`⌘Z` / `Ctrl+Z` reverts it exactly like any other edit); **Reject** and **Dismiss** leave the
+diagram untouched. There is no partial accept — if you want a smaller change, ask the agent to revise
+the proposal, which updates the same one in place rather than creating a second.
+
+If the diagram changed elsewhere since the proposal was written, a note says so but doesn't block
+Accept; if something the proposal is specifically *about* changed — a renamed element, a moved
+connector — Accept is disabled until the agent revises it. A proposal survives a restart: if Draft
+Canvas quit mid-accept, it's recovered automatically the next time you look at it.
 
 ## Saving
 
@@ -127,3 +163,13 @@ changed in that case.
 
 For how it works — the protocol, the guarantees about retries, what is and isn't supported — see
 [Agent integration](../reference/agent-integration.md).
+
+## What was actually tested
+
+Claude Code on macOS is exercised end-to-end (the existing agent test suite, including this round's
+proposal review flow). Cursor's setup is verified for correctness — the deeplink's config payload and
+the pasted-config fallback are unit-tested to decode to the exact same server definition, and the
+`cursor://` URL and `~/.cursor/mcp.json` shape match Cursor's own published format — but connecting a
+real Cursor install to Draft Canvas has not been run in this environment; treat it as
+configuration-verified, not as a tested connection, until it's been tried against an actual Cursor.
+Windows and Linux are untested for every client in this round, same as before it.

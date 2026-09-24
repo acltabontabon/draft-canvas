@@ -256,8 +256,44 @@ export function renameFlow(doc: DraftDocument, flowId: string, title: string): D
 }
 
 export function deleteFlow(doc: DraftDocument, flowId: string): DraftDocument {
-  const flows = doc.flows.filter((flow) => flow.id !== flowId);
-  return flows.length === doc.flows.length ? doc : withFlows(doc, flows);
+  const existed = doc.flows.some((flow) => flow.id === flowId);
+  // A flow naming this one as its `variantOf` would otherwise dangle — cleared back to a plain,
+  // unrelated flow rather than left pointing at nothing.
+  let orphaned = false;
+  const flows = doc.flows
+    .filter((flow) => flow.id !== flowId)
+    .map((flow) => {
+      if (flow.variantOf !== flowId) return flow;
+      orphaned = true;
+      const next = { ...flow };
+      delete next.variantOf;
+      return next;
+    });
+  return existed || orphaned ? withFlows(doc, flows) : doc;
+}
+
+/**
+ * Sets, or clears (`undefined`), which flow this is a variant of — e.g. a "Payment — failure path"
+ * naming "Payment"'s id, so a failure walkthrough is a labelled alternative rather than an unrelated
+ * flow with a similar name. Refuses (no-op) a self-link, a target that doesn't exist in this room, or
+ * a target that is itself already a variant: hub-and-spoke by construction, so nothing here ever has
+ * to walk a chain to detect a cycle.
+ */
+export function setFlowVariantOf(doc: DraftDocument, flowId: string, variantOf: string | undefined): DraftDocument {
+  const flow = findFlow(doc, flowId);
+  if (!flow || flow.variantOf === variantOf) return doc;
+  if (variantOf !== undefined) {
+    if (variantOf === flowId) return doc;
+    const target = findFlow(doc, variantOf);
+    if (!target || target.variantOf !== undefined) return doc;
+  }
+  const next = { ...flow };
+  if (variantOf) next.variantOf = variantOf;
+  else delete next.variantOf;
+  return withFlows(
+    doc,
+    doc.flows.map((f) => (f.id === flowId ? next : f)),
+  );
 }
 
 /** Sets, or clears (`undefined`), a flow's lens accent — see `DraftFlow.accent`. */

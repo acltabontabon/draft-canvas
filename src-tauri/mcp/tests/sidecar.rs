@@ -96,8 +96,13 @@ async fn a_real_client_lists_the_tools_and_round_trips_a_call() {
             "get_capabilities",
             "list_diagrams",
             "read_diagram",
+            "read_selection",
+            "get_implementation_context",
             "create_diagram",
-            "update_diagram"
+            "update_diagram",
+            "submit_proposal",
+            "get_proposal",
+            "list_proposals"
         ]
     );
     let create = tools.iter().find(|t| t.name == "create_diagram").unwrap();

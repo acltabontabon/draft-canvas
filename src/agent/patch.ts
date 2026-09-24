@@ -16,10 +16,11 @@
 
 import { addAction, createAction, removeAction, setActionDone, updateActionText } from '../document/actions';
 import { inferRelationship, isEligibleForReinference } from '../document/connectorSemantics';
-import { createFlow } from '../document/flow';
+import { createFlow, setFlowVariantOf } from '../document/flow';
 import {
   attachToEdge,
   attachToNode,
+  descendantsOf,
   hasAttachmentRoom,
   removeAttachment,
   removeEdgeAttachment,
@@ -39,7 +40,7 @@ import { AgentError, Problems } from './errors';
 import { AGENT_LIMITS, readActions, readLayout, readRoom, Reader, type LayoutSpec, type RoomSpec } from './input';
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
 import { pastDeadline, repairAnchors } from './route';
-import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange } from './arrange';
+import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
 import { checkQuality, scoreOf } from './quality';
 import { GROUP_KINDS, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
 
@@ -72,7 +73,41 @@ export function idsInFile(file: DraftDocument): Set<string> {
   return out;
 }
 
-export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknown, rawLayout: unknown): PatchResult {
+/** A captured selection, frozen by id — `read_selection`'s `scope` passed back on a later edit. An
+ *  `add` op is always permitted (including a boundary connection into an outside element); any
+ *  `update`/`remove`, or a cascading effect of one, that would touch an id outside this is refused. */
+export interface Scope {
+  nodes: ReadonlySet<string>;
+  edges: ReadonlySet<string>;
+}
+
+function readScope(r: Reader, raw: unknown, at: string, view: DraftDocument): Scope | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const obj = r.object(raw, at);
+  if (!obj) return undefined;
+  const nodeIds = r.array(obj.nodes, `${at}/nodes`, 300).filter((id): id is string => typeof id === 'string');
+  const edgeIds = r.array(obj.edges, `${at}/edges`, 300).filter((id): id is string => typeof id === 'string');
+  const knownNodes = new Set(view.nodes.map((n) => n.id));
+  const knownEdges = new Set(view.edges.map((e) => e.id));
+  const missing = [...nodeIds.filter((id) => !knownNodes.has(id)), ...edgeIds.filter((id) => !knownEdges.has(id))];
+  if (missing.length) {
+    r.problems.add('SCOPE_TARGET_MISSING', at, `nothing with id ${missing.map((id) => `"${id}"`).join(', ')} in this view — it may have been removed since the selection was captured`);
+  }
+  return { nodes: new Set(nodeIds), edges: new Set(edgeIds) };
+}
+
+function outOfScope(scope: Scope | undefined, ids: readonly string[], within: 'nodes' | 'edges'): string[] {
+  if (!scope) return [];
+  const allowed = within === 'nodes' ? scope.nodes : scope.edges;
+  return ids.filter((id) => !allowed.has(id));
+}
+
+function refuseOutOfScope(r: Reader, at: string, offending: readonly string[]) {
+  if (!offending.length) return;
+  r.problems.add('OUT_OF_SCOPE', at, `${offending.map((id) => `"${id}"`).join(', ')} ${offending.length === 1 ? 'is' : 'are'} outside the captured selection; expand the scope, or make this change without one`);
+}
+
+export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknown, rawLayout: unknown, rawScope: unknown = undefined): PatchResult {
   const problems = new Problems();
   const r = new Reader(problems);
   const ops = r.array(rawOps, '/ops', AGENT_LIMITS.opsPerRequest);
@@ -87,6 +122,8 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   const taken = idsInFile(file);
   let view = viewOf(file, path);
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
+  const scope = readScope(r, rawScope, '/scope', view);
+  problems.throwIfAny();
   let actions = file.actions;
   const touched = new Set<string>();
   const counts: PatchResult['counts'] = { added: 0, updated: 0, removed: 0 };
@@ -101,6 +138,14 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     if (kind === 'arrange') {
       const request = readArrange(r, op, at, view, layout);
       if (!request || !problems.empty) return;
+      if (scope) {
+        if (!request.scope) {
+          problems.add('OUT_OF_SCOPE', `${at}/scope`, 'a selection scope is active on this request; name what to rearrange with scope: {nodes} or {group} instead of the whole view');
+          return;
+        }
+        refuseOutOfScope(r, `${at}/scope`, outOfScope(scope, [...scopeOf(view, request.scope)], 'nodes'));
+        if (!problems.empty) return;
+      }
       const arranged = arrangeView(view, request, ctx, problems, at);
       if (!arranged) return;
       view = arranged.view;
@@ -157,15 +202,31 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       for (const id of ids) {
         const node = view.nodes.find((n) => n.id === id);
         if (node) {
+          if (outOfScope(scope, [id], 'nodes').length) {
+            refuseOutOfScope(r, `${at}/ids`, [id]);
+            continue;
+          }
           const children = view.nodes.filter((n) => n.parentId === id);
           if (node.type === 'group' && children.length && !cascade) {
             problems.add('INVALID_INPUT', `${at}/ids`, `boundary "${id}" still holds ${children.length} element(s); pass cascade: true to remove them too, or move them out first`);
             continue;
           }
+          // A cascade must never reach past the captured scope: check every descendant, not just `id`.
+          if (node.type === 'group' && cascade && scope) {
+            const offending = outOfScope(scope, descendantsOf(view, id), 'nodes');
+            if (offending.length) {
+              refuseOutOfScope(r, `${at}/ids`, offending);
+              continue;
+            }
+          }
           nodeIds.push(id);
           continue;
         }
         if (view.edges.some((e) => e.id === id)) {
+          if (outOfScope(scope, [id], 'edges').length) {
+            refuseOutOfScope(r, `${at}/ids`, [id]);
+            continue;
+          }
           edgeIds.push(id);
           continue;
         }
@@ -182,6 +243,10 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
         }
         const attached = findAttachment(view, id);
         if (attached) {
+          if (outOfScope(scope, [attached.hostId], attached.kind === 'node' ? 'nodes' : 'edges').length) {
+            refuseOutOfScope(r, `${at}/ids`, [attached.hostId]);
+            continue;
+          }
           view = attached.kind === 'node' ? removeAttachment(view, attached.hostId, id) : removeEdgeAttachment(view, attached.hostId, id);
           touched.add(attached.hostId);
           counts.removed += 1;
@@ -202,7 +267,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       if (!id) problems.add('INVALID_INPUT', `${at}/id`, 'is required');
       return;
     }
-    const result = updateOne(r, view, file, actions, id, set, `${at}/set`, ctx, touched, advisories, layout.direction);
+    const result = updateOne(r, view, file, actions, id, set, `${at}/set`, ctx, touched, advisories, layout.direction, scope);
     if (!result) return;
     view = result.view;
     actions = result.actions;
@@ -229,9 +294,12 @@ function updateOne(
   touched: Set<string>,
   advisories: string[],
   direction: LayoutSpec['direction'],
+  scope?: Scope,
 ): { view: DraftDocument; actions: DraftDocument['actions'] } | undefined {
   const node = view.nodes.find((n) => n.id === id);
   if (node) {
+    refuseOutOfScope(r, at, outOfScope(scope, [id], 'nodes'));
+    if (!r.problems.empty) return undefined;
     const patch: Partial<DraftNode> = {};
     const clear = (field: string) => set[field] === null;
     if (set.label !== undefined) {
@@ -328,6 +396,8 @@ function updateOne(
   }
   const edge = view.edges.find((e) => e.id === id);
   if (edge) {
+    refuseOutOfScope(r, at, outOfScope(scope, [id], 'edges'));
+    if (!r.problems.empty) return undefined;
     const patch: Partial<DraftEdge> = {};
     if (set.label === null) patch.label = undefined;
     else if (set.label !== undefined) patch.label = r.text(set.label, `${at}/label`, AGENT_LIMITS.relationshipLabelLength, { singleLine: true });
@@ -376,6 +446,16 @@ function updateOne(
       const steps = flowStepsFor(r, set.steps, `${at}/steps`, existing, new Set(view.edges.map((e) => e.id)));
       if (steps) flow.steps = steps;
     }
+    if (set.variantOf === null) delete flow.variantOf;
+    else if (set.variantOf !== undefined) {
+      const variantOf = typeof set.variantOf === 'string' ? set.variantOf : undefined;
+      const target = variantOf && variantOf !== id ? view.flows.find((f) => f.id === variantOf) : undefined;
+      if (!target || target.variantOf !== undefined) {
+        r.problems.add('INVALID_REFERENCE', `${at}/variantOf`, `must be another flow in this view that is not itself a variant`);
+      } else {
+        flow.variantOf = variantOf;
+      }
+    }
     if (!r.problems.empty) return undefined;
     const flows = [...view.flows];
     flows[flowIndex] = flow;
@@ -383,7 +463,11 @@ function updateOne(
     return { view: { ...view, flows }, actions };
   }
   const attached = findAttachment(view, id);
-  if (attached) return updateAttachmentOp(r, view, attached, set, at, touched, actions);
+  if (attached) {
+    refuseOutOfScope(r, at, outOfScope(scope, [attached.hostId], attached.kind === 'node' ? 'nodes' : 'edges'));
+    if (!r.problems.empty) return undefined;
+    return updateAttachmentOp(r, view, attached, set, at, touched, actions);
+  }
   const action = actions.find((a) => a.id === id);
   if (action) {
     let next = { ...file, actions };
@@ -574,12 +658,16 @@ function addToView(
     }
   }
 
-  // Flows (they may use new and existing connectors alike).
+  // Flows (they may use new and existing connectors alike). variantOf is linked in a second pass,
+  // once every flow in this batch has been added — its target may be another flow added right here.
   for (const f of room.flows) {
     const flow = createFlow({ id: f.id, title: f.title });
     if (f.color) flow.accent = f.color;
     flow.steps = f.steps.map((s, i) => ({ id: `${f.id}.s${i + 1}`, edgeId: s.relationship, ...(s.caption ? { caption: s.caption } : {}) }));
     next = { ...next, flows: [...next.flows, flow] };
+  }
+  for (const f of room.flows) {
+    if (f.variantOf) next = setFlowVariantOf(next, f.id, f.variantOf);
   }
   for (const id of [...newIds, ...room.relationships.map((e) => e.id)]) touched.add(id);
   return next;

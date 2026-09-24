@@ -234,3 +234,45 @@ describe('read_diagram', () => {
     expect(refusal(() => readDiagram(file, { cursor: first.cursor }, 'o:a.2', 'd')).code).toBe('CURSOR_STALE');
   });
 });
+
+describe('update_diagram flow variantOf', () => {
+  it('links a newly-added flow to another new flow in the same batch', () => {
+    const file = base();
+    const { file: next } = applyUpdate(
+      file,
+      [],
+      [
+        {
+          op: 'add',
+          flows: [
+            { id: 'fnorm', title: 'Payment', steps: ['u'] },
+            { id: 'ffail', title: 'Payment — failure path', steps: ['d'], variantOf: 'fnorm' },
+          ],
+        },
+      ],
+      undefined,
+    );
+    expect(next.flows.find((f) => f.id === 'ffail')?.variantOf).toBe('fnorm');
+  });
+
+  it('refuses linking a flow update to a target that is itself a variant', () => {
+    const file = base();
+    const { file: withFlows } = applyUpdate(
+      file,
+      [],
+      [
+        { op: 'add', flows: [{ id: 'a', title: 'A', steps: ['u'] }, { id: 'b', title: 'B', steps: ['d'], variantOf: 'a' }, { id: 'c', title: 'C', steps: ['u'] }] },
+      ],
+      undefined,
+    );
+    const error = refusal(() => applyUpdate(withFlows, [], [{ op: 'update', id: 'c', set: { variantOf: 'b' } }], undefined));
+    expect(error.code).toBe('INVALID_REFERENCE');
+  });
+
+  it('clears variantOf with an explicit null', () => {
+    const file = base();
+    const { file: withFlows } = applyUpdate(file, [], [{ op: 'add', flows: [{ id: 'a', title: 'A', steps: ['u'] }, { id: 'b', title: 'B', steps: ['d'], variantOf: 'a' }] }], undefined);
+    const { file: cleared } = applyUpdate(withFlows, [], [{ op: 'update', id: 'b', set: { variantOf: null } }], undefined);
+    expect(cleared.flows.find((f) => f.id === 'b')?.variantOf).toBeUndefined();
+  });
+});

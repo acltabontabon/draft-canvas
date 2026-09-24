@@ -568,6 +568,18 @@ export interface DraftFlow {
    * vocabulary as nodes/edges, not a colour picker.
    */
   accent?: Accent;
+  /**
+   * The id of the flow this is an alternative telling of — e.g. a flow named
+   * "Payment — failure path" naming the normal "Payment" flow's id. Strictly
+   * hub-and-spoke: a flow a variant points to may never itself carry
+   * `variantOf` (`document/flow.ts`'s `setFlowVariantOf` enforces this, which
+   * rules out chains and cycles by construction rather than by walking one).
+   * Dropped automatically if the flow it names is deleted (`deleteFlow`'s
+   * prune), so this never dangles. See `presentation/useFlowPlayback.ts` for
+   * how switching between a flow and its variant lands on a corresponding
+   * step (by shared `edgeId`) instead of always resetting to the first one.
+   */
+  variantOf?: string;
 }
 
 export interface DraftViewport {

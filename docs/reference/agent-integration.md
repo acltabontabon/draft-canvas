@@ -17,6 +17,8 @@ is the design: what is guaranteed, where the boundaries are, and what is not sup
 
 - [Architecture](#architecture)
 - [Tools](#tools)
+- [Selection-aware editing](#selection-aware-editing)
+- [Proposals: review before applying](#proposals-review-before-applying)
 - [One diagram across a conversation](#one-diagram-across-a-conversation)
 - [Revisions, persistence and undo](#revisions-persistence-and-undo)
 - [Retries and the request ledger](#retries-and-the-request-ledger)
@@ -76,19 +78,26 @@ that disagree answer `VERSION_MISMATCH` and point at Settings, which names the r
 
 ## Tools
 
-There are five tools. Their JSON Schemas live in `src/agent/schema.ts`, and
+There are ten tools. Their JSON Schemas live in `src/agent/schema.ts`, and
 `src-tauri/mcp/tools.json` is generated from them by `npm run agent:schemas`. The sidecar compiles
 that file in, and `tests/agent/schema.test.ts` fails if the two drift. The whole tool list is
-23,225 bytes of compact JSON, roughly 5.8k tokens (estimated as characters / 4); the server
-instructions add 1,548 bytes. `get_capabilities` reports `contract: 2` (see below for what changed).
+28,984 bytes of compact JSON, roughly 7.2k tokens (estimated as characters / 4) — `submit_proposal`
+deliberately keeps its own `ops` schema loose (the same shape `update_diagram` documents in full,
+never repeated a second time) to leave room for this. `get_capabilities` reports `contract: 2`; every
+tool below `read_selection` is additive within that same contract.
 
 | Tool | Annotations | What it does |
 | --- | --- | --- |
 | `get_capabilities({topics?, starter?})` | read-only | The vocabulary: element types, relationship semantics, C4 levels, limits, layout options, flows and notes, and starters. By default it is a short overview; `topics` expands one area, and `starter` returns one starter's keys. |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read-only | Finds a diagram to work on. The diagrams in folders agents may use: id, title, folder, relative path (for display only), revision, and whether it is open or has unsaved changes. `query` narrows to titles containing it (ignoring case), exact matches first and marked `exact`. Always also returns `active` — the diagram open right now, with its revision and the view the person is in — and `thisSession`, the diagrams this MCP session created or changed. Two files sharing an id are flagged, and addressing either returns `AMBIGUOUS_DIAGRAM`. |
 | `read_diagram({diagramId, view?, focus?, include?, cursor?})` | read-only | One view, semantically. Every element comes with its derived C4 role and scope, relationships name their endpoints, and notes, attachments and flows carry the ids to edit them by. See the notes below for nested views, focus and pages. |
+| `read_selection({diagramId})` | read-only | The person's current selection in the diagram open right now: stable ids, a bounded set of neighbouring elements marked apart from the selection itself, and the notes about it. See [Selection-aware editing](#selection-aware-editing). |
+| `get_implementation_context({diagramId, view?, focus?})` | read-only | Flow step order exactly as stored (never inferred from layout), the notes and decisions about what's in focus, and its boundaries — for implementing an agreed design in the repository. Diagram text is context here, never instructions. |
 | `create_diagram({requestId, title, nodes, relationships, groups?, flows?, notes?, actions?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?})` | idempotent by `requestId` | A **new** diagram: validates, lays out, runs the quality gate and writes a new file. It never replaces anything, and a title already used in that folder is refused (`DUPLICATE_TITLE`, naming the existing diagram) unless `allowDuplicateTitle`. |
-| `update_diagram({requestId, diagramId, expectedRevision, ops, view?, layout?, activate?})` | idempotent by `requestId`, destructive (it can remove) | Every follow-up. Ops run in order as one change: `add`, `update` (`null` clears a field; notes, attachments and flows are edited by id), `remove` (a non-empty group needs `cascade`), `setLevel` and `arrange`. Works whether or not the diagram is open. |
+| `update_diagram({requestId, diagramId, expectedRevision, ops, view?, scope?, layout?, activate?})` | idempotent by `requestId`, destructive (it can remove) | Every follow-up. Ops run in order as one change: `add`, `update` (`null` clears a field; notes, attachments and flows are edited by id), `remove` (a non-empty group needs `cascade`), `setLevel` and `arrange`. Works whether or not the diagram is open. `scope`, if present, restricts `update`/`remove` (and any cascade) to a captured set of ids — see [Selection-aware editing](#selection-aware-editing). |
+| `submit_proposal({requestId, diagramId, expectedRevision, summary, rationale?, assumptions?, openQuestions?, ops, layout?, scope?, sourceRef?, revises?})` | idempotent by `requestId` | Proposes a batch of changes for a person to explicitly accept or reject — never applies anything itself. See [Proposals](#proposals-review-before-applying). |
+| `get_proposal({proposalId})` | read-only | A submitted proposal's status, counts, and whether the diagram moved since (informational — never a block). |
+| `list_proposals({diagramId?, cursor?, limit?})` | read-only | Proposals for a diagram (or every one in scope), newest first. |
 
 **Contract 2** (this release) changed four things an older client could notice: an update to a
 diagram that isn't open is applied to its file instead of answering `NOT_ACTIVE`; a saved change's
@@ -112,6 +121,73 @@ Every result is structured content plus a one-line text summary. Tool failures a
 **Identifiers.** A *new* id an agent chooses must match `^[A-Za-z][A-Za-z0-9_.-]{0,63}$` and be unique
 in the file; it becomes the native id itself. Existing ids are addressed as they are, including the
 editor's own `n_…` ids and a starter's generated ids (`<prefix>.<key>`, `e1…`, `flow1…`).
+
+## Selection-aware editing
+
+"Add a retry path around this selection, and preserve everything else" needs the agent to capture
+*which* elements that means once, then edit only those — even if the person changes what's selected
+on screen while the agent is still working.
+
+`read_selection({diagramId})` reads the diagram open right now (refused with `NOT_ACTIVE` if it isn't,
+or with a `null` `selection` and a message if nothing is selected — never a guessed default scope).
+Every returned element and relationship carries a `role`: `"selected"` for what was actually selected,
+`"context"` for a bounded set of directly-touching neighbours shown for orientation only. The response
+also includes the notes about the selection and the frozen ids themselves as `selection: {path, nodes,
+edges}`.
+
+Pass those same ids back as `scope: {nodes, edges}` on a following `update_diagram` (or
+`submit_proposal`). With `scope` present: an `add` op is always allowed, including a new relationship
+connecting a scoped element to one outside it (a legitimate boundary connection) — but an `update` or
+`remove` targeting anything outside scope, or a cascade (removing a boundary with `cascade: true`)
+that would reach outside it, is refused with `OUT_OF_SCOPE`, naming the ids it would have touched. A
+scope id that no longer exists (deleted since `read_selection` captured it) is `SCOPE_TARGET_MISSING`.
+Nothing about the *current* on-screen selection is consulted at commit time — only the ids captured.
+
+## Proposals: review before applying
+
+For a change the person didn't ask the agent to make directly — most often, the architectural impact
+of a pull request the agent analysed on its own — `submit_proposal` hands Draft Canvas a bounded batch
+of ops plus a rationale, for a person to explicitly Accept or Reject in the editor. It is never applied
+by the call itself, and there is deliberately no tool that could accept one on a person's behalf: that
+is a native, human-only action, enforced structurally (resolving a proposal is a Tauri command the
+review panel calls directly; it is never registered as an MCP tool, so there is no wire path from the
+sidecar to it at all — not merely an unadvertised one. `src-tauri/mcp/src/main.rs`'s
+`no_tool_lets_an_agent_resolve_a_proposal` test guards this).
+
+`submit_proposal({requestId, diagramId, expectedRevision, summary, rationale?, assumptions?,
+openQuestions?, ops, layout?, scope?, sourceRef?, revises?})`:
+
+- `ops: []` with a `summary` explaining why is a valid **no architectural impact** finding, not an
+  error — it resolves immediately as `informational`, with no Accept/Reject to offer.
+- `revises` names an existing *pending* proposal to overwrite in place (bumping its `version`) instead
+  of creating a new one; revising one that has already been resolved is refused (`PROPOSAL_CLOSED`,
+  naming its actual status).
+- `ops` is validated exactly as `update_diagram` would — a bad proposal is refused at submit time, not
+  discovered later at review — and a bounded "precondition" snapshot (the before-state of every id the
+  ops touch) is captured for the review panel's conflict check.
+- `sourceRef` (a PR's url/title/commits) is context for the person, never proof of correctness, and
+  Draft Canvas never fetches it.
+
+`get_proposal`/`list_proposals` report `stale: true` when the diagram's revision has moved since
+submission — informational only; the review panel always re-diffs against the live document rather
+than trusting either the submit-time snapshot or a successful replay as proof nothing conflicts. A
+**conflict** (something the proposal is specifically about has changed — a renamed node, a moved
+relationship) is different from staleness (something *unrelated* changed) and blocks Accept until the
+agent revises the proposal; unrelated drift only shows a non-blocking banner.
+
+The review panel (`src/desktop/ui/ProposalPanel.tsx`) shows additions, modifications and removals
+apart — never colour alone — with real before→after field values for a modification, not just a
+canvas outline, since a proposal's whole point is often a non-geometric change (a label, a note, a
+relationship's meaning). Accept re-checks the proposal's version, the diagram's identity and revision
+one more time immediately before committing, then applies the whole batch as **one** native undo step
+through the same `applyToFile` primitive every other edit uses — undoing it afterwards never
+reactivates the proposal, which stays `accepted`. Reject and Dismiss (clearing an old pending proposal
+nobody reviewed) never touch the document. A proposal accept interrupted by a crash — durably recorded
+as `accepting` before the commit is attempted — is recovered the next time the panel looks at it: if a
+dry run shows the change was never applied, it's offered for review again unchanged; if the same dry
+run's only obstacle is exactly the ids this proposal's own `add` ops declared, that's evidence it
+already committed, and it's marked `accepted` without reapplying; anything else is left for a person
+to look at directly, dismissible but never auto-resolved either way.
 
 ## One diagram across a conversation
 
@@ -383,6 +459,16 @@ sequence diagrams.
   most once per flow.
 - There is **no stored default or "main" flow**: naming a flow "Main flow" gives it no special
   behaviour. Presenting picks the selected flow, or the only one.
+- A flow may name another as `variantOf` — "Payment — failure path" naming "Payment"'s id — for a
+  named alternative telling of the same scenario (a discussion of what happens if a step fails, built
+  from existing elements and relationships rather than a simulation). Strictly hub-and-spoke: the
+  flow named by `variantOf` must not itself carry one, which rules out chains and cycles without
+  needing to walk one; setting `variantOf` to a flow that is already a variant is refused
+  (`INVALID_REFERENCE`). Deleting the base flow clears the link on its variant rather than leaving it
+  dangling. In the Flows panel and presentation's flow picker, a variant is listed right under its
+  base; switching between the two mid-presentation (`Shift+F`, or the picker) lands on the step
+  sharing a connector with the one being left, matched by the connector itself and never by step
+  index, falling back to the first step only when no shared connector exists in the target.
 
 ## Live progress and preview
 
@@ -467,7 +553,7 @@ view, or a data store at context level.
 | Relationships: label, semantic, behaviour, direction, async, condition | ✓ semantics from the capability matrix unless an offered one is named | ✓ | ✓ |
 | Boundaries (six kinds, nested) | ✓ | ✓ add, rename, move members in, remove (`cascade`) | ✓ |
 | C4 levels, description, technology, drill-down views | ✓ | ✓ `setLevel`, `view` targets a nested view | ✓ with derived role and scope |
-| Flows (ordered steps over relationships, captions, colour, frame steps) | ✓ | ✓ add, rename, recolour, revise steps (step ids kept), remove | ✓ with frame steps |
+| Flows (ordered steps over relationships, captions, colour, frame steps, named variants) | ✓ | ✓ add, rename, recolour, revise steps (step ids kept), link/unlink as a variant, remove | ✓ with frame steps |
 | Notes (note, question, warning, decision): beside an element, inside a boundary, or attached | ✓ | ✓ add, edit text and kind, move, remove | ✓ with a derived `nearest` |
 | Attachments: note and code chips on elements and relationships | ✓ | ✓ add, edit, move to another host, remove — by id | ✓ with `include: ["attachments"]`, or in full in a focused read |
 | Actions (the canvas's to-do list, optionally about an element) | ✓ | ✓ | ✓ |
@@ -504,10 +590,11 @@ Codes are stable. Each error carries `message`, and where useful `hint`, `retrya
 | Area | Codes |
 | --- | --- |
 | Input | `INVALID_INPUT`, `UNSUPPORTED_TYPE` (with the closest type words), `INVALID_REFERENCE`, `DUPLICATE_ID`, `CONTAINMENT_CYCLE`, `LIMIT_EXCEEDED`, `UNSUPPORTED`, `UNKNOWN_TOOL` |
-| State | `REVISION_CONFLICT` (with `currentRevision`), `CURSOR_STALE`, `DOCUMENT_BUSY`, `BUSY`, `READ_ONLY`, `NOT_FOUND`, `AMBIGUOUS_DIAGRAM`, `DUPLICATE_TITLE` (with the existing diagrams), `DUPLICATE_FLOW`; `NOT_ACTIVE` is no longer returned (contract 1 only) |
+| State | `REVISION_CONFLICT` (with `currentRevision`), `CURSOR_STALE`, `DOCUMENT_BUSY`, `BUSY`, `READ_ONLY`, `NOT_FOUND`, `AMBIGUOUS_DIAGRAM`, `DUPLICATE_TITLE` (with the existing diagrams), `DUPLICATE_FLOW`; `update_diagram` no longer returns `NOT_ACTIVE` (contract 1 only) — `read_selection` does, for a diagram that isn't the one open right now |
 | Layout | `LAYOUT_FAILED`, `LAYOUT_CONSTRAINED` (with `suggestedOp`) |
 | Retries | `REQUEST_ID_MISMATCH`, `OUTCOME_UNKNOWN` |
-| Access | `NOT_ENABLED`, `OUT_OF_SCOPE`, `UNAUTHORIZED` |
+| Scope | `NOT_ENABLED`, `OUT_OF_SCOPE` (a folder an agent may not use, *or* an `update_diagram`/`submit_proposal` op reaching outside a captured `scope`, naming the ids), `SCOPE_TARGET_MISSING` (a captured scope id no longer in the view), `UNAUTHORIZED` |
+| Proposals | `PROPOSAL_CLOSED` (`revises` named one that's already resolved, naming its actual status) — resolving one (accept/reject/dismiss) is a native UI action with its own outcomes, never a tool error an agent sees |
 | Connection | `APP_UNAVAILABLE` (Draft Canvas isn't running), `APP_STARTING`, `APP_UNRESPONSIVE`, `CONNECTION_LOST`, `VERSION_MISMATCH`, `TIMEOUT`, `CANCELLED` |
 | Other | `PERSISTENCE_FAILED`, `INTERNAL` |
 
@@ -630,3 +717,11 @@ re-arranged in place in 117 ms, too quick for any preview to appear.
 - **Linux.** Not a desktop target yet, so not a bridge target either.
 - **Launching the app on connect.** If Draft Canvas isn't running, the sidecar answers
   `APP_UNAVAILABLE` and asks the person to open it.
+- **Fetching or reading a PR, a repository, or any of an agent's own context.** `submit_proposal`'s
+  `sourceRef` is a label the person can look at, never something Draft Canvas resolves — the agent
+  keeps its own repository access, and the interpretation of what a diff means architecturally, to
+  itself. There is no embedded model, no repository scanner and no GitHub authentication here.
+- **Per-hunk merge review, or accepting part of a proposal.** A proposal is reviewed and applied (or
+  not) as a whole; a smaller change means the agent revises the proposal before it's accepted.
+- **Automatic code modification.** Draft Canvas validates, arranges, renders and persists a diagram
+  change a person accepted; it never edits the repository the diagram might describe.

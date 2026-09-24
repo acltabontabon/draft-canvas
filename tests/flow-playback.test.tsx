@@ -251,3 +251,54 @@ describe('useFlowPlayback — moving between flows', () => {
     expect(result.current.flows.map((f) => f.title)).toEqual(['Checkout', 'Checkout']);
   });
 });
+
+describe('useFlowPlayback — switching to a named variant lands on the shared step', () => {
+  beforeEach(reset);
+
+  it('lands on the step sharing a connector when picking a variant, not step 1', () => {
+    const edgeA = connectedPair();
+    const edgeShared = connectedPair();
+    const edgeB = connectedPair();
+    useEditorStore.setState((state) => ({
+      document: {
+        ...state.document,
+        flows: [
+          { id: 'fnorm', title: 'Payment', steps: [{ id: 's1', edgeId: edgeA.id }, { id: 's2', edgeId: edgeShared.id }] },
+          { id: 'ffail', title: 'Payment — failure path', variantOf: 'fnorm', steps: [{ id: 's1', edgeId: edgeShared.id }, { id: 's2', edgeId: edgeB.id }] },
+        ],
+      },
+    }));
+    const { result } = mount();
+    act(() => result.current.pickFlow('fnorm'));
+    // Standing on the shared step of the normal flow...
+    act(() => result.current.goTo(2));
+    expect(useEditorStore.getState().flowPlayback.step).toBe(2);
+
+    act(() => result.current.pickFlow('ffail'));
+    // ...lands on the failure path's corresponding step (index 0, its own step 1), not always step 1
+    // by coincidence — the assertion that matters is it's the step carrying the *same* connector.
+    const landedStep = useEditorStore.getState().flowPlayback.step;
+    const failure = useEditorStore.getState().document.flows.find((f) => f.id === 'ffail')!;
+    expect(failure.steps[landedStep - 1]?.edgeId).toBe(edgeShared.id);
+  });
+
+  it('always starts at step 1 when switching between two unrelated flows', () => {
+    const edgeA = connectedPair();
+    const edgeB = connectedPair();
+    useEditorStore.setState((state) => ({
+      document: {
+        ...state.document,
+        flows: [
+          { id: 'f1', title: 'One', steps: [{ id: 's1', edgeId: edgeA.id }] },
+          { id: 'f2', title: 'Two (unrelated)', steps: [{ id: 's1', edgeId: edgeB.id }, { id: 's2', edgeId: edgeA.id }] },
+        ],
+      },
+    }));
+    const { result } = mount();
+    act(() => result.current.pickFlow('f1'));
+    act(() => result.current.pickFlow('f2'));
+    // f2's step 2 also references edgeA (shared with f1's step 1) — but f1/f2 are not variants of
+    // one another, so pairing must never kick in here.
+    expect(useEditorStore.getState().flowPlayback.step).toBe(1);
+  });
+});

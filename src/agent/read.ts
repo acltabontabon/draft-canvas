@@ -283,7 +283,7 @@ function project(
   return result;
 }
 
-function attachmentOf(a: Attachment) {
+export function attachmentOf(a: Attachment) {
   return {
     id: a.id,
     kind: a.type,
@@ -294,7 +294,7 @@ function attachmentOf(a: Attachment) {
 }
 
 /** The element a free note sits closest to (edge to edge), within a short reach — or none. */
-function nearestElement(note: DraftNode, nodes: readonly DraftNode[]): string | undefined {
+export function nearestElement(note: DraftNode, nodes: readonly DraftNode[]): string | undefined {
   const REACH = 160;
   let best: { id: string; gap: number } | undefined;
   for (const n of nodes) {
@@ -307,7 +307,7 @@ function nearestElement(note: DraftNode, nodes: readonly DraftNode[]): string | 
   return best?.id;
 }
 
-function relationshipOf(edge: DraftEdge, byId: Map<string, DraftNode>, withAttachments = false) {
+export function relationshipOf(edge: DraftEdge, byId: Map<string, DraftNode>, withAttachments = false) {
   const source = byId.get(edge.source);
   const target = byId.get(edge.target);
   const caption =

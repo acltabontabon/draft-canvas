@@ -23,6 +23,7 @@ import {
   removeStepFromFlow,
   renameFlow,
   setFlowAccent,
+  setFlowVariantOf,
   setStepViewport,
   spliceEdgeInFlows,
   stepIndexOf,
@@ -837,5 +838,110 @@ describe('v1 to v2 migration', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.document.flows).toEqual([]);
+  });
+});
+
+describe('setFlowVariantOf (failure-path walkthroughs)', () => {
+  it('links a flow to another as its variant', () => {
+    const normal = createFlow({ id: 'fnorm', title: 'Payment' });
+    const failure = createFlow({ id: 'ffail', title: 'Payment — failure path' });
+    let doc = addFlow(addFlow(createDocument('Flows'), normal), failure);
+    doc = setFlowVariantOf(doc, 'ffail', 'fnorm');
+    expect(doc.flows.find((f) => f.id === 'ffail')?.variantOf).toBe('fnorm');
+  });
+
+  it('refuses a self-link', () => {
+    const flow = createFlow({ id: 'f1', title: 'Payment' });
+    const doc = addFlow(createDocument('Flows'), flow);
+    const next = setFlowVariantOf(doc, 'f1', 'f1');
+    expect(next).toBe(doc);
+  });
+
+  it('refuses a target that does not exist', () => {
+    const flow = createFlow({ id: 'f1', title: 'Payment' });
+    const doc = addFlow(createDocument('Flows'), flow);
+    const next = setFlowVariantOf(doc, 'f1', 'nope');
+    expect(next.flows[0]?.variantOf).toBeUndefined();
+  });
+
+  it('refuses hub-and-spoke chains: a variant cannot itself become another variant\'s target', () => {
+    const a = createFlow({ id: 'a', title: 'A' });
+    const b = createFlow({ id: 'b', title: 'B' });
+    const c = createFlow({ id: 'c', title: 'C' });
+    let doc = addFlow(addFlow(addFlow(createDocument('Flows'), a), b), c);
+    doc = setFlowVariantOf(doc, 'b', 'a'); // b is a variant of a
+    const next = setFlowVariantOf(doc, 'c', 'b'); // c wants to be a variant of b — refused, b is already a variant
+    expect(next).toBe(doc);
+  });
+
+  it('clears a flow\'s variantOf back to undefined', () => {
+    const a = createFlow({ id: 'a', title: 'A' });
+    const b = createFlow({ id: 'b', title: 'B' });
+    let doc = addFlow(addFlow(createDocument('Flows'), a), b);
+    doc = setFlowVariantOf(doc, 'b', 'a');
+    doc = setFlowVariantOf(doc, 'b', undefined);
+    expect(doc.flows.find((f) => f.id === 'b')?.variantOf).toBeUndefined();
+  });
+
+  it('deleting the base flow clears the dangling variantOf on its variant, not the variant itself', () => {
+    const a = createFlow({ id: 'a', title: 'A' });
+    const b = createFlow({ id: 'b', title: 'B' });
+    let doc = addFlow(addFlow(createDocument('Flows'), a), b);
+    doc = setFlowVariantOf(doc, 'b', 'a');
+    doc = deleteFlow(doc, 'a');
+    expect(doc.flows).toHaveLength(1);
+    expect(doc.flows[0]).toMatchObject({ id: 'b' });
+    expect(doc.flows[0]?.variantOf).toBeUndefined();
+  });
+});
+
+describe('parseDocument: variantOf survives, and is repaired rather than left dangling', () => {
+  function rawDoc(flows: unknown[]): string {
+    return JSON.stringify({
+      format: DRAFT_FORMAT,
+      version: CURRENT_VERSION,
+      metadata: { id: 'd1', title: 'Doc', createdAt: 0, updatedAt: 0 },
+      nodes: [],
+      edges: [],
+      flows,
+    });
+  }
+
+  it('keeps a valid variantOf link, remapped through any id reassignment', () => {
+    const result = parseDocument(rawDoc([{ id: 'a', title: 'A', steps: [] }, { id: 'b', title: 'B', steps: [], variantOf: 'a' }]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const b = result.document.flows.find((f) => f.title === 'B');
+    const a = result.document.flows.find((f) => f.title === 'A');
+    expect(b?.variantOf).toBe(a?.id);
+  });
+
+  it('drops a self-link rather than keeping it', () => {
+    const result = parseDocument(rawDoc([{ id: 'a', title: 'A', steps: [], variantOf: 'a' }]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.flows[0]?.variantOf).toBeUndefined();
+  });
+
+  it('drops a variantOf naming a flow that does not exist', () => {
+    const result = parseDocument(rawDoc([{ id: 'a', title: 'A', steps: [], variantOf: 'ghost' }]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.flows[0]?.variantOf).toBeUndefined();
+  });
+
+  it('breaks a chain into hub-and-spoke: only the first-processed link survives', () => {
+    const result = parseDocument(
+      rawDoc([
+        { id: 'a', title: 'A', steps: [] },
+        { id: 'b', title: 'B', steps: [], variantOf: 'a' },
+        { id: 'c', title: 'C', steps: [], variantOf: 'b' },
+      ]),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [a, b, c] = ['A', 'B', 'C'].map((title) => result.document.flows.find((f) => f.title === title));
+    expect(b?.variantOf).toBe(a?.id);
+    expect(c?.variantOf).toBeUndefined();
   });
 });

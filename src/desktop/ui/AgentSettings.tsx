@@ -94,17 +94,15 @@ function backgroundLine(agent: AgentState, platform: 'macos' | 'windows' | 'linu
     : 'Keep the Draft Canvas window open while an agent works; a hidden window may be paused.';
 }
 
-/** How to point an agent at the connector: its path, and the two setups most clients use. */
+/** How to point an agent at the connector: its path, and the setups the common clients use. */
 function Connect({ agent }: { agent: AgentState }) {
   const [copied, setCopied] = useState<string | null>(null);
   if (!agent.sidecarPath) {
     return <p className="dc-muted dc-settings-hint">This build of Draft Canvas doesn’t include the agent connector.</p>;
   }
-  const quoted = JSON.stringify(agent.sidecarPath);
-  const setups = [
-    { id: 'claude-code', label: 'Claude Code', text: `claude mcp add draft-canvas -- ${quoted}` },
-    { id: 'json', label: 'Other agents (MCP config)', text: JSON.stringify({ mcpServers: { 'draft-canvas': { command: agent.sidecarPath } } }, null, 2) },
-  ];
+  const sidecarPath = agent.sidecarPath;
+  const quoted = JSON.stringify(sidecarPath);
+  const setups = [{ id: 'claude-code', label: 'Claude Code', text: `claude mcp add draft-canvas -- ${quoted}` }];
   const copy = async (id: string, text: string) => {
     if (await useEditorStore.getState().copyText(text)) setCopied(id);
   };
@@ -126,6 +124,64 @@ function Connect({ agent }: { agent: AgentState }) {
           <pre>{setup.text}</pre>
         </div>
       ))}
+      <CursorSetup sidecarPath={sidecarPath} copied={copied === 'cursor-json'} onCopy={() => copy('cursor-json', genericConfigJson(sidecarPath))} />
+      <div className="dc-agent-setup">
+        <div className="dc-agent-setup-head">
+          <span>Other agents (MCP config)</span>
+          <Button variant="quiet" onClick={() => void copy('json', genericConfigJson(sidecarPath))}>
+            {copied === 'json' ? 'Copied' : 'Copy'}
+          </Button>
+        </div>
+        <pre>{genericConfigJson(sidecarPath)}</pre>
+      </div>
+    </div>
+  );
+}
+
+/** The one server definition every setup below is built from, so the deeplink and the pasted config
+ *  (Cursor's own, and the generic "other agents" one) can never quietly drift apart from each other. */
+export function cursorServerConfig(sidecarPath: string) {
+  return { command: sidecarPath };
+}
+
+export function genericConfigJson(sidecarPath: string): string {
+  return JSON.stringify({ mcpServers: { 'draft-canvas': cursorServerConfig(sidecarPath) } }, null, 2);
+}
+
+/** Cursor writes its own config when this link is opened — Draft Canvas never edits another app's
+ *  config file directly, which is what makes this the reliable "automatic setup" the other clients
+ *  don't have. The pasted-JSON fallback (below, `genericConfigJson`) is for a machine with no
+ *  `cursor://` handler registered, or a project-scoped `.cursor/mcp.json` someone wants to review
+ *  before adding — built from the same `cursorServerConfig`, just wrapped for a different consumer. */
+export function cursorDeeplink(sidecarPath: string): string {
+  const encoded = encodeURIComponent(btoa(JSON.stringify(cursorServerConfig(sidecarPath))));
+  return `cursor://anysphere.cursor-deeplink/mcp/install?name=draft-canvas&config=${encoded}`;
+}
+
+function CursorSetup({ sidecarPath, copied, onCopy }: { sidecarPath: string; copied: boolean; onCopy: () => void }) {
+  const [showFallback, setShowFallback] = useState(false);
+  return (
+    <div className="dc-agent-setup">
+      <div className="dc-agent-setup-head">
+        <span>Cursor</span>
+      </div>
+      <p className="dc-muted dc-settings-hint">
+        <a href={cursorDeeplink(sidecarPath)}>Add to Cursor</a> — opens Cursor and adds Draft Canvas to its MCP config.
+      </p>
+      <Button variant="quiet" onClick={() => setShowFallback((v) => !v)}>
+        {showFallback ? 'Hide config' : 'Or copy the config instead'}
+      </Button>
+      {showFallback && (
+        <>
+          <div className="dc-agent-setup-head">
+            <span className="dc-muted dc-settings-hint">Paste into ~/.cursor/mcp.json, or a project's .cursor/mcp.json</span>
+            <Button variant="quiet" onClick={onCopy}>
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
+          </div>
+          <pre>{genericConfigJson(sidecarPath)}</pre>
+        </>
+      )}
     </div>
   );
 }

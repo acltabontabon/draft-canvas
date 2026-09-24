@@ -15,11 +15,13 @@ pub mod broker;
 pub mod endpoint;
 pub mod ledger;
 pub mod page;
+pub mod proposals;
 pub mod scope;
 pub mod session;
 
 use crate::util::{lock, now_ms};
 use ledger::Ledger;
+use proposals::Proposals;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -47,6 +49,9 @@ pub struct Agent {
     running: Mutex<Option<bridge::Running>>,
     pub(crate) page: page::PageLink,
     ledger: Mutex<Option<Ledger>>,
+    /// Proposals a coding agent submitted for human review — a distinct, longer-lived store from the
+    /// ledger's per-call replay guarantee. See `proposals.rs`.
+    proposals: Mutex<Option<Proposals>>,
     /// Requests being worked on right now, by ledger key: a duplicate waits for the first to finish.
     inflight: Mutex<HashMap<String, watch::Receiver<bool>>>,
     pub(crate) index: scope::DiagramIndex,
@@ -71,6 +76,7 @@ impl Agent {
             running: Mutex::new(None),
             page: page::PageLink::default(),
             ledger: Mutex::new(None),
+            proposals: Mutex::new(None),
             inflight: Mutex::default(),
             index: scope::DiagramIndex::default(),
             active: Mutex::new(None),
@@ -110,6 +116,7 @@ impl Agent {
             return Ok(());
         }
         self.ensure_ledger()?;
+        self.ensure_proposals()?;
         *running = Some(bridge::listen(self.clone())?);
         Ok(())
     }
@@ -161,6 +168,24 @@ impl Agent {
     /// Runs `work` with the ledger. `None` when it couldn't be opened, which `enable` already reported.
     pub(crate) fn with_ledger<T>(&self, work: impl FnOnce(&mut Ledger) -> T) -> Option<T> {
         lock(&self.ledger).as_mut().map(work)
+    }
+
+    fn ensure_proposals(&self) -> std::io::Result<()> {
+        let mut proposals = lock(&self.proposals);
+        if proposals.is_none() {
+            *proposals = Some(Proposals::open(&self.dir, now_ms())?);
+        }
+        Ok(())
+    }
+
+    /// Runs `work` with the proposal store, opening it on first use — unlike the ledger, review of a
+    /// proposal already submitted must work even if agent access is currently off, so this isn't gated
+    /// behind `enable()`. `None` only if the store couldn't be opened at all (a disk error).
+    pub(crate) fn with_proposals<T>(&self, work: impl FnOnce(&mut Proposals) -> T) -> Option<T> {
+        if self.ensure_proposals().is_err() {
+            return None;
+        }
+        lock(&self.proposals).as_mut().map(work)
     }
 
     pub fn set_active(&self, active: Option<ActiveDoc>) {

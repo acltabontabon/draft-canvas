@@ -63,6 +63,9 @@ const ExportDialogChunk = retryableLazy(() => import('./ExportDialog').then((mod
 // Learn and every one of its scenes arrive the first time it's opened, and stay mounted after — so
 // the editor itself carries nothing but the recipe titles its palette can search.
 const LearnDrawerChunk = retryableLazy(() => import('../learn/LearnDrawer').then((module) => ({ default: module.LearnDrawer })));
+// Proposal review is desktop-only (an AI agent's own feature); `__DESKTOP__` drops it from the web
+// build entirely, the same way `App.tsx` gates every other desktop-only chunk.
+const ProposalPanelChunk = __DESKTOP__ ? retryableLazy(() => import('../../desktop/ui/ProposalPanel').then((module) => ({ default: module.ProposalPanel }))) : null;
 
 /** Whether a modal dialog (`Modal`'s `aria-modal` panel) is up — the editor's shortcuts stand down. */
 function modalIsOpen(): boolean {
@@ -518,6 +521,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           {!presenting && <ContinuationAnnouncer />}
           {!presenting && <Inspector />}
           {!presenting && <FlowPanel onPresent={onPresent} />}
+          {!presenting && ProposalPanelChunk && (
+            <Suspense fallback={null}>
+              <ProposalPanelChunk.Component />
+            </Suspense>
+          )}
           {/* Ungated on purpose — the only surface here besides the flow bar that presentation
               lets through, and then only its one-line capture. See `TakeawaysPanel`. */}
           <TakeawaysPanel playback={playback} buildCommandContext={buildCommandContext} />

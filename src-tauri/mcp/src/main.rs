@@ -193,7 +193,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_compiled_in_tools_parse_and_are_the_five_documented_ones() {
+    fn the_compiled_in_tools_parse_and_are_the_documented_ones() {
         let names: Vec<String> = tools().iter().map(|t| t.name.to_string()).collect();
         assert_eq!(
             names,
@@ -201,9 +201,29 @@ mod tests {
                 "get_capabilities",
                 "list_diagrams",
                 "read_diagram",
+                "read_selection",
+                "get_implementation_context",
                 "create_diagram",
-                "update_diagram"
+                "update_diagram",
+                "submit_proposal",
+                "get_proposal",
+                "list_proposals"
             ]
         );
+    }
+
+    /// Resolving a proposal (accept/reject/dismiss) is a native, human-only action — never a tool an
+    /// MCP client could call. This is the compiled-in half of that guarantee: whatever tools land here
+    /// in a later round, none of them may be a way to approve a pending proposal on the person's behalf.
+    #[test]
+    fn no_tool_lets_an_agent_resolve_a_proposal() {
+        let names: Vec<String> = tools().iter().map(|t| t.name.to_string()).collect();
+        for name in &names {
+            let lower = name.to_lowercase();
+            assert!(
+                !(lower.contains("accept") || lower.contains("reject") || lower.contains("resolve") || lower.contains("dismiss")),
+                "{name} looks like it could approve a proposal — that must stay a native-only action"
+            );
+        }
     }
 }

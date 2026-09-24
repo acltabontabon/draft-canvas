@@ -6,6 +6,8 @@ import {
   type DesktopApi,
   type DesktopSettings,
   type HostBoot,
+  type Proposal,
+  type ProposalAction,
   type UpdateSnapshot,
   type HostEvent,
 } from '../api';
@@ -113,5 +115,9 @@ export function createTauriApi(): DesktopApi {
     agentRespond: (id, outcome) => call<void>('agent_respond', { id, outcome }),
     agentStatus: () => call<AgentSettings>('agent_status'),
     agentConfigure: (patch) => call<AgentSettings>('agent_configure', { patch }),
+    agentProposalList: (diagramId) => call<Proposal[]>('agent_proposal_list', { diagramId }),
+    agentProposalGet: (id) => call<Proposal | null>('agent_proposal_get', { id }),
+    agentProposalBeginAccept: (id, version, diagramId, path) => call<ProposalAction>('agent_proposal_begin_accept', { id, version, diagramId, path }),
+    agentProposalResolve: (id, status) => call<ProposalAction>('agent_proposal_resolve', { id, status }),
   };
 }

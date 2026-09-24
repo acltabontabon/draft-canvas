@@ -15,6 +15,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { ReadOnlyCode } from '../../canvas/AttachmentPresentation';
 import type { FlowPlaybackController } from '../../presentation/useFlowPlayback';
+import type { DraftFlow } from '../../document/types';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { useFocusReturn } from '../common/useFocusReturn';
@@ -298,6 +299,29 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
  * so a document with five flows can legitimately show three rows. Saying "flows you can present"
  * is what makes that read as a fact about them rather than as something missing.
  */
+
+/** Groups a flow with its named variant(s) (e.g. a failure path) right after it, in the picker's
+ *  existing order — nothing reordered otherwise, and a variant whose base isn't in this playable
+ *  list (rare — the base itself would have to not be presentable) just falls back to its own row. */
+export function orderedWithVariants(flows: readonly DraftFlow[]): { flow: DraftFlow; variant: boolean }[] {
+  const byId = new Map(flows.map((f) => [f.id, f]));
+  const placed = new Set<string>();
+  const rows: { flow: DraftFlow; variant: boolean }[] = [];
+  for (const flow of flows) {
+    if (placed.has(flow.id)) continue;
+    if (flow.variantOf && byId.has(flow.variantOf)) continue; // placed alongside its base below
+    rows.push({ flow, variant: false });
+    placed.add(flow.id);
+    for (const candidate of flows) {
+      if (candidate.variantOf === flow.id && !placed.has(candidate.id)) {
+        rows.push({ flow: candidate, variant: true });
+        placed.add(candidate.id);
+      }
+    }
+  }
+  return rows;
+}
+
 function FlowPicker({
   playback,
   onClose,
@@ -377,7 +401,7 @@ function FlowPicker({
         </Button>
       </div>
       <div className="dc-flow-picker-list">
-        {playback.flows.map((flow, index) => {
+        {orderedWithVariants(playback.flows).map(({ flow, variant }, index) => {
           const current = flow.id === playback.flow?.id;
           return (
             <button
@@ -388,7 +412,7 @@ function FlowPicker({
               // The flow's own name, and only that: the position and step count beside it are
               // orientation for the eye, not part of what this row is called.
               aria-label={flow.title}
-              className="dc-flow-picker-item"
+              className={variant ? 'dc-flow-picker-item dc-flow-picker-item-variant' : 'dc-flow-picker-item'}
               title={flow.title}
               onClick={() => {
                 if (current) onClose();

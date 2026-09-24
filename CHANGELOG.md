@@ -50,6 +50,22 @@ and apply to the web app.
   step aside, a retry queue sits right by its worker, and a topic's fan-out is one trunk with one
   caption.
 - An agent's layout work no longer holds up the editor while it runs.
+- **Cursor can connect too**, alongside Claude Code — Settings → AI agents has an **Add to Cursor**
+  button that sets it up in one click, or a config to paste in yourself.
+- **Review an agent's proposed change before it touches your diagram.** Ask an agent to check a pull
+  request's architectural impact against a diagram, or to preview a failure-path walkthrough, and it
+  submits a proposal instead of applying anything. A small button over the diagram opens a review
+  panel showing every addition, modification and removal apart from each other — with the actual
+  before-and-after values for a modification, not just a highlighted shape — plus the agent's
+  reasoning and any open questions. Accept applies the whole thing as one ordinary undo step; Reject
+  and Dismiss leave the diagram untouched. Nothing an agent proposes can be approved except by you.
+  <!-- highlight -->
+- An agent can capture your current selection and edit only that, even if you select something else
+  on screen while it's still working.
+- An agent can read a flow's steps in the order they happen, and the notes and decisions around them,
+  as design context for implementing a change in your repository.
+- A flow can be named as a variant of another — a failure path alongside its normal one — and switched
+  to mid-presentation without leaving it.
 
 ## [1.11.1] - 2026-09-24
 

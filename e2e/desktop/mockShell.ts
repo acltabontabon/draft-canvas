@@ -51,6 +51,9 @@ export interface ShellHandle {
   recoveryIds(): string[];
   /** What the message boxes said. */
   asked(): { title: string; message: string; buttons: string[] }[];
+  /** Seeds a proposal directly into the mock store, as if `submit_proposal` had already run. */
+  addProposal(proposal: Record<string, unknown>): void;
+  proposal(id: string): Record<string, unknown> | undefined;
 }
 
 declare global {
@@ -96,6 +99,7 @@ export async function installMockShell(page: Page): Promise<void> {
       projects: listedProjects.map((handle) => ({ ...folder(handle).info, agent: agentFolders.get(handle) ?? false })),
     });
     let agentSettings: Record<string, unknown> = { enabled: false, listening: false, connections: 0, sidecarPath: '/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp', sidecarWarning: null, background: 'restart-needed', projects: [] };
+    const proposals = new Map<string, Record<string, unknown>>();
     let settings: Record<string, unknown> = { closeBehavior: 'ask', autoCheckUpdates: true };
     let events: ChannelLike | null = null;
     let eventIndex = 0;
@@ -342,6 +346,39 @@ export async function installMockShell(page: Page): Promise<void> {
         if (args.patch.rotate) agentSettings = { ...agentSettings, connections: 0 };
         return agentView();
       },
+      // Proposal review — the mock's rules mirror `proposals.rs`/`commands/agent.rs` closely enough
+      // for a browser-driven test of the review panel: idempotent resolve, wrong-stage refusal, and
+      // the version/identity check `begin_accept` makes before any commit is attempted.
+      agent_proposal_list: (args: { diagramId?: string }) =>
+        [...proposals.values()]
+          .filter((p) => args.diagramId === undefined || p.diagramId === args.diagramId)
+          .sort((a, b) => (b.updatedAt as number) - (a.updatedAt as number)),
+      agent_proposal_get: (args: { id: string }) => proposals.get(args.id) ?? null,
+      agent_proposal_begin_accept: (args: { id: string; version: number; diagramId: string; path: string[] }) => {
+        const proposal = proposals.get(args.id);
+        if (!proposal) return { ok: false, code: 'NOT_FOUND' };
+        if (proposal.status !== 'pending' && proposal.status !== 'accepting') return { ok: false, code: 'WRONG_STAGE', status: proposal.status };
+        if (proposal.version !== args.version || proposal.diagramId !== args.diagramId || JSON.stringify(proposal.path) !== JSON.stringify(args.path)) {
+          return { ok: false, code: 'PROPOSAL_CHANGED', proposal };
+        }
+        const next = { ...proposal, status: 'accepting' };
+        proposals.set(args.id, next);
+        return { ok: true, proposal: next };
+      },
+      agent_proposal_resolve: (args: { id: string; status: 'accepted' | 'rejected' | 'dismissed' }) => {
+        const proposal = proposals.get(args.id);
+        if (!proposal) return { ok: false, code: 'NOT_FOUND' };
+        if (proposal.status === args.status) return { ok: true, proposal };
+        const terminal = new Set(['accepted', 'rejected', 'dismissed', 'informational', 'accept-failed']);
+        if (terminal.has(proposal.status as string)) return { ok: false, code: 'ALREADY_RESOLVED', status: proposal.status };
+        const valid =
+          (proposal.status === 'accepting' && (args.status === 'accepted' || args.status === 'dismissed')) ||
+          (proposal.status === 'pending' && (args.status === 'rejected' || args.status === 'dismissed'));
+        if (!valid) return { ok: false, code: 'WRONG_STAGE', status: proposal.status };
+        const next = { ...proposal, status: args.status, resolvedAt: Date.now() };
+        proposals.set(args.id, next);
+        return { ok: true, proposal: next };
+      },
     };
 
     // What `@tauri-apps/api/core` needs of the page: a way to register the callbacks a `Channel` calls back into.
@@ -407,6 +444,8 @@ export async function installMockShell(page: Page): Promise<void> {
       exports: () => exported,
       recoveryIds: () => [...recovery.keys()],
       asked: () => asked,
+      addProposal: (proposal) => void proposals.set(proposal.proposalId as string, proposal),
+      proposal: (id) => proposals.get(id),
     };
     win.__shell = shell;
   });
