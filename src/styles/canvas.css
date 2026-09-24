@@ -3308,6 +3308,39 @@
 
 /* ------------------------------------------------- intent continuation -- */
 
+/* An AI agent's change still being prepared (`AgentPreviewLayer`): the ghost's own treatment, named
+   by a small tag so it can't be mistaken for an offer of Draft Canvas's own, and what it would
+   remove crossed out where it stands. */
+.dc-agent-preview-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 2px 8px;
+  border: 1px dashed var(--dc-border-strong);
+  border-radius: 999px;
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+  font: 500 11px/16px var(--dc-font);
+  white-space: nowrap;
+}
+
+.dc-agent-preview-group {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 1px dashed var(--dc-border-strong);
+  border-radius: var(--dc-radius-lg);
+}
+
+.dc-agent-preview-removed {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 1px dashed var(--dc-danger);
+  border-radius: calc(var(--dc-radius) + 3px);
+  background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--dc-danger) 18%, transparent) 6px 7px);
+}
+
 /* The ghost: an offer drawn in flow space (inside the viewport portal, so it pans and zooms
    with the diagram) at reduced opacity with a dashed outline in the plain border colour — not
    the selection colour, whose dashed form already means "drag-to-attach armed". Distinguished

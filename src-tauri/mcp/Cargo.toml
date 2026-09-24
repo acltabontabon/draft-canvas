@@ -1,0 +1,28 @@
+[package]
+name = "draft-canvas-mcp"
+# Placeholder, as for the app: the bridge handshake carries the app's real version.
+version = "0.0.0"
+description = "Draft Canvas MCP server: a stdio bridge from an AI agent to the running Draft Canvas app"
+edition = "2021"
+rust-version = "1.88"
+license = "Apache-2.0"
+publish = false
+
+[[bin]]
+name = "draft-canvas-mcp"
+path = "src/main.rs"
+
+[dependencies]
+# The official Rust MCP SDK. Server over stdio only: no HTTP, no network transport compiled in.
+rmcp = { version = "3.4", default-features = false, features = ["server", "transport-io"] }
+tokio = { version = "1", features = ["rt", "macros", "io-std", "io-util", "net", "time", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+rmcp = { version = "3.4", default-features = false, features = ["client", "transport-child-process"] }
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "net", "io-util", "time", "fs"] }
+
+[lints.rust]
+unsafe_code = "forbid"

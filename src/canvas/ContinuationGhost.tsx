@@ -131,7 +131,8 @@ function GhostBody({ offer, anchor }: { offer: ContinuationOffer; anchor: DraftN
   );
 }
 
-function GhostNode({
+/** A node drawn exactly as the canvas draws it, at a ghost's opacity — shared with `AgentPreviewLayer`. */
+export function GhostNode({
   node,
   theme,
   preset,
@@ -169,7 +170,8 @@ function GhostNode({
   );
 }
 
-function GhostEdge({
+/** A connector routed exactly as the canvas routes it, at a ghost's opacity — shared with `AgentPreviewLayer`. */
+export function GhostEdge({
   edge,
   endpoints,
   obstacleRects,
@@ -187,7 +189,11 @@ function GhostEdge({
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
     obstacles,
   });
-  const caption = edge.semantic
+  // Its own words when it has them (a connector an agent is proposing usually does), else the
+  // relationship's caption.
+  const caption = edge.label
+    ? edge.label
+    : edge.semantic
     ? relationshipCaptionLabel(edge.semantic, {
         hasResponse: edge.hasResponse,
         deliveryAttempts: edge.deliveryAttempts,

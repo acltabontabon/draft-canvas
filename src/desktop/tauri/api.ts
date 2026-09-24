@@ -1,6 +1,7 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import {
   DesktopError,
+  type AgentSettings,
   type AppErrorKind,
   type DesktopApi,
   type DesktopSettings,
@@ -105,5 +106,12 @@ export function createTauriApi(): DesktopApi {
     updateDownload: () => call<UpdateSnapshot>('update_download'),
     updateInstall: () => call<UpdateSnapshot>('update_install'),
     updateDismiss: () => call<UpdateSnapshot>('update_dismiss'),
+    agentAck: (id) => call<void>('agent_ack', { id }),
+    agentGate: (id) => call<boolean>('agent_gate', { id }),
+    agentCancel: (id) => call<boolean>('agent_cancel', { id }),
+    agentProgress: (id, message) => call<void>('agent_progress', { id, message }),
+    agentRespond: (id, outcome) => call<void>('agent_respond', { id, outcome }),
+    agentStatus: () => call<AgentSettings>('agent_status'),
+    agentConfigure: (patch) => call<AgentSettings>('agent_configure', { patch }),
   };
 }

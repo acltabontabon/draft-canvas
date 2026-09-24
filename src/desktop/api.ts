@@ -192,7 +192,56 @@ export type HostEvent =
   | { type: 'update'; snapshot: UpdateSnapshot }
   | { type: 'window-focused' }
   | { type: 'recents-changed' }
-  | { type: 'notice'; message: string };
+  | { type: 'notice'; message: string }
+  /**
+   * A request from an AI agent, carried by the local bridge (`src-tauri/src/agent/`). Acknowledge it
+   * at once (`agentAck`), pass the commit gate before changing anything (`agentGate`), answer with
+   * `agentRespond`. `context` is what the shell resolved: the diagram's id, whether it is the one
+   * open, and — for a file that isn't — its text.
+   */
+  | { type: 'agent-request'; id: number; tool: string; args: Record<string, unknown>; context: AgentContext }
+  /**
+   * The shell wrote an agent's update to a diagram that isn't open (request `id`); the file is now at
+   * `stamp`. The page offers to show it, with the change as one undo step.
+   */
+  | { type: 'agent-file-written'; id: number; handle: Handle | null; displayPath: string; stamp: string; created: boolean }
+  /** Agent access was switched on or off: Settings looks again. */
+  | { type: 'agent-changed' };
+
+/** What the shell tells the page about the diagram an agent's request names. */
+export interface AgentContext {
+  diagramId?: string;
+  project?: string;
+  path?: string;
+  open?: boolean;
+  handle?: Handle;
+  /** The file's text and stamp, when it isn't the open document. */
+  text?: string;
+  stamp?: string;
+  /** For `open_created`: the new file's name and where it is. */
+  name?: string;
+  displayPath?: string;
+  revision?: string;
+}
+
+/** Agent access as Settings shows it. Never the token. */
+export interface AgentSettings {
+  enabled: boolean;
+  listening: boolean;
+  connections: number;
+  sidecarPath: string | null;
+  sidecarWarning: string | null;
+  /** `ready`: a hidden window keeps answering. `restart-needed`: after a restart it will (macOS 14+).
+   *  `unverified`: this system offers no supported way to keep a hidden window running. */
+  background: 'ready' | 'restart-needed' | 'unverified';
+  projects: { handle: Handle; name: string; displayPath: string; agent: boolean }[];
+}
+
+export interface AgentPatch {
+  enabled?: boolean;
+  project?: { handle: Handle; agent: boolean };
+  rotate?: boolean;
+}
 
 export type QuitDecision = 'ready' | 'prompting' | 'cancel';
 
@@ -292,4 +341,16 @@ export interface DesktopApi {
   /** Asks the quit question first; when it works the app is replaced and relaunched. */
   updateInstall(): Promise<UpdateSnapshot>;
   updateDismiss(): Promise<UpdateSnapshot>;
+
+  // AI agents (see `agent-request`)
+  agentAck(id: number): Promise<void>;
+  /** True: go ahead and change the document. False: the request expired or was cancelled — change nothing. */
+  agentGate(id: number): Promise<boolean>;
+  /** The person cancelled it. True if it was still before its gate (it will now change nothing). */
+  agentCancel(id: number): Promise<boolean>;
+  /** A short stage phrase for the agent that sent request `id` (MCP progress, if its client asked). */
+  agentProgress(id: number, message: string): Promise<void>;
+  agentRespond(id: number, outcome: unknown): Promise<void>;
+  agentStatus(): Promise<AgentSettings>;
+  agentConfigure(patch: AgentPatch): Promise<AgentSettings>;
 }

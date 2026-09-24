@@ -3,6 +3,7 @@
 //! up the threads that answer other requests), and turns any failure into an `AppError`. The work
 //! itself lives in plain functions over `&AppState`, which the tests drive directly.
 
+pub mod agent;
 pub mod documents;
 pub mod host;
 pub mod peek;
@@ -80,6 +81,7 @@ pub(crate) fn remember_project(state: &AppState, root: &Path, name: &str) {
         let project = LastProject {
             path: path.to_string(),
             name: name.to_string(),
+            agent: false,
         };
         let _ = state.settings.update(|s| {
             s.remember_project(project);

@@ -60,6 +60,7 @@ import {
 } from './projection';
 import { computeSnap, sameGuides, type Guide } from './snapping';
 import { snapResize } from './resizeSnap';
+import { AgentPreviewLayer } from './AgentPreviewLayer';
 import { ContinuationGhost } from './ContinuationGhost';
 import { RoomFrame } from './RoomFrame';
 import { useContinuation } from './useContinuation';
@@ -1905,6 +1906,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           <RoomFrame />
 
           {interactive && <ContinuationGhost />}
+
+          {/* An AI agent's change still being prepared (desktop only): drawn over the diagram, never in it. */}
+          <AgentPreviewLayer />
 
           {interactive && attachTarget && (
             <div

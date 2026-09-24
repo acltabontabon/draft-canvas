@@ -29,6 +29,9 @@ pub fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
     let handle = app.handle().clone();
     let state = handle.state::<AppState>();
+    handle
+        .state::<std::sync::Arc<crate::agent::Agent>>()
+        .start(&handle, state.settings.get().agent_access);
     match crate::tray::create(&handle) {
         Ok(()) => {
             state.tray_ready.store(true, Ordering::SeqCst);
@@ -78,11 +81,36 @@ fn create_window(app: &App) -> tauri::Result<()> {
         .find(|w| w.label == MAIN)
         .cloned()
         .expect("tauri.conf.json defines the main window");
-    WebviewWindowBuilder::from_config(app, &config)?
+    let mut builder = WebviewWindowBuilder::from_config(app, &config)?
         .on_navigation(|url| allows_navigation(url, tauri::is_dev()))
-        .on_new_window(|_, _| NewWindowResponse::Deny)
-        .build()?;
+        .on_new_window(|_, _| NewWindowResponse::Deny);
+    // An agent's request is answered by the page, so a window hidden in the tray has to keep running.
+    // Browsers suspend a hidden view after a few minutes; only macOS 14+ lets that be switched off
+    // (Tauri/Wry's `background_throttling` does nothing on Windows or older macOS). Chosen when the
+    // window is made, so access turned on later takes effect from the next launch.
+    let agent_access = app.state::<AppState>().settings.get().agent_access;
+    if agent_access && can_keep_running_hidden() {
+        builder = builder
+            .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
+        app.state::<std::sync::Arc<crate::agent::Agent>>()
+            .background_ready
+            .store(true, Ordering::SeqCst);
+    }
+    builder.build()?;
     Ok(())
+}
+
+/// Whether this system lets a hidden window keep running (see `create_window`).
+pub fn can_keep_running_hidden() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let version = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion();
+        version.majorVersion >= 14
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
 }
 
 pub fn on_run_event(app: &AppHandle, event: RunEvent) {
@@ -112,6 +140,13 @@ pub fn on_run_event(app: &AppHandle, event: RunEvent) {
             code: None, api, ..
         } if !lock(&app.state::<AppState>().quit).is_quitting() => {
             api.prevent_exit();
+        }
+        // Connected agents hear the app is going, so a sidecar exits (and, on Windows, releases its
+        // executable before an update replaces it) instead of waiting on a socket that's gone.
+        RunEvent::Exit => {
+            if let Some(agent) = app.try_state::<std::sync::Arc<crate::agent::Agent>>() {
+                agent.shutdown("quit");
+            }
         }
         #[cfg(target_os = "macos")]
         RunEvent::Opened { urls } => {

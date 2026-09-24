@@ -28,6 +28,10 @@ pub enum CloseBehavior {
 pub struct LastProject {
     pub path: String,
     pub name: String,
+    /// Whether AI agents may read and change the diagrams in this folder. Off until the person turns
+    /// it on for this folder in Settings; a file written before this existed reads as off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub agent: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,6 +50,9 @@ pub struct Settings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_project: Option<LastProject>,
     pub last_dir: Option<String>,
+    /// Agent access as a whole (`agent/`). Off by default; turned on in Settings, never by the page's
+    /// ordinary settings patch.
+    pub agent_access: bool,
 }
 
 /// How many projects are remembered. Past this the oldest is let go; its folder is untouched, and adding
@@ -61,13 +68,18 @@ impl Default for Settings {
             projects: Vec::new(),
             last_project: None,
             last_dir: None,
+            agent_access: false,
         }
     }
 }
 
 impl Settings {
     /// Puts a project first, adding it if it's new, and keeps the list within its cap.
-    pub fn remember_project(&mut self, project: LastProject) {
+    pub fn remember_project(&mut self, mut project: LastProject) {
+        // Opening a project again keeps the person's choice about agents for it.
+        if let Some(known) = self.projects.iter().find(|p| p.path == project.path) {
+            project.agent |= known.agent;
+        }
         self.projects.retain(|p| p.path != project.path);
         self.projects.insert(0, project);
         self.projects.truncate(PROJECTS_CAP);
@@ -339,6 +351,7 @@ mod tests {
         let project = |n: usize| LastProject {
             path: format!("/p/{n}"),
             name: format!("p{n}"),
+            agent: false,
         };
         for n in 0..PROJECTS_CAP + 5 {
             settings.remember_project(project(n));
@@ -377,6 +390,7 @@ mod tests {
                 s.remember_project(LastProject {
                     path: "/p".into(),
                     name: "p".into(),
+                    agent: false,
                 });
             })
             .unwrap();
@@ -384,7 +398,7 @@ mod tests {
             serde_json::from_slice(&fs::read(dir.path().join("settings.json")).unwrap()).unwrap();
         assert_eq!(
             stored,
-            json!({"v": 1, "closeBehavior": "ask", "autoCheckUpdates": true, "projects": [{"path": "/p", "name": "p"}], "lastDir": null})
+            json!({"v": 1, "closeBehavior": "ask", "autoCheckUpdates": true, "projects": [{"path": "/p", "name": "p"}], "lastDir": null, "agentAccess": false})
         );
         assert_eq!(
             serde_json::to_value(settings.public()).unwrap(),

@@ -75,6 +75,27 @@ pub enum HostEvent {
     Notice {
         message: String,
     },
+    /// A request from an AI agent, carried by the bridge (`agent/`). The page acknowledges it
+    /// (`agent_ack`), passes the commit gate before changing anything (`agent_gate`), and answers
+    /// (`agent_respond`).
+    AgentRequest {
+        id: u64,
+        tool: String,
+        args: serde_json::Value,
+        context: serde_json::Value,
+    },
+    /// An agent's update to a diagram that isn't open was written to its file (request `id`, as sent in
+    /// `AgentRequest`), now at `stamp`: the page offers to show it, with the change as one undo step.
+    AgentFileWritten {
+        id: u64,
+        handle: Option<Handle>,
+        display_path: String,
+        stamp: String,
+        /// A new diagram (nothing to undo); otherwise a change to an existing one.
+        created: bool,
+    },
+    /// Agent access was switched on or off, or its connections changed: Settings looks again.
+    AgentChanged,
 }
 
 struct Bus {

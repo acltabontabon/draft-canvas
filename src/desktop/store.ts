@@ -1,4 +1,4 @@
-import type { DesktopSettings, Handle, ProjectFile, ProjectInfo, RecentItem, RecoveryEntry, UpdateSnapshot } from './api';
+import type { AgentSettings, DesktopSettings, Handle, ProjectFile, ProjectInfo, RecentItem, RecoveryEntry, UpdateSnapshot } from './api';
 
 /**
  * "Rename file…", wherever it was asked for: the file open right now (its name comes from `doc`, not
@@ -61,6 +61,8 @@ export interface DesktopState {
   update: UpdateSnapshot | null;
   /** The update panel is open. */
   updateOpen: boolean;
+  /** Agent access as the shell last described it; null until Settings has asked. */
+  agent: AgentSettings | null;
 }
 
 const INITIAL: DesktopState = {
@@ -78,6 +80,7 @@ const INITIAL: DesktopState = {
   renameTarget: null,
   update: null,
   updateOpen: false,
+  agent: null,
 };
 
 /**

@@ -1,3 +1,4 @@
+mod agent;
 mod commands;
 mod dialogs;
 mod docio;
@@ -87,6 +88,13 @@ pub fn run() {
             commands::updates::update_download,
             commands::updates::update_install,
             commands::updates::update_dismiss,
+            commands::agent::agent_ack,
+            commands::agent::agent_gate,
+            commands::agent::agent_cancel,
+            commands::agent::agent_progress,
+            commands::agent::agent_respond,
+            commands::agent::agent_status,
+            commands::agent::agent_configure,
         ])
         .setup(lifecycle::setup)
         .build(tauri::generate_context!())
@@ -101,6 +109,7 @@ pub fn run() {
         std::process::exit(1);
     };
     app.manage(AppState::new(&config_dir, &data_dir));
+    app.manage(std::sync::Arc::new(agent::Agent::new(&data_dir)));
 
     app.run(lifecycle::on_run_event);
 }

@@ -4,6 +4,7 @@ import { serializeDocument } from '../../src/export/project';
 import type { CommandMessage, ToHostMessage } from '../../src/host/embeddedHost';
 import {
   DesktopError,
+  type AgentSettings,
   type DesktopApi,
   type DocState,
   type FileFilter,
@@ -44,6 +45,25 @@ interface FakeFile {
  * through its whole life without a window.
  */
 export function createHarness() {
+  const agent = {
+    acks: [] as number[],
+    gates: [] as number[],
+    gateOpen: true,
+    /** Requests the person cancelled from the status line: their gate stays shut. */
+    cancelled: new Set<number>(),
+    /** Stage phrases the page passed on for the requesting agent. */
+    progress: [] as { id: number; message: string }[],
+    responses: new Map<number, unknown>(),
+    settings: {
+      enabled: false,
+      listening: false,
+      connections: 0,
+      sidecarPath: null,
+      sidecarWarning: null,
+      background: 'unverified' as const,
+      projects: [],
+    } as AgentSettings,
+  };
   const files = new Map<string, FakeFile>();
   const recovery = new Map<string, { entry: RecoveryEntry; text: string }>();
   const sidecars = new Map<string, { mime: string; base64: string }>();
@@ -53,6 +73,8 @@ export function createHarness() {
   const delivered: unknown[] = [];
   const posted: string[] = [];
   const notices: string[] = [];
+  /** A notice's action button, by the notice's text. */
+  const noticeActions = new Map<string, () => void>();
   let pickedFile: string | null = null;
   let saveAsPath: { name: string; displayPath: string } | null = null;
   let lastSaveAsStartIn: StartLocation | null = null;
@@ -264,6 +286,21 @@ export function createHarness() {
     updateDownload: vi.fn(async () => update),
     updateInstall: vi.fn(async () => update),
     updateDismiss: vi.fn(async () => ({ ...update, dismissed: true })),
+    // The agent bridge: the fake records what the page said and opens the gate unless told not to.
+    agentAck: vi.fn(async (id: number) => void agent.acks.push(id)),
+    agentGate: vi.fn(async (id: number) => {
+      agent.gates.push(id);
+      return agent.gateOpen && !agent.cancelled.has(id);
+    }),
+    agentCancel: vi.fn(async (id: number) => {
+      if (agent.gates.includes(id)) return false;
+      agent.cancelled.add(id);
+      return true;
+    }),
+    agentProgress: vi.fn(async (id: number, message: string) => void agent.progress.push({ id, message })),
+    agentRespond: vi.fn(async (id: number, outcome: unknown) => void agent.responses.set(id, outcome)),
+    agentStatus: vi.fn(async () => agent.settings),
+    agentConfigure: vi.fn(async () => agent.settings),
   } satisfies DesktopApi;
 
   const link: HostLink = {
@@ -287,7 +324,10 @@ export function createHarness() {
     openAbout: vi.fn(),
     openShortcuts: vi.fn(),
     openSettings: vi.fn(),
-    notify: (message) => void notices.push(message),
+    notify: (message, action) => {
+      notices.push(message);
+      if (action) noticeActions.set(message, action.run);
+    },
     editCommand: vi.fn(),
     openRename: vi.fn(),
   };
@@ -307,6 +347,7 @@ export function createHarness() {
 
   return {
     api,
+    agent,
     controller,
     store,
     ui,
@@ -317,6 +358,7 @@ export function createHarness() {
     delivered,
     posted,
     notices,
+    noticeActions,
     errors,
     asked,
     loads,

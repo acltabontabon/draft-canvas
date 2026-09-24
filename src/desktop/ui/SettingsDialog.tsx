@@ -2,6 +2,7 @@ import { Modal } from '../../ui/common/Modal';
 import type { CloseBehavior } from '../api';
 import { desktopStore } from '../store';
 import { useDesktopController, useDesktopState } from '../useDesktop';
+import { AgentSettings } from './AgentSettings';
 import { RenameFileDialog } from './RenameFileDialog';
 import { UpdatePanel, UpdateSettings } from './Updates';
 import './desktop.css';
@@ -40,7 +41,7 @@ function RenameTargetDialog() {
   return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameProjectFile(project, relPath, newStem)} onClose={onClose} />;
 }
 
-/** What closing the window does, and updates. */
+/** What closing the window does, updates, and AI agent access. */
 function SettingsDialog() {
   const { settingsOpen, settings, platform } = useDesktopState();
   const controller = useDesktopController();
@@ -73,6 +74,7 @@ function SettingsDialog() {
         ))}
       </fieldset>
       <UpdateSettings />
+      {__DESKTOP__ && <AgentSettings />}
     </Modal>
   );
 }

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Preset } from '../canvas/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
-import type { Side } from '../document/types';
+import type { DraftEdge, DraftNode, Side } from '../document/types';
 import type { RecipeCategory } from '../learn/types';
 import type { PresentationReveal } from '../presentation/presentationAttachments';
 import { readPreference, writePreference } from '../lib/preferences';
@@ -95,6 +95,18 @@ export interface ContextMenuState {
  * selection move); a `'drop'` offer is owned by the Quick Connect menu for as long as it is open.
  * Ephemeral by construction — never persisted, never in history, never in the document.
  */
+/** An AI agent's provisional change to the view on screen (see `UiState.agentPreview`). */
+export interface AgentPreview {
+  opId: number;
+  /** Numbered with the preparation's progress: a later candidate replaces an earlier one. */
+  seq: number;
+  /** The room it was prepared for; shown only while the person is in that room. */
+  path: readonly string[];
+  /** The whole view as it would be after the change. */
+  nodes: readonly DraftNode[];
+  edges: readonly DraftEdge[];
+}
+
 export interface ContinuationOffer extends MaterializedContinuation {
   trigger: 'select' | 'drop';
   /**
@@ -312,6 +324,12 @@ export interface UiStore {
   /** Intent Continuation's current offer, if any. */
   continuation: ContinuationOffer | null;
   /**
+   * What an AI agent is preparing for the view on screen, drawn on top of it as a provisional layer
+   * (`canvas/AgentPreviewLayer.tsx`) until the change is committed or dropped. Never part of the
+   * document, its history or autosave; set and cleared by the desktop's agent activity alone.
+   */
+  agentPreview: AgentPreview | null;
+  /**
    * Offers the user has waved away this session, pinned to the exact neighborhood they were made
    * in (`dismissalKey`): Escape on a ghost keeps it away for that node until something about that
    * node's connections changes, and no longer. Session-only — cleared on document switch, never
@@ -464,6 +482,7 @@ export interface UiStore {
    *  and edge ids already held (re-keying the fresh geometry onto them), so unrelated document
    *  changes never re-mint a ghost's React keys. */
   setContinuation: (offer: ContinuationOffer | null) => void;
+  setAgentPreview: (preview: AgentPreview | null) => void;
   /**
    * Waves continuation away at the offer's anchor — every candidate, not just the one showing —
    * for as long as that anchor's neighborhood stays the same. Asking again with `]` still works.
@@ -548,6 +567,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   learnFocusRequest: 0,
   learnFocusPending: false,
   continuation: null,
+  agentPreview: null,
   continuationDismissals: new Set<DismissalKey>(),
   continuationsEnabled: initialContinuationsEnabled(),
   continuationCycle: null,
@@ -736,6 +756,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   showLearnRecipe: (learnRecipeId) => set({ learnRecipeId }),
   setLearnQuery: (learnQuery) => set({ learnQuery }),
   setLearnCategory: (learnCategory) => set({ learnCategory }),
+  setAgentPreview: (agentPreview) => set({ agentPreview }),
   setContinuation: (next) =>
     set((state) => {
       const previous = state.continuation;

@@ -45,6 +45,13 @@
     "allow-update-check",
     "allow-update-download",
     "allow-update-install",
-    "allow-update-dismiss"
+    "allow-update-dismiss",
+    "allow-agent-ack",
+    "allow-agent-gate",
+    "allow-agent-cancel",
+    "allow-agent-progress",
+    "allow-agent-respond",
+    "allow-agent-status",
+    "allow-agent-configure"
   ]
 }

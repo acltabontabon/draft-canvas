@@ -34,6 +34,10 @@ const DesktopHomeChunk = __DESKTOP__
 const DesktopSettingsChunk = __DESKTOP__
   ? retryableLazy(() => import('./desktop/ui/SettingsDialog').then((module) => ({ default: module.DesktopSettings })))
   : null;
+// What AI agents are doing — the status line and the generation view. Renders nothing while idle.
+const AgentActivityChunk = __DESKTOP__
+  ? retryableLazy(() => import('./desktop/ui/AgentActivity').then((module) => ({ default: module.AgentActivity })))
+  : null;
 
 function LazyAboutDialog() {
   const open = useUiStore((state) => state.aboutOpen);
@@ -127,6 +131,11 @@ function Shell() {
       {DesktopSettingsChunk && hostKind() === 'desktop' && (
         <Suspense fallback={null}>
           <DesktopSettingsChunk.Component />
+        </Suspense>
+      )}
+      {AgentActivityChunk && hostKind() === 'desktop' && (
+        <Suspense fallback={null}>
+          <AgentActivityChunk.Component />
         </Suspense>
       )}
     </>

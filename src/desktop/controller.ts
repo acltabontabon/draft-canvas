@@ -1,11 +1,16 @@
 import { createDocument } from '../document/factory';
 import { deserializeDocument, fileNameFor, serializeDocument } from '../export/project';
+import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
 import type { CommandMessage, LoadMessage, ToHostMessage } from '../host/embeddedHost';
+import type { AgentHost } from './agent';
+import { agentActivity } from './agentActivity';
+import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
 import { logDiagnostic } from '../lib/diagnostics';
 import type { StarterId } from '../starters';
 import { loadStarters } from '../starters/load';
 import {
   DesktopError,
+  type AgentPatch,
   type DesktopApi,
   type DocState,
   type Handle,
@@ -27,7 +32,7 @@ export interface DesktopUi {
   openAbout(): void;
   openShortcuts(): void;
   openSettings(): void;
-  notify(message: string): void;
+  notify(message: string, action?: { label: string; run: () => void }): void;
   /** "Rename file…"/"Rename draft" from the menu: what it offers depends on whether the open document
    * has a file yet, which only the app layer (holding `DesktopState.doc`) can tell. */
   openRename(): void;
@@ -67,6 +72,8 @@ const SNAPSHOT_QUIET_MS = 1500;
 const SNAPSHOT_MAX_MS = 5000;
 /** The app answers a flush as soon as its pending edits are posted; a webview that never answers mustn't hold a save or a quit. */
 const FLUSH_TIMEOUT_MS = 1000;
+/** How long an agent's question to the editor, or an open it asked for, may take. */
+const EDITOR_ANSWER_MS = 10_000;
 const QUICK_DRAFT_TITLE = 'Quick Draft';
 
 const realClock: Clock = {
@@ -235,7 +242,161 @@ export class DesktopController {
         return void this.store.update({ update: event.snapshot });
       case 'menu':
         return this.onMenu(event.command);
+      case 'agent-request':
+        return this.onAgentRequest(event);
+      case 'agent-file-written':
+        return this.onAgentFileWritten(event);
+      case 'agent-changed':
+        return void this.refreshAgent();
     }
+  }
+
+  // ─── AI agents ──────────────────────────────────────────────────────────────────────
+
+  private agentModule: Promise<typeof import('./agent')> | null = null;
+  private agentRequests = 0;
+  private readonly agentReplies = new Map<number, (reply: AgentEditorReply) => void>();
+  private readonly openedWaiters = new Map<number, () => void>();
+
+  private async onAgentRequest(event: Extract<HostEvent, { type: 'agent-request' }>): Promise<void> {
+    // Acknowledged before anything loads, so the shell can tell a page that is here from one that isn't.
+    void this.api.agentAck(event.id).catch(() => {});
+    this.agentModule ??= import('./agent');
+    const { handleAgentRequest } = await this.agentModule;
+    await handleAgentRequest(this.api, this.agentHost, event);
+  }
+
+  /**
+   * The person cancelled an agent's request from the status line. Before its commit gate that means
+   * nothing changes (the agent is told it was cancelled); once it is being applied it is too late,
+   * and the line says so — Undo is the way back from a change that landed.
+   */
+  async cancelAgentRequest(id: number): Promise<void> {
+    agentActivity.cancelling(id);
+    const cancelled = await this.api.agentCancel(id).catch(() => false);
+    if (!cancelled) this.ui.notify('That change was already being applied. Use Undo to take it back.');
+  }
+
+  /**
+   * An agent changed a diagram that isn't open (the shell wrote it). Nothing on screen moves; the
+   * notice offers to show it, and opening it — from here or anywhere — has the change as one Undo step.
+   */
+  private onAgentFileWritten(event: Extract<HostEvent, { type: 'agent-file-written' }>): void {
+    const handle = event.handle;
+    const show = handle ? { label: event.created ? 'Open' : 'Show', run: () => void this.openHandle(handle) } : undefined;
+    if (event.created) {
+      const name = event.displayPath.slice(event.displayPath.lastIndexOf('/') + 1).replace(/\.draftcanvas$/, '');
+      this.ui.notify(`An AI agent created “${name}”.`, show);
+      return;
+    }
+    const written = confirmWrite(event.id, event.displayPath, event.stamp);
+    this.ui.notify(`An AI agent updated “${written?.title || 'a diagram'}”.`, show);
+  }
+
+  private readonly agentHost: AgentHost = {
+    openFile: () =>
+      this.session.kind === 'file' ? { handle: this.session.handle, stamp: this.session.stamp, readOnly: this.session.readOnly } : null,
+    hasRecoveryFor: async (displayPath) =>
+      (await this.api.recoveryList()).some((entry) => entry.origin.kind === 'file' && entry.origin.displayPath === displayPath),
+    canReveal: (requested) =>
+      this.session.kind === 'none' || (this.session.kind === 'quick' && !this.edited) || (requested && !this.dirty),
+    isClean: () => this.session.kind === 'file' && !this.dirty,
+    inTurn: <T>(work: () => Promise<T>) => {
+      const next = this.turn.then(work, work);
+      this.turn = next.catch(() => {});
+      return next;
+    },
+    askEditor: (request) => this.askEditor(request),
+    flush: () => this.flushApp(),
+    openQuietly: (handle) => this.openQuietly(handle),
+    saveQuietly: () => this.saveQuietly(),
+    notify: (message) => this.ui.notify(message),
+  };
+
+  private askEditor(request: AgentEditorRequest): Promise<AgentEditorReply> {
+    const id = ++this.agentRequests;
+    return new Promise((resolve, reject) => {
+      const timeout = this.clock.setTimeout(() => {
+        this.agentReplies.delete(id);
+        reject(new Error('The editor did not answer.'));
+      }, EDITOR_ANSWER_MS);
+      this.agentReplies.set(id, (reply) => {
+        this.clock.clearTimeout(timeout);
+        this.agentReplies.delete(id);
+        resolve(reply);
+      });
+      const command: CommandMessage = { type: 'draft-canvas:command', command: 'agent', id, request };
+      this.link.deliver(command);
+    });
+  }
+
+  /**
+   * An agent's `activate`/`open`: makes `handle` the open document without a single question — so it
+   * refuses whenever a question would have been needed (unsaved changes, a recovery copy to decide
+   * about). Never brings the window forward; says so in a notice instead.
+   */
+  private async openQuietly(handle: Handle): Promise<{ opened: true } | { opened: false; reason: string }> {
+    if (this.session.kind === 'file' && this.session.handle === handle) return { opened: true };
+    await this.flushApp();
+    if (this.saving) await this.saving;
+    if (this.dirty) return { opened: false, reason: `${this.displayName} has unsaved changes.` };
+    const opened = await this.api.openHandle(handle);
+    const parsed = deserializeDocument(opened.text);
+    if (!parsed.ok) return { opened: false, reason: `${opened.name}.draftcanvas can't be opened: ${parsed.error}` };
+    const pending = (await this.api.recoveryList()).some((entry) => entry.origin.kind === 'file' && entry.origin.displayPath === opened.displayPath);
+    if (pending) {
+      return { opened: false, reason: `Draft Canvas kept unsaved changes to ${opened.name}.draftcanvas from an earlier session; the person should open it and decide what to keep.` };
+    }
+    const leaving = this.session;
+    if (leaving.kind === 'quick' || leaving.kind === 'pending') await this.discard(leaving.id);
+    this.session = {
+      kind: 'file',
+      handle: opened.handle,
+      name: opened.name,
+      displayPath: opened.displayPath,
+      stamp: opened.stamp,
+      readOnly: opened.readOnly,
+      recoveryId: `f_${uuid()}`,
+    };
+    this.edited = false;
+    await this.loadOpened(opened, opened.text, true);
+    this.ui.notify(`An AI agent opened ${opened.name}.draftcanvas.`);
+    void this.refreshRecents();
+    return { opened: true };
+  }
+
+  /** Save for an agent's change: the same stamp-guarded write as ⌘S, with no dialog either way. */
+  private saveQuietly(): Promise<{ saved: true } | { saved: false; reason: string }> {
+    const run = async (): Promise<{ saved: true } | { saved: false; reason: string }> => {
+      await this.flushApp();
+      const session = this.session;
+      if (session.kind !== 'file') return { saved: false, reason: 'The document has no file yet.' };
+      if (!this.dirty) return { saved: true };
+      const text = this.latestText;
+      if (text === null) return { saved: false, reason: 'Nothing to save yet.' };
+      let result;
+      try {
+        result = await this.api.saveDocument(session.handle, encoder.encode(text), session.stamp);
+      } catch (error) {
+        return { saved: false, reason: describe(error) };
+      }
+      if (result.outcome !== 'saved') return { saved: false, reason: 'The file changed on disk since it was opened.' };
+      session.stamp = result.stamp;
+      this.savedText = text;
+      await this.applyBackground(session.handle);
+      await this.discard(session.recoveryId);
+      this.clearSnapshotTimer();
+      this.outside = null;
+      this.publish();
+      return { saved: true };
+    };
+    const waitFor = this.saving;
+    const next = (waitFor ? waitFor.then(run, run) : run()).finally(() => {
+      if (this.saving === settled) this.saving = null;
+    });
+    const settled = next.then(() => {});
+    this.saving = settled;
+    return next;
   }
 
   private async onMenu(command: Extract<HostEvent, { type: 'menu' }>['command']): Promise<void> {
@@ -295,6 +456,9 @@ export class DesktopController {
       case 'draft-canvas:flushed':
         this.flushes.get(message.id)?.();
         return;
+      case 'draft-canvas:agent':
+        this.agentReplies.get(message.id)?.(message.reply);
+        return;
       case 'draft-canvas:closed':
         this.onClosed();
         return;
@@ -314,6 +478,7 @@ export class DesktopController {
   }
 
   private onOpened(info: { text: string; seq?: number }): void {
+    if (info.seq !== undefined) this.openedWaiters.get(info.seq)?.();
     if (info.seq !== undefined && info.seq !== this.seq) return;
     this.latestText = info.text;
     if (this.expectBaseline) this.savedText = info.text;
@@ -475,11 +640,63 @@ export class DesktopController {
       recoveryId,
     };
     this.edited = false;
-    this.load(text, opened.name, { baseline });
-    this.publish();
+    await this.loadOpened(opened, text, baseline);
     void this.refreshRecents();
     void this.refreshRecovery();
     return true;
+  }
+
+  /** Resolves once the app has shown load `seq`, or has taken too long to say so. */
+  private whenShown(seq: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const timeout = this.clock.setTimeout(() => {
+        this.openedWaiters.delete(seq);
+        resolve();
+      }, EDITOR_ANSWER_MS);
+      this.openedWaiters.set(seq, () => {
+        this.clock.clearTimeout(timeout);
+        this.openedWaiters.delete(seq);
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * Loads a file just opened, and waits until it is on screen. When an AI agent changed it while it
+   * was closed and nothing has touched it since (`agentWrites.ts`), it is loaded as it was before and
+   * the agent's change applied on top as one undo step — so the person sees the change, and can take
+   * it back, as if the file had been open all along. What is on screen is what is on disk either way.
+   */
+  private async loadOpened(opened: OpenedDoc, text: string, baseline: boolean): Promise<void> {
+    const write: AgentWrite | undefined = baseline ? takeWrite(opened.displayPath, opened.stamp) : undefined;
+    const after = write ? deserializeDocument(write.after) : undefined;
+    const seq = this.seq + 1;
+    const shown = this.whenShown(seq);
+    if (!write || !after?.ok || !deserializeDocument(write.before).ok) {
+      this.load(text, opened.name, { baseline });
+      this.publish();
+      await shown;
+      return;
+    }
+    this.load(write.before, opened.name, { baseline: false });
+    this.publish();
+    await shown;
+    const snapshot = this.seq === seq ? await this.askEditor({ kind: 'snapshot' }).catch(() => null) : null;
+    const committed =
+      snapshot?.kind === 'snapshot' && this.seq === seq
+        ? await this.askEditor({ kind: 'commit', expectedRevision: snapshot.revision, file: after.document, label: 'Agent edit' }).catch(() => null)
+        : null;
+    if (this.seq !== seq) return;
+    if (committed?.kind === 'committed') {
+      // The editor now shows the file exactly as on disk; only its undo history holds the "before".
+      this.savedText = this.latestText;
+      this.publish();
+      return;
+    }
+    const retry = this.whenShown(this.seq + 1);
+    this.load(text, opened.name, { baseline: true });
+    this.publish();
+    await retry;
   }
 
   /**
@@ -1097,6 +1314,26 @@ export class DesktopController {
   async setAutoCheckUpdates(autoCheckUpdates: boolean): Promise<void> {
     const settings = await this.api.settingsSet({ autoCheckUpdates });
     this.store.update({ settings });
+  }
+
+  /** Settings → AI agents asks where access stands; so does the shell's `agent-changed`. */
+  async refreshAgent(): Promise<void> {
+    try {
+      this.store.update({ agent: await this.api.agentStatus() });
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-agent-status' });
+    }
+  }
+
+  /** Switch agent access, one folder's permission, or the connection secret; the shell answers
+   *  with where things now stand. */
+  async configureAgent(patch: AgentPatch): Promise<void> {
+    try {
+      this.store.update({ agent: await this.api.agentConfigure(patch) });
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-agent-configure' });
+      this.ui.notify(`Couldn’t change agent access: ${describe(error)}`);
+    }
   }
 
   // ─── Updates ────────────────────────────────────────────────────────────────────────

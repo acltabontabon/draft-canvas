@@ -47,6 +47,13 @@ const COMMANDS: &[&str] = &[
     "update_download",
     "update_install",
     "update_dismiss",
+    "agent_ack",
+    "agent_gate",
+    "agent_cancel",
+    "agent_progress",
+    "agent_respond",
+    "agent_status",
+    "agent_configure",
 ];
 
 fn main() {

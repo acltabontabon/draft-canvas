@@ -72,6 +72,19 @@ pub async fn report_state(app: AppHandle, state: ReportedState) -> Result<(), Ap
             ReportedState::File { handle, .. } => shared.file(handle).ok().map(|g| g.path),
             _ => None,
         };
+        // The agent bridge answers "is this diagram open, and does it have unsaved changes?" from here.
+        let active = match (&state, &file) {
+            (ReportedState::File { handle, dirty, .. }, Some(path)) => {
+                Some(crate::agent::ActiveDoc {
+                    handle: handle.clone(),
+                    path: path.clone(),
+                    dirty: *dirty,
+                })
+            }
+            _ => None,
+        };
+        app.state::<std::sync::Arc<crate::agent::Agent>>()
+            .set_active(active);
         apply_state(app, &state, file);
         Ok(())
     })
@@ -178,7 +191,13 @@ mod tests {
         let name = folder.file_name().unwrap().to_str().unwrap().to_string();
         state
             .settings
-            .update(|s| s.remember_project(LastProject { path, name }))
+            .update(|s| {
+                s.remember_project(LastProject {
+                    path,
+                    name,
+                    agent: false,
+                })
+            })
             .unwrap();
     }
 

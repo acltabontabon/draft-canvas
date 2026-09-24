@@ -1228,6 +1228,9 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* A fieldset is as wide as its widest content by default; a long command line would widen the
+     whole dialog and clip every hint beside it. */
+  min-inline-size: 0;
   margin: 0;
   padding: 0;
   border: 0;
@@ -1539,4 +1542,198 @@
   .dc-update-gauge > span {
     animation: none !important;
   }
+}
+
+/* ---- settings: AI agents ---------------------------------------------------- */
+
+.dc-agent-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 24px;
+}
+
+.dc-agent-status {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.dc-agent-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dc-agent-setup-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.dc-agent-setup pre {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-code-bg);
+  font-family: var(--dc-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre;
+  user-select: text;
+}
+
+.dc-agent-warning {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--dc-danger);
+  font-size: 12.5px;
+}
+
+/* ─── AI agents at work (`AgentActivity.tsx`) ───────────────────────────────────────────────────
+   One quiet line per request that takes a moment, above the status bar, clear of the toasts at the
+   top; and the generation view — a sheet over the canvas that says plainly it isn't saved yet. */
+.dc-agent-activity {
+  position: fixed;
+  left: 12px;
+  bottom: calc(var(--dc-status-height) + 10px);
+  z-index: var(--dc-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(560px, calc(100% - 24px));
+}
+
+.dc-agent-activity-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 12px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface-raised);
+  box-shadow: var(--dc-shadow-panel);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.dc-agent-activity-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dc-text-muted);
+}
+
+.dc-agent-activity-who {
+  color: var(--dc-text);
+  font-weight: 600;
+}
+
+.dc-agent-activity-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dc-selection);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-agent-activity-line[data-phase='working'] .dc-agent-activity-dot {
+    animation: dc-agent-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes dc-agent-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.dc-agent-generation {
+  position: fixed;
+  inset: calc(var(--dc-bar-height) + 12px) 24px calc(var(--dc-status-height) + 56px) 24px;
+  z-index: var(--dc-z-drawer);
+  display: flex;
+  flex-direction: column;
+  border: 1px dashed var(--dc-border-strong);
+  border-radius: var(--dc-radius-lg);
+  background: var(--dc-canvas, var(--dc-surface));
+  box-shadow: var(--dc-shadow-panel);
+  overflow: hidden;
+}
+
+.dc-agent-generation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 10px 8px 16px;
+  border-bottom: 1px solid var(--dc-border);
+  background: var(--dc-surface-raised);
+}
+
+.dc-agent-generation-titles {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.dc-agent-generation-title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dc-agent-generation-badge {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px dashed var(--dc-border-strong);
+  border-radius: var(--dc-radius-pill);
+  color: var(--dc-text-muted);
+  font-size: 11px;
+}
+
+.dc-agent-generation-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+
+.dc-agent-generation-stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dc-agent-generation-stage:active {
+  cursor: grabbing;
+}
+
+.dc-agent-generation-image {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  user-select: none;
+  pointer-events: none;
+}
+
+.dc-agent-generation-waiting {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
 }

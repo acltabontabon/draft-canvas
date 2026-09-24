@@ -32,7 +32,7 @@ const ui: DesktopUi = {
   openAbout: () => useUiStore.getState().setAboutOpen(true),
   openShortcuts: () => useUiStore.getState().setShortcutsOpen(true),
   openSettings: () => desktopStore.update({ settingsOpen: true }),
-  notify: (message) => useUiStore.getState().notify(message),
+  notify: (message, action) => useUiStore.getState().notify(message, 'info', action),
   editCommand: dispatchEditCommand,
   openRename: () => {
     const { doc } = desktopStore.getSnapshot();

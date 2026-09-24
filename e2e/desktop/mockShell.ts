@@ -10,6 +10,12 @@ import type { Page } from '@playwright/test';
  * Tests reach the shell through `window.__shell`, typed below.
  */
 export interface ShellHandle {
+  /** What the page answered an agent request with, by request id. */
+  agentResponse(id: number): unknown;
+  /** Holds every agent request at its commit gate until released (or cancelled), so a test can see it mid-way. */
+  holdGate(hold: boolean): void;
+  /** Stage phrases the page passed on for requesting agents. */
+  agentProgress(): { id: number; message: string }[];
   /** Adds a file to the fake disk. */
   addFile(name: string, text: string): string;
   file(handle: string): { name: string; text: string; version: number } | undefined;
@@ -78,6 +84,18 @@ export async function installMockShell(page: Page): Promise<void> {
     let cancelExport = false;
     let trayArt: unknown = null;
     let update: Record<string, unknown> = { currentVersion: '1.9.4', state: { phase: 'idle' }, dismissed: false, held: null, error: null };
+    const agentResponses = new Map<number, unknown>();
+    let gateHeld = false;
+    const gatePassed = new Set<number>();
+    const agentCancelled = new Set<number>();
+    const progressLog: { id: number; message: string }[] = [];
+    // Which listed folders agents may use; Settings lists every one the shell knows.
+    const agentFolders = new Map<string, boolean>();
+    const agentView = () => ({
+      ...agentSettings,
+      projects: listedProjects.map((handle) => ({ ...folder(handle).info, agent: agentFolders.get(handle) ?? false })),
+    });
+    let agentSettings: Record<string, unknown> = { enabled: false, listening: false, connections: 0, sidecarPath: '/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp', sidecarWarning: null, background: 'restart-needed', projects: [] };
     let settings: Record<string, unknown> = { closeBehavior: 'ask', autoCheckUpdates: true };
     let events: ChannelLike | null = null;
     let eventIndex = 0;
@@ -302,6 +320,28 @@ export async function installMockShell(page: Page): Promise<void> {
       update_download: () => update,
       update_install: () => update,
       update_dismiss: () => (update = { ...update, dismissed: true }),
+      // The agent bridge: what the page says back is recorded for a test to read.
+      agent_ack: () => null,
+      agent_gate: async (args: { id: number }) => {
+        while (gateHeld && !agentCancelled.has(args.id)) await new Promise((resolve) => setTimeout(resolve, 20));
+        if (agentCancelled.has(args.id)) return false;
+        gatePassed.add(args.id);
+        return true;
+      },
+      agent_cancel: (args: { id: number }) => {
+        if (gatePassed.has(args.id)) return false;
+        agentCancelled.add(args.id);
+        return true;
+      },
+      agent_progress: (args: { id: number; message: string }) => void progressLog.push(args),
+      agent_respond: (args: { id: number; outcome: unknown }) => void agentResponses.set(args.id, args.outcome),
+      agent_status: () => agentView(),
+      agent_configure: (args: { patch: { enabled?: boolean; project?: { handle: string; agent: boolean }; rotate?: boolean } }) => {
+        if (args.patch.enabled !== undefined) agentSettings = { ...agentSettings, enabled: args.patch.enabled, listening: args.patch.enabled };
+        if (args.patch.project) agentFolders.set(args.patch.project.handle, args.patch.project.agent);
+        if (args.patch.rotate) agentSettings = { ...agentSettings, connections: 0 };
+        return agentView();
+      },
     };
 
     // What `@tauri-apps/api/core` needs of the page: a way to register the callbacks a `Channel` calls back into.
@@ -323,6 +363,9 @@ export async function installMockShell(page: Page): Promise<void> {
     };
 
     const shell: ShellHandle = {
+      agentResponse: (id) => agentResponses.get(id),
+      holdGate: (hold) => void (gateHeld = hold),
+      agentProgress: () => [...progressLog],
       addFile,
       file: (handle) => files.get(handle),
       nextOpen: (handle) => void (pickedOpen = handle),

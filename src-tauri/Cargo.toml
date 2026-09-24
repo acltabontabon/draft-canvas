@@ -10,6 +10,11 @@ rust-version = "1.88"
 license = "Apache-2.0"
 publish = false
 
+# The app and the MCP sidecar an agent launches (`mcp/`) build together and share one lockfile and
+# target folder, so the sidecar sits beside the app's own binary in development as it does installed.
+[workspace]
+members = ["mcp"]
+
 [lib]
 name = "draft_canvas_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
@@ -26,7 +31,7 @@ tauri-plugin-opener = "2.5"
 # The official updater, driven from Rust only (`src/updater/`); the page gets no updater permission.
 tauri-plugin-updater = "2.12"
 semver = "1"
-tokio = { version = "1", features = ["sync", "time"] }
+tokio = { version = "1", features = ["sync", "time", "net", "io-util", "macros"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

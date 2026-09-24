@@ -182,7 +182,24 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          args: ${{ matrix.args }} --config src-tauri/tauri.updater.conf.json --config src-tauri/tauri.version.conf.json
+          args: ${{ matrix.args }} --config src-tauri/tauri.sidecar.conf.json --config src-tauri/tauri.updater.conf.json --config src-tauri/tauri.version.conf.json
+      # The agent connector rides inside the app bundle (Settings → AI agents points agents at it): it
+      # must be there, intact, and — where the runner can run it — built from this source (it reports
+      # package.json's version, which a prerelease tag may lead).
+      - name: The agent connector is in the app
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          VERSION="$(node -p 'require("./package.json").version')"
+          app="$(find "src-tauri/target/$TARGET/release/bundle/macos" -maxdepth 1 -name '*.app' | head -n 1)"
+          sidecar="$app/Contents/MacOS/draft-canvas-mcp"
+          test -x "$sidecar" || { echo "::error::$sidecar is missing."; exit 1; }
+          codesign --verify --strict --verbose=2 "$sidecar"
+          if [[ "$TARGET" == "aarch64-apple-darwin" ]]; then
+            [[ "$("$sidecar" --version)" == "draft-canvas-mcp $VERSION" ]] || { echo "::error::The connector is not version $VERSION."; exit 1; }
+          fi
       # tauri-action names files after the product ("Draft Canvas_1.9.4_x64-setup.exe"); the release
       # gets names a person can read and a script can predict.
       - name: Name the installer and the update package

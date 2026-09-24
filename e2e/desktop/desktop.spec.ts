@@ -634,6 +634,41 @@ test('Settings has the update switch, and turning it off tells the shell', async
   await expect(settings.getByRole('button', { name: 'Check for updates' })).toBeVisible();
 });
 
+test('Settings → AI agents is off until turned on, and each folder is allowed on its own', async ({ page }) => {
+  await page.addInitScript(() => window.__shell.seed({ projects: [{ name: 'platform', diagrams: [] }, { name: 'payments', diagrams: [] }] }));
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'settings' }));
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  const access = settings.getByRole('checkbox', { name: /Let coding agents on this computer draw diagrams/ });
+  await expect(access).not.toBeChecked();
+  // Nothing about folders or connecting shows while access is off.
+  await expect(settings.getByRole('group', { name: 'Folders agents may use' })).toHaveCount(0);
+
+  await access.check();
+  await expect(access).toBeChecked();
+  const folders = settings.getByRole('group', { name: 'Folders agents may use' });
+  const platform = folders.getByRole('checkbox', { name: /platform/ });
+  const payments = folders.getByRole('checkbox', { name: /payments/ });
+  await expect(platform).not.toBeChecked();
+  await expect(payments).not.toBeChecked();
+  await payments.check();
+  await expect(payments).toBeChecked();
+  await expect(platform).not.toBeChecked();
+  await expect(settings.getByRole('status').filter({ hasText: 'Restart Draft Canvas so agents can reach it while its window is hidden.' })).toBeVisible();
+  // The connector's path, ready to paste into an agent's setup — never the secret.
+  await expect(settings.getByText('claude mcp add draft-canvas -- "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"')).toBeVisible();
+
+  const patches = await page.evaluate(() =>
+    window.__shell
+      .calls()
+      .filter((call) => call.command === 'agent_configure')
+      .map((call) => (call.args as { patch: unknown }).patch),
+  );
+  expect(patches[0]).toEqual({ enabled: true });
+  expect(patches[1]).toMatchObject({ project: { agent: true } });
+});
+
 test('the tray panel draws each diagram and chooses only through the shell', async ({ page }) => {
   await page.goto('/');
   const text = await documentText(page, 'Payments', 3);
