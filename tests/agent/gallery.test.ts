@@ -3,6 +3,7 @@ import { compose } from '../../src/agent/compile';
 import { applyUpdate } from '../../src/agent/patch';
 import { measureContext } from '../../src/agent/place';
 import { checkQuality } from '../../src/agent/quality';
+import { bendsOf, drawnRoute } from '../../src/agent/route';
 import { walkGraphs } from '../../src/depth/tree';
 import { viewOf } from '../../src/depth/tree';
 import { deserializeDocument } from '../../src/export/project';
@@ -93,6 +94,29 @@ describe('layout gallery', () => {
     expect(mermaid).toContain('sequenceDiagram');
     expect(mermaid).toContain('Order Service');
     expect(sequenceSourceFor(doc, 'plantuml')).toContain('@startuml');
+  });
+
+  it('19: the loan-application reference case comes out peer-uniform and readable — the regression it was built for', () => {
+    const { doc } = galleryDocument(GALLERY.find((g) => g.id === '19-loan-application-context')!);
+    const byId = new Map(doc.nodes.map((n) => [n.id, n]));
+    const size = (id: string) => {
+      const n = byId.get(id)!;
+      return `${n.width}x${n.height}`;
+    };
+    // The two actors read as a row: same box, however different their descriptions' lengths.
+    expect(size('applicant')).toBe(size('officer'));
+    // The four external systems read as a row too, none of them enlarged by another's description.
+    expect(size('bureau')).toBe(size('kyc'));
+    expect(size('kyc')).toBe(size('core'));
+    expect(size('core')).toBe(size('notify'));
+    // Nothing is left unnecessarily bent — the loan officer's edge no longer loops around the focal
+    // system, and no connector here needs more than a couple of corners to reach its target.
+    for (const edge of doc.edges) {
+      const drawn = drawnRoute(edge, doc.nodes, doc.edges);
+      expect(drawn, edge.id).not.toBeNull();
+      expect(bendsOf(drawn!.points), edge.id).toBeLessThanOrEqual(2);
+    }
+    expect(checkQuality(doc.nodes, doc.edges, measureContext())).toEqual({ errors: [], warnings: [] });
   });
 
   it('11: the context view keeps its focal system’s containers one level in', () => {

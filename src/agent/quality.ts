@@ -48,10 +48,33 @@ const WEIGHT: Record<QualityIssue['kind'], number> = {
 
 /**
  * One number to compare candidate arrangements by: errors by how much they hide, then (far less)
- * skewed connectors. Lower is better; 0 is a clean result with every connector straight.
+ * skewed connectors. Lower is better; 0 is a clean result with every connector straight. For
+ * display only — `isBetterReport` is what candidate selection uses, since a plain sum can't
+ * guarantee an error-free candidate always outranks one with errors.
  */
 export function scoreOf(report: QualityReport): number {
   return [...report.errors, ...report.warnings].reduce((sum, issue) => sum + WEIGHT[issue.kind], 0);
+}
+
+const weightOf = (issues: readonly QualityIssue[]) => issues.reduce((sum, issue) => sum + WEIGHT[issue.kind], 0);
+
+/**
+ * Whether `a` should be kept over `b` when choosing among candidate arrangements: errors always
+ * decide it first — no amount of avoided jogs may let a candidate with more hidden content win —
+ * and only when they're tied does the warning weight break it. A single weighted sum can't promise
+ * that on its own (enough warnings could in principle outweigh one error), so this compares the two
+ * halves separately instead of summing them together.
+ */
+export function isBetterReport(a: QualityReport, b: QualityReport): boolean {
+  const errorsA = weightOf(a.errors);
+  const errorsB = weightOf(b.errors);
+  if (errorsA !== errorsB) return errorsA < errorsB;
+  return weightOf(a.warnings) < weightOf(b.warnings);
+}
+
+/** No errors and nothing left to tidy — the search for a better candidate can stop here. */
+export function isClean(report: QualityReport): boolean {
+  return report.errors.length === 0 && report.warnings.length === 0;
 }
 
 const contains = (outer: Box, inner: Box) =>

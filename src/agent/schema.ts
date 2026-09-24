@@ -130,6 +130,11 @@ const action: Schema = {
   ],
 };
 
+const normalizePeerSizes = {
+  type: 'boolean',
+  description: 'Give peer shapes (same type/role, same parent) one uniform size, bounded against one long description enlarging the rest. Default true for a new diagram or block; false for arrange (existing sizes kept unless asked).',
+} as const;
+
 const layout: Schema = {
   type: 'object',
   properties: {
@@ -137,7 +142,17 @@ const layout: Schema = {
     spacing: { enum: ['compact', 'comfortable', 'spacious'] },
     primaryFlow: { type: 'string', description: 'Id of the flow to lay out as the main path.' },
     allowDegraded: { type: 'boolean', description: 'Accept a layout that failed the readability check instead of an error.' },
+    normalizePeerSizes,
   },
+  additionalProperties: false,
+};
+
+/** The lighter `layout` object `update_diagram` and `submit_proposal` take at the request's top
+ *  level — direction/spacing/peer-sizing only; `primaryFlow`/`allowDegraded` are `arrange`-op or
+ *  create-only concerns there. */
+const layoutBrief: Schema = {
+  type: 'object',
+  properties: { direction: { enum: ['right', 'down'] }, spacing: { enum: ['compact', 'comfortable', 'spacious'] }, normalizePeerSizes },
   additionalProperties: false,
 };
 
@@ -184,6 +199,7 @@ const ops: Schema = {
         additionalProperties: false,
       },
       connectors: { enum: ['tidy', 'keep', 'orthogonal'], description: 'arrange only: tidy (default) drops hand-routing on connectors in scope; keep leaves it; orthogonal also makes them right-angled.' },
+      move: { type: 'boolean', description: 'arrange only: false re-anchors connectors in scope without moving or resizing anything — a cheaper cleanup pass. Default true.' },
       direction: { enum: ['right', 'down'], description: 'arrange only. Default: the way the view already reads.' },
       spacing: { enum: ['compact', 'comfortable', 'spacious'] },
       primaryFlow: { type: 'string', description: 'arrange only: lay this flow out as the straight main path.' },
@@ -325,7 +341,7 @@ export const TOOLS = [
         activate: { type: 'boolean', description: 'Also open the diagram on screen first (refused if what is open has unsaved changes). Not needed to change it.' },
         scope,
         ops,
-        layout: { type: 'object', properties: { direction: { enum: ['right', 'down'] }, spacing: { enum: ['compact', 'comfortable', 'spacious'] } }, additionalProperties: false },
+        layout: layoutBrief,
       },
       required: ['requestId', 'diagramId', 'expectedRevision', 'ops'],
       additionalProperties: false,

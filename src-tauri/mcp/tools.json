@@ -809,6 +809,10 @@
             "allowDegraded": {
               "type": "boolean",
               "description": "Accept a layout that failed the readability check instead of an error."
+            },
+            "normalizePeerSizes": {
+              "type": "boolean",
+              "description": "Give peer shapes (same type/role, same parent) one uniform size, bounded against one long description enlarging the rest. Default true for a new diagram or block; false for arrange (existing sizes kept unless asked)."
             }
           },
           "additionalProperties": false
@@ -991,6 +995,10 @@
                   "orthogonal"
                 ],
                 "description": "arrange only: tidy (default) drops hand-routing on connectors in scope; keep leaves it; orthogonal also makes them right-angled."
+              },
+              "move": {
+                "type": "boolean",
+                "description": "arrange only: false re-anchors connectors in scope without moving or resizing anything — a cheaper cleanup pass. Default true."
               },
               "direction": {
                 "enum": [
@@ -1513,6 +1521,10 @@
                 "comfortable",
                 "spacious"
               ]
+            },
+            "normalizePeerSizes": {
+              "type": "boolean",
+              "description": "Give peer shapes (same type/role, same parent) one uniform size, bounded against one long description enlarging the rest. Default true for a new diagram or block; false for arrange (existing sizes kept unless asked)."
             }
           },
           "additionalProperties": false

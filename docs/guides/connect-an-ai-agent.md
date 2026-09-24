@@ -45,7 +45,10 @@ doesn't start the app for you, and it says so if the app isn't open.
     saved to its file without switching what you're looking at; a notice offers **Show**, and opening
     it then has the change as its undo step.
   - "Clean up the arrows and spacing" re-arranges the diagram in place — the same shapes, notes and
-    flows, laid out again. You can ask for just one boundary.
+    flows, laid out again. You can ask for just one boundary, or just a tidier connector or two
+    without moving anything.
+  - Shapes that play the same role — a row of actors, a row of external systems — come out one
+    consistent size automatically, without an unusually long description enlarging the rest of them.
   - If two diagrams have the name you mention, the agent asks you which.
 - **Add notes and flows.** A note can sit beside a shape, inside a boundary, or be attached to a shape
   or connector so it moves with it. Flows walk through the connectors that are already there, and

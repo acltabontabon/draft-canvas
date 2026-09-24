@@ -9,9 +9,8 @@ import { viewOf, type DepthPath } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 import { compose, type Composed } from './compile';
 import { applyUpdate, type PatchResult } from './patch';
-import { measureContext } from './place';
 import { silent, type Report } from './progress';
-import { checkQuality, type QualityIssue } from './quality';
+import { type QualityIssue, type QualityReport } from './quality';
 import { withDeadline } from './route';
 
 export type Job =
@@ -31,6 +30,8 @@ export type JobResult =
       problems: string[];
       /** When there are problems: the smallest op that would make room (an `arrange` over a scope). */
       suggestedOp?: Record<string, unknown>;
+      /** Errors and warnings among what the request touched — see `PatchResult['quality']`. */
+      quality: QualityReport;
     };
 
 /**
@@ -45,7 +46,7 @@ export function runJob(job: Job, deadline: number, report: Report = silent): Job
     const view = viewOf(result.file, job.path);
     // The edited view whole, as it would be committed: what the preview shows while it is checked.
     if (view && result.file !== job.file) report('routing', { nodes: view.nodes, edges: view.edges, flows: view.flows });
-    const issues = view && result.touched.size ? checkQuality(view.nodes, view.edges, measureContext(), result.touched).errors : [];
+    const issues = result.quality.errors;
     const suggestedOp = view && issues.length ? smallestArrange(view, issues) : undefined;
     return {
       kind: 'update',
@@ -55,6 +56,7 @@ export function runJob(job: Job, deadline: number, report: Report = silent): Job
       advisories: result.advisories,
       problems: issues.map((issue) => issue.message),
       ...(suggestedOp ? { suggestedOp } : {}),
+      quality: result.quality,
     };
   });
 }

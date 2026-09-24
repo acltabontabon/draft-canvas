@@ -345,6 +345,15 @@ dependency). It works in these steps:
 Sizes come from the renderer: `naturalArchitectureSize` asks the shape describer itself. A caption's
 size comes from the canvas's own text layout.
 
+**Peer sizing.** Shapes of the same type, sub-kind (`serviceKind`, `actorKind`, …) and parent, and at
+roughly the same distance along the graph, are given one shared size — so a row of actors or external
+systems reads as a row instead of whatever each one's own content happened to need. A member far
+larger than its group's typical size is left at its own size instead of being folded in, so one long
+description never enlarges its siblings; nothing ever shrinks below the size it already has.
+`layout.normalizePeerSizes` controls it — on by default for `create_diagram` and a newly-added block
+(nothing manual to preserve yet), off by default for `arrange` on an existing diagram (which keeps
+whatever sizes it already has unless this is explicitly asked for).
+
 **Straight before balanced.** When two neighbours pull a shape equally, it lines up with one of them —
 the one on the longer chain — instead of sitting halfway, where both connectors would step. A final
 pass moves a shape by up to 72 px when that straightens a connector without overlapping anything,
@@ -373,7 +382,7 @@ its trunks for fan-outs, its lanes for parallel pairs, and its label groups (`sr
 | Class | Checks | On create | On update |
 | --- | --- | --- | --- |
 | Error | shapes overlapping; a member outside its boundary; clipped text; a connector through an unrelated shape; a caption over a shape; two captions overlapping; a line through another connector's caption; two connectors drawn on top of each other for more than 30 px (outside a shared trunk); invalid geometry | Repaired, then `LAYOUT_FAILED` if still present (see below). With `layout.allowDegraded: true` the diagram is kept, and the receipt says `degraded: true` and lists the problems. | Only what the edit touched is judged. An error is `LAYOUT_CONSTRAINED`, and nothing changes. |
-| Warning | a lone connector between facing sides that still steps sideways | Reported | Reported |
+| Warning | a lone connector between facing sides that still steps sideways | Reported, and counted toward which candidate the repair keeps | Reported, and counted the same way |
 
 Captions are judged where the canvas draws them: a connector's own label as its chip, and a
 relationship caption as the canvas's `captionAnchor` places it — under a horizontal line, or on the
@@ -385,11 +394,17 @@ The repair is bounded:
   route first, trying each pair of sides before variations of one, with at most 24 fully drawn
   candidates each. Then roomier spacing is tried; then the other reading direction, unless the
   caller chose one; then all of that again with balanced placement.
-- **Best kept.** Every candidate is scored (hidden content weighs most, a skewed connector least), and
-  the best one is what is used — never simply the last one tried. With no clean candidate, the
-  request is refused rather than drawn, unless `allowDegraded`.
+- **Best kept.** Candidates are compared errors first — a candidate with fewer errors always wins,
+  however many stray warnings the other avoided — and only once errors are tied does the warning
+  count decide it; the best one is what is used, never simply the last one tried. With no clean
+  candidate, the request is refused rather than drawn, unless `allowDegraded`.
 - **Time.** Repairs stop at a 6 s soft budget, and a worker still busy at 20 s is terminated. Either
   way the request is refused with nothing changed.
+
+Every receipt carries a `quality` object: `scope` (`"whole-diagram"` for `create_diagram`, `"touched"`
+for `update_diagram` — a partial check is never reported as if the rest of the diagram were vouched
+for), `errors`/`warnings` counts, `errorsTruncated`/`warningsTruncated` when the listed `problems`/
+`warningProblems` (capped at 10, each with its `kind` and affected `ids`) don't cover all of them.
 
 **Updates never move existing elements, except by `arrange`.** New elements are placed as a block
 beside the existing element they connect to most, on its connector line, upstream when they feed it.
@@ -399,7 +414,7 @@ the narrowest `arrange` that would make room (the innermost boundary holding eve
 the whole view) — for the agent to add to the same request.
 
 **`arrange`** (`src/agent/arrange.ts`) is "clean up the layout": the same arrangement a new diagram
-gets, applied in place. `{op:"arrange", scope?, direction?, spacing?, connectors?, primaryFlow?}`:
+gets, applied in place. `{op:"arrange", scope?, direction?, spacing?, connectors?, move?, primaryFlow?}`:
 
 - `scope` is the whole view by default, or `{group}` (with its contents), or `{nodes: [...]}`.
   Nothing outside it moves; a boundary it sits in only grows. A partial scope keeps its top-left
@@ -409,21 +424,34 @@ gets, applied in place. `{op:"arrange", scope?, direction?, spacing?, connectors
 - `connectors`: `tidy` (default) re-anchors connectors touching the scope and drops hand routing on
   them; `keep` leaves hand routing; `orthogonal` also makes them right-angled. Connectors that don't
   touch the scope are untouched either way.
+- `move: false` re-anchors connectors touching the scope without moving, resizing or re-peer-sizing
+  any shape — a cheaper "just clean up the arrows" pass. An untouched neighbour sharing a side with a
+  re-anchored connector keeps its own anchor exactly as it was; the re-anchored ones are placed clear
+  of it, never on the slot it already occupies. Default `true` (the full placement pass).
 - Ids, labels, C4 fields, attachments, notes' text and flows never change. A note inside a boundary is
   laid out with it; a free note goes back beside the shape it sat closest to.
-- Shapes keep their size unless their text needs more room.
+- Shapes keep their size unless their text needs more room, or `normalizePeerSizes` was asked for.
 
-The layout gallery — 18 cases in `tests/fixtures/agent/gallery.ts` — is asserted in
+A "pinned" shape or a "preserve manual routes" request need no dedicated field: leaving a node out of
+`scope.nodes` (or its group out of the scope) keeps it fixed, and `connectors: "keep"` preserves a
+connector's hand routing. Nothing geometric beyond a connector's `routing` style and its two anchors
+is ever persisted, so there is nothing for a reload, resize or move to silently discard — the drawn
+path is always recomputed from the current shapes through the same `routeBetween` function the canvas
+and the exporter call, never a second implementation that could drift from what the person sees.
+
+The layout gallery — 20 cases in `tests/fixtures/agent/gallery.ts` — is asserted in
 `tests/agent/gallery.test.ts`:
 
 - no errors in any view;
 - pixel-stable output;
 - nothing pre-existing moved on update;
-- at most one avoidable jog across the whole gallery.
+- at most one avoidable jog across the whole gallery;
+- the loan-application context case (peer-uniform actors and external systems, no connector bent more
+  than twice) checked on its own, as the regression it was built for.
 
 `npx tsx e2e/agent-gallery.ts --base <dev server> --out <dir>` renders every case in the real editor,
 in light and dark, at 1440×900 and 1920×1080, for a person to look at. Rendered there, with the
-canvas's own text measurement, all 18 cases come out with no errors and no warnings.
+canvas's own text measurement, all 20 cases come out with no errors and no warnings.
 
 ## Notes and flows
 

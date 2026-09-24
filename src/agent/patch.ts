@@ -41,7 +41,7 @@ import { AGENT_LIMITS, readActions, readLayout, readRoom, Reader, type LayoutSpe
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
 import { pastDeadline, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
-import { checkQuality, scoreOf } from './quality';
+import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
 import { GROUP_KINDS, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
 
 export interface PatchResult {
@@ -51,6 +51,9 @@ export interface PatchResult {
   /** `arranged`: shapes and connectors an `arrange` moved or re-anchored. */
   counts: { added: number; updated: number; removed: number; arranged?: number };
   advisories: string[];
+  /** Errors and warnings among `touched` and whatever it touches — a partial check, never the whole
+   *  file (see `qualityReceipt`'s `'touched'` scope). */
+  quality: QualityReport;
 }
 
 type Json = Record<string, unknown>;
@@ -171,7 +174,11 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
         }
       });
       if (!problems.empty) return;
-      view = addToView(view, room, layout, ctx, touched, advisories);
+      // A newly-added block has nothing manual to preserve, so peer sizing defaults on for it even
+      // when the request's own top-level layout (also `arrange`'s base, which defaults it off) left
+      // the field unset.
+      const blockLayout: LayoutSpec = { ...layout, normalizePeerSizes: layout.normalizePeerSizes ?? true };
+      view = addToView(view, room, blockLayout, ctx, touched, advisories);
       for (const a of newActions) {
         const action = createAction(a.text, a.about ? { kind: view.edges.some((e) => e.id === a.about) ? 'edge' : 'node', id: a.about } : undefined);
         if (!action) continue;
@@ -279,7 +286,10 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   // Actions are root-only; `embed` carries them home from any room.
   const nextView: DraftDocument = { ...view, actions };
   const nextFile = path.length ? embed(file, path, nextView) : nextView;
-  return { file: nextFile, touched, counts, advisories };
+  // Only what this request could plausibly have broken — `touched` plus, through `checkQuality`'s
+  // pairwise checks, anything untouched it collides with — never a claim the whole file is clean.
+  const quality: QualityReport = touched.size ? checkQuality(view.nodes, view.edges, ctx, touched) : { errors: [], warnings: [] };
+  return { file: nextFile, touched, counts, advisories, quality };
 }
 
 function updateOne(
@@ -607,19 +617,18 @@ function addToView(
     ? [{ host: hosts[0], direction: layout.direction }, ...(block ? [{ host: hosts[0], direction: other as LayoutSpec['direction'] }] : []), ...hosts.slice(1, 3).map((host) => ({ host, direction: layout.direction }))]
     : [{ direction: layout.direction }];
   const judged = new Set([...newIds, ...room.relationships.map((e) => e.id)]);
-  let best: { view: DraftDocument; score: number; notes: string[] } | undefined;
+  let best: { view: DraftDocument; report: QualityReport; notes: string[] } | undefined;
   for (const attempt of tries) {
     if (best && pastDeadline()) break;
     const notes: string[] = [];
     const candidate = placeWith(attempt.host, attempt.direction, notes);
     if (tries.length === 1) {
-      best = { view: candidate, score: 0, notes };
+      best = { view: candidate, report: { errors: [], warnings: [] }, notes };
       break;
     }
     const report = checkQuality(candidate.nodes, candidate.edges, ctx, judged);
-    const score = scoreOf({ errors: report.errors, warnings: [] });
-    if (!best || score < best.score) best = { view: candidate, score, notes };
-    if (score === 0) break;
+    if (!best || isBetterReport(report, best.report)) best = { view: candidate, report, notes };
+    if (isClean(report)) break;
   }
   advisories.push(...best!.notes);
   let next = best!.view;

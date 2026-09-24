@@ -133,33 +133,43 @@ function centre(rect: Rect) {
  * Anchors for every edge. Connectors sharing one side of a shape spread over its handles in the
  * order of where their other ends are, so they don't cross each other on the way out; more than
  * three share the nearest handle and the native spine bundles them.
+ *
+ * `pinned` names edges whose side and offset are already decided (an untouched neighbour a scoped
+ * re-anchor must route around, not recompute) — they keep exactly the anchor given, are never moved
+ * to another side by the overflow rule below, and still occupy their slot so a free edge on the same
+ * side is placed clear of them. When a side holds any pinned edge, the free edges sharing it are
+ * spread over whatever handles remain, in order, rather than run through the optimal-alignment
+ * search below — correctness (never landing on an occupied handle) matters more than optimal
+ * alignment for a side an unrelated connector already has a fixed claim on.
  */
-export function assignAnchors(edges: AnchorEdge[], rects: Map<string, Rect>, direction: Direction): Map<string, Anchors> {
+export function assignAnchors(edges: AnchorEdge[], rects: Map<string, Rect>, direction: Direction, pinned?: ReadonlyMap<string, Anchors>): Map<string, Anchors> {
   const sides = new Map<string, { source: Side; target: Side }>();
-  const onSide = new Map<string, { edge: string; end: 'source' | 'target'; other: Rect }[]>();
+  const onSide = new Map<string, { edge: string; end: 'source' | 'target'; other: Rect; pinnedOffset?: number }[]>();
   for (const edge of edges) {
     const s = rects.get(edge.source);
     const t = rects.get(edge.target);
     if (!s || !t) continue;
+    const fixed = pinned?.get(edge.id);
     // The way back of a pair drawn both ways: straight back beside its twin when both shapes are tall
     // enough for the two to sit a caption's height apart (0.25 and 0.75 of the side); between small
     // shapes (a queue's tube) they would run a few pixels apart, so it goes around instead.
     const twin = edges.some((other) => other !== edge && other.source === edge.target && other.target === edge.source);
     const roomy = Math.min(spanOf(s, direction), spanOf(t, direction)) >= TWIN_SPAN;
-    const chosen = sidesFor(s, t, direction, (!twin || roomy) && corridorClear(s, t, rects, edge, direction));
+    const chosen = fixed ? { source: fixed.sourceAnchor.side, target: fixed.targetAnchor.side } : sidesFor(s, t, direction, (!twin || roomy) && corridorClear(s, t, rects, edge, direction));
     sides.set(edge.id, chosen);
-    for (const [end, node, side, other] of [
-      ['source', edge.source, chosen.source, t],
-      ['target', edge.target, chosen.target, s],
+    for (const [end, node, side, other, offset] of [
+      ['source', edge.source, chosen.source, t, fixed?.sourceAnchor.offset],
+      ['target', edge.target, chosen.target, s, fixed?.targetAnchor.offset],
     ] as const) {
       const key = `${node}\u0000${side}`;
       const list = onSide.get(key) ?? [];
-      list.push({ edge: edge.id, end, other });
+      list.push({ edge: edge.id, end, other, ...(offset !== undefined ? { pinnedOffset: offset } : {}) });
       onSide.set(key, list);
     }
   }
   // A side has three handles. Past three connectors, the ones reaching furthest up or down leave by
-  // the top or bottom instead of sharing a handle (and a line) with a neighbour.
+  // the top or bottom instead of sharing a handle (and a line) with a neighbour. A pinned entry never
+  // moves — it isn't this scoped re-anchor's to relocate.
   for (const [key, list] of [...onSide]) {
     const side = key.slice(key.indexOf('\u0000') + 1) as Side;
     if (list.length <= 3 || (side !== 'left' && side !== 'right')) continue;
@@ -168,12 +178,13 @@ export function assignAnchors(edges: AnchorEdge[], rects: Map<string, Rect>, dir
     if (!own) continue;
     list.sort((a, b) => centre(a.other).y - centre(b.other).y || (a.edge < b.edge ? -1 : 1));
     const moves: { entry: (typeof list)[number]; to: Side }[] = [];
+    const movable = (entry: (typeof list)[number] | undefined) => entry && entry.pinnedOffset === undefined;
     while (list.length - moves.length > 3) {
       const first = list[moves.filter((m) => m.to === 'top').length];
       const last = list[list.length - 1 - moves.filter((m) => m.to === 'bottom').length];
-      const up = first && centre(first.other).y < own.y ? first : undefined;
-      const down = last && centre(last.other).y > own.y + own.height ? last : undefined;
-      const pick = up && (!down || own.y - centre(up.other).y >= centre(down.other).y - (own.y + own.height)) ? { entry: up, to: 'top' as Side } : down ? { entry: down, to: 'bottom' as Side } : undefined;
+      const up = movable(first) && centre((first as (typeof list)[number]).other).y < own.y ? first : undefined;
+      const down = movable(last) && centre((last as (typeof list)[number]).other).y > own.y + own.height ? last : undefined;
+      const pick = up && (!down || own.y - centre(up.other).y >= centre((down as (typeof list)[number]).other).y - (own.y + own.height)) ? { entry: up, to: 'top' as Side } : down ? { entry: down, to: 'bottom' as Side } : undefined;
       if (!pick) break;
       moves.push(pick);
     }
@@ -188,35 +199,53 @@ export function assignAnchors(edges: AnchorEdge[], rects: Map<string, Rect>, dir
   const offsets = new Map<string, number>();
   const byId = new Map(edges.map((e) => [e.id, e]));
   for (const [key, list] of onSide) {
+    const pinnedEntries = list.filter((e) => e.pinnedOffset !== undefined);
+    for (const entry of pinnedEntries) offsets.set(`${entry.edge}\u0000${entry.end}`, entry.pinnedOffset as number);
+    const free = list.filter((e) => e.pinnedOffset === undefined);
+    if (!free.length) continue;
+    if (pinnedEntries.length) {
+      // A side an unrelated connector already occupies: fill whatever handles remain, in the order
+      // the free ends already sit in, rather than search for the alignment the unconstrained case
+      // below would — the taken handle rules that search out.
+      const available = HANDLES.filter((h) => !pinnedEntries.some((e) => e.pinnedOffset === h));
+      const horizontal = (key.slice(key.indexOf('\u0000') + 1) as Side) === 'top' || (key.slice(key.indexOf('\u0000') + 1) as Side) === 'bottom';
+      free.sort((a, b) => {
+        const ca = centre(a.other);
+        const cb = centre(b.other);
+        return (horizontal ? ca.x - cb.x : ca.y - cb.y) || (a.edge < b.edge ? -1 : 1);
+      });
+      free.forEach((entry, i) => offsets.set(`${entry.edge}\u0000${entry.end}`, available[Math.min(i, available.length - 1)] ?? 0.5));
+      continue;
+    }
     // A fan (or funnel) of unlabelled connectors that all mean the same thing — a topic fanning out to
     // its queues — leaves from one point, so the native router draws them as one trunk with one caption
     // ("fans out to", once) instead of parallel lines each repeating it. Words of their own, or
     // different meanings, keep each connector on its own handle.
-    const members = list.map((entry) => byId.get(entry.edge));
+    const members = free.map((entry) => byId.get(entry.edge));
     const fan =
-      list.length >= 2 &&
-      new Set(list.map((entry) => entry.end)).size === 1 &&
-      new Set(list.map((entry) => entry.other)).size === list.length &&
+      free.length >= 2 &&
+      new Set(free.map((entry) => entry.end)).size === 1 &&
+      new Set(free.map((entry) => entry.other)).size === free.length &&
       members.every((m) => m && !m.label && m.semantic && m.semantic === members[0]?.semantic);
     if (fan) {
-      for (const entry of list) offsets.set(`${entry.edge}\u0000${entry.end}`, 0.5);
+      for (const entry of free) offsets.set(`${entry.edge}\u0000${entry.end}`, 0.5);
       continue;
     }
     const side = key.slice(key.indexOf('\u0000') + 1) as Side;
     const horizontal = side === 'top' || side === 'bottom';
-    list.sort((a, b) => {
+    free.sort((a, b) => {
       const ca = centre(a.other);
       const cb = centre(b.other);
       return (horizontal ? ca.x - cb.x : ca.y - cb.y) || (a.edge < b.edge ? -1 : 1);
     });
-    const n = list.length;
+    const n = free.length;
     const node = key.slice(0, key.indexOf('\u0000'));
     const own = rects.get(node);
     // Connectors to the same shape (a compensation twin) stay spread over the side: aligned on one
     // shared target they would land a few pixels apart, and so would their captions.
-    const twins = new Set(list.map((e) => e.other)).size < list.length;
-    const chosen = own && n <= 3 && !twins ? alignedOffsets(own, side, list.map((e) => e.other)) : undefined;
-    list.forEach((entry, i) => {
+    const twins = new Set(free.map((e) => e.other)).size < free.length;
+    const chosen = own && n <= 3 && !twins ? alignedOffsets(own, side, free.map((e) => e.other)) : undefined;
+    free.forEach((entry, i) => {
       const offset = chosen?.[i] ?? (n <= 3 ? OFFSETS[n]?.[i] : OFFSETS[3]?.[Math.min(2, Math.floor((i * 3) / n))]) ?? 0.5;
       offsets.set(`${entry.edge}\u0000${entry.end}`, offset);
     });

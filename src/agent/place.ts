@@ -10,7 +10,7 @@ import { capabilityFor, categoryOf, inferRelationship } from '../document/connec
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { createAttachment, createDocument, createEdge, createNode } from '../document/factory';
 import { createFlow } from '../document/flow';
-import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode, ViewLevel } from '../document/types';
+import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode, DraftNodeType, ViewLevel } from '../document/types';
 import { hasAttachmentRoom } from '../document/operations';
 import { anchorBandOf } from '../document/queueGeometry';
 import { roomOf } from '../depth/tree';
@@ -87,6 +87,104 @@ export function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: stri
   const attachments = attachmentsOf(spec.attachments);
   if (attachments.length) node.attachments = attachments;
   return sizeToFit(node, ctx);
+}
+
+/** Which field tells two shapes of the same type apart for peer sizing — an API service and a
+ *  message queue are both `service`s but read as different rows if grouped together. */
+const PEER_SUBKIND_FIELD: Partial<Record<DraftNodeType, keyof DraftNode>> = {
+  service: 'serviceKind',
+  database: 'databaseKind',
+  queue: 'queueKind',
+  actor: 'actorKind',
+  component: 'componentKind',
+};
+
+/** How much larger than its group's typical size a shape may be before it is left as its own case
+ *  instead of being folded into (or stretching) the shared size — one long description must not
+ *  balloon every sibling that happens to share its type. */
+const PEER_OUTLIER_FACTOR = 1.5;
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? (sorted[mid] as number) : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
+}
+
+/**
+ * How far each id sits from a source along `edges`, by longest path — the same idea
+ * `layout/layered.ts`'s own rank assignment uses, independently and much more loosely: this is only
+ * ever a grouping signal (are two shapes actually side by side, or is one downstream of the other?),
+ * never a layout decision, so it skips that module's careful, deterministic cycle-breaking. A cycle
+ * here just stops contributing extra depth past the point it's re-entered — fine for "roughly which
+ * layer," not fine for laying anything out.
+ */
+function rankOf(ids: Iterable<string>, edges: readonly { source: string; target: string }[]): Map<string, number> {
+  const known = new Set(ids);
+  const preds = new Map<string, string[]>();
+  for (const id of known) preds.set(id, []);
+  for (const e of edges) {
+    if (!known.has(e.source) || !known.has(e.target) || e.source === e.target) continue;
+    preds.get(e.target)?.push(e.source);
+  }
+  const rank = new Map<string, number>();
+  const visiting = new Set<string>();
+  const rankOfId = (id: string): number => {
+    const cached = rank.get(id);
+    if (cached !== undefined) return cached;
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
+    const p = preds.get(id) ?? [];
+    const r = p.length ? Math.max(...p.map((pid) => rankOfId(pid) + 1)) : 0;
+    visiting.delete(id);
+    rank.set(id, r);
+    return r;
+  };
+  for (const id of known) rankOfId(id);
+  return rank;
+}
+
+/**
+ * Gives peer shapes — same type, same sub-kind, same parent, and (by `rankOf`) roughly the same
+ * distance along the graph — one shared size, so a row of actors or external systems reads as a row
+ * instead of whatever each one's own content happened to need. The rank check is what keeps a merge
+ * point or a hub out of a group of the parallel shapes that feed it: same type and sub-kind isn't
+ * enough on its own to make two shapes read as peers when one is structurally downstream of, or
+ * central to, the other. Runs after every element already has its own content-fitting size
+ * (`sizeToFit`/`grown`), so this only ever grows a box: shrinking one would clip text that already
+ * fit. A member far larger than its group's typical size (`PEER_OUTLIER_FACTOR`) is left at its own
+ * size and excluded from the shared one, so it can never grow its peers to match it.
+ */
+export function peerNormalize(elements: Map<string, DraftNode>, edges: readonly DraftEdge[], ctx: DescribeContext): void {
+  const rank = rankOf(elements.keys(), edges);
+  const groups = new Map<string, DraftNode[]>();
+  for (const node of elements.values()) {
+    const field = PEER_SUBKIND_FIELD[node.type];
+    if (!field) continue;
+    const key = `${node.type}\u0000${String(node[field] ?? '')}\u0000${node.parentId ?? ''}\u0000${rank.get(node.id) ?? 0}`;
+    const list = groups.get(key) ?? [];
+    list.push(node);
+    groups.set(key, list);
+  }
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+    const medianWidth = median(members.map((n) => n.width));
+    const medianHeight = median(members.map((n) => n.height));
+    const core = members.filter((n) => n.width <= medianWidth * PEER_OUTLIER_FACTOR && n.height <= medianHeight * PEER_OUTLIER_FACTOR);
+    if (core.length < 2) continue;
+    const sharedWidth = Math.max(...core.map((n) => n.width));
+    const sharedHeight = Math.max(...core.map((n) => n.height));
+    for (const node of core) {
+      const width = Math.max(node.width, sharedWidth);
+      const height = Math.max(node.height, sharedHeight);
+      if (width === node.width && height === node.height) continue;
+      // Growing can only help text fit, but verified rather than assumed: a member that somehow
+      // still wouldn't fit at the shared size is left at its own size instead of clipping.
+      const check = naturalArchitectureSize({ ...node, width, height }, ctx, { maxWidth: width, maxHeight: height });
+      if (!check.fits) continue;
+      node.width = width;
+      node.height = height;
+    }
+  }
 }
 
 export function sizeToFit(node: DraftNode, ctx: DescribeContext): DraftNode {
@@ -323,6 +421,7 @@ function companionsOf(elements: Map<string, DraftNode>, edges: readonly DraftEdg
  */
 export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: DescribeContext): { width: number; height: number } {
   const { elements, groups, memberNotes, edges, primaryEdges } = parts;
+  if (layout.normalizePeerSizes) peerNormalize(elements, edges, ctx);
   const right = layout.direction === 'right';
   // A loop companion rides with its host as one box (see `companionsOf`): the host first, the
   // companion beyond it across the flow, and the host's own line what the layout aligns on.

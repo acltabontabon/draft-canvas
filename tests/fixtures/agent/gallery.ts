@@ -436,4 +436,49 @@ export const GALLERY: GalleryCase[] = [
     arrange: { web: { x: 520, y: 480 }, billing: { x: -300, y: 60 }, nb: { x: -300, y: 170 }, email: { x: 880, y: -160 }, events: { x: 140, y: 400 } },
     update: { ops: [{ op: 'arrange' }] },
   },
+  {
+    // The MCP layout-quality regression case: two actors and four external systems that used to come
+    // out different sizes and misaligned, with one connector (the loan officer's override) looping
+    // around the focal system instead of routing to it directly. `tests/agent/gallery.test.ts` checks
+    // this case specifically for peer-uniform sizing on top of the generic readability assertions.
+    id: '19-loan-application-context',
+    title: 'C4 context: peer-uniform actors and external systems, no looping connectors',
+    kind: 'create',
+    request: {
+      title: 'Loan application — system context',
+      level: 'context',
+      nodes: [
+        n('applicant', 'person', 'Applicant', { description: 'A person applying for a loan online.' }),
+        n('officer', 'person', 'Loan Officer', { description: 'Reviews applications, overrides automated decisions.' }),
+        n('focal', 'service', 'Loan Application System', { description: 'Accepts, underwrites, decisions and disburses consumer loan applications.' }),
+        n('bureau', 'external-system', 'Credit Bureau', { description: 'Third-party credit history and score provider.' }),
+        n('kyc', 'external-system', 'KYC Provider', { description: 'Identity verification and fraud checks.' }),
+        n('core', 'external-system', 'Core Banking System', { description: 'Holds accounts and settles disbursed funds.' }),
+        n('notify', 'external-system', 'Email/SMS Provider', { description: 'Delivers applicant notifications.' }),
+      ],
+      relationships: [
+        r('a', 'applicant', 'focal', 'Applies for a loan and tracks status'),
+        r('b', 'officer', 'focal', 'Reviews and overrides decisions'),
+        r('c', 'focal', 'bureau', 'Fetches credit reports'),
+        r('d', 'focal', 'kyc', 'Verifies applicant identity'),
+        r('e', 'focal', 'core', 'Disburses approved funds'),
+        r('f', 'focal', 'notify', 'Sends applicant notifications'),
+      ],
+    },
+  },
+  {
+    // Route-only cleanup ({op:"arrange", move:false}): only the connectors touching the scope are
+    // re-anchored; the shapes stay exactly where they are, and a neighbour's own connector (not in
+    // the scope) is neither moved nor made to collide with the ones that are.
+    id: '20-route-only-cleanup',
+    title: 'Reconnect two edges into a hub without moving anything ({op:"arrange", move:false})',
+    kind: 'update',
+    base: {
+      title: 'Hub with three inputs',
+      nodes: [n('p', 'service', 'P'), n('q', 'service', 'Q'), n('r', 'service', 'R'), n('hub', 'service', 'Hub')],
+      relationships: [r('pe', 'p', 'hub'), r('qe', 'q', 'hub'), r('re', 'r', 'hub')],
+    },
+    arrange: { p: { x: -40, y: -260 }, q: { x: -40, y: -60 }, r: { x: -40, y: 220 }, hub: { x: 360, y: -20 } },
+    update: { ops: [{ op: 'arrange', move: false, scope: { nodes: ['p', 'q'] } }] },
+  },
 ];

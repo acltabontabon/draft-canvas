@@ -21,12 +21,12 @@
 
 import { updateNode } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
-import { assignAnchors } from '../layout/anchors';
+import { assignAnchors, type Anchors } from '../layout/anchors';
 import type { DescribeContext } from '../nodes/describe';
 import type { Problems } from './errors';
 import type { LayoutSpec, Reader } from './input';
 import { anchorRectOf, arrangeParts, captionSizer, placeBlock, sizeToFit } from './place';
-import { checkQuality, scoreOf } from './quality';
+import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
 import { drawnRoute, pastDeadline, repairAnchors } from './route';
 
 type Json = Record<string, unknown>;
@@ -34,13 +34,16 @@ type Json = Record<string, unknown>;
 export interface ArrangeRequest {
   scope?: { group?: string; nodes?: string[] };
   connectors: 'tidy' | 'keep' | 'orthogonal';
+  /** `false`: re-anchor connectors touching the scope without moving, resizing or re-peer-sizing any
+   *  shape — a cheaper "just clean up the arrows" pass. Default `true` (the full placement pass). */
+  move: boolean;
   layout: LayoutSpec;
 }
 
 const SPACINGS: LayoutSpec['spacing'][] = ['comfortable', 'spacious'];
 const isNoteLike = (n: DraftNode) => n.type === 'note' || n.type === 'text' || n.type === 'code';
 
-/** Reads `{op:"arrange", scope?, direction?, spacing?, connectors?, primaryFlow?}` against the view. */
+/** Reads `{op:"arrange", scope?, direction?, spacing?, connectors?, move?, primaryFlow?}` against the view. */
 export function readArrange(r: Reader, op: Json, at: string, view: DraftDocument, base: LayoutSpec): ArrangeRequest | undefined {
   const scopeRaw = op.scope === undefined ? undefined : r.object(op.scope, `${at}/scope`);
   let scope: ArrangeRequest['scope'];
@@ -59,17 +62,23 @@ export function readArrange(r: Reader, op: Json, at: string, view: DraftDocument
   const direction = op.direction === undefined ? undefined : r.oneOf(op.direction, `${at}/direction`, ['right', 'down'] as const);
   const spacing = op.spacing === undefined ? undefined : r.oneOf(op.spacing, `${at}/spacing`, ['compact', 'comfortable', 'spacious'] as const);
   const connectors = op.connectors === undefined ? 'tidy' : r.oneOf(op.connectors, `${at}/connectors`, ['tidy', 'keep', 'orthogonal'] as const);
+  const move = r.bool(op.move, `${at}/move`) ?? true;
   const primaryFlow = typeof op.primaryFlow === 'string' ? op.primaryFlow : undefined;
   if (primaryFlow && !view.flows.some((f) => f.id === primaryFlow)) r.problems.add('INVALID_REFERENCE', `${at}/primaryFlow`, `no flow "${primaryFlow}" in this view`);
   if (!r.problems.empty || !connectors) return undefined;
   return {
     ...(scope ? { scope } : {}),
     connectors,
+    move,
     layout: {
       ...base,
       direction: direction ?? readingDirectionOf(view),
       directionChosen: direction !== undefined,
       spacing: spacing ?? base.spacing,
+      // An existing diagram's manual sizes are kept unless the request's own top-level layout
+      // explicitly asks to normalize peers — unlike a new diagram or a newly-added block, which
+      // default it on.
+      normalizePeerSizes: base.normalizePeerSizes ?? false,
       ...(primaryFlow ? { primaryFlow } : {}),
     },
   };
@@ -126,7 +135,7 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
 
   const spacings = [request.layout.spacing, ...SPACINGS.filter((s) => s !== request.layout.spacing)];
   const attempts: LayoutSpec[] = [...spacings.map((spacing) => ({ ...request.layout, spacing })), ...spacings.map((spacing) => ({ ...request.layout, spacing, ties: 'balance' as const }))];
-  let best: { arranged: Arranged; score: number } | undefined;
+  let best: { arranged: Arranged; report: QualityReport } | undefined;
   let lastRefusal = false;
   for (const layout of attempts) {
     if (best && pastDeadline()) break;
@@ -136,9 +145,10 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
       continue;
     }
     const report = checkQuality(arranged.view.nodes, arranged.view.edges, ctx, arranged.touched);
-    const score = scoreOf(report);
-    if (!best || score < best.score) best = { arranged, score };
-    if (report.errors.length === 0) break;
+    if (!best || isBetterReport(report, best.report)) best = { arranged, report };
+    if (isClean(report)) break;
+    // Route-only never moves a shape, so a roomier spacing changes nothing — one attempt is enough.
+    if (request.move === false) break;
   }
   if (!best && lastRefusal) {
     problems.add('LAYOUT_CONSTRAINED', at, 'the arranged part would run into shapes outside the scope, and there is no free space beside it; arrange the whole view instead ({op:"arrange"})');
@@ -148,6 +158,7 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
 }
 
 function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request: ArrangeRequest, layout: LayoutSpec, ctx: DescribeContext): Arranged | undefined {
+  if (request.move === false) return routeOnly(view, inScope, request, ctx);
   const byId = new Map(view.nodes.map((n) => [n.id, n]));
   const elements = new Map<string, DraftNode>();
   const groups = new Map<string, DraftNode>();
@@ -215,6 +226,32 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   // Boundaries the scope sits in grow to hold it.
   for (const node of moved) if (node.parentId && !inScope.has(node.parentId)) next = fitGroups(next, node.id);
   return { view: next, touched };
+}
+
+/**
+ * `move: false`: re-anchors every connector touching the scope, moving, resizing or re-peer-sizing
+ * nothing. An edge that shares a node with one being re-anchored, but doesn't itself touch the
+ * scope, is passed to `assignAnchors` as `pinned` — fixed at its current anchor — so the scoped
+ * edges route clear of it instead of colliding with a neighbour this request has no business
+ * moving. An edge with no persisted anchor of its own (never arranged, only ever hand-drawn) can't
+ * be pinned to a specific slot and is left out of that occupancy check — a narrower case than the
+ * common one, where every edge that has been through `create_diagram` or an earlier `arrange`
+ * already carries the anchors this relies on.
+ */
+function routeOnly(view: DraftDocument, inScope: ReadonlySet<string>, request: ArrangeRequest, ctx: DescribeContext): Arranged {
+  const touching = view.edges.filter((e) => inScope.has(e.source) || inScope.has(e.target));
+  const touched = touching.map((e) => restyled(e, request.connectors));
+  const touchedIds = new Set(touched.map((e) => e.id));
+  const affectedNodes = new Set(touched.flatMap((e) => [e.source, e.target]));
+  const neighbours = view.edges.filter((e) => !touchedIds.has(e.id) && (affectedNodes.has(e.source) || affectedNodes.has(e.target)) && e.sourceAnchor && e.targetAnchor);
+  const rects = new Map(view.nodes.map((n) => [n.id, anchorRectOf(n)]));
+  const pinned = new Map<string, Anchors>(neighbours.map((e) => [e.id, { sourceAnchor: e.sourceAnchor as NonNullable<DraftEdge['sourceAnchor']>, targetAnchor: e.targetAnchor as NonNullable<DraftEdge['targetAnchor']> }]));
+  const anchors = assignAnchors([...touched, ...neighbours], rects, request.layout.direction, pinned);
+  for (const e of touched) Object.assign(e, anchors.get(e.id) ?? {});
+  const changed = new Map(touched.map((e) => [e.id, e]));
+  const next: DraftDocument = { ...view, edges: view.edges.map((e) => changed.get(e.id) ?? e) };
+  repairAnchors(touched, next.nodes, captionSizer(next.nodes, ctx), next.edges);
+  return { view: next, touched: new Set(changed.keys()) };
 }
 
 /** A shape at least as big as it was, and big enough for its text. */

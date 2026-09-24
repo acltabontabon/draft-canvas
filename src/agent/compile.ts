@@ -15,7 +15,7 @@ import { AgentError } from './errors';
 import { readCreate, type CreateSpec, type LayoutSpec } from './input';
 import { measureContext, placeRoom, type PlacedRoom } from './place';
 import { silent, type Report } from './progress';
-import { checkQuality, scoreOf, type QualityIssue } from './quality';
+import { checkQuality, isBetterReport, isClean, type QualityIssue, type QualityReport } from './quality';
 import { pastDeadline, withDeadline } from './route';
 import { buildFromStarter } from './starter';
 
@@ -44,21 +44,26 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   report('preparing');
   const spec = readCreate(raw);
   const ctx = measureContext();
+  // A brand-new diagram has nothing manual to preserve, so peer sizing defaults on unless the
+  // request explicitly turned it off.
+  const layout0: LayoutSpec = { ...spec.layout, normalizePeerSizes: spec.layout.normalizePeerSizes ?? true };
   // Bounded repair: roomier spacing first; then, only when the caller left the reading direction to
   // us, the other one. A first readable result wins; with none, the least bad one is what a degraded
   // request gets.
-  const spacings = [spec.layout.spacing, ...REPAIR_LADDER.filter((s) => s !== spec.layout.spacing)];
+  const spacings = [layout0.spacing, ...REPAIR_LADDER.filter((s) => s !== layout0.spacing)];
   // Each arrangement is tried with straight connectors first (see `LayoutInput.ties`), and balanced
   // only if that can't be made readable.
-  const attempts: LayoutSpec[] = spacings.map((spacing) => ({ ...spec.layout, spacing }));
-  if (!spec.layout.directionChosen) {
-    const other = spec.layout.direction === 'right' ? 'down' : 'right';
-    attempts.push(...REPAIR_LADDER.map((spacing) => ({ ...spec.layout, direction: other, spacing }) as LayoutSpec));
+  const attempts: LayoutSpec[] = spacings.map((spacing) => ({ ...layout0, spacing }));
+  if (!layout0.directionChosen) {
+    const other = layout0.direction === 'right' ? 'down' : 'right';
+    attempts.push(...REPAIR_LADDER.map((spacing) => ({ ...layout0, direction: other, spacing }) as LayoutSpec));
   }
   attempts.push(...attempts.map((layout) => ({ ...layout, ties: 'balance' as const })));
   // The best candidate so far is kept, so running out of attempts (or time) never trades a readable
-  // arrangement for a worse last one; among unreadable ones, the one that hides the least wins.
-  let best: { placed: PlacedRoom; issues: QualityIssue[]; layout: LayoutSpec; score: number } | undefined;
+  // arrangement for a worse last one; among unreadable ones, the one that hides the least wins. A
+  // candidate with fewer errors always outranks one with more, however many jogs either has —
+  // `isBetterReport` decides that, not a summed score (see its doc comment).
+  let best: { placed: PlacedRoom; found: QualityReport; layout: LayoutSpec } | undefined;
   let outOfTime = false;
   let tried = 0;
   for (const layout of attempts) {
@@ -74,13 +79,13 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
     // (Once repairing, it stays "repairing": the stage says where the request is, not each step.)
     report(tried === 1 ? 'routing' : 'repairing', { nodes: candidate.nodes, edges: candidate.edges, flows: candidate.flows });
     const found = qualityOfEveryRoom(candidate, ctx);
-    const score = scoreOf({ errors: found, warnings: [] });
-    if (!best || score < best.score) best = { placed: candidate, issues: found, layout, score };
-    if (found.length === 0) break;
+    if (!best || isBetterReport(found, best.found)) best = { placed: candidate, found, layout };
+    if (isClean(found)) break;
   }
   const repaired = tried - 1;
   if (!best) throw new AgentError('INTERNAL', 'Nothing was laid out.');
-  const { placed, issues, layout: used } = best;
+  const { placed, found, layout: used } = best;
+  const issues = found.errors;
   report('finishing', { nodes: placed.nodes, edges: placed.edges, flows: placed.flows });
   if (issues.length > 0 && !spec.layout.allowDegraded) {
     const why = outOfTime || pastDeadline() ? ' (it ran out of time before every repair could be tried)' : '';
@@ -100,7 +105,7 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
       created: counts,
       layout: { direction: used.direction, spacing: used.spacing },
       ...(issues.length ? { degraded: true } : {}),
-      quality: { errors: issues.length, ...(issues.length ? { problems: issues.slice(0, 10).map((i) => i.message) } : {}) },
+      quality: qualityReceipt('whole-diagram', found),
       ...(placed.advisories.length || levelAdvisories(document.nodes, document.level).length
         ? { advisories: [...levelAdvisories(document.nodes, document.level), ...placed.advisories].slice(0, 10) }
         : {}),
@@ -108,17 +113,37 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   };
 }
 
-function qualityOfEveryRoom(room: PlacedRoom, ctx: ReturnType<typeof measureContext>): QualityIssue[] {
-  const issues = [...checkQuality(room.nodes, room.edges, ctx).errors];
-  const visit = (nodes: PlacedRoom['nodes']) => {
+/** The shape every tool's receipt reports quality diagnostics in: capped lists plus true totals, so
+ *  a caller can tell "10 of 14" from "all 10" — and a `'touched'` scope never reads as "the whole
+ *  diagram is clean" when only part of it was actually checked. */
+export function qualityReceipt(scope: 'whole-diagram' | 'touched', report: QualityReport) {
+  const cap = 10;
+  return {
+    scope,
+    errors: report.errors.length,
+    errorsTruncated: report.errors.length > cap,
+    ...(report.errors.length ? { problems: report.errors.slice(0, cap).map((i) => ({ kind: i.kind, ids: i.ids, message: i.message })) } : {}),
+    warnings: report.warnings.length,
+    warningsTruncated: report.warnings.length > cap,
+    ...(report.warnings.length ? { warningProblems: report.warnings.slice(0, cap).map((i) => ({ kind: i.kind, ids: i.ids, message: i.message })) } : {}),
+  };
+}
+
+function qualityOfEveryRoom(room: PlacedRoom, ctx: ReturnType<typeof measureContext>): QualityReport {
+  const errors: QualityIssue[] = [];
+  const warnings: QualityIssue[] = [];
+  const visit = (nodes: PlacedRoom['nodes'], edges: PlacedRoom['edges'], prefix: string) => {
+    const found = checkQuality(nodes, edges, ctx);
+    const tag = (i: QualityIssue) => (prefix ? { ...i, message: `${prefix}${i.message}` } : i);
+    errors.push(...found.errors.map(tag));
+    warnings.push(...found.warnings.map(tag));
     for (const node of nodes) {
       if (!node.inside) continue;
-      issues.push(...checkQuality(node.inside.nodes, node.inside.edges, ctx).errors.map((i) => ({ ...i, message: `inside ${node.id}: ${i.message}` })));
-      visit(node.inside.nodes);
+      visit(node.inside.nodes, node.inside.edges, `inside ${node.id}: `);
     }
   };
-  visit(room.nodes);
-  return issues;
+  visit(room.nodes, room.edges, '');
+  return { errors, warnings };
 }
 
 function assemble(spec: CreateSpec, placed: PlacedRoom, diagramId: string): DraftDocument {

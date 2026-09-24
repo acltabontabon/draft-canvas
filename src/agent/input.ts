@@ -144,6 +144,14 @@ export interface LayoutSpec {
   spacing: 'compact' | 'comfortable' | 'spacious';
   primaryFlow?: string;
   allowDegraded: boolean;
+  /**
+   * Keep peer shapes (same type, sub-kind and parent) a uniform size. Left `undefined` when the
+   * caller didn't say — each call site resolves its own default: a new diagram or a newly-added
+   * block has nothing manual to preserve (default on); an existing diagram being re-arranged keeps
+   * whatever sizes it already has unless normalization is explicitly requested (default off). See
+   * `peerNormalize` (`agent/place.ts`).
+   */
+  normalizePeerSizes?: boolean;
   /** Internal to repair (never read from a request): see `LayoutInput.ties`. */
   ties?: 'align' | 'balance';
 }
@@ -537,12 +545,14 @@ export function readLayout(r: Reader, value: unknown, path: string, flowIds: Set
   const primaryFlow = typeof raw.primaryFlow === 'string' ? raw.primaryFlow : undefined;
   if (primaryFlow !== undefined && !flowIds.has(primaryFlow)) r.problems.add('INVALID_REFERENCE', `${path}/primaryFlow`, `no flow "${primaryFlow}"`);
   const allowDegraded = r.bool(raw.allowDegraded, `${path}/allowDegraded`) ?? false;
+  const normalizePeerSizes = r.bool(raw.normalizePeerSizes, `${path}/normalizePeerSizes`);
   return {
     direction,
     ...(raw.direction !== undefined ? { directionChosen: true } : {}),
     spacing,
     ...(primaryFlow && flowIds.has(primaryFlow) ? { primaryFlow } : {}),
     allowDegraded,
+    ...(normalizePeerSizes !== undefined ? { normalizePeerSizes } : {}),
   };
 }
 
