@@ -34,6 +34,7 @@ v(n+1)-shaped one:
 | v11 → v12 | `migrateAddInsides` | Structural no-op — a v11 node simply has no `inside`, which is what absent already means. The version still moves because a v11 build's whitelist would strip the rooms out of a v12 file and (in VS Code) write the stripped version back; refusing it by name is the only safe reading. |
 | v12 → v13 | `migrateAddActions` | Structural no-op — a v12 file simply has no canvas-level `actions`, which is what absent already means. Root-only, so deliberately *not* wrapped in `everyRoom`. The version still moves for v12's own reason: an older build's whitelist would strip the actions out of a v13 file and (in VS Code) write the stripped version back. |
 | v13 → v14 | `migrateProjectsToWrites` | The `projects` relationship is gone — a projection's write into a read store is a write — so any `semantic: 'projects'` becomes `'writes'`, keeping whether it was inferred or chosen and any label. |
+| v14 → v15 | `migrateAddC4Text` | Structural no-op — a v14 node simply has no `description` or `technology` (C4 text, kept only on services, data stores, queues, actors and components). The version still moves so an older build refuses a v15 file by name instead of its whitelist silently dropping the text, and (in VS Code) writing the stripped file back. |
 
 Several of these are deliberate **structural no-ops**: versions where the on-disk shape didn't
 actually need to change, but an entry is still required. `migrateToCurrent` walks the chain from a

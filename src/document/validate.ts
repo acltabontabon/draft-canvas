@@ -27,6 +27,7 @@ import {
   EDGE_ROUTINGS,
   GRID_MODES,
   NODE_TYPES,
+  C4_TEXT_TYPES,
   NOTE_KINDS,
   EDGE_SEMANTICS,
   QUEUE_KINDS,
@@ -453,6 +454,13 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
     const label = text(candidate.text, LIMITS.maxTextLength);
     if (label !== undefined) node.text = label;
+    if ((C4_TEXT_TYPES as readonly DraftNodeType[]).includes(type)) {
+      // Trimmed and empty-dropped: an empty line would still reserve room under the name.
+      const description = text(candidate.description, LIMITS.maxDescriptionLength)?.trim();
+      if (description) node.description = description;
+      const technology = text(candidate.technology, LIMITS.maxTechnologyLength)?.replace(/\s+/g, ' ').trim();
+      if (technology) node.technology = technology;
+    }
 
     // Absent stays absent, same reasoning as `semanticsOrigin` below: a document saved before
     // this field existed has no way to say its label was auto-generated, so it's left with no

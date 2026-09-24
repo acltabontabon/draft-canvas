@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { LIMITS } from '../document/limits';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useReactFlow, useStore } from '@xyflow/react';
 import { primaryCommandsFor } from '../commands/registry';
@@ -8,6 +9,7 @@ import type { CommandContext } from '../commands/types';
 import {
   ACCENTS,
   BOUNDARY_PRESETS,
+  C4_TEXT_TYPES,
   CODE_LANGUAGES,
   NOTE_KINDS,
   TEXT_ALIGNS,
@@ -169,7 +171,7 @@ function ElementInspectorBody({
   // One slot, not two independent booleans — a colour palette and a typography panel open from
   // the same row and would otherwise be able to stack under each other; this makes them mutually
   // exclusive for free and keeps the reset/Escape/click-away plumbing below written once.
-  const [openPanel, setOpenPanel] = useState<'color' | 'typography' | null>(null);
+  const [openPanel, setOpenPanel] = useState<ElementPanel | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   usePopoverKeyboard(panelRef);
 
@@ -310,6 +312,58 @@ function ElementInspectorBody({
   );
 }
 
+/** The one panel open under the row at a time: colours, text style, or an architecture shape's C4 details. */
+type ElementPanel = 'color' | 'typography' | 'details';
+
+/** Shapes that can carry a C4 technology and description (`C4_TEXT_TYPES`). */
+const C4_TYPES: ReadonlySet<string> = new Set(C4_TEXT_TYPES);
+
+/**
+ * An architecture shape's C4 detail: what it is built with, and what it is responsible for. Each field
+ * commits when it lets go (blur, or Enter in the one-line technology field) as one coalesced edit, and
+ * the shape grows to show what was typed. Keyed by node id by the caller, so switching elements
+ * starts from that element's own values.
+ */
+function C4DetailsPanel({ node }: { node: DraftNode }) {
+  const commit = (patch: { technology?: string; description?: string }) => useEditorStore.getState().setNodeC4Text(node.id, patch);
+  const stop = (event: ReactKeyboardEvent<HTMLElement>) => event.stopPropagation();
+  return (
+    <div className="dc-popover-panel dc-c4-panel">
+      <label className="dc-c4-field">
+        <span>Technology</span>
+        <input
+          className="dc-inspector-control"
+          defaultValue={node.technology ?? ''}
+          maxLength={LIMITS.maxTechnologyLength}
+          placeholder="Spring Boot, PostgreSQL…"
+          spellCheck={false}
+          onBlur={(event) => {
+            if (event.currentTarget.value.trim() !== (node.technology ?? '')) commit({ technology: event.currentTarget.value });
+          }}
+          onKeyDown={(event) => {
+            stop(event);
+            if (event.key === 'Enter' && !isImeKeyEvent(event)) event.currentTarget.blur();
+          }}
+        />
+      </label>
+      <label className="dc-c4-field">
+        <span>Description</span>
+        <textarea
+          className="dc-inspector-control"
+          defaultValue={node.description ?? ''}
+          maxLength={LIMITS.maxDescriptionLength}
+          rows={3}
+          placeholder="What it is responsible for, in a sentence."
+          onBlur={(event) => {
+            if (event.currentTarget.value.trim() !== (node.description ?? '')) commit({ description: event.currentTarget.value });
+          }}
+          onKeyDown={stop}
+        />
+      </label>
+    </div>
+  );
+}
+
 /** Memoized: the body re-renders every frame its element is dragged or resized (it tracks the
  *  live position), and none of these props change just because the element moved. */
 const ElementInspectorRow = memo(function ElementInspectorRow({
@@ -324,8 +378,8 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
 }: {
   node: DraftNode;
   hasDlqEdge: boolean;
-  openPanel: 'color' | 'typography' | null;
-  setOpenPanel: (panel: 'color' | 'typography' | null) => void;
+  openPanel: ElementPanel | null;
+  setOpenPanel: (panel: ElementPanel | null) => void;
   menuDirection: 'up' | 'down';
   getMenuAvoidRect: () => { top: number; bottom: number } | null;
   theme: ReturnType<typeof useThemeValue>;
@@ -495,6 +549,17 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
             layout={typeControl.layout}
           />
         )}
+        {C4_TYPES.has(node.type) && (
+          <Button
+            variant="quiet"
+            active={openPanel === 'details'}
+            aria-expanded={openPanel === 'details'}
+            title="Technology and description (C4)"
+            onClick={() => setOpenPanel(openPanel === 'details' ? null : 'details')}
+          >
+            Details
+          </Button>
+        )}
         <span className="dc-popover-divider" aria-hidden="true" />
         <Button
           variant="quiet"
@@ -532,6 +597,8 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           ))}
         </div>
       )}
+
+      {openPanel === 'details' && C4_TYPES.has(node.type) && <C4DetailsPanel key={node.id} node={node} />}
 
       {openPanel === 'typography' && node.type === 'text' && (
         <div className="dc-popover-panel dc-typography-panel">

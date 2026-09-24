@@ -111,6 +111,10 @@ export interface StarterNodeSpec {
   /** `queue` nodes only — see `DraftNode.deliveryRole`. A dead-letter queue is drawn as one
    *  (dashed tube, `DLQ` caption) and categorised as one by the capability matrix. */
   deliveryRole?: DeliveryRole;
+  /** C4 text — see `DraftNode.description`/`technology`. None of the catalog's starters set these;
+   *  they are here so a starter built for someone (an agent's request) can carry them. */
+  description?: string;
+  technology?: string;
   /** Supporting detail folded into the node as click-to-reveal chips (`DraftNode.attachments`) —
    *  the same depth-without-a-visible-node mechanism `StarterEdgeSpec.attachments` gives a
    *  connector. `id`s are minted at build time. */

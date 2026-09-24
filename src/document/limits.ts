@@ -21,6 +21,10 @@ export const LIMITS = {
   maxTextLength: 20_000,
   maxCodeLength: 200_000,
   maxLabelLength: 500,
+  /** A C4 description is a sentence or two drawn inside the shape — not a place for a spec. */
+  maxDescriptionLength: 280,
+  /** "Spring Boot 3, Kotlin" — a line, not a stack listing. */
+  maxTechnologyLength: 60,
   maxIdLength: 128,
   /** Coordinates are clamped to keep the viewport maths well-conditioned. */
   maxCoordinate: 1_000_000,

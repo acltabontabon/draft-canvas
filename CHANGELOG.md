@@ -14,6 +14,14 @@ and apply to the web app.
 
 ### Shared
 
+#### Added
+
+- **Technology and description on shapes.** Services, data stores, queues, actors and components can
+  carry a technology (`[Spring Boot]`) and a one-line description under their name, the way C4
+  diagrams show them. Edit both from the shape's **Details**. <!-- highlight -->
+- Diagrams with a technology or description use document format v15. An older version of Draft
+  Canvas says the file is from a newer version instead of opening it without them.
+
 #### Fixed
 
 - A note chip on a connector no longer covers the connector's label when the label sits above the

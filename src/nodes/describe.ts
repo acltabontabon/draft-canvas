@@ -166,6 +166,84 @@ function variantCaption(
   ];
 }
 
+/* ------------------------------------------------------------ C4 detail -- */
+
+/** Space between a name and the C4 detail under it, and between the detail's own two parts. */
+const C4_NAME_GAP = 3;
+const C4_PART_GAP = 2;
+/** Room above and below a centred name-and-detail block. */
+const C4_BLOCK_PAD = 14;
+
+function hasC4Text(node: DraftNode): boolean {
+  return Boolean(node.technology || node.description);
+}
+
+/**
+ * A shape's C4 detail — `[technology]`, then the description — laid out for `maxWidth`, keeping to
+ * `maxHeight`. The description gives up lines first (then ellipsis); the technology line, one line
+ * by definition, only goes when there is no room for it at all. `null` when the node has neither.
+ */
+interface C4Detail {
+  height: number;
+  place(x: number, y: number, align: 'middle' | 'start'): Shape[];
+}
+
+function c4Detail(node: DraftNode, ctx: DescribeContext, maxWidth: number, maxHeight: number): C4Detail | null {
+  if (!hasC4Text(node)) return null;
+  const techFont = FONTS.nodeTechnology;
+  const bodyFont = FONTS.nodeDescription;
+  const techLineHeight = techFont.size * LINE_HEIGHTS.label;
+  const bodyLineHeight = bodyFont.size * LINE_HEIGHTS.label;
+  const tech =
+    node.technology && maxHeight >= techLineHeight
+      ? layoutText(`[${node.technology}]`, {
+          font: techFont,
+          maxWidth,
+          lineHeight: techLineHeight,
+          maxLines: 1,
+          measurer: ctx.measurer,
+        })
+      : undefined;
+  const used = tech ? tech.height + (node.description ? C4_PART_GAP : 0) : 0;
+  const bodyLines = Math.floor((maxHeight - used) / bodyLineHeight);
+  const body =
+    node.description && bodyLines >= 1
+      ? layoutText(node.description, {
+          font: bodyFont,
+          maxWidth,
+          lineHeight: bodyLineHeight,
+          maxLines: bodyLines,
+          measurer: ctx.measurer,
+        })
+      : undefined;
+  if (!tech && !body) return null;
+  const height = (tech?.height ?? 0) + (tech && body ? C4_PART_GAP : 0) + (body?.height ?? 0);
+  return {
+    height,
+    place(x, y, align) {
+      const shapes: Shape[] = [];
+      if (tech) shapes.push({ t: 'text', x, y, layout: tech, font: techFont, fill: ctx.theme.textMuted, align });
+      if (body) {
+        const top = y + (tech ? tech.height + C4_PART_GAP : 0);
+        shapes.push({ t: 'text', x, y: top, layout: body, font: bodyFont, fill: ctx.theme.textMuted, align });
+      }
+      return shapes;
+    },
+  };
+}
+
+/**
+ * How much height the C4 detail would like, uncapped — what a name is kept clear of before it may
+ * take a second line. One description line is always claimed for when there is a description, so a
+ * long name can never crowd it out entirely.
+ */
+function c4Reserve(node: DraftNode): number {
+  if (!hasC4Text(node)) return 0;
+  const tech = node.technology ? FONTS.nodeTechnology.size * LINE_HEIGHTS.label : 0;
+  const body = node.description ? FONTS.nodeDescription.size * LINE_HEIGHTS.label : 0;
+  return C4_NAME_GAP + tech + (tech && body ? C4_PART_GAP : 0) + body;
+}
+
 /**
  * Name + kind, stacked as two lines pinned a fixed gap under a compact glyph
  * — the same treatment `queue()` has always given Queue/Topic/Stream,
@@ -212,10 +290,13 @@ function pinnedCaption(
     font: FONTS.nodeLabel,
     minFontSize: TEXT_SIZES.nodeLabelMin,
     maxWidth,
-    maxHeight: Math.max(0, available - nameGap - kindLayout.height),
+    maxHeight: Math.max(0, available - nameGap - kindLayout.height - c4Reserve(node)),
     lineHeightRatio: LINE_HEIGHTS.label,
     measurer: ctx.measurer,
   });
+  const kindTop = options.top + nameLayout.height + nameGap;
+  const detailTop = kindTop + kindLayout.height + C4_NAME_GAP;
+  const detail = c4Detail(node, ctx, maxWidth, node.height - bottomMargin - detailTop);
   return [
     {
       t: 'text',
@@ -230,12 +311,13 @@ function pinnedCaption(
     {
       t: 'text',
       x: node.width / 2,
-      y: options.top + nameLayout.height + nameGap,
+      y: kindTop,
       layout: kindLayout,
       font: kindFont,
       fill: ctx.theme.textMuted,
       align: 'middle',
     },
+    ...(detail ? detail.place(node.width / 2, detailTop, 'middle') : []),
   ];
 }
 
@@ -294,28 +376,37 @@ function centredLabel(
   const left = options.left ?? 0;
   const right = options.right ?? 0;
   const maxWidth = Math.max(16, node.width - PADDING * 2 - left - right);
-  const available = node.height - options.top - options.bottom;
+  // A name with C4 detail under it is a block that can fill the shape: kept clear of the kind's own
+  // chrome at the top (a cap, window dots) and of the bottom edge.
+  const pad = hasC4Text(node) ? C4_BLOCK_PAD : 0;
+  const available = node.height - options.top - options.bottom - pad * 2;
 
   const { layout, font } = fitLabel(text, {
     font: FONTS.nodeLabel,
     minFontSize: TEXT_SIZES.nodeLabelMin,
     maxWidth,
-    maxHeight: available,
+    maxHeight: available - c4Reserve(node),
     lineHeightRatio: LINE_HEIGHTS.label,
     measurer: ctx.measurer,
   });
+  // With C4 detail, name and detail are one block, centred together in the band.
+  const detail = c4Detail(node, ctx, maxWidth, available - layout.height - C4_NAME_GAP);
+  const blockHeight = layout.height + (detail ? C4_NAME_GAP + detail.height : 0);
+  const x = left + (node.width - left - right) / 2;
+  const top = options.top + pad + (available - blockHeight) / 2;
 
   return [
     {
       t: 'text',
-      x: left + (node.width - left - right) / 2,
-      y: options.top + (available - layout.height) / 2,
+      x,
+      y: top,
       layout,
       font,
       fill: options.color || palette.text,
       align: 'middle',
       role: 'label',
     },
+    ...(detail ? detail.place(x, top + layout.height + C4_NAME_GAP, 'middle') : []),
   ];
 }
 
@@ -1081,16 +1172,20 @@ function dataStoreCaption(node: DraftNode, ctx: DescribeContext, palette: Accent
   }
   const text = node.text ?? '';
   if (!text.trim()) return [];
+  const maxWidth = Math.max(16, node.width - PADDING * 2);
   const { layout, font } = fitLabel(text, {
     font: FONTS.nodeLabel,
     minFontSize: TEXT_SIZES.nodeLabelMin,
-    maxWidth: Math.max(16, node.width - PADDING * 2),
-    maxHeight: Math.max(0, node.height - top - 4),
+    maxWidth,
+    maxHeight: Math.max(0, node.height - top - 4 - c4Reserve(node)),
     lineHeightRatio: LINE_HEIGHTS.label,
     measurer: ctx.measurer,
   });
+  const detailTop = top + layout.height + C4_NAME_GAP;
+  const detail = c4Detail(node, ctx, maxWidth, node.height - 4 - detailTop);
   return [
     { t: 'text', x: node.width / 2, y: top, layout, font, fill: palette.text, align: 'middle', role: 'label' },
+    ...(detail ? detail.place(node.width / 2, detailTop, 'middle') : []),
   ];
 }
 
@@ -2048,11 +2143,12 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
   const text = node.text ?? '';
   if (text.trim()) {
     const top = glyphBottom + GLYPH_LABEL_GAP;
+    const maxWidth = Math.max(16, node.width - PADDING);
     const { layout, font } = fitLabel(text, {
       font: FONTS.nodeLabel,
       minFontSize: TEXT_SIZES.nodeLabelMin,
-      maxWidth: Math.max(16, node.width - PADDING),
-      maxHeight: Math.max(0, node.height - top),
+      maxWidth,
+      maxHeight: Math.max(0, node.height - top - c4Reserve(node)),
       lineHeightRatio: LINE_HEIGHTS.label,
       measurer: ctx.measurer,
     });
@@ -2066,6 +2162,9 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
       align: 'middle',
       role: 'label',
     });
+    const detailTop = top + layout.height + C4_NAME_GAP;
+    const detail = c4Detail(node, ctx, maxWidth, node.height - 6 - detailTop);
+    if (detail) shapes.push(...detail.place(cx, detailTop, 'middle'));
   }
   return shapes;
 }
@@ -2553,6 +2652,86 @@ export function naturalCodeSize(
     width: clamp(longest * metrics.charWidth + CODE_PADDING_X * 2 + 8, 260, 680),
     height: clamp(CODE_HEADER_HEIGHT + CODE_PADDING_Y * 2 + Math.min(lines.length, 40) * metrics.lineHeight, 110, 520),
   };
+}
+
+/**
+ * The box an architecture shape needs for its name and C4 detail to show in full, starting from its
+ * current size and only ever growing — the size an arranged diagram gives it, so nothing it was
+ * told arrives with an ellipsis.
+ *
+ * Asks the renderer itself rather than restating each kind's insets (a cube glyph, a tag row, a
+ * notch, a Data Store glyph that scales with its box): `describeNode` is the one authority on
+ * where text goes, and a second copy of that geometry would drift from it. Width grows first, to at
+ * most `maxWidth`, until the name sits at its full size in two lines or fewer; height then grows
+ * until the detail fits. `fits` is false when even the largest box truncates something — the
+ * caller reports that rather than accepting a clipped label silently.
+ */
+export function naturalArchitectureSize(
+  node: DraftNode,
+  ctx: DescribeContext,
+  bounds: { maxWidth: number; maxHeight: number } = { maxWidth: 280, maxHeight: 320 },
+): { width: number; height: number; fits: boolean } {
+  const verdict = (width: number, height: number) => captionVerdict(describeNode({ ...node, width, height }, ctx).shapes, node);
+  const start = verdict(node.width, node.height);
+  if (start.fits) return { width: node.width, height: node.height, fits: true };
+
+  // For each width (growing in steps), the least height at which everything shows — by bisection,
+  // since more height never shows less. The first width whose shape comes out no taller than it is
+  // wide wins; failing that, the one needing the least height. A one-line part (a long technology)
+  // can only be helped by width, which is why width is searched and not just grown for the name.
+  const WIDTH_STEP = 20;
+  const minHeightAt = (width: number): number | undefined => {
+    if (!verdict(width, bounds.maxHeight).fits) return undefined;
+    let low = node.height;
+    let high = bounds.maxHeight;
+    if (verdict(width, low).fits) return low;
+    while (high - low > 2) {
+      const mid = Math.floor((low + high) / 2);
+      if (verdict(width, mid).fits) high = mid;
+      else low = mid;
+    }
+    return high;
+  };
+  // A Data Store's glyph grows with the smaller of its box's two growths (`dataStoreScale`), so a box
+  // grown both ways draws a giant glyph: for one, the shortest box that fits wins outright.
+  const shortest = node.type === 'database';
+  let best: { width: number; height: number } | undefined;
+  for (let width = node.width; ; width = Math.min(bounds.maxWidth, width + WIDTH_STEP)) {
+    const height = minHeightAt(width);
+    if (height !== undefined) {
+      if (!shortest && height <= Math.max(node.height, width)) return { width, height, fits: true };
+      if (!best || height < best.height) best = { width, height };
+    }
+    if (width >= bounds.maxWidth) break;
+  }
+  return best ? { ...best, fits: true } : { width: bounds.maxWidth, height: bounds.maxHeight, fits: false };
+}
+
+/** Whether every text in a shape's display list shows in full — the C4 detail drawn at all, not just
+ *  not cut short, since a part with no room is left out rather than ellipsised — and whether the name
+ *  shows at its own full size in at most two lines. */
+function captionVerdict(shapes: Shape[], node: DraftNode): { fits: boolean; nameComfortable: boolean } {
+  let fits = true;
+  let nameComfortable = true;
+  let technology = !node.technology;
+  let description = !node.description;
+  const visit = (shape: Shape) => {
+    if (shape.t === 'group') {
+      shape.children.forEach(visit);
+      return;
+    }
+    if (shape.t !== 'text') return;
+    if (shape.layout.truncated) fits = false;
+    if (shape.font === FONTS.nodeTechnology) technology = true;
+    if (shape.font === FONTS.nodeDescription) description = true;
+    if (shape.role === 'label') {
+      if (shape.layout.truncated || shape.font.size < TEXT_SIZES.nodeLabel || shape.layout.lines.length > 2) {
+        nameComfortable = false;
+      }
+    }
+  };
+  shapes.forEach(visit);
+  return { fits: fits && nameComfortable && technology && description, nameComfortable };
 }
 
 export const CODE_LAYOUT = {

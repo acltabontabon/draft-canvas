@@ -65,6 +65,11 @@ export const TEXT_SIZES = {
    *  doesn't also wrap. */
   groupTitleMin: 11,
   connectorCaption: 9.5,
+  /** A shape's C4 `[technology]` line — small and muted, under the name. */
+  nodeTechnology: 10,
+  /** A shape's C4 description. The smallest body text on the canvas that is still meant to be read
+   *  rather than glanced at; below this it stops being legible across a meeting room. */
+  nodeDescription: 11,
 } as const;
 
 /** Line heights are absolute multiples so the exporter can reproduce them exactly. */
@@ -89,4 +94,6 @@ export const FONTS = {
   sequenceBadge: { stack: 'sans', size: TEXT_SIZES.sequenceBadge, weight: 700 } satisfies FontSpec,
   groupTitle: { stack: 'sans', size: TEXT_SIZES.groupTitle, weight: 600 } satisfies FontSpec,
   connectorCaption: { stack: 'sans', size: TEXT_SIZES.connectorCaption, weight: 500 } satisfies FontSpec,
+  nodeTechnology: { stack: 'sans', size: TEXT_SIZES.nodeTechnology, weight: 500 } satisfies FontSpec,
+  nodeDescription: { stack: 'sans', size: TEXT_SIZES.nodeDescription, weight: 400 } satisfies FontSpec,
 } as const;

@@ -1,6 +1,7 @@
 import { createId } from './ids';
 import { DEFAULTS } from './limits';
 import {
+  C4_TEXT_TYPES,
   CURRENT_VERSION,
   DRAFT_FORMAT,
   type Accent,
@@ -233,6 +234,9 @@ export interface CreateNodeInput {
   textAlign?: TextAlign;
   textBold?: boolean;
   textItalic?: boolean;
+  /** Architecture shapes only (`C4_TEXT_TYPES`) — ignored on anything else. */
+  description?: string;
+  technology?: string;
 }
 
 export function createNode(input: CreateNodeInput): DraftNode {
@@ -272,6 +276,10 @@ export function createNode(input: CreateNodeInput): DraftNode {
   if (input.type === 'actor') node.actorKind = input.actorKind ?? 'human';
   if (input.type === 'component') node.componentKind = input.componentKind ?? 'generic';
   if (input.deliveryRole) node.deliveryRole = input.deliveryRole;
+  if ((C4_TEXT_TYPES as readonly DraftNodeType[]).includes(input.type)) {
+    if (input.description?.trim()) node.description = input.description.trim();
+    if (input.technology?.trim()) node.technology = input.technology.trim();
+  }
   if (input.type === 'text' && input.annotation) node.annotation = true;
   if (input.type === 'text') {
     if (input.textRole) node.textRole = input.textRole;

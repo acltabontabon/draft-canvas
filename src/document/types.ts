@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 14;
+export const CURRENT_VERSION = 15;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -34,6 +34,13 @@ export const NODE_TYPES = [
 ] as const;
 
 export type DraftNodeType = (typeof NODE_TYPES)[number];
+
+/**
+ * The shapes that stand for a piece of architecture, and so may carry a C4 `description` and
+ * `technology`. A note, a label, a code card, a Junction or a Boundary is annotation or structure,
+ * not an element with a responsibility of its own.
+ */
+export const C4_TEXT_TYPES = ['service', 'database', 'queue', 'actor', 'component'] as const satisfies readonly DraftNodeType[];
 
 export const NOTE_KINDS = ['note', 'question', 'warning', 'decision'] as const;
 export type NoteKind = (typeof NOTE_KINDS)[number];
@@ -321,6 +328,17 @@ export interface DraftNode {
   parentId?: string;
   /** The node's primary label. Always plain text — never HTML. */
   text?: string;
+  /**
+   * What this element is responsible for, in a sentence — the C4 "description" line, drawn small
+   * under the name. Architecture shapes only (`C4_TEXT_TYPES`); plain text, never HTML.
+   */
+  description?: string;
+  /**
+   * What it is built with ("Spring Boot", "PostgreSQL 16") — the C4 "[technology]" line.
+   * Architecture shapes only (`C4_TEXT_TYPES`). Not a kind: it never changes the silhouette or the
+   * connector semantics, which follow `serviceKind`/`databaseKind`/… exactly as before.
+   */
+  technology?: string;
   /**
    * Whether `text` is a system-managed placeholder or a name the user chose — the same
    * "may this be silently recomputed?" question `DraftEdge.semanticsOrigin` answers for an edge's

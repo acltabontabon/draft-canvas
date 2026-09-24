@@ -304,6 +304,18 @@ function migrateAddActions(doc: Record<string, unknown>): Record<string, unknown
 }
 
 /**
+ * v15 lets an architecture shape carry a C4 `description` and `technology`. Structurally a no-op:
+ * a v14 file has neither, and a shape without them draws exactly as it did.
+ *
+ * Not wrapped in `everyRoom`, because there is nothing to rewrite at any level. The version moves
+ * for v13's reason: a v14 build's whitelist would silently strip both fields and, where every edit
+ * saves straight back (VS Code), write the stripped file over the original.
+ */
+function migrateAddC4Text(doc: Record<string, unknown>): Record<string, unknown> {
+  return doc;
+}
+
+/**
  * Applies `fn` to the document's own graph and to every room nested inside it, however deep.
  *
  * Exists so a migration can say what it changes once and have it reach the whole file — which
@@ -366,6 +378,7 @@ const MIGRATIONS: Record<number, Migration> = {
   11: migrateAddInsides,
   12: migrateAddActions,
   13: everyRoom(migrateProjectsToWrites),
+  14: migrateAddC4Text,
 };
 
 export class UnsupportedVersionError extends Error {

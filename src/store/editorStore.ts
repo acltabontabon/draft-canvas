@@ -29,7 +29,8 @@ import {
   type DepthPath,
 } from '../depth/tree';
 import { getMeasurer } from '../render/text/measure';
-import { naturalNoteHeight, naturalTextHeight } from '../nodes/describe';
+import { describeContext, naturalArchitectureSize, naturalNoteHeight, naturalTextHeight } from '../nodes/describe';
+import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
   addNodes,
@@ -137,6 +138,7 @@ import type {
   Side,
   ViewLevel,
 } from '../document/types';
+import { C4_TEXT_TYPES } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
 import { hostClipboard } from '../host/hostClipboard';
@@ -351,6 +353,9 @@ export interface EditorStore {
     targetOffset?: number,
   ) => DraftEdge | null;
   updateNodeById: (id: string, patch: Partial<Omit<DraftNode, 'id'>>, label?: string) => void;
+  /** Sets or clears (with `''`) an architecture shape's C4 technology/description, growing the
+   *  shape — never shrinking it — so what was typed shows in full. */
+  setNodeC4Text: (id: string, patch: { technology?: string; description?: string }) => void;
   /** `height` lets a note commit its grown-to-fit box in the same undo step as the text. */
   updateNodeText: (id: string, text: string, options?: { height?: number }) => void;
   /**
@@ -1379,6 +1384,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const changesKind = KIND_FIELDS.some((field) => field in patch);
       return changesKind ? reinferIncidentEdges(next, id) : next;
     });
+  },
+
+  setNodeC4Text(id, patch) {
+    const fields: Partial<DraftNode> = {};
+    if (patch.technology !== undefined) {
+      fields.technology = patch.technology.replace(/\s+/g, ' ').trim().slice(0, LIMITS.maxTechnologyLength) || undefined;
+    }
+    if (patch.description !== undefined) {
+      fields.description = patch.description.trim().slice(0, LIMITS.maxDescriptionLength) || undefined;
+    }
+    get().apply(
+      patch.description !== undefined ? 'Edit description' : 'Edit technology',
+      (doc) => growArchitectureToFit(updateNode(doc, id, fields), id),
+      { coalesceKey: `node-c4:${id}` },
+    );
   },
 
   updateNodeText(id, rawText, options) {
@@ -2652,6 +2672,18 @@ function growNoteToFit(doc: DraftDocument, id: string): DraftDocument {
   if (!node || node.type !== 'note') return doc;
   const needed = naturalNoteHeight(node, node.text ?? '', { measurer: getMeasurer() });
   return needed > node.height ? updateNode(doc, id, { height: needed }) : doc;
+}
+
+/** Same grow-only rule for an architecture shape given C4 detail: enough room for the name and the
+ *  detail to show in full, never smaller than the box already was. Light theme only for measuring —
+ *  colour never changes where text goes. */
+function growArchitectureToFit(doc: DraftDocument, id: string): DraftDocument {
+  const node = doc.nodes.find((n) => n.id === id);
+  if (!node || !(C4_TEXT_TYPES as readonly string[]).includes(node.type)) return doc;
+  if (!node.technology && !node.description) return doc;
+  const needed = naturalArchitectureSize(node, describeContext(LIGHT));
+  if (needed.width <= node.width && needed.height <= node.height) return doc;
+  return updateNode(doc, id, { width: Math.max(node.width, needed.width), height: Math.max(node.height, needed.height) });
 }
 
 /** Same idea as `growNoteToFit`: a role/bold/italic change can make the same text wrap onto more

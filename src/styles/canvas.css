@@ -1588,6 +1588,29 @@
   padding: 8px;
 }
 
+/* An architecture shape's C4 details: two labelled fields, stacked, at the row's control scale. */
+.dc-c4-panel {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 280px;
+}
+
+.dc-c4-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--dc-popover-font);
+  color: var(--dc-text-muted);
+}
+
+.dc-c4-field textarea {
+  resize: vertical;
+  min-height: 52px;
+  font: inherit;
+  color: var(--dc-text);
+}
+
 /* Text's Bold/Italic/Alignment panel — same compact control scale the row above it already uses,
    so opening the panel doesn't suddenly introduce a second, larger button size. */
 .dc-typography-panel .dc-button {
