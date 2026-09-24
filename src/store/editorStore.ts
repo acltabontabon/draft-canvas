@@ -316,6 +316,12 @@ export interface EditorStore {
   /* Document access */
   setDocument: (document: DraftDocument, options?: { resetHistory?: boolean; keepPath?: boolean }) => void;
   apply: (label: string, recipe: (doc: DraftDocument) => DraftDocument, options?: ApplyOptions) => void;
+  /**
+   * One undoable edit to the whole *file*, not the room on screen — for a change that arrives from
+   * outside the canvas (an agent's batch) and may touch any room. `false` when nothing changed.
+   * Never coalesces, so the next keystroke can't fold into it.
+   */
+  applyToFile: (label: string, recipe: (file: DraftDocument) => DraftDocument) => boolean;
 
   /* Interactions (drag, resize) collapse into one undo entry */
   beginInteraction: (label: string) => void;
@@ -1218,6 +1224,46 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }),
     }));
     closeStaleAttachmentDetail(next);
+  },
+
+  applyToFile(label, recipe) {
+    // A gesture in flight would otherwise absorb this change into its own undo entry — or record
+    // its baseline over it. The caller refuses while `isInteracting()`; this is the last guard.
+    if (interaction) return false;
+    const state = get();
+    const file = fileOf(state);
+    const nextFile = touch(recipe(file));
+    if (nextFile === file || shallowEqualDocument(nextFile, file)) return false;
+    // The room on screen may itself be what changed — or be gone. Stay where you are when it
+    // still exists, fall back to the top when it doesn't.
+    const path = resolvePath(nextFile, state.path);
+    const room = path.length > 0 ? viewOf(nextFile, path) : undefined;
+    const inside = room !== undefined;
+    const moved = inside ? pathKey(path) !== pathKey(state.path) : state.path.length > 0;
+    const document = room ?? nextFile;
+    const cleared = moved ? resetViewSession() : undefined;
+    const selectionAfter = cleared ? EMPTY_SELECTION : selectionIn(document, state.document, state.selection);
+    set((s) => ({
+      ...(cleared ?? {}),
+      document,
+      path: inside ? path : ROOT_PATH,
+      outer: inside ? nextFile : null,
+      ...(moved ? { liveViewport: null } : {}),
+      selection: selectionAfter,
+      revision: s.revision + 1,
+      ...focusThatSurvives(document, s),
+      history: pushEntry(s.history, {
+        label,
+        before: file,
+        after: nextFile,
+        path: inside ? path : ROOT_PATH,
+        selectionBefore: s.selection,
+        selectionAfter,
+        at: Date.now(),
+      }),
+    }));
+    closeStaleAttachmentDetail(document);
+    return true;
   },
 
   beginInteraction(label) {
@@ -2650,6 +2696,11 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
     a.level === b.level &&
     a.metadata.title === b.metadata.title
   );
+}
+
+/** Whether a drag or resize is in progress — an outside edit waits rather than joining it. */
+export function isInteracting(): boolean {
+  return interaction !== null;
 }
 
 /** Test seam: interaction state lives outside the store, so it needs resetting. */

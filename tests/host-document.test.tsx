@@ -117,6 +117,33 @@ describe('embedded in a host', () => {
   });
 
   /**
+   * A v15 file made on the desktop (C4 text, a system boundary), opened in VS Code and edited there:
+   * what goes back to the file still carries every element's description and technology.
+   */
+  it('keeps C4 text through an edit in the VS Code host', async () => {
+    const state = mount();
+    await waitFor(() => expect(messages('draft-canvas:ready')).toHaveLength(1));
+    const { readFileSync } = await import('node:fs');
+    const text = readFileSync(`${process.cwd()}/tests/fixtures/agent/online-shop.desktop.draftcanvas`, 'utf8');
+    const original = JSON.parse(text) as { metadata: { id: string }; nodes: Array<{ id: string; description?: string; technology?: string; parentId?: string }> };
+    fromHost({ type: 'draft-canvas:load', text });
+    await waitFor(() => expect(state().openId).toBe(original.metadata.id));
+
+    act(() => useEditorStore.getState().setNodeC4Text('ordersDb', { description: 'Orders and their status history.' }));
+
+    await waitFor(() => expect(messages('draft-canvas:change')).toHaveLength(1));
+    const sent = JSON.parse(messages('draft-canvas:change')[0]!.message.text!) as typeof original & { version: number };
+    expect(sent.version).toBe(15);
+    for (const node of original.nodes) {
+      const back = sent.nodes.find((n) => n.id === node.id);
+      expect(back?.technology).toBe(node.technology);
+      expect(back?.parentId).toBe(node.parentId);
+      if (node.id !== 'ordersDb') expect(back?.description).toBe(node.description);
+    }
+    expect(sent.nodes.find((n) => n.id === 'ordersDb')?.description).toBe('Orders and their status history.');
+  });
+
+  /**
    * In VS Code the file *is* the document, so an edit made inside a shape has to travel back as
    * the whole file — and the reload the host sends on every outside change must leave the user
    * standing in the room they were in, not throw them back out to the top of the diagram.

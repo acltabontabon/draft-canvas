@@ -271,6 +271,16 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
           void flush().then(() => post({ type: 'draft-canvas:flushed', id }));
         } else if (command.command === 'close') {
           void sessionRef.current.closeDocument();
+        } else if (__DESKTOP__ && command.command === 'agent' && host.kind === 'desktop' && typeof command.id === 'number' && command.request) {
+          const id = command.id;
+          const request = command.request;
+          void (async () => {
+            const { handleAgentRequest } = await import('./agentBridge');
+            const reply = handleAgentRequest(request);
+            // The shell decides whether to save from the text it holds, so the change is posted first.
+            if (reply.kind === 'committed') await sendChange();
+            post({ type: 'draft-canvas:agent', id, reply });
+          })().catch((error: unknown) => logDiagnostic(error, { operation: 'host-agent' }));
         }
         return;
       }

@@ -1,3 +1,5 @@
+import type { AgentEditorReply, AgentEditorRequest } from './agentBridge';
+
 /**
  * Set when a host editor frames the app for a single `.draftcanvas` file. Today that host is only
  * the VS Code extension (`vscode-extension/`), which loads the app at `?host=vscode`.
@@ -20,7 +22,7 @@ function detectHost(): 'vscode' | null {
  * Messages between the app and its host. The app's protocol version travels with `ready`, so a host
  * can tell an app that predates a message it relies on.
  */
-export const HOST_PROTOCOL = 6;
+export const HOST_PROTOCOL = 7;
 
 export type ToHostMessage =
   | { type: 'draft-canvas:ready'; protocol: number }
@@ -59,7 +61,9 @@ export type ToHostMessage =
    */
   | { type: 'draft-canvas:closed' }
   /** The answer to a `flush` command, once the app has posted every edit still pending. */
-  | { type: 'draft-canvas:flushed'; id: number };
+  | { type: 'draft-canvas:flushed'; id: number }
+  /** Since protocol 7, desktop only: the answer to an `agent` command (see `host/agentBridge.ts`). */
+  | { type: 'draft-canvas:agent'; id: number; reply: AgentEditorReply };
 
 /**
  * Desktop shell to app. `flush` has the app let go of a field still being typed in and post what is
@@ -67,8 +71,10 @@ export type ToHostMessage =
  */
 export interface CommandMessage {
   type: 'draft-canvas:command';
-  command: 'flush' | 'close';
+  /** `agent` since protocol 7, desktop only: an AI agent's question or change for the open document. */
+  command: 'flush' | 'close' | 'agent';
   id?: number;
+  request?: AgentEditorRequest;
 }
 
 /** The host's answer to `background-read`: the stored image (base64), or none when the file has no image beside it. */
