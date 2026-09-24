@@ -126,6 +126,15 @@ export function accentOf(theme: Theme, accent: Accent | undefined): AccentPalett
 }
 
 /**
+ * A boundary's outline colour. Drawn at full strength — a boundary stays quieter than the shapes it
+ * holds through a thinner, broken line and no heavy fill, never by fading the colour the user
+ * picked (which is what made a recoloured boundary nearly indistinguishable from a neutral one).
+ */
+export function boundaryLine(theme: Theme, accent: Accent | undefined): string {
+  return accentOf(theme, accent).line;
+}
+
+/**
  * Mirrors the theme onto the document root as CSS custom properties, so the
  * stylesheets and the exporter can never disagree about what "teal" means.
  */

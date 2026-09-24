@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode, minSizeFor } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
 import { addFlow, addStepToFlow, createFlow } from '../src/document/flow';
-import { NODE_TYPES } from '../src/document/types';
+import { ACCENTS, BOUNDARY_PRESETS, NODE_TYPES } from '../src/document/types';
 import { describeContext, describeNode } from '../src/nodes/describe';
 import type { Shape } from '../src/render/displayList';
 import { renderDocumentSvg } from '../src/render/svg/document';
@@ -12,7 +12,7 @@ import { tokenizeCode, flattenToLines } from '../src/render/code/highlight';
 import { layoutText, baselineOf } from '../src/render/text/layout';
 import { StaticTextMeasurer } from '../src/render/text/measure';
 import { FONTS } from '../src/render/text/fonts';
-import { LIGHT } from '../src/render/theme/tokens';
+import { DARK, LIGHT } from '../src/render/theme/tokens';
 import { routeBetween, chooseSides, rectOf } from '../src/edges/routing';
 
 const measurer = new StaticTextMeasurer();
@@ -639,6 +639,76 @@ describe('live resize', () => {
       .filter((shape): shape is Extract<typeof shape, { t: 'text' }> => shape.t === 'text')
       .map((shape) => shape.layout.lines.map((line) => line.text).join(''));
     expect(texts).toEqual(['Untitled area']);
+  });
+
+  const outlineOf = (shapes: Shape[]) =>
+    shapes.find((shape): shape is Extract<Shape, { t: 'rect' | 'path' }> =>
+      (shape.t === 'rect' || shape.t === 'path') && shape.fill === 'none' && Boolean(shape.stroke));
+  const textsOf = (shapes: Shape[]) =>
+    shapes.filter((shape): shape is Extract<Shape, { t: 'text' }> => shape.t === 'text');
+
+  it("draws a boundary's colour at full strength, apart from its faint fill", () => {
+    // The regression: fill and outline were one element at `opacity: 0.35`, so a recoloured
+    // boundary's line showed at a third of its colour and read as neutral.
+    for (const theme of [LIGHT, DARK]) {
+      const ctx = describeContext(theme);
+      for (const preset of BOUNDARY_PRESETS) {
+        for (const accent of ACCENTS) {
+          const node = createNode({ type: 'group', x: 0, y: 0, text: 'Scope', boundaryPreset: preset, accent });
+          const shapes = describeNode(node, ctx).shapes;
+          const outline = outlineOf(shapes);
+          expect(outline?.stroke?.color).toBe(theme.accents[accent].line);
+          // Group sits deliberately back from the family; nothing fades a line further than that.
+          expect(outline?.opacity ?? 1).toBeGreaterThanOrEqual(0.85);
+          const fill = shapes[0] as Extract<Shape, { t: 'rect' }>;
+          expect(fill.stroke).toBeUndefined();
+          expect(fill.opacity).toBeLessThan(1);
+        }
+      }
+    }
+  });
+
+  it('tells boundary kinds apart by outline, header and marker — not by colour or text alone', () => {
+    const ctx = describeContext(LIGHT);
+    const signatures = BOUNDARY_PRESETS.map((preset) => {
+      const node = createNode({ type: 'group', x: 0, y: 0, width: 420, height: 300, boundaryPreset: preset });
+      const shapes = describeNode(node, ctx).shapes;
+      const outline = outlineOf(shapes)!;
+      const chrome = shapes.filter((shape) => shape !== outline && shape !== shapes[0] && shape.t !== 'text');
+      return `${outline.stroke!.dash?.join(',') ?? 'solid'}|${outline.stroke!.width}|${chrome.length}`;
+    });
+    expect(new Set(signatures).size).toBe(BOUNDARY_PRESETS.length);
+  });
+
+  it('keeps a long boundary title on one line inside the box, dropping the kind caption first', () => {
+    const ctx = { ...describeContext(LIGHT), measurer: new StaticTextMeasurer() };
+    const min = minSizeFor('group');
+    for (const preset of BOUNDARY_PRESETS) {
+      const node = createNode({
+        type: 'group', x: 0, y: 0, ...min, boundaryPreset: preset,
+        text: 'A boundary title far too long to fit in the smallest box',
+      });
+      const texts = textsOf(describeNode(node, ctx).shapes);
+      expect(texts).toHaveLength(1);
+      const [title] = texts;
+      expect(title!.role).toBe('label');
+      expect(title!.layout.lines).toHaveLength(1);
+      expect(title!.x + title!.layout.width).toBeLessThanOrEqual(node.width - 12);
+    }
+  });
+
+  it("sits an untitled boundary's kind caption on the header row, not up on the border", () => {
+    const ctx = { ...describeContext(DARK), measurer: new StaticTextMeasurer() };
+    for (const preset of BOUNDARY_PRESETS) {
+      const node = createNode({ type: 'group', x: 0, y: 0, text: '', boundaryPreset: preset });
+      for (const text of textsOf(describeNode(node, ctx).shapes)) {
+        const baseline = text.y + baselineOf(text.layout, 0);
+        // The header row runs y 1–33 with its centre at 17; a caption's baseline sits just below it.
+        expect(text.y).toBeGreaterThan(4);
+        expect(baseline).toBeGreaterThan(17);
+        expect(baseline).toBeLessThan(26);
+      }
+    }
   });
 
   function fillsAndCaptions(ctx: ReturnType<typeof describeContext>, node: ReturnType<typeof createNode>) {

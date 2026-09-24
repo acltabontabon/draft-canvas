@@ -261,7 +261,7 @@ const monolith: ArchitectureStarter = {
  *
  * The outer boundary reads `Application` / `Single deployable unit`, not `Application` under a
  * fixed `DEPLOYMENT` tag. `boundaryPreset: 'deployment'`'s caption is a closed vocabulary word
- * (`nodes/describe.ts`'s `BOUNDARY_PRESET_LABELS`) — there's no way to make it say anything but
+ * (`nodes/describe.ts`'s `BOUNDARY_STYLES`) — there's no way to make it say anything but
  * `DEPLOYMENT` — so saying the actual phrase means dropping the preset caption
  * (`boundaryPreset: 'boundary'`, the same choice Hexagonal already made for `Application Core`)
  * and adding one small `annotation: true` text node directly under the boundary's own title, the

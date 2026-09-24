@@ -63,6 +63,35 @@ Notes are for what the boxes don't say: why the queue is there, or a decision th
 
 Or right-click a shape and choose **Add Note**, which creates one already attached.
 
+## Draw a boundary
+
+A boundary is a frame around shapes that belong to the same scope. Select some shapes and press `⌘G`
+to put a boundary around them, or press `B` to draw an empty one. A shape dragged into a boundary
+becomes part of it. When you move, copy or delete a boundary, the shapes inside go with it.
+Draft Canvas never moves a shape into or out of a boundary just because the two overlap.
+
+Choose a boundary's **kind** in the bar that appears when you select it. Each kind has its own
+outline and header, so you can tell kinds apart without reading the labels:
+
+| Kind | Use it for | How it looks |
+|---|---|---|
+| Boundary | Any frame, with no particular meaning | Dashed outline, name only |
+| Group | Shapes that go together for this explanation | Dotted outline, quiet name |
+| System | What sits inside one software system | Solid outline, window mark |
+| Domain | Shapes that share a domain responsibility | Dashed outline, name on a corner tab |
+| Network | What sits within one network scope | Dash-dot outline, connected-nodes mark |
+| Deployment | What runs in one runtime or hosting scope | Solid outline, cube mark, ruled header |
+
+These kinds describe your diagram. They don't enforce anything: a Network boundary doesn't make
+anything secure, and a Deployment boundary doesn't have to be one machine.
+
+The name is the boundary's own. The kind appears after it in small capitals, and is hidden when the
+name needs the room. To rename a boundary, double-click its name or press `Enter`.
+
+Use the colour swatch in the same bar to colour a boundary. The colour applies to the outline and
+the kind mark, and tints the inside slightly, so the shapes inside stay easy to read. If you change
+the kind later, the name, colour, contents and connectors stay as they were.
+
 ## Present a flow
 
 A flow is a numbered path through connectors. It's how you say "first this happens, then this".

@@ -321,7 +321,7 @@ export function Inspector() {
                 .updateNodeById(
                   onlyNode.id,
                   { boundaryPreset: event.target.value as BoundaryPreset },
-                  'Change boundary preset',
+                  'Change boundary kind',
                 )
             }
           >

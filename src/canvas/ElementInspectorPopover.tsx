@@ -14,6 +14,7 @@ import {
   NOTE_KINDS,
   TEXT_ALIGNS,
   TEXT_ROLES,
+  type Accent,
   type ActorKind,
   type BoundaryPreset,
   type CodeLanguage,
@@ -35,7 +36,13 @@ import { useUiStore } from '../store/uiStore';
 import { nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
-import { BOUNDARY_PRESET_OPTION_LABELS, NOTE_LABELS, TEXT_ROLE_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
+import {
+  BOUNDARY_PRESET_DESCRIPTIONS,
+  BOUNDARY_PRESET_OPTION_LABELS,
+  NOTE_LABELS,
+  TEXT_ROLE_OPTION_LABELS,
+} from '../ui/Editor/nodeKindLabels';
+import { shapeVariantOptions } from './shapeVariantOptions';
 import { ACTOR_ICON_OPTIONS } from './actorOptions';
 import { COMPONENT_ICON_OPTIONS } from './componentOptions';
 import { DATABASE_ICON_OPTIONS } from './dataStoreOptions';
@@ -69,10 +76,25 @@ const DATABASE_OPTIONS: InspectorSelectOption[] = DATABASE_ICON_OPTIONS;
 const QUEUE_OPTIONS: InspectorSelectOption[] = QUEUE_ICON_OPTIONS;
 const ACTOR_OPTIONS: InspectorSelectOption[] = ACTOR_ICON_OPTIONS;
 const COMPONENT_OPTIONS: InspectorSelectOption[] = COMPONENT_ICON_OPTIONS;
-const BOUNDARY_OPTIONS: InspectorSelectOption[] = BOUNDARY_PRESETS.map((preset) => ({
-  value: preset,
-  label: BOUNDARY_PRESET_OPTION_LABELS[preset],
-}));
+/** Boundary kinds differ more in purpose than in silhouette, so each option carries a live preview
+ *  *and* a line saying what it is for. Previewed in the boundary's own colour — switching kind
+ *  keeps the colour, and the picker shows exactly that. One list per accent, built once. */
+const boundaryOptionsByAccent = new Map<Accent | undefined, InspectorSelectOption[]>();
+function boundaryOptions(accent: Accent | undefined): InspectorSelectOption[] {
+  let options = boundaryOptionsByAccent.get(accent);
+  if (!options) {
+    options = shapeVariantOptions(
+      'group',
+      BOUNDARY_PRESETS,
+      BOUNDARY_PRESET_OPTION_LABELS,
+      (preset) => ({ boundaryPreset: preset, accent }),
+      // The corner, not the whole box: outline, plate, tab and rule are what tell kinds apart.
+      { descriptions: BOUNDARY_PRESET_DESCRIPTIONS, size: { width: 160, height: 120 }, frame: { width: 72, height: 48 } },
+    );
+    boundaryOptionsByAccent.set(accent, options);
+  }
+  return options;
+}
 const TEXT_ROLE_OPTIONS: InspectorSelectOption[] = TEXT_ROLES.map((role) => ({
   value: role,
   label: TEXT_ROLE_OPTION_LABELS[role],
@@ -405,7 +427,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
     value: string;
     ariaLabel: string;
     onChange: (value: string) => void;
-    layout?: 'list' | 'grid';
+    layout?: 'list' | 'grid' | 'rich';
   } | null => {
     switch (node.type) {
       case 'note':
@@ -458,11 +480,12 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
         };
       case 'group':
         return {
-          options: BOUNDARY_OPTIONS,
+          options: boundaryOptions(node.accent),
           value: node.boundaryPreset ?? 'boundary',
-          ariaLabel: 'Boundary preset',
+          ariaLabel: 'Boundary kind',
           onChange: (value) =>
-            useEditorStore.getState().updateNodeById(node.id, { boundaryPreset: value as BoundaryPreset }, 'Change boundary preset'),
+            useEditorStore.getState().updateNodeById(node.id, { boundaryPreset: value as BoundaryPreset }, 'Change boundary kind'),
+          layout: 'rich',
         };
       case 'actor':
         return {

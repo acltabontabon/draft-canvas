@@ -242,3 +242,22 @@ describe('InspectorSelect avoid rect', () => {
     expect(screen.getByRole('listbox')).toHaveAttribute('data-direction', 'up');
   });
 });
+
+describe('InspectorSelect rich layout', () => {
+  it("shows each option's purpose under its name, and only as a tooltip elsewhere", () => {
+    const options: InspectorSelectOption[] = [
+      { value: 'system', label: 'System', description: 'Inside one software system’s scope' },
+      { value: 'network', label: 'Network', description: 'Within one network scope' },
+    ];
+    const { rerender } = render(
+      <InspectorSelect value="system" options={options} onChange={vi.fn()} ariaLabel="Boundary kind" layout="rich" />,
+    );
+    openMenu();
+    expect(screen.getByRole('listbox')).toHaveAttribute('data-layout', 'rich');
+    expect(screen.getByText('Within one network scope')).toBeInTheDocument();
+
+    rerender(<InspectorSelect value="system" options={options} onChange={vi.fn()} ariaLabel="Boundary kind" />);
+    expect(screen.queryByText('Within one network scope')).toBeNull();
+    expect(screen.getByRole('option', { name: 'Network' })).toHaveAttribute('title', 'Within one network scope');
+  });
+});

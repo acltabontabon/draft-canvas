@@ -133,3 +133,40 @@ describe('normalizeDocument', () => {
     expect(result.document.nodes[0]).toMatchObject({ width: 177, height: 64 });
   });
 });
+
+describe('changing a boundary kind', () => {
+  beforeEach(() => __resetInteraction());
+
+  it('keeps its colour, name, geometry, members and connections, as one undo step', () => {
+    const { boundary, nodes } = withBoundary({ type: 'service', x: 100, y: 100, text: 'Inside' });
+    const outside = createNode({ type: 'service', x: 2000, y: 100, text: 'Outside' });
+    const edge = { id: 'e1', source: nodes[0]!.id, target: outside.id, directed: true, routing: 'smoothstep' as const };
+    store.setState((state) => ({
+      document: {
+        ...state.document,
+        nodes: state.document.nodes.map((n) => (n.id === boundary.id ? { ...n, accent: 'rose' as const } : n)).concat(outside),
+        edges: [edge],
+      },
+    }));
+    const before = store.getState().document;
+
+    store.getState().updateNodeById(boundary.id, { boundaryPreset: 'network' }, 'Change boundary kind');
+    const after = store.getState().document;
+    const changed = after.nodes.find((n) => n.id === boundary.id)!;
+    expect(changed).toMatchObject({ boundaryPreset: 'network', accent: 'rose', text: 'VPC', x: 0, y: 0, width: 1600, height: 900 });
+    expect(after.nodes.find((n) => n.id === nodes[0]!.id)!.parentId).toBe(boundary.id);
+    expect(after.edges).toEqual(before.edges);
+
+    store.getState().undo();
+    expect(store.getState().document.nodes.find((n) => n.id === boundary.id)!.boundaryPreset).toBe('boundary');
+    expect(store.getState().document.nodes.find((n) => n.id === boundary.id)!.accent).toBe('rose');
+  });
+
+  it("opens an older diagram's boundary kind and colour exactly as saved", () => {
+    const boundary = { ...createNode({ type: 'group', x: 0, y: 0, text: 'Edge' }), boundaryPreset: 'network' as const, accent: 'violet' as const };
+    const result = normalizeDocument({ ...createDocument('Older'), nodes: [boundary] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.nodes[0]).toMatchObject({ boundaryPreset: 'network', accent: 'violet', text: 'Edge' });
+  });
+});

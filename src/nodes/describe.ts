@@ -18,9 +18,9 @@ import { DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreScale } from '../document/dataS
 import { roughenPath } from '../render/roughness/roughPath';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
-import { accentOf, type AccentPalette, type Theme } from '../render/theme/tokens';
+import { accentOf, boundaryLine, type AccentPalette, type Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS, TEXT_SIZES, type FontSpec } from '../render/text/fonts';
-import { fitLabel, layoutText } from '../render/text/layout';
+import { baselineOf, fitLabel, layoutText, type TextLayout } from '../render/text/layout';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../ui/personality/usePersonality';
 import { clamp } from '../lib/math';
@@ -79,13 +79,40 @@ export const NOTE_LABELS: Record<NoteKind, string> = {
   decision: 'DECISION',
 };
 
-/** The default preset renders no caption at all — a plain boundary needs no label. */
-const BOUNDARY_PRESET_LABELS: Partial<Record<BoundaryPreset, string>> = {
-  system: 'SYSTEM',
-  domain: 'DOMAIN',
-  network: 'NETWORK',
-  deployment: 'DEPLOYMENT',
-  group: 'GROUP',
+/**
+ * How each boundary kind says what it is — through its outline, its header and a small marker,
+ * never through colour alone (colour is the user's, and every kind wears every accent). The six
+ * are one family: the same corner, inset, header row and type sizes, differing only in these few
+ * deliberate places.
+ *
+ * - `dash`: the outline's stroke pattern (`undefined` = solid). Group's near-zero dash with round
+ *   caps draws dots — the lightest line in the family. Network's dash-dot is the long-standing
+ *   map notation for a perimeter.
+ * - `header`: `plain` sets the title on the header row; `tab` puts it in a corner tab (Domain —
+ *   the name *is* the point); `band` rules the header off from the contents (Deployment — a
+ *   runtime scope reads as infrastructure with a label plate).
+ * - `caption`: the kind, after the title and quieter than it. The generic Boundary and Group have
+ *   none — one means "no stated meaning", the other wants the least chrome possible.
+ */
+interface BoundaryStyle {
+  dash?: number[];
+  width: number;
+  /** Group only — its outline sits back from the rest of the family on purpose. */
+  strokeOpacity?: number;
+  header: 'plain' | 'tab' | 'band';
+  marker?: 'system' | 'network' | 'deployment';
+  caption?: string;
+  /** Group only — the title is muted along with the outline. */
+  quietTitle?: boolean;
+}
+
+export const BOUNDARY_STYLES: Record<BoundaryPreset, BoundaryStyle> = {
+  boundary: { dash: [6, 4], width: 1.25, header: 'plain' },
+  group: { dash: [0.01, 4], width: 1.75, strokeOpacity: 0.85, header: 'plain', quietTitle: true },
+  system: { width: 1.25, header: 'plain', marker: 'system', caption: 'SYSTEM' },
+  domain: { dash: [9, 4], width: 1.25, header: 'tab', caption: 'DOMAIN' },
+  network: { dash: [10, 4, 0.01, 4], width: 1.25, header: 'plain', marker: 'network', caption: 'NETWORK' },
+  deployment: { width: 1, header: 'band', marker: 'deployment', caption: 'DEPLOYMENT' },
 };
 
 /**
@@ -2448,14 +2475,59 @@ export function naturalTextHeight(
  *  services it contains. Clean stays 1 (no-op) so this never changes byte-identical output. */
 const BOUNDARY_BOOST: Record<PersonalityPreset, number> = { clean: 1, draft: 1.4, sketch: 1.7 };
 
+/**
+ * The boundary header, laid out on one grid so every kind lines up with every other:
+ *
+ * - The row is `BOUNDARY_HEADER_HEIGHT` tall, measured from the outline's top edge (y 1); the
+ *   Domain tab and the Deployment rule both end exactly there.
+ * - The marker plate is centred in the row with the *same* gap above and to its left, and its
+ *   corner radius is the outline's minus that gap — concentric with the boundary's own corner, so
+ *   the plate reads as set into it rather than dropped near it.
+ * - Every line of text is centred on the row by its cap height, so a title, a lone kind caption
+ *   and the plate's glyph all share one optical centre line whatever is or isn't there.
+ */
+const BOUNDARY_RADIUS = 12;
+const BOUNDARY_HEADER_HEIGHT = 32;
+const BOUNDARY_ROW_MID = 1 + BOUNDARY_HEADER_HEIGHT / 2;
+const BOUNDARY_PLATE = 20;
+const BOUNDARY_PLATE_GAP = (BOUNDARY_HEADER_HEIGHT - BOUNDARY_PLATE) / 2;
+const BOUNDARY_MARKER = 12;
+/** Left inset of a header that starts with text; also the tab's padding on either side of it. */
+const BOUNDARY_INSET_X = 12;
+const BOUNDARY_TEXT_GAP = 8;
+/** Cap height as a fraction of font size, for the system UI sans every export uses. */
+const CAP_HEIGHT = 0.71;
+/** Cubic control distance for a quarter circle, as a fraction of the radius. */
+const KAPPA = 0.5523;
+
+/** The outline's rounded top-left corner as a path start, so a tab or band fills it exactly. */
+function topLeftCorner(): string {
+  const k = 1 + BOUNDARY_RADIUS * (1 - KAPPA);
+  return `M1 ${1 + BOUNDARY_RADIUS} C1 ${k} ${k} 1 ${1 + BOUNDARY_RADIUS} 1`;
+}
+
 function group(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent);
+  const style = BOUNDARY_STYLES[node.boundaryPreset ?? 'boundary'];
   const profile = PERSONALITY_PROFILES[ctx.preset];
   const boost = BOUNDARY_BOOST[ctx.preset];
-  const rect = { x: 1, y: 1, w: node.width - 2, h: node.height - 2, r: 12 };
-  const stroke: Stroke = { color: palette.line, width: 1.25, dash: [6, 5] };
+  const rect = { x: 1, y: 1, w: node.width - 2, h: node.height - 2, r: BOUNDARY_RADIUS };
+  const stroke: Stroke = {
+    color: boundaryLine(ctx.theme, node.accent),
+    width: style.width,
+    dash: style.dash,
+    // A near-zero dash is a dot, and a dot needs a round cap to exist at all.
+    linecap: style.dash?.some((d) => d < 1) ? 'round' : undefined,
+  };
+  // Fill and outline are two shapes, deliberately. They used to be one element carrying
+  // `opacity: 0.35` for the sake of a barely-there fill — which faded the outline, and with it
+  // the user's chosen colour, to a third of its strength. The fill stays faint; the line doesn't.
   const shapes: Shape[] = [
-    outlineShape(node.id, ctx, rect, { fill: ctx.theme.surface, opacity: 0.35, stroke }, boost),
+    outlineShape(node.id, ctx, rect, {
+      fill: node.accent && node.accent !== 'neutral' ? palette.fill : ctx.theme.surface,
+      opacity: node.accent && node.accent !== 'neutral' ? 0.55 : 0.3,
+    }, boost),
+    outlineShape(node.id, ctx, rect, { fill: 'none', stroke, opacity: style.strokeOpacity }, boost),
   ];
 
   // Only the boldest primitive in the whole system gets both of these: a second,
@@ -2479,57 +2551,181 @@ function group(node: DraftNode, ctx: DescribeContext): Shape[] {
     if (d) shapes.push({ t: 'path', d, fill: 'none', stroke });
   }
 
-  // The preset is a small secondary caption, never folded into the node's
-  // own `text` — a Domain boundary labelled "Payment Platform" must still
-  // read "Payment Platform", not "Domain: Payment Platform".
-  const presetLabel = BOUNDARY_PRESET_LABELS[node.boundaryPreset ?? 'boundary'];
-  let titleTop = 9;
-  if (presetLabel) {
-    const captionLayout = layoutText(presetLabel, {
+  shapes.push(...boundaryHeader(node, ctx, style, palette));
+  return shapes;
+}
+
+/**
+ * One header row for every kind: [marker] Title  CAPTION. The title is the user's and always wins
+ * the width — the kind caption only appears when it fits whole after it, and is dropped before the
+ * title is ever shortened for it. The kind is never folded into the node's own `text`: a Domain
+ * boundary named "Payments" still reads "Payments", not "Domain: Payments".
+ */
+function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundaryStyle, palette: AccentPalette): Shape[] {
+  const shapes: Shape[] = [];
+  const bottom = 1 + BOUNDARY_HEADER_HEIGHT;
+  // A tab holds its text with the same padding on both sides, and never reaches the far corner.
+  const right = style.header === 'tab' ? node.width - 1 - BOUNDARY_RADIUS - BOUNDARY_INSET_X : node.width - BOUNDARY_INSET_X;
+
+  let x = BOUNDARY_INSET_X;
+  if (style.marker) {
+    // The glyph sits on a small plate tinted with the boundary's own colour — a stamped kind mark
+    // rather than an icon floating in the corner, and the first place a recolour shows.
+    const plate = 1 + BOUNDARY_PLATE_GAP;
+    shapes.push({
+      t: 'rect',
+      x: plate,
+      y: plate,
+      w: BOUNDARY_PLATE,
+      h: BOUNDARY_PLATE,
+      r: BOUNDARY_RADIUS - BOUNDARY_PLATE_GAP,
+      fill: palette.chip,
+      opacity: ctx.theme.name === 'dark' ? 0.18 : 0.13,
+    });
+    const inset = (BOUNDARY_PLATE - BOUNDARY_MARKER) / 2;
+    shapes.push(boundaryMarker(style.marker, plate + inset, plate + inset, palette.chip));
+    x = plate + BOUNDARY_PLATE + BOUNDARY_TEXT_GAP;
+  }
+
+  const title = (node.text ?? '').trim() ? (node.text ?? '') : '';
+  // Shrinks (one step) but never wraps: the title sits above whatever children the boundary
+  // contains, positioned independently of it, so a second line risks colliding with them —
+  // unlike every other label here, a Boundary title stays single-line by design.
+  const fitted = title
+    ? fitLabel(title, {
+        font: FONTS.groupTitle,
+        minFontSize: TEXT_SIZES.groupTitleMin,
+        maxWidth: Math.max(16, right - x),
+        maxHeight: Math.max(0, node.height - 1),
+        lineHeightRatio: LINE_HEIGHTS.label,
+        maxLines: 1,
+        measurer: ctx.measurer,
+      })
+    : null;
+  const titleEnd = fitted ? x + fitted.layout.width : x;
+  const captionX = fitted ? titleEnd + BOUNDARY_TEXT_GAP : x;
+
+  let caption: TextLayout | null = null;
+  if (style.caption) {
+    const measured = layoutText(style.caption, {
       font: FONTS.presetTag,
-      maxWidth: Math.max(16, node.width - 24),
+      maxWidth: Number.POSITIVE_INFINITY,
       lineHeight: FONTS.presetTag.size * LINE_HEIGHTS.label,
       maxLines: 1,
       measurer: ctx.measurer,
     });
+    if (!fitted?.layout.truncated && captionX + measured.width <= right) caption = measured;
+  }
+  const headerEnd = caption ? captionX + caption.width : titleEnd;
+
+  if (style.header === 'tab') {
+    // A corner tab cut from the boundary's own top-left corner: it shares the outline's top and
+    // left edges, so only its right and bottom edges are drawn. Sized to what it holds, with the
+    // same padding after the text as before it.
+    const tabRight = Math.min(node.width - 1 - BOUNDARY_RADIUS, Math.max(headerEnd, BOUNDARY_INSET_X + 24) + BOUNDARY_INSET_X);
+    const r = BOUNDARY_RADIUS - BOUNDARY_PLATE_GAP;
+    // M/L/Q/C only — the command set `roughenPath` understands — so the edge wobbles with the
+    // outline at Draft and Sketch instead of being dropped.
+    const edge = `M${tabRight} 1 L${tabRight} ${bottom - r} Q${tabRight} ${bottom} ${tabRight - r} ${bottom} L1 ${bottom}`;
     shapes.push({
-      t: 'text',
-      x: 12,
-      y: 8,
-      layout: captionLayout,
-      font: FONTS.presetTag,
-      fill: palette.line,
-      align: 'start',
+      t: 'path',
+      d: `${topLeftCorner()} L${tabRight} 1 L${tabRight} ${bottom - r} Q${tabRight} ${bottom} ${tabRight - r} ${bottom} L1 ${bottom} Z`,
+      fill: palette.chip,
+      opacity: ctx.theme.name === 'dark' ? 0.16 : 0.1,
     });
-    titleTop = 8 + captionLayout.height + 2;
+    shapes.push({
+      t: 'path',
+      d: roughOutline(edge, `${node.id}:tab`, ctx),
+      fill: 'none',
+      stroke: { color: palette.chip, width: 1 },
+      opacity: 0.75,
+    });
+  } else if (style.header === 'band') {
+    // A label plate ruled off from the contents across the full width — faint tint above, one
+    // hairline under — so the runtime scope reads as infrastructure without a heavy panel.
+    const w = node.width;
+    const k = BOUNDARY_RADIUS * (1 - KAPPA);
+    shapes.push({
+      t: 'path',
+      d: `${topLeftCorner()} L${w - 1 - BOUNDARY_RADIUS} 1 C${w - 1 - k} 1 ${w - 1} ${1 + k} ${w - 1} ${1 + BOUNDARY_RADIUS} L${w - 1} ${bottom} L1 ${bottom} Z`,
+      fill: palette.chip,
+      opacity: ctx.theme.name === 'dark' ? 0.08 : 0.06,
+    });
+    shapes.push({
+      t: 'path',
+      d: roughOutline(`M1 ${bottom} L${w - 1} ${bottom}`, `${node.id}:rule`, ctx),
+      fill: 'none',
+      stroke: { color: palette.chip, width: 1 },
+      opacity: 0.6,
+    });
   }
 
-  const title = node.text ?? '';
-  if (title.trim()) {
-    // Shrinks (one step) but never wraps: the title sits above whatever children the boundary
-    // contains, positioned independently of it, so a second line risks colliding with them —
-    // unlike every other label here, a Boundary title stays single-line by design.
-    const { layout, font } = fitLabel(title, {
-      font: FONTS.groupTitle,
-      minFontSize: TEXT_SIZES.groupTitleMin,
-      maxWidth: Math.max(16, node.width - 24),
-      maxHeight: Math.max(0, node.height - titleTop),
-      lineHeightRatio: LINE_HEIGHTS.label,
-      maxLines: 1,
-      measurer: ctx.measurer,
-    });
+  // One baseline for the row: the title's, cap-centred on the row — or, with no title, the
+  // caption's own — so the caption never drifts toward the border and the pair reads as one line.
+  const baseline = BOUNDARY_ROW_MID + (CAP_HEIGHT * (fitted ? fitted.font.size : FONTS.presetTag.size)) / 2;
+  if (fitted) {
     shapes.push({
       t: 'text',
-      x: 12,
-      y: titleTop,
-      layout,
-      font,
-      fill: ctx.theme.textMuted,
+      x,
+      y: baseline - baselineOf(fitted.layout, 0),
+      layout: fitted.layout,
+      font: fitted.font,
+      fill: style.quietTitle ? ctx.theme.textMuted : ctx.theme.text,
       align: 'start',
       role: 'label',
     });
   }
+  if (caption) {
+    shapes.push({
+      t: 'text',
+      x: captionX,
+      y: baseline - baselineOf(caption, 0),
+      layout: caption,
+      font: FONTS.presetTag,
+      fill: ctx.theme.textFaint,
+      align: 'start',
+    });
+  }
   return shapes;
+}
+
+/**
+ * The small kind marker at the head of a boundary's header — 12 units square, drawn in the
+ * accent's chip colour (the same colour the swatch shows), so a recolour is visible here first.
+ * Literal and generic on purpose: a window for a system, a connected trio for a network, a
+ * deployable unit for a runtime scope. None implies more than the kind itself says — no lock or
+ * shield on a network, no server rack on a deployment.
+ */
+function boundaryMarker(marker: NonNullable<BoundaryStyle['marker']>, x: number, y: number, color: string): Shape {
+  const s: Stroke = { color, width: 1.25, linecap: 'round' };
+  const at = (px: number, py: number) => `${x + px} ${y + py}`;
+  switch (marker) {
+    case 'system':
+      return {
+        t: 'group',
+        children: [
+          { t: 'rect', x: x + 0.75, y: y + 1.25, w: 10.5, h: 9.5, r: 2, fill: 'none', stroke: s },
+          { t: 'path', d: `M${at(0.75, 4.5)} H${x + 11.25}`, fill: 'none', stroke: s },
+        ],
+      };
+    case 'network':
+      return {
+        t: 'group',
+        children: [
+          { t: 'path', d: `M${at(6, 2.5)} L${at(2, 9.5)} H${x + 10} Z`, fill: 'none', stroke: { ...s, width: 1 } },
+          { t: 'ellipse', cx: x + 6, cy: y + 2.5, rx: 2, ry: 2, fill: color },
+          { t: 'ellipse', cx: x + 2, cy: y + 9.5, rx: 2, ry: 2, fill: color },
+          { t: 'ellipse', cx: x + 10, cy: y + 9.5, rx: 2, ry: 2, fill: color },
+        ],
+      };
+    case 'deployment':
+      return {
+        t: 'path',
+        d: `M${at(6, 0.75)} L${at(11.25, 3.5)} V${y + 8.75} L${at(6, 11.5)} L${at(0.75, 8.75)} V${y + 3.5} Z M${at(0.75, 3.5)} L${at(6, 6.25)} L${at(11.25, 3.5)} M${at(6, 6.25)} V${y + 11.5}`,
+        fill: 'none',
+        stroke: s,
+      };
+  }
 }
 
 /* ------------------------------------------------------------ code cards -- */

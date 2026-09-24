@@ -3,7 +3,12 @@ import { capabilityFor, categoryOf } from '../src/document/connectorSemantics';
 import { anchorPoint, laneIndex, routeEdge, rectOf as rectOfNode } from '../src/edges/routing';
 import { routingPlan } from '../src/edges/bundles';
 import type { DraftNode } from '../src/document/types';
-import { BOUNDARY_PAD, BOUNDARY_HEADER_CAPTION_ONLY, BOUNDARY_TITLE_SUBLINE_Y } from '../src/starters/compose';
+import {
+  BOUNDARY_PAD,
+  BOUNDARY_HEADER_CAPTION_ONLY,
+  BOUNDARY_HEADER_PLAIN_MIN,
+  BOUNDARY_TITLE_SUBLINE_Y,
+} from '../src/starters/compose';
 import { ARCHITECTURE_STARTERS, STARTER_IDS, starterById, starterSize } from '../src/starters';
 import { buildStarter, sizeOfSpec } from '../src/starters/build';
 import { describeContext, describeNode } from '../src/nodes/describe';
@@ -150,8 +155,13 @@ describe('the starter catalog', () => {
       expect(child.x - parent.x).toBeGreaterThanOrEqual(BOUNDARY_PAD);
       expect(parent.x + parent.width - (child.x + child.width)).toBeGreaterThanOrEqual(BOUNDARY_PAD);
       expect(parent.y + parent.height - (child.y + child.height)).toBeGreaterThanOrEqual(BOUNDARY_PAD);
-      // The preset caption and title are drawn inside the top edge — see `nodes/describe.ts`.
-      expect(child.y - parent.y).toBeGreaterThanOrEqual(BOUNDARY_HEADER_CAPTION_ONLY);
+      // The header row (marker, title, kind caption — and Deployment's rule under them) is drawn
+      // inside the top edge — see `nodes/describe.ts`. A generic boundary's header is its title alone.
+      const header =
+        (byKey.get(spec.parent)!.boundaryPreset ?? 'boundary') === 'boundary'
+          ? BOUNDARY_HEADER_PLAIN_MIN
+          : BOUNDARY_HEADER_CAPTION_ONLY;
+      expect(child.y - parent.y).toBeGreaterThanOrEqual(header);
     }
   });
 });

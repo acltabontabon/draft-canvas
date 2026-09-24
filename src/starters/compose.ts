@@ -26,26 +26,34 @@ export const INNER_BAND = 72;
 export const BOUNDARY_PAD = 36;
 
 /**
- * Top breathing room inside a boundary: its preset caption and title are drawn at y 8–34 by
- * `nodes/describe.ts`'s `group()`, so anything less than this collides with the label.
+ * Top breathing room inside a boundary. `nodes/describe.ts`'s `group()` draws one header row —
+ * marker, title and kind caption — ending at y 27 (the Domain tab and the Deployment rule sit on
+ * that line), so this leaves a clear band of air between the header and the first child.
  */
 export const BOUNDARY_HEADER = 56;
 
-/** The same, for a boundary with no title of its own — only the small uppercase preset caption. */
-export const BOUNDARY_HEADER_CAPTION_ONLY = 40;
+/**
+ * The same, for a boundary with no title of its own — only its marker and kind caption. Also the
+ * floor for any kind that draws header chrome (the marker plate, Domain's tab, Deployment's rule),
+ * all of which end at y 33: less than this and a child crowds the rule.
+ */
+export const BOUNDARY_HEADER_CAPTION_ONLY = 48;
+
+/** The least room any child may leave under a generic boundary's top edge — its header is one
+ *  title line ending near y 25, with no plate, tab or rule below it. */
+export const BOUNDARY_HEADER_PLAIN_MIN = 40;
 
 /**
- * The same, for a boundary with a title but no preset caption above it — `boundaryPreset:
- * 'boundary'` is the one preset `nodes/describe.ts`'s `BOUNDARY_PRESET_LABELS` has no entry for,
- * so nothing is drawn ahead of the title and it starts higher (y 9, not y 8+caption+2). Kept as
- * its own named constant rather than reused ad hoc: a boundary that wants a real title with no
- * extra tag above it is a real, nameable shape a future starter can reach for.
+ * The same, for a generic boundary (`boundaryPreset: 'boundary'`) — no marker and no kind caption
+ * in `nodes/describe.ts`'s `BOUNDARY_STYLES`, just the title. Kept as its own named constant rather
+ * than reused ad hoc: a boundary that wants a real title with nothing else in its header is a
+ * real, nameable shape a future starter can reach for.
  */
 export const BOUNDARY_HEADER_TITLE_ONLY = 44;
 
 /**
- * The boundary title's own left inset (`nodes/describe.ts`'s `group()` draws it at local `x: 12`,
- * the module's own `PADDING` constant). A child node is ordinarily held to `BOUNDARY_PAD`'s wider
+ * The boundary title's own left inset for a kind with no marker (`nodes/describe.ts`'s `group()`
+ * draws it at local `x: 12`, its `BOUNDARY_INSET_X`). A child node is ordinarily held to `BOUNDARY_PAD`'s wider
  * inset (see `tests/starters.test.ts`'s "clear of the boundary caption" check) — this narrower one
  * is only for a header annotation meant to read as a continuation of the title itself, sharing its
  * exact left edge rather than falling back to a generic child's own breathing room.

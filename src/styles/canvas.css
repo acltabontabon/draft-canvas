@@ -76,6 +76,11 @@
   pointer-events: none;
 }
 
+.dc-node[data-type='group'][data-selected='true']::after {
+  /* A boundary's corner is 12 (`BOUNDARY_RADIUS` in describe.ts); the ring sits 4 outside it. */
+  border-radius: 16px;
+}
+
 .dc-node[data-type='ellipse'][data-selected='true']::after {
   border-radius: 50%;
 }
@@ -323,6 +328,13 @@
 .dc-resize-line {
   border-color: var(--dc-selection);
   opacity: 0.55;
+}
+
+/* A boundary's outline *is* its kind and colour, and its resize line would sit exactly on top of
+ * it — hiding the colour whenever it's selected. The ring just outside says "selected"; the line
+ * stays as an invisible grab strip for resizing. */
+.dc-node[data-type='group'] .dc-resize-line {
+  opacity: 0;
 }
 
 .dc-resize-handle {
@@ -1938,6 +1950,41 @@
 
 .dc-inspector-select-menu[data-layout='grid'] .dc-inspector-select-option-label {
   white-space: normal;
+}
+
+/* One column of preview · name · purpose — the Boundary kind picker, where kinds differ more in
+ * meaning than in silhouette. The preview is a real boundary in the element's own colour. */
+.dc-inspector-select-menu[data-layout='rich'] {
+  width: 292px;
+  max-height: 380px;
+}
+
+.dc-inspector-select-menu[data-layout='rich'] .dc-inspector-select-option {
+  gap: 10px;
+  padding: 6px 8px;
+}
+
+.dc-inspector-select-menu[data-layout='rich'] .dc-inspector-select-option-icon {
+  width: 48px;
+  height: 32px;
+}
+
+.dc-inspector-select-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dc-inspector-select-option-description {
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.dc-inspector-select-option[aria-selected='true'] .dc-inspector-select-option-description {
+  color: inherit;
+  opacity: 0.8;
 }
 
 .dc-inspector-select-option-icon {

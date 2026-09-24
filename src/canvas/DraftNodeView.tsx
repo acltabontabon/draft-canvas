@@ -22,7 +22,7 @@ import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { useSettle } from './useContinuation';
 import { DragCapsule } from './DragCapsule';
-import { FONTS, LINE_HEIGHTS, cssFont, type FontSpec } from '../render/text/fonts';
+import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
 import type { Shape } from '../render/displayList';
 import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
 import { accentOf, type Theme } from '../render/theme/tokens';
@@ -259,13 +259,13 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
    * each shape's band here — the one thing that would let the editor and the render disagree.
    * `null` while not editing (the only time this is needed) or for a node with no fitted label.
    */
-  const editingLabelFont = useMemo<FontSpec | null>(() => {
+  const editingLabel = useMemo<Extract<Shape, { t: 'text' }> | null>(() => {
     if (!editing || !node || isCode || isNote || isText) return null;
     const drawn = describeNode(node, describeContext(theme, preset));
     const label = drawn.shapes.find(
       (s): s is Extract<Shape, { t: 'text' }> => s.t === 'text' && s.role === 'label',
     );
-    return label?.font ?? null;
+    return label ?? null;
   }, [editing, node, theme, preset, isCode, isNote, isText]);
 
   /**
@@ -531,7 +531,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           aria-label={isCode ? 'Code' : isNote ? 'Note' : isText ? 'Text' : 'Label'}
           placeholder={isNote ? 'Add a note…' : isText ? 'Type something…' : undefined}
           spellCheck={false}
-          style={editorStyle(node, effectiveHeight >= NOTE_AUTO_MAX_HEIGHT, editingLabelFont)}
+          style={editorStyle(node, effectiveHeight >= NOTE_AUTO_MAX_HEIGHT, editingLabel)}
           onInput={isNote || isText ? (event) => growToFit(event.currentTarget) : undefined}
           onBlur={(event) => {
             commit(event.currentTarget.value);
@@ -667,7 +667,12 @@ function placeholderStyle(node: DraftNode): React.CSSProperties {
  * The editor overlays the text it replaces, matching its font and metrics so
  * that committing an edit does not make the text visibly jump.
  */
-function editorStyle(node: DraftNode, atGrowthCap: boolean, labelFont?: FontSpec | null): React.CSSProperties {
+function editorStyle(
+  node: DraftNode,
+  atGrowthCap: boolean,
+  label?: Extract<Shape, { t: 'text' }> | null,
+): React.CSSProperties {
+  const labelFont = label?.font;
   if (node.type === 'code') {
     return {
       font: cssFont(FONTS.code),
@@ -710,7 +715,24 @@ function editorStyle(node: DraftNode, atGrowthCap: boolean, labelFont?: FontSpec
       textAlign: node.textAlign ?? 'left',
     };
   }
-  // Matches whatever the fitted label actually rendered at — see `editingLabelFont` above — so
+  if (node.type === 'group') {
+    // A boundary's name is one line in its header row, not the middle of the box — edit it where it
+    // is drawn, after the kind marker, so the contents stay visible while renaming.
+    const font = labelFont ?? FONTS.groupTitle;
+    const lineHeight = font.size * LINE_HEIGHTS.label;
+    return {
+      font: cssFont(font),
+      lineHeight: `${lineHeight}px`,
+      top: label?.y ?? 8,
+      left: label?.x ?? 12,
+      right: 12,
+      height: lineHeight + 2,
+      textAlign: 'left',
+      overflow: 'hidden',
+      whiteSpace: 'nowrap',
+    };
+  }
+  // Matches whatever the fitted label actually rendered at — see `editingLabel` above — so
   // finishing an edit never snaps the text to a visibly different size than what was just typed.
   // Falls back to the preferred size for a node this component didn't compute one for.
   const font = labelFont ?? FONTS.nodeLabel;

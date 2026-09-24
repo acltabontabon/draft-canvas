@@ -23,10 +23,15 @@ export function ShapePreview({
   node,
   width = 40,
   height = 26,
+  frame,
 }: {
   node: Pick<DraftNode, 'type'> & Partial<DraftNode>;
   width?: number;
   height?: number;
+  /** Show only this much of the shape, from its top-left corner — for a shape whose identifying
+   *  detail lives in one corner (a Boundary's header) and would shrink to nothing at icon size if
+   *  the whole thing were fitted in. */
+  frame?: { width: number; height: number };
 }) {
   const theme = useThemeValue();
   const markup = useMemo(() => {
@@ -49,7 +54,7 @@ export function ShapePreview({
   return (
     <svg
       className="dc-shape-preview"
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={`0 0 ${frame?.width ?? width} ${frame?.height ?? height}`}
       aria-hidden="true"
       focusable="false"
       dangerouslySetInnerHTML={{ __html: markup }}

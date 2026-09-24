@@ -3,13 +3,17 @@ import { clamp } from '../lib/math';
 
 /** The least a menu is allowed to shrink to: about three options, so it is still a list. */
 const MIN_MENU_HEIGHT = 96;
+const RICH_MENU_MAX_HEIGHT = 380;
 
 export interface InspectorSelectOption {
   value: string;
   label: string;
   /** A small preview rendered before the label — e.g. a kind's shape preview. Only meaningful
-   *  alongside `layout: 'grid'`; ignored by the default list layout. */
+   *  alongside `layout: 'grid'` or `'rich'`; ignored by the default list layout. */
   icon?: ReactNode;
+  /** One short line saying what choosing this means — shown under the label by `layout: 'rich'`,
+   *  and as the option's tooltip everywhere else. */
+  description?: string;
 }
 
 /**
@@ -59,8 +63,10 @@ export function InspectorSelect({
   getAvoidRect?: () => { top: number; bottom: number } | null;
   /** `'grid'` switches the menu to a compact 2-column layout with room for each option's `icon` —
    *  used only by the Data Store kind picker, whose seven options are worth previewing visually.
-   *  Defaults to `'list'`, today's exact behaviour, so every other picker is untouched. */
-  layout?: 'list' | 'grid';
+   *  Defaults to `'list'`, today's exact behaviour, so every other picker is untouched. `'rich'` is
+   *  one column of preview + name + a line of `description` — for a picker whose options differ
+   *  in *purpose* more than in look (Boundary), where the name alone doesn't say enough. */
+  layout?: 'list' | 'grid' | 'rich';
 }) {
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
@@ -213,7 +219,8 @@ export function InspectorSelect({
     setDirection(resolved);
     // Never a sliver: with next to no room either way, a menu a few pixels tall is worse than one
     // that reaches past the pane's edge, which is at least a list somebody can scroll.
-    setMaxHeight(clamp(space[resolved], MIN_MENU_HEIGHT, 220));
+    // A rich list's rows are two lines tall; it gets the room to show its whole set unscrolled.
+    setMaxHeight(clamp(space[resolved], MIN_MENU_HEIGHT, layout === 'rich' ? RICH_MENU_MAX_HEIGHT : 220));
 
     // Horizontal: the menu (now free to grow via CSS `width: max-content`) is measured at its
     // natural, unclamped width — the widest option's real width, not the trigger's. It stays
@@ -241,7 +248,7 @@ export function InspectorSelect({
     // options while the menu stays open and mounted (e.g. switching selection between shape
     // types) re-measures instead of keeping a stale width from the previous option set.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, measureTick, preferredDirection, avoidRect?.top, avoidRect?.bottom, getAvoidRect, options.map((o) => o.label).join('\u0000')]);
+  }, [open, measureTick, preferredDirection, avoidRect?.top, avoidRect?.bottom, getAvoidRect, layout, options.map((o) => o.label).join('\u0000')]);
 
   const commit = (index: number) => {
     const option = options[index];
@@ -320,11 +327,21 @@ export function InspectorSelect({
               aria-selected={index === selectedIndex}
               className="dc-inspector-select-option"
               data-highlighted={index === highlighted ? 'true' : undefined}
+              title={layout === 'rich' ? undefined : option.description}
               onPointerEnter={() => setHighlighted(index)}
               onClick={() => commit(index)}
             >
               {option.icon && <span className="dc-inspector-select-option-icon">{option.icon}</span>}
-              <span className="dc-inspector-select-option-label">{option.label}</span>
+              {layout === 'rich' ? (
+                <span className="dc-inspector-select-option-text">
+                  <span className="dc-inspector-select-option-label">{option.label}</span>
+                  {option.description && (
+                    <span className="dc-inspector-select-option-description">{option.description}</span>
+                  )}
+                </span>
+              ) : (
+                <span className="dc-inspector-select-option-label">{option.label}</span>
+              )}
             </li>
           ))}
         </ul>

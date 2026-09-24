@@ -22,6 +22,18 @@ and apply to the web app.
 - Diagrams with a technology or description use document format v15. An older version of Draft
   Canvas says the file is from a newer version instead of opening it without them.
 
+#### Changed
+
+- **Boundaries show their kind.** Each kind has its own outline and header, so System, Domain,
+  Network, Deployment, Group and plain Boundary no longer look alike. System, Network and Deployment
+  have a small mark, a Domain's name sits on a corner tab, and a Deployment's header is ruled off.
+  <!-- highlight -->
+- A boundary's colour is now easy to see. It used to be faded to a third of its strength along with
+  the fill. The kind mark uses the same colour, and the outline keeps it while the boundary is
+  selected.
+- The boundary kind picker shows a preview of each kind and a short note on what it's for.
+- A boundary's name is edited in place in its header, not in a box covering the whole boundary.
+
 #### Fixed
 
 - A note chip on a connector no longer covers the connector's label when the label sits above the

@@ -31,6 +31,18 @@ export const BOUNDARY_PRESET_OPTION_LABELS: Record<BoundaryPreset, string> = {
   group: 'Group',
 };
 
+/** What each boundary kind is *for*, in a line — shown under its name in the kind picker, so the
+ *  choice can be made without the docs. Deliberately modest claims: a Network is a scope, not a
+ *  security guarantee; a Deployment is where something runs, not necessarily one machine. */
+export const BOUNDARY_PRESET_DESCRIPTIONS: Record<BoundaryPreset, string> = {
+  boundary: 'An enclosure with no stated meaning',
+  group: 'Belongs together for this explanation',
+  system: 'Inside one software system’s scope',
+  domain: 'Shares a domain responsibility',
+  network: 'Within one network scope',
+  deployment: 'Runs in one runtime or hosting scope',
+};
+
 export const SERVICE_KIND_OPTION_LABELS: Record<ServiceKind, string> = {
   generic: 'Generic',
   api: 'API',

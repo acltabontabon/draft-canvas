@@ -25,11 +25,21 @@ export function shapeVariantOptions<K extends string>(
   kinds: readonly K[],
   labels: Record<K, string>,
   nodeFor: (kind: K) => Partial<DraftNode>,
+  extras: {
+    /** A one-line purpose per kind, for a picker whose kinds differ more in meaning than in look. */
+    descriptions?: Record<K, string>;
+    /** Preview at this logical size instead of the family's minimum — for a family whose
+     *  distinguishing detail (a Boundary's header) is small next to its body. */
+    size?: { width: number; height: number };
+    /** Crop the preview to this top-left region — see `ShapePreview`'s `frame`. */
+    frame?: { width: number; height: number };
+  } = {},
 ): InspectorSelectOption[] {
-  const size = minSizeFor(type);
+  const size = extras.size ?? minSizeFor(type);
   return kinds.map((kind) => ({
     value: kind,
     label: labels[kind],
-    icon: <ShapePreview node={{ type, ...nodeFor(kind) }} width={size.width} height={size.height} />,
+    description: extras.descriptions?.[kind],
+    icon: <ShapePreview node={{ type, ...nodeFor(kind) }} width={size.width} height={size.height} frame={extras.frame} />,
   }));
 }
