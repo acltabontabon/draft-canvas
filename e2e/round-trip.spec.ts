@@ -14,7 +14,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const richDocument = () => ({
   format: 'draft-canvas',
-  version: 14,
+  version: 15,
   metadata: { id: 'round-trip', title: 'Round trip', createdAt: 1, updatedAt: 2 },
   level: 'container',
   nodes: [
@@ -29,6 +29,8 @@ const richDocument = () => ({
       height: 70,
       z: 1,
       text: 'Orders',
+      description: 'Takes and validates orders.',
+      technology: 'Spring Boot',
       parentId: 'box',
       attachments: [
         { id: 'a-note', type: 'note', text: 'Owned by the platform team', noteKind: 'warning', width: 200, height: 56 },
@@ -47,7 +49,7 @@ const richDocument = () => ({
       parentId: 'box',
       inside: {
         nodes: [
-          { id: 'r1', type: 'service', x: 60, y: 60, width: 170, height: 70, z: 0, text: 'Posting' },
+          { id: 'r1', type: 'service', x: 60, y: 60, width: 170, height: 70, z: 0, text: 'Posting', technology: 'Kotlin' },
           { id: 'r2', type: 'database', x: 320, y: 60, width: 170, height: 90, z: 0, text: 'Journal' },
         ],
         edges: [{ id: 're1', source: 'r1', target: 'r2', directed: true, routing: 'smoothstep' }],
@@ -130,6 +132,9 @@ test('a rich diagram survives save, reopen, export and import unchanged', async 
   const nodes = first.nodes as Array<{ id: string; attachments?: unknown[]; inside?: { nodes: unknown[]; edges: unknown[] } }>;
   expect(nodes.find((n) => n.id === 'a')?.attachments).toHaveLength(2);
   expect(nodes.find((n) => n.id === 'b')?.inside?.nodes).toHaveLength(2);
+  // Schema v15's C4 text, at the top and inside a room.
+  expect(nodes.find((n) => n.id === 'a')).toMatchObject({ description: 'Takes and validates orders.', technology: 'Spring Boot' });
+  expect(nodes.find((n) => n.id === 'b')?.inside?.nodes[0]).toMatchObject({ technology: 'Kotlin' });
   expect((first.edges as Array<{ id: string; attachments?: unknown[] }>).find((e) => e.id === 'e1')?.attachments).toHaveLength(1);
   expect(first.actions).toHaveLength(2);
   expect((first.actions as Array<{ anchor?: unknown }>)[0]?.anchor).toEqual({ kind: 'node', id: 'a' });
@@ -155,4 +160,34 @@ test('a rich diagram survives save, reopen, export and import unchanged', async 
   const copy = await exportDocument(page);
   expect((copy.metadata as { id: string }).id).not.toBe((first.metadata as { id: string }).id);
   expect(content(copy)).toEqual(content(first));
+});
+
+/**
+ * A diagram an agent created on the desktop (schema v15, C4 text, a system boundary) opened in the web
+ * editor, edited there, exported, and opened again: its architecture comes back as it went out.
+ * The file is the one the desktop app wrote, kept as a fixture.
+ */
+test('a desktop-created v15 diagram survives web editing and export', async ({ page }) => {
+  const text = readFileSync(new URL('../tests/fixtures/agent/online-shop.desktop.draftcanvas', import.meta.url), 'utf8');
+  const original = JSON.parse(text) as Json & { nodes: Array<Json & { id: string }> };
+  await page.goto('/');
+  await page.setInputFiles('input[type="file"]', { name: 'shop.draftcanvas', mimeType: 'application/json', buffer: Buffer.from(text) });
+  await page.waitForSelector('.dc-editor');
+  await expect(page.locator('.dc-node')).toHaveCount(original.nodes.length);
+  // An edit made in the web editor, through the same store action the inspector uses.
+  await page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    useEditorStore.getState().setNodeC4Text('ordersDb', { technology: 'PostgreSQL 16' });
+  });
+  const exported = await exportDocument(page);
+  expect(exported.version).toBe(15);
+  const nodes = exported.nodes as Array<Json & { id: string; description?: string; technology?: string; parentId?: string }>;
+  for (const node of original.nodes) {
+    const back = nodes.find((n) => n.id === node.id);
+    expect(back?.description).toBe(node.description);
+    expect(back?.parentId).toBe(node.parentId);
+    if (node.id !== 'ordersDb') expect(back?.technology).toBe(node.technology);
+  }
+  expect(nodes.find((n) => n.id === 'ordersDb')?.technology).toBe('PostgreSQL 16');
+  expect((exported.edges as unknown[]).length).toBe((original.edges as unknown[]).length);
 });

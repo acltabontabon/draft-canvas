@@ -12,7 +12,18 @@ import { createFlow } from '../document/flow';
 import { createId } from '../document/ids';
 import { LIMITS } from '../document/limits';
 import type { DraftEdge, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
-import type { ArchitectureStarter, StarterNodeSpec } from './types';
+import type { ArchitectureStarter, StarterEdgeSpec, StarterNodeSpec } from './types';
+
+/**
+ * Ids to give the built elements instead of fresh random ones — for a caller that needs to name
+ * them afterwards (an agent that asked for a starter and then refines it). The starter itself stays
+ * data; only the names differ. Each callback must return ids unique across the file.
+ */
+export interface StarterIds {
+  node?: (key: string) => string;
+  edge?: (spec: StarterEdgeSpec, index: number) => string;
+  flow?: (index: number) => string;
+}
 
 export interface BuiltStarter {
   nodes: DraftNode[];
@@ -68,6 +79,7 @@ export function starterSize(starter: ArchitectureStarter): { width: number; heig
 export function buildStarter(
   starter: ArchitectureStarter,
   origin: { x: number; y: number },
+  named?: StarterIds,
 ): BuiltStarter {
   const byKey = new Map(starter.nodes.map((spec) => [spec.key, spec]));
   let minX = Infinity;
@@ -88,6 +100,7 @@ export function buildStarter(
   const nodes: DraftNode[] = starter.nodes.map((spec) => {
     const size = sizeOfSpec(spec);
     const node = createNode({
+      ...(named?.node ? { id: named.node(spec.key) } : {}),
       type: spec.type,
       x: Math.round(spec.x + dx),
       y: Math.round(spec.y + dy),
@@ -106,6 +119,8 @@ export function buildStarter(
       ...(spec.boundaryPreset ? { boundaryPreset: spec.boundaryPreset } : {}),
       ...(spec.annotation ? { annotation: spec.annotation } : {}),
       ...(spec.deliveryRole ? { deliveryRole: spec.deliveryRole } : {}),
+      ...(spec.description ? { description: spec.description } : {}),
+      ...(spec.technology ? { technology: spec.technology } : {}),
     });
     if (spec.attachments?.length) node.attachments = spec.attachments.map(createAttachment);
     ids.set(spec.key, node.id);
@@ -123,7 +138,7 @@ export function buildStarter(
 
   const edges: DraftEdge[] = [];
   const edgeIds = new Map<string, string>();
-  for (const spec of starter.edges) {
+  for (const [index, spec] of starter.edges.entries()) {
     const sourceId = ids.get(spec.from);
     const targetId = ids.get(spec.to);
     if (!sourceId || !targetId) continue;
@@ -135,6 +150,7 @@ export function buildStarter(
     const offered = capabilityFor(categoryOf(source), categoryOf(target))?.relations ?? [];
     const explicit = spec.semantic !== undefined && offered.includes(spec.semantic) ? spec.semantic : undefined;
     const edge = createEdge({
+      ...(named?.edge ? { id: named.edge(spec, index) } : {}),
       source: sourceId,
       target: targetId,
       sourceAnchor: spec.sourceAnchor,
@@ -159,8 +175,8 @@ export function buildStarter(
   // A flow is built the way `addStepToFlow` would build it, one step per resolved key, so a
   // starter's flow is indistinguishable from one the user assembled by hand. An unresolved key is
   // skipped rather than thrown: `tests/starters.test.ts` guarantees the catalog has none.
-  const flows: DraftFlow[] = (starter.flows ?? []).map((spec) => {
-    const flow = createFlow({ title: spec.title });
+  const flows: DraftFlow[] = (starter.flows ?? []).map((spec, index) => {
+    const flow = createFlow({ title: spec.title, ...(named?.flow ? { id: named.flow(index) } : {}) });
     if (spec.accent) flow.accent = spec.accent;
     for (const stepSpec of spec.steps) {
       if (flow.steps.length >= LIMITS.maxStepsPerFlow) break;

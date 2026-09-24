@@ -20,12 +20,12 @@ export interface TextMeasurer {
  * no second layout engine that could disagree with it.
  */
 class CanvasTextMeasurer implements TextMeasurer {
-  private readonly context: CanvasRenderingContext2D;
+  private readonly context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
   private readonly widths = new Lru<string, number>(8000);
   private readonly metricsCache = new Map<string, FontMetrics>();
   private readonly charWidths = new Map<string, number>();
 
-  constructor(context?: CanvasRenderingContext2D) {
+  constructor(context?: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D) {
     const ctx = context ?? document.createElement('canvas').getContext('2d');
     if (!ctx) throw new Error('A 2D canvas context is required to measure text.');
     this.context = ctx;
@@ -99,6 +99,21 @@ export class StaticTextMeasurer implements TextMeasurer {
 
   charWidth(font: FontSpec): number {
     return font.size * 0.6;
+  }
+}
+
+/**
+ * The same real measurement from a worker, which has no `document` to make a canvas with. `null`
+ * where OffscreenCanvas has no 2D context (older WebKit) — the caller then measures on the main
+ * thread instead, rather than accept approximate widths that would disagree with the canvas.
+ */
+export function createOffscreenMeasurer(): TextMeasurer | null {
+  try {
+    if (typeof OffscreenCanvas === 'undefined') return null;
+    const context = new OffscreenCanvas(1, 1).getContext('2d');
+    return context ? new CanvasTextMeasurer(context) : null;
+  } catch {
+    return null;
   }
 }
 

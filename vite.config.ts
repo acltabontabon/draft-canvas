@@ -82,13 +82,38 @@ function withoutServiceWorker(): Plugin {
 // `base` stays relative so the built bundle can be served from any path
 // (e.g. /workbench/draft-canvas/) without a rebuild.
 //
+/**
+ * The agent's layout worker (`src/agent/worker.ts`) has no `document`. The code highlighter's entity
+ * decoder (`decode-named-character-reference`, via refractor → parse-entities) ships a browser build
+ * that makes an element as it loads and a worker build that doesn't — and a worker bundle is resolved
+ * for the browser like the page. The worker threw as it loaded, so every agent request fell back to
+ * the page's main thread and froze the editor for as long as its layout took. Worker bundles only.
+ */
+function workerSafeEntities(): Plugin {
+  return {
+    name: 'draft-canvas:worker-safe-entities',
+    enforce: 'pre',
+    async resolveId(source, importer, options) {
+      if (source !== 'decode-named-character-reference') return null;
+      const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
+      return resolved ? { ...resolved, id: resolved.id.replace(/index\.dom\.js$/, 'index.js') } : null;
+    },
+  };
+}
+
 // `--mode desktop` builds the same app for the Tauri shell (src-tauri/): no PWA, no meta CSP (Tauri
 // sets the CSP itself, and `connect-src 'self'` would block its IPC), no source maps in the
 // installer, and `__DESKTOP__` true so the web build can drop the desktop code entirely.
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const desktop = mode === 'desktop';
   return {
     base: './',
+    // The dev server pre-bundles the highlighter once for the page and the agent's worker alike, and a
+    // plugin can't reach inside that bundle — so there, both take the entity decoder's DOM-free build
+    // (see `workerSafeEntities`). A production page keeps the smaller DOM one.
+    ...(command === 'serve'
+      ? { resolve: { alias: { 'decode-named-character-reference': fileURLToPath(new URL('./node_modules/decode-named-character-reference/index.js', import.meta.url)) } } }
+      : {}),
     define: { __DESKTOP__: JSON.stringify(desktop) },
     plugins: [
       react(),
@@ -119,6 +144,9 @@ export default defineConfig(({ mode }) => {
             }),
           ]),
     ],
+    worker: {
+      plugins: () => [workerSafeEntities()],
+    },
     server: {
       // `tauri dev` needs a fixed port (5180 belongs to the web dev server and its e2e suite), and
       // the watcher must skip src-tauri/: cargo's target/ holds more files than it can watch.

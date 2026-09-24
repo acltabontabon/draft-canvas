@@ -1,0 +1,44 @@
+/**
+ * The sidecar compiles `src-tauri/mcp/tools.json` in; `src/agent/schema.ts` is where the tools are
+ * defined. A schema change that isn't regenerated would ship an agent a contract the app no longer
+ * honours — so the two must match byte for byte (`npm run agent:schemas` rewrites the file).
+ */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { TOOLS } from '../../src/agent/schema';
+
+const toolsJson = () => readFileSync(join(process.cwd(), 'src-tauri/mcp/tools.json'), 'utf8');
+
+describe('MCP tool definitions', () => {
+  it('are the ones the sidecar compiles in', () => {
+    expect(toolsJson()).toBe(`${JSON.stringify(TOOLS, null, 2)}\n`);
+  });
+
+  it('name the five tools, each with an object input schema and annotations', () => {
+    expect(TOOLS.map((t) => t.name)).toEqual(['get_capabilities', 'list_diagrams', 'read_diagram', 'create_diagram', 'update_diagram']);
+    for (const tool of TOOLS) {
+      expect(tool.inputSchema.type).toBe('object');
+      expect(tool.annotations).toBeDefined();
+      expect(tool.description.length).toBeGreaterThan(20);
+    }
+  });
+
+  it('mark the reads read-only and the edits idempotent by request id', () => {
+    type Loose = { annotations: Record<string, unknown>; inputSchema: { required?: readonly string[] } };
+    const by = new Map<string, Loose>(TOOLS.map((t) => [t.name, t as unknown as Loose]));
+    for (const name of ['get_capabilities', 'list_diagrams', 'read_diagram']) expect(by.get(name)?.annotations.readOnlyHint).toBe(true);
+    for (const name of ['create_diagram', 'update_diagram']) {
+      expect(by.get(name)?.annotations.readOnlyHint).toBe(false);
+      expect(by.get(name)?.annotations.idempotentHint).toBe(true);
+      expect(by.get(name)?.inputSchema.required ?? []).toContain('requestId');
+    }
+    expect(by.get('update_diagram')?.annotations.destructiveHint).toBe(true);
+  });
+
+  it('stay compact enough to sit in an agent\'s context', () => {
+    // The tool list goes to the model on every turn, as compact JSON: keep it under ~6k tokens
+    // (estimated as characters / 4).
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(24_000);
+  });
+});

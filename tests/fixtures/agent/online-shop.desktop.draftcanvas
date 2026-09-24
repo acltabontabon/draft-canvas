@@ -1,0 +1,288 @@
+{
+  "format": "draft-canvas",
+  "version": 15,
+  "metadata": {
+    "id": "d_89914cb160f5",
+    "title": "Online shop containers",
+    "createdAt": 1790241355106,
+    "updatedAt": 1790241361083
+  },
+  "nodes": [
+    {
+      "id": "shop",
+      "type": "group",
+      "x": 224,
+      "y": 0,
+      "width": 1181,
+      "height": 446,
+      "z": -1,
+      "text": "Online shop",
+      "textOrigin": "explicit",
+      "boundaryPreset": "system"
+    },
+    {
+      "id": "customer",
+      "type": "actor",
+      "x": 0,
+      "y": 120,
+      "width": 120,
+      "height": 92,
+      "z": 0,
+      "text": "Customer",
+      "description": "Browses products and places orders in the online shop.",
+      "textOrigin": "explicit",
+      "actorKind": "human"
+    },
+    {
+      "id": "webapp",
+      "type": "service",
+      "x": 260,
+      "y": 135,
+      "width": 176,
+      "height": 88,
+      "z": 0,
+      "text": "Web App",
+      "description": "Lets customers browse the catalogue and place orders from their browser.",
+      "technology": "React",
+      "textOrigin": "explicit",
+      "parentId": "shop",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "ordersApi",
+      "type": "service",
+      "x": 553,
+      "y": 145,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Orders API",
+      "description": "Validates and records orders, takes payment and announces new orders.",
+      "technology": "Spring Boot",
+      "textOrigin": "explicit",
+      "parentId": "shop",
+      "serviceKind": "api"
+    },
+    {
+      "id": "ordersDb",
+      "type": "database",
+      "x": 889,
+      "y": 56,
+      "width": 140,
+      "height": 114,
+      "z": 0,
+      "text": "Orders database",
+      "description": "Stores orders and their status.",
+      "technology": "PostgreSQL",
+      "textOrigin": "explicit",
+      "parentId": "shop",
+      "databaseKind": "sql"
+    },
+    {
+      "id": "orderEvents",
+      "type": "queue",
+      "x": 889,
+      "y": 224,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "order-events",
+      "description": "Carries order lifecycle events to downstream consumers.",
+      "technology": "Apache Kafka",
+      "textOrigin": "explicit",
+      "parentId": "shop",
+      "queueKind": "topic"
+    },
+    {
+      "id": "fulfilment",
+      "type": "service",
+      "x": 1193,
+      "y": 204,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Fulfilment worker",
+      "description": "Picks, packs and ships orders when order events arrive.",
+      "technology": "Java",
+      "textOrigin": "explicit",
+      "parentId": "shop",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "payment",
+      "type": "service",
+      "x": 1528,
+      "y": 118,
+      "width": 176,
+      "height": 96,
+      "z": 0,
+      "text": "Payment provider",
+      "description": "External service that authorises and captures card payments.",
+      "textOrigin": "explicit",
+      "serviceKind": "external"
+    },
+    {
+      "id": "notification",
+      "type": "service",
+      "x": 1101,
+      "y": 342,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Notification worker",
+      "textOrigin": "explicit",
+      "serviceKind": "worker",
+      "description": "Emails customers order confirmations and status updates when order events arrive.",
+      "technology": "Node.js",
+      "parentId": "shop"
+    }
+  ],
+  "edges": [
+    {
+      "id": "r1",
+      "source": "customer",
+      "target": "webapp",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Uses",
+      "semantic": "calls",
+      "semanticsOrigin": "inferred",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "r2",
+      "source": "webapp",
+      "target": "ordersApi",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Places orders",
+      "semantic": "http",
+      "semanticsOrigin": "explicit",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "r3",
+      "source": "ordersApi",
+      "target": "ordersDb",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Writes orders",
+      "semantic": "writes",
+      "semanticsOrigin": "explicit",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.25
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "r4",
+      "source": "ordersApi",
+      "target": "orderEvents",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Publishes OrderPlaced",
+      "semantic": "publishes",
+      "kind": "event",
+      "semanticsOrigin": "explicit",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.75
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "r5",
+      "source": "orderEvents",
+      "target": "fulfilment",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Consumes order events",
+      "semantic": "deliversTo",
+      "kind": "event",
+      "semanticsOrigin": "inferred",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "r6",
+      "source": "ordersApi",
+      "target": "payment",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Takes payment",
+      "semantic": "calls",
+      "semanticsOrigin": "explicit",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "r7",
+      "source": "orderEvents",
+      "target": "notification",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "Consumes order events",
+      "kind": "event",
+      "semantic": "deliversTo",
+      "semanticsOrigin": "explicit",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [],
+  "level": "container"
+}

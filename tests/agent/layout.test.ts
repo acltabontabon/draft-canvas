@@ -1,0 +1,170 @@
+import { describe, expect, it } from 'vitest';
+import { compose } from '../../src/agent/compile';
+import { measureContext } from '../../src/agent/place';
+import { checkQuality } from '../../src/agent/quality';
+import { isotonic, layoutGraph } from '../../src/layout/layered';
+import { deserializeDocument } from '../../src/export/project';
+import type { DraftDocument, DraftNode } from '../../src/document/types';
+
+function build(raw: Record<string, unknown>): DraftDocument {
+  const out = compose({ title: 'T', ...raw }, 'd_layouttest0');
+  const parsed = deserializeDocument(out.text);
+  if (!parsed.ok) throw new Error(parsed.error);
+  return parsed.document;
+}
+
+const byId = (doc: DraftDocument, id: string) => doc.nodes.find((n) => n.id === id) as DraftNode;
+const cy = (n: DraftNode) => n.y + n.height / 2;
+const cx = (n: DraftNode) => n.x + n.width / 2;
+
+const service = (id: string, label = id) => ({ id, type: 'service', label });
+
+describe('layered layout', () => {
+  it('isotonic keeps order and separation while staying close to what each box wants', () => {
+    const out = isotonic([0, 0, 0], [1, 1, 1], [10, 10]);
+    expect(out).toEqual([-10, 0, 10]);
+    expect(isotonic([0, 100], [1, 1], [10])).toEqual([0, 100]);
+  });
+
+  it('puts a chain on one straight line in the reading direction', () => {
+    const doc = build({
+      nodes: ['a', 'b', 'c', 'd'].map((id) => service(id)),
+      relationships: [
+        { id: 'ab', from: 'a', to: 'b' },
+        { id: 'bc', from: 'b', to: 'c' },
+        { id: 'cd', from: 'c', to: 'd' },
+      ],
+    });
+    const centres = ['a', 'b', 'c', 'd'].map((id) => cy(byId(doc, id)));
+    expect(new Set(centres).size).toBe(1);
+    const xs = ['a', 'b', 'c', 'd'].map((id) => byId(doc, id).x);
+    expect(xs).toEqual([...xs].sort((p, q) => p - q));
+    const down = build({ layout: { direction: 'down' }, nodes: ['a', 'b'].map((id) => service(id)), relationships: [{ id: 'ab', from: 'a', to: 'b' }] });
+    expect(byId(down, 'b').y).toBeGreaterThan(byId(down, 'a').y);
+    expect(cx(byId(down, 'a'))).toBe(cx(byId(down, 'b')));
+  });
+
+  it('balances a fan-out around its source and brings a merge back to the middle', () => {
+    const doc = build({
+      nodes: ['src', 'x', 'y', 'z', 'sink'].map((id) => service(id)),
+      relationships: [
+        { id: 'sx', from: 'src', to: 'x' },
+        { id: 'sy', from: 'src', to: 'y' },
+        { id: 'sz', from: 'src', to: 'z' },
+        { id: 'xk', from: 'x', to: 'sink' },
+        { id: 'yk', from: 'y', to: 'sink' },
+        { id: 'zk', from: 'z', to: 'sink' },
+      ],
+    });
+    const middle = cy(byId(doc, 'y'));
+    expect(cy(byId(doc, 'src'))).toBe(middle);
+    expect(cy(byId(doc, 'sink'))).toBe(middle);
+    expect(middle - cy(byId(doc, 'x'))).toBe(cy(byId(doc, 'z')) - middle);
+  });
+
+  it('lays out a cycle without changing any connector\'s direction', () => {
+    const doc = build({
+      nodes: ['a', 'b', 'c'].map((id) => service(id)),
+      relationships: [
+        { id: 'ab', from: 'a', to: 'b' },
+        { id: 'bc', from: 'b', to: 'c' },
+        { id: 'ca', from: 'c', to: 'a', label: 'Retry' },
+      ],
+    });
+    const edge = doc.edges.find((e) => e.id === 'ca');
+    expect(edge).toMatchObject({ source: 'c', target: 'a' });
+    // The return trip runs around the outside, not back through b.
+    expect(edge?.sourceAnchor?.side).toBe(edge?.targetAnchor?.side);
+  });
+
+  it('sizes a boundary around its members, with room for its title, and keeps non-members out', () => {
+    const doc = build({
+      groups: [{ id: 'sys', label: 'A rather long system boundary title', kind: 'system' }],
+      nodes: [
+        { id: 'user', type: 'person', label: 'Customer' },
+        { ...service('web', 'Web App'), group: 'sys' },
+        { ...service('api', 'API'), group: 'sys' },
+        { id: 'db', type: 'database', label: 'Orders', group: 'sys' },
+        { id: 'pay', type: 'external-system', label: 'Payment Provider' },
+      ],
+      relationships: [
+        { id: 'u', from: 'user', to: 'web', label: 'Uses' },
+        { id: 'w', from: 'web', to: 'api', label: 'Calls' },
+        { id: 'a', from: 'api', to: 'db' },
+        { id: 'p', from: 'api', to: 'pay', label: 'Charges card' },
+      ],
+    });
+    const sys = byId(doc, 'sys');
+    for (const id of ['web', 'api', 'db']) {
+      const n = byId(doc, id);
+      expect(n.parentId).toBe('sys');
+      expect(n.x).toBeGreaterThanOrEqual(sys.x);
+      expect(n.y).toBeGreaterThanOrEqual(sys.y + 44);
+      expect(n.x + n.width).toBeLessThanOrEqual(sys.x + sys.width);
+      expect(n.y + n.height).toBeLessThanOrEqual(sys.y + sys.height);
+    }
+    for (const id of ['user', 'pay']) {
+      const n = byId(doc, id);
+      const inside = n.x < sys.x + sys.width && sys.x < n.x + n.width && n.y < sys.y + sys.height && sys.y < n.y + n.height;
+      expect(inside).toBe(false);
+    }
+    expect(checkQuality(doc.nodes, doc.edges, measureContext()).errors).toEqual([]);
+  });
+
+  it('widens the gap a long relationship label crosses', () => {
+    const short = build({ nodes: [service('a'), service('b')], relationships: [{ id: 'e', from: 'a', to: 'b' }] });
+    const long = build({ nodes: [service('a'), service('b')], relationships: [{ id: 'e', from: 'a', to: 'b', label: 'Publishes RepaymentReceived events after validation' }] });
+    const gap = (doc: DraftDocument) => byId(doc, 'b').x - (byId(doc, 'a').x + byId(doc, 'a').width);
+    expect(gap(long)).toBeGreaterThan(gap(short));
+  });
+
+  it('grows a shape for a long name instead of cutting it off', () => {
+    const doc = build({ nodes: [{ id: 'a', type: 'service', label: 'Customer Onboarding Orchestration Service', description: 'Coordinates KYC checks, account creation and the welcome journey for every new retail customer.', technology: 'Spring Boot 3, Kotlin' }] });
+    const a = byId(doc, 'a');
+    expect(a.width * a.height).toBeGreaterThan(176 * 68);
+    expect(checkQuality(doc.nodes, doc.edges, measureContext()).errors).toEqual([]);
+  });
+
+  it('keeps disconnected parts apart and in input order', () => {
+    const doc = build({
+      nodes: [service('a'), service('b'), service('c'), service('d'), service('lonely')],
+      relationships: [
+        { id: 'ab', from: 'a', to: 'b' },
+        { id: 'cd', from: 'c', to: 'd' },
+      ],
+    });
+    expect(checkQuality(doc.nodes, doc.edges, measureContext()).errors).toEqual([]);
+    expect(byId(doc, 'c').y).toBeGreaterThan(byId(doc, 'a').y);
+  });
+
+  it('is deterministic to the pixel', () => {
+    const raw = {
+      groups: [{ id: 'g', label: 'Group' }],
+      nodes: [service('a'), { ...service('b'), group: 'g' }, { ...service('c'), group: 'g' }, service('d')],
+      relationships: [
+        { id: 'ab', from: 'a', to: 'b' },
+        { id: 'ac', from: 'a', to: 'c' },
+        { id: 'bd', from: 'b', to: 'd' },
+        { id: 'cd', from: 'c', to: 'd' },
+        { id: 'da', from: 'd', to: 'a' },
+      ],
+    };
+    const geometry = (doc: DraftDocument) => JSON.stringify([doc.nodes.map((n) => [n.id, n.x, n.y, n.width, n.height]), doc.edges.map((e) => [e.id, e.sourceAnchor, e.targetAnchor])]);
+    expect(geometry(build(raw))).toBe(geometry(build(raw)));
+  });
+
+  it('refuses nested groups that form a cycle', () => {
+    expect(() =>
+      layoutGraph({
+        boxes: [{ id: 'a', width: 10, height: 10, parent: 'g1' }],
+        groups: [
+          { id: 'g1', parent: 'g2', header: 40, minWidth: 0 },
+          { id: 'g2', parent: 'g1', header: 40, minWidth: 0 },
+        ],
+        edges: [],
+        direction: 'right',
+        spacing: { layer: 100, sibling: 50, pad: 30, component: 100 },
+      }),
+    ).toThrow();
+  });
+});
