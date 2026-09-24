@@ -91,7 +91,6 @@ pub fn remove_info(dir: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     #[test]
     fn tokens_are_long_and_never_repeat() {
@@ -114,7 +113,7 @@ mod tests {
     #[test]
     fn the_folder_and_the_file_are_private() {
         use std::os::unix::fs::PermissionsExt;
-        let root = tempdir().unwrap();
+        let root = tempfile::tempdir().unwrap();
         let dir = agent_dir(root.path());
         prepare_dir(&dir).unwrap();
         write_info(
