@@ -34,9 +34,11 @@ export function adviceFor(room: RoomSpec, legibility: Legibility, primaryFlow?: 
     const inside = (id: string) => byId.get(id)?.group === group.id;
     const crossing = room.relationships.filter((r) => inside(r.from) !== inside(r.to));
     const callers = new Set(crossing.map((r) => (inside(r.from) ? r.to : r.from)));
-    // Only when it shows: the layout lines such a column up with its callers where it can.
+    // Only when it shows: the layout lines such a column up with its callers where it can. It shows
+    // as one of the boundary's own connectors going the long way round, or as any connector cutting
+    // through the boundary (the column sits in the way of what runs between its callers).
     const troubled = new Set([...legibility.detours, ...legibility.throughBoundaries]);
-    if (callers.size < 2 || !crossing.some((r) => troubled.has(r.id))) continue;
+    if (callers.size < 2 || !(crossing.some((r) => troubled.has(r.id)) || legibility.crossedBoundaries.includes(group.id))) continue;
     const ops = members.map((m) => ({ op: 'update', id: m.id, set: { group: null } }));
     out.push(
       `Boundary "${group.id}" only gathers external systems that ${callers.size} different elements call, so it is placed as one block and most of its connectors reach around it. Unless it is a real boundary, ungroup its members so each sits beside its caller: ${JSON.stringify([...ops, { op: 'remove', ids: [group.id] }, { op: 'arrange' }])}.`,

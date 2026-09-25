@@ -25,7 +25,11 @@ the release notes and the in-app What's New are generated from here. See
   its boundary), heads a boundary with its own note, and steers lines out of boundaries they don't
   belong to. A note about a shape or a connector now attaches to it, so it moves, exports and goes
   with its host; three or more labelled connectors out of one shape that mean the same thing share
-  one Smart Routing trunk, each branch keeping its caption. The agent is told how clear the result
+  one Smart Routing trunk, each branch keeping its caption. An external system called from the
+  middle of a boundary — a hub's credit bureau, fraud check and core banking calls — now hangs right
+  beside the hub, across the flow, instead of being pushed past the whole boundary with its line
+  running the width of the canvas; and a boundary that only gathers externals called from several
+  places is named in the receipt, with the ops that ungroup it. The agent is told how clear the result
   is — crossings, detours, stranded notes — and what in its request to change, so it can fix it in
   the same turn. <!-- highlight -->
 

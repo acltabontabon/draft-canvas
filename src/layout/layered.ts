@@ -21,6 +21,12 @@
  * 6. **Positions** across the layers by weighted isotonic regression: each box as close as it can
  *    get to the median of its neighbours without overlapping its siblings — the step that makes a
  *    main path come out straight and a fan-out come out balanced.
+ * 7. **Satellites.** A shape whose only connector joins something *inside* a boundary, and joins it in
+ *    the middle of that boundary's flow (a hub calling an external system, with more of its own flow
+ *    after it), is not put after the boundary — its connector would cross everything that follows —
+ *    but hung across the flow from the boundary, level with its caller, as part of the boundary's
+ *    block. The caller is moved to that edge of its layer, so the connector between them is short and
+ *    straight; `sides` tells the caller which sides it chose.
  *
  * Every tie is broken by input order, and every loop has a fixed bound, so the same input always
  * produces the same output, to the pixel.
@@ -108,11 +114,16 @@ export interface Rect {
   height: number;
 }
 
+export type LayoutSide = 'top' | 'bottom' | 'left' | 'right';
+
 export interface LayoutOutput {
   boxes: Map<string, { x: number; y: number }>;
   groups: Map<string, Rect>;
   width: number;
   height: number;
+  /** Connectors the layout ran across the flow (to a satellite, see the module doc) and the sides of
+   *  each end it did that by — what anchor assignment should start from for them. */
+  sides: Map<string, { source: LayoutSide; target: LayoutSide }>;
 }
 
 type Point = { x: number; y: number };
@@ -246,10 +257,48 @@ export function layoutGraph(input: LayoutInput): LayoutOutput {
     lifted.set(meet, list);
   }
 
+  // Every box inside a boundary, at any depth — what "more of the boundary's flow" is measured against.
+  const members = new Map<string, Set<string>>(input.groups.map((g) => [g.id, new Set<string>()]));
+  for (const box of input.boxes) for (const g of chain(box.parent)) if (g !== undefined) get(members, g).add(box.id);
+  // Satellites (see the module doc), by the cluster they sit in: a box with exactly one connector
+  // there, to a boundary, whose real end inside it has more of the boundary's own flow after it (for a
+  // sink) or before it (for a source). One that also reaches out of its own cluster is left in the
+  // flow — it has somewhere else to be near.
+  const satellites = new Map<string | undefined, Satellite[]>();
+  const hangs = new Set<string>();
+  for (const [cluster, list] of lifted) {
+    const degree = new Map<string, number>();
+    for (const e of list) for (const end of [e.source, e.target]) degree.set(end, (degree.get(end) ?? 0) + 1);
+    for (const e of list) {
+      for (const [id, group, end, role] of [
+        [e.target, e.source, e.sourceEnd, 'sink'],
+        [e.source, e.target, e.targetEnd, 'source'],
+      ] as const) {
+        if (!boxesById.has(id) || !groupsById.has(group) || degree.get(id) !== 1 || exits.has(id) || enters.has(id)) continue;
+        const inside = get(members, group);
+        const flowsOn = input.edges.some((x) => x.source !== x.target && (role === 'sink' ? x.source === end && inside.has(x.target) : x.target === end && inside.has(x.source)));
+        if (!flowsOn) continue;
+        const sats = satellites.get(cluster) ?? [];
+        sats.push({ id, group, end, edge: e.id, role, labelWidth: e.labelWidth, labelHeight: e.labelHeight });
+        satellites.set(cluster, sats);
+        hangs.add(end);
+      }
+    }
+  }
+  const satelliteIds = new Set([...satellites.values()].flat().map((s) => s.id));
+  const satelliteEdges = new Set([...satellites.values()].flat().map((s) => s.edge));
+  const sides = new Map<string, { source: LayoutSide; target: LayoutSide }>();
+
   const sizes = new Map<string, Size>();
   for (const box of input.boxes) sizes.set(box.id, { width: box.width, height: box.height });
   const local = new Map<string, Point>();
   const contentOffset = new Map<string, Point>();
+  // A boundary with satellites is laid out in its cluster as one block holding both (its size in
+  // `sizes`); this is the boundary's own box within that block, and its own size.
+  const compositeOffset = new Map<string, Point>();
+  const ownSize = new Map<string, Size>();
+  /** A satellite's box within its boundary's block. */
+  const satelliteAt = new Map<string, Point>();
 
   // Bottom-up: a boundary can be sized only once everything inside it is.
   const depthOf = (id: string) => chain(id).length;
@@ -259,43 +308,84 @@ export function layoutGraph(input: LayoutInput): LayoutOutput {
     if (box.lead !== undefined) bands.set(box.id, box.lead);
     else if (box.band !== undefined && input.direction === 'right') bands.set(box.id, box.band);
   }
-  // Where, across a block, the shape an edge really joins lines up — for a boundary, that's the inner
-  // shape's own line, not the boundary's middle. Known by the time the block's parent is laid out,
-  // since boundaries are laid out deepest first.
   const across = (p: Point) => (input.direction === 'right' ? p.y : p.x);
-  const endLine = (block: string, end: string): number | undefined => {
+  const zero = { x: 0, y: 0 };
+  /** The box of `end` (its own, for a boundary) relative to `block`'s box — or, when `block` holds
+   *  satellites, to the block that holds both. Known once `end`'s cluster is laid out. */
+  const endRect = (block: string, end: string): Rect | undefined => {
     if (block === end) return undefined;
-    const size = sizes.get(end);
+    const size = ownSize.get(end) ?? sizes.get(end);
     if (!size) return undefined;
-    let line = bands.get(end) ?? (input.direction === 'right' ? size.height : size.width) / 2;
+    let x = 0;
+    let y = 0;
     let at = end;
     while (at !== block) {
       const parent = clusterOf(at);
       if (parent === undefined) return undefined;
-      line += across(local.get(at) ?? { x: 0, y: 0 }) + across(contentOffset.get(parent) ?? { x: 0, y: 0 });
+      const here = local.get(at) ?? zero;
+      const own = compositeOffset.get(at) ?? zero;
+      const offset = contentOffset.get(parent) ?? zero;
+      x += here.x + own.x + offset.x;
+      y += here.y + own.y + offset.y;
       at = parent;
     }
-    return line;
+    const own = compositeOffset.get(block) ?? zero;
+    return { x: x + own.x, y: y + own.y, width: size.width, height: size.height };
+  };
+  // Where, across a block, the shape an edge really joins lines up — for a boundary, that's the inner
+  // shape's own line, not the boundary's middle. Known by the time the block's parent is laid out,
+  // since boundaries are laid out deepest first.
+  const endLine = (block: string, end: string): number | undefined => {
+    const rect = endRect(block, end);
+    if (!rect) return undefined;
+    return across(rect) + (bands.get(end) ?? (input.direction === 'right' ? rect.height : rect.width) / 2);
   };
   const first = new Set(input.boxes.filter((b) => b.first).map((b) => b.id));
-  const env: Env = { sizes, order, direction: input.direction, spacing: input.spacing, local, bands, ties: input.ties ?? 'align', exits, enters, endLine, first };
+  const env: Env = { sizes, order, direction: input.direction, spacing: input.spacing, local, bands, ties: input.ties ?? 'align', exits, enters, endLine, first, hangs, hangsMembers: (g) => get(members, g) };
+  // A cluster's items and connectors, its satellites (and their connectors) taken out: they are laid
+  // out with the boundary they hang off, as part of its block.
+  const itemsOf = (cluster: string | undefined) => (children.get(cluster) ?? []).filter((id) => !satelliteIds.has(id));
+  const edgesOf = (cluster: string | undefined) => (lifted.get(cluster) ?? []).filter((e) => !satelliteEdges.has(e.id));
+  // Once a cluster is laid out its boundaries' satellites follow, from where each block landed.
+  const settle = (cluster: string | undefined) => {
+    for (const sat of satellites.get(cluster) ?? []) {
+      const block = get(local, sat.group);
+      const at = get(satelliteAt, sat.id);
+      local.set(sat.id, { x: Math.round(block.x + at.x), y: Math.round(block.y + at.y) });
+    }
+  };
   for (const group of deepestFirst) {
-    const content = layoutCluster(children.get(group.id) ?? [], lifted.get(group.id) ?? [], env);
+    const content = layoutCluster(itemsOf(group.id), edgesOf(group.id), env);
+    settle(group.id);
     const pad = input.spacing.pad;
     const width = Math.max(group.minWidth, content.width + pad * 2, 160);
     const height = Math.max(group.header + content.height + pad, 120);
-    sizes.set(group.id, { width: Math.round(width), height: Math.round(height) });
+    const own = { width: Math.round(width), height: Math.round(height) };
+    sizes.set(group.id, own);
     contentOffset.set(group.id, { x: Math.round((width - content.width) / 2), y: group.header });
+    const mine = (satellites.get(group.parent) ?? []).filter((s) => s.group === group.id);
+    if (mine.length === 0) continue;
+    // Its satellites hang beside it, and the two are one block to the cluster around them.
+    const block = hangSatellites(group.id, own, mine, env, endRect);
+    ownSize.set(group.id, own);
+    sizes.set(group.id, block.size);
+    compositeOffset.set(group.id, block.offset);
+    bands.set(group.id, across(block.offset) + (input.direction === 'right' ? own.height : own.width) / 2);
+    for (const [id, at] of block.at) satelliteAt.set(id, at);
+    for (const [id, side] of block.sides) sides.set(id, side);
   }
-  const root = layoutCluster(children.get(undefined) ?? [], lifted.get(undefined) ?? [], env);
+  const root = layoutCluster(itemsOf(undefined), edgesOf(undefined), env);
+  settle(undefined);
 
   // Top-down: absolute positions.
   const absolute = (id: string): Point => {
-    const here = local.get(id) ?? { x: 0, y: 0 };
+    const local0 = local.get(id) ?? zero;
+    const own = compositeOffset.get(id) ?? zero;
+    const here = { x: local0.x + own.x, y: local0.y + own.y };
     const parent = clusterOf(id);
     if (parent === undefined) return here;
     const origin = absolute(parent);
-    const offset = contentOffset.get(parent) ?? { x: 0, y: 0 };
+    const offset = contentOffset.get(parent) ?? zero;
     return { x: origin.x + offset.x + here.x, y: origin.y + offset.y + here.y };
   };
   const boxes = new Map<string, Point>();
@@ -306,10 +396,111 @@ export function layoutGraph(input: LayoutInput): LayoutOutput {
   }
   for (const group of input.groups) {
     const p = absolute(group.id);
-    const size = get(sizes, group.id);
+    const size = ownSize.get(group.id) ?? get(sizes, group.id);
     groups.set(group.id, { x: Math.round(p.x), y: Math.round(p.y), width: size.width, height: size.height });
   }
-  return { boxes, groups, width: root.width, height: root.height };
+  return { boxes, groups, width: root.width, height: root.height, sides };
+}
+
+interface Satellite {
+  id: string;
+  /** The boundary it hangs off, and the shape inside it its one connector really joins. */
+  group: string;
+  end: string;
+  edge: string;
+  /** `sink`: the connector runs from `end` to it; `source`: the other way. */
+  role: 'sink' | 'source';
+  labelWidth: number;
+  labelHeight: number;
+}
+
+/**
+ * Where a boundary's satellites go: in a row across the flow from it (below it reading right, to its
+ * right reading down), each as nearly level with its own caller as the row allows, top-aligned so the
+ * row reads as one layer. Every caller was moved to that edge of its layer (`Env.hangs`), so the
+ * connector between them is a short straight line; when something of the boundary still lies in the
+ * way (a second part of it, stacked after the caller's) and the near side is clear, that satellite
+ * hangs on the near side instead. Returns the block holding both, where the boundary sits in it,
+ * where each satellite sits in it, and the sides its connectors run between.
+ */
+function hangSatellites(
+  group: string,
+  own: Size,
+  sats: Satellite[],
+  env: Env,
+  endRect: (block: string, end: string) => Rect | undefined,
+): { size: Size; offset: Point; at: Map<string, Point>; sides: Map<string, { source: LayoutSide; target: LayoutSide }> } {
+  const right = env.direction === 'right';
+  const along = (r: { width: number; height: number }) => (right ? r.width : r.height);
+  const acrossOf = (r: { width: number; height: number }) => (right ? r.height : r.width);
+  const start = (r: Rect) => (right ? r.x : r.y);
+  const crossStart = (r: Rect) => (right ? r.y : r.x);
+  const groupAlong = along(own);
+  const groupAcross = acrossOf(own);
+  // Everything the boundary holds, in its own coordinates — what a connector across the flow must clear.
+  const inside = [...(env.hangsMembers?.(group) ?? [])];
+  const rects = new Map<string, Rect>();
+  for (const id of inside) {
+    const r = endRect(group, id);
+    if (r) rects.set(id, r);
+  }
+  const placed: { sat: Satellite; side: 'far' | 'near'; want: number }[] = [];
+  for (const sat of sats) {
+    const end = endRect(group, sat.end);
+    if (!end) continue;
+    const blocked = (far: boolean) =>
+      [...rects].some(([id, r]) => {
+        if (id === sat.end || start(r) >= start(end) + along(end) || start(r) + along(r) <= start(end)) return false;
+        return far ? crossStart(r) >= crossStart(end) + acrossOf(end) - 1 : crossStart(r) + acrossOf(r) <= crossStart(end) + 1;
+      });
+    // The near side is where a shape's notes sit (`LayoutBox.lead`), so a caller with those keeps
+    // its satellites on the far side whatever is in the way.
+    const side = blocked(true) && !blocked(false) && !env.bands.has(sat.end) ? 'near' : 'far';
+    placed.push({ sat, side, want: start(end) + along(end) / 2 });
+  }
+  const spots = new Map<string, Point>();
+  const sides = new Map<string, { source: LayoutSide; target: LayoutSide }>();
+  let alongMin = 0;
+  let alongMax = groupAlong;
+  let acrossMin = 0;
+  let acrossMax = groupAcross;
+  for (const side of ['far', 'near'] as const) {
+    const row = placed.filter((p) => p.side === side).sort((a, b) => a.want - b.want || get(env.order, a.sat.id) - get(env.order, b.sat.id));
+    if (row.length === 0) continue;
+    const size = (p: (typeof row)[number]) => get(env.sizes, p.sat.id);
+    // Level with its caller where the row allows; neighbours keep a sibling's gap, and enough room
+    // for both their captions, which hang beside the connectors between them.
+    const gaps = row.slice(1).map((p, i) => {
+      const before = at(row, i);
+      const captions = right ? Math.max(p.sat.labelWidth, before.sat.labelWidth) : Math.max(p.sat.labelHeight, before.sat.labelHeight);
+      return along(size(before)) / 2 + along(size(p)) / 2 + Math.max(env.spacing.sibling, captions + CAPTION_AIR / 2);
+    });
+    const centres = isotonic(
+      row.map((p) => p.want),
+      row.map(() => 1),
+      gaps,
+    );
+    const rowAcross = Math.max(...row.map((p) => acrossOf(size(p))));
+    const label = Math.max(0, ...row.map((p) => (right ? p.sat.labelHeight : p.sat.labelWidth)));
+    const gap = Math.max(env.spacing.layer, label > 0 ? label + CAPTION_AIR : 0);
+    const rowStart = side === 'far' ? groupAcross + gap : -gap - rowAcross;
+    row.forEach((p, i) => {
+      const s = size(p);
+      const a = at(centres, i) - along(s) / 2;
+      spots.set(p.sat.id, right ? { x: a, y: rowStart } : { x: rowStart, y: a });
+      alongMin = Math.min(alongMin, a);
+      alongMax = Math.max(alongMax, a + along(s));
+      const far = side === 'far';
+      const [out, into]: [LayoutSide, LayoutSide] = right ? (far ? ['bottom', 'top'] : ['top', 'bottom']) : far ? ['right', 'left'] : ['left', 'right'];
+      sides.set(p.sat.edge, p.sat.role === 'sink' ? { source: out, target: into } : { source: into, target: out });
+    });
+    acrossMin = Math.min(acrossMin, rowStart);
+    acrossMax = Math.max(acrossMax, rowStart + rowAcross);
+  }
+  const offset = right ? { x: -alongMin, y: -acrossMin } : { x: -acrossMin, y: -alongMin };
+  for (const [id, p] of spots) spots.set(id, { x: Math.round(p.x + offset.x), y: Math.round(p.y + offset.y) });
+  const size = right ? { width: Math.round(alongMax - alongMin), height: Math.round(acrossMax - acrossMin) } : { width: Math.round(acrossMax - acrossMin), height: Math.round(alongMax - alongMin) };
+  return { size, offset: { x: Math.round(offset.x), y: Math.round(offset.y) }, at: spots, sides };
 }
 
 interface Env {
@@ -330,6 +521,10 @@ interface Env {
   endLine: (block: string, end: string) => number | undefined;
   /** See `LayoutBox.first`. */
   first: ReadonlySet<string>;
+  /** Shapes a satellite hangs off (see the module doc): each goes to the far edge of its layer. */
+  hangs: ReadonlySet<string>;
+  /** Every box inside a boundary, at any depth. */
+  hangsMembers?: (group: string) => Iterable<string>;
 }
 
 interface Block {
@@ -703,6 +898,15 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
     }
     if (!improved) break;
   }
+  // A shape with satellites goes to the far edge of its layer, whatever the sweeps made of it: its
+  // connectors across the flow then leave the boundary without passing a sibling.
+  for (const layer of layers) {
+    const hanging = layer.filter((id) => env.hangs.has(id));
+    if (hanging.length === 0 || hanging.length === layer.length) continue;
+    const rest = layer.filter((id) => !env.hangs.has(id));
+    layer.splice(0, layer.length, ...rest, ...hanging);
+  }
+  index();
 
   // 6. Positions across the layers.
   const centre = new Map<string, number>();

@@ -29,6 +29,52 @@ export type GalleryCase = GalleryCreate | GalleryUpdate;
 const n = (id: string, type: string, label: string, extra: Json = {}) => ({ id, type, label, ...extra });
 const r = (id: string, from: string, to: string, label?: string, extra: Json = {}) => ({ id, from, to, ...(label ? { label } : {}), ...extra });
 
+/** The batch-processing request of gallery case 22, shared with case 23 (the same diagram after the advised edit). */
+const GALLERY_22_REQUEST = (): Json => ({
+      title: 'Credit card application batch processing',
+      level: 'container',
+      groups: [
+        { id: 'batch', label: 'Batch Processing', kind: 'system' },
+        { id: 'ext', label: 'External Partners & Services', kind: 'group' },
+        { id: 'intake', label: 'Application Intake', kind: 'system' },
+      ],
+      nodes: [
+        n('branch', 'external-actor', 'Branch / Partner', { group: 'ext', description: 'Submits a nightly file of new credit card applications.' }),
+        n('sftp', 'gateway', 'SFTP Intake Gateway', { group: 'intake', description: 'Receives batch application files over SFTP.' }),
+        n('ingest', 'worker', 'File Ingestion Worker', { group: 'intake', description: 'Parses and validates incoming batch files.' }),
+        n('raw', 'object-storage', 'Raw File Storage', { group: 'intake', description: 'Landing zone for unprocessed batch files.' }),
+        n('appsdb', 'sql-database', 'Applications Database', { group: 'batch', description: 'Staging store of parsed, pending applications.' }),
+        n('scheduler', 'scheduler', 'Nightly Batch Scheduler', { group: 'batch', description: 'Kicks off the batch run on a fixed schedule.' }),
+        n('worker', 'worker', 'Batch Processing Worker', { group: 'batch', description: 'Orchestrates credit checks, scoring and decisioning for each application.' }),
+        n('engine', 'service', 'Underwriting Decision Engine', { group: 'batch', description: 'Applies scoring rules to approve, decline or refer an application.' }),
+        n('rules', 'sql-database', 'Rules & Scoring Store', { group: 'batch', description: 'Underwriting rules, score thresholds and credit limit tables.' }),
+        n('audit', 'sql-database', 'Audit & Reporting Store', { group: 'batch', description: 'Immutable record of every decision for compliance reporting.' }),
+        n('notify', 'worker', 'Notification Worker', { group: 'batch', description: 'Prepares approval and decline correspondence.' }),
+        n('bureau', 'external-system', 'Credit Bureau', { group: 'ext', description: 'Returns credit reports and scores.' }),
+        n('fraud', 'external-system', 'Fraud Detection Service', { group: 'ext', description: 'Screens applications for identity and fraud risk.' }),
+        n('core', 'external-system', 'Core Banking System', { group: 'ext', description: 'Opens the card account and issues the credit line.' }),
+        n('mail', 'external-system', 'Email / Print Vendor', { group: 'ext', description: "Delivers the applicant's decision letter." }),
+      ],
+      relationships: [
+        r('e1', 'branch', 'sftp', 'Uploads application batch file'),
+        r('e2', 'sftp', 'raw', 'Writes raw file'),
+        r('e3', 'sftp', 'ingest', 'New file arrived'),
+        r('e4', 'ingest', 'raw', 'Reads file'),
+        r('e5', 'ingest', 'appsdb', 'Writes parsed applications'),
+        r('e6', 'scheduler', 'worker', 'Triggers nightly run'),
+        r('e7', 'worker', 'appsdb', 'Reads pending applications'),
+        r('e8', 'worker', 'engine', 'Submits for scoring'),
+        r('e9', 'engine', 'rules', 'Reads scoring rules'),
+        r('e10', 'engine', 'worker', 'Returns decision'),
+        r('e11', 'worker', 'bureau', 'Requests credit report'),
+        r('e12', 'worker', 'fraud', 'Requests fraud screening'),
+        r('e13', 'worker', 'core', 'Opens account'),
+        r('e14', 'worker', 'audit', 'Writes decision record'),
+        r('e15', 'worker', 'notify', 'Queues notification', { condition: 'Approved' }),
+        r('e16', 'notify', 'mail', 'Sends decision letter'),
+      ],
+});
+
 export const GALLERY: GalleryCase[] = [
   {
     id: '01-request-path',
@@ -552,4 +598,31 @@ export const GALLERY: GalleryCase[] = [
       ],
     },
   },
+  {
+    // The reported regression: a batch-processing container view an agent sent over MCP. The hub
+    // worker's seven connectors ran the width of the canvas in one crowded corridor, two captions sat
+    // side by side on it, the intake boundary landed after the batch it feeds, and the batch boundary
+    // was mostly empty space. Held to its legibility numbers in `tests/agent/gallery.test.ts`.
+    id: '22-credit-card-batch',
+    title: 'Container view: a hub worker with many externals, three boundaries and a return',
+    kind: 'create',
+    request: GALLERY_22_REQUEST(),
+  },
+  {
+    // The same request after the agent applies the receipt's advice: the gathering boundary ungrouped
+    // and the view arranged again in place. Its externals hang beside the worker that calls them
+    // (satellites, `layout/layered.ts`), so nothing runs the width of the canvas any more.
+    id: '23-credit-card-batch-ungrouped',
+    title: 'The batch view after the advised ungrouping and arrange ({op:"arrange"})',
+    kind: 'update',
+    base: GALLERY_22_REQUEST(),
+    update: {
+      ops: [
+        ...['branch', 'bureau', 'fraud', 'core', 'mail'].map((id) => ({ op: 'update', id, set: { group: null } })),
+        { op: 'remove', ids: ['ext'] },
+        { op: 'arrange' },
+      ],
+    },
+  },
 ];
+

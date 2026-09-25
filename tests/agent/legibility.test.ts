@@ -11,7 +11,7 @@ const node = (id: string, x: number, y: number, extra: Partial<DraftNode> = {}):
 const edge = (id: string, source: string, target: string, sourceSide: 'left' | 'right' | 'top' | 'bottom', targetSide: 'left' | 'right' | 'top' | 'bottom'): DraftEdge =>
   ({ id, source, target, routing: 'smoothstep', sourceAnchor: { side: sourceSide, offset: 0.5 }, targetAnchor: { side: targetSide, offset: 0.5 } }) as DraftEdge;
 
-const clean: Legibility = { crossings: 0, detours: [], throughBoundaries: [], farNotes: [], bundled: 0, length: 0, fill: 1 };
+const clean: Legibility = { crossings: 0, detours: [], throughBoundaries: [], crossedBoundaries: [], farNotes: [], bundled: 0, length: 0, fill: 1 };
 
 describe('legibility', () => {
   it('counts two connectors crossing, and none for connectors that only share an end', () => {

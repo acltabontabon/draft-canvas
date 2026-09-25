@@ -19,8 +19,10 @@ export interface Legibility {
   crossings: number;
   /** Connectors drawn far longer than the distance between their ends — around the outside of things. */
   detours: string[];
-  /** Connectors that pass through a boundary neither of their ends is in. */
+  /** Connectors that pass through a boundary neither of their ends is in… */
   throughBoundaries: string[];
+  /** …and the boundaries they pass through — the ones standing in the way of what runs past them. */
+  crossedBoundaries: string[];
   /** Notes further from what they are about than `NOTE_REACH`. */
   farNotes: string[];
   /** Connectors drawn as branches of a shared trunk — parallel lines Smart Routing folded into one. */
@@ -128,6 +130,7 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
   const groups = nodes.filter((n) => n.type === 'group');
   const detours: string[] = [];
   const throughBoundaries: string[] = [];
+  const crossedBoundaries = new Set<string>();
   let length = 0;
   for (const { edge, route } of drawn) {
     const points = route.points;
@@ -137,7 +140,9 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
     const target = byId.get(edge.target);
     if (source && target && isDetour(points, source, target)) detours.push(edge.id);
     const own = new Set([...ancestry(edge.source, byId), ...ancestry(edge.target, byId)]);
-    if (groups.some((g) => !own.has(g.id) && points.some((p, k) => k > 0 && entersBox(points[k - 1]!, p, g)))) throughBoundaries.push(edge.id);
+    const crossed = groups.filter((g) => !own.has(g.id) && points.some((p, k) => k > 0 && entersBox(points[k - 1]!, p, g)));
+    if (crossed.length) throughBoundaries.push(edge.id);
+    for (const g of crossed) crossedBoundaries.add(g.id);
   }
   const farNotes: string[] = [];
   for (const [noteId, subjectId] of about) {
@@ -162,7 +167,7 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
   }
   for (const n of solid) area += n.width * n.height;
   const bounds = Number.isFinite(minX) ? (maxX - minX) * (maxY - minY) : 0;
-  return { crossings, detours, throughBoundaries, farNotes, bundled, length: Math.round(length), fill: bounds > 0 ? Math.round((area / bounds) * 1000) / 1000 : 1 };
+  return { crossings, detours, throughBoundaries, crossedBoundaries: [...crossedBoundaries], farNotes, bundled, length: Math.round(length), fill: bounds > 0 ? Math.round((area / bounds) * 1000) / 1000 : 1 };
 }
 
 /**

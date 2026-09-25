@@ -24,6 +24,9 @@ export interface AnchorEdge extends Pick<DraftEdge, 'kind' | 'directed' | 'async
 export interface AnchorOptions {
   /** Connectors that never join a labelled fan — the main path, which stays its own straight line. */
   keepApart?: ReadonlySet<string>;
+  /** Sides the layout already chose for a connector it ran across the flow (`LayoutOutput.sides`):
+   *  used as they are, where `sidesFor` would read the geometry as a forward step and round a corner. */
+  sides?: ReadonlyMap<string, { source: Side; target: Side }>;
   /** `unlabelled` (the repair's fallback) never bundles labelled connectors. Default `all`. */
   fans?: 'all' | 'unlabelled';
 }
@@ -174,7 +177,7 @@ export function assignAnchors(
     // shapes (a queue's tube) they would run a few pixels apart, so it goes around instead.
     const twin = edges.some((other) => other !== edge && other.source === edge.target && other.target === edge.source);
     const roomy = Math.min(spanOf(s, direction), spanOf(t, direction)) >= TWIN_SPAN;
-    const free = fixed ? { source: fixed.sourceAnchor.side, target: fixed.targetAnchor.side } : sidesFor(s, t, direction, (!twin || roomy) && corridorClear(s, t, rects, edge, direction));
+    const free = fixed ? { source: fixed.sourceAnchor.side, target: fixed.targetAnchor.side } : (options.sides?.get(edge.id) ?? sidesFor(s, t, direction, (!twin || roomy) && corridorClear(s, t, rects, edge, direction)));
     // A reserved side gives way to the one the reading direction leaves (or arrives) by.
     const chosen = fixed
       ? free

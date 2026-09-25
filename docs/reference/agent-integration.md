@@ -362,7 +362,14 @@ dependency). It works in these steps:
    a connector to or from a boundary lines up with the shape inside that it really joins, not the
    boundary's middle — so an external system sits level with the service that calls it. Loose shapes
    in a boundary that are each called from outside (a boundary of external systems) stand in a
-   column, each level with its own caller, rather than in a row along the flow.
+   column, each level with its own caller, rather than in a row along the flow. A shape outside a
+   boundary whose only connector joins something in the *middle* of that boundary's flow — an
+   external system a hub calls, with more of the hub's own flow after it — is a **satellite**: put
+   after the boundary, its connector would cross everything that follows its caller, so it hangs
+   across the flow instead (below, reading right; to the right, reading down), level with its
+   caller, as part of the boundary's block; the caller is moved to that edge of its layer, so the
+   connector between them is a short straight line. Several satellites of one caller form a row
+   under it. One joined to the last shape of the boundary's flow stays after the boundary, in the flow.
 2. **Cycles.** They are broken for layering only. The stored `source` and `target`, semantics and
    flow steps are never touched, and a return is drawn as a detour that barely pulls on placement.
 3. **Layers.** Longest-path layering, with placeholders for long edges.
