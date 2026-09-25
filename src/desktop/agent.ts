@@ -27,7 +27,7 @@
  */
 
 import { capabilities } from '../agent/capabilities';
-import { gate, qualityReceipt } from '../agent/compile';
+import { gate, legibilityReceipt, qualityReceipt } from '../agent/compile';
 import { AgentError, toAgentError } from '../agent/errors';
 import type { JobResult } from '../agent/jobs';
 import { runOffThread, type Progress } from '../agent/offThread';
@@ -275,6 +275,7 @@ function receiptCounts(result: Extract<JobResult, { kind: 'update' }>) {
     ...(result.counts.arranged ? { arranged: result.counts.arranged } : {}),
     ...(result.advisories.length ? { advisories: result.advisories.slice(0, 5) } : {}),
     quality: qualityReceipt('touched', result.quality),
+    ...(result.legibility ? { legibility: legibilityReceipt(result.legibility) } : {}),
   };
 }
 

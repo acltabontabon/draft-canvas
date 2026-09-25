@@ -18,6 +18,8 @@ import { silent, type Report } from './progress';
 import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
 import { pastDeadline, withDeadline } from './route';
 import { buildFromStarter } from './starter';
+import { legibilityCost, legibilityOf, type Legibility } from './legibility';
+import { adviceFor } from './advice';
 
 export interface Composed {
   text: string;
@@ -63,15 +65,12 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   // arrangement for a worse last one; among unreadable ones, the one that hides the least wins. A
   // candidate with fewer errors always outranks one with more, however many jogs either has —
   // `isBetterReport` decides that, not a summed score (see its doc comment).
-  let best: { placed: PlacedRoom; found: QualityReport; fit?: FitReport; layout: LayoutSpec } | undefined;
+  let best: Candidate | undefined;
   let outOfTime = false;
   let tried = 0;
-  for (const layout of attempts) {
-    // Another attempt only while there is time for it; the first always runs.
-    if (best && pastDeadline()) {
-      outOfTime = true;
-      break;
-    }
+  // Which note is about which element: a note's subject isn't stored in the file, only used to place it.
+  const about = new Map(spec.notes.flatMap((n) => (n.near ? [[n.id, n.near] as const] : [])));
+  const judge = (layout: LayoutSpec): Candidate => {
     tried += 1;
     report(tried === 1 ? 'arranging' : 'repairing');
     const candidate = spec.starter ? buildFromStarter(spec, layout, ctx) : placeRoom(spec, layout, ctx);
@@ -82,12 +81,32 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
     // Only measured against a viewport the request actually gave — otherwise this candidate always
     // "fits", so a request with no `layout.viewport` compares and stops exactly as it always has.
     const fit = layout.viewport ? checkFit(renderedBoundsOf(candidate.nodes, candidate.edges, ctx), smallestFontPresent(candidate.nodes, candidate.edges), layout.viewport) : undefined;
-    if (!best || isBetterCandidate({ report: found, fit }, { report: best.found, fit: best.fit })) best = { placed: candidate, found, fit, layout };
-    if (isCleanCandidate({ report: found, fit })) break;
+    return { placed: candidate, found, fit, layout, legibility: legibilityOf(candidate.nodes, candidate.edges, about) };
+  };
+  const keep = (candidate: Candidate) => {
+    if (!best || isBetterArrangement(candidate, best, layout0.direction)) best = candidate;
+  };
+  for (const layout of attempts) {
+    // Another attempt only while there is time for it; the first always runs.
+    if (best && pastDeadline()) {
+      outOfTime = true;
+      break;
+    }
+    const candidate = judge(layout);
+    keep(candidate);
+    if (isCleanCandidate({ report: candidate.found, fit: candidate.fit })) break;
+  }
+  // Readable is not the same as legible: a clean arrangement can still send connectors the width of
+  // the canvas. When the reading direction was left to us and a clean result came early, the other
+  // direction is laid out too, and kept only when it reads clearly better (`isBetterArrangement`).
+  if (best && !layout0.directionChosen && !spec.starter && !pastDeadline() && !attempts.slice(0, tried).some((a) => a.direction !== layout0.direction)) {
+    const found = best as Candidate;
+    const other = attempts.find((a) => a.direction !== found.layout.direction && a.spacing === found.layout.spacing && a.ties === found.layout.ties);
+    if (other) keep(judge(other));
   }
   const repaired = tried - 1;
   if (!best) throw new AgentError('INTERNAL', 'Nothing was laid out.');
-  const { placed, found, fit, layout: used } = best;
+  const { placed, found, fit, layout: used, legibility } = best as Candidate;
   const issues = found.errors;
   report('finishing', { nodes: placed.nodes, edges: placed.edges, flows: placed.flows });
   if (issues.length > 0 && !spec.layout.allowDegraded) {
@@ -105,6 +124,9 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   }
 
   const document = assemble(spec, placed, diagramId);
+  // What the request itself could change for a clearer diagram comes first: it is the advice the agent
+  // can act on in this same turn (see `advice.ts`).
+  const advice = [...(spec.starter ? [] : adviceFor(spec, legibility, used.primaryFlow)), ...levelAdvisories(document.nodes, document.level), ...placed.advisories];
   const text = gate(document);
   const counts = countAll(document);
   return {
@@ -115,9 +137,10 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
       layout: { direction: used.direction, spacing: used.spacing },
       ...(issues.length || (fit && !fit.readable) ? { degraded: true } : {}),
       quality: qualityReceipt('whole-diagram', found),
+      legibility: legibilityReceipt(legibility),
       ...(fit ? { fit } : {}),
-      ...(placed.advisories.length || levelAdvisories(document.nodes, document.level).length
-        ? { advisories: [...levelAdvisories(document.nodes, document.level), ...placed.advisories].slice(0, 10) }
+      ...(advice.length
+        ? { advisories: advice.slice(0, 10) }
         : {}),
     },
   };
@@ -136,6 +159,48 @@ export function qualityReceipt(scope: 'whole-diagram' | 'touched', report: Quali
     warnings: report.warnings.length,
     warningsTruncated: report.warnings.length > cap,
     ...(report.warnings.length ? { warningProblems: report.warnings.slice(0, cap).map((i) => ({ kind: i.kind, ids: i.ids, message: i.message })) } : {}),
+  };
+}
+
+interface Candidate {
+  placed: PlacedRoom;
+  found: QualityReport;
+  fit?: FitReport;
+  layout: LayoutSpec;
+  legibility: Legibility;
+}
+
+/** The other reading direction wins only when it costs at most this fraction of the default one… */
+const CLEARLY_BETTER = 0.8;
+/** …and saves at least this much outright (about one crossing and a detour). */
+const MIN_GAIN = 25;
+/** A skewed connector, weighed against legibility: about one crossing. */
+const JOG_COST = 10;
+
+/**
+ * Whether `a` should be kept over `b`. Hidden content and fit decide first, exactly as
+ * `isBetterCandidate` has them; only between equally readable arrangements does legibility (with
+ * skewed connectors counted in) decide — and a change of reading direction from the default has to be
+ * clearly better, so a diagram never flips over a few pixels of connector.
+ */
+function isBetterArrangement(a: Candidate, b: Candidate, preferred: LayoutSpec['direction']): boolean {
+  const errorsOnly = (c: Candidate) => ({ report: { errors: c.found.errors, warnings: [] }, fit: c.fit });
+  if (isBetterCandidate(errorsOnly(a), errorsOnly(b))) return true;
+  if (isBetterCandidate(errorsOnly(b), errorsOnly(a))) return false;
+  const cost = (c: Candidate) => legibilityCost(c.legibility) + c.found.warnings.length * JOG_COST;
+  const [ca, cb] = [cost(a), cost(b)];
+  if (a.layout.direction === b.layout.direction) return ca < cb;
+  return a.layout.direction === preferred ? !(cb < ca * CLEARLY_BETTER && ca - cb > MIN_GAIN) : ca < cb * CLEARLY_BETTER && cb - ca > MIN_GAIN;
+}
+
+/** What a receipt says about legibility: the counts, and which connectors or notes to look at. */
+export function legibilityReceipt(l: Legibility) {
+  return {
+    crossings: l.crossings,
+    ...(l.detours.length ? { detours: l.detours.slice(0, 10) } : {}),
+    ...(l.throughBoundaries.length ? { throughBoundaries: l.throughBoundaries.slice(0, 10) } : {}),
+    ...(l.farNotes.length ? { farNotes: l.farNotes.slice(0, 10) } : {}),
+    fill: l.fill,
   };
 }
 

@@ -166,22 +166,31 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   const elements = new Map<string, DraftNode>();
   const groups = new Map<string, DraftNode>();
   const memberNotes = new Map<string, DraftNode>();
+  const besideNotes = new Map<string, DraftNode[]>();
   for (const node of view.nodes) {
     if (!inScope.has(node.id)) continue;
     if (node.type === 'group') groups.set(node.id, { ...node });
-    else if (isNoteLike(node)) {
-      if (node.parentId && inScope.has(node.parentId)) memberNotes.set(node.id, { ...node });
-    } else elements.set(node.id, grown(node, ctx));
+    else if (!isNoteLike(node)) elements.set(node.id, grown(node, ctx));
+  }
+  // A note inside a boundary is either about the boundary (its heading) or about the shape it sits
+  // beside there — which one isn't stored, so it is read off where the note is: beside a shape of the
+  // same boundary, it stays with that shape; otherwise it heads the boundary.
+  for (const node of view.nodes) {
+    if (!inScope.has(node.id) || !isNoteLike(node) || !node.parentId || !inScope.has(node.parentId)) continue;
+    const host = nearestShape(node, view.nodes, BESIDE_REACH);
+    if (host && host.parentId === node.parentId && elements.has(host.id)) besideNotes.set(host.id, [...(besideNotes.get(host.id) ?? []), { ...node }]);
+    else memberNotes.set(node.id, { ...node });
   }
   // (A shape whose boundary is outside the scope is laid out as if loose — `arrangeParts` only nests
   // within the groups it is given — and stays that boundary's member.)
   const inner = view.edges.filter((e) => elements.has(e.source) && elements.has(e.target)).map((e) => restyled(e, request.connectors));
   const primary = view.flows.find((f) => f.id === layout.primaryFlow);
-  arrangeParts({ elements, groups, memberNotes, edges: inner, primaryEdges: new Set(primary?.steps.flatMap((s) => (s.edgeId ? [s.edgeId] : [])) ?? []) }, layout, ctx);
+  arrangeParts({ elements, groups, memberNotes, besideNotes, edges: inner, primaryEdges: new Set(primary?.steps.flatMap((s) => (s.edgeId ? [s.edgeId] : [])) ?? []) }, layout, ctx);
 
   // Back where the scope was: its old top-left corner, or beside it when that would collide.
-  const moved = [...elements.values(), ...groups.values(), ...memberNotes.values()];
-  const before = view.nodes.filter((n) => elements.has(n.id) || groups.has(n.id) || memberNotes.has(n.id));
+  const besides = [...besideNotes.values()].flat();
+  const moved = [...elements.values(), ...groups.values(), ...memberNotes.values(), ...besides];
+  const before = view.nodes.filter((n) => elements.has(n.id) || groups.has(n.id) || memberNotes.has(n.id) || besides.some((b) => b.id === n.id));
   const oldBox = boxOf(before);
   const newBox = boxOf(moved);
   // Free notes follow the shape they sit beside, so they aren't in the way either.
@@ -300,16 +309,19 @@ function containsScope(node: DraftNode, scope: readonly DraftNode[], byId: Map<s
   });
 }
 
+/** How close a note inside a boundary must sit to a shape to count as that shape's rather than the
+ *  boundary's own: a note laid out beside its shape sits `NOTE_GAP` (20) from it. */
+const BESIDE_REACH = 48;
+
 /** The shape a note sits closest to (edge to edge), within a short reach. */
-export function nearestShape(note: DraftNode, nodes: readonly DraftNode[]): DraftNode | undefined {
-  const REACH = 160;
+export function nearestShape(note: DraftNode, nodes: readonly DraftNode[], reach = 160): DraftNode | undefined {
   let best: { node: DraftNode; gap: number } | undefined;
   for (const n of nodes) {
     if (n.id === note.id || n.type === 'group' || isNoteLike(n)) continue;
     const dx = Math.max(0, n.x - (note.x + note.width), note.x - (n.x + n.width));
     const dy = Math.max(0, n.y - (note.y + note.height), note.y - (n.y + n.height));
     const gap = Math.hypot(dx, dy);
-    if (gap <= REACH && (!best || gap < best.gap)) best = { node: n, gap };
+    if (gap <= reach && (!best || gap < best.gap)) best = { node: n, gap };
   }
   return best?.node;
 }

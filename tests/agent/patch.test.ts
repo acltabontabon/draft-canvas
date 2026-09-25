@@ -90,7 +90,8 @@ describe('update_diagram operations', () => {
     expect(next.flows[0]?.steps.map((s) => s.edgeId)).toEqual(['u']);
     expect(refusal(() => applyUpdate(file, [], [{ op: 'remove', ids: ['sys'] }], undefined)).code).toBe('INVALID_INPUT');
     const { file: gone } = applyUpdate(file, [], [{ op: 'remove', ids: ['sys'], cascade: true }], undefined);
-    expect(gone.nodes.map((n) => n.id).sort()).toEqual(['n1', 'user']);
+    // The note about `api` sits inside `api`'s boundary, beside it — so it goes with the boundary.
+    expect(gone.nodes.map((n) => n.id).sort()).toEqual(['user']);
   });
 
   it('refuses the whole batch when any op is wrong — nothing half-applied', () => {

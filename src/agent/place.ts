@@ -10,7 +10,7 @@ import { capabilityFor, categoryOf, inferRelationship } from '../document/connec
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { createAttachment, createDocument, createEdge, createNode } from '../document/factory';
 import { createFlow } from '../document/flow';
-import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode, DraftNodeType, ViewLevel } from '../document/types';
+import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode, DraftNodeType, Side, ViewLevel } from '../document/types';
 import { hasAttachmentRoom } from '../document/operations';
 import { anchorBandOf } from '../document/queueGeometry';
 import { roomOf } from '../depth/tree';
@@ -283,21 +283,26 @@ const JOG = { align: 72, balance: 10 } as const;
  * inside its boundary, and leaves more of that shape's connectors straight than before (a shape can
  * line up with only so many neighbours; moving it for one must not skew two others).
  */
-function snapLevelJogs(edges: DraftEdge[], elements: Map<string, DraftNode>, groups: Map<string, DraftNode>, limit: number): void {
-  const all = () => [...elements.values()];
+function snapLevelJogs(edges: DraftEdge[], elements: Map<string, DraftNode>, groups: Map<string, DraftNode>, limit: number, besideNotes: ReadonlyMap<string, DraftNode[]> = new Map()): void {
+  const all = () => [...elements.values(), ...[...besideNotes.values()].flat()];
+  // A shape moves with the notes about it, as the one box the layout placed.
+  const unit = (node: DraftNode) => [node, ...(besideNotes.get(node.id) ?? [])];
   const free = (node: DraftNode, dx: number, dy: number) => {
-    const box = { x: node.x + dx, y: node.y + dy, width: node.width, height: node.height };
-    const clear = all().every(
-      (other) =>
-        other.id === node.id ||
-        box.x + box.width + 12 <= other.x ||
-        other.x + other.width + 12 <= box.x ||
-        box.y + box.height + 12 <= other.y ||
-        other.y + other.height + 12 <= box.y,
-    );
-    const parent = node.parentId ? groups.get(node.parentId) : undefined;
-    const inside = !parent || (box.x >= parent.x && box.y >= parent.y + 36 && box.x + box.width <= parent.x + parent.width && box.y + box.height <= parent.y + parent.height);
-    return clear && inside;
+    const moving = unit(node);
+    return moving.every((part) => {
+      const box = { x: part.x + dx, y: part.y + dy, width: part.width, height: part.height };
+      const clear = all().every(
+        (other) =>
+          moving.includes(other) ||
+          box.x + box.width + 12 <= other.x ||
+          other.x + other.width + 12 <= box.x ||
+          box.y + box.height + 12 <= other.y ||
+          other.y + other.height + 12 <= box.y,
+      );
+      const parent = part.parentId ? groups.get(part.parentId) : undefined;
+      const inside = !parent || (box.x >= parent.x && box.y >= parent.y + 36 && box.x + box.width <= parent.x + parent.width && box.y + box.height <= parent.y + parent.height);
+      return clear && inside;
+    });
   };
   /** How far `edge`'s ends are out of line, or undefined when its sides don't face along one axis. */
   const skew = (edge: DraftEdge): { delta: number; horizontal: boolean } | undefined => {
@@ -315,11 +320,15 @@ function snapLevelJogs(edges: DraftEdge[], elements: Map<string, DraftNode>, gro
   const tryMove = (node: DraftNode, dx: number, dy: number) => {
     if (!free(node, dx, dy)) return false;
     const before = straightAt(node.id);
-    node.x += dx;
-    node.y += dy;
+    const shift = (sign: number) => {
+      for (const part of unit(node)) {
+        part.x += dx * sign;
+        part.y += dy * sign;
+      }
+    };
+    shift(1);
     if (straightAt(node.id) > before) return true;
-    node.x -= dx;
-    node.y -= dy;
+    shift(-1);
     return false;
   };
   for (let pass = 0; pass < 2; pass += 1) {
@@ -369,6 +378,9 @@ export interface RoomParts {
   groups: Map<string, DraftNode>;
   /** Free notes laid out as members of their boundary. */
   memberNotes: Map<string, DraftNode>;
+  /** Free notes about one element, by that element's id: laid out with it, as one box (see
+   *  `arrangeParts`), so the layout keeps room for them right beside what they describe. */
+  besideNotes?: Map<string, DraftNode[]>;
   edges: DraftEdge[];
   /** The relationships of the flow to lay out as the main path, if one was named. */
   primaryEdges: ReadonlySet<string>;
@@ -376,6 +388,9 @@ export interface RoomParts {
 
 /** Room between a shape and its loop companion: two arrowheads, and the pair's captions beside them. */
 const COMPANION_GAP = 72;
+/** Between a shape and a note about it, and between two notes about one shape. No connector runs
+ *  there (the side is reserved, see `assignAnchors`), so it only has to read as "this one's". */
+const NOTE_GAP = 20;
 
 /**
  * Loop companions, by host: a shape joined to exactly one other, by connectors both ways — a retry
@@ -421,6 +436,7 @@ function companionsOf(elements: Map<string, DraftNode>, edges: readonly DraftEdg
  */
 export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: DescribeContext): { width: number; height: number } {
   const { elements, groups, memberNotes, edges, primaryEdges } = parts;
+  const besideNotes = parts.besideNotes ?? new Map<string, DraftNode[]>();
   if (layout.normalizePeerSizes) peerNormalize(elements, edges, ctx);
   const right = layout.direction === 'right';
   // A loop companion rides with its host as one box (see `companionsOf`): the host first, the
@@ -442,6 +458,13 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
     const band = anchorBandOf({ ...n, x: 0, y: 0 });
     return right ? (band ? (band.top + band.bottom) / 2 : n.height / 2) : n.width / 2;
   };
+  // Notes about a shape sit across the flow from it, on the side its loop companion doesn't take
+  // (before it: above, reading right; to its left, reading down) — stacked, nearest first.
+  const notesAcross = (id: string) => {
+    const notes = besideNotes.get(id) ?? [];
+    return notes.reduce((sum, note) => sum + (right ? note.height : note.width) + NOTE_GAP, 0);
+  };
+  const notesAlong = (id: string) => Math.max(0, ...(besideNotes.get(id) ?? []).map((note) => (right ? note.width : note.height)));
   const layoutEdges: LayoutEdge[] = edges
     .filter((edge) => !companions.has(edge.source) && !companions.has(edge.target))
     .map((edge) => {
@@ -459,12 +482,19 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
           const band = anchorBandOf({ ...n, x: 0, y: 0 });
           const parent = n.parentId && groups.has(n.parentId) ? { parent: n.parentId } : {};
           const mate = elements.get(companionOf.get(n.id) ?? '');
+          const before = notesAcross(n.id);
+          const along = notesAlong(n.id);
           if (mate) {
             return right
-              ? { id: n.id, width: Math.max(n.width, mate.width), height: n.height + COMPANION_GAP + mate.height, lead: lineAcross(n), ...parent }
-              : { id: n.id, width: n.width + COMPANION_GAP + mate.width, height: Math.max(n.height, mate.height), lead: lineAcross(n), ...parent };
+              ? { id: n.id, width: Math.max(n.width, mate.width, along), height: before + n.height + COMPANION_GAP + mate.height, lead: before + lineAcross(n), ...parent }
+              : { id: n.id, width: before + n.width + COMPANION_GAP + mate.width, height: Math.max(n.height, mate.height, along), lead: before + lineAcross(n), ...parent };
           }
-          return { id: n.id, width: n.width, height: n.height, ...parent, ...(band ? { band: (band.top + band.bottom) / 2 } : {}) };
+          if (before > 0) {
+            return right
+              ? { id: n.id, width: Math.max(n.width, along), height: before + n.height, lead: before + lineAcross(n), ...parent }
+              : { id: n.id, width: before + n.width, height: Math.max(n.height, along), lead: before + lineAcross(n), ...parent };
+          }
+          return { id: n.id, width: n.width, height: n.height, ...parent, ...(band ? { band: (band.top + band.bottom) / 2 } : {}), ...(memberNotes.has(n.id) ? { first: true } : {}) };
         }),
       groups: [...groups.values()].map((g) => ({
         id: g.id,
@@ -485,10 +515,35 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
   const rects = new Map<string, AnchorRect>();
   for (const [id, node] of elements) {
     if (companions.has(id)) continue;
-    const at = placed.boxes.get(id)!;
+    const placedAt = placed.boxes.get(id)!;
     const mate = elements.get(companionOf.get(id) ?? '');
+    const notes = besideNotes.get(id) ?? [];
+    // The box the layout placed holds the notes first, then the shape (and its companion).
+    const before = notesAcross(id);
+    const at = right ? { x: placedAt.x, y: placedAt.y + before } : { x: placedAt.x + before, y: placedAt.y };
     node.x = at.x;
     node.y = at.y;
+    if (notes.length) {
+      const span = right ? Math.max(node.width, mate?.width ?? 0, notesAlong(id)) : Math.max(node.height, mate?.height ?? 0, notesAlong(id));
+      // Centred on the shape along the flow when the box is only as wide as the notes, else on the box.
+      let cursor = right ? at.y : at.x;
+      for (const note of notes) {
+        cursor -= (right ? note.height : note.width) + NOTE_GAP;
+        if (right) {
+          note.x = Math.round(placedAt.x + (span - note.width) / 2);
+          note.y = Math.round(cursor);
+        } else {
+          note.x = Math.round(cursor);
+          note.y = Math.round(placedAt.y + (span - note.height) / 2);
+        }
+        note.parentId = node.parentId;
+        if (!note.parentId) delete note.parentId;
+      }
+      if (!mate) {
+        if (right) node.x = Math.round(placedAt.x + (span - node.width) / 2);
+        else node.y = Math.round(placedAt.y + (span - node.height) / 2);
+      }
+    }
     if (mate) {
       // Centred on each other across the pair, so the two connectors between them run straight.
       if (right) {
@@ -530,7 +585,10 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
     const rect = placed.groups.get(id)!;
     Object.assign(group, { x: rect.x, y: rect.y, width: rect.width, height: rect.height, z: depthOf(id) - deepest - 1 });
   }
-  const anchors = assignAnchors(edges, rects, layout.direction);
+  // A shape's note side is taken: no connector may leave or arrive there, or it would run through the note.
+  const noteSide: Side = right ? 'top' : 'left';
+  const reserved = new Map([...besideNotes.keys()].filter((id) => besideNotes.get(id)?.length).map((id) => [id, noteSide]));
+  const anchors = assignAnchors(edges, rects, layout.direction, undefined, reserved);
   for (const edge of edges) {
     const a = anchors.get(edge.id);
     if (a) {
@@ -538,7 +596,7 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
       edge.targetAnchor = a.targetAnchor;
     }
   }
-  snapLevelJogs(edges, elements, groups, JOG[layout.ties ?? 'align']);
+  snapLevelJogs(edges, elements, groups, JOG[layout.ties ?? 'align'], besideNotes);
   return { width: placed.width, height: placed.height };
 }
 
@@ -570,18 +628,23 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
   // A note attached to an element or connector rides on it; one inside a boundary is laid out as a
   // member of it, so the boundary is sized to hold it. The rest are placed after (`placeNotes`).
   const memberNotes = new Map<string, DraftNode>();
+  // A note about an element is laid out with it, so the layout keeps room for it right there (inside
+  // the element's boundary, when it has one) instead of fitting it into whatever space is left.
+  const besideNotes = new Map<string, DraftNode[]>();
   for (const spec of room.notes) {
     if (spec.attachTo) {
       const target = spec.attachTo;
       attachNote(target.kind === 'node' ? elements.get(target.id) : edges.find((e) => e.id === target.id), target.kind, spec);
     } else if (spec.group) {
       memberNotes.set(spec.id, noteNode(spec, ctx));
+    } else if (spec.near && elements.has(spec.near)) {
+      besideNotes.set(spec.near, [...(besideNotes.get(spec.near) ?? []), noteNode(spec, ctx)]);
     }
   }
 
   const primary = room.flows.find((f) => f.id === (primaryFlow ?? layout.primaryFlow));
-  const placed = arrangeParts({ elements, groups: groupNodes, memberNotes, edges, primaryEdges: new Set(primary?.steps.map((s) => s.relationship) ?? []) }, layout, ctx);
-  const nodes = [...groupNodes.values(), ...elements.values(), ...memberNotes.values()];
+  const placed = arrangeParts({ elements, groups: groupNodes, memberNotes, besideNotes, edges, primaryEdges: new Set(primary?.steps.map((s) => s.relationship) ?? []) }, layout, ctx);
+  const nodes = [...groupNodes.values(), ...elements.values(), ...memberNotes.values(), ...[...besideNotes.values()].flat()];
   nodes.push(...placeNotes(room, nodes, edges, placed.width, placed.height, layout.direction, ctx));
   repairAnchors(edges, nodes, captionSizer(nodes, ctx));
 
@@ -699,7 +762,7 @@ function placeNotes(room: RoomSpec, placed: DraftNode[], edges: DraftEdge[], wid
     return drawn ? [drawn.points] : [];
   });
   for (const spec of room.notes) {
-    if (spec.attachTo || spec.group) continue;
+    if (spec.attachTo || spec.group || placed.some((n) => n.id === spec.id)) continue;
     const note = noteNode(spec, ctx);
     const host = spec.near ? [...placed, ...out].find((n) => n.id === spec.near) : undefined;
     const doc: DraftDocument = { ...createDocument(), nodes: [...placed, ...out] };
