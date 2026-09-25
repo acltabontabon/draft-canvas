@@ -600,7 +600,7 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
   // A shape's note side is taken: no connector may leave or arrive there, or it would run through the note.
   const noteSide: Side = right ? 'top' : 'left';
   const reserved = new Map([...besideNotes.keys()].filter((id) => besideNotes.get(id)?.length).map((id) => [id, noteSide]));
-  const anchors = assignAnchors(edges, rects, layout.direction, undefined, reserved, { keepApart: primaryEdges, ...(layout.fans ? { fans: layout.fans } : {}) });
+  const anchors = assignAnchors(edges, rects, layout.direction, undefined, reserved, { keepApart: primaryEdges, sides: placed.sides, ...(layout.fans ? { fans: layout.fans } : {}) });
   for (const edge of edges) {
     const a = anchors.get(edge.id);
     if (a) {

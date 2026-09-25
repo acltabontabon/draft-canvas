@@ -201,6 +201,69 @@ describe('layered layout', () => {
       expect(at('x2').y).toBe(at('b').y);
     });
 
+    it('hangs a shape called from the middle of a boundary\'s flow beside its caller, across the flow', () => {
+      // q calls x, and still has s after it inside g: x placed after g would be reached across s.
+      // It hangs under q instead, level with it, and the layout says which sides that runs between.
+      const out = layoutGraph({
+        boxes: [box('p', 'g'), box('q', 'g'), box('s', 'g'), box('x')],
+        groups: [group('g')],
+        edges: [edge('p', 'q'), edge('q', 's'), edge('q', 'x')],
+        direction: 'right',
+        spacing,
+      });
+      const at = (id: string) => out.boxes.get(id)!;
+      const g = out.groups.get('g')!;
+      expect(at('x').y).toBeGreaterThanOrEqual(g.y + g.height + spacing.layer);
+      expect(at('x').x).toBe(at('q').x);
+      expect(out.sides.get('q-x')).toEqual({ source: 'bottom', target: 'top' });
+      expect(out.width).toBe(g.width);
+      // Reading down, it hangs to the boundary's right instead.
+      const down = layoutGraph({
+        boxes: [box('p', 'g'), box('q', 'g'), box('s', 'g'), box('x')],
+        groups: [group('g')],
+        edges: [edge('p', 'q'), edge('q', 's'), edge('q', 'x')],
+        direction: 'down',
+        spacing,
+      });
+      const gd = down.groups.get('g')!;
+      expect(down.boxes.get('x')!.x).toBeGreaterThanOrEqual(gd.x + gd.width + spacing.layer);
+      expect(down.boxes.get('x')!.y).toBe(down.boxes.get('q')!.y);
+      expect(down.sides.get('q-x')).toEqual({ source: 'right', target: 'left' });
+    });
+
+    it('keeps a shape called from the end of a boundary\'s flow after it, in the flow', () => {
+      const out = layoutGraph({
+        boxes: [box('p', 'g'), box('q', 'g'), box('x')],
+        groups: [group('g')],
+        edges: [edge('p', 'q'), edge('q', 'x')],
+        direction: 'right',
+        spacing,
+      });
+      const g = out.groups.get('g')!;
+      expect(out.boxes.get('x')!.x).toBeGreaterThanOrEqual(g.x + g.width);
+      expect(out.boxes.get('x')!.y).toBe(out.boxes.get('q')!.y);
+      expect(out.sides.size).toBe(0);
+    });
+
+    it('spreads several satellites of one caller under it, and moves the caller to the edge of its layer', () => {
+      // hub shares its layer with r; with three externals hanging off it, it goes to the bottom of
+      // that layer so their connectors leave the boundary without passing r.
+      const out = layoutGraph({
+        boxes: [box('p', 'g'), box('hub', 'g'), box('r', 'g'), box('s', 'g'), box('x1'), box('x2'), box('x3')],
+        groups: [group('g')],
+        edges: [edge('p', 'hub'), edge('p', 'r'), edge('hub', 's'), edge('hub', 'x1'), edge('hub', 'x2'), edge('hub', 'x3')],
+        direction: 'right',
+        spacing,
+      });
+      const at = (id: string) => out.boxes.get(id)!;
+      expect(at('hub').y).toBeGreaterThan(at('r').y);
+      const xs = ['x1', 'x2', 'x3'].map((id) => at(id).x);
+      expect(xs).toEqual([...xs].sort((a, b) => a - b));
+      expect(new Set(['x1', 'x2', 'x3'].map((id) => at(id).y)).size).toBe(1);
+      expect(at('x2').x).toBe(at('hub').x);
+      expect(at('x2').x - at('x1').x).toBeGreaterThanOrEqual(120 + spacing.sibling);
+    });
+
     it('puts a boundary\'s own note under its title, ahead of its flow', () => {
       const out = layoutGraph({
         boxes: [box('p', 'g'), box('q', 'g'), { ...box('n', 'g'), first: true }],

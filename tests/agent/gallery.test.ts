@@ -75,6 +75,8 @@ describe('layout gallery', () => {
     // have avoided. The dense case falls back to a balanced arrangement to fit its captions, and
     // keeps one; the card-provisioning case's two returns into the system (a reviewer's decision,
     // the provisioning outcome under the main path) step on their way, and are held to it below.
+    // The batch case as the agent sent it gathers its externals in one boundary, a column that can
+    // line up with only one of its callers (the receipt says so — see case 23 for the fix).
     const jogs = GALLERY.flatMap((entry) => {
       const { doc, touched } = galleryDocument(entry);
       const out: string[] = [];
@@ -85,9 +87,46 @@ describe('layout gallery', () => {
       });
       return out;
     });
-    expect(jogs.filter((j) => !j.startsWith('10-dense') && !j.startsWith('21-card'))).toEqual([]);
+    expect(jogs.filter((j) => !j.startsWith('10-dense') && !j.startsWith('21-card') && !j.startsWith('22-credit'))).toEqual([]);
     expect(jogs.filter((j) => j.startsWith('10-dense')).length).toBeLessThanOrEqual(1);
     expect(jogs.filter((j) => j.startsWith('21-card')).length).toBeLessThanOrEqual(2);
+    expect(jogs.filter((j) => j.startsWith('22-credit')).length).toBeLessThanOrEqual(1);
+  });
+
+  it('22/23: the batch view is told to ungroup its externals, and the advised edit hangs them beside their caller', () => {
+    // As sent: the hub worker's calls to three externals ran the width of the canvas, through its own
+    // boundary, because the boundary gathering them could only be placed after it.
+    const grouped = GALLERY.find((g) => g.id === '22-credit-card-batch')! as { request: Record<string, unknown> };
+    const receipt = compose({ requestId: 'g', ...grouped.request }, 'd_gallery00001').receipt;
+    const advice = receipt.advisories as string[];
+    expect(advice[0]).toContain('Boundary "ext"');
+    for (const id of ['branch', 'bureau', 'fraud', 'core', 'mail']) expect(advice[0]).toContain(`{"op":"update","id":"${id}","set":{"group":null}}`);
+    expect(advice[0]).toContain('{"op":"arrange"}');
+    // After the advised ops: the three externals the worker calls hang across the flow from the batch
+    // boundary, under the worker, each reached by a straight connector out of its bottom; the vendor
+    // the notification worker calls (last in the boundary's flow) stays after it, in the flow.
+    const { doc, touched } = galleryDocument(GALLERY.find((g) => g.id === '23-credit-card-batch-ungrouped')!);
+    const at = (id: string) => doc.nodes.find((n) => n.id === id)!;
+    const worker = at('worker');
+    const batch = at('batch');
+    for (const id of ['bureau', 'fraud', 'core']) {
+      expect(at(id).y, id).toBeGreaterThanOrEqual(batch.y + batch.height);
+      expect(at(id).parentId, id).toBeUndefined();
+      const edge = doc.edges.find((e) => e.target === id)!;
+      expect(edge.sourceAnchor?.side, id).toBe('bottom');
+      expect(edge.targetAnchor?.side, id).toBe('top');
+    }
+    expect(at('fraud').x + at('fraud').width / 2).toBeCloseTo(worker.x + worker.width / 2, -1);
+    expect(at('mail').x).toBeGreaterThanOrEqual(at('notify').x + at('notify').width);
+    expect(at('mail').y).toBeLessThan(batch.y + batch.height);
+    const legibility = legibilityOf(doc.nodes, doc.edges);
+    expect(legibility.detours).toEqual([]);
+    expect(legibility.throughBoundaries).toEqual([]);
+    // Kept reading right, as the view already did: the notification worker sits after the audit store
+    // on the hub's line, so its connector goes round it — under the hub, across the three hanging
+    // lines. (Created afresh, with the direction left open, the same request reads down with none.)
+    expect(legibility.crossings).toBeLessThanOrEqual(3);
+    expect(checkQuality(doc.nodes, doc.edges, measureContext(), touched).errors).toEqual([]);
   });
 
   it('14: the starter keeps its own flows, and they export as sequence diagrams', () => {
