@@ -39,6 +39,11 @@ export interface Theme {
   codeBg: string;
   codeBorder: string;
   shadow: string;
+  /** Removal/danger red — matches `--dc-danger` in `tokens.css`. Kept as a literal here (not read
+   *  from the CSS custom property) for the same reason every other colour here is: a ghost's
+   *  removed-connector marker (`Markers.tsx`) is generated once as static SVG markup keyed by exact
+   *  colour string, so a `var(--dc-danger)` string would mint an arrowhead nothing ever registers. */
+  danger: string;
   accents: Record<Accent, AccentPalette>;
 }
 
@@ -60,6 +65,7 @@ export const DARK: Theme = {
   codeBg: '#12151a',
   codeBorder: '#2c333d',
   shadow: 'rgba(0, 0, 0, 0.45)',
+  danger: '#e2687f',
   accents: {
     // Not a chrome-token alias: a shape with no explicit accent should read as
     // an intentional slate surface sitting *on* the canvas, not flush with it —
@@ -98,6 +104,7 @@ export const LIGHT: Theme = {
   codeBg: '#f7f8fa',
   codeBorder: '#e2e6eb',
   shadow: 'rgba(19, 24, 32, 0.10)',
+  danger: '#c2455f',
   accents: {
     // Same reasoning as DARK.neutral, tuned independently rather than inverted:
     // a hair warmer than pure white, and a line/chip with a touch more presence

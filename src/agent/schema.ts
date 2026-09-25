@@ -374,7 +374,7 @@ export const TOOLS = [
         // loose here rather than repeating that whole schema a second time; input.ts validates either
         // way, so a client that only saw this description still gets the same field-by-field answer.
         ops: { type: 'array', maxItems: AGENT_LIMITS.opsPerRequest, items: { type: 'object' }, description: "Same shape as update_diagram's ops. Empty means no architectural impact." },
-        layout: { type: 'object', properties: { direction: { enum: ['right', 'down'] }, spacing: { enum: ['compact', 'comfortable', 'spacious'] } }, additionalProperties: false },
+        layout: layoutBrief,
         summary: text(400, 'What this proposes, or why not.'),
         rationale: text(2000, 'The reasoning a reviewer needs.'),
         assumptions: { type: 'array', maxItems: 20, items: text(300) },

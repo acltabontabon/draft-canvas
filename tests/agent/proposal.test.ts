@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { AgentError } from '../../src/agent/errors';
 import { applyUpdate } from '../../src/agent/patch';
-import { diffForReview, preconditionConflicts, prepareProposal } from '../../src/agent/proposal';
+import { diffForReview, looksAlreadyApplied, preconditionConflicts, prepareProposal } from '../../src/agent/proposal';
+import { createNode } from '../../src/document/factory';
 import { deserializeDocument } from '../../src/export/project';
 import type { DraftDocument } from '../../src/document/types';
 
@@ -41,6 +42,28 @@ describe('prepareProposal', () => {
     const file = base();
     expect(() => prepareProposal(file, [], [{ op: 'update', id: 'nope', set: { label: 'x' } }], undefined, undefined)).toThrow(AgentError);
   });
+
+  it('refuses a duplicate id at submit time, the same as update_diagram would (DUPLICATE_ID)', () => {
+    // `submit_proposal`'s docs claim its ops are "validated exactly as update_diagram would" — this
+    // is that claim, exercised through `prepareProposal` itself, not just the shared `applyUpdate`
+    // engine underneath it (which is what the Case B tests below exercise for a different purpose).
+    const file = base();
+    try {
+      prepareProposal(file, [], [{ op: 'add', nodes: [{ id: 'api', type: 'service', label: 'Clash' }] }], undefined, undefined);
+      expect.unreachable('expected a DUPLICATE_ID AgentError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(AgentError);
+      expect((error as AgentError).code).toBe('DUPLICATE_ID');
+    }
+  });
+
+  it('accepts a layout.viewport, the same as update_diagram would', () => {
+    // `submit_proposal`'s declared schema once excluded `viewport` (a hand-duplicated, narrower
+    // copy of `update_diagram`'s layout object) even though this shared engine always accepted it —
+    // this is the runtime half of that fix; `tests/agent/schema.test.ts` pins the schema itself.
+    const file = base();
+    expect(() => prepareProposal(file, [], [{ op: 'update', id: 'api', set: { label: 'Renamed' } }], { viewport: [1600, 900] }, undefined)).not.toThrow();
+  });
 });
 
 describe('preconditionConflicts', () => {
@@ -73,6 +96,73 @@ describe('preconditionConflicts', () => {
     // A change to an id the proposal never referenced is staleness, not a conflict.
     const unrelatedEdit = { ...file, nodes: file.nodes.map((n) => (n.id === 'db' ? { ...n, text: 'Something else' } : n)) };
     expect(preconditionConflicts(unrelatedEdit, [], preconditions)).toEqual([]);
+  });
+});
+
+describe('looksAlreadyApplied (crash-recovery Case B)', () => {
+  const addOps = [{ op: 'add', nodes: [{ id: 'cache', type: 'redis', label: 'Cache' }] }];
+  const matchingLive = { nodes: [createNode({ id: 'cache', type: 'database', x: 0, y: 0, text: 'Cache' })], edges: [] };
+
+  it('is true when every conflicting id is one this proposal would create, and the live content matches', () => {
+    expect(looksAlreadyApplied(addOps, ['cache'], matchingLive)).toBe(true);
+  });
+
+  it('is false when a conflicting id is not one of this proposal\'s own — genuinely ambiguous (Case C)', () => {
+    expect(looksAlreadyApplied(addOps, ['cache', 'somethingElse'], matchingLive)).toBe(false);
+    expect(looksAlreadyApplied(addOps, ['somethingElse'], matchingLive)).toBe(false);
+  });
+
+  it('is false with no conflicting ids, or no live view, at all (an ordinary, non-duplicate-id failure)', () => {
+    expect(looksAlreadyApplied(addOps, undefined, matchingLive)).toBe(false);
+    expect(looksAlreadyApplied(addOps, [], matchingLive)).toBe(false);
+    expect(looksAlreadyApplied(addOps, ['cache'], undefined)).toBe(false);
+  });
+
+  it('is false when the id collides but the live label does not match — a coincidence, not this proposal (regression: false Case B)', () => {
+    // Same id, but a different label — something else entirely made this, or a *different* attempt
+    // at "cache" landed. Reporting this as already applied would silently discard whatever this
+    // proposal actually intended.
+    const unrelatedLive = { nodes: [createNode({ id: 'cache', type: 'database', x: 0, y: 0, text: 'Someone else’s cache' })], edges: [] };
+    expect(looksAlreadyApplied(addOps, ['cache'], unrelatedLive)).toBe(false);
+  });
+
+  it('checks a group id collision by label, since a group has no type to compare', () => {
+    const groupOps = [{ op: 'add', groups: [{ id: 'g1', label: 'Team' }] }];
+    const groupLive = { nodes: [createNode({ id: 'g1', type: 'group', x: 0, y: 0, text: 'Team' })], edges: [] };
+    expect(looksAlreadyApplied(groupOps, ['g1'], groupLive)).toBe(true);
+    const mismatchedGroupLive = { nodes: [createNode({ id: 'g1', type: 'group', x: 0, y: 0, text: 'A different team' })], edges: [] };
+    expect(looksAlreadyApplied(groupOps, ['g1'], mismatchedGroupLive)).toBe(false);
+  });
+
+  it('end to end: re-running a proposal whose add already landed throws with exactly its own id in conflictingIds, and the live content matches', () => {
+    const file = base();
+    const ops = [{ op: 'add', nodes: [{ id: 'cache', type: 'redis', label: 'Cache' }] }];
+    // Simulate the crash: the add already committed to the live document...
+    const { file: alreadyThere } = applyUpdate(file, [], ops, undefined, undefined);
+    // ...but the proposal, replayed against that same document, naturally collides on its own id.
+    try {
+      applyUpdate(alreadyThere, [], ops, undefined, undefined);
+      expect.unreachable('expected a DUPLICATE_ID AgentError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(AgentError);
+      const conflictingIds = (error as AgentError).details?.conflictingIds;
+      expect(conflictingIds).toEqual(['cache']);
+      expect(looksAlreadyApplied(ops, conflictingIds as string[], alreadyThere)).toBe(true);
+    }
+  });
+
+  it('end to end: a coincidental id collision from something else entirely is never mistaken for this proposal', () => {
+    const file = base();
+    const ops = [{ op: 'add', nodes: [{ id: 'cache', type: 'redis', label: 'Cache' }] }];
+    // This proposal's own add never landed — a *different* node happens to have grabbed the same id.
+    const { file: unrelated } = applyUpdate(file, [], [{ op: 'add', nodes: [{ id: 'cache', type: 'worker', label: 'Unrelated worker' }] }], undefined, undefined);
+    try {
+      applyUpdate(unrelated, [], ops, undefined, undefined);
+      expect.unreachable('expected a DUPLICATE_ID AgentError');
+    } catch (error) {
+      const conflictingIds = (error as AgentError).details?.conflictingIds;
+      expect(looksAlreadyApplied(ops, conflictingIds as string[], unrelated)).toBe(false);
+    }
   });
 });
 

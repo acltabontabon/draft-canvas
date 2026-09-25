@@ -3717,12 +3717,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   flex-direction: column;
   width: min(360px, calc(100% - 24px));
   max-height: min(560px, calc(100% - 24px));
-  overflow: auto;
+  /* Only `.dc-proposal-detail-scroll` scrolls — the head and the actions row must stay put. */
+  overflow: hidden;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-lg);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
-  padding-bottom: 8px;
 }
 
 .dc-proposal-panel-head {
@@ -3742,6 +3742,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-proposal-list {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   border-bottom: 1px solid var(--dc-border);
 }
 
@@ -3773,14 +3774,137 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-proposal-detail {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px 0;
+  flex: 1 1 auto;
+  min-height: 0;
   font-size: 13px;
 }
 
-.dc-proposal-list-block ul {
+.dc-proposal-detail-head {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 12px 14px 0;
+}
+
+.dc-proposal-summary {
+  margin: 0;
+  font-weight: 500;
+}
+
+.dc-proposal-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.dc-proposal-status-pill {
+  padding: 1px 8px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.dc-proposal-status-pill[data-status='accepted'] {
+  color: var(--dc-selection);
+}
+
+.dc-proposal-status-pill[data-status='rejected'],
+.dc-proposal-status-pill[data-status='accept-failed'] {
+  color: var(--dc-danger);
+}
+
+.dc-proposal-path {
+  margin: 0;
+  font-size: 12px;
+}
+
+/* The toolbar (preview toggle, Focus changes) and the legend sit between the head and the
+   scrollable body, so they never scroll out of reach the way a paragraph of rationale can. */
+.dc-proposal-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+}
+
+.dc-proposal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+}
+
+.dc-proposal-legend {
+  display: flex;
+  flex-shrink: 0;
+  gap: 14px;
+  margin: 0 0 4px;
+  padding: 0 14px;
+  list-style: none;
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}
+
+.dc-proposal-legend-item {
+  position: relative;
+  padding-left: 14px;
+}
+
+.dc-proposal-legend-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  border: 1px dashed var(--dc-border-strong);
+}
+
+.dc-proposal-legend-changed::before {
+  border-color: var(--dc-selection);
+}
+
+.dc-proposal-legend-removed::before {
+  border-color: var(--dc-danger);
+  background: color-mix(in srgb, var(--dc-danger) 18%, transparent);
+}
+
+.dc-proposal-detail-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 14px 12px;
+}
+
+.dc-proposal-collapsible {
+  font-size: 13px;
+}
+
+.dc-proposal-collapsible summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dc-proposal-collapsible ul {
   margin: 4px 0 0;
   padding-left: 18px;
+}
+
+.dc-proposal-collapsible p {
+  margin: 4px 0 0;
 }
 
 .dc-proposal-banner {
@@ -3819,7 +3943,10 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   background: var(--dc-surface-raised);
 }
 
-.dc-proposal-diff-added {
+.dc-proposal-diff-added,
+.dc-proposal-diff-modified {
+  /* Matches the canvas ghost: an addition and a modification draw the same way there too — only a
+     removal gets a colour of its own. */
   border-left-color: var(--dc-selection);
 }
 
@@ -3856,9 +3983,11 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 .dc-proposal-actions {
   display: flex;
+  flex-shrink: 0;
   justify-content: flex-end;
   gap: 8px;
-  padding: 4px 14px 12px;
+  padding: 8px 14px 12px;
+  border-top: 1px solid var(--dc-border);
 }
 
 /* Learn's "?" — a quiet way into one recipe from a dense control (`ui/learn/LearnLink.tsx`). Styled

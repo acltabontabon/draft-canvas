@@ -88,11 +88,21 @@ export function focusNodes(ctx: CommandContext, nodeIds: string[]) {
  * commands in `registry.ts`.
  */
 export function focusBounds(ctx: CommandContext, bounds: Bounds | null) {
+  focusBoundsInView(ctx.camera, bounds);
+}
+
+/**
+ * `focusBounds`'s actual camera move, decoupled from the full `CommandContext` a palette command
+ * carries — so a surface with no reason to build one of those (`ProposalPanel`'s "Focus changes")
+ * can still trust the exact same math the palette and the GIF exporter do, rather than a second
+ * inline copy of it.
+ */
+export function focusBoundsInView(camera: Pick<CommandContext['camera'], 'viewWidth' | 'viewHeight' | 'setViewport'>, bounds: Bounds | null) {
   if (!bounds) return;
-  const { viewWidth, viewHeight } = ctx.camera;
+  const { viewWidth, viewHeight } = camera;
   if (viewWidth <= 0 || viewHeight <= 0) return;
   const viewport = getViewportForBounds(bounds, viewWidth, viewHeight, 0.1, JUMP_MAX_ZOOM, JUMP_PADDING);
-  void ctx.camera.setViewport(viewport, { duration: 320 });
+  void camera.setViewport(viewport, { duration: 320 });
 }
 
 /** Every jumpable thing on the canvas as a command, unranked — the palette ranks and caps. */

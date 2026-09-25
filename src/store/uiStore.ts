@@ -107,6 +107,24 @@ export interface AgentPreview {
   edges: readonly DraftEdge[];
 }
 
+/**
+ * A pending MCP proposal's reviewed result, shown as a ghost on the canvas alongside
+ * `ProposalPanel`'s text diff (see `UiState.proposalPreview`). Keyed by `proposalId` rather than
+ * `agentPreview`'s `opId`/`seq` — a proposal under review and an agent mid live-write are two
+ * independent, simultaneously-possible things, and switching between two proposals must replace
+ * this wholesale rather than merge into whatever the last one left behind.
+ */
+export interface ProposalPreview {
+  proposalId: string;
+  /** The room the proposal targets; shown only while the person is in that room. */
+  path: readonly string[];
+  /** The whole view as it would be after the proposal is accepted. */
+  nodes: readonly DraftNode[];
+  edges: readonly DraftEdge[];
+  /** The review panel's "Show on canvas" toggle — ghost data stays cached while this is off. */
+  visible: boolean;
+}
+
 export interface ContinuationOffer extends MaterializedContinuation {
   trigger: 'select' | 'drop';
   /**
@@ -334,6 +352,13 @@ export interface UiStore {
    */
   agentPreview: AgentPreview | null;
   /**
+   * A pending proposal's reviewed result, drawn the same way as `agentPreview` while
+   * `ProposalPanel` shows it. Set and cleared by the panel alone — never by autosave, history or
+   * the document itself; cleared on Accept/Reject/Dismiss, on switching proposals or documents,
+   * and on closing the panel.
+   */
+  proposalPreview: ProposalPreview | null;
+  /**
    * Offers the user has waved away this session, pinned to the exact neighborhood they were made
    * in (`dismissalKey`): Escape on a ghost keeps it away for that node until something about that
    * node's connections changes, and no longer. Session-only — cleared on document switch, never
@@ -489,6 +514,10 @@ export interface UiStore {
    *  changes never re-mint a ghost's React keys. */
   setContinuation: (offer: ContinuationOffer | null) => void;
   setAgentPreview: (preview: AgentPreview | null) => void;
+  /** Replaces the whole proposal ghost — a proposalId change never merges onto the previous one. */
+  setProposalPreview: (preview: ProposalPreview | null) => void;
+  /** Flips the review panel's "Show on canvas" toggle without recomputing or dropping the ghost data. */
+  setProposalPreviewVisible: (visible: boolean) => void;
   /**
    * Waves continuation away at the offer's anchor — every candidate, not just the one showing —
    * for as long as that anchor's neighborhood stays the same. Asking again with `]` still works.
@@ -576,6 +605,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   learnFocusPending: false,
   continuation: null,
   agentPreview: null,
+  proposalPreview: null,
   continuationDismissals: new Set<DismissalKey>(),
   continuationsEnabled: initialContinuationsEnabled(),
   continuationCycle: null,
@@ -766,6 +796,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setLearnQuery: (learnQuery) => set({ learnQuery }),
   setLearnCategory: (learnCategory) => set({ learnCategory }),
   setAgentPreview: (agentPreview) => set({ agentPreview }),
+  setProposalPreview: (proposalPreview) => set({ proposalPreview }),
+  setProposalPreviewVisible: (visible) =>
+    set((state) => (state.proposalPreview ? { proposalPreview: { ...state.proposalPreview, visible } } : state)),
   setContinuation: (next) =>
     set((state) => {
       const previous = state.continuation;

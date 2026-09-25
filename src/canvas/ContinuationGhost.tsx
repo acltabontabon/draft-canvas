@@ -170,15 +170,23 @@ export function GhostNode({
   );
 }
 
-/** A connector routed exactly as the canvas routes it, at a ghost's opacity — shared with `AgentPreviewLayer`. */
+/** The tight, even dash `AgentPreviewLayer` draws a connector's removal with — distinct from any
+ *  ordinary dash pattern `dashForEdge` mints for a real (or added/modified) connector. */
+const REMOVED_EDGE_DASH = '3 3';
+
+/** A connector routed exactly as the canvas routes it, at a ghost's opacity — shared with `AgentPreviewLayer`.
+ *  `removed` draws it in the same danger colour as `.dc-agent-preview-removed`'s crossed-out box,
+ *  for a connector the change takes away rather than adds or rewires. */
 export function GhostEdge({
   edge,
   endpoints,
   obstacleRects,
+  removed,
 }: {
   edge: DraftEdge;
   endpoints: ReadonlyMap<string, DraftNode>;
   obstacleRects: { id: string; rect: Rect }[];
+  removed?: boolean;
 }) {
   const theme = useThemeValue();
   const source = endpoints.get(edge.source);
@@ -202,9 +210,14 @@ export function GhostEdge({
       })
     : undefined;
   const at = captionAnchor(route.labelSide, route.labelX, route.labelY);
-  // Always the theme's plain connector colour: `Markers` mints an arrowhead for it unconditionally,
-  // whereas an accent's marker only exists once a real edge of that colour does.
-  const color = theme.edge;
+  // Always a literal colour from `theme`, on both branches: `Markers` mints every arrowhead once,
+  // as static SVG markup keyed by exact colour string (`Markers.tsx`'s `colors` Set) — a CSS custom
+  // property string here would mint a `marker-end` reference nothing in `<defs>` ever defines, and
+  // the browser silently drops an unresolvable marker reference (no arrowhead, not a fallback one).
+  // `theme.danger` matches the CSS `--dc-danger` `.dc-agent-preview-removed` uses, so the two
+  // treatments still read as one system in both themes — just via the same literal-colour route
+  // every other connector on screen already takes.
+  const color = removed ? theme.danger : theme.edge;
   return (
     <g>
       <path
@@ -213,7 +226,7 @@ export function GhostEdge({
         stroke={color}
         strokeWidth={1.6}
         strokeLinecap="round"
-        strokeDasharray={dashForEdge(edge)?.join(' ')}
+        strokeDasharray={removed ? REMOVED_EDGE_DASH : dashForEdge(edge)?.join(' ')}
         markerEnd={edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined}
       />
       {caption && (
@@ -222,8 +235,8 @@ export function GhostEdge({
           y={at.y}
           textAnchor={at.textAnchor}
           dominantBaseline={at.dominantBaseline}
-          fill={theme.textFaint}
-          style={{ font: cssFont(FONTS.connectorCaption) }}
+          fill={color}
+          style={{ font: cssFont(FONTS.connectorCaption), textDecoration: removed ? 'line-through' : undefined }}
         >
           {caption}
         </text>

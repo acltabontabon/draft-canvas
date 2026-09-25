@@ -60,7 +60,7 @@ import {
 } from './projection';
 import { computeSnap, sameGuides, type Guide } from './snapping';
 import { snapResize } from './resizeSnap';
-import { AgentPreviewLayer } from './AgentPreviewLayer';
+import { AgentPreviewLayer, ProposalPreviewLayer } from './AgentPreviewLayer';
 import { ContinuationGhost } from './ContinuationGhost';
 import { RoomFrame } from './RoomFrame';
 import { useContinuation } from './useContinuation';
@@ -1909,6 +1909,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
           {/* An AI agent's change still being prepared (desktop only): drawn over the diagram, never in it. */}
           <AgentPreviewLayer />
+
+          {/* A pending proposal's reviewed result (desktop only), while `ProposalPanel` shows it. */}
+          <ProposalPreviewLayer />
 
           {interactive && attachTarget && (
             <div

@@ -42,9 +42,12 @@ export const Markers = memo(function Markers() {
     // Every accent chip too, not only colours some edge currently resolves to: a flow's accent is
     // worn by its member connectors only while that flow is the lens or the presented step, and a
     // `markerRef` to a colour with no marker here draws a directed connector with no arrowhead.
+    // `theme.danger` for the same reason: a removed connector in a ghost preview (`ContinuationGhost.tsx`)
+    // is never a document edge `edgeColorKey` would see, but still needs its arrowhead registered.
     const colors = new Set<string>([
       theme.edge,
       theme.selection,
+      theme.danger,
       ...Object.values(theme.accents).map((accent) => accent.chip),
       ...(colorKey ? colorKey.split('|') : []),
     ]);

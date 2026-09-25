@@ -144,7 +144,11 @@ Each of these has a failure mode that is silent, delayed, or both.
   `uiStore.agentPreview` (the provisional layer) and `src/desktop/agentActivity.ts` (the status line
   and generation view) — never through the editor store, its history or autosave. Only the commit
   (`host/agentBridge.ts`, one `applyToFile`) or the shell's file write changes a diagram; a preview
-  that reached the document would be saved, undoable and indistinguishable from the real change.
+  that reached the document would be saved, undoable and indistinguishable from the real change. A
+  pending proposal's reviewed result is the same rule under a second name: `uiStore.proposalPreview`,
+  set only by `ProposalPanel.tsx` from the dry run its own text diff already computed, cleared on
+  Accept/Reject/Dismiss/Close and on switching proposals or documents — Accept is still the one and
+  only `applyToFile` that makes it real.
 - **The agent worker must load without a DOM.** `src/agent/worker.ts` shares the renderer's modules,
   and a dependency that touches `document` as it loads makes the worker fail silently — every request
   then runs on the main thread and freezes the editor. `workerSafeEntities` in `vite.config.ts` is the

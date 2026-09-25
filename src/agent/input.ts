@@ -248,7 +248,7 @@ export class Reader {
       return undefined;
     }
     if (taken.has(value)) {
-      this.problems.add('DUPLICATE_ID', path, `id "${value}" is already used in this diagram or request`);
+      this.problems.add('DUPLICATE_ID', path, `id "${value}" is already used in this diagram or request`, { id: value });
       return undefined;
     }
     taken.add(value);

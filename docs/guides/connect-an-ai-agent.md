@@ -114,17 +114,24 @@ a **proposal** instead — Draft Canvas never fetches or reads the pull request 
 structured description of the change the agent sends. A small **N proposal(s) to review** button
 appears over the diagram; click it to open the review panel.
 
-The panel shows the agent's summary and reasoning, its assumptions and open questions, and every
-addition, modification and removal apart from each other — for a modification, the actual before and
-after values, not just a highlighted shape. **Accept** applies the whole thing as one ordinary undo
-step (`⌘Z` / `Ctrl+Z` reverts it exactly like any other edit); **Reject** and **Dismiss** leave the
-diagram untouched. There is no partial accept — if you want a smaller change, ask the agent to revise
-the proposal, which updates the same one in place rather than creating a second.
+The panel leads with the agent's summary, a status, and how many things it adds, changes and removes;
+its reasoning, assumptions and open questions sit underneath, collapsed until you want them. The
+proposed change also appears right on the canvas — additions and modifications as a dashed outline,
+removals crossed out where they stand — with a legend, a toggle to hide it without losing your place,
+and a **Focus changes** button that pans to it. The panel still lists every addition, modification and
+removal on its own, apart from each other, and for a modification the actual before and after values,
+not just a highlighted shape — a canvas outline alone can't show a renamed relationship or a changed
+label. **Accept** applies the whole thing as one ordinary undo step (`⌘Z` / `Ctrl+Z` reverts it exactly
+like any other edit); **Reject** and **Dismiss** leave the diagram untouched. There is no partial
+accept — if you want a smaller change, ask the agent to revise the proposal, which updates the same
+one in place rather than creating a second.
 
 If the diagram changed elsewhere since the proposal was written, a note says so but doesn't block
 Accept; if something the proposal is specifically *about* changed — a renamed element, a moved
 connector — Accept is disabled until the agent revises it. A proposal survives a restart: if Draft
-Canvas quit mid-accept, it's recovered automatically the next time you look at it.
+Canvas quit mid-accept, the next time you look at it either picks up where it left off (offering
+Accept again) or, if it can tell the change already landed, offers **Mark as applied** instead — a
+record-keeping click, not a second attempt to apply it.
 
 ## Saving
 
@@ -169,8 +176,19 @@ For how it works — the protocol, the guarantees about retries, what is and isn
 
 ## What was actually tested
 
-Claude Code on macOS is exercised end-to-end (the existing agent test suite, including this round's
-proposal review flow). Cursor's setup is verified for correctness — the deeplink's config payload and
+Claude Code on macOS is exercised end-to-end for the create/update/read tool path (the existing agent
+test suite, `e2e/agent-conversations.ts`/`e2e/agent-scenarios.ts` against a real sidecar and a real
+client). The proposal review panel's own round of fixes — the canvas ghost, the legend and visibility
+toggle, "Focus changes", the crash-recovery "Mark as applied" path, and the nested-view review fix —
+were verified as real browser exercises of the actual rendering, store and commit code
+(`e2e/desktop/proposal-review.spec.ts`), driven by fixture proposals injected directly into the review
+store rather than by a live `submit_proposal` MCP call from an agent. That is a deliberate substitute,
+not an oversight — it reaches the same panel, ghost-rendering and `applyToFile` code a real proposal
+would — but a genuine agent-driven `submit_proposal` → review → Accept round trip through a real
+sidecar has not been run in this environment; treat the review UI as verified in isolation, the
+MCP plumbing it's fed by as verified separately (Rust and TypeScript unit tests for validation,
+staleness, conflicts and the crash-recovery state machine), and the two joined together as the one
+remaining gap. Cursor's setup is verified for correctness — the deeplink's config payload and
 the pasted-config fallback are unit-tested to decode to the exact same server definition, and the
 `cursor://` URL and `~/.cursor/mcp.json` shape match Cursor's own published format — but connecting a
 real Cursor install to Draft Canvas has not been run in this environment; treat it as

@@ -165,6 +165,8 @@ openQuestions?, ops, layout?, scope?, sourceRef?, revises?})`:
 - `ops` is validated exactly as `update_diagram` would — a bad proposal is refused at submit time, not
   discovered later at review — and a bounded "precondition" snapshot (the before-state of every id the
   ops touch) is captured for the review panel's conflict check.
+- `layout` is the same object `update_diagram` takes at its own top level (`direction`, `spacing`,
+  `normalizePeerSizes`, `viewport`) — one shared schema, so the two can't drift apart field by field.
 - `sourceRef` (a PR's url/title/commits) is context for the person, never proof of correctness, and
   Draft Canvas never fetches it.
 
@@ -175,19 +177,39 @@ than trusting either the submit-time snapshot or a successful replay as proof no
 relationship) is different from staleness (something *unrelated* changed) and blocks Accept until the
 agent revises the proposal; unrelated drift only shows a non-blocking banner.
 
-The review panel (`src/desktop/ui/ProposalPanel.tsx`) shows additions, modifications and removals
-apart — never colour alone — with real before→after field values for a modification, not just a
-canvas outline, since a proposal's whole point is often a non-geometric change (a label, a note, a
-relationship's meaning). Accept re-checks the proposal's version, the diagram's identity and revision
-one more time immediately before committing, then applies the whole batch as **one** native undo step
+Unlike `update_diagram`'s arrange (below), this dry run and the panel's own re-diff run on the page's
+main thread, by design: they only run while the panel is actually open and being looked at, never
+unattended, so there is no background request to protect the page from the way the worker protects one.
+
+The review panel (`src/desktop/ui/ProposalPanel.tsx`) leads with the proposal's summary, a status pill
+and accurate added/modified/removed counts, keeping rationale, assumptions and open questions
+collapsed by default so the diff itself stays the main thing to read. Every reviewable proposal also
+draws a ghost directly on the canvas (`src/canvas/AgentPreviewLayer.tsx`'s `ProposalPreviewLayer`,
+the same ghost machinery — `GhostNode`/`GhostEdge` — the in-progress live-write preview uses):
+additions and modifications as a dashed outline in place, removals (elements, connectors and
+boundaries alike) crossed out where they stand, all through the ordinary node/edge renderer rather
+than a second one. A "Show on canvas" toggle hides it without discarding it, a small legend explains
+the two treatments, and "Focus changes" pans/zooms to exactly what the ghost is showing, clear of the
+panel itself. The text list still carries the real before→after field values for a modification —
+a proposal's whole point is often a non-geometric change (a label, a note, a relationship's meaning)
+that a canvas ghost alone can't show — and a breadcrumb names which room the proposal targets when
+that isn't the one currently on screen, including in the "no changes here" case.
+
+Accept re-checks the proposal's version, the diagram's identity and revision one more time
+immediately before committing (the revision check happens inside the same atomic commit call, not as
+a separate step with a gap of its own), then applies the whole batch as **one** native undo step
 through the same `applyToFile` primitive every other edit uses — undoing it afterwards never
 reactivates the proposal, which stays `accepted`. Reject and Dismiss (clearing an old pending proposal
-nobody reviewed) never touch the document. A proposal accept interrupted by a crash — durably recorded
-as `accepting` before the commit is attempted — is recovered the next time the panel looks at it: if a
-dry run shows the change was never applied, it's offered for review again unchanged; if the same dry
-run's only obstacle is exactly the ids this proposal's own `add` ops declared, that's evidence it
-already committed, and it's marked `accepted` without reapplying; anything else is left for a person
-to look at directly, dismissible but never auto-resolved either way.
+nobody reviewed) never touch the document; closing the panel, rejecting, dismissing, accepting, or
+switching to a different proposal or diagram each independently clear the canvas ghost, so it can
+never point at the wrong proposal or outlive its own review. A proposal accept interrupted by a crash
+— durably recorded as `accepting` before the commit is attempted — is recovered the next time the
+panel looks at it: if a dry run shows the change was never applied, it's offered for review again
+unchanged (Accept retries it normally); if the same dry run's only obstacle is exactly the ids this
+proposal's own `add` ops declared (`looksAlreadyApplied` in `src/agent/proposal.ts`), that's evidence
+it already committed, and the panel offers "Mark as applied" — a plain status transition, no document
+write — instead of Accept or Reject; anything else is left for a person to look at directly,
+dismissible but never auto-resolved either way.
 
 ## One diagram across a conversation
 

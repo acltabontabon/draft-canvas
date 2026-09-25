@@ -75,24 +75,37 @@ export function toAgentError(error: unknown): AgentErrorJson {
 
 /** Collects problems found while checking a request, so one reply lists them all (up to a bound). */
 export class Problems {
-  private readonly list: { code: AgentErrorCode; path: string; message: string }[] = [];
+  private readonly list: { code: AgentErrorCode; path: string; message: string; details?: Record<string, unknown> }[] = [];
+  private truncated = false;
   static readonly MAX = 20;
 
-  add(code: AgentErrorCode, path: string, message: string): void {
-    if (this.list.length < Problems.MAX) this.list.push({ code, path, message });
+  add(code: AgentErrorCode, path: string, message: string, details?: Record<string, unknown>): void {
+    if (this.list.length < Problems.MAX) this.list.push({ code, path, message, details });
+    else this.truncated = true;
   }
 
   get empty(): boolean {
     return this.list.length === 0;
   }
 
-  /** Throws the first problem as the error, with every one found in `details.problems`. */
+  /**
+   * Throws the first problem as the error, with every one found in `details.problems`. When every
+   * problem found is a `DUPLICATE_ID`, the offending ids are also collected into
+   * `details.conflictingIds` — a caller that needs to know *which* ids collided (the review panel's
+   * crash-recovery check: "did this proposal's own ids already land?") reads that rather than
+   * parsing an id back out of the message text. Never populated when the list was truncated at
+   * `MAX`: a homogeneous first 20 proves nothing about problem 21, and that check exists precisely
+   * so a genuinely mixed-cause failure is never reported as a clean, confirmable one.
+   */
   throwIfAny(): void {
     const first = this.list[0];
     if (!first) return;
+    const conflictingIds = !this.truncated && this.list.every((p) => p.code === 'DUPLICATE_ID')
+      ? [...new Set(this.list.map((p) => p.details?.id).filter((id): id is string => typeof id === 'string'))]
+      : undefined;
     throw new AgentError(first.code, this.list.length === 1 ? `${first.path}: ${first.message}` : `${this.list.length} problems; first — ${first.path}: ${first.message}`, {
       path: first.path,
-      details: { problems: this.list },
+      details: { problems: this.list, ...(conflictingIds?.length ? { conflictingIds } : {}) },
     });
   }
 }

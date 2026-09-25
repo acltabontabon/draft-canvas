@@ -1641,6 +1641,19 @@
                 "comfortable",
                 "spacious"
               ]
+            },
+            "normalizePeerSizes": {
+              "type": "boolean",
+              "description": "Give peer shapes (same type/role, parent) one uniform size, bounded against one outlier growing the rest. Default true for a new diagram/block; false for arrange (kept unless asked)."
+            },
+            "viewport": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Intended [width, height] px. Preferred over a layout unreadable there; refused, not shrunk, if none fits."
             }
           },
           "additionalProperties": false

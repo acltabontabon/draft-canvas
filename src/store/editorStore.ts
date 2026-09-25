@@ -318,10 +318,14 @@ export interface EditorStore {
   apply: (label: string, recipe: (doc: DraftDocument) => DraftDocument, options?: ApplyOptions) => void;
   /**
    * One undoable edit to the whole *file*, not the room on screen — for a change that arrives from
-   * outside the canvas (an agent's batch) and may touch any room. `false` when nothing changed.
-   * Never coalesces, so the next keystroke can't fold into it.
+   * outside the canvas (an agent's batch) and may touch any room. `false` when nothing changed, or
+   * when `expectedRevision` no longer matches — the caller's own snapshot went stale between reading
+   * it and calling this, checked inside the same synchronous pass that commits, so nothing can land
+   * in between (`ProposalPanel`'s Accept is what needs this; a caller with no such snapshot to
+   * protect passes nothing and keeps today's behaviour). Never coalesces, so the next keystroke
+   * can't fold into it.
    */
-  applyToFile: (label: string, recipe: (file: DraftDocument) => DraftDocument) => boolean;
+  applyToFile: (label: string, recipe: (file: DraftDocument) => DraftDocument, expectedRevision?: number) => boolean;
 
   /* Interactions (drag, resize) collapse into one undo entry */
   beginInteraction: (label: string) => void;
@@ -1226,11 +1230,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     closeStaleAttachmentDetail(next);
   },
 
-  applyToFile(label, recipe) {
+  applyToFile(label, recipe, expectedRevision) {
     // A gesture in flight would otherwise absorb this change into its own undo entry — or record
     // its baseline over it. The caller refuses while `isInteracting()`; this is the last guard.
     if (interaction) return false;
     const state = get();
+    if (expectedRevision !== undefined && state.revision !== expectedRevision) return false;
     const file = fileOf(state);
     const nextFile = touch(recipe(file));
     if (nextFile === file || shallowEqualDocument(nextFile, file)) return false;

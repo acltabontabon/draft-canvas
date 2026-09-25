@@ -47,12 +47,25 @@ describe('MCP tool definitions', () => {
     expect(by.get('update_diagram')?.annotations.destructiveHint).toBe(true);
   });
 
+  it('gives submit_proposal the exact same layout schema as update_diagram, never a hand-copy', () => {
+    // `submit_proposal.layout` once hand-duplicated `update_diagram.layout`'s shape and silently
+    // fell behind it when `viewport`/`normalizePeerSizes` were added there — this pins them to the
+    // same object so that class of drift can't recur.
+    type Loose = { inputSchema: { properties: Record<string, unknown> } };
+    const by = new Map<string, Loose>(TOOLS.map((t) => [t.name, t as unknown as Loose]));
+    expect(by.get('submit_proposal')?.inputSchema.properties.layout).toBe(by.get('update_diagram')?.inputSchema.properties.layout);
+  });
+
   it('stay compact enough to sit in an agent\'s context', () => {
-    // The tool list goes to the model on every turn, as compact JSON: keep it under ~7.5k tokens
+    // The tool list goes to the model on every turn, as compact JSON: keep it under ~7.7k tokens
     // (estimated as characters / 4). Raised from 24k when submit_proposal/get_proposal/list_proposals
     // were added — a deliberate capability expansion, not drift — with submit_proposal's own `ops`
     // kept intentionally loose (input.ts validates regardless) rather than repeating update_diagram's
-    // full room schema a second time.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(30_000);
+    // full room schema a second time. Raised again, slightly, when `submit_proposal.layout` was fixed
+    // to reuse the shared `layoutBrief` (it had drifted into a hand-duplicated, narrower copy that
+    // silently dropped `viewport`/`normalizePeerSizes` from a later `update_diagram` addition) —
+    // sharing the object closes that drift permanently, at the cost of its description text appearing
+    // twice in the compiled JSON.
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(30_500);
   });
 });
