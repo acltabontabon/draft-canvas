@@ -2561,13 +2561,19 @@ function group(node: DraftNode, ctx: DescribeContext): Shape[] {
  * title is ever shortened for it. The kind is never folded into the node's own `text`: a Domain
  * boundary named "Payments" still reads "Payments", not "Domain: Payments".
  */
+/** Where a boundary's title starts: after its kind mark when it has one. The rename editor sits there
+ *  even while the title is empty and no label shape exists to read it from. */
+export function boundaryTitleX(node: DraftNode): number {
+  return BOUNDARY_STYLES[node.boundaryPreset ?? 'boundary'].marker ? 1 + BOUNDARY_PLATE_GAP + BOUNDARY_PLATE + BOUNDARY_TEXT_GAP : BOUNDARY_INSET_X;
+}
+
 function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundaryStyle, palette: AccentPalette): Shape[] {
   const shapes: Shape[] = [];
   const bottom = 1 + BOUNDARY_HEADER_HEIGHT;
   // A tab holds its text with the same padding on both sides, and never reaches the far corner.
   const right = style.header === 'tab' ? node.width - 1 - BOUNDARY_RADIUS - BOUNDARY_INSET_X : node.width - BOUNDARY_INSET_X;
 
-  let x = BOUNDARY_INSET_X;
+  const x = boundaryTitleX(node);
   if (style.marker) {
     // The glyph sits on a small plate tinted with the boundary's own colour — a stamped kind mark
     // rather than an icon floating in the corner, and the first place a recolour shows.
@@ -2584,7 +2590,6 @@ function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundarySt
     });
     const inset = (BOUNDARY_PLATE - BOUNDARY_MARKER) / 2;
     shapes.push(boundaryMarker(style.marker, plate + inset, plate + inset, palette.chip));
-    x = plate + BOUNDARY_PLATE + BOUNDARY_TEXT_GAP;
   }
 
   const title = (node.text ?? '').trim() ? (node.text ?? '') : '';

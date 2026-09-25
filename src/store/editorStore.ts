@@ -2733,6 +2733,9 @@ function growArchitectureToFit(doc: DraftDocument, id: string): DraftDocument {
   if (!node || !(C4_TEXT_TYPES as readonly string[]).includes(node.type)) return doc;
   if (!node.technology && !node.description) return doc;
   const needed = naturalArchitectureSize(node, describeContext(LIGHT));
+  // No size shows it all — an unnamed shape draws no detail, and a technology too long for one line
+  // never fits — so growing to the search's ceiling would only leave an empty 280×320 box.
+  if (!needed.fits) return doc;
   if (needed.width <= node.width && needed.height <= node.height) return doc;
   return updateNode(doc, id, { width: Math.max(node.width, needed.width), height: Math.max(node.height, needed.height) });
 }

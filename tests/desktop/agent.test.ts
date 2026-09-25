@@ -86,6 +86,17 @@ beforeEach(async () => {
 });
 
 describe('agent requests on desktop', () => {
+  it('answers a proposal for the open diagram, and the next request still runs', async () => {
+    const handle = await openOrders();
+    const read = await request('read_diagram', { diagramId: 'd_orders000001' }, { handle, open: true, diagramId: 'd_orders000001' });
+    const revision = read.value!.revision as string;
+    const proposed = await request('submit_proposal', { ...addMailer(revision), summary: 'Add a mailer.' }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(proposed?.ok).toBe(true);
+    expect(useEditorStore.getState().document.nodes.some((n) => n.text === 'Mailer')).toBe(false);
+    const applied = await request('update_diagram', addMailer(currentRevision()), { handle, open: true, diagramId: 'd_orders000001' });
+    expect(applied?.ok).toBe(true);
+  });
+
   it('applies to the open, clean document as one undo step and saves it', async () => {
     const handle = await openOrders();
     const before = currentRevision();

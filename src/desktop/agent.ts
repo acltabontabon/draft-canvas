@@ -404,10 +404,10 @@ async function submitProposal(host: AgentHost, event: Request) {
   let file: DraftDocument;
   let revision: string;
   if (context.open) {
-    const snapshot = await host.inTurn(async () => {
-      await host.flush();
-      return host.askEditor({ kind: 'snapshot' });
-    });
+    // Already inside this request's turn (see `submit_proposal` above): taking another would queue
+    // behind itself, and every later request and Open would wait on it for good.
+    await host.flush();
+    const snapshot = await host.askEditor({ kind: 'snapshot' });
     if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
     file = snapshot.file;
     revision = revisionOfOpen(host, snapshot.revision);

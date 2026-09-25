@@ -269,6 +269,23 @@ describe('update_diagram flow variantOf', () => {
     expect(error.code).toBe('INVALID_REFERENCE');
   });
 
+  it('never builds a chain, whatever order a batch links it in', () => {
+    const file = base();
+    const { file: made } = applyUpdate(
+      file,
+      [],
+      [{ op: 'add', flows: [{ id: 'a', title: 'A', steps: ['u'], variantOf: 'b' }, { id: 'b', title: 'B', steps: ['d'], variantOf: 'c' }, { id: 'c', title: 'C', steps: ['u'] }] }],
+      undefined,
+    );
+    const variants = made.flows.filter((f) => f.variantOf !== undefined);
+    expect(variants.every((f) => made.flows.find((t) => t.id === f.variantOf)?.variantOf === undefined)).toBe(true);
+    expect(variants.every((f) => !made.flows.some((o) => o.variantOf === f.id))).toBe(true);
+
+    const { file: withFlows } = applyUpdate(file, [], [{ op: 'add', flows: [{ id: 'a', title: 'A', steps: ['u'], variantOf: 'b' }, { id: 'b', title: 'B', steps: ['d'] }, { id: 'c', title: 'C', steps: ['u'] }] }], undefined);
+    const error = refusal(() => applyUpdate(withFlows, [], [{ op: 'update', id: 'b', set: { variantOf: 'c' } }], undefined));
+    expect(error.code).toBe('INVALID_REFERENCE');
+  });
+
   it('clears variantOf with an explicit null', () => {
     const file = base();
     const { file: withFlows } = applyUpdate(file, [], [{ op: 'add', flows: [{ id: 'a', title: 'A', steps: ['u'] }, { id: 'b', title: 'B', steps: ['d'], variantOf: 'a' }] }], undefined);

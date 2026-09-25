@@ -3,7 +3,7 @@ import { currentRevision } from '../../host/agentBridge';
 import { diffForReview, preconditionConflicts, type ElementDiffRow } from '../../agent/proposal';
 import { applyUpdate } from '../../agent/patch';
 import { AgentError } from '../../agent/errors';
-import { useEditorStore } from '../../store/editorStore';
+import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../../ui/common/Button';
 import type { Proposal } from '../api';
@@ -110,8 +110,12 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
 
   // Recomputed fresh against the live document on every render this proposal is shown — never the
   // submit-time snapshot, and never proof by itself that nothing conflicts (see `preconditionConflicts`).
-  const live = useEditorStore((state) => state.document);
-  const path = useEditorStore((state) => state.path);
+  // Against the whole file and the view the proposal was written for — never the room on screen,
+  // which is only the whole file at the top level. Subscribed to the room so an edit re-renders;
+  // `fileOf` is cached per room, so reading it here costs nothing.
+  useEditorStore((state) => state.document);
+  const live = fileOf(useEditorStore.getState());
+  const path = proposal.path;
   let diff: ElementDiffRow[] = [];
   let conflicts: ReturnType<typeof preconditionConflicts> = [];
   let dryRunProblem: string | null = null;
@@ -144,9 +148,10 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
       // Re-check everything immediately before committing — the diagram may have moved since this
       // render; a stale re-render here would otherwise commit against a document already gone stale.
       const state = useEditorStore.getState();
+      const file = fileOf(state);
       const beforeRevision = currentRevision();
-      const result = applyUpdate(state.document, state.path, proposal.ops, proposal.layout ?? undefined);
-      const freshConflicts = preconditionConflicts(state.document, state.path, proposal.preconditions);
+      const result = applyUpdate(file, proposal.path, proposal.ops, proposal.layout ?? undefined);
+      const freshConflicts = preconditionConflicts(file, proposal.path, proposal.preconditions);
       if (freshConflicts.length > 0) {
         setError('The diagram changed in a way this proposal conflicts with. Ask the agent to revise it.');
         return;
@@ -176,8 +181,17 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
       }
     });
 
-  const reject = () => act(async () => void (await controller.resolveProposal(proposal.proposalId, 'rejected')));
-  const dismiss = () => act(async () => void (await controller.resolveProposal(proposal.proposalId, 'dismissed')));
+  const close = (status: 'rejected' | 'dismissed') =>
+    act(async () => {
+      const resolved = await controller.resolveProposal(proposal.proposalId, status);
+      // Already closed is the outcome asked for; anything else (one mid-accept, say) would otherwise
+      // leave the button doing nothing, with no word why.
+      if (!resolved.ok && resolved.code !== 'ALREADY_RESOLVED') {
+        setError(resolved.code === 'WRONG_STAGE' ? `It can’t be ${status} while it is ${resolved.status}.` : `Couldn’t update it (${resolved.code}).`);
+      }
+    });
+  const reject = () => close('rejected');
+  const dismiss = () => close('dismissed');
 
   return (
     <div className="dc-proposal-detail">

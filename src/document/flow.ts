@@ -275,9 +275,9 @@ export function deleteFlow(doc: DraftDocument, flowId: string): DraftDocument {
 /**
  * Sets, or clears (`undefined`), which flow this is a variant of — e.g. a "Payment — failure path"
  * naming "Payment"'s id, so a failure walkthrough is a labelled alternative rather than an unrelated
- * flow with a similar name. Refuses (no-op) a self-link, a target that doesn't exist in this room, or
- * a target that is itself already a variant: hub-and-spoke by construction, so nothing here ever has
- * to walk a chain to detect a cycle.
+ * flow with a similar name. Refuses (no-op) a self-link, a target that doesn't exist in this room, a
+ * target that is itself already a variant, or a flow that already has variants of its own:
+ * hub-and-spoke by construction, so nothing here ever has to walk a chain to detect a cycle.
  */
 export function setFlowVariantOf(doc: DraftDocument, flowId: string, variantOf: string | undefined): DraftDocument {
   const flow = findFlow(doc, flowId);
@@ -286,6 +286,7 @@ export function setFlowVariantOf(doc: DraftDocument, flowId: string, variantOf: 
     if (variantOf === flowId) return doc;
     const target = findFlow(doc, variantOf);
     if (!target || target.variantOf !== undefined) return doc;
+    if (doc.flows.some((f) => f.variantOf === flowId)) return doc;
   }
   const next = { ...flow };
   if (variantOf) next.variantOf = variantOf;

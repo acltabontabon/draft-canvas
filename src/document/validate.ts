@@ -821,14 +821,16 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   }
 
   // Hub-and-spoke, enforced by construction rather than a cycle walk: a variant's target may never
-  // itself be a variant. Resolved in array order, so of two flows each naming the other, only the
-  // first to be processed keeps its `variantOf` — the second's target has one by the time it's checked.
+  // itself be a variant, and a flow that already has variants may not become one. Resolved in array
+  // order, so of two flows each naming the other, or a chain A → B → C, only the first link processed
+  // survives — every later one meets a flow that is already one side of a link.
   const flowsById = new Map(flows.map((f) => [f.id, f]));
   let droppedVariantOf = 0;
   for (const [flowId, rawVariantOf] of pendingVariantOf) {
     const targetId = flowIdRemap.get(rawVariantOf) ?? rawVariantOf;
     const target = targetId === flowId ? undefined : flowsById.get(targetId);
-    if (target && target.variantOf === undefined) flowsById.get(flowId)!.variantOf = targetId;
+    const hasVariants = flows.some((f) => f.variantOf === flowId);
+    if (target && target.variantOf === undefined && !hasVariants) flowsById.get(flowId)!.variantOf = targetId;
     else droppedVariantOf += 1;
   }
   if (droppedVariantOf > 0) repairs.push(`Dropped ${droppedVariantOf} flow variant link(s) that pointed at itself, at another variant, or at nothing.`);

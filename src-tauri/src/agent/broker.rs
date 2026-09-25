@@ -1346,9 +1346,42 @@ async fn submit_proposal(
         resolved_at: if no_impact { Some(now) } else { None },
     };
 
-    match agent.with_proposals(|s| s.put(proposal.clone())) {
+    // A revise re-checks what it revises under the store's lock, right before writing: the person may
+    // have accepted or rejected it, or another revise landed, while the page was composing this one —
+    // and writing over that would reopen a proposal they had already decided.
+    let saved = agent.with_proposals(|s| {
+        if let Some(before) = &existing {
+            match s.get(&proposal_id) {
+                Some(now) if now.status == ProposalStatus::Pending && now.version == before.version => {}
+                Some(now) if now.status != ProposalStatus::Pending => {
+                    return Err(ToolError::new(
+                        "PROPOSAL_CLOSED",
+                        format!("That proposal became {:?} while this revision was being prepared; submit a new one instead.", now.status),
+                    ));
+                }
+                _ => {
+                    return Err(ToolError::new(
+                        "PROPOSAL_CHANGED",
+                        "That proposal changed while this revision was being prepared. Read it again before revising it.",
+                    ));
+                }
+            }
+        }
+        s.put(proposal.clone()).map_err(|_| {
+            ToolError::new(
+                "INTERNAL",
+                "The proposal couldn't be saved. Nothing was recorded.",
+            )
+            .hint("Retry with the same requestId.")
+        })
+    });
+    match saved {
         Some(Ok(())) => {}
-        _ => {
+        Some(Err(e)) => {
+            fail(agent, &key, &e);
+            return Err(e);
+        }
+        None => {
             let e = ToolError::new(
                 "INTERNAL",
                 "The proposal couldn't be saved. Nothing was recorded.",
@@ -1375,14 +1408,17 @@ async fn submit_proposal(
 }
 
 /// What an unfinished `submit_proposal` left behind, after a crash. Mirrors `recover_create`: the
-/// evidence is the proposal id minted for this request before anything was written — found, it proves
-/// the store write succeeded even though the ledger never heard; not found, nothing happened, and the
-/// request may run from scratch (the page round-trip has no side effect of its own to repeat safely).
+/// evidence is the proposal id minted for this request before anything was written, holding a version
+/// written no earlier than the request began — found, it proves the store write succeeded even though
+/// the ledger never heard; not found, nothing happened, and the request may run from scratch (the page
+/// round-trip has no side effect of its own to repeat safely). The time matters for a revise, whose id
+/// already existed: its earlier version is not this request's write.
 fn recover_submit_proposal(agent: &Agent, entry: &Entry) -> Option<Value> {
     let proposal_id = entry.diagram_id.as_deref()?;
     let proposal = agent
         .with_proposals(|s| s.get(proposal_id).cloned())
-        .flatten()?;
+        .flatten()
+        .filter(|p| p.updated_at >= entry.at)?;
     Some(json!({
         "proposalId": proposal.id,
         "version": proposal.version,
@@ -1692,6 +1728,42 @@ mod tests {
         assert_eq!(receipt["recovered"], json!(true));
         assert_eq!(receipt["proposalId"], json!("p_minted00001"));
         assert_eq!(receipt["version"], json!(1));
+    }
+
+    #[test]
+    fn an_interrupted_revise_is_not_mistaken_for_the_version_it_revises() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent
+            .with_proposals(|s| {
+                s.put(stored_proposal(
+                    "p_revised0001",
+                    "d_1",
+                    ProposalStatus::Pending,
+                    5,
+                ))
+            })
+            .unwrap()
+            .unwrap();
+        let entry = Entry {
+            key: "submit_proposal:r2".into(),
+            tool: "submit_proposal".into(),
+            fingerprint: "f".into(),
+            stage: Stage::Pending,
+            at: 10,
+            diagram_id: Some("p_revised0001".into()),
+            path: None,
+            receipt: None,
+        };
+        // Version 1 was there before this revise began: the revise never reached the store.
+        assert_eq!(recover_submit_proposal(&agent, &entry), None);
+        let mut revised = stored_proposal("p_revised0001", "d_1", ProposalStatus::Pending, 12);
+        revised.version = 2;
+        agent.with_proposals(|s| s.put(revised)).unwrap().unwrap();
+        assert_eq!(
+            recover_submit_proposal(&agent, &entry).unwrap()["version"],
+            json!(2)
+        );
     }
 
     #[test]

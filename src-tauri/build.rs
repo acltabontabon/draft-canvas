@@ -61,9 +61,29 @@ const COMMANDS: &[&str] = &[
 ];
 
 fn main() {
-    tauri_build::try_build(
-        tauri_build::Attributes::new()
-            .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),
-    )
-    .expect("failed to run the Tauri build script");
+    let mut attributes = tauri_build::Attributes::new()
+        .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS));
+    if embed_windows_manifest() {
+        attributes = attributes
+            .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest());
+    }
+    tauri_build::try_build(attributes).expect("failed to run the Tauri build script");
+}
+
+// Tauri embeds its Windows manifest (Common Controls v6) as a resource of the app binary only, so the
+// unit-test binary linked without it and died on start with STATUS_ENTRYPOINT_NOT_FOUND once the lib
+// grew a reference into comctl32 v6. Handing the same manifest to the linker reaches every binary this
+// crate links, tests included.
+fn embed_windows_manifest() -> bool {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    if target_os != "windows" || target_env != "msvc" {
+        return false;
+    }
+    let manifest =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("windows-app-manifest.xml");
+    println!("cargo:rerun-if-changed={}", manifest.display());
+    println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+    println!("cargo:rustc-link-arg=/MANIFESTINPUT:{}", manifest.display());
+    true
 }

@@ -11,6 +11,7 @@ import { LIGHT } from '../src/render/theme/tokens';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { createDocument } from '../src/document/factory';
 import { walkGraphs } from '../src/depth/tree';
+import { useEditorStore } from '../src/store/editorStore';
 
 const shape = (id: string, extra: Record<string, unknown> = {}) => ({ id, type: 'service', x: 0, y: 0, width: 176, height: 68, z: 0, text: id, ...extra });
 
@@ -106,5 +107,27 @@ describe('C4 text on the canvas', () => {
     const { svg } = renderDocumentSvg(doc, { theme: 'light' } as never);
     expect(svg).toContain('[Kotlin]');
     expect(svg).toContain('Takes orders.');
+  });
+});
+
+describe('C4 text grows a shape only when growing shows it', () => {
+  const edit = (node: DraftNode, patch: { technology?: string; description?: string }) => {
+    useEditorStore.setState({ document: { ...createDocument('C4'), nodes: [node] }, path: [], outer: null, history: { past: [], future: [] } });
+    useEditorStore.getState().setNodeC4Text(node.id, patch);
+    return useEditorStore.getState().document.nodes[0]!;
+  };
+
+  it('grows a named shape to fit its detail', () => {
+    const node = createNode({ type: 'service', x: 0, y: 0, text: 'Orders API' });
+    const grown = edit(node, { description: 'Takes orders from the shop and hands each one to fulfilment, once.' });
+    expect(grown.height).toBeGreaterThan(node.height);
+  });
+
+  it('leaves an unnamed shape, or one whose technology can never fit, the size it was', () => {
+    const queue = createNode({ type: 'queue', x: 0, y: 0 });
+    expect(edit(queue, { technology: 'RabbitMQ' })).toMatchObject({ width: queue.width, height: queue.height });
+    const service = createNode({ type: 'service', x: 0, y: 0, text: 'Orders API' });
+    const long = edit(service, { technology: 'Spring Boot 3 on Kubernetes with Istio and Envoy sidecars' });
+    expect(long).toMatchObject({ width: service.width, height: service.height });
   });
 });

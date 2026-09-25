@@ -639,7 +639,7 @@ Codes are stable. Each error carries `message`, and where useful `hint`, `retrya
 | Layout | `LAYOUT_FAILED`, `LAYOUT_CONSTRAINED` (with `suggestedOp`) |
 | Retries | `REQUEST_ID_MISMATCH`, `OUTCOME_UNKNOWN` |
 | Scope | `NOT_ENABLED`, `OUT_OF_SCOPE` (a folder an agent may not use, *or* an `update_diagram`/`submit_proposal` op reaching outside a captured `scope`, naming the ids), `SCOPE_TARGET_MISSING` (a captured scope id no longer in the view), `UNAUTHORIZED` |
-| Proposals | `PROPOSAL_CLOSED` (`revises` named one that's already resolved, naming its actual status) — resolving one (accept/reject/dismiss) is a native UI action with its own outcomes, never a tool error an agent sees |
+| Proposals | `PROPOSAL_CLOSED` (`revises` named one that's already resolved, naming its actual status — including one resolved while the revision was being prepared), `PROPOSAL_CHANGED` (another revision of it landed first; read it again) — resolving one (accept/reject/dismiss) is a native UI action with its own outcomes, never a tool error an agent sees |
 | Connection | `APP_UNAVAILABLE` (Draft Canvas isn't running), `APP_STARTING`, `APP_UNRESPONSIVE`, `CONNECTION_LOST`, `VERSION_MISMATCH`, `TIMEOUT`, `CANCELLED` |
 | Other | `PERSISTENCE_FAILED`, `INTERNAL` |
 

@@ -874,6 +874,16 @@ describe('setFlowVariantOf (failure-path walkthroughs)', () => {
     expect(next).toBe(doc);
   });
 
+  it('refuses the other way round too: a flow with variants cannot become a variant, whatever the order', () => {
+    const a = createFlow({ id: 'a', title: 'A' });
+    const b = createFlow({ id: 'b', title: 'B' });
+    const c = createFlow({ id: 'c', title: 'C' });
+    let doc = addFlow(addFlow(addFlow(createDocument('Flows'), a), b), c);
+    doc = setFlowVariantOf(doc, 'b', 'c'); // b is a variant of c
+    const next = setFlowVariantOf(doc, 'c', 'a'); // c has a variant, so it can't become one — refused
+    expect(next).toBe(doc);
+  });
+
   it('clears a flow\'s variantOf back to undefined', () => {
     const a = createFlow({ id: 'a', title: 'A' });
     const b = createFlow({ id: 'b', title: 'B' });
@@ -942,6 +952,22 @@ describe('parseDocument: variantOf survives, and is repaired rather than left da
     if (!result.ok) return;
     const [a, b, c] = ['A', 'B', 'C'].map((title) => result.document.flows.find((f) => f.title === title));
     expect(b?.variantOf).toBe(a?.id);
+    expect(c?.variantOf).toBeUndefined();
+  });
+
+  it('breaks a chain listed base-last the same way', () => {
+    const result = parseDocument(
+      rawDoc([
+        { id: 'a', title: 'A', steps: [], variantOf: 'b' },
+        { id: 'b', title: 'B', steps: [], variantOf: 'c' },
+        { id: 'c', title: 'C', steps: [] },
+      ]),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [a, b, c] = ['A', 'B', 'C'].map((title) => result.document.flows.find((f) => f.title === title));
+    expect(a?.variantOf).toBe(b?.id);
+    expect(b?.variantOf).toBeUndefined();
     expect(c?.variantOf).toBeUndefined();
   });
 });

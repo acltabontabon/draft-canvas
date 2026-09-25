@@ -462,6 +462,8 @@ function updateOne(
       const target = variantOf && variantOf !== id ? view.flows.find((f) => f.id === variantOf) : undefined;
       if (!target || target.variantOf !== undefined) {
         r.problems.add('INVALID_REFERENCE', `${at}/variantOf`, `must be another flow in this view that is not itself a variant`);
+      } else if (view.flows.some((f) => f.variantOf === id)) {
+        r.problems.add('INVALID_REFERENCE', `${at}/variantOf`, `a flow with variants of its own cannot become a variant`);
       } else {
         flow.variantOf = variantOf;
       }
