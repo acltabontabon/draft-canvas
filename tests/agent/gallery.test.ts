@@ -11,6 +11,7 @@ import { sequenceSourceFor } from '../../src/export/sequence';
 import type { DraftDocument } from '../../src/document/types';
 import { GALLERY, type GalleryCase } from '../fixtures/agent/gallery';
 import { legibilityOf } from '../../src/agent/legibility';
+import { routingPlan } from '../../src/edges/bundles';
 import { nearestElement } from '../../src/agent/read';
 
 function create(request: Record<string, unknown>, id = 'd_gallery00001'): DraftDocument {
@@ -127,10 +128,7 @@ describe('layout gallery', () => {
     const entry = GALLERY.find((g) => g.id === '21-card-provisioning')!;
     const { doc } = galleryDocument(entry);
     const at = (id: string) => doc.nodes.find((n) => n.id === id)!;
-    const notes = new Map([
-      ['n-retry', 'check'],
-      ['n-notify', 'notify'],
-    ]);
+    const notes = new Map([['n-notify', 'notify']]);
     const legibility = legibilityOf(doc.nodes, doc.edges, notes);
     // It used to have five crossings, two lines through unrelated boundaries and a stranded note.
     expect(legibility.farNotes).toEqual([]);
@@ -142,10 +140,17 @@ describe('layout gallery', () => {
       const points = drawnRoute(doc.edges.find((e) => e.id === id)!, doc.nodes, doc.edges)!.points;
       expect(new Set(points.map((p) => Math.round(p.y))).size, id).toBe(1);
     }
-    // The notes sit inside the boundary of what they describe; the decision heads its domain.
-    expect(at('n-retry').parentId).toBe('svc');
+    // The check's four labelled calls out share one trunk, each keeping its own caption on its branch.
+    const plan = routingPlan(doc.nodes, doc.edges);
+    const trunk = ['r5', 'r6', 'r7', 'r8'].filter((id) => plan.spineFor(id));
+    expect(trunk.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(trunk.map((id) => plan.spineFor(id)!.id)).size).toBe(1);
+    expect(legibility.bundled).toBeGreaterThanOrEqual(3);
+    // The retry note attaches to its check (the default); the callout kept beside its service sits
+    // inside that service's boundary, and the decision heads its domain.
+    expect(at('check').attachments?.map((a) => a.id)).toEqual(['n-retry']);
+    expect(doc.nodes.find((n) => n.id === 'n-retry')).toBeUndefined();
     expect(at('n-notify').parentId).toBe('platform');
-    expect(nearestElement(at('n-retry'), doc.nodes)).toBe('check');
     expect(nearestElement(at('n-notify'), doc.nodes)).toBe('notify');
     expect(at('n-decision').y).toBeLessThan(Math.min(...doc.nodes.filter((n) => n.parentId === 'svc' && n.type !== 'note').map((n) => n.y)));
     // And the receipt tells the agent what else would help: this domain belongs a level down.

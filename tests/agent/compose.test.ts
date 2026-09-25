@@ -44,7 +44,7 @@ describe('compose', () => {
         notes: [
           { id: 'retry', text: 'Retries 5 times with backoff,\nthen parks in the DLQ.', kind: 'warning', about: 'r3' },
           { id: 'owner', text: 'Owned by the ledger team.', about: 'core' },
-          { id: 'assume', text: 'Assumption: one parser per region.', about: 'parser' },
+          { id: 'assume', text: 'Assumption: one parser per region.', about: 'parser', attach: false },
           { id: 'why', text: 'Posts in batches of 500.', about: 'posting', attach: true },
         ],
         flows: [{ id: 'main', title: 'Normal processing', steps: ['r1', 'r2', 'r3', 'r4'] }],
@@ -76,7 +76,7 @@ describe('compose', () => {
         groups: [{ id: 'core', label: 'Posting', kind: 'system' }],
         nodes: repayment.nodes.map((n) => (n.id === 'posting' || n.id === 'ledger' ? { ...n, group: 'core' } : n)),
         notes: [
-          { id: 'batch', text: 'Posts in batches of 500; a failed batch is retried whole.', kind: 'decision', about: 'posting' },
+          { id: 'batch', text: 'Posts in batches of 500; a failed batch is retried whole.', kind: 'decision', about: 'posting', attach: false },
           { id: 'loose', text: 'Owned by the payments guild.' },
         ],
       },
@@ -104,5 +104,20 @@ describe('compose', () => {
     expect(at('loose').x).toBeGreaterThan(Math.max(...doc.nodes.filter((n) => n.id !== 'loose').map((n) => n.x + n.width)));
     expect(out.receipt).toMatchObject({ quality: { errors: 0 }, legibility: { crossings: 0 } });
     expect((out.receipt.advisories as string[]).some((a) => a.includes('"loose"') && a.includes('about'))).toBe(true);
+  });
+
+  it('attaches a note about an element by default, and puts one beside a full element instead of refusing it', () => {
+    const notes = Array.from({ length: 13 }, (_, i) => ({ id: `n${i}`, text: `Note ${i}`, about: 'posting' }));
+    const out = compose({ ...repayment, notes }, 'd_test00000004');
+    const parsed = deserializeDocument(out.text);
+    if (!parsed.ok) throw new Error(parsed.error);
+    const posting = parsed.document.nodes.find((n) => n.id === 'posting')!;
+    // Twelve attach (an element's limit); the thirteenth is laid out beside it, and the receipt says so.
+    expect(posting.attachments?.map((a) => a.id)).toEqual(notes.slice(0, 12).map((n) => n.id));
+    const last = parsed.document.nodes.find((n) => n.id === 'n12')!;
+    expect(last.type).toBe('note');
+    expect(nearestElement(last, parsed.document.nodes)).toBe('posting');
+    expect((out.receipt.advisories as string[]).some((a) => a.includes('"n12"') && a.includes('beside "posting"'))).toBe(true);
+    expect(out.receipt).toMatchObject({ quality: { errors: 0 } });
   });
 });

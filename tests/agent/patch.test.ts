@@ -27,7 +27,7 @@ const base = () =>
       { id: 'd', from: 'api', to: 'db' },
     ],
     flows: [{ id: 'f', title: 'Order', steps: ['u', 'd'] }],
-    notes: [{ id: 'n1', text: 'Orders are idempotent by client key.', kind: 'decision', near: 'api' }],
+    notes: [{ id: 'n1', text: 'Orders are idempotent by client key.', kind: 'decision', near: 'api', attach: false }],
     actions: [{ id: 'act', text: 'Confirm retention with legal', about: 'db' }],
   });
 

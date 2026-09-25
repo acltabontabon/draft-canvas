@@ -37,7 +37,7 @@ const orders = () =>
       { id: 'r5', from: 'events', to: 'email' },
     ],
     notes: [
-      { id: 'n1', text: 'Billing retries 5 times, then parks the message.', about: 'billing' },
+      { id: 'n1', text: 'Billing retries 5 times, then parks the message.', about: 'billing', attach: false },
       { id: 'why', text: 'Signed with HMAC.', about: 'r1' },
     ],
     flows: [{ id: 'happy', title: 'Normal processing', steps: ['r1', 'r3', 'r4'] }],
@@ -145,7 +145,7 @@ describe('arrange', () => {
         { id: 'b', type: 'database', label: 'DB B' },
       ],
       relationships: [{ id: 'r1', from: 'a', to: 'b', label: 'reads and writes' }],
-      notes: [{ id: 'n1', text: 'Keep this handy.', near: 'a' }],
+      notes: [{ id: 'n1', text: 'Keep this handy.', near: 'a', attach: false }],
     });
     // A person nudges the shape a little, taking the note along at the same offset.
     const nudged = { ...doc, nodes: doc.nodes.map((n) => (n.id === 'a' || n.id === 'n1' ? { ...n, x: n.x + 15, y: n.y - 10 } : n)) };
@@ -165,7 +165,7 @@ describe('arrange', () => {
         { id: 'blocker', type: 'service', label: 'Blocker' },
       ],
       relationships: [{ id: 'r1', from: 'a', to: 'b', label: 'reads and writes' }],
-      notes: [{ id: 'n1', text: 'Keep this handy.', near: 'a' }],
+      notes: [{ id: 'n1', text: 'Keep this handy.', near: 'a', attach: false }],
     });
     const note = doc.nodes.find((n) => n.id === 'n1')!;
     const [dx, dy] = [15, -10];
@@ -195,7 +195,7 @@ describe('arrange', () => {
         { id: 'b', from: 'api', to: 'db' },
       ],
       notes: [
-        { id: 'idem', text: 'Idempotent by client key.', about: 'api' },
+        { id: 'idem', text: 'Idempotent by client key.', about: 'api', attach: false },
         { id: 'own', text: 'Owned by the orders team.', about: 'core' },
       ],
     });

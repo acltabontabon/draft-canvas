@@ -8,18 +8,29 @@
  * handle to land on.
  */
 
-import type { Side } from '../document/types';
+import type { DraftEdge, Side } from '../document/types';
+import { compatibilityKey, MIN_FAN_SPREAD } from '../edges/bundles';
 import type { Direction, Rect } from './layered';
 
-export interface AnchorEdge {
+export interface AnchorEdge extends Pick<DraftEdge, 'kind' | 'directed' | 'async' | 'hasResponse' | 'accent' | 'deliveryAttempts' | 'semantic'> {
   id: string;
   source: string;
   target: string;
-  /** Its own words, if any: a labelled connector keeps its own branch and caption. */
+  /** Its own words, if any: a labelled connector keeps its own branch and caption — on a shared trunk
+   *  when enough of them mean the same thing (see `assignAnchors`'s labelled fan). */
   label?: string;
-  /** What it means: connectors that mean the same thing from one shape may share one trunk. */
-  semantic?: string;
 }
+
+export interface AnchorOptions {
+  /** Connectors that never join a labelled fan — the main path, which stays its own straight line. */
+  keepApart?: ReadonlySet<string>;
+  /** `unlabelled` (the repair's fallback) never bundles labelled connectors. Default `all`. */
+  fans?: 'all' | 'unlabelled';
+}
+
+/** Labelled connectors that share a trunk each keep a caption on their branch: fewer than this and two
+ *  separate lines read as well, with no bends. */
+export const MIN_LABELLED_FAN = 3;
 
 export interface Anchors {
   sourceAnchor: { side: Side; offset: number };
@@ -149,6 +160,7 @@ export function assignAnchors(
   pinned?: ReadonlyMap<string, Anchors>,
   /** A side of a shape no connector may use — where a note about it sits. */
   reserved?: ReadonlyMap<string, Side>,
+  options: AnchorOptions = {},
 ): Map<string, Anchors> {
   const sides = new Map<string, { source: Side; target: Side }>();
   const onSide = new Map<string, { edge: string; end: 'source' | 'target'; other: Rect; pinnedOffset?: number }[]>();
@@ -236,17 +248,25 @@ export function assignAnchors(
     // ("fans out to", once) instead of parallel lines each repeating it. Words of their own, or
     // different meanings, keep each connector on its own handle.
     const members = free.map((entry) => byId.get(entry.edge));
-    const fan =
-      free.length >= 2 &&
-      new Set(free.map((entry) => entry.end)).size === 1 &&
-      new Set(free.map((entry) => entry.other)).size === free.length &&
-      members.every((m) => m && !m.label && m.semantic && m.semantic === members[0]?.semantic);
-    if (fan) {
+    const oneEnd = new Set(free.map((entry) => entry.end)).size === 1 && new Set(free.map((entry) => entry.other)).size === free.length;
+    const fan = free.length >= 2 && oneEnd && members.every((m) => m && !m.label && m.semantic && m.semantic === members[0]?.semantic);
+    const side = key.slice(key.indexOf('\u0000') + 1) as Side;
+    const horizontal = side === 'top' || side === 'bottom';
+    // Labelled connectors bundle too, when enough of them leave one shape meaning the same thing and
+    // reach shapes spread across the flow — every branch then carries its own words after the shared
+    // stem, in the room the layout keeps for it — but never the main path, and never a fan the
+    // router would refuse anyway (`edges/bundles.ts`'s gates, checked here so a shared point that
+    // ends in no trunk isn't three lines drawn on top of each other).
+    const labelledFan =
+      options.fans !== 'unlabelled' &&
+      free.length >= MIN_LABELLED_FAN &&
+      oneEnd &&
+      members.every((m) => m && m.label && !options.keepApart?.has(m.id) && compatibilityKey(m) === compatibilityKey(members[0] as AnchorEdge)) &&
+      Math.max(...free.map((e) => (horizontal ? centre(e.other).x : centre(e.other).y))) - Math.min(...free.map((e) => (horizontal ? centre(e.other).x : centre(e.other).y))) >= MIN_FAN_SPREAD;
+    if (fan || labelledFan) {
       for (const entry of free) offsets.set(`${entry.edge}\u0000${entry.end}`, 0.5);
       continue;
     }
-    const side = key.slice(key.indexOf('\u0000') + 1) as Side;
-    const horizontal = side === 'top' || side === 'bottom';
     free.sort((a, b) => {
       const ca = centre(a.other);
       const cb = centre(b.other);

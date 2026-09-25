@@ -71,9 +71,9 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       edits: 'update set.steps keeps each step whose relationship stays (its id, caption, highlights and camera); set.title alone leaves steps untouched.',
     };
     out.notes = {
-      beside: 'about = an element: laid out with it, just before it across the flow and inside its boundary (placement only — nothing records the link).',
-      inside: 'about = a group: a member of the boundary, placed inside it.',
-      attached: 'about = a relationship, or an element with attach: true: a native attachment that moves, exports and is removed with its host; edit or remove it by the note id.',
+      attached: 'about = an element or a relationship (the default): a native attachment that moves, exports and is removed with its host; edit or remove it by the note id. A full element takes it beside instead, with an advisory.',
+      beside: 'about = an element with attach: false: a free note laid out with it, just before it across the flow and inside its boundary — for a callout meant to be read at a glance (placement only — nothing records the link).',
+      inside: 'about = a group: a member of the boundary, at its head.',
     };
   }
   if (want('starters')) {
@@ -96,10 +96,11 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       order: 'List elements and relationships in reading order, entry point (the person or client) first. The layout breaks every tie by input order, so an order that follows the request path draws it as a line.',
       mainPath: 'Name the main path as a flow and pass it as layout.primaryFlow: it is laid out straight and first, and side paths (retries, failures, dead letters) yield to it.',
       boundaries: 'Group only a real boundary — a system, a domain, a deployment. A boundary is laid out as one block, so a group of external systems called from different places makes their connectors reach around each other; left ungrouped, each external sits beside its caller.',
-      notes: 'Give every note an about. About an element, it sits right beside it; about a boundary, under its title; about a relationship, on it. A note with no about goes after the diagram, far from what it means.',
+      notes: 'Give every note an about. About an element or a relationship it attaches (a chip on it; stored, so a read finds it again); about a boundary, it heads the boundary. attach: false puts it beside the element instead — only for a callout meant to be read at a glance; a note that spans several shapes belongs to their boundary. A note with no about goes after the diagram, far from what it means.',
       size: 'About 15 elements is what one view reads well. Past that, draw one element for a part and put its detail in that element\'s inside view (the next C4 level): a nested domain in a container view is the usual candidate.',
       returns: 'A reply is implied by the request; draw a relationship back only when it is its own interaction (a callback, a notification). Every relationship that runs against the reading direction goes around what lies between.',
       direction: 'Leave layout.direction out unless the person asks: both directions are tried and the clearer one kept. "down" suits a person at the top calling one system that calls many externals.',
+      trunks: 'Three or more labelled connectors leaving one shape (or reaching one) with the same meaning and kind are drawn as one trunk, each branch keeping its own caption — give them the same semantic and kind to bundle, different ones to stay apart. The main path never joins a trunk.',
       feedback: 'The create receipt reports legibility — crossings, and connectors that detour or cut through a boundary they are not in (by id) — and advisories naming what in the request to change, with the update_diagram ops that do it. Apply them in the same turn when they make sense, then read the receipt again.',
     };
   }

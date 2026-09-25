@@ -127,6 +127,9 @@ export interface Drawn {
   points: Point[];
   /** The caption chip this connector draws, if it draws one (a label group's other members don't). */
   chip: Box | null;
+  /** The chip is the connector's own label, on its own branch — not a relationship caption collapsed
+   *  onto a shared trunk's one point, which every member of the trunk reports alike. */
+  ownChip?: boolean;
   /** The Smart Routing trunk it shares, if any: members of one run along it together on purpose. */
   spine?: string;
 }
@@ -212,7 +215,14 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
       }
     }
   }
-  return { points: pathPoints(route.d), chip, ...(spine ? { spine: spine.id } : {}) };
+  return { points: pathPoints(route.d), chip, ...(chip && edge.label ? { ownChip: true } : {}), ...(spine ? { spine: spine.id } : {}) };
+}
+
+/** Two captions that may legitimately share a spot: one label drawn for a group, or one relationship
+ *  caption collapsed onto a trunk. Two connectors' *own* labels never may, trunk-mates or not. */
+export function captionsTogether(a: Drawn & { id?: string }, b: Other): boolean {
+  if (a.id && b.shares?.includes(a.id)) return true;
+  return Boolean(a.spine && a.spine === b.spine && !(a.ownChip && b.ownChip));
 }
 
 /** Another connector as drawn, for judging this one against it. `shares` names connectors that draw
@@ -220,6 +230,7 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
 export interface Other {
   id: string;
   chip: Box | null;
+  ownChip?: boolean;
   points: Point[];
   shares?: readonly string[];
   spine?: string;
@@ -247,7 +258,7 @@ export function othersOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[
     if (e.id === except) return [];
     const drawn = drawnRoute(e, nodes, edges, caption);
     const members = groups.groupFor(e.id)?.members;
-    return drawn ? [{ id: e.id, chip: drawn.chip, points: drawn.points, ...(drawn.spine ? { spine: drawn.spine } : {}), ...(members ? { shares: members } : {}) }] : [];
+    return drawn ? [{ id: e.id, chip: drawn.chip, points: drawn.points, ...(drawn.ownChip ? { ownChip: true } : {}), ...(drawn.spine ? { spine: drawn.spine } : {}), ...(members ? { shares: members } : {}) }] : [];
   });
 }
 
@@ -286,7 +297,7 @@ export function routeProblem(
   if (drawn.chip) {
     const covered = nodes.find((n) => n.type !== 'group' && overlaps(drawn.chip!, inset(n, CAPTION_INSET)));
     if (covered) return { kind: 'label-over-node', node: covered.id };
-    const clash = others?.find((o) => o.id !== edge.id && o.chip && !together({ ...drawn, id: edge.id }, o) && overlaps(drawn.chip!, o.chip));
+    const clash = others?.find((o) => o.id !== edge.id && o.chip && !captionsTogether({ ...drawn, id: edge.id }, o) && overlaps(drawn.chip!, o.chip));
     if (clash) return { kind: 'label-collision', node: clash.id };
   }
   const crossed = others?.find((o) => o.id !== edge.id && crosses({ ...drawn, id: edge.id }, o));

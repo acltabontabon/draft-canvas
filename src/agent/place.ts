@@ -15,7 +15,8 @@ import { hasAttachmentRoom } from '../document/operations';
 import { anchorBandOf } from '../document/queueGeometry';
 import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
-import { assignAnchors, type AnchorRect } from '../layout/anchors';
+import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect } from '../layout/anchors';
+import { compatibilityKey } from '../edges/bundles';
 import { describeContext, naturalArchitectureSize, naturalNoteHeight, type DescribeContext } from '../nodes/describe';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
@@ -465,13 +466,24 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
     return notes.reduce((sum, note) => sum + (right ? note.height : note.width) + NOTE_GAP, 0);
   };
   const notesAlong = (id: string) => Math.max(0, ...(besideNotes.get(id) ?? []).map((note) => (right ? note.width : note.height)));
+  // Labelled connectors that `assignAnchors` will put on one shared trunk (enough of them out of one
+  // shape, or into one, meaning the same thing) — so the layout keeps room for a caption per branch.
+  const bundled = new Set<string>();
+  if (layout.fans !== 'unlabelled') {
+    const fans = new Map<string, string[]>();
+    for (const edge of edges) {
+      if (!edge.label || primaryEdges.has(edge.id)) continue;
+      for (const key of [`s\u0000${edge.source}\u0000${compatibilityKey(edge)}`, `t\u0000${edge.target}\u0000${compatibilityKey(edge)}`]) fans.set(key, [...(fans.get(key) ?? []), edge.id]);
+    }
+    for (const ids of fans.values()) if (ids.length >= MIN_LABELLED_FAN) for (const id of ids) bundled.add(id);
+  }
   const layoutEdges: LayoutEdge[] = edges
     .filter((edge) => !companions.has(edge.source) && !companions.has(edge.target))
     .map((edge) => {
       const size = edgeLabelSize(edge, elements.get(edge.source)!, elements.get(edge.target)!, ctx);
       const target = elements.get(edge.target);
       const minor = edge.kind === 'failure' || edge.kind === 'retry' || edge.semantic === 'deadLetters' || target?.deliveryRole === 'dead-letter';
-      return { id: edge.id, source: edge.source, target: edge.target, labelWidth: size.width, labelHeight: size.height, primary: primaryEdges.has(edge.id), minor };
+      return { id: edge.id, source: edge.source, target: edge.target, labelWidth: size.width, labelHeight: size.height, primary: primaryEdges.has(edge.id), minor, ...(bundled.has(edge.id) ? { bundled: true } : {}) };
     });
   let placed;
   try {
@@ -588,7 +600,7 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
   // A shape's note side is taken: no connector may leave or arrive there, or it would run through the note.
   const noteSide: Side = right ? 'top' : 'left';
   const reserved = new Map([...besideNotes.keys()].filter((id) => besideNotes.get(id)?.length).map((id) => [id, noteSide]));
-  const anchors = assignAnchors(edges, rects, layout.direction, undefined, reserved);
+  const anchors = assignAnchors(edges, rects, layout.direction, undefined, reserved, { keepApart: primaryEdges, ...(layout.fans ? { fans: layout.fans } : {}) });
   for (const edge of edges) {
     const a = anchors.get(edge.id);
     if (a) {
@@ -631,14 +643,20 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
   // A note about an element is laid out with it, so the layout keeps room for it right there (inside
   // the element's boundary, when it has one) instead of fitting it into whatever space is left.
   const besideNotes = new Map<string, DraftNode[]>();
+  const beside = (spec: NoteSpec, host: string) => besideNotes.set(host, [...(besideNotes.get(host) ?? []), noteNode(spec, ctx)]);
   for (const spec of room.notes) {
     if (spec.attachTo) {
       const target = spec.attachTo;
-      attachNote(target.kind === 'node' ? elements.get(target.id) : edges.find((e) => e.id === target.id), target.kind, spec);
+      const host = target.kind === 'node' ? elements.get(target.id) : edges.find((e) => e.id === target.id);
+      if (host && !hasAttachmentRoom(host, target.kind) && target.kind === 'node') {
+        // A full element never refuses the note: it goes beside the element instead, and the receipt says so.
+        advisories.push(`"${spec.id}" was placed beside "${host.id}" instead of attached: it already holds ${host.attachments?.length ?? 0} attachments.`);
+        beside(spec, target.id);
+      } else attachNote(host, target.kind, spec);
     } else if (spec.group) {
       memberNotes.set(spec.id, noteNode(spec, ctx));
     } else if (spec.near && elements.has(spec.near)) {
-      besideNotes.set(spec.near, [...(besideNotes.get(spec.near) ?? []), noteNode(spec, ctx)]);
+      beside(spec, spec.near);
     }
   }
 
@@ -762,7 +780,7 @@ function placeNotes(room: RoomSpec, placed: DraftNode[], edges: DraftEdge[], wid
     return drawn ? [drawn.points] : [];
   });
   for (const spec of room.notes) {
-    if (spec.attachTo || spec.group || placed.some((n) => n.id === spec.id)) continue;
+    if (spec.group || placed.some((n) => n.id === spec.id) || (spec.attachTo && !spec.near)) continue;
     const note = noteNode(spec, ctx);
     const host = spec.near ? [...placed, ...out].find((n) => n.id === spec.near) : undefined;
     const doc: DraftDocument = { ...createDocument(), nodes: [...placed, ...out] };
