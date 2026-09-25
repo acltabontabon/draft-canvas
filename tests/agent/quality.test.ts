@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { measureContext } from '../../src/agent/place';
-import { checkQuality, isBetterReport, isClean, type QualityReport } from '../../src/agent/quality';
+import { checkFit, checkQuality, isBetterCandidate, isBetterReport, isClean, isCleanCandidate, type QualityReport } from '../../src/agent/quality';
 import { deserializeDocument } from '../../src/export/project';
 import type { DraftNode } from '../../src/document/types';
 
@@ -102,5 +102,72 @@ describe('the create_diagram repair ladder', () => {
     expect(found.errors).toEqual([]);
     expect(composed.receipt.layout).toEqual({ direction: 'right', spacing: 'comfortable' });
     expect(composed.receipt.quality).toMatchObject({ scope: 'whole-diagram', errors: 0, warnings: 0 });
+  });
+
+  it("prefers the direction that fits the requested viewport when the caller's own choice doesn't", () => {
+    // A long sequential chain: laid out reading right, it comes out very wide and short — unreadable
+    // at a tall, narrow viewport no matter how it's tidied — but reading down it comes out narrow and
+    // tall, which does fit. Direction isn't pinned, so the ladder can try both.
+    const chain = {
+      title: 'Chain',
+      nodes: Array.from({ length: 6 }, (_, i) => ({ id: `n${i}`, type: 'service', label: `Service ${i}` })),
+      relationships: Array.from({ length: 5 }, (_, i) => ({ id: `e${i}`, from: `n${i}`, to: `n${i + 1}`, label: 'calls' })),
+      layout: { viewport: [400, 1400] as [number, number] },
+    };
+    const composed = compose(chain, 'd_viewportfit');
+    expect(composed.receipt.layout).toMatchObject({ direction: 'down' });
+    expect((composed.receipt as { fit?: { readable: boolean } }).fit?.readable).toBe(true);
+  });
+
+  it('refuses, with an actionable diagnostic, when no candidate is readable at the given viewport', () => {
+    const chain = {
+      title: 'Chain',
+      nodes: Array.from({ length: 6 }, (_, i) => ({ id: `n${i}`, type: 'service', label: `Service ${i}` })),
+      relationships: Array.from({ length: 5 }, (_, i) => ({ id: `e${i}`, from: `n${i}`, to: `n${i + 1}`, label: 'calls' })),
+      layout: { viewport: [80, 80] as [number, number] },
+    };
+    expect(() => compose(chain, 'd_viewportfail')).toThrow(/too small to read/);
+    // The same request is accepted, and says so honestly, once the caller opts in to a degraded fit.
+    const degraded = compose({ ...chain, layout: { ...chain.layout, allowDegraded: true } }, 'd_viewportok');
+    expect(degraded.receipt).toMatchObject({ degraded: true, fit: { readable: false } });
+  });
+});
+
+describe('checkFit', () => {
+  it('never scales a diagram up past its own size to fill a larger frame', () => {
+    expect(checkFit({ width: 100, height: 50 }, 10, [1000, 1000]).scale).toBe(1);
+  });
+
+  it('flags text below the readable floor once the frame forces it small enough', () => {
+    const roomy = checkFit({ width: 200, height: 100 }, 10, [200, 100]);
+    expect(roomy.readable).toBe(true);
+    const cramped = checkFit({ width: 2000, height: 1000 }, 10, [200, 100]);
+    expect(cramped.effectiveFontPx).toBeCloseTo(1, 5);
+    expect(cramped.readable).toBe(false);
+  });
+});
+
+describe('isBetterCandidate / isCleanCandidate', () => {
+  const clean = report(0, 0);
+
+  it('behaves exactly like isBetterReport/isClean when neither candidate carries a fit', () => {
+    expect(isBetterCandidate({ report: report(0, 25) }, { report: report(1, 0) })).toBe(isBetterReport(report(0, 25), report(1, 0)));
+    expect(isCleanCandidate({ report: clean })).toBe(true);
+    expect(isCleanCandidate({ report: report(0, 1) })).toBe(false);
+  });
+
+  it('ranks a fitting candidate over an equally error-free one that does not fit', () => {
+    const fits = { report: clean, fit: checkFit({ width: 100, height: 100 }, 10, [200, 200]) };
+    const doesNotFit = { report: clean, fit: checkFit({ width: 2000, height: 2000 }, 10, [200, 200]) };
+    expect(isBetterCandidate(fits, doesNotFit)).toBe(true);
+    expect(isBetterCandidate(doesNotFit, fits)).toBe(false);
+    expect(isCleanCandidate(fits)).toBe(true);
+    expect(isCleanCandidate(doesNotFit)).toBe(false);
+  });
+
+  it('still lets fewer errors win over a better fit — geometry outranks readable size', () => {
+    const fewerErrorsBadFit = { report: report(1, 0), fit: checkFit({ width: 2000, height: 2000 }, 10, [200, 200]) };
+    const moreErrorsGoodFit = { report: report(2, 0), fit: checkFit({ width: 100, height: 100 }, 10, [200, 200]) };
+    expect(isBetterCandidate(fewerErrorsBadFit, moreErrorsGoodFit)).toBe(true);
   });
 });

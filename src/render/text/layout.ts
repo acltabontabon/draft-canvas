@@ -39,9 +39,26 @@ const segmenter =
     : null;
 
 function segments(text: string): string[] {
-  if (!segmenter) return text.match(/\s+|\S+/g) ?? [];
+  const raw = segmenter ? [...segmenter.segment(text)].map((s) => s.segment) : (text.match(/\s+|\S+/g) ?? []);
+  return mergeOrphanPunctuation(raw);
+}
+
+/** A segment made entirely of punctuation, with nothing else in it to wrap around. */
+const PUNCTUATION_ONLY = /^\p{P}+$/u;
+
+/**
+ * `Intl.Segmenter`'s word granularity gives trailing punctuation its own segment ("correct?" ->
+ * "correct", "?"), so the wrap loop can leave it to open the next line alone once the word ahead of
+ * it just barely doesn't fit. Fused onto the segment before it, punctuation always wraps with the
+ * word it closes — except when it opens the text, where it's the author's own leading mark (a bullet,
+ * an opening quote) and belongs on its own.
+ */
+function mergeOrphanPunctuation(pieces: string[]): string[] {
   const out: string[] = [];
-  for (const { segment } of segmenter.segment(text)) out.push(segment);
+  for (const piece of pieces) {
+    if (out.length > 0 && PUNCTUATION_ONLY.test(piece)) out[out.length - 1] += piece;
+    else out.push(piece);
+  }
   return out;
 }
 

@@ -15,7 +15,7 @@ import { AgentError } from './errors';
 import { readCreate, type CreateSpec, type LayoutSpec } from './input';
 import { measureContext, placeRoom, type PlacedRoom } from './place';
 import { silent, type Report } from './progress';
-import { checkQuality, isBetterReport, isClean, type QualityIssue, type QualityReport } from './quality';
+import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
 import { pastDeadline, withDeadline } from './route';
 import { buildFromStarter } from './starter';
 
@@ -63,7 +63,7 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   // arrangement for a worse last one; among unreadable ones, the one that hides the least wins. A
   // candidate with fewer errors always outranks one with more, however many jogs either has —
   // `isBetterReport` decides that, not a summed score (see its doc comment).
-  let best: { placed: PlacedRoom; found: QualityReport; layout: LayoutSpec } | undefined;
+  let best: { placed: PlacedRoom; found: QualityReport; fit?: FitReport; layout: LayoutSpec } | undefined;
   let outOfTime = false;
   let tried = 0;
   for (const layout of attempts) {
@@ -79,12 +79,15 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
     // (Once repairing, it stays "repairing": the stage says where the request is, not each step.)
     report(tried === 1 ? 'routing' : 'repairing', { nodes: candidate.nodes, edges: candidate.edges, flows: candidate.flows });
     const found = qualityOfEveryRoom(candidate, ctx);
-    if (!best || isBetterReport(found, best.found)) best = { placed: candidate, found, layout };
-    if (isClean(found)) break;
+    // Only measured against a viewport the request actually gave — otherwise this candidate always
+    // "fits", so a request with no `layout.viewport` compares and stops exactly as it always has.
+    const fit = layout.viewport ? checkFit(renderedBoundsOf(candidate.nodes, candidate.edges, ctx), smallestFontPresent(candidate.nodes, candidate.edges), layout.viewport) : undefined;
+    if (!best || isBetterCandidate({ report: found, fit }, { report: best.found, fit: best.fit })) best = { placed: candidate, found, fit, layout };
+    if (isCleanCandidate({ report: found, fit })) break;
   }
   const repaired = tried - 1;
   if (!best) throw new AgentError('INTERNAL', 'Nothing was laid out.');
-  const { placed, found, layout: used } = best;
+  const { placed, found, fit, layout: used } = best;
   const issues = found.errors;
   report('finishing', { nodes: placed.nodes, edges: placed.edges, flows: placed.flows });
   if (issues.length > 0 && !spec.layout.allowDegraded) {
@@ -92,6 +95,12 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
     throw new AgentError('LAYOUT_FAILED', `The arranged diagram still has ${issues.length} readability problem(s) after ${repaired} repair attempt(s)${why}.`, {
       hint: 'Try layout.direction "down", fewer relationships per element, shorter labels — or pass layout.allowDegraded: true to accept it and tidy by hand.',
       details: { problems: issues.slice(0, 20).map((i) => i.message) },
+    });
+  }
+  if (fit && !fit.readable && !spec.layout.allowDegraded) {
+    throw new AgentError('LAYOUT_FAILED', `The arranged diagram's smallest text would render at about ${fit.effectiveFontPx.toFixed(1)}px in a ${used.viewport![0]}×${used.viewport![1]} frame — too small to read.`, {
+      hint: 'Shorten labels/descriptions, split the diagram, use a larger viewport, or pass layout.allowDegraded: true to accept it as is.',
+      details: { fit },
     });
   }
 
@@ -104,8 +113,9 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
     receipt: {
       created: counts,
       layout: { direction: used.direction, spacing: used.spacing },
-      ...(issues.length ? { degraded: true } : {}),
+      ...(issues.length || (fit && !fit.readable) ? { degraded: true } : {}),
       quality: qualityReceipt('whole-diagram', found),
+      ...(fit ? { fit } : {}),
       ...(placed.advisories.length || levelAdvisories(document.nodes, document.level).length
         ? { advisories: [...levelAdvisories(document.nodes, document.level), ...placed.advisories].slice(0, 10) }
         : {}),

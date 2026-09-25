@@ -101,6 +101,25 @@ describe('text layout', () => {
     expect(first).toBeGreaterThan(0);
     expect(first).toBeLessThan(20);
   });
+
+  it('never strands trailing punctuation alone on the line after the word it closes', () => {
+    const text = 'Should low-stock alerts page the on-call manager immediately, or wait for the scheduled report?';
+    // At width 118 the unfused word/punctuation pair used to wrap so the '?' opened its own line.
+    for (const maxWidth of [60, 90, 112, 114, 116, 118, 140, 200]) {
+      const layout = layoutText(text, { font: FONTS.nodeLabel, maxWidth, lineHeight: 19, measurer });
+      for (const line of layout.lines) expect(line.text).not.toMatch(/^\p{P}+$/u);
+    }
+  });
+
+  it('keeps a leading punctuation mark on its own when it opens the text', () => {
+    const layout = layoutText('- first\n- second', {
+      font: FONTS.nodeLabel,
+      maxWidth: 400,
+      lineHeight: 19,
+      measurer,
+    });
+    expect(layout.lines.map((line) => line.text)).toEqual(['- first', '- second']);
+  });
 });
 
 describe('code tokenizing', () => {

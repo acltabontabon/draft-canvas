@@ -233,7 +233,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "A fresh unique id (a UUID) per intended change. Retrying with the same id and payload returns the first result instead of applying twice."
+          "description": "A fresh UUID per change. Retrying with the same id and payload returns the first result, not a second."
         },
         "title": {
           "type": "string",
@@ -812,7 +812,16 @@
             },
             "normalizePeerSizes": {
               "type": "boolean",
-              "description": "Give peer shapes (same type/role, same parent) one uniform size, bounded against one long description enlarging the rest. Default true for a new diagram or block; false for arrange (existing sizes kept unless asked)."
+              "description": "Give peer shapes (same type/role, parent) one uniform size, bounded against one outlier growing the rest. Default true for a new diagram/block; false for arrange (kept unless asked)."
+            },
+            "viewport": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Intended [width, height] px. Preferred over a layout unreadable there; refused, not shrunk, if none fits."
             }
           },
           "additionalProperties": false
@@ -884,7 +893,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "A fresh unique id (a UUID) per intended change. Retrying with the same id and payload returns the first result instead of applying twice."
+          "description": "A fresh UUID per change. Retrying with the same id and payload returns the first result, not a second."
         },
         "diagramId": {
           "type": "string"
@@ -1524,7 +1533,16 @@
             },
             "normalizePeerSizes": {
               "type": "boolean",
-              "description": "Give peer shapes (same type/role, same parent) one uniform size, bounded against one long description enlarging the rest. Default true for a new diagram or block; false for arrange (existing sizes kept unless asked)."
+              "description": "Give peer shapes (same type/role, parent) one uniform size, bounded against one outlier growing the rest. Default true for a new diagram/block; false for arrange (kept unless asked)."
+            },
+            "viewport": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Intended [width, height] px. Preferred over a layout unreadable there; refused, not shrunk, if none fits."
             }
           },
           "additionalProperties": false
@@ -1557,7 +1575,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "A fresh unique id (a UUID) per intended change. Retrying with the same id and payload returns the first result instead of applying twice."
+          "description": "A fresh UUID per change. Retrying with the same id and payload returns the first result, not a second."
         },
         "diagramId": {
           "type": "string"

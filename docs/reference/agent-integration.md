@@ -375,6 +375,9 @@ would cut diagonally through shapes). Anchors follow the reading direction:
   width so the two connectors run as a short straight pair instead of a detour around the diagram.
 - A return runs around the outside; when its caption or line meets another connector, the repair
   first tries moving *the other* connector, so a straight one isn't sent on a detour.
+- A **reciprocal pair** — two relationships between the same two elements, one each way — is spaced
+  further apart than an ordinary set of parallel connectors, so the two directions read as clearly
+  separate lines rather than a small parallel nudge that could pass for one route with a kink.
 
 **Quality gate** (`src/agent/quality.ts`). Connectors are checked exactly as the canvas draws them:
 its trunks for fan-outs, its lanes for parallel pairs, and its label groups (`src/agent/route.ts`).
@@ -400,6 +403,20 @@ The repair is bounded:
   candidate, the request is refused rather than drawn, unless `allowDegraded`.
 - **Time.** Repairs stop at a 6 s soft budget, and a worker still busy at 20 s is terminated. Either
   way the request is refused with nothing changed.
+
+**`layout.viewport: [width, height]`** (px) names the frame the diagram is meant to be shown in.
+When given, every candidate in the ladder above is also measured against it: the diagram's complete
+rendered extent (every shape, plus every connector's route and caption exactly as drawn) is scaled to
+fit the frame, and the smallest font size actually used by the diagram's own content is scaled with
+it. A candidate that would leave text unreadably small at that size is ranked below one that wouldn't
+— right after valid geometry and before route-length or spacing niceties — so, for instance, a caller
+who left `direction` unset gets the orientation that actually fits the frame, not just the one that
+happened to have no overlaps. Nothing is ever shrunk, clipped, or hidden to pass this check: with no
+candidate reading well at the given size, the request is refused (`LAYOUT_FAILED`) with the scale and
+effective font size in its `details`, the same way an unreadable layout already is — or kept anyway
+with `layout.allowDegraded: true`, whose receipt then carries `fit: { scale, effectiveFontPx,
+readable: false }` alongside the usual `degraded: true`. Omitted (the default), nothing about layout
+selection changes.
 
 Every receipt carries a `quality` object: `scope` (`"whole-diagram"` for `create_diagram`, `"touched"`
 for `update_diagram` — a partial check is never reported as if the rest of the diagram were vouched
@@ -446,8 +463,8 @@ The layout gallery — 20 cases in `tests/fixtures/agent/gallery.ts` — is asse
 - pixel-stable output;
 - nothing pre-existing moved on update;
 - at most one avoidable jog across the whole gallery;
-- the loan-application context case (peer-uniform actors and external systems, no connector bent more
-  than twice) checked on its own, as the regression it was built for.
+- a system-context case (peer-uniform actors and external systems, no connector bent more than twice)
+  checked on its own, as the regression it was built for.
 
 `npx tsx e2e/agent-gallery.ts --base <dev server> --out <dir>` renders every case in the real editor,
 in light and dark, at 1440×900 and 1920×1080, for a person to look at. Rendered there, with the

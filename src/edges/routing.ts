@@ -358,6 +358,8 @@ export interface LaneAssignment {
 
 const LONE_LANE: LaneAssignment = { offset: 0, count: 1 };
 const laneIndexCache = new WeakMap<readonly DraftEdge[], Map<string, LaneAssignment>>();
+/** How much further apart a proven-reciprocal pair's lanes sit than an ordinary parallel group's. */
+const RECIPROCAL_LANE_WIDEN = 1.6;
 
 /** Groups edges by their unordered (source, target) pair, so A→B and B→A —
  *  the callback case — share a lane group and fan out together. */
@@ -451,9 +453,15 @@ export function laneIndex(edges: readonly DraftEdge[]): Map<string, LaneAssignme
     // stable even if the edges array is ever reordered upstream.
     const sorted = [...group].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     const count = sorted.length;
+    // A group that actually runs both ways (the callback case) reads as two independent
+    // relationships, not one fan — nudged further apart than an ordinary parallel group so the
+    // two directions don't pass for a single kinked line. `labelLaneOffset`/`laneNudge` both scale
+    // off this same offset, so widening it here separates the routed lines and their captions alike.
+    const reciprocal = sorted.some((edge) => sorted.some((other) => other !== edge && other.source === edge.target && other.target === edge.source));
+    const widen = reciprocal ? RECIPROCAL_LANE_WIDEN : 1;
     sorted.forEach((edge, i) => {
       // Centred and symmetric: count=2 -> [-0.5, 0.5], count=3 -> [-1, 0, 1].
-      index.set(edge.id, { offset: i - (count - 1) / 2, count });
+      index.set(edge.id, { offset: (i - (count - 1) / 2) * widen, count });
     });
   }
 

@@ -260,6 +260,13 @@ describe('laneIndex separates parallel edges between the same node pair', () => 
     expect(lanes.get('e1')!.offset).not.toBe(lanes.get('e2')!.offset);
   });
 
+  it('spaces a reciprocal pair further apart than an ordinary parallel group of the same size', () => {
+    const reciprocal = laneIndex([edgeWith('e1', 'a', 'b'), edgeWith('e2', 'b', 'a')]);
+    const parallel = laneIndex([edgeWith('e3', 'a', 'b'), edgeWith('e4', 'a', 'b')]);
+    expect(Math.abs(reciprocal.get('e1')!.offset)).toBeGreaterThan(Math.abs(parallel.get('e3')!.offset));
+    expect(Math.abs(reciprocal.get('e1')!.offset)).toBe(Math.abs(reciprocal.get('e2')!.offset));
+  });
+
   it('centres three or more edges around zero', () => {
     const edges = [edgeWith('e1', 'a', 'b'), edgeWith('e2', 'a', 'b'), edgeWith('e3', 'a', 'b')];
     const lanes = laneIndex(edges);

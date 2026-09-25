@@ -8,6 +8,7 @@ import { compose } from '../../src/agent/compile';
 import { applyUpdate } from '../../src/agent/patch';
 import { measureContext } from '../../src/agent/place';
 import { checkQuality } from '../../src/agent/quality';
+import { overlaps } from '../../src/agent/route';
 import type { DraftDocument, DraftNode } from '../../src/document/types';
 import { deserializeDocument } from '../../src/export/project';
 
@@ -135,5 +136,49 @@ describe('arrange', () => {
 
   it('refuses a scope it cannot find, naming it', () => {
     expect(() => applyUpdate(orders(), [], [{ op: 'arrange', scope: { group: 'nope' } }], undefined)).toThrow(/no group "nope"/);
+  });
+
+  it('keeps a free note at its own offset from its host when that host moves, instead of replacing the offset', () => {
+    const doc = build({
+      nodes: [
+        { id: 'a', type: 'service', label: 'Service A' },
+        { id: 'b', type: 'database', label: 'DB B' },
+      ],
+      relationships: [{ id: 'r1', from: 'a', to: 'b', label: 'reads and writes' }],
+      notes: [{ id: 'n1', text: 'Keep this handy.', near: 'a' }],
+    });
+    // A person nudges the shape a little, taking the note along at the same offset.
+    const nudged = { ...doc, nodes: doc.nodes.map((n) => (n.id === 'a' || n.id === 'n1' ? { ...n, x: n.x + 15, y: n.y - 10 } : n)) };
+    const before = byId(nudged);
+    const relBefore = { x: before.get('n1')!.x - before.get('a')!.x, y: before.get('n1')!.y - before.get('a')!.y };
+    const { file } = applyUpdate(nudged, [], [{ op: 'arrange' }], undefined);
+    const after = byId(file);
+    const relAfter = { x: after.get('n1')!.x - after.get('a')!.x, y: after.get('n1')!.y - after.get('a')!.y };
+    expect(relAfter).toEqual(relBefore);
+  });
+
+  it('falls back to a fresh spot for the note when its old offset from the host is no longer free', () => {
+    const doc = build({
+      nodes: [
+        { id: 'a', type: 'service', label: 'Service A' },
+        { id: 'b', type: 'database', label: 'DB B' },
+        { id: 'blocker', type: 'service', label: 'Blocker' },
+      ],
+      relationships: [{ id: 'r1', from: 'a', to: 'b', label: 'reads and writes' }],
+      notes: [{ id: 'n1', text: 'Keep this handy.', near: 'a' }],
+    });
+    const note = doc.nodes.find((n) => n.id === 'n1')!;
+    const [dx, dy] = [15, -10];
+    // A shape parked exactly where the note's preserved offset would land it.
+    const blockerBox = { x: note.x + dx, y: note.y + dy, width: note.width, height: note.height };
+    const nudged = {
+      ...doc,
+      nodes: doc.nodes.map((n) =>
+        n.id === 'a' || n.id === 'n1' ? { ...n, x: n.x + dx, y: n.y + dy } : n.id === 'blocker' ? { ...n, ...blockerBox } : n,
+      ),
+    };
+    const { file } = applyUpdate(nudged, [], [{ op: 'arrange' }], undefined);
+    const after = byId(file);
+    expect(overlaps(after.get('n1')!, after.get('blocker')!)).toBe(false);
   });
 });

@@ -152,6 +152,8 @@ export interface LayoutSpec {
    * `peerNormalize` (`agent/place.ts`).
    */
   normalizePeerSizes?: boolean;
+  /** The intended presentation frame, `[width, height]` px — see `agent/quality.ts`'s `FitReport`. */
+  viewport?: [number, number];
   /** Internal to repair (never read from a request): see `LayoutInput.ties`. */
   ties?: 'align' | 'balance';
 }
@@ -546,6 +548,7 @@ export function readLayout(r: Reader, value: unknown, path: string, flowIds: Set
   if (primaryFlow !== undefined && !flowIds.has(primaryFlow)) r.problems.add('INVALID_REFERENCE', `${path}/primaryFlow`, `no flow "${primaryFlow}"`);
   const allowDegraded = r.bool(raw.allowDegraded, `${path}/allowDegraded`) ?? false;
   const normalizePeerSizes = r.bool(raw.normalizePeerSizes, `${path}/normalizePeerSizes`);
+  const viewport = readViewport(r, raw.viewport, `${path}/viewport`);
   return {
     direction,
     ...(raw.direction !== undefined ? { directionChosen: true } : {}),
@@ -553,7 +556,17 @@ export function readLayout(r: Reader, value: unknown, path: string, flowIds: Set
     ...(primaryFlow && flowIds.has(primaryFlow) ? { primaryFlow } : {}),
     allowDegraded,
     ...(normalizePeerSizes !== undefined ? { normalizePeerSizes } : {}),
+    ...(viewport ? { viewport } : {}),
   };
+}
+
+function readViewport(r: Reader, value: unknown, path: string): [number, number] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length !== 2 || !value.every((n) => typeof n === 'number' && Number.isFinite(n) && n > 0)) {
+    r.problems.add('INVALID_INPUT', path, 'must be [width, height] in px, both greater than 0');
+    return undefined;
+  }
+  return [value[0] as number, value[1] as number];
 }
 
 function allIds(room: RoomSpec, into: Set<string>) {

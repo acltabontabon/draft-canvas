@@ -132,8 +132,16 @@ const action: Schema = {
 
 const normalizePeerSizes = {
   type: 'boolean',
-  description: 'Give peer shapes (same type/role, same parent) one uniform size, bounded against one long description enlarging the rest. Default true for a new diagram or block; false for arrange (existing sizes kept unless asked).',
+  description: 'Give peer shapes (same type/role, parent) one uniform size, bounded against one outlier growing the rest. Default true for a new diagram/block; false for arrange (kept unless asked).',
 } as const;
+
+const viewport: Schema = {
+  type: 'array',
+  items: { type: 'number' },
+  minItems: 2,
+  maxItems: 2,
+  description: 'Intended [width, height] px. Preferred over a layout unreadable there; refused, not shrunk, if none fits.',
+};
 
 const layout: Schema = {
   type: 'object',
@@ -143,6 +151,7 @@ const layout: Schema = {
     primaryFlow: { type: 'string', description: 'Id of the flow to lay out as the main path.' },
     allowDegraded: { type: 'boolean', description: 'Accept a layout that failed the readability check instead of an error.' },
     normalizePeerSizes,
+    viewport,
   },
   additionalProperties: false,
 };
@@ -152,7 +161,7 @@ const layout: Schema = {
  *  create-only concerns there. */
 const layoutBrief: Schema = {
   type: 'object',
-  properties: { direction: { enum: ['right', 'down'] }, spacing: { enum: ['compact', 'comfortable', 'spacious'] }, normalizePeerSizes },
+  properties: { direction: { enum: ['right', 'down'] }, spacing: { enum: ['compact', 'comfortable', 'spacious'] }, normalizePeerSizes, viewport },
   additionalProperties: false,
 };
 
@@ -166,7 +175,7 @@ const room = (withActions: boolean): Record<string, Schema> => ({
   ...(withActions ? { actions: { type: 'array', maxItems: AGENT_LIMITS.actionsPerRequest, items: action } } : {}),
 });
 
-const requestId = { type: 'string', minLength: 1, maxLength: 128, description: 'A fresh unique id (a UUID) per intended change. Retrying with the same id and payload returns the first result instead of applying twice.' };
+const requestId = { type: 'string', minLength: 1, maxLength: 128, description: 'A fresh UUID per change. Retrying with the same id and payload returns the first result, not a second.' };
 
 const scope: Schema = {
   type: 'object',

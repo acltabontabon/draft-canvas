@@ -17,9 +17,10 @@
 import type { DraftEdge, DraftNode } from '../document/types';
 import { naturalArchitectureSize, type DescribeContext } from '../nodes/describe';
 import { isC4Element } from '../depth/c4';
+import { TEXT_SIZES } from '../render/text/fonts';
 import { captionSizer } from './place';
 import { routingPlan } from '../edges/bundles';
-import { crosses, othersOf, overlaps, routeProblem, stacked, together, type Box, type Other } from './route';
+import { crosses, drawnRoute, othersOf, overlaps, routeProblem, stacked, together, type Box, type Other } from './route';
 
 export interface QualityIssue {
   kind: 'overlap' | 'outside-group' | 'clipped-text' | 'through-node' | 'label-over-node' | 'label-collision' | 'label-crossed' | 'shared-run' | 'invalid-geometry' | 'jog';
@@ -75,6 +76,105 @@ export function isBetterReport(a: QualityReport, b: QualityReport): boolean {
 /** No errors and nothing left to tidy — the search for a better candidate can stop here. */
 export function isClean(report: QualityReport): boolean {
   return report.errors.length === 0 && report.warnings.length === 0;
+}
+
+/** Below this, text stops being legible even at a glance — see `TEXT_SIZES.nodeDescription`'s own
+ *  doc comment for the same line drawn for body text. A named, real floor, not a guess: every size
+ *  in `TEXT_SIZES` above it is meant to be read; nothing in the app ever renders text this small. */
+const MIN_READABLE_PX = 8;
+
+export interface FitReport {
+  /** `min(viewport.width / bounds.width, viewport.height / bounds.height)`, capped at 1 — a diagram
+   *  smaller than the frame is never scaled up to fill it, only ever down to fit. */
+  scale: number;
+  /** The smallest font size actually used by this diagram's own content, before scaling. */
+  smallestFontPx: number;
+  /** `smallestFontPx * scale` — what that text would render at, fitted to the viewport. */
+  effectiveFontPx: number;
+  /** Whether `effectiveFontPx` stays at or above `MIN_READABLE_PX`. */
+  readable: boolean;
+}
+
+/** The smallest font size actually present in `nodes`/`edges`' own content — real usage, not every
+ *  size the app is capable of drawing. A caption or relationship label (`TEXT_SIZES.connectorCaption`)
+ *  is close to universal, so it usually sets the floor; a note or a C4 description/technology line
+ *  can set it lower or higher depending on what the diagram actually shows. */
+export function smallestFontPresent(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): number {
+  let smallest: number = TEXT_SIZES.nodeLabel;
+  const consider = (px: number) => {
+    if (px < smallest) smallest = px;
+  };
+  for (const node of nodes) {
+    if (node.type === 'note' || node.type === 'text' || node.type === 'code') consider(TEXT_SIZES.noteBody);
+    if (isC4Element(node)) {
+      if (node.description) consider(TEXT_SIZES.nodeDescription);
+      if (node.technology) consider(TEXT_SIZES.nodeTechnology);
+    }
+  }
+  for (const edge of edges) {
+    if (edge.label || edge.semantic) consider(TEXT_SIZES.connectorCaption);
+  }
+  return smallest;
+}
+
+/** Every shape, plus every connector's route and caption chip exactly as drawn — the diagram's
+ *  complete rendered extent, not just its shapes' own boxes. A long detour or a caption sitting past
+ *  a shape's edge is part of what a viewport has to hold too. */
+export function renderedBoundsOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], ctx: DescribeContext): { width: number; height: number } {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const grow = (x: number, y: number) => {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  };
+  for (const node of nodes) {
+    grow(node.x, node.y);
+    grow(node.x + node.width, node.y + node.height);
+  }
+  const caption = captionSizer(nodes, ctx);
+  for (const edge of edges) {
+    const drawn = drawnRoute(edge, nodes, edges, caption);
+    if (!drawn) continue;
+    for (const point of drawn.points) grow(point.x, point.y);
+    if (drawn.chip) {
+      grow(drawn.chip.x, drawn.chip.y);
+      grow(drawn.chip.x + drawn.chip.width, drawn.chip.y + drawn.chip.height);
+    }
+  }
+  if (!Number.isFinite(minX)) return { width: 0, height: 0 };
+  return { width: maxX - minX, height: maxY - minY };
+}
+
+/** How a diagram would read at an intended presentation size: never by shrinking, clipping or hiding
+ *  anything — this only measures what's already there against the frame it's meant to be shown in. */
+export function checkFit(bounds: { width: number; height: number }, smallestFontPx: number, viewport: readonly [number, number]): FitReport {
+  const [width, height] = viewport;
+  const scale = Math.min(1, width / Math.max(1, bounds.width), height / Math.max(1, bounds.height));
+  const effectiveFontPx = smallestFontPx * scale;
+  return { scale, smallestFontPx, effectiveFontPx, readable: effectiveFontPx >= MIN_READABLE_PX };
+}
+
+/** Like `isBetterReport`, but a viewport hint is judged right where the request's priority order puts
+ *  it: after valid geometry, before route/spacing niceties. Absent on both sides (no `layout.viewport`
+ *  given) never enters the comparison, so a request without it behaves exactly as `isBetterReport`
+ *  always has. */
+export function isBetterCandidate(a: { report: QualityReport; fit?: FitReport }, b: { report: QualityReport; fit?: FitReport }): boolean {
+  const errorsA = weightOf(a.report.errors);
+  const errorsB = weightOf(b.report.errors);
+  if (errorsA !== errorsB) return errorsA < errorsB;
+  const fitsA = a.fit?.readable ?? true;
+  const fitsB = b.fit?.readable ?? true;
+  if (fitsA !== fitsB) return fitsA;
+  return weightOf(a.report.warnings) < weightOf(b.report.warnings);
+}
+
+/** `isClean`, extended the same way `isBetterCandidate` extends `isBetterReport`. */
+export function isCleanCandidate(candidate: { report: QualityReport; fit?: FitReport }): boolean {
+  return isClean(candidate.report) && (candidate.fit?.readable ?? true);
 }
 
 const contains = (outer: Box, inner: Box) =>

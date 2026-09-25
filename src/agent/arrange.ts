@@ -26,8 +26,8 @@ import type { DescribeContext } from '../nodes/describe';
 import type { Problems } from './errors';
 import type { LayoutSpec, Reader } from './input';
 import { anchorRectOf, arrangeParts, captionSizer, placeBlock, sizeToFit } from './place';
-import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
-import { drawnRoute, pastDeadline, repairAnchors } from './route';
+import { checkFit, checkQuality, isBetterCandidate, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityReport } from './quality';
+import { drawnRoute, overlaps, pastDeadline, repairAnchors, segmentHitsBox } from './route';
 
 type Json = Record<string, unknown>;
 
@@ -135,7 +135,7 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
 
   const spacings = [request.layout.spacing, ...SPACINGS.filter((s) => s !== request.layout.spacing)];
   const attempts: LayoutSpec[] = [...spacings.map((spacing) => ({ ...request.layout, spacing })), ...spacings.map((spacing) => ({ ...request.layout, spacing, ties: 'balance' as const }))];
-  let best: { arranged: Arranged; report: QualityReport } | undefined;
+  let best: { arranged: Arranged; report: QualityReport; fit?: FitReport } | undefined;
   let lastRefusal = false;
   for (const layout of attempts) {
     if (best && pastDeadline()) break;
@@ -145,8 +145,11 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
       continue;
     }
     const report = checkQuality(arranged.view.nodes, arranged.view.edges, ctx, arranged.touched);
-    if (!best || isBetterReport(report, best.report)) best = { arranged, report };
-    if (isClean(report)) break;
+    // Measured against the whole diagram, not just the touched scope — a viewport is about how the
+    // presented diagram reads overall, not only what this one edit changed.
+    const fit = layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, arranged.view.edges, ctx), smallestFontPresent(arranged.view.nodes, arranged.view.edges), layout.viewport) : undefined;
+    if (!best || isBetterCandidate({ report, fit }, { report: best.report, fit: best.fit })) best = { arranged, report, fit };
+    if (isCleanCandidate({ report, fit })) break;
     // Route-only never moves a shape, so a roomier spacing changes nothing — one attempt is enough.
     if (request.move === false) break;
   }
@@ -211,13 +214,18 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   const touchedEdges = next.edges.filter((e) => changed.has(e.id));
   repairAnchors(touchedEdges, next.nodes, captionSizer(next.nodes, ctx), next.edges);
 
-  // Free notes back beside the shape they sat closest to, when that shape moved.
+  // Free notes back beside the shape they sat closest to, when that shape moved: first tried at the
+  // same offset from the host it already had (a person's own placement kept, not just "some clear
+  // spot"), and only replaced with a fresh `placeBeside` when that offset is no longer free.
   const touched = new Set<string>([...placed.keys(), ...changed.keys()]);
   for (const note of view.nodes) {
     if (!isNoteLike(note) || placed.has(note.id) || (note.parentId && byId.get(note.parentId)?.type === 'group')) continue;
     const host = nearestShape(note, view.nodes);
     if (!host || !placed.has(host.id)) continue;
-    const beside = placeBeside(next, note.id, next.nodes.find((n) => n.id === host.id)!, layout.direction);
+    const movedHost = next.nodes.find((n) => n.id === host.id)!;
+    const dx = movedHost.x - host.x;
+    const dy = movedHost.y - host.y;
+    const beside = translatedBeside(next, note.id, dx, dy) ?? placeBeside(next, note.id, movedHost, layout.direction);
     if (beside) {
       next = beside;
       touched.add(note.id);
@@ -328,6 +336,26 @@ export function fitGroups(view: DraftDocument, id: string): DraftDocument {
     current = group.parentId;
   }
   return doc;
+}
+
+/**
+ * Moves a free note by the same delta its host just moved by, keeping whatever offset and side a
+ * person gave it — clear of every other shape and of connectors as drawn, exactly like `placeBeside`
+ * checks, just at this one specific spot rather than searching for a fresh one. `undefined` when the
+ * translated spot collides with something, so the caller can fall back to `placeBeside`.
+ */
+function translatedBeside(view: DraftDocument, noteId: string, dx: number, dy: number): DraftDocument | undefined {
+  const note = view.nodes.find((n) => n.id === noteId);
+  if (!note) return undefined;
+  const box = { x: Math.round(note.x + dx), y: Math.round(note.y + dy), width: note.width, height: note.height };
+  const others = view.nodes.filter((n) => n.id !== noteId);
+  if (others.some((n) => overlaps(box, n))) return undefined;
+  const lines = view.edges.flatMap((edge) => {
+    const drawn = drawnRoute(edge, others, view.edges);
+    return drawn ? [drawn.points] : [];
+  });
+  if (lines.some((line) => line.some((point, k) => k > 0 && segmentHitsBox(line[k - 1]!, point, box)))) return undefined;
+  return updateNode(view, noteId, { x: box.x, y: box.y });
 }
 
 /**
