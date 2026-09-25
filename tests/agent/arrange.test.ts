@@ -181,4 +181,30 @@ describe('arrange', () => {
     const after = byId(file);
     expect(overlaps(after.get('n1')!, after.get('blocker')!)).toBe(false);
   });
+
+  it('keeps a note beside its shape inside a boundary, and a boundary\'s own note at its head', () => {
+    const doc = build({
+      groups: [{ id: 'core', label: 'Orders', kind: 'system' }],
+      nodes: [
+        { id: 'web', type: 'service', label: 'Web Storefront' },
+        { id: 'api', type: 'api', label: 'Orders API', group: 'core' },
+        { id: 'db', type: 'sql-database', label: 'Orders DB', group: 'core' },
+      ],
+      relationships: [
+        { id: 'a', from: 'web', to: 'api' },
+        { id: 'b', from: 'api', to: 'db' },
+      ],
+      notes: [
+        { id: 'idem', text: 'Idempotent by client key.', about: 'api' },
+        { id: 'own', text: 'Owned by the orders team.', about: 'core' },
+      ],
+    });
+    const { file } = applyUpdate(doc, [], [{ op: 'arrange', spacing: 'spacious' }], undefined);
+    const at = (id: string) => file.nodes.find((n) => n.id === id)!;
+    expect(at('idem').parentId).toBe('core');
+    expect(at('idem').y + at('idem').height).toBeLessThanOrEqual(at('api').y);
+    expect(at('api').y - (at('idem').y + at('idem').height)).toBeLessThanOrEqual(40);
+    expect(at('own').y).toBeLessThan(at('idem').y);
+    expect(checkQuality(file.nodes, file.edges, measureContext()).errors).toEqual([]);
+  });
 });

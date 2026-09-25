@@ -142,7 +142,14 @@ function centre(rect: Rect) {
  * search below — correctness (never landing on an occupied handle) matters more than optimal
  * alignment for a side an unrelated connector already has a fixed claim on.
  */
-export function assignAnchors(edges: AnchorEdge[], rects: Map<string, Rect>, direction: Direction, pinned?: ReadonlyMap<string, Anchors>): Map<string, Anchors> {
+export function assignAnchors(
+  edges: AnchorEdge[],
+  rects: Map<string, Rect>,
+  direction: Direction,
+  pinned?: ReadonlyMap<string, Anchors>,
+  /** A side of a shape no connector may use — where a note about it sits. */
+  reserved?: ReadonlyMap<string, Side>,
+): Map<string, Anchors> {
   const sides = new Map<string, { source: Side; target: Side }>();
   const onSide = new Map<string, { edge: string; end: 'source' | 'target'; other: Rect; pinnedOffset?: number }[]>();
   for (const edge of edges) {
@@ -155,7 +162,14 @@ export function assignAnchors(edges: AnchorEdge[], rects: Map<string, Rect>, dir
     // shapes (a queue's tube) they would run a few pixels apart, so it goes around instead.
     const twin = edges.some((other) => other !== edge && other.source === edge.target && other.target === edge.source);
     const roomy = Math.min(spanOf(s, direction), spanOf(t, direction)) >= TWIN_SPAN;
-    const chosen = fixed ? { source: fixed.sourceAnchor.side, target: fixed.targetAnchor.side } : sidesFor(s, t, direction, (!twin || roomy) && corridorClear(s, t, rects, edge, direction));
+    const free = fixed ? { source: fixed.sourceAnchor.side, target: fixed.targetAnchor.side } : sidesFor(s, t, direction, (!twin || roomy) && corridorClear(s, t, rects, edge, direction));
+    // A reserved side gives way to the one the reading direction leaves (or arrives) by.
+    const chosen = fixed
+      ? free
+      : {
+          source: reserved?.get(edge.source) === free.source ? (direction === 'right' ? 'right' : 'bottom') : free.source,
+          target: reserved?.get(edge.target) === free.target ? (direction === 'right' ? 'left' : 'top') : free.target,
+        };
     sides.set(edge.id, chosen);
     for (const [end, node, side, other, offset] of [
       ['source', edge.source, chosen.source, t, fixed?.sourceAnchor.offset],
@@ -182,8 +196,8 @@ export function assignAnchors(edges: AnchorEdge[], rects: Map<string, Rect>, dir
     while (list.length - moves.length > 3) {
       const first = list[moves.filter((m) => m.to === 'top').length];
       const last = list[list.length - 1 - moves.filter((m) => m.to === 'bottom').length];
-      const up = movable(first) && centre((first as (typeof list)[number]).other).y < own.y ? first : undefined;
-      const down = movable(last) && centre((last as (typeof list)[number]).other).y > own.y + own.height ? last : undefined;
+      const up = movable(first) && reserved?.get(node) !== 'top' && centre((first as (typeof list)[number]).other).y < own.y ? first : undefined;
+      const down = movable(last) && reserved?.get(node) !== 'bottom' && centre((last as (typeof list)[number]).other).y > own.y + own.height ? last : undefined;
       const pick = up && (!down || own.y - centre(up.other).y >= centre((down as (typeof list)[number]).other).y - (own.y + own.height)) ? { entry: up, to: 'top' as Side } : down ? { entry: down, to: 'bottom' as Side } : undefined;
       if (!pick) break;
       moves.push(pick);

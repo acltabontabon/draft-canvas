@@ -73,7 +73,7 @@ const group: Schema = {
   properties: {
     id: id('group'),
     label: text(AGENT_LIMITS.groupLabelLength),
-    kind: { enum: Object.keys(GROUP_KINDS), description: '"system" is a C4 software-system boundary; "group" is purely visual. Default "boundary".' },
+    kind: { enum: Object.keys(GROUP_KINDS), description: '"system" is a C4 software-system boundary; "group" is purely visual. Default "boundary". Laid out as one block: never group external systems just to tidy them.' },
     parent: { type: 'string', description: 'Id of the group it nests in.' },
   },
   required: ['id', 'label'],
@@ -114,7 +114,7 @@ const note: Schema = {
     about: {
       type: 'string',
       description:
-        'Id of the element, relationship or group it is about. An element: placed beside it (placement only). A group: placed inside the boundary (a member). A relationship: attached to it.',
+        'Id of the element, relationship or group it is about — always give one, or it goes after the diagram. An element: placed beside it (placement only). A group: placed inside the boundary (a member). A relationship: attached to it.',
     },
     attach: { type: 'boolean', description: 'With about = an element: attach it to the element natively (it moves and is removed with it) instead of placing it beside.' },
     near: { type: 'string', description: 'Older name for about.' },
@@ -226,7 +226,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        topics: { type: 'array', items: { enum: ['types', 'relationships', 'c4', 'flows', 'starters', 'limits', 'layout'] } },
+        topics: { type: 'array', items: { enum: ['types', 'relationships', 'c4', 'flows', 'starters', 'limits', 'layout', 'readability'] } },
         starter: { enum: STARTER_IDS, description: 'Describe one starter: its element keys and flows.' },
       },
       additionalProperties: false,
@@ -306,7 +306,7 @@ export const TOOLS = [
     name: 'create_diagram',
     title: 'Create a diagram',
     description:
-      'Creates a NEW diagram file — only for the first diagram of a conversation, or when the person asks for a new or separate one; every follow-up is update_diagram on the diagramId this returns. Send the whole graph in one call, notes and flows included, with no coordinates: sizing, layout and connector routing are automatic and checked for readability. Saved into a folder the person enabled; a title that already exists there is refused (DUPLICATE_TITLE) unless allowDuplicateTitle. open: true shows it in Draft Canvas (only when that loses nothing) — pass it when the person wants to see or watch it.',
+      'Creates a NEW diagram file — only for the first diagram of a conversation, or when the person asks for a new or separate one; every follow-up is update_diagram on the diagramId this returns. Send the whole graph in one call, notes and flows included, with no coordinates: sizing, layout and connector routing are automatic and checked for readability. For a clear result list elements in reading order, entry point first; name the main path in layout.primaryFlow; put detail past ~15 elements in an element\'s inside view (get_capabilities readability has the rest). The receipt\'s legibility and advisories say what to change next. Saved into a folder the person enabled; a title that already exists there is refused (DUPLICATE_TITLE) unless allowDuplicateTitle. open: true shows it in Draft Canvas (only when that loses nothing) — pass it when the person wants to see or watch it.',
     inputSchema: {
       type: 'object',
       properties: {

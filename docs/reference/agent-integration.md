@@ -356,7 +356,13 @@ after a save, a replayed unsaved receipt, and a late page refused at the gate.
 The layout is Draft Canvas's own deterministic layered layout (`src/layout/layered.ts`; no
 dependency). It works in these steps:
 
-1. **Clusters.** Boundaries are laid out as compound clusters, inside out.
+1. **Clusters.** Boundaries are laid out as compound clusters, inside out. A boundary knows which of
+   its shapes connect outside it: a shape whose only way on leaves the boundary goes to the boundary's
+   far side, next to where its connector is headed, and one entered from outside goes first. Outside,
+   a connector to or from a boundary lines up with the shape inside that it really joins, not the
+   boundary's middle — so an external system sits level with the service that calls it. Loose shapes
+   in a boundary that are each called from outside (a boundary of external systems) stand in a
+   column, each level with its own caller, rather than in a row along the flow.
 2. **Cycles.** They are broken for layering only. The stored `source` and `target`, semantics and
    flow steps are never touched, and a return is drawn as a detour that barely pulls on placement.
 3. **Layers.** Longest-path layering, with placeholders for long edges.
@@ -397,6 +403,12 @@ would cut diagonally through shapes). Anchors follow the reading direction:
   width so the two connectors run as a short straight pair instead of a detour around the diagram.
 - A return runs around the outside; when its caption or line meets another connector, the repair
   first tries moving *the other* connector, so a straight one isn't sent on a detour.
+- A connector cutting through a boundary neither of its ends is in (or along its title) is
+  re-anchored when another anchoring avoids it without a much longer route (at most 320 px more);
+  while fixing a worse problem, the repair accepts a route that only crosses a boundary if nothing
+  clears everything. Crossing a boundary is never an error on its own.
+- The side of a shape its notes sit on (above it, reading right; left of it, reading down) is
+  reserved: no connector leaves or arrives there.
 - A **reciprocal pair** — two relationships between the same two elements, one each way — is spaced
   further apart than an ordinary set of parallel connectors, so the two directions read as clearly
   separate lines rather than a small parallel nudge that could pass for one route with a kink.
@@ -440,6 +452,42 @@ with `layout.allowDegraded: true`, whose receipt then carries `fit: { scale, eff
 readable: false }` alongside the usual `degraded: true`. Omitted (the default), nothing about layout
 selection changes.
 
+**Legibility** (`src/agent/legibility.ts`). Readable isn't the same as clear: a diagram can pass
+every check above and still send connectors across the whole canvas. So each arrangement is also
+measured, on the connectors as drawn:
+
+| Measure | What it counts |
+| --- | --- |
+| `crossings` | Places where two connectors cross (members of one trunk never count against each other) |
+| `detours` | Connectors drawn more than 1.5× the distance between their shapes' middles, plus 200 px |
+| `throughBoundaries` | Connectors that pass through a boundary neither of their ends is in |
+| `farNotes` | Notes more than 160 px from what they are about — where a read stops associating them |
+| `fill` | Shapes' area over the diagram's bounding area; low means mostly empty space |
+
+Between candidates the quality gate rates the same, legibility decides (with each warning counted as
+one crossing). When the caller left `layout.direction` out and a clean candidate came early, the other
+direction is laid out too; it replaces the default only when it costs at most 80% as much and saves at
+least 25 points, so a diagram doesn't flip over a few pixels of connector. The create receipt carries
+`legibility: {crossings, detours?, throughBoundaries?, farNotes?, fill}`, with the connector and note
+ids listed (up to 10 each); an update receipt carries the same for the whole edited view.
+
+**Advice** (`src/agent/advice.ts`). Some mess comes from the request itself, and the layout can't
+undo it. The create receipt's `advisories` start with what to change, naming ids and, where there is
+one, the `update_diagram` ops that do it:
+
+- a boundary gathering only external systems or people, each called from a different shape, whose
+  connectors detour or cut through something: ungroup its members (the ops to do so are given);
+- a boundary of more than 8 elements, or a view of more than 15: draw a nested boundary one C4 level
+  down, in an element's `inside` view;
+- a note with no `about`, placed after the diagram: give it one;
+- six or more crossings, two or more detours, or three connectors through boundaries: name the main
+  path as `layout.primaryFlow` and list elements in reading order (or, with a main path already
+  named, try `direction: "down"`).
+
+`get_capabilities` with `topics: ["readability"]` gives the agent the whole checklist, each rule with
+its reason, and the sidecar's instructions ask the agent to read it before its first create and to act
+on the receipt's advisories in the same turn.
+
 Every receipt carries a `quality` object: `scope` (`"whole-diagram"` for `create_diagram`, `"touched"`
 for `update_diagram` — a partial check is never reported as if the rest of the diagram were vouched
 for), `errors`/`warnings` counts, `errorsTruncated`/`warningsTruncated` when the listed `problems`/
@@ -467,8 +515,9 @@ gets, applied in place. `{op:"arrange", scope?, direction?, spacing?, connectors
   any shape — a cheaper "just clean up the arrows" pass. An untouched neighbour sharing a side with a
   re-anchored connector keeps its own anchor exactly as it was; the re-anchored ones are placed clear
   of it, never on the slot it already occupies. Default `true` (the full placement pass).
-- Ids, labels, C4 fields, attachments, notes' text and flows never change. A note inside a boundary is
-  laid out with it; a free note goes back beside the shape it sat closest to.
+- Ids, labels, C4 fields, attachments, notes' text and flows never change. A note inside a boundary
+  stays with the shape it sits right beside (within 48 px), or else heads the boundary; a free note
+  goes back beside the shape it sat closest to.
 - Shapes keep their size unless their text needs more room, or `normalizePeerSizes` was asked for.
 
 A "pinned" shape or a "preserve manual routes" request need no dedicated field: leaving a node out of
@@ -478,19 +527,24 @@ is ever persisted, so there is nothing for a reload, resize or move to silently 
 path is always recomputed from the current shapes through the same `routeBetween` function the canvas
 and the exporter call, never a second implementation that could drift from what the person sees.
 
-The layout gallery — 20 cases in `tests/fixtures/agent/gallery.ts` — is asserted in
+The layout gallery — 21 cases in `tests/fixtures/agent/gallery.ts` — is asserted in
 `tests/agent/gallery.test.ts`:
 
 - no errors in any view;
 - pixel-stable output;
 - nothing pre-existing moved on update;
-- at most one avoidable jog across the whole gallery;
+- at most one avoidable jog in the dense case, two in the card-provisioning case (its returns into the
+  system) and none anywhere else;
 - a system-context case (peer-uniform actors and external systems, no connector bent more than twice)
-  checked on its own, as the regression it was built for.
+  checked on its own, as the regression it was built for;
+- a container view with a nested domain, grouped external providers, a reviewer loop and three notes
+  — reported as passing every check while reading badly — held to its legibility: each provider level
+  with its caller, every note beside its subject, at most three crossings.
 
 `npx tsx e2e/agent-gallery.ts --base <dev server> --out <dir>` renders every case in the real editor,
 in light and dark, at 1440×900 and 1920×1080, for a person to look at. Rendered there, with the
-canvas's own text measurement, all 20 cases come out with no errors and no warnings.
+canvas's own text measurement, every case comes out with no errors, and all but the dense and
+card-provisioning cases with no warnings.
 
 ## Notes and flows
 
@@ -498,10 +552,11 @@ canvas's own text measurement, all 20 cases come out with no errors and no warni
 
 | Request | What it becomes |
 | --- | --- |
-| `notes: [{id, text, kind?, about: <element>}]` | A free note placed beside the element, clear of shapes and connectors as drawn. Placement only: nothing records the link. Reads report a derived `nearest` element, labelled as placement. |
+| `notes: [{id, text, kind?, about: <element>}]` | A free note laid out with the element, as one box: just before it across the flow (above, reading right; to its left, reading down), inside the element's boundary, with that side of the element kept free of connectors. Placement only: nothing records the link. Reads report a derived `nearest` element, labelled as placement. |
 | `about: <element>, attach: true` | A native attachment on the element (the chip), under the note's id: it moves, exports and is removed with its host. |
 | `about: <relationship>` | Always an attachment on the connector: a line has no "beside". |
-| `about: <group>` | A member of the boundary, placed inside it; the boundary grows to hold it. |
+| `about: <group>` | A member of the boundary, placed at its head, under its title; the boundary grows to hold it. |
+| no `about` | A free note in a column after the diagram (a row below it, reading down), and an advisory asking for an `about`. |
 
 Text may be multiline; `kind` is `note`, `question`, `warning` or `decision`. The instructions ask
 agents to add only notes that explain something, and to mark an inference from code as an assumption.

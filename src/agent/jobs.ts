@@ -12,6 +12,7 @@ import { applyUpdate, type PatchResult } from './patch';
 import { silent, type Report } from './progress';
 import { type QualityIssue, type QualityReport } from './quality';
 import { withDeadline } from './route';
+import { legibilityOf, type Legibility } from './legibility';
 
 export type Job =
   | { kind: 'compose'; raw: unknown; diagramId: string }
@@ -32,6 +33,8 @@ export type JobResult =
       suggestedOp?: Record<string, unknown>;
       /** Errors and warnings among what the request touched — see `PatchResult['quality']`. */
       quality: QualityReport;
+      /** How the edited view reads as a whole (see `legibility.ts`) — absent when nothing changed. */
+      legibility?: Legibility;
     };
 
 /**
@@ -57,6 +60,7 @@ export function runJob(job: Job, deadline: number, report: Report = silent): Job
       problems: issues.map((issue) => issue.message),
       ...(suggestedOp ? { suggestedOp } : {}),
       quality: result.quality,
+      ...(view && result.file !== job.file ? { legibility: legibilityOf(view.nodes, view.edges) } : {}),
     };
   });
 }

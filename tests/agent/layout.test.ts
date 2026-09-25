@@ -153,6 +153,68 @@ describe('layered layout', () => {
     expect(geometry(build(raw))).toBe(geometry(build(raw)));
   });
 
+  describe('across a boundary', () => {
+    const spacing = { layer: 100, sibling: 50, pad: 30, component: 100 };
+    const box = (id: string, parent?: string) => ({ id, width: 120, height: 60, ...(parent ? { parent } : {}) });
+    const edge = (source: string, target: string) => ({ id: `${source}-${target}`, source, target });
+    const group = (id: string, parent?: string) => ({ id, header: 40, minWidth: 0, ...(parent ? { parent } : {}) });
+
+    it('lines an outside shape up with the inner shape it connects to, not the boundary\'s middle', () => {
+      // p fans out to q and r inside g, so g's middle is p's line; x is called from r, below it.
+      const out = layoutGraph({
+        boxes: [box('p', 'g'), box('q', 'g'), box('r', 'g'), box('x')],
+        groups: [group('g')],
+        edges: [edge('p', 'q'), edge('p', 'r'), edge('r', 'x')],
+        direction: 'right',
+        spacing,
+      });
+      const y = (id: string) => out.boxes.get(id)!.y;
+      expect(y('r')).not.toBe(y('p'));
+      expect(y('x')).toBe(y('r'));
+    });
+
+    it('puts a shape whose connector leaves its boundary on the side it leaves by', () => {
+      // t is fed from the first layer, but its only other connector goes out of g: it belongs at g's
+      // far side (with s), not in the middle where its way out would cross everything after it.
+      const out = layoutGraph({
+        boxes: [box('p', 'g'), box('q', 'g'), box('s', 'g'), box('t', 'g'), box('x')],
+        groups: [group('g')],
+        edges: [edge('p', 'q'), edge('q', 's'), edge('p', 't'), edge('t', 'x')],
+        direction: 'right',
+        spacing,
+      });
+      expect(out.boxes.get('t')!.x).toBe(out.boxes.get('s')!.x);
+      expect(out.boxes.get('t')!.x).toBeGreaterThan(out.boxes.get('q')!.x);
+    });
+
+    it('stands a boundary of separately called shapes in a column, each level with its caller', () => {
+      const out = layoutGraph({
+        boxes: [box('hub'), box('a'), box('b'), box('x1', 'ext'), box('x2', 'ext')],
+        groups: [group('ext')],
+        edges: [edge('hub', 'a'), edge('hub', 'b'), edge('a', 'x1'), edge('b', 'x2')],
+        direction: 'right',
+        spacing,
+      });
+      const at = (id: string) => out.boxes.get(id)!;
+      expect(at('x1').x).toBe(at('x2').x);
+      expect(at('x1').y).toBe(at('a').y);
+      expect(at('x2').y).toBe(at('b').y);
+    });
+
+    it('puts a boundary\'s own note under its title, ahead of its flow', () => {
+      const out = layoutGraph({
+        boxes: [box('p', 'g'), box('q', 'g'), { ...box('n', 'g'), first: true }],
+        groups: [group('g')],
+        edges: [edge('p', 'q')],
+        direction: 'right',
+        spacing,
+      });
+      const at = (id: string) => out.boxes.get(id)!;
+      expect(at('n').y + 60).toBeLessThanOrEqual(at('p').y);
+      expect(at('p').y - (at('n').y + 60)).toBe(spacing.sibling);
+    });
+  });
+
   it('refuses nested groups that form a cycle', () => {
     expect(() =>
       layoutGraph({

@@ -10,6 +10,8 @@ import { deserializeDocument } from '../../src/export/project';
 import { sequenceSourceFor } from '../../src/export/sequence';
 import type { DraftDocument } from '../../src/document/types';
 import { GALLERY, type GalleryCase } from '../fixtures/agent/gallery';
+import { legibilityOf } from '../../src/agent/legibility';
+import { nearestElement } from '../../src/agent/read';
 
 function create(request: Record<string, unknown>, id = 'd_gallery00001'): DraftDocument {
   const parsed = deserializeDocument(compose({ requestId: 'g', ...request }, id).text);
@@ -70,7 +72,8 @@ describe('layout gallery', () => {
   it('draws connectors straight wherever a straight one is possible', () => {
     // A lone connector between facing sides that still steps sideways is a skew the layout could
     // have avoided. The dense case falls back to a balanced arrangement to fit its captions, and
-    // keeps one; everything else has none.
+    // keeps one; the card-provisioning case's two returns into the system (a reviewer's decision,
+    // the provisioning outcome under the main path) step on their way, and are held to it below.
     const jogs = GALLERY.flatMap((entry) => {
       const { doc, touched } = galleryDocument(entry);
       const out: string[] = [];
@@ -81,8 +84,9 @@ describe('layout gallery', () => {
       });
       return out;
     });
-    expect(jogs.filter((j) => !j.startsWith('10-dense'))).toEqual([]);
-    expect(jogs.length).toBeLessThanOrEqual(1);
+    expect(jogs.filter((j) => !j.startsWith('10-dense') && !j.startsWith('21-card'))).toEqual([]);
+    expect(jogs.filter((j) => j.startsWith('10-dense')).length).toBeLessThanOrEqual(1);
+    expect(jogs.filter((j) => j.startsWith('21-card')).length).toBeLessThanOrEqual(2);
   });
 
   it('14: the starter keeps its own flows, and they export as sequence diagrams', () => {
@@ -117,6 +121,37 @@ describe('layout gallery', () => {
       expect(bendsOf(drawn!.points), edge.id).toBeLessThanOrEqual(2);
     }
     expect(checkQuality(doc.nodes, doc.edges, measureContext())).toEqual({ errors: [], warnings: [] });
+  });
+
+  it('21: the reported container view reads — providers beside their callers, notes beside their subjects', () => {
+    const entry = GALLERY.find((g) => g.id === '21-card-provisioning')!;
+    const { doc } = galleryDocument(entry);
+    const at = (id: string) => doc.nodes.find((n) => n.id === id)!;
+    const notes = new Map([
+      ['n-retry', 'check'],
+      ['n-notify', 'notify'],
+    ]);
+    const legibility = legibilityOf(doc.nodes, doc.edges, notes);
+    // It used to have five crossings, two lines through unrelated boundaries and a stranded note.
+    expect(legibility.farNotes).toEqual([]);
+    expect(legibility.detours).toEqual([]);
+    expect(legibility.crossings).toBeLessThanOrEqual(3);
+    expect(legibility.throughBoundaries.length).toBeLessThanOrEqual(1);
+    // Each provider is level with the check that calls it: a straight line out of the system.
+    for (const id of ['r11', 'r12', 'r13']) {
+      const points = drawnRoute(doc.edges.find((e) => e.id === id)!, doc.nodes, doc.edges)!.points;
+      expect(new Set(points.map((p) => Math.round(p.y))).size, id).toBe(1);
+    }
+    // The notes sit inside the boundary of what they describe; the decision heads its domain.
+    expect(at('n-retry').parentId).toBe('svc');
+    expect(at('n-notify').parentId).toBe('platform');
+    expect(nearestElement(at('n-retry'), doc.nodes)).toBe('check');
+    expect(nearestElement(at('n-notify'), doc.nodes)).toBe('notify');
+    expect(at('n-decision').y).toBeLessThan(Math.min(...doc.nodes.filter((n) => n.parentId === 'svc' && n.type !== 'note').map((n) => n.y)));
+    // And the receipt tells the agent what else would help: this domain belongs a level down.
+    const out = compose({ requestId: 'g', ...(entry as { request: Record<string, unknown> }).request }, 'd_gallery00001');
+    expect(out.receipt.legibility).toMatchObject({ crossings: legibility.crossings });
+    expect((out.receipt.advisories as string[])[0]).toContain('"svc"');
   });
 
   it('11: the context view keeps its focal system’s containers one level in', () => {

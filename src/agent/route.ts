@@ -265,7 +265,7 @@ function endsOf(edge: DraftEdge, byId: Map<string, DraftNode>): Set<string> {
 }
 
 export interface RouteProblem {
-  kind: 'through-node' | 'label-over-node' | 'label-collision' | 'label-crossed' | 'shared-run';
+  kind: 'through-node' | 'label-over-node' | 'label-collision' | 'label-crossed' | 'shared-run' | 'through-boundary';
   /** The shape, or (for a collision) the other connector, in the way. */
   node: string;
 }
@@ -302,8 +302,24 @@ export function routeProblem(
       if (segmentHitsBox(drawn.points[k]!, drawn.points[k + 1]!, box)) return { kind: 'through-node', node: node.id };
     }
   }
+  // Last, and never an error on its own: a line cutting through a boundary neither end is in (or
+  // along its title) reads as belonging to it. Worth another anchoring when one avoids it; often none
+  // does, and then the line stays as it is.
+  for (const node of nodes) {
+    if (ends.has(node.id) || node.type !== 'group') continue;
+    const box = inset(node, BOUNDARY_INSET);
+    for (let k = 0; k + 1 < drawn.points.length; k += 1) {
+      if (segmentHitsBox(drawn.points[k]!, drawn.points[k + 1]!, box)) return { kind: 'through-boundary', node: node.id };
+    }
+  }
   return undefined;
 }
+
+/** How much longer (in `routeCost` terms) a route may get to keep out of a boundary it isn't in. */
+const BOUNDARY_DETOUR = 320;
+
+/** A line may run this close inside a boundary's outline before it counts as going through it. */
+const BOUNDARY_INSET = 2;
 
 /** How many alternative anchorings are drawn in full for one connector before it is left as it is. */
 const MAX_CHECKS = 24;
@@ -356,8 +372,13 @@ export function repairAnchors(
    * Re-anchors `mover` until every connector in `clean` is drawn without a problem — the first such
    * anchoring, cheapest first — or puts it back and says it couldn't.
    */
-  const tryMove = (mover: DraftEdge, clean: readonly DraftEdge[]): boolean => {
+  const tryMove = (mover: DraftEdge, clean: readonly DraftEdge[], why: RouteProblem['kind']): boolean => {
     const original = { sourceAnchor: mover.sourceAnchor, targetAnchor: mover.targetAnchor };
+    // Crossing a boundary is the mildest problem: fixing a worse one may leave a line crossing one
+    // (the best of those is kept in case nothing clears everything), and neither case is worth a
+    // detour much longer than the route it would replace.
+    const originalCost = roughCost(mover, nodes, byId) ?? Number.POSITIVE_INFINITY;
+    let fallback: { source: DraftEdge['sourceAnchor']; target: DraftEdge['targetAnchor']; next: DraftEdge[]; others: Other[]; cost: number } | undefined;
     const ends = new Set(clean.flatMap((e) => [e.source, e.target]));
     const touching = edges.filter((e) => ends.has(e.source) || ends.has(e.target));
     const neighbours = new Set(touching.map((e) => e.id));
@@ -391,6 +412,8 @@ export function repairAnchors(
     let fixed = false;
     for (const candidate of [...firsts, ...rest].slice(0, MAX_CHECKS)) {
       if (performance.now() > deadline) break;
+      if (why === 'through-boundary' && candidate.cost > originalCost + BOUNDARY_DETOUR) continue;
+      if (fallback && candidate.cost > fallback.cost + BOUNDARY_DETOUR) break;
       edge.sourceAnchor = candidate.source;
       edge.targetAnchor = candidate.target;
       // A fresh array per arrangement (the routing caches are keyed by it), and planned over the
@@ -400,12 +423,23 @@ export function repairAnchors(
       const local = next.filter((e) => hood.has(e.source) || hood.has(e.target));
       const fresh = new Map(othersOf(nodes, local, caption).filter((o) => neighbours.has(o.id)).map((o) => [o.id, o]));
       const others = [...drawn.values()].map((o) => fresh.get(o.id) ?? o);
-      if (clean.every((e) => !routeProblem(moving.get(e.id) ?? e, nodes, local, caption, others))) {
+      const problems = clean.map((e) => routeProblem(moving.get(e.id) ?? e, nodes, local, caption, others));
+      if (problems.every((p) => !p)) {
         fixed = true;
         edges = next;
         drawn = new Map(others.map((o) => [o.id, o]));
         break;
       }
+      if (!fallback && why !== 'through-boundary' && problems.every((p) => !p || p.kind === 'through-boundary')) {
+        fallback = { source: candidate.source, target: candidate.target, next, others, cost: candidate.cost };
+      }
+    }
+    if (!fixed && fallback) {
+      edge.sourceAnchor = fallback.source;
+      edge.targetAnchor = fallback.target;
+      edges = fallback.next;
+      drawn = new Map(fallback.others.map((o) => [o.id, o]));
+      fixed = true;
     }
     if (!fixed) Object.assign(edge, original);
     return fixed;
@@ -420,8 +454,8 @@ export function repairAnchors(
     // straight connector on a detour around its neighbour's line.
     const between = problem.kind === 'label-crossed' || problem.kind === 'label-collision' || problem.kind === 'shared-run';
     const other = between ? moving.get(problem.node) : undefined;
-    if (other && other !== edge && tryMove(other, [edge, other])) continue;
-    tryMove(edge, [edge]);
+    if (other && other !== edge && tryMove(other, [edge, other], problem.kind)) continue;
+    tryMove(edge, [edge], problem.kind);
   }
 }
 

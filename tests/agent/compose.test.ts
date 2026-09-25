@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { deserializeDocument } from '../../src/export/project';
+import { nearestElement } from '../../src/agent/read';
 
 const repayment = {
   requestId: 'r1',
@@ -62,7 +63,46 @@ describe('compose', () => {
     expect(owner.parentId).toBe('core');
     expect(owner.x >= core.x && owner.y >= core.y && owner.x + owner.width <= core.x + core.width && owner.y + owner.height <= core.y + core.height).toBe(true);
     expect(doc.nodes.find((n) => n.id === 'assume')!.parentId).toBeUndefined();
+    // The boundary's own note heads it, above what it holds.
+    expect(owner.y).toBeLessThan(doc.nodes.find((n) => n.id === 'posting')!.y);
     expect(doc.flows.map((f) => f.title)).toEqual(['Normal processing']);
     expect(out.receipt).toMatchObject({ quality: { errors: 0 } });
+  });
+
+  it('lays a note about an element out right beside it, inside its boundary, where a read finds it again', () => {
+    const out = compose(
+      {
+        ...repayment,
+        groups: [{ id: 'core', label: 'Posting', kind: 'system' }],
+        nodes: repayment.nodes.map((n) => (n.id === 'posting' || n.id === 'ledger' ? { ...n, group: 'core' } : n)),
+        notes: [
+          { id: 'batch', text: 'Posts in batches of 500; a failed batch is retried whole.', kind: 'decision', about: 'posting' },
+          { id: 'loose', text: 'Owned by the payments guild.' },
+        ],
+      },
+      'd_test00000003',
+    );
+    const parsed = deserializeDocument(out.text);
+    if (!parsed.ok) throw new Error(parsed.error);
+    const doc = parsed.document;
+    const at = (id: string) => doc.nodes.find((n) => n.id === id)!;
+    const note = at('batch');
+    const posting = at('posting');
+    const core = at('core');
+    expect(note.parentId).toBe('core');
+    expect(note.x >= core.x && note.y >= core.y && note.x + note.width <= core.x + core.width && note.y + note.height <= core.y + core.height).toBe(true);
+    // Just before it across the flow (above, reading right), and nearer to it than to anything else.
+    expect(note.y + note.height).toBeLessThanOrEqual(posting.y);
+    expect(posting.y - (note.y + note.height)).toBeLessThanOrEqual(40);
+    expect(nearestElement(note, doc.nodes)).toBe('posting');
+    // Nothing connects to the side the note is on.
+    for (const edge of doc.edges) {
+      if (edge.source === 'posting') expect(edge.sourceAnchor?.side).not.toBe('top');
+      if (edge.target === 'posting') expect(edge.targetAnchor?.side).not.toBe('top');
+    }
+    // A note about nothing still goes after the diagram.
+    expect(at('loose').x).toBeGreaterThan(Math.max(...doc.nodes.filter((n) => n.id !== 'loose').map((n) => n.x + n.width)));
+    expect(out.receipt).toMatchObject({ quality: { errors: 0 }, legibility: { crossings: 0 } });
+    expect((out.receipt.advisories as string[]).some((a) => a.includes('"loose"') && a.includes('about'))).toBe(true);
   });
 });

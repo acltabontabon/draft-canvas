@@ -65,7 +65,10 @@ describe('MCP tool definitions', () => {
     // to reuse the shared `layoutBrief` (it had drifted into a hand-duplicated, narrower copy that
     // silently dropped `viewport`/`normalizePeerSizes` from a later `update_diagram` addition) —
     // sharing the object closes that drift permanently, at the cost of its description text appearing
-    // twice in the compiled JSON.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(30_500);
+    // twice in the compiled JSON. Raised a third time for the readability guidance in create_diagram,
+    // group.kind and note.about — the sentences that stop an agent sending a request the layout can
+    // only draw badly (externals grouped for tidiness, notes with no subject, no main path); the full
+    // checklist is behind get_capabilities' `readability` topic rather than here.
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(31_000);
   });
 });

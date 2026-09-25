@@ -19,7 +19,7 @@ import { ELEMENT_TYPES, GROUP_KINDS, NOTE_KIND_NAMES } from './vocabulary';
  */
 export const CONTRACT_VERSION = 2;
 
-const TOPICS = ['types', 'relationships', 'c4', 'flows', 'starters', 'limits', 'layout'] as const;
+const TOPICS = ['types', 'relationships', 'c4', 'flows', 'starters', 'limits', 'layout', 'readability'] as const;
 
 export function capabilities(args: { topics?: unknown; starter?: unknown }): Record<string, unknown> {
   if (typeof args.starter === 'string') {
@@ -71,7 +71,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       edits: 'update set.steps keeps each step whose relationship stays (its id, caption, highlights and camera); set.title alone leaves steps untouched.',
     };
     out.notes = {
-      beside: 'about = an element: placed beside it, clear of shapes and connectors (placement only — nothing records the link).',
+      beside: 'about = an element: laid out with it, just before it across the flow and inside its boundary (placement only — nothing records the link).',
       inside: 'about = a group: a member of the boundary, placed inside it.',
       attached: 'about = a relationship, or an element with attach: true: a native attachment that moves, exports and is removed with its host; edit or remove it by the note id.',
     };
@@ -87,6 +87,20 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       create: 'Fully automatic: shapes sized to their text, laid out in layers along the reading direction, connectors right-angled and straight where the layout can line them up, captions given room. A few spacings are tried and the most readable kept; one that still fails the check (overlap, clipped text, a connector through an element) is refused unless allowDegraded.',
       update: 'Existing elements never move. New ones are placed beside what they connect to (other spots are tried before giving up); a group grows to hold new members. If nothing fits, LAYOUT_CONSTRAINED carries suggestedOp: the arrange to add.',
       arrange: '{op:"arrange", scope?, direction?, spacing?, connectors?} re-lays out existing content in place — the whole view or one group — keeping ids, notes and flows; direction defaults to the way the view already reads.',
+    };
+  }
+  if (want('readability')) {
+    // What the layout can't fix on its own because it is in the request — each rule with its reason,
+    // so an agent can apply the idea to a case the rule doesn't name. Kept in step with `advice.ts`.
+    out.readability = {
+      order: 'List elements and relationships in reading order, entry point (the person or client) first. The layout breaks every tie by input order, so an order that follows the request path draws it as a line.',
+      mainPath: 'Name the main path as a flow and pass it as layout.primaryFlow: it is laid out straight and first, and side paths (retries, failures, dead letters) yield to it.',
+      boundaries: 'Group only a real boundary — a system, a domain, a deployment. A boundary is laid out as one block, so a group of external systems called from different places makes their connectors reach around each other; left ungrouped, each external sits beside its caller.',
+      notes: 'Give every note an about. About an element, it sits right beside it; about a boundary, under its title; about a relationship, on it. A note with no about goes after the diagram, far from what it means.',
+      size: 'About 15 elements is what one view reads well. Past that, draw one element for a part and put its detail in that element\'s inside view (the next C4 level): a nested domain in a container view is the usual candidate.',
+      returns: 'A reply is implied by the request; draw a relationship back only when it is its own interaction (a callback, a notification). Every relationship that runs against the reading direction goes around what lies between.',
+      direction: 'Leave layout.direction out unless the person asks: both directions are tried and the clearer one kept. "down" suits a person at the top calling one system that calls many externals.',
+      feedback: 'The create receipt reports legibility — crossings, and connectors that detour or cut through a boundary they are not in (by id) — and advisories naming what in the request to change, with the update_diagram ops that do it. Apply them in the same turn when they make sense, then read the receipt again.',
     };
   }
   return out;

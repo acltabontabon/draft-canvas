@@ -1,5 +1,5 @@
 /**
- * The layout gallery: fifteen requests an agent might really send, from a four-box request path to
+ * The layout gallery: requests an agent might really send, from a four-box request path to
  * C4 context/container/component views, a starter with a flow, and edits to existing diagrams. Each
  * is asserted in `tests/agent/gallery.test.ts` (readable, deterministic, nothing existing moved) and
  * rendered in the real editor, light and dark, by `e2e/agent-gallery.ts` for a person to look at.
@@ -480,5 +480,75 @@ export const GALLERY: GalleryCase[] = [
     },
     arrange: { p: { x: -40, y: -260 }, q: { x: -40, y: -60 }, r: { x: -40, y: 220 }, hub: { x: 360, y: -20 } },
     update: { ops: [{ op: 'arrange', move: false, scope: { nodes: ['p', 'q'] } }] },
+  },
+  {
+    // The reported regression: a container view an agent sent over MCP that passed every check yet
+    // read badly — lines to the external providers across the whole system, a notification looping
+    // under everything back to the applicant, notes far from what they describe and a boundary that
+    // was mostly empty. `tests/agent/gallery.test.ts` holds it to its legibility numbers too.
+    id: '21-card-provisioning',
+    title: 'Container view: nested domain, grouped externals, a reviewer loop and notes',
+    kind: 'create',
+    request: {
+      title: 'Card provisioning — containers',
+      level: 'container',
+      groups: [
+        { id: 'platform', label: 'Card Provisioning Platform', kind: 'system' },
+        { id: 'svc', label: 'Serviceability Check', kind: 'domain', parent: 'platform' },
+        { id: 'ext', label: 'External Verification Providers', kind: 'group' },
+      ],
+      nodes: [
+        n('applicant', 'person', 'Applicant'),
+        n('app', 'service', 'Card App (Mobile/Web)', { technology: 'Web / Mobile client' }),
+        n('gw', 'gateway', 'API Gateway', { group: 'platform' }),
+        n('cps', 'service', 'Card Provisioning Service', { group: 'platform', description: 'Orchestrates the end-to-end card provisioning request.' }),
+        n('check', 'service', 'Serviceability Check Service', { group: 'svc', description: 'Decides whether the applicant and address can be serviced before a card is issued.' }),
+        n('addr', 'service', 'Address Validation', { group: 'svc' }),
+        n('idv', 'service', 'Identity Verification', { group: 'svc' }),
+        n('risk', 'service', 'Credit Risk Check', { group: 'svc' }),
+        n('rules', 'service', 'Eligibility Rules Engine', { group: 'svc' }),
+        n('rcache', 'cache', 'Eligibility Rules Cache', { group: 'svc' }),
+        n('review', 'queue', 'Manual Review Queue', { group: 'svc' }),
+        n('issue', 'service', 'Card Issuance Service', { group: 'platform', description: 'Creates the physical/virtual card once the applicant is deemed serviceable.' }),
+        n('carddb', 'database', 'Card Database', { group: 'platform' }),
+        n('custdb', 'database', 'Customer Database', { group: 'platform' }),
+        n('audit', 'database', 'Audit Log Store', { group: 'platform' }),
+        n('outcome', 'topic', 'Provisioning Outcome Topic', { group: 'platform' }),
+        n('notify', 'worker', 'Notification Service', { group: 'platform' }),
+        n('addrp', 'external-system', 'Address Data Provider', { group: 'ext' }),
+        n('kyc', 'external-system', 'KYC / Identity Provider', { group: 'ext' }),
+        n('bureau', 'external-system', 'Credit Bureau', { group: 'ext' }),
+        n('reviewer', 'person', 'Compliance Reviewer'),
+      ],
+      relationships: [
+        r('r1', 'applicant', 'app', 'Requests new card'),
+        r('r2', 'app', 'gw', 'Submits provisioning request'),
+        r('r3', 'gw', 'cps', 'Routes request'),
+        r('r4', 'cps', 'check', 'Checks serviceability'),
+        r('r5', 'check', 'addr', 'Validates address'),
+        r('r6', 'check', 'idv', 'Verifies identity'),
+        r('r7', 'check', 'risk', 'Requests risk score'),
+        r('r8', 'check', 'rules', 'Evaluates eligibility'),
+        r('r9', 'rules', 'rcache', 'Reads eligibility rules'),
+        r('r10', 'check', 'review', 'Escalates for manual review', { condition: 'provider retries exhausted' }),
+        r('r11', 'addr', 'addrp', 'Verifies address'),
+        r('r12', 'idv', 'kyc', 'Runs KYC check'),
+        r('r13', 'risk', 'bureau', 'Pulls credit report'),
+        r('r14', 'review', 'reviewer', 'Assigns case'),
+        r('r15', 'reviewer', 'cps', 'Submits manual serviceability decision'),
+        r('r16', 'cps', 'issue', 'Issues card', { condition: 'serviceable = true' }),
+        r('r17', 'issue', 'carddb', 'Persists card record'),
+        r('r18', 'issue', 'custdb', 'Links card to account'),
+        r('r19', 'cps', 'audit', 'Logs provisioning decision'),
+        r('r20', 'cps', 'outcome', 'Publishes provisioning outcome'),
+        r('r21', 'outcome', 'notify', 'Consumes outcome event'),
+        r('r22', 'notify', 'applicant', 'Sends outcome notification'),
+      ],
+      notes: [
+        { id: 'n-retry', text: 'Each external check (address, identity, credit) retries up to 2x with exponential backoff before being treated as a failure and escalated.', about: 'check' },
+        { id: 'n-decision', text: 'Serviceable only if the address is deliverable, identity is verified, and credit risk is within threshold — a rejection on any one check fails the whole request.', kind: 'decision', about: 'svc' },
+        { id: 'n-notify', text: "Delivers the outcome (approved or declined) via the applicant's preferred channel — push, SMS or email.", about: 'notify' },
+      ],
+    },
   },
 ];

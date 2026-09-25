@@ -46,6 +46,9 @@ export interface LayoutBox {
    * shape itself, not the pair's middle, is what lines up with its neighbours. Overrides `band`.
    */
   lead?: number;
+  /** Laid out ahead of everything else in its boundary, under its title — a note about the boundary
+   *  itself reads as its caption, not as a stray shape after the flow. */
+  first?: boolean;
 }
 
 export interface LayoutGroup {
@@ -150,6 +153,9 @@ interface LiftedEdge {
   id: string;
   source: string;
   target: string;
+  /** The shapes the edge really joins, inside `source`/`target` when those are boundaries. */
+  sourceEnd: string;
+  targetEnd: string;
   labelWidth: number;
   labelHeight: number;
   primary: boolean;
@@ -198,8 +204,12 @@ export function layoutGraph(input: LayoutInput): LayoutOutput {
   for (const box of input.boxes) push(box.parent, box.id);
   for (const group of input.groups) push(group.parent, group.id);
 
-  // Edges lifted to the cluster where their endpoints meet.
+  // Edges lifted to the cluster where their endpoints meet. On the way up, every boundary the edge
+  // leaves (or enters) marks the item inside it the edge passes through, so that boundary's own
+  // layout can put that item on the side the edge leaves by (see `Env.exits`).
   const lifted = new Map<string | undefined, LiftedEdge[]>();
+  const exits = new Set<string>();
+  const enters = new Set<string>();
   const clusterOf = (id: string): string | undefined => boxesById.get(id)?.parent ?? groupsById.get(id)?.parent;
   for (const edge of input.edges) {
     for (const end of [edge.source, edge.target]) {
@@ -220,8 +230,10 @@ export function layoutGraph(input: LayoutInput): LayoutOutput {
       }
     }
     if (from === undefined || to === undefined || from === to) continue;
+    for (let k = 1; sourceChain[k] !== meet; k += 1) exits.add(sourceChain[k - 1] as string);
+    for (let k = 1; targetChain[k] !== meet; k += 1) enters.add(targetChain[k - 1] as string);
     const list = lifted.get(meet) ?? [];
-    list.push({ id: edge.id, source: from, target: to, labelWidth: edge.labelWidth ?? 0, labelHeight: edge.labelHeight ?? 0, primary: edge.primary === true, minor: edge.minor === true && edge.primary !== true });
+    list.push({ id: edge.id, source: from, target: to, sourceEnd: edge.source, targetEnd: edge.target, labelWidth: edge.labelWidth ?? 0, labelHeight: edge.labelHeight ?? 0, primary: edge.primary === true, minor: edge.minor === true && edge.primary !== true });
     lifted.set(meet, list);
   }
 
@@ -238,7 +250,26 @@ export function layoutGraph(input: LayoutInput): LayoutOutput {
     if (box.lead !== undefined) bands.set(box.id, box.lead);
     else if (box.band !== undefined && input.direction === 'right') bands.set(box.id, box.band);
   }
-  const env: Env = { sizes, order, direction: input.direction, spacing: input.spacing, local, bands, ties: input.ties ?? 'align' };
+  // Where, across a block, the shape an edge really joins lines up — for a boundary, that's the inner
+  // shape's own line, not the boundary's middle. Known by the time the block's parent is laid out,
+  // since boundaries are laid out deepest first.
+  const across = (p: Point) => (input.direction === 'right' ? p.y : p.x);
+  const endLine = (block: string, end: string): number | undefined => {
+    if (block === end) return undefined;
+    const size = sizes.get(end);
+    if (!size) return undefined;
+    let line = bands.get(end) ?? (input.direction === 'right' ? size.height : size.width) / 2;
+    let at = end;
+    while (at !== block) {
+      const parent = clusterOf(at);
+      if (parent === undefined) return undefined;
+      line += across(local.get(at) ?? { x: 0, y: 0 }) + across(contentOffset.get(parent) ?? { x: 0, y: 0 });
+      at = parent;
+    }
+    return line;
+  };
+  const first = new Set(input.boxes.filter((b) => b.first).map((b) => b.id));
+  const env: Env = { sizes, order, direction: input.direction, spacing: input.spacing, local, bands, ties: input.ties ?? 'align', exits, enters, endLine, first };
   for (const group of deepestFirst) {
     const content = layoutCluster(children.get(group.id) ?? [], lifted.get(group.id) ?? [], env);
     const pad = input.spacing.pad;
@@ -282,6 +313,14 @@ interface Env {
   /** Each box's connection line, down from its top (see `LayoutBox.band`); absent means its middle. */
   bands: Map<string, number>;
   ties: 'align' | 'balance';
+  /** Items with an edge leaving the cluster they sit in (to somewhere outside it)… */
+  exits: ReadonlySet<string>;
+  /** …or arriving into it from outside. */
+  enters: ReadonlySet<string>;
+  /** See `layoutGraph`'s `endLine`. */
+  endLine: (block: string, end: string) => number | undefined;
+  /** See `LayoutBox.first`. */
+  first: ReadonlySet<string>;
 }
 
 interface Block {
@@ -304,25 +343,35 @@ function layoutCluster(items: string[], edges: LiftedEdge[], env: Env): Size {
     const set = new Set(component);
     blocks.push(layerComponent(component, edges.filter((e) => set.has(e.source) && set.has(e.target)), env));
   }
-  if (alone.length > 0) blocks.push(rowOf(alone, env, blocks));
+  // Lone items that connect to the outside — a boundary of external systems, each called from a
+  // different shape — stand in one column across the flow, the way their callers do, so each can
+  // line up with its own; in a row along the flow, all but one would be reached around the others.
+  const heading = alone.filter((id) => env.first.has(id));
+  const ported = alone.filter((id) => !env.first.has(id) && (env.exits.has(id) || env.enters.has(id)));
+  const rest = alone.filter((id) => !env.first.has(id) && !ported.includes(id));
+  if (ported.length > 0) blocks.push(rowOf(ported, env, [], 0));
+  if (rest.length > 0) blocks.push(rowOf(rest, env, blocks));
+  if (heading.length > 0) blocks.unshift(rowOf(heading, env, blocks));
 
-  // Stacked across the reading direction, aligned at the start.
+  // Stacked across the reading direction, aligned at the start. A heading row sits closer to what
+  // follows it than one part does to another: it belongs to the whole boundary.
   let offset = 0;
   let width = 0;
   let height = 0;
-  for (const block of blocks) {
+  blocks.forEach((block, i) => {
+    const gap = i === 0 && heading.length > 0 ? env.spacing.sibling : env.spacing.component;
     if (env.direction === 'right') {
       block.place(0, offset);
-      offset += block.height + env.spacing.component;
+      offset += block.height + gap;
       width = Math.max(width, block.width);
-      height = offset - env.spacing.component;
+      height = offset - gap;
     } else {
       block.place(offset, 0);
-      offset += block.width + env.spacing.component;
+      offset += block.width + gap;
       height = Math.max(height, block.height);
-      width = offset - env.spacing.component;
+      width = offset - gap;
     }
-  }
+  });
   for (const id of items) {
     const p = env.local.get(id);
     if (p) env.local.set(id, { x: Math.round(p.x), y: Math.round(p.y) });
@@ -332,13 +381,13 @@ function layoutCluster(items: string[], edges: LiftedEdge[], env: Env): Size {
 
 /** Unconnected items in rows along the reading direction, each row about as long as the longest
  *  connected part (or four items, when there is none). */
-function rowOf(ids: string[], env: Env, others: Block[]): Block {
+function rowOf(ids: string[], env: Env, others: Block[], rowLength?: number): Block {
   const { direction, spacing } = env;
   const along = (id: string) => (direction === 'right' ? get(env.sizes, id).width : get(env.sizes, id).height);
   const across = (id: string) => (direction === 'right' ? get(env.sizes, id).height : get(env.sizes, id).width);
-  const limit = others.length
-    ? Math.max(...others.map((b) => (direction === 'right' ? b.width : b.height)))
-    : ids.slice(0, 4).reduce((sum, id) => sum + along(id) + spacing.sibling, 0);
+  const limit =
+    rowLength ??
+    (others.length ? Math.max(...others.map((b) => (direction === 'right' ? b.width : b.height))) : ids.slice(0, 4).reduce((sum, id) => sum + along(id) + spacing.sibling, 0));
   const rows: string[][] = [];
   let current: string[] = [];
   let used = 0;
@@ -410,7 +459,9 @@ interface Slot {
   lead: number;
 }
 
-type Neighbour = { id: string; weight: number };
+/** `shift`: how far this box's line should sit from the neighbour's for the edge between them to run
+ *  straight — nonzero when either end is a boundary whose inner shape isn't on its middle line. */
+type Neighbour = { id: string; weight: number; shift: number };
 
 function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
   const { direction, spacing } = env;
@@ -448,7 +499,7 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
       }
     }
   }
-  const dag = edges.map((e) => (reversed.has(e.id) ? { ...e, source: e.target, target: e.source } : e));
+  const dag = edges.map((e) => (reversed.has(e.id) ? { ...e, source: e.target, target: e.source, sourceEnd: e.targetEnd, targetEnd: e.sourceEnd } : e));
 
   // 3. Layers: longest path, then sources pulled up to just before what they feed.
   const preds = new Map<string, string[]>(ids.map((id) => [id, []]));
@@ -480,6 +531,14 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
       rank.set(id, Math.min(...get(succs, id).map((s) => get(rank, s))) - 1);
     }
   }
+  // A sink whose edges leave this boundary goes to its far side, next to where they are headed,
+  // instead of the middle, where they would cross everything after it to get out; an item entered
+  // from outside and fed by nothing here is the boundary's way in, so it goes first.
+  const lastRank = Math.max(...ids.map((id) => get(rank, id)));
+  for (const id of ids) {
+    if (env.exits.has(id) && get(succs, id).length === 0 && get(preds, id).length > 0) rank.set(id, lastRank);
+    else if (env.enters.has(id) && get(preds, id).length === 0 && !env.exits.has(id)) rank.set(id, Math.min(...ids.map((other) => get(rank, other))));
+  }
   const minRank = Math.min(...ids.map((id) => get(rank, id)));
   for (const id of ids) rank.set(id, get(rank, id) - minRank);
   const layerCount = Math.max(...ids.map((id) => get(rank, id))) + 1;
@@ -487,7 +546,7 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
   // 4. Placeholders for edges spanning more than one layer.
   const slots = new Map<string, Slot>();
   for (const id of ids) slots.set(id, { dummy: false, along: along(id), across: across(id), lead: env.bands.get(id) ?? across(id) / 2 });
-  const links: { from: string; to: string; weight: number }[] = [];
+  const links: { from: string; to: string; weight: number; shift: number }[] = [];
   const gapLabel = new Array<number>(layerCount).fill(0);
   // A source feeding several boxes in the next layer is drawn as a shared trunk that branches: the
   // captions then sit on the branches, after the trunk, so that gap needs the trunk's run as well.
@@ -506,15 +565,21 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
     // A side path (failure, retry, dead letter) pulls less than the main one, so where a shape could
     // line up with either, the main path is the one drawn straight.
     const pull = (reversed.has(e.id) ? 0.25 : 1) * (e.minor ? 0.35 : 1);
+    // The line the edge leaves and arrives on, relative to each block's own: the placeholders carry
+    // the source's line across, and the target lines its inner shape up with it.
+    const out = (env.endLine(e.source, e.sourceEnd) ?? get(slots, e.source).lead) - get(slots, e.source).lead;
+    const into = (env.endLine(e.target, e.targetEnd) ?? get(slots, e.target).lead) - get(slots, e.target).lead;
     let previous = e.source;
+    let shift = out;
     for (let r = from + 1; r < to; r += 1) {
       const id = `\u0000${e.id}:${r}`;
       slots.set(id, { dummy: true, along: 0, across: DUMMY_THICKNESS, lead: DUMMY_THICKNESS / 2 });
       rank.set(id, r);
-      links.push({ from: previous, to: id, weight: (e.primary ? 8 : 2) * pull });
+      links.push({ from: previous, to: id, weight: (e.primary ? 8 : 2) * pull, shift });
       previous = id;
+      shift = 0;
     }
-    links.push({ from: previous, to: e.target, weight: (e.primary ? 8 : previous === e.source ? 1 : 2) * pull });
+    links.push({ from: previous, to: e.target, weight: (e.primary ? 8 : previous === e.source ? 1 : 2) * pull, shift: shift - into });
   }
 
   // 5. Order within layers.
@@ -526,8 +591,8 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
     down.set(id, []);
   }
   for (const link of links) {
-    get(down, link.from).push({ id: link.to, weight: link.weight });
-    get(up, link.to).push({ id: link.from, weight: link.weight });
+    get(down, link.from).push({ id: link.to, weight: link.weight, shift: -link.shift });
+    get(up, link.to).push({ id: link.from, weight: link.weight, shift: link.shift });
   }
   // How long a chain runs through each box (longest path in plus longest path out): on a tie, a box
   // lines up with the neighbour on the longer chain, so the diagram's spine is the part drawn straight.
@@ -653,7 +718,7 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
           weights.push(0.1);
           continue;
         }
-        desired.push(weightedMedian(pulls.map((n) => ({ value: get(centre, n.id), weight: n.weight, prefer: get(chain, n.id) * 1e6 - idx(n.id) })), env.ties));
+        desired.push(weightedMedian(pulls.map((n) => ({ value: get(centre, n.id) + n.shift, weight: n.weight, prefer: get(chain, n.id) * 1e6 - idx(n.id) })), env.ties));
         weights.push(pulls.reduce((s, n) => s + n.weight, 0) * (get(slots, id).dummy ? 1.5 : 1));
       }
       const gaps = layer.slice(1).map((id, i) => separation(at(layer, i), id));
@@ -671,7 +736,7 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
       if (get(slots, id).dummy) return;
       const from = get(up, id);
       if (from.length !== 1) return;
-      const delta = get(centre, at(from, 0).id) - get(centre, id);
+      const delta = get(centre, at(from, 0).id) + at(from, 0).shift - get(centre, id);
       if (delta === 0 || Math.abs(delta) > STRAIGHTEN) return;
       const next = get(centre, id) + delta;
       const before = i > 0 ? at(layer, i - 1) : undefined;

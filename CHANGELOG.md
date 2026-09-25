@@ -20,6 +20,11 @@ the release notes and the in-app What's New are generated from here. See
   summary, status and counts, with the agent's reasoning collapsed underneath. <!-- highlight -->
 - A proposal interrupted mid-accept — Draft Canvas closed right after it actually landed — now
   offers "Mark as applied" instead of asking you to decide something that already happened.
+- **Clearer diagrams from AI agents** — a diagram an agent draws over MCP now puts each external
+  system level with the service that calls it, keeps a note right beside what it describes (inside
+  its boundary), heads a boundary with its own note, and steers lines out of boundaries they don't
+  belong to. The agent is told how clear the result is — crossings, detours, stranded notes — and
+  what in its request to change, so it can fix it in the same turn. <!-- highlight -->
 
 #### Fixed
 
