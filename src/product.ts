@@ -1,4 +1,4 @@
-import { author, version } from '../package.json';
+import { author } from '../package.json';
 
 /**
  * Draft Canvas' own identity, in one place.
@@ -16,7 +16,7 @@ export const PRODUCT = {
   /** The About panel's one supporting sentence — what it enables, not what it contains. */
   pitch: 'Sketch architecture, trace flows, explain systems, and get back to the conversation.',
   author: author.name,
-  version,
+  version: __APP_VERSION__,
   links: {
     github: 'https://github.com/acltabontabon',
     linkedin: 'https://www.linkedin.com/in/acltabontabon/',

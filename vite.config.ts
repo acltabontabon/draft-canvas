@@ -27,6 +27,23 @@ function releaseHighlights(platform: 'desktop' | 'web'): Plugin {
 }
 
 /**
+ * The version this build is: package.json's, unless desktop-release.yml is building a desktop preview
+ * ahead of it (`desktop-v1.12.0-beta.1`), when it has written the tag's version to
+ * `src-tauri/tauri.version.conf.json` for Tauri first. Reading the same file keeps About and What's New
+ * on the version the installer carries, instead of naming the last release.
+ */
+function appVersion(desktop: boolean): string {
+  const read = (path: string) => JSON.parse(readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')) as { version?: string };
+  const released = read('./package.json').version as string;
+  if (!desktop) return released;
+  try {
+    return read('./src-tauri/tauri.version.conf.json').version ?? released;
+  } catch {
+    return released;
+  }
+}
+
+/**
  * The privacy promise, enforced by the browser rather than by good intentions.
  *
  * `connect-src 'self'` means no fetch, XHR, WebSocket or beacon can reach any
@@ -114,7 +131,7 @@ export default defineConfig(({ mode, command }) => {
     ...(command === 'serve'
       ? { resolve: { alias: { 'decode-named-character-reference': fileURLToPath(new URL('./node_modules/decode-named-character-reference/index.js', import.meta.url)) } } }
       : {}),
-    define: { __DESKTOP__: JSON.stringify(desktop) },
+    define: { __DESKTOP__: JSON.stringify(desktop), __APP_VERSION__: JSON.stringify(appVersion(desktop)) },
     plugins: [
       react(),
       releaseHighlights(desktop ? 'desktop' : 'web'),

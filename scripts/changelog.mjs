@@ -308,15 +308,17 @@ function highlightOf(bullet, version) {
 
 /**
  * What's New for `platform`: one entry per release (a release's highlights include its
- * prereleases'), newest first, only for releases that marked something worth telling. Prereleases
- * have no entry of their own — the app only ever runs a release version.
+ * prereleases'), newest first, only for releases that marked something worth telling. A prerelease
+ * has an entry of its own only until the release it leads to is written — a desktop preview runs its
+ * own version, so it shows its own news, and then folds into that release rather than repeating it.
+ * The web build never runs a prerelease, so `applicableReleases` leaves them out there.
  */
 export function whatsNew(changelog, platform) {
   const entries = parseChangelog(changelog);
   const wanted = platformsFor(platform);
   const releases = [];
   for (const entry of entries) {
-    if (isPrerelease(entry.version)) continue;
+    if (isPrerelease(entry.version) && entries.some((other) => !isPrerelease(other.version) && compareVersions(other.version, entry.version) > 0)) continue;
     const range = releaseRange(entries, entry.version);
     const highlights = range.flatMap((part) =>
       wanted.flatMap((key) => bullets(part.sections[key] ?? '').filter((bullet) => bullet.includes(HIGHLIGHT))).map((bullet) => highlightOf(bullet, part.version)),
@@ -328,7 +330,7 @@ export function whatsNew(changelog, platform) {
       ...(entry.date ? { date: entry.date } : {}),
       ...(summary ? { summary } : {}),
       highlights,
-      changelogUrl: changelogUrl(entry, `v${entry.version}`),
+      changelogUrl: changelogUrl(entry, isPrerelease(entry.version) ? `desktop-v${entry.version}` : `v${entry.version}`),
     });
   }
   return releases.sort((a, b) => compareVersions(b.version, a.version));

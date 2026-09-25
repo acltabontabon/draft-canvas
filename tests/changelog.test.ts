@@ -187,6 +187,21 @@ describe('What’s New is the changelog’s marked highlights, for this platform
     });
   });
 
+  it('gives a desktop preview its own entry until the release it leads to is written', () => {
+    const preview = CHANGELOG.replace('## [1.10.0] - 2026-10-01', '## [1.11.0-beta.1] - 2026-10-02\n\nA preview.\n\n### Desktop\n\n- **Agents** — they draw. <!-- highlight -->\n\n## [1.10.0] - 2026-10-01');
+    const [beta, release] = whatsNew(preview, 'desktop');
+    expect(beta).toMatchObject({
+      version: '1.11.0-beta.1',
+      summary: 'A preview.',
+      highlights: [{ title: 'Agents', description: 'They draw.' }],
+      changelogUrl: 'https://github.com/acltabontabon/draft-canvas/blob/desktop-v1.11.0-beta.1/CHANGELOG.md#1110-beta1---2026-10-02',
+    });
+    expect(release!.version).toBe('1.10.0');
+    const shipped = preview.replace('## [1.11.0-beta.1]', '## [1.11.0] - 2026-10-03\n\n### Shared\n\n- Out.\n\n## [1.11.0-beta.1]');
+    expect(whatsNew(shipped, 'desktop').map((entry) => entry.version)).toEqual(['1.11.0', '1.10.0']);
+    expect(whatsNew(shipped, 'desktop')[0]!.highlights.map((h) => h.title)).toEqual(['Agents']);
+  });
+
   it('shows words, not Markdown', () => {
     const [release] = whatsNew(CHANGELOG, 'web');
     expect(release!.highlights[0]).toEqual({ title: 'Framed on open', description: 'A diagram opens zoomed to fit, as described.' });
@@ -203,7 +218,7 @@ describe('the real changelog and release configuration', () => {
 
   it('parses, and every version’s notes can be generated', () => {
     for (const entry of parseChangelog(changelog)) {
-      const tag = entry.version.startsWith('1.10.0-') ? `desktop-v${entry.version}` : `v${entry.version}`;
+      const tag = entry.version.includes('-') && !entry.version.startsWith('0.') ? `desktop-v${entry.version}` : `v${entry.version}`;
       expect(() => releaseBody(tag, changelog), entry.version).not.toThrow();
     }
   });
@@ -233,7 +248,8 @@ describe('the real changelog and release configuration', () => {
     const versions = PRODUCT_RELEASES.map((release) => release.version);
     expect(new Set(versions).size).toBe(versions.length);
     expect(ARCHIVED_RELEASES.every((release) => compareVersions(release.version, '1.9.4') <= 0)).toBe(true);
-    expect(PRODUCT_RELEASES.every((release) => release.changelogUrl?.startsWith(`https://github.com/acltabontabon/draft-canvas/blob/v${release.version}/CHANGELOG.md#`))).toBe(true);
+    const tagOf = (version: string) => (version.includes('-') ? `desktop-v${version}` : `v${version}`);
+    expect(PRODUCT_RELEASES.every((release) => release.changelogUrl?.startsWith(`https://github.com/acltabontabon/draft-canvas/blob/${tagOf(release.version)}/CHANGELOG.md#`))).toBe(true);
   });
 
   it('keeps the release workflows’ tags, prerelease flags, titles and assets as they were', () => {

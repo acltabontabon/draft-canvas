@@ -1,83 +1,72 @@
 # Changelog
 
-All notable changes to Draft Canvas are documented here, once. The web app, the Docker image and the
-desktop app share one version and are released together; a `-alpha.N` section is a preview of the
-desktop app ahead of the release it leads to. Draft Canvas for VS Code has its own changelog in
-[`vscode-extension/`](vscode-extension/CHANGELOG.md).
+Every notable change to Draft Canvas, written once. The web app, the Docker image and the desktop app
+share one version and ship together; an `-alpha.N` or `-beta.N` section is a desktop preview ahead of
+the release it leads to. Draft Canvas for VS Code keeps [its own changelog](vscode-extension/CHANGELOG.md).
 
-Each version says who a change is for — **Shared** (the web and desktop apps both), **Desktop** or
-**Web** — and every release note and the in-app What's New are generated from here. How to write an
-entry is in [CONTRIBUTING.md](CONTRIBUTING.md#release-notes). Versions before 1.10.0 predate that split
-and apply to the web app.
+From 1.10.0, each change says who it's for — **Shared** (web and desktop), **Desktop** or **Web** — and
+the release notes and the in-app What's New are generated from here. See
+[CONTRIBUTING.md](CONTRIBUTING.md#release-notes) for how to write an entry.
 
 ## [Unreleased]
+
+## [1.12.0-beta.1] - 2026-09-25
+
+A beta of Draft Canvas Desktop 1.12: connect an AI coding agent and it draws and edits diagrams
+with you. Shapes can name their technology, and each boundary kind now looks like itself.
 
 ### Shared
 
 #### Added
 
-- **Technology and description on shapes.** Services, data stores, queues, actors and components can
-  carry a technology (`[Spring Boot]`) and a one-line description under their name, the way C4
-  diagrams show them. Edit both from the shape's **Details**. <!-- highlight -->
-- Diagrams with a technology or description use document format v15. An older version of Draft
-  Canvas says the file is from a newer version instead of opening it without them.
+- **Technology and description on shapes** — services, data stores, queues, actors and components
+  can show a technology (`[Spring Boot]`) and a one-line description under their name, C4-style.
+  Edit both from **Details**. <!-- highlight -->
+- Diagrams that use them are saved as format v15. An older Draft Canvas says the file is from a newer
+  version instead of opening it without them.
 
 #### Changed
 
-- **Boundaries show their kind.** Each kind has its own outline and header, so System, Domain,
-  Network, Deployment, Group and plain Boundary no longer look alike. System, Network and Deployment
-  have a small mark, a Domain's name sits on a corner tab, and a Deployment's header is ruled off.
-  <!-- highlight -->
-- A boundary's colour is now easy to see. It used to be faded to a third of its strength along with
-  the fill. The kind mark uses the same colour, and the outline keeps it while the boundary is
-  selected.
-- The boundary kind picker shows a preview of each kind and a short note on what it's for.
-- A boundary's name is edited in place in its header, not in a box covering the whole boundary.
+- **Boundaries show their kind** — System, Domain, Network, Deployment, Group and Boundary each have
+  their own outline and header, and some a small mark. <!-- highlight -->
+- A boundary's colour shows at full strength, and stays on its outline while it's selected.
+- The boundary kind picker previews each kind, and a boundary's name is edited in its header.
 
 #### Fixed
 
-- A note chip on a connector no longer covers the connector's label when the label sits above the
-  line.
+- A connector's note chip no longer covers the connector's label.
+- Two connectors drawn in opposite directions between the same shapes sit further apart, so they no
+  longer read as one bent line.
+- Punctuation at the end of a wrapped line stays with its word instead of starting the next line.
 
 ### Desktop
 
 #### Added
 
-- **AI agents can draw diagrams.** Turn it on in Settings → AI agents, choose the project folders an
-  agent may use, and connect a coding agent such as Claude Code. It describes the system; Draft Canvas
-  lays it out and draws an ordinary diagram you can edit — one undo step per change, never moving what
-  you arranged, and saved for you only when you had nothing unsaved. Off until you turn it on; nothing
-  leaves your computer from Draft Canvas. <!-- highlight -->
-- Follow-ups change the same diagram — add a queue, rename a service, explain something in a note,
-  add a flow — even when you have another one open. A change to a diagram that isn't open is saved to
-  its file without switching what you're looking at, and opening it shows the change as one undo step.
-- "Clean up the layout" re-arranges a diagram in place, keeping every shape, note and flow — the whole
-  diagram or one boundary.
-- Watch an agent work: a line above the status bar says what it is doing, with Cancel; a new diagram
-  can be watched as it is arranged, and a change to the open one is shown faintly on top of it until
-  it is applied.
-- Notes can sit beside a shape, inside a boundary, or be attached to a shape or connector, and flows
-  keep their details when an agent revises them.
-- Diagrams an agent draws read more cleanly: the main path runs straight, retry and dead-letter paths
-  step aside, a retry queue sits right by its worker, and a topic's fan-out is one trunk with one
-  caption.
-- An agent's layout work no longer holds up the editor while it runs.
-- **Cursor can connect too**, alongside Claude Code — Settings → AI agents has an **Add to Cursor**
-  button that sets it up in one click, or a config to paste in yourself.
-- **Review an agent's proposed change before it touches your diagram.** Ask an agent to check a pull
-  request's architectural impact against a diagram, or to preview a failure-path walkthrough, and it
-  submits a proposal instead of applying anything. A small button over the diagram opens a review
-  panel showing every addition, modification and removal apart from each other — with the actual
-  before-and-after values for a modification, not just a highlighted shape — plus the agent's
-  reasoning and any open questions. Accept applies the whole thing as one ordinary undo step; Reject
-  and Dismiss leave the diagram untouched. Nothing an agent proposes can be approved except by you.
+- **AI agents can draw diagrams** — turn it on in Settings → AI agents, choose the project folders an
+  agent may use, and connect Claude Code or Cursor. The agent describes the system; Draft Canvas lays
+  it out as an ordinary diagram you can edit. Off until you turn it on, and nothing leaves your
+  computer from Draft Canvas. <!-- highlight -->
+- **Review an agent's change before it lands** — an agent can send a proposal instead of editing. The
+  review panel lists every addition, change and removal, with before-and-after values and the agent's
+  reasoning. Accept applies it as one undo step; Reject leaves the diagram as it was.
   <!-- highlight -->
-- An agent can capture your current selection and edit only that, even if you select something else
-  on screen while it's still working.
-- An agent can read a flow's steps in the order they happen, and the notes and decisions around them,
-  as design context for implementing a change in your repository.
-- A flow can be named as a variant of another — a failure path alongside its normal one — and switched
-  to mid-presentation without leaving it.
+- Follow-ups edit the same diagram — add, rename, remove, notes, flows — whether or not it's open, one
+  undo step each, without moving what you arranged.
+- "Clean up the layout" re-arranges a whole diagram or one boundary, keeping every shape, note and flow.
+- A line above the status bar shows what an agent is doing, with Cancel, and its change is drawn
+  faintly over the diagram until it's applied.
+- An agent can edit only the selection you gave it, and read a flow's steps as context for
+  implementing a change in your code.
+- A flow can be a variant of another — a failure path beside its normal one — and you can switch to it
+  mid-presentation.
+- Agent-drawn diagrams keep the main path straight, set retry and dead-letter paths aside, and draw a
+  topic's fan-out as one trunk.
+
+#### Fixed
+
+- About and What's New in a desktop preview name the preview's own version and news, not the last
+  release's.
 
 ## [1.11.1] - 2026-09-24
 
@@ -1571,6 +1560,7 @@ pre-release milestone; this is the one meant for real use.
   your device. Documents are encrypted at rest in your browser.
 
 [Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...main
+[1.12.0-beta.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...desktop-v1.12.0-beta.1
 [1.11.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.9.4...v1.10.0

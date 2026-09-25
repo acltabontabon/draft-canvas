@@ -286,8 +286,8 @@ someone using the app by leading with a **bold title** and ending with `<!-- hig
 ```
 
 The marker is invisible on GitHub and dropped from every release body. A release's What's New is its
-own highlights plus its prereleases' — nobody runs an alpha's version number — so an alpha's highlights
-first appear in the app when the release they lead to ships.
+own highlights plus its prereleases'. A desktop preview shows its own entry — it runs its own version
+number — until the release it leads to is written, and then folds into it.
 
 What's New for 1.9.4 and earlier is frozen as it was written, in `src/releases/productReleases.ts`
 (`ARCHIVED_RELEASES`). Don't add to it.
