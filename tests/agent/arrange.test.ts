@@ -120,6 +120,42 @@ describe('arrange', () => {
     expect(a!.y < b!.y && b!.y < c!.y).toBe(true);
   });
 
+  it('turns a whole view the other way only when that reads clearly better, and a scoped part never', () => {
+    // A hub inside a boundary calling three externals, drawn reading right. Whether a cleanup turns
+    // it is the rule a new diagram uses (`clearlyBetterDirection`, held to in the gallery's batch
+    // case); here the two directions read alike, so nothing turns — and told the direction, or given
+    // only part of the view, a cleanup never turns it.
+    const request = {
+      groups: [{ id: 'sys', label: 'System', kind: 'system' }],
+      nodes: [
+        { id: 'in', type: 'api', label: 'Intake', group: 'sys' },
+        { id: 'hub', type: 'service', label: 'Hub', group: 'sys' },
+        { id: 'a', type: 'service', label: 'A', group: 'sys' },
+        { id: 'b', type: 'database', label: 'B', group: 'sys' },
+        { id: 'c', type: 'worker', label: 'C', group: 'sys' },
+        { id: 'x', type: 'external-system', label: 'X' },
+        { id: 'y', type: 'external-system', label: 'Y' },
+        { id: 'z', type: 'external-system', label: 'Z' },
+      ],
+      relationships: [
+        { id: 'r1', from: 'in', to: 'hub', label: 'Hands over' },
+        { id: 'r2', from: 'hub', to: 'a', label: 'Calls' },
+        { id: 'r3', from: 'a', to: 'b', label: 'Writes' },
+        { id: 'r4', from: 'hub', to: 'c', label: 'Queues' },
+        { id: 'r5', from: 'hub', to: 'x', label: 'Checks with' },
+        { id: 'r6', from: 'hub', to: 'y', label: 'Scores with' },
+        { id: 'r7', from: 'hub', to: 'z', label: 'Opens at' },
+      ],
+    };
+    const right = build({ ...request, layout: { direction: 'right' } });
+    expect(readingDirectionOf(right)).toBe('right');
+    const { file } = applyUpdate(right, [], [{ op: 'arrange' }], undefined);
+    expect(readingDirectionOf(file)).toBe('right');
+    expect(checkQuality(file.nodes, file.edges, measureContext()).errors).toEqual([]);
+    expect(readingDirectionOf(applyUpdate(right, [], [{ op: 'arrange', direction: 'right' }], undefined).file)).toBe('right');
+    expect(readingDirectionOf(applyUpdate(right, [], [{ op: 'arrange', scope: { group: 'sys' } }], undefined).file)).toBe('right');
+  });
+
   it('adds and cleans up in one request, as one change', () => {
     const { file } = applyUpdate(
       orders(),

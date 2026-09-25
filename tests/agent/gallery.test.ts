@@ -13,6 +13,7 @@ import { GALLERY, type GalleryCase } from '../fixtures/agent/gallery';
 import { legibilityOf } from '../../src/agent/legibility';
 import { routingPlan } from '../../src/edges/bundles';
 import { nearestElement } from '../../src/agent/read';
+import { readingDirectionOf } from '../../src/agent/arrange';
 
 function create(request: Record<string, unknown>, id = 'd_gallery00001'): DraftDocument {
   const parsed = deserializeDocument(compose({ requestId: 'g', ...request }, id).text);
@@ -103,29 +104,29 @@ describe('layout gallery', () => {
     for (const id of ['branch', 'bureau', 'fraud', 'core', 'mail']) expect(advice[0]).toContain(`{"op":"update","id":"${id}","set":{"group":null}}`);
     expect(advice[0]).toContain('{"op":"arrange"}');
     // After the advised ops: the three externals the worker calls hang across the flow from the batch
-    // boundary, under the worker, each reached by a straight connector out of its bottom; the vendor
-    // the notification worker calls (last in the boundary's flow) stays after it, in the flow.
+    // boundary, level with the worker, each reached by a straight connector out of its side; the
+    // vendor the notification worker calls (last in the boundary's flow) stays after it, in the flow.
+    // The view was drawn reading right; the cleanup turns it to read down, where the hub's fan hangs
+    // beside it with nothing crossing anything, instead of keeping a direction that reads worse.
     const { doc, touched } = galleryDocument(GALLERY.find((g) => g.id === '23-credit-card-batch-ungrouped')!);
+    expect(readingDirectionOf(doc)).toBe('down');
     const at = (id: string) => doc.nodes.find((n) => n.id === id)!;
     const worker = at('worker');
     const batch = at('batch');
     for (const id of ['bureau', 'fraud', 'core']) {
-      expect(at(id).y, id).toBeGreaterThanOrEqual(batch.y + batch.height);
+      expect(at(id).x, id).toBeGreaterThanOrEqual(batch.x + batch.width);
       expect(at(id).parentId, id).toBeUndefined();
       const edge = doc.edges.find((e) => e.target === id)!;
-      expect(edge.sourceAnchor?.side, id).toBe('bottom');
-      expect(edge.targetAnchor?.side, id).toBe('top');
+      expect(edge.sourceAnchor?.side, id).toBe('right');
+      expect(edge.targetAnchor?.side, id).toBe('left');
     }
-    expect(at('fraud').x + at('fraud').width / 2).toBeCloseTo(worker.x + worker.width / 2, -1);
-    expect(at('mail').x).toBeGreaterThanOrEqual(at('notify').x + at('notify').width);
-    expect(at('mail').y).toBeLessThan(batch.y + batch.height);
+    expect(at('fraud').y + at('fraud').height / 2).toBeCloseTo(worker.y + worker.height / 2, -1);
+    expect(at('mail').y).toBeGreaterThanOrEqual(at('notify').y + at('notify').height);
+    expect(at('mail').x).toBeLessThan(batch.x + batch.width);
     const legibility = legibilityOf(doc.nodes, doc.edges);
     expect(legibility.detours).toEqual([]);
     expect(legibility.throughBoundaries).toEqual([]);
-    // Kept reading right, as the view already did: the notification worker sits after the audit store
-    // on the hub's line, so its connector goes round it — under the hub, across the three hanging
-    // lines. (Created afresh, with the direction left open, the same request reads down with none.)
-    expect(legibility.crossings).toBeLessThanOrEqual(3);
+    expect(legibility.crossings).toBe(0);
     expect(checkQuality(doc.nodes, doc.edges, measureContext(), touched).errors).toEqual([]);
   });
 

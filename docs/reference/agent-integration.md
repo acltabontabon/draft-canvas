@@ -522,7 +522,9 @@ gets, applied in place. `{op:"arrange", scope?, direction?, spacing?, connectors
   Nothing outside it moves; a boundary it sits in only grows. A partial scope keeps its top-left
   corner, or is set beside where it was when that would collide; if nothing near is free it is
   refused with the whole-view arrange as `suggestedOp`.
-- `direction` defaults to the way the view already reads.
+- `direction` defaults to the way the view already reads. A whole-view arrange that leaves it out is
+  also laid out the other way, and turned only when that reads clearly better — the same rule
+  `create_diagram` applies (below); a scoped arrange always keeps the view's direction.
 - `connectors`: `tidy` (default) re-anchors connectors touching the scope and drops hand routing on
   them; `keep` leaves hand routing; `orthogonal` also makes them right-angled. Connectors that don't
   touch the scope are untouched either way.
