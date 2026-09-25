@@ -112,9 +112,8 @@ function setUpSpine() {
     if (!wide.matches) return;
 
     const mainTop = main.getBoundingClientRect().top + window.scrollY;
-    const stops = [...main.querySelectorAll('.chapter .slate, .get .slate')].map(
-      (slate) => Math.round(slate.getBoundingClientRect().top + window.scrollY - mainTop + 38),
-    );
+    const slates = [...main.querySelectorAll('.chapter .slate, .get .slate')];
+    const stops = slates.map((slate) => Math.round(slate.getBoundingClientRect().top + window.scrollY - mainTop + 38));
     if (stops.length < 2) return;
 
     const top = stops[0] - 72;
@@ -130,8 +129,11 @@ function setUpSpine() {
     drawn.style.strokeDasharray = String(bottom - top);
     svg.append(drawn);
 
-    junctions = stops.map((y) => {
-      const dot = svgEl('circle', { class: 'junction', cx: 35, cy: y, r: 5 });
+    // The revision chapter's junction is its delta tag, the way a drawing marks where it changed.
+    junctions = stops.map((y, index) => {
+      const dot = slates[index].closest('.chapter-rev')
+        ? svgEl('path', { class: 'junction junction-rev', d: `M35 ${y - 6.5}l6.5 11h-13z`, 'stroke-linejoin': 'round' })
+        : svgEl('circle', { class: 'junction', cx: 35, cy: y, r: 5 });
       svg.append(dot);
       return { dot, y };
     });
@@ -258,6 +260,53 @@ function setUpDemo() {
   observer.observe(video);
 }
 
+/* ── The revision ───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Plays the agent chapter's exchange once, when enough of it is on screen to be watched — the
+ * request typed, the diagram drawn, the proposal pencilled in and clouded, then accepted and inked.
+ *
+ * Without this, or with motion unwelcome, the stage simply rests on the proposal waiting for review,
+ * which is the frame that says the most. Replay restarts it by taking the class off and putting it
+ * back on the next frame, after a reflow, so every animation starts again from its first keyframe.
+ */
+function setUpRevision() {
+  const stage = document.getElementById('rev-stage');
+  const replay = document.getElementById('rev-replay');
+  if (!stage || reduceMotion.matches || !('IntersectionObserver' in window)) return;
+
+  // Armed now, held on its first frame, so the finished picture never shows and then resets.
+  stage.classList.add('play');
+
+  const play = () => {
+    stage.classList.remove('play', 'running');
+    void stage.offsetWidth;
+    stage.classList.add('play', 'running');
+  };
+
+  // Most of it in view — or, where it is stacked taller than the window, most of the window full of
+  // it. A ratio alone never arrives on a short screen, and the stage would wait on its first frame.
+  const observer = new IntersectionObserver(
+    (entries) => {
+      const seen = entries.some(
+        (entry) =>
+          entry.isIntersecting &&
+          (entry.intersectionRatio >= 0.45 || entry.intersectionRect.height >= (entry.rootBounds?.height ?? window.innerHeight) * 0.6),
+      );
+      if (!seen) return;
+      observer.disconnect();
+      stage.classList.add('running');
+    },
+    { threshold: Array.from({ length: 21 }, (_, step) => step / 20) },
+  );
+  observer.observe(stage);
+
+  if (replay) {
+    replay.hidden = false;
+    replay.addEventListener('click', play);
+  }
+}
+
 /* ── The old service worker ─────────────────────────────────────────────────────────────── */
 
 /**
@@ -366,6 +415,7 @@ setUpReveal();
 setUpSpine();
 setUpMasthead();
 setUpDemo();
+setUpRevision();
 setUpDownloads();
 void retireFormerWorker();
 void setUpReturningVisitor();

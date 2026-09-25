@@ -108,6 +108,7 @@
         <a href="#present">Present</a>
         <a href="#depth">Depth</a>
         <a href="#export">Export</a>
+        <a href="#agents" class="nav-rev">Agents<span aria-label=", in beta">&beta;</span></a>
         <a href="#get">Get it</a>
       </nav>
       <a class="button button-primary masthead-cta" href="./editor/">Open editor</a>
@@ -139,6 +140,11 @@
       ================================================================= -->
       <section class="hero" id="top">
         <div class="hero-words">
+          <a class="rev-flag reveal" href="#agents">
+            <span class="rev-flag-tag"><svg viewBox="0 0 14 12" width="12" height="11" aria-hidden="true" focusable="false"><path d="M7 1l6 10H1z" /></svg>1.12 beta</span>
+            <span class="rev-flag-text">Your coding agent can draw now</span>
+            <svg class="rev-flag-arrow" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5" /></svg>
+          </a>
           <p class="overline reveal">Architecture at meeting speed</p>
           <h1 class="reveal">Draw it<br />so everyone<br /><span class="hero-accent">gets it.</span></h1>
           <p class="lead reveal">
@@ -762,6 +768,384 @@
           </div>
           <figcaption>One dialog, four modes, one button. The tile is the actual diagram, not a stand-in.</figcaption>
         </figure>
+      </section>
+
+      <!-- ================================================================
+           Δ — the revision. AI agents over MCP, in the desktop beta.
+
+           Told the way a drawing sheet records a change: the agent's proposal arrives in pencil,
+           inside a revision cloud with a delta tag, and is inked only when someone accepts it. That
+           is not a metaphor laid over the product, it is what the product does: an agent's change
+           is drawn faintly over the diagram until it is applied, and a proposal is not applied until
+           you press Accept. The request on the left carries no coordinates, because the real one
+           carries none either — where things go is Draft Canvas's call.
+
+           Everything rests in the "in review" state without scripting or under reduced motion; with
+           both, main.js adds `.play` once the stage is on screen and the sequence runs once.
+      ================================================================= -->
+      <section class="chapter chapter-rev" id="agents" aria-labelledby="agents-title">
+        <header class="slate reveal">
+          <span class="numeral numeral-delta" aria-hidden="true">&Delta;</span>
+          <p class="overline">Revision 1.12 &middot; in the desktop beta</p>
+          <h2 id="agents-title">Your agent sketches in pencil. You ink&nbsp;it.</h2>
+          <p class="sub">Draft Canvas speaks MCP, so the agent in your editor can draw</p>
+        </header>
+
+        <div class="rev-stage reveal" id="rev-stage">
+          <figure class="rev-term" aria-labelledby="rev-term-caption">
+            <p class="rev-term-bar"><span>~/shop</span><span>coding agent</span></p>
+            <div class="rev-lines">
+              <p class="l l-you" style="--t: 0.2"><span class="p">&rsaquo;</span><span class="say">Draw how checkout works in this repo.</span></p>
+              <p class="l l-tool" style="--t: 1.2"><span class="p">&#9210;</span><span><b>create_diagram</b> &middot; Checkout, 5 parts, 4 relationships</span></p>
+              <p class="l l-you" style="--t: 2.9"><span class="p">&rsaquo;</span><span class="say">Failed charges have nowhere to land. Propose a fix &mdash; don&rsquo;t apply it.</span></p>
+              <div class="l l-tool l-call" style="--t: 4.1">
+                <p><span class="p">&#9210;</span><span><b>submit_proposal</b></span></p>
+                <span class="rev-handoff" aria-hidden="true"><i>MCP</i></span>
+              </div>
+              <pre class="l l-json" style="--t: 4.4"><code>{ "op": "add",
+  "nodes": [{
+    "id": "dlq",
+    "type": "dead-letter-queue",
+    "label": "payments-dlq" }],
+  "relationships": [{
+    "from": "payments",
+    "to": "dlq",
+    "label": "after 5 attempts" }] }</code></pre>
+              <p class="l l-margin" style="--t: 5"><span>No <code>x</code>, no <code>y</code>. Where it goes is Draft&nbsp;Canvas&rsquo;s call.</span></p>
+              <p class="l l-tool" style="--t: 7.3"><span class="p">&#9210;</span><span>Proposal ready &middot; waiting for your review</span></p>
+            </div>
+            <figcaption id="rev-term-caption" class="visually-hidden">
+              A conversation with a coding agent. Asked to draw how checkout works, it creates a
+              diagram; asked to propose a fix for failed charges without applying it, it submits a
+              proposal that adds a dead-letter queue. The request names the parts and how they
+              connect, and carries no coordinates.
+            </figcaption>
+          </figure>
+
+          <figure class="rev-sheet chapter-figure" aria-labelledby="rev-sheet-caption">
+            <svg class="scene scene-rev" viewBox="0 0 760 452" aria-hidden="true" focusable="false">
+              <defs>
+                <!-- Graphite: a little grain on the edge of every pencil stroke. -->
+                <filter id="rev-grain" x="-4%" y="-4%" width="108%" height="108%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="11" result="grain" />
+                  <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.8" xChannelSelector="R" yChannelSelector="G" />
+                </filter>
+                <pattern id="rev-hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+                  <path d="M0 0v5" />
+                </pattern>
+              </defs>
+
+              <!-- Revision 1: what the agent drew and was applied. Ink. -->
+              <g class="rev-base">
+                <g class="rev-boundary">
+                  <rect class="outline" x="12" y="12" width="736" height="428" rx="10" />
+                  <rect class="plate" x="19" y="19" width="20" height="20" rx="6" />
+                  <rect class="mark" x="23.75" y="24.25" width="10.5" height="9.5" rx="2" />
+                  <path class="mark" d="M23.75 27.5H34.25" />
+                  <text class="t-title" x="48" y="34">Checkout</text>
+                  <text class="t-caption" x="120" y="34">SYSTEM</text>
+                </g>
+
+                <g class="wire async" style="--draw: 1">
+                  <path d="M216 130H298" /><circle class="dot" cx="257" cy="130" r="2.5" />
+                  <path class="head" d="M298 125.5l8 4.5-8 4.5z" />
+                </g>
+                <text class="t-edge" x="261" y="152">publishes to</text>
+
+                <g class="wire async" style="--draw: 2">
+                  <path d="M458 130H540" /><circle class="dot" cx="499" cy="130" r="2.5" />
+                  <path class="head" d="M540 125.5l8 4.5-8 4.5z" />
+                </g>
+                <text class="t-edge" x="503" y="152">consumed by</text>
+
+                <g class="wire" style="--draw: 3">
+                  <path d="M126 180V268" /><path class="head" d="M121.5 268l4.5 8 4.5-8z" />
+                </g>
+                <text class="t-edge t-edge-side" x="138" y="232">writes to</text>
+
+                <g class="wire" style="--draw: 4">
+                  <path d="M638 180V268" /><path class="head" d="M633.5 268l4.5 8 4.5-8z" />
+                </g>
+                <text class="t-edge t-edge-side" x="650" y="232">writes to</text>
+
+                <g class="node service" style="--in: 1">
+                  <rect class="body" x="36" y="80" width="180" height="100" rx="11" />
+                  <text class="t-name" x="126" y="116">Checkout API</text>
+                  <text class="t-tech" x="126" y="136">[Node.js]</text>
+                  <text class="t-desc" x="126" y="154">Takes the order.</text>
+                  <text class="t-kind" x="204" y="171">API</text>
+                </g>
+
+                <g class="node queue" style="--in: 2">
+                  <path class="body" d="M332 104h100a26 26 0 010 52H332a26 26 0 010-52z" />
+                  <g class="envelopes">
+                    <rect x="347" y="122" width="21" height="16" rx="2" /><path d="M347.5 123.5l10 7.5 10-7.5" />
+                    <rect x="374" y="122" width="21" height="16" rx="2" /><path d="M374.5 123.5l10 7.5 10-7.5" />
+                    <rect x="401" y="122" width="21" height="16" rx="2" /><path d="M401.5 123.5l10 7.5 10-7.5" />
+                  </g>
+                  <text class="t-name t-below" x="382" y="180">payments</text>
+                  <text class="t-kind t-below" x="382" y="196">QUEUE</text>
+                </g>
+
+                <g class="node service" style="--in: 3">
+                  <rect class="ghost" x="554" y="86" width="180" height="100" rx="11" />
+                  <rect class="body" x="548" y="80" width="180" height="100" rx="11" />
+                  <text class="t-name" x="638" y="116">Payment Worker</text>
+                  <text class="t-tech" x="638" y="136">[Go]</text>
+                  <text class="t-desc" x="638" y="154">Charges each order once.</text>
+                  <text class="t-kind" x="716" y="171">WORKER</text>
+                </g>
+
+                <g class="node store" style="--in: 4">
+                  <path class="body" d="M80 290a46 14 0 0192 0v34a46 14 0 01-92 0z" />
+                  <path class="cap" d="M80 290a46 14 0 0092 0" />
+                  <text class="t-name t-below" x="126" y="362">Orders DB</text>
+                  <text class="t-kind t-below" x="126" y="378">SQL</text>
+                </g>
+
+                <g class="node store" style="--in: 5">
+                  <path class="body" d="M592 290a46 14 0 0192 0v34a46 14 0 01-92 0z" />
+                  <path class="cap" d="M592 290a46 14 0 0092 0" />
+                  <text class="t-name t-below" x="638" y="362">Payments DB</text>
+                  <text class="t-kind t-below" x="638" y="378">SQL</text>
+                </g>
+              </g>
+
+              <!-- Revision 2, as the agent proposed it: pencil, until someone inks it. The same
+                   dead-letter queue the real renderer draws — a slightly dimmed tube, one envelope
+                   that made it and a dashed one that didn't — sketched, hatched and retraced the way
+                   the Sketch personality retraces its outlines. -->
+              <g class="rev-pencil" filter="url(#rev-grain)">
+                <path class="pl hatch" pathLength="1" d="M332 292h100a26 26 0 010 52H332a26 26 0 010-52z" style="--at: 5" />
+                <path class="pl retrace" pathLength="1" d="M333 293.5h99a25 25 0 011 50.5H331.5a26.5 26 0 01.5-51z" style="--at: 5.35" />
+                <path class="pl" pathLength="1" d="M361.5 311.5h17v13h-17zM362 312.5l8.5 6 8.5-6" style="--at: 5.6" />
+                <path class="pl" pathLength="1" d="M385.5 311.5h17v13h-17zM386 312.5l8.5 6 8.5-6" style="--at: 5.75" />
+                <path class="pl" pathLength="1" d="M382 204V284" style="--at: 5.3" />
+                <path class="pl-head" d="M377.5 284l4.5 8 4.5-8z" style="--at: 5.7" />
+                <path class="pl" pathLength="1" d="M338 248h44" style="--at: 5.85" />
+                <rect class="pl" pathLength="1" x="272" y="237" width="66" height="22" rx="11" style="--at: 5.9" />
+                <text class="pt t-name t-below" x="382" y="368" style="--at: 6">payments-dlq</text>
+                <text class="pt t-kind t-below" x="382" y="384" style="--at: 6.05">DLQ</text>
+                <text class="pt t-edge t-edge-side" x="394" y="252" style="--at: 6.1">after 5 attempts</text>
+                <text class="pt t-chip" x="305" y="252" style="--at: 6.15">note</text>
+              </g>
+
+              <!-- The revision cloud and its delta tag: how a drawing marks what changed. -->
+              <g class="rev-cloud">
+                <path class="cloud" pathLength="1" d="M252.0 216.0A12.6 12.6 0 0 1 276.8 216.0A15.2 15.2 0 0 1 301.6 216.0A13.4 13.4 0 0 1 326.4 216.0A13.2 13.2 0 0 1 351.2 216.0A14.6 14.6 0 0 1 376.0 216.0A14.1 14.1 0 0 1 400.8 216.0A13.5 13.5 0 0 1 425.6 216.0A14.7 14.7 0 0 1 450.4 216.0A14.7 14.7 0 0 1 475.2 216.0A14.1 14.1 0 0 1 500.0 216.0A13.5 13.5 0 0 1 500.0 239.0A13.3 13.3 0 0 1 500.0 262.0A13.8 13.8 0 0 1 500.0 285.0A12.3 12.3 0 0 1 500.0 308.0A12.7 12.7 0 0 1 500.0 331.0A13.5 13.5 0 0 1 500.0 354.0A13.5 13.5 0 0 1 500.0 377.0A11.9 11.9 0 0 1 500.0 400.0A14.5 14.5 0 0 1 475.2 400.0A13.9 13.9 0 0 1 450.4 400.0A15.2 15.2 0 0 1 425.6 400.0A14.9 14.9 0 0 1 400.8 400.0A13.0 13.0 0 0 1 376.0 400.0A14.0 14.0 0 0 1 351.2 400.0A15.2 15.2 0 0 1 326.4 400.0A14.5 14.5 0 0 1 301.6 400.0A14.4 14.4 0 0 1 276.8 400.0A14.2 14.2 0 0 1 252.0 400.0A14.0 14.0 0 0 1 252.0 377.0A14.0 14.0 0 0 1 252.0 354.0A12.7 12.7 0 0 1 252.0 331.0A12.6 12.6 0 0 1 252.0 308.0A13.8 13.8 0 0 1 252.0 285.0A12.6 12.6 0 0 1 252.0 262.0A12.1 12.1 0 0 1 252.0 239.0A12.5 12.5 0 0 1 252.0 216.0Z" />
+                <g class="delta">
+                  <path d="M513 190l14 24h-28z" />
+                  <text x="513" y="210">2</text>
+                </g>
+              </g>
+
+              <!-- Revision 2, inked: the same parts as the renderer draws them once accepted. -->
+              <g class="rev-inked">
+                <g class="wire async">
+                  <path d="M382 204V284" /><path class="head" d="M377.5 284l4.5 8 4.5-8z" />
+                </g>
+                <text class="t-edge t-edge-side" x="394" y="252">after 5 attempts</text>
+                <g class="chip">
+                  <path class="stem" d="M338 248h44" />
+                  <rect x="272" y="237" width="66" height="22" rx="11" />
+                  <circle cx="286" cy="248" r="3.5" />
+                  <text x="309" y="252">note</text>
+                </g>
+                <g class="node queue dlq">
+                  <path class="body" d="M332 292h100a26 26 0 010 52H332a26 26 0 010-52z" />
+                  <g class="envelopes">
+                    <rect x="361.5" y="311.5" width="17" height="13" rx="2" /><path d="M362 312.5l8.5 6 8.5-6" />
+                    <rect class="dashed" x="385.5" y="311.5" width="17" height="13" rx="2" /><path class="dashed" d="M386 312.5l8.5 6 8.5-6" />
+                  </g>
+                  <text class="t-name t-below" x="382" y="368">payments-dlq</text>
+                  <text class="t-kind t-below" x="382" y="384">DLQ</text>
+                </g>
+              </g>
+
+              <!-- The review button over the diagram, as the desktop app shows it. -->
+              <g class="rev-pill">
+                <rect x="566" y="20" width="170" height="24" rx="12" />
+                <circle cx="581" cy="32" r="3.5" />
+                <text class="wait" x="658" y="36">1 proposal to review</text>
+                <text class="done" x="658" y="36">Accepted &middot; one undo step</text>
+              </g>
+
+              <!-- Whoever is reviewing. Only ever seen while the sequence plays. -->
+              <g class="rev-cursor">
+                <path d="M0 0v17l4.6-4.3 3 7 3-1.3-3-6.8h6.2z" />
+              </g>
+            </svg>
+
+            <table class="rev-table">
+              <caption class="visually-hidden">Revisions of the Checkout diagram</caption>
+              <thead>
+                <tr><th scope="col">Rev</th><th scope="col">What changed</th><th scope="col">By</th><th scope="col">State</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>&Delta;1</td><td>Checkout, drawn from the repository</td><td>agent</td><td>inked</td>
+                </tr>
+                <tr class="rev-row-now">
+                  <td>&Delta;2</td><td>Dead-letter queue after <em>payments</em>, and why</td><td>agent</td>
+                  <td><span class="st st-review">in review</span><span class="st st-inked">inked by you</span></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <figcaption id="rev-sheet-caption">
+              A Checkout system, as the agent drew it: an API publishing to a <em>payments</em> queue, a
+              payment worker consuming it, each writing to its own database, with the technology each
+              one runs on under its name. The agent&rsquo;s proposal &mdash; a dead-letter queue after
+              five failed attempts, with a note saying why &mdash; waits in pencil inside a revision
+              cloud until someone accepts it.
+            </figcaption>
+          </figure>
+
+          <button class="rev-replay" id="rev-replay" type="button" hidden>
+            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
+              <path d="M13 8a5 5 0 11-1.5-3.6M13 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            Replay the revision
+          </button>
+        </div>
+
+        <div class="chapter-body chapter-body-split rev-words">
+          <div class="prose reveal">
+            <p>
+              Ask Claude Code or Cursor to draw how orders move through the repository you have open.
+              It reads the code, then hands Draft Canvas a description &mdash; the parts, how they
+              connect, the flows. <strong>Never a coordinate.</strong> Draft Canvas lays it out, routes
+              it and draws it as an ordinary diagram: yours to move, present and export.
+            </p>
+            <p>
+              Follow-ups change the same diagram &mdash; <span class="q">add a dead-letter queue</span>,
+              <span class="q">rename that service</span>, <span class="q">explain the retry in a
+              note</span>. Each one lands as a single undo step, and what you arranged by hand stays
+              where you put it. While the agent works, its change is drawn faintly over yours: pencil,
+              until it lands.
+            </p>
+            <p>
+              Or tell it not to touch anything. <span class="q">Review this pull request against the
+              diagram</span> comes back as a proposal &mdash; every addition, change and removal, the
+              actual before and after, and the agent&rsquo;s reasoning. Nothing is inked until you
+              press <em>Accept</em>.
+            </p>
+          </div>
+
+          <div class="prose reveal">
+            <p class="callout">
+              <strong>Off until you turn it on, and only in the folders you tick.</strong> Draft Canvas
+              sends your diagrams nowhere; your agent talks to its own AI provider, as it already does
+              with your code. Nothing an agent is still preparing is saved, undoable, or in the file
+              until it lands.
+            </p>
+            <p class="rev-verbs-title">Ten verbs, and not one of them takes a position</p>
+            <ul class="rev-verbs" aria-label="The tools Draft Canvas gives an agent">
+              <li>create_diagram</li><li>update_diagram</li><li>read_diagram</li><li>list_diagrams</li>
+              <li>read_selection</li><li>submit_proposal</li><li>get_proposal</li><li>list_proposals</li>
+              <li>get_implementation_context</li><li>get_capabilities</li>
+            </ul>
+            <p class="aside">
+              <code>get_implementation_context</code> runs the other way: select a flow, and the agent
+              reads its steps in the order they happen as the design for the code it is about to write.
+            </p>
+          </div>
+        </div>
+
+        <!-- The rest of the revision. Each drawn as the renderer draws it. -->
+        <div class="rev-extras">
+          <p class="overline rev-extras-title reveal">Also on this revision</p>
+
+          <article class="rev-extra reveal">
+            <svg viewBox="0 0 240 118" aria-hidden="true" focusable="false">
+              <rect class="x-body" x="30" y="10" width="180" height="98" rx="11" />
+              <text class="x-name" x="120" y="44">Orders API</text>
+              <text class="x-tech" x="120" y="65">[Spring Boot]</text>
+              <text class="x-desc" x="120" y="84">Takes orders, once each.</text>
+            </svg>
+            <h3>What it&rsquo;s built with, under its name</h3>
+            <p>
+              Services, data stores, queues, actors and components carry a technology and a one-line
+              description, the way C4 draws them. An agent fills them in from the code; you edit them
+              in <em>Details</em>.
+            </p>
+          </article>
+
+          <article class="rev-extra reveal">
+            <svg viewBox="0 0 240 118" aria-hidden="true" focusable="false">
+              <!-- System: solid, a stamped mark on a tinted plate. -->
+              <g class="x-bound">
+                <path class="x-line" d="M8 56V14a6 6 0 016-6h98" />
+                <rect class="x-plate" x="13" y="13" width="17" height="17" rx="5" />
+                <rect class="x-mark" x="16.5" y="17" width="10" height="9" rx="2" /><path class="x-mark" d="M16.5 20.2h10" />
+                <text class="x-cap" x="37" y="25">SYSTEM</text>
+              </g>
+              <!-- Domain: a longer dash, and the name on a tab cut from the corner. -->
+              <g class="x-bound">
+                <path class="x-line x-domain" d="M126 56V14a6 6 0 016-6h100" />
+                <path class="x-line" d="M126 30h62a6 6 0 006-6V8" />
+                <text class="x-cap" x="134" y="23">DOMAIN</text>
+              </g>
+              <!-- Network: dash and dot, and a mark of three joined nodes. -->
+              <g class="x-bound">
+                <path class="x-line x-network" d="M8 112V70a6 6 0 016-6h98" />
+                <g class="x-mark"><path d="M22 72l-4 7h8z" /><circle cx="22" cy="72" r="1.8" /><circle cx="18" cy="79" r="1.8" /><circle cx="26" cy="79" r="1.8" /></g>
+                <text class="x-cap" x="37" y="81">NETWORK</text>
+              </g>
+              <!-- Deployment: a hairline outline, its header ruled off, and a box mark. -->
+              <g class="x-bound">
+                <path class="x-line x-deploy" d="M126 112V70a6 6 0 016-6h100" />
+                <path class="x-line x-deploy" d="M126 90h106" />
+                <path class="x-mark" d="M140 69.5l5 2.6v5.6l-5 2.7-5-2.7v-5.6zM135 72.1l5 2.6 5-2.6M140 74.7v5.7" />
+                <text class="x-cap" x="152" y="81">DEPLOYMENT</text>
+              </g>
+            </svg>
+            <h3>Boundaries that say what they are</h3>
+            <p>
+              System, Domain, Network, Deployment, Group and plain Boundary each get their own outline
+              and header. A boundary&rsquo;s colour now shows at full strength.
+            </p>
+          </article>
+
+          <article class="rev-extra reveal">
+            <svg viewBox="0 0 240 118" aria-hidden="true" focusable="false">
+              <rect class="x-body" x="8" y="20" width="56" height="30" rx="7" />
+              <rect class="x-body" x="92" y="20" width="56" height="30" rx="7" />
+              <rect class="x-body" x="176" y="20" width="56" height="30" rx="7" />
+              <rect class="x-body" x="92" y="80" width="56" height="30" rx="7" />
+              <path class="x-flow" d="M64 35h24" /><path class="x-flow-head" d="M84 31l6 4-6 4z" />
+              <path class="x-flow" d="M148 35h24" /><path class="x-flow-head" d="M168 31l6 4-6 4z" />
+              <path class="x-fail" d="M120 50v24" /><path class="x-fail-head" d="M116 70l4 6 4-6z" />
+              <circle class="x-step" cx="76" cy="23" r="7" /><text class="x-n" x="76" y="26.5">1</text>
+              <circle class="x-step" cx="160" cy="23" r="7" /><text class="x-n" x="160" y="26.5">2</text>
+              <circle class="x-step x-step-fail" cx="134" cy="62" r="7" /><text class="x-n x-n-fail" x="134" y="65.5">2</text>
+              <text class="x-cap" x="160" y="99">failure path</text>
+            </svg>
+            <h3>The failure path, beside the normal one</h3>
+            <p>
+              An agent can walk through what happens when a step fails, as a flow of its own that
+              knows which flow it breaks. <kbd>Shift</kbd>+<kbd>F</kbd> switches to it without
+              leaving the presentation.
+            </p>
+          </article>
+        </div>
+
+        <!-- Points at the beta by name. When 1.12.0 ships, this chapter stops being a preview: drop
+             "in the desktop beta" from the overline, the β from the masthead and the hero flag, and
+             send this button to #desktop like the others. -->
+        <div class="rev-cta reveal">
+          <p class="rev-cta-actions">
+            <a class="button button-primary button-lg" href="https://github.com/acltabontabon/draft-canvas/releases/tag/desktop-v1.12.0-beta.1">
+              <span>Try the desktop beta</span>
+              <small>1.12.0-beta.1 &middot; macOS and Windows</small>
+            </a>
+            <a class="button button-lg" href="https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/connect-an-ai-agent.md">Connect an agent</a>
+          </p>
+          <p class="rev-cta-fine">
+            A beta updates itself to the next beta, then to 1.12. The web app and VS Code open what an
+            agent draws, but agents can only reach the desktop app.
+          </p>
+        </div>
       </section>
 
       <!-- ================================================================
