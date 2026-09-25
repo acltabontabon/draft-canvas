@@ -378,7 +378,7 @@ export const GALLERY: GalleryCase[] = [
       ],
       notes: [
         { id: 'n-idem', text: 'Every call carries an idempotency key;\na retry never charges twice.', kind: 'decision', about: 'api' },
-        { id: 'n-ttl', text: 'Assumption: carts expire after 30 minutes.', kind: 'question', about: 'cart' },
+        { id: 'n-ttl', text: 'Assumption: carts expire after 30 minutes.', kind: 'question', about: 'cart', attach: false },
         { id: 'n-pci', text: 'PCI scope ends here.', kind: 'warning', about: 'pay' },
         { id: 'n-auth', text: '3-D Secure challenge may add 10 s.', about: 'c4' },
       ],
@@ -485,7 +485,8 @@ export const GALLERY: GalleryCase[] = [
     // The reported regression: a container view an agent sent over MCP that passed every check yet
     // read badly — lines to the external providers across the whole system, a notification looping
     // under everything back to the applicant, notes far from what they describe and a boundary that
-    // was mostly empty. `tests/agent/gallery.test.ts` holds it to its legibility numbers too.
+    // was mostly empty. `tests/agent/gallery.test.ts` holds it to its legibility numbers too. One
+    // note attaches (the default), one is kept beside its shape as a callout (`attach: false`).
     id: '21-card-provisioning',
     title: 'Container view: nested domain, grouped externals, a reviewer loop and notes',
     kind: 'create',
@@ -547,7 +548,7 @@ export const GALLERY: GalleryCase[] = [
       notes: [
         { id: 'n-retry', text: 'Each external check (address, identity, credit) retries up to 2x with exponential backoff before being treated as a failure and escalated.', about: 'check' },
         { id: 'n-decision', text: 'Serviceable only if the address is deliverable, identity is verified, and credit risk is within threshold — a rejection on any one check fails the whole request.', kind: 'decision', about: 'svc' },
-        { id: 'n-notify', text: "Delivers the outcome (approved or declined) via the applicant's preferred channel — push, SMS or email.", about: 'notify' },
+        { id: 'n-notify', text: "Delivers the outcome (approved or declined) via the applicant's preferred channel — push, SMS or email.", about: 'notify', attach: false },
       ],
     },
   },

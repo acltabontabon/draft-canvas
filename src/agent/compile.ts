@@ -7,7 +7,7 @@
 
 import { createAction } from '../document/actions';
 import { createDocument } from '../document/factory';
-import type { DraftDocument } from '../document/types';
+import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { levelAdvisories } from '../depth/c4';
 import { walkGraphs } from '../depth/tree';
 import { deserializeDocument, serializeDocument } from '../export/project';
@@ -20,6 +20,7 @@ import { pastDeadline, withDeadline } from './route';
 import { buildFromStarter } from './starter';
 import { legibilityCost, legibilityOf, type Legibility } from './legibility';
 import { adviceFor } from './advice';
+import { routingPlan } from '../edges/bundles';
 
 export interface Composed {
   text: string;
@@ -94,7 +95,11 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
     }
     const candidate = judge(layout);
     keep(candidate);
-    if (isCleanCandidate({ report: candidate.found, fit: candidate.fit })) break;
+    // A shared trunk for labelled connectors can lose — three branches' captions no longer fitting
+    // their gap — so the same arrangement without one is judged beside it, and the better kept.
+    const alone = hasLabelledTrunk(candidate.placed) && !pastDeadline() ? judge({ ...layout, fans: 'unlabelled' }) : undefined;
+    if (alone) keep(alone);
+    if (isCleanCandidate({ report: candidate.found, fit: candidate.fit }) || (alone && isCleanCandidate({ report: alone.found, fit: alone.fit }))) break;
   }
   // Readable is not the same as legible: a clean arrangement can still send connectors the width of
   // the canvas. When the reading direction was left to us and a clean result came early, the other
@@ -191,6 +196,12 @@ function isBetterArrangement(a: Candidate, b: Candidate, preferred: LayoutSpec['
   const [ca, cb] = [cost(a), cost(b)];
   if (a.layout.direction === b.layout.direction) return ca < cb;
   return a.layout.direction === preferred ? !(cb < ca * CLEARLY_BETTER && ca - cb > MIN_GAIN) : ca < cb * CLEARLY_BETTER && cb - ca > MIN_GAIN;
+}
+
+/** Whether any labelled connector shares a Smart Routing trunk here (see `assignAnchors`'s labelled fan). */
+export function hasLabelledTrunk(room: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] }): boolean {
+  const plan = routingPlan(room.nodes, room.edges);
+  return room.edges.some((e) => e.label && plan.spineFor(e.id));
 }
 
 /** What a receipt says about legibility: the counts, and which connectors or notes to look at. */

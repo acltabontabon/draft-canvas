@@ -114,9 +114,9 @@ const note: Schema = {
     about: {
       type: 'string',
       description:
-        'Id of the element, relationship or group it is about — always give one, or it goes after the diagram. An element: placed beside it (placement only). A group: placed inside the boundary (a member). A relationship: attached to it.',
+        'Id of the element, relationship or group it is about — always give one, or it goes after the diagram. An element or relationship: attached to it. A group: placed inside the boundary (a member).',
     },
-    attach: { type: 'boolean', description: 'With about = an element: attach it to the element natively (it moves and is removed with it) instead of placing it beside.' },
+    attach: { type: 'boolean', description: 'Default true for an element: a native attachment (moves, exports and is removed with it). false: a free note beside it, for a callout meant to be read at a glance.' },
     near: { type: 'string', description: 'Older name for about.' },
   },
   required: ['id', 'text'],

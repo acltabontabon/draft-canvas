@@ -23,6 +23,8 @@ export interface Legibility {
   throughBoundaries: string[];
   /** Notes further from what they are about than `NOTE_REACH`. */
   farNotes: string[];
+  /** Connectors drawn as branches of a shared trunk — parallel lines Smart Routing folded into one. */
+  bundled: number;
   /** Total drawn connector length, in pixels. */
   length: number;
   /** Shapes' area over the diagram's bounding area (0–1): low means mostly empty space. */
@@ -113,6 +115,7 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
     const route = drawnRoute(edge, nodes, edges);
     if (route && route.points.length > 1) drawn.push({ edge, route });
   }
+  const bundled = drawn.filter((d) => d.route.spine).length;
   let crossings = 0;
   for (let i = 0; i < drawn.length; i += 1) {
     for (let j = i + 1; j < drawn.length; j += 1) {
@@ -159,7 +162,7 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
   }
   for (const n of solid) area += n.width * n.height;
   const bounds = Number.isFinite(minX) ? (maxX - minX) * (maxY - minY) : 0;
-  return { crossings, detours, throughBoundaries, farNotes, length: Math.round(length), fill: bounds > 0 ? Math.round((area / bounds) * 1000) / 1000 : 1 };
+  return { crossings, detours, throughBoundaries, farNotes, bundled, length: Math.round(length), fill: bounds > 0 ? Math.round((area / bounds) * 1000) / 1000 : 1 };
 }
 
 /**
@@ -167,5 +170,10 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
  * candidates the quality gate already rates the same, so it can never trade hidden content for tidiness.
  */
 export function legibilityCost(l: Legibility): number {
-  return l.crossings * 10 + l.detours.length * 40 + l.throughBoundaries.length * 25 + l.farNotes.length * 30 + l.length / 400 + (1 - l.fill) * 20;
+  // A trunk's branches count for it: every member is a parallel line the reader no longer follows
+  // separately, which is worth the wider gap its captions need.
+  return l.crossings * 10 + l.detours.length * 40 + l.throughBoundaries.length * 25 + l.farNotes.length * 30 + l.length / 400 + (1 - l.fill) * 20 - l.bundled * BUNDLE_CREDIT;
 }
+
+/** What one connector folded into a shared trunk is worth, against the cost of the room it takes. */
+const BUNDLE_CREDIT = 3;

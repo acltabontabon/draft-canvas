@@ -156,6 +156,9 @@ export interface LayoutSpec {
   viewport?: [number, number];
   /** Internal to repair (never read from a request): see `LayoutInput.ties`. */
   ties?: 'align' | 'balance';
+  /** Internal (never read from a request): `unlabelled` keeps labelled connectors off shared trunks —
+   *  the arrangement compared against one with them (see `AnchorOptions.fans`). */
+  fans?: 'all' | 'unlabelled';
 }
 
 export interface StarterSpec {
@@ -459,8 +462,10 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
 /**
  * What a note is about (`about`, or the older `near`) and whether it is attached (`attach`), as the
  * model can hold it: attached to an element or relationship, a member of a group, or placed beside
- * an element. A relationship has no "beside", so a note about one is always attached. `undefined`
- * when the request is wrong (a problem is recorded).
+ * an element. A note about an element attaches unless `attach: false` asks for it beside — attached,
+ * the link is stored and the note moves, exports and goes with its host; beside, only its position
+ * says what it is about. A relationship has no "beside", so a note about one is always attached.
+ * `undefined` when the request is wrong (a problem is recorded).
  */
 export function readNoteRelation(
   r: Reader,
@@ -474,7 +479,7 @@ export function readNoteRelation(
     r.problems.add('INVALID_INPUT', `${at}/${field}`, 'must be the id of an element, group or relationship');
     return undefined;
   }
-  const attach = r.bool(item.attach, `${at}/attach`) ?? false;
+  const attach = r.bool(item.attach, `${at}/attach`);
   if (about === undefined) {
     if (attach) r.problems.add('INVALID_INPUT', `${at}/attach`, 'needs about: the element or relationship to attach the note to');
     return attach ? undefined : {};
@@ -487,7 +492,7 @@ export function readNoteRelation(
     }
     return { group: about };
   }
-  if (known.elementIds.has(about)) return attach ? { attachTo: { kind: 'node', id: about } } : { near: about };
+  if (known.elementIds.has(about)) return attach === false ? { near: about } : { attachTo: { kind: 'node', id: about } };
   r.problems.add('INVALID_REFERENCE', `${at}/${field}`, `no element, group or relationship "${about}" in this view`);
   return undefined;
 }

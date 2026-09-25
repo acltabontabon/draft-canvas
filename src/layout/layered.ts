@@ -71,6 +71,9 @@ export interface LayoutEdge {
   primary?: boolean;
   /** A side path — a failure, retry or dead-letter branch: it yields the straight line to the main one. */
   minor?: boolean;
+  /** Set when this labelled edge will share a trunk with others out of its source (or into its target):
+   *  its caption then sits on its own branch after the trunk, and the gap has to hold both. */
+  bundled?: boolean;
 }
 
 export interface LayoutSpacing {
@@ -129,6 +132,11 @@ const DUMMY_GAP = 14;
 const CAPTION_AIR = 40;
 /** The run of a fan-out's shared trunk before it branches (`edges/bundles.ts` needs at least 56). */
 const FAN_TRUNK = 72;
+/** How much of the gap a shared trunk sits along (`edges/bundles.ts`'s `TRUNK_BIAS`, 0.62), leaving
+ *  the rest for the branches. */
+const TRUNK_SHARE = 0.62;
+/** Clearance a branch's caption keeps from the shape it reaches, both ends. */
+const BRANCH_AIR = 16;
 /** How far off its feeder's line a box may be and still be moved onto it. */
 const STRAIGHTEN = 28;
 
@@ -160,6 +168,7 @@ interface LiftedEdge {
   labelHeight: number;
   primary: boolean;
   minor: boolean;
+  bundled: boolean;
 }
 
 export function layoutGraph(input: LayoutInput): LayoutOutput {
@@ -233,7 +242,7 @@ export function layoutGraph(input: LayoutInput): LayoutOutput {
     for (let k = 1; sourceChain[k] !== meet; k += 1) exits.add(sourceChain[k - 1] as string);
     for (let k = 1; targetChain[k] !== meet; k += 1) enters.add(targetChain[k - 1] as string);
     const list = lifted.get(meet) ?? [];
-    list.push({ id: edge.id, source: from, target: to, sourceEnd: edge.source, targetEnd: edge.target, labelWidth: edge.labelWidth ?? 0, labelHeight: edge.labelHeight ?? 0, primary: edge.primary === true, minor: edge.minor === true && edge.primary !== true });
+    list.push({ id: edge.id, source: from, target: to, sourceEnd: edge.source, targetEnd: edge.target, labelWidth: edge.labelWidth ?? 0, labelHeight: edge.labelHeight ?? 0, primary: edge.primary === true, minor: edge.minor === true && edge.primary !== true, bundled: edge.bundled === true });
     lifted.set(meet, list);
   }
 
@@ -551,14 +560,22 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
   // A source feeding several boxes in the next layer is drawn as a shared trunk that branches: the
   // captions then sit on the branches, after the trunk, so that gap needs the trunk's run as well.
   const fanOut = new Map<string, number>();
-  for (const e of dag) if (get(rank, e.target) === get(rank, e.source) + 1) fanOut.set(e.source, (fanOut.get(e.source) ?? 0) + 1);
+  const fanIn = new Map<string, number>();
+  for (const e of dag) {
+    if (get(rank, e.target) !== get(rank, e.source) + 1) continue;
+    fanOut.set(e.source, (fanOut.get(e.source) ?? 0) + 1);
+    fanIn.set(e.target, (fanIn.get(e.target) ?? 0) + 1);
+  }
   for (const e of dag) {
     const from = get(rank, e.source);
     const to = get(rank, e.target);
     // A caption sits in the first gap the edge crosses; the widest one there sets that gap.
     const label = direction === 'right' ? e.labelWidth : e.labelHeight;
-    const trunk = label > 0 && (fanOut.get(e.source) ?? 0) > 1 ? FAN_TRUNK : 0;
-    if (to > from) gapLabel[from] = Math.max(at(gapLabel, from), label + trunk);
+    const trunk = label > 0 && ((fanOut.get(e.source) ?? 0) > 1 || (fanIn.get(e.target) ?? 0) > 1) ? FAN_TRUNK : 0;
+    // A branch off a shared trunk carries its caption at the branch's middle, and the trunk takes
+    // `TRUNK_SHARE` of the gap: the branch must be as long as the caption and its clearance.
+    const branch = e.bundled && label > 0 ? Math.ceil((label + BRANCH_AIR) / (1 - TRUNK_SHARE)) : 0;
+    if (to > from) gapLabel[from] = Math.max(at(gapLabel, from), label + trunk, branch);
     // A return (reversed for layering) is drawn as a detour around the boxes, not along the reading
     // line, so it barely pulls: otherwise a reply from the far side drags its target off the line
     // it starts, and the forward connector turns into a jog for the sake of the return.

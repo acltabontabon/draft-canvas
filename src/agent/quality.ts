@@ -20,7 +20,7 @@ import { isC4Element } from '../depth/c4';
 import { TEXT_SIZES } from '../render/text/fonts';
 import { captionSizer } from './place';
 import { routingPlan } from '../edges/bundles';
-import { crosses, drawnRoute, othersOf, overlaps, routeProblem, stacked, together, type Box, type Other } from './route';
+import { captionsTogether, crosses, drawnRoute, othersOf, overlaps, routeProblem, stacked, together, type Box, type Other } from './route';
 
 export interface QualityIssue {
   kind: 'overlap' | 'outside-group' | 'clipped-text' | 'through-node' | 'label-over-node' | 'label-collision' | 'label-crossed' | 'shared-run' | 'invalid-geometry' | 'jog';
@@ -273,16 +273,19 @@ export function checkQuality(
       const a = drawn[i] as Other;
       const b = drawn[j] as Other;
       if (!judged(a.id, b.id)) continue;
+      // Two captions on top of each other read as neither, and a line through a caption strikes its
+      // words out: errors, like a caption over a shape. Trunk-mates' lines meet by design; their own
+      // labels, one per branch, still may not.
+      if (a.chip && b.chip && !captionsTogether(a, b) && overlaps(a.chip, b.chip)) {
+        errors.push({ kind: 'label-collision', ids: [a.id, b.id], message: `the captions of ${a.id} and ${b.id} overlap.` });
+        continue;
+      }
       if (together(a, b)) continue;
       if (stacked(a, b)) {
         errors.push({ kind: 'shared-run', ids: [a.id, b.id], message: `connectors ${a.id} and ${b.id} run on top of each other.` });
         continue;
       }
-      // Two captions on top of each other read as neither, and a line through a caption strikes its
-      // words out: errors, like a caption over a shape.
-      if (a.chip && b.chip && overlaps(a.chip, b.chip)) {
-        errors.push({ kind: 'label-collision', ids: [a.id, b.id], message: `the captions of ${a.id} and ${b.id} overlap.` });
-      } else if (crosses(a, b)) {
+      if (crosses(a, b)) {
         errors.push({ kind: 'label-crossed', ids: [a.id, b.id], message: `connectors ${a.id} and ${b.id} run through each other's caption.` });
       }
     }

@@ -26,6 +26,8 @@ import type { DescribeContext } from '../nodes/describe';
 import type { Problems } from './errors';
 import type { LayoutSpec, Reader } from './input';
 import { anchorRectOf, arrangeParts, captionSizer, placeBlock, sizeToFit } from './place';
+import { hasLabelledTrunk } from './compile';
+import { legibilityCost, legibilityOf } from './legibility';
 import { checkFit, checkQuality, isBetterCandidate, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityReport } from './quality';
 import { drawnRoute, overlaps, pastDeadline, repairAnchors, segmentHitsBox } from './route';
 
@@ -153,6 +155,20 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
     // Route-only never moves a shape, so a roomier spacing changes nothing — one attempt is enough.
     if (request.move === false) break;
   }
+  // A trunk shared by labelled connectors is kept only when it reads better than separate lines
+  // (`compile.ts` does the same for a new diagram): errors decide first, then legibility.
+  if (best && request.move !== false && !pastDeadline() && hasLabelledTrunk(best.arranged.view)) {
+    const layout: LayoutSpec = { ...request.layout, fans: 'unlabelled' };
+    const arranged = arrangeOnce(view, inScope, request, layout, ctx);
+    if (arranged) {
+      const report = checkQuality(arranged.view.nodes, arranged.view.edges, ctx, arranged.touched);
+      const fit = layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, arranged.view.edges, ctx), smallestFontPresent(arranged.view.nodes, arranged.view.edges), layout.viewport) : undefined;
+      const errorsOnly = (r: QualityReport) => ({ errors: r.errors, warnings: [] });
+      const tie = !isBetterCandidate({ report: errorsOnly(report), fit }, { report: errorsOnly(best.report), fit: best.fit }) && !isBetterCandidate({ report: errorsOnly(best.report), fit: best.fit }, { report: errorsOnly(report), fit });
+      const cost = (a: Arranged, r: QualityReport) => legibilityCost(legibilityOf(a.view.nodes, a.view.edges)) + r.warnings.length * 10;
+      if (isBetterCandidate({ report: errorsOnly(report), fit }, { report: errorsOnly(best.report), fit: best.fit }) || (tie && cost(arranged, report) < cost(best.arranged, best.report))) best = { arranged, report, fit };
+    }
+  }
   if (!best && lastRefusal) {
     problems.add('LAYOUT_CONSTRAINED', at, 'the arranged part would run into shapes outside the scope, and there is no free space beside it; arrange the whole view instead ({op:"arrange"})');
     return undefined;
@@ -216,7 +232,7 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   const innerById = new Map(inner.map((e) => [e.id, e]));
   const crossing = view.edges.filter((e) => !innerById.has(e.id) && (elements.has(e.source) || elements.has(e.target))).map((e) => restyled(e, request.connectors));
   const rects = new Map(next.nodes.map((n) => [n.id, anchorRectOf(n)]));
-  const anchors = assignAnchors(crossing, rects, layout.direction);
+  const anchors = assignAnchors(crossing, rects, layout.direction, undefined, undefined, { ...(layout.fans ? { fans: layout.fans } : {}) });
   for (const e of crossing) Object.assign(e, anchors.get(e.id) ?? {});
   const changed = new Map([...inner, ...crossing].map((e) => [e.id, e]));
   next = { ...next, edges: next.edges.map((e) => changed.get(e.id) ?? e) };

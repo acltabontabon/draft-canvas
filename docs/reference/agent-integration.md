@@ -403,6 +403,13 @@ would cut diagonally through shapes). Anchors follow the reading direction:
   width so the two connectors run as a short straight pair instead of a detour around the diagram.
 - A return runs around the outside; when its caption or line meets another connector, the repair
   first tries moving *the other* connector, so a straight one isn't sent on a detour.
+- **Labelled fans share a trunk.** Three or more labelled connectors leaving one shape (or reaching
+  one) that mean the same thing — same semantic, kind, direction, async, accent — leave from one
+  point, so Smart Routing draws one trunk with a labelled branch each; the layout keeps the gap wide
+  enough for a caption on every branch after the trunk. The main path never joins one, a fan the
+  router would refuse (its far ends stacked, its corridor blocked) is never started, and two
+  branches' own captions are still checked against each other. Each such arrangement is judged
+  beside the same one without the trunk, and the more legible kept.
 - A connector cutting through a boundary neither of its ends is in (or along its title) is
   re-anchored when another anchoring avoids it without a much longer route (at most 320 px more);
   while fixing a worse problem, the repair accepts a route that only crosses a boundary if nothing
@@ -459,6 +466,7 @@ measured, on the connectors as drawn:
 | Measure | What it counts |
 | --- | --- |
 | `crossings` | Places where two connectors cross (members of one trunk never count against each other) |
+| `bundled` | Connectors drawn as branches of a shared trunk — parallel lines folded into one; a credit, not a cost |
 | `detours` | Connectors drawn more than 1.5× the distance between their shapes' middles, plus 200 px |
 | `throughBoundaries` | Connectors that pass through a boundary neither of their ends is in |
 | `farNotes` | Notes more than 160 px from what they are about — where a read stops associating them |
@@ -552,8 +560,8 @@ card-provisioning cases with no warnings.
 
 | Request | What it becomes |
 | --- | --- |
-| `notes: [{id, text, kind?, about: <element>}]` | A free note laid out with the element, as one box: just before it across the flow (above, reading right; to its left, reading down), inside the element's boundary, with that side of the element kept free of connectors. Placement only: nothing records the link. Reads report a derived `nearest` element, labelled as placement. |
-| `about: <element>, attach: true` | A native attachment on the element (the chip), under the note's id: it moves, exports and is removed with its host. |
+| `notes: [{id, text, kind?, about: <element>}]` | A native attachment on the element (the chip), under the note's id: it moves, exports and is removed with its host, and a read finds it on the element. An element already holding its 12 attachments takes the note beside it instead (the row below), with an advisory in the receipt — never a refusal. |
+| `about: <element>, attach: false` | A free note laid out with the element, as one box: just before it across the flow (above, reading right; to its left, reading down), inside the element's boundary, with that side of the element kept free of connectors — for a callout meant to be read at a glance. Placement only: nothing records the link. Reads report a derived `nearest` element, labelled as placement. |
 | `about: <relationship>` | Always an attachment on the connector: a line has no "beside". |
 | `about: <group>` | A member of the boundary, placed at its head, under its title; the boundary grows to hold it. |
 | no `about` | A free note in a column after the diagram (a row below it, reading down), and an advisory asking for an `about`. |

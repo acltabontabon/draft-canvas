@@ -58,7 +58,7 @@ const TRUNK_QUANTUM = 8;
 
 /** How far apart the far ends must be spread, across the trunk, before a fan
  *  is a fan. Destinations all at one height have nothing to fan out. */
-const MIN_FAN_SPREAD = 32;
+export const MIN_FAN_SPREAD = 32;
 
 /**
  * Where in the corridor the trunk sits, as a fraction of the distance from the
@@ -111,7 +111,7 @@ const EMPTY_PLAN: RoutingPlan = { spineFor: () => undefined, membersOf: () => EM
  * colour (`accent`) are here for the same reason — a trunk drawn from members
  * that disagree about how it should look has no correct appearance.
  */
-function compatibilityKey(edge: DraftEdge): string {
+export function compatibilityKey(edge: Pick<DraftEdge, 'semantic' | 'kind' | 'directed' | 'async' | 'hasResponse' | 'accent' | 'deliveryAttempts'>): string {
   return [
     edge.semantic ?? '',
     edge.kind ?? '',
