@@ -10,6 +10,22 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Desktop
+
+#### Added
+
+- **See a proposed change on the canvas, not just in a list** — reviewing an agent's proposal now
+  shows it in place on the diagram: additions and changes outlined, removals crossed out, with a
+  legend, a toggle to hide the preview, and a "Focus changes" button. The panel itself leads with a
+  summary, status and counts, with the agent's reasoning collapsed underneath. <!-- highlight -->
+- A proposal interrupted mid-accept — Draft Canvas closed right after it actually landed — now
+  offers "Mark as applied" instead of asking you to decide something that already happened.
+
+#### Fixed
+
+- Accepting a proposal re-checks the diagram's revision as one atomic step, closing a narrow window
+  where an edit landing at just the wrong moment could have gone uncaught.
+
 ## [1.12.0-beta.1] - 2026-09-25
 
 A beta of Draft Canvas Desktop 1.12: connect an AI coding agent and it draws and edits diagrams
