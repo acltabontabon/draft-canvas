@@ -86,7 +86,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       spacing: ['compact', 'comfortable', 'spacious'],
       create: 'Fully automatic: shapes sized to their text, laid out in layers along the reading direction, connectors right-angled and straight where the layout can line them up, captions given room. A few spacings are tried and the most readable kept; one that still fails the check (overlap, clipped text, a connector through an element) is refused unless allowDegraded.',
       update: 'Existing elements never move. New ones are placed beside what they connect to (other spots are tried before giving up); a group grows to hold new members. If nothing fits, LAYOUT_CONSTRAINED carries suggestedOp: the arrange to add.',
-      arrange: '{op:"arrange", scope?, direction?, spacing?, connectors?} re-lays out existing content in place — the whole view or one group — keeping ids, notes and flows; direction defaults to the way the view already reads.',
+      arrange: '{op:"arrange", scope?, direction?, spacing?, connectors?} re-lays out existing content in place — the whole view or one group — keeping ids, notes and flows; direction defaults to the way the view already reads, and a whole-view arrange turns the other way only when that reads clearly better.',
     };
   }
   if (want('readability')) {

@@ -16,7 +16,10 @@
  *   sat closest to, if that shape moved.
  *
  * Bounded like a new diagram's layout: a short ladder of spacings and tie rules, the best readable
- * candidate kept (never merely the last one tried), stopping at the request's deadline.
+ * candidate kept (never merely the last one tried), stopping at the request's deadline. A whole-view
+ * cleanup whose direction was left to us is also laid out the other way, and turned only when that
+ * reads clearly better (the rule a new diagram uses) — a hub's fan that cut across everything read
+ * across now hangs off it, read down, and "clean up" should find that.
  */
 
 import { updateNode } from '../document/operations';
@@ -26,7 +29,7 @@ import type { DescribeContext } from '../nodes/describe';
 import type { Problems } from './errors';
 import type { LayoutSpec, Reader } from './input';
 import { anchorRectOf, arrangeParts, captionSizer, placeBlock, sizeToFit } from './place';
-import { hasLabelledTrunk } from './compile';
+import { clearlyBetterDirection, hasLabelledTrunk, JOG_COST } from './compile';
 import { legibilityCost, legibilityOf } from './legibility';
 import { checkFit, checkQuality, isBetterCandidate, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityReport } from './quality';
 import { drawnRoute, overlaps, pastDeadline, repairAnchors, segmentHitsBox } from './route';
@@ -125,6 +128,21 @@ export interface Arranged {
   touched: Set<string>;
 }
 
+/** One candidate arrangement with what was found wrong with it, and the layout that made it. */
+interface Judged {
+  arranged: Arranged;
+  report: QualityReport;
+  fit?: FitReport;
+  layout: LayoutSpec;
+}
+
+const errorsOnly = (c: Judged) => ({ report: { errors: c.report.errors, warnings: [] }, fit: c.fit });
+/** Hidden content and fit decide first, exactly as they do for a new diagram. */
+const betterByErrors = (a: Judged, b: Judged) => isBetterCandidate(errorsOnly(a), errorsOnly(b));
+const tied = (a: Judged, b: Judged) => !betterByErrors(a, b) && !betterByErrors(b, a);
+/** Between equally readable candidates: legibility, with skewed connectors counted in. */
+const cost = (c: Judged) => legibilityCost(legibilityOf(c.arranged.view.nodes, c.arranged.view.edges)) + c.report.warnings.length * JOG_COST;
+
 /**
  * Arranges `view` as `request` asks, keeping the best readable candidate of a short ladder. Records a
  * problem (and returns `undefined`) when the scope can't be put back without overlapping its
@@ -137,37 +155,42 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
 
   const spacings = [request.layout.spacing, ...SPACINGS.filter((s) => s !== request.layout.spacing)];
   const attempts: LayoutSpec[] = [...spacings.map((spacing) => ({ ...request.layout, spacing })), ...spacings.map((spacing) => ({ ...request.layout, spacing, ties: 'balance' as const }))];
-  let best: { arranged: Arranged; report: QualityReport; fit?: FitReport } | undefined;
+  let best: Judged | undefined;
   let lastRefusal = false;
-  for (const layout of attempts) {
-    if (best && pastDeadline()) break;
+  const judge = (layout: LayoutSpec): Judged | undefined => {
     const arranged = arrangeOnce(view, inScope, request, layout, ctx);
-    if (!arranged) {
-      lastRefusal = true;
-      continue;
-    }
+    if (!arranged) return undefined;
     const report = checkQuality(arranged.view.nodes, arranged.view.edges, ctx, arranged.touched);
     // Measured against the whole diagram, not just the touched scope — a viewport is about how the
     // presented diagram reads overall, not only what this one edit changed.
     const fit = layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, arranged.view.edges, ctx), smallestFontPresent(arranged.view.nodes, arranged.view.edges), layout.viewport) : undefined;
-    if (!best || isBetterCandidate({ report, fit }, { report: best.report, fit: best.fit })) best = { arranged, report, fit };
-    if (isCleanCandidate({ report, fit })) break;
+    return { arranged, report, fit, layout };
+  };
+  for (const layout of attempts) {
+    if (best && pastDeadline()) break;
+    const candidate = judge(layout);
+    if (!candidate) {
+      lastRefusal = true;
+      continue;
+    }
+    if (!best || isBetterCandidate(candidate, best)) best = candidate;
+    if (isCleanCandidate(candidate)) break;
     // Route-only never moves a shape, so a roomier spacing changes nothing — one attempt is enough.
     if (request.move === false) break;
   }
   // A trunk shared by labelled connectors is kept only when it reads better than separate lines
   // (`compile.ts` does the same for a new diagram): errors decide first, then legibility.
   if (best && request.move !== false && !pastDeadline() && hasLabelledTrunk(best.arranged.view)) {
-    const layout: LayoutSpec = { ...request.layout, fans: 'unlabelled' };
-    const arranged = arrangeOnce(view, inScope, request, layout, ctx);
-    if (arranged) {
-      const report = checkQuality(arranged.view.nodes, arranged.view.edges, ctx, arranged.touched);
-      const fit = layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, arranged.view.edges, ctx), smallestFontPresent(arranged.view.nodes, arranged.view.edges), layout.viewport) : undefined;
-      const errorsOnly = (r: QualityReport) => ({ errors: r.errors, warnings: [] });
-      const tie = !isBetterCandidate({ report: errorsOnly(report), fit }, { report: errorsOnly(best.report), fit: best.fit }) && !isBetterCandidate({ report: errorsOnly(best.report), fit: best.fit }, { report: errorsOnly(report), fit });
-      const cost = (a: Arranged, r: QualityReport) => legibilityCost(legibilityOf(a.view.nodes, a.view.edges)) + r.warnings.length * 10;
-      if (isBetterCandidate({ report: errorsOnly(report), fit }, { report: errorsOnly(best.report), fit: best.fit }) || (tie && cost(arranged, report) < cost(best.arranged, best.report))) best = { arranged, report, fit };
-    }
+    const alone = judge({ ...best.layout, fans: 'unlabelled' });
+    if (alone && (betterByErrors(alone, best) || (tied(alone, best) && cost(alone) < cost(best)))) best = alone;
+  }
+  // The other reading direction, for a whole-view cleanup that left the direction to us: kept only
+  // when it reads clearly better, never over a few pixels — the diagram a person is looking at
+  // doesn't turn on its side for nothing. A scoped arrange keeps the view's direction: the part it
+  // moves has to read the way the rest still does.
+  if (best && !request.scope && request.move !== false && !request.layout.directionChosen && !pastDeadline()) {
+    const other = judge({ ...best.layout, direction: best.layout.direction === 'right' ? 'down' : 'right' });
+    if (other && (betterByErrors(other, best) || (tied(other, best) && clearlyBetterDirection(cost(other), cost(best))))) best = other;
   }
   if (!best && lastRefusal) {
     problems.add('LAYOUT_CONSTRAINED', at, 'the arranged part would run into shapes outside the scope, and there is no free space beside it; arrange the whole view instead ({op:"arrange"})');

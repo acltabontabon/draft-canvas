@@ -209,7 +209,7 @@ const ops: Schema = {
       },
       connectors: { enum: ['tidy', 'keep', 'orthogonal'], description: 'arrange only: tidy (default) drops hand-routing on connectors in scope; keep leaves it; orthogonal also makes them right-angled.' },
       move: { type: 'boolean', description: 'arrange only: false re-anchors connectors in scope without moving or resizing anything — a cheaper cleanup pass. Default true.' },
-      direction: { enum: ['right', 'down'], description: 'arrange only. Default: the way the view already reads.' },
+      direction: { enum: ['right', 'down'], description: 'arrange only. Default: the way the view already reads (a whole-view arrange turns the other way only when that reads clearly better).' },
       spacing: { enum: ['compact', 'comfortable', 'spacious'] },
       primaryFlow: { type: 'string', description: 'arrange only: lay this flow out as the straight main path.' },
       ...room(true),

@@ -180,7 +180,14 @@ const CLEARLY_BETTER = 0.8;
 /** …and saves at least this much outright (about one crossing and a detour). */
 const MIN_GAIN = 25;
 /** A skewed connector, weighed against legibility: about one crossing. */
-const JOG_COST = 10;
+export const JOG_COST = 10;
+
+/** Whether an arrangement in the other reading direction, costing `other` (`legibilityCost` plus
+ *  jogs), reads clearly enough better than the preferred direction's `same` to be worth the flip —
+ *  a diagram never turns over a few pixels of connector. Shared with `arrange`. */
+export function clearlyBetterDirection(other: number, same: number): boolean {
+  return other < same * CLEARLY_BETTER && same - other > MIN_GAIN;
+}
 
 /**
  * Whether `a` should be kept over `b`. Hidden content and fit decide first, exactly as
@@ -195,7 +202,7 @@ function isBetterArrangement(a: Candidate, b: Candidate, preferred: LayoutSpec['
   const cost = (c: Candidate) => legibilityCost(c.legibility) + c.found.warnings.length * JOG_COST;
   const [ca, cb] = [cost(a), cost(b)];
   if (a.layout.direction === b.layout.direction) return ca < cb;
-  return a.layout.direction === preferred ? !(cb < ca * CLEARLY_BETTER && ca - cb > MIN_GAIN) : ca < cb * CLEARLY_BETTER && cb - ca > MIN_GAIN;
+  return a.layout.direction === preferred ? !clearlyBetterDirection(cb, ca) : clearlyBetterDirection(ca, cb);
 }
 
 /** Whether any labelled connector shares a Smart Routing trunk here (see `assignAnchors`'s labelled fan). */

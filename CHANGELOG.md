@@ -29,7 +29,8 @@ the release notes and the in-app What's New are generated from here. See
   middle of a boundary — a hub's credit bureau, fraud check and core banking calls — now hangs right
   beside the hub, across the flow, instead of being pushed past the whole boundary with its line
   running the width of the canvas; and a boundary that only gathers externals called from several
-  places is named in the receipt, with the ops that ungroup it. The agent is told how clear the result
+  places is named in the receipt, with the ops that ungroup it. A whole-view "clean up" turns the
+  diagram to read the other way when that is clearly clearer, as a new diagram already chooses. The agent is told how clear the result
   is — crossings, detours, stranded notes — and what in its request to change, so it can fix it in
   the same turn. <!-- highlight -->
 

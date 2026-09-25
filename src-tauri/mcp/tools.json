@@ -1015,7 +1015,7 @@
                   "right",
                   "down"
                 ],
-                "description": "arrange only. Default: the way the view already reads."
+                "description": "arrange only. Default: the way the view already reads (a whole-view arrange turns the other way only when that reads clearly better)."
               },
               "spacing": {
                 "enum": [
