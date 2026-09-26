@@ -10,41 +10,62 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+## [1.12.0-beta.2] - 2026-09-26
+
+A second beta of Draft Canvas Desktop 1.12: presenting a flow now tells it as a story, an agent's
+proposal shows on the diagram itself, and agent-drawn diagrams lay out more clearly.
+
 ### Shared
 
 #### Added
 
-- **Follow the signal** — presenting a flow is a spatial story. It opens with the flow's title beside its whole path, each step sends one signal along the connector from where the interaction starts to where it arrives, the destination lights up, and then everything holds still while you talk. A caption in the corner names the step with the labels already on the canvas and shows what the connector means: a condition, an event, a retry, a failure path, a reply, the boundary it crosses. After the last step the flow closes on its whole path, with Replay and the next flow a click away. <!-- highlight -->
-- **A directed camera** — the presentation holds still while the next step already reads, slides a little when it has to, and only recomposes for a long handoff. Pan or zoom by hand whenever you like and **Re-centre** (`R`) hands the camera back; **Overview** (`O`) pulls back to the whole flow without losing the step.
-- A control strip that recedes while you talk, with chapter marks for jumping straight to a step (`1`–`9`, `Home`, `End`), and a pointer (`P`) — a soft ring that follows the cursor.
+- **Follow the signal** — presenting a flow tells it as a story. It opens on the flow's whole path;
+  each step sends one signal along its connector and lights up where it arrives, then holds still
+  while you talk. A caption names the step and what the connector means — a condition, an event, a
+  retry, a failure path, a reply, a boundary crossed. The last step closes on the whole path again,
+  with Replay and the next flow one click away. <!-- highlight -->
+- **A calmer camera** — it stays put while the next step is already in view, slides a little when it
+  has to, and only reframes for a long jump. Pan or zoom whenever you like: **Re-centre** (`R`) hands
+  the camera back, and **Overview** (`O`) shows the whole flow without losing your place.
+- A control strip that fades back while you talk, with a mark for each step (jump with `1`–`9`,
+  `Home`, `End`), and a pointer (`P`) that follows your cursor as a soft ring.
 
 #### Changed
 
-- The rest of the diagram stays readable while a step is shown, at lower emphasis, instead of fading almost away; a connector the diagram itself coloured keeps its colour while it is the one being explained.
+- While a step is shown, the rest of the diagram stays readable instead of fading almost away, and a
+  connector you coloured keeps its colour while it's the one being explained.
 
 #### Fixed
 
-- Dragging a Note or Code card to attach it no longer hides its host's connectors for the drag duration.
-- Smart Routing trunks no longer retain routing scratch work in every undo step; only the plan is kept.
+- Dragging a Note or Code card no longer hides the connectors attached to it until you let go.
+- Long editing sessions on large diagrams with bundled connectors use much less memory.
 
 ### Desktop
 
 #### Added
 
-- **See proposed changes on the canvas** — agent proposals now show on the diagram with additions outlined, removals crossed out, and a legend; the review panel leads with a summary and reason, collapsible. <!-- highlight -->
-- A proposal interrupted mid-accept now offers "Mark as applied" instead of asking you to decide something that's already happened.
-- **AI diagrams layout clearly** — notes attach to their shapes or connectors and move with them; multiple labelled connectors from one shape that share meaning bundle into one trunk with labelled branches; external systems called from a boundary sit beside it instead of far away; "Clean up" flips the whole view when it reads better. <!-- highlight -->
+- **See an agent's proposal on the diagram** — what it would add is outlined, what it would remove is
+  crossed out, with a legend and a button to focus the camera on the changes. The review panel leads
+  with a summary and the agent's reason, with the full list of changes a click away.
+  <!-- highlight -->
+- **Clearer agent-drawn diagrams** — notes are attached to the shape or connector they describe and
+  move with it, several labelled connectors leaving one shape bundle into one trunk, external systems
+  sit beside the part of the system that calls them, and "Clean up the layout" turns the whole
+  diagram when it reads better the other way. <!-- highlight -->
 
 #### Changed
 
-- **Settings has room to breathe** — General, AI agents and Updates each get their own page. AI agents reads top to bottom: access and where connections stand, the folders (nested ones say when a ticked folder already reaches them, and stay visible while access is off), one agent's setup at a time, and Disconnect set apart.
+- **Settings has a page for each part** — General, AI agents and Updates. AI agents reads top to
+  bottom: access and connection status, the folders an agent may use, one agent's setup at a time,
+  and Disconnect set apart.
 
 #### Fixed
 
-- Accepting a proposal re-checks the diagram's revision in one atomic step.
-- Recovering a proposal stuck mid-accept offers only what you can do: finish or dismiss.
-- Submitting a large proposal no longer freezes the editor; it's validated off-thread like other requests.
-- Proposal scope now correctly refuses changes to flows and actions outside the selection.
+- A proposal interrupted part-way through Accept can be finished or dismissed, and is recognised as
+  applied if it already was — no longer offering a Reject that could never work.
+- Accepting a proposal can no longer land on top of a change made to the diagram at the same moment.
+- Sending a large proposal no longer freezes the editor.
+- An agent limited to your selection can no longer change flows or actions outside it.
 
 ## [1.12.0-beta.1] - 2026-09-25
 
@@ -1596,6 +1617,7 @@ pre-release milestone; this is the one meant for real use.
   your device. Documents are encrypted at rest in your browser.
 
 [Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...main
+[1.12.0-beta.2]: https://github.com/acltabontabon/draft-canvas/compare/desktop-v1.12.0-beta.1...desktop-v1.12.0-beta.2
 [1.12.0-beta.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...desktop-v1.12.0-beta.1
 [1.11.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.10.0...v1.11.0
