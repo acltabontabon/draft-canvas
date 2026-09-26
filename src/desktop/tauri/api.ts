@@ -102,7 +102,6 @@ export function createTauriApi(): DesktopApi {
     settingsSet: (patch) => call<DesktopSettings>('settings_set', { patch }),
     ask: (title, message, buttons) => call('ask', { title, message, buttons }),
     showError: (title, message) => call('show_error', { title, message }),
-    trayDecorate: (art) => call('tray_decorate', { art }),
     updateStatus: () => call<UpdateSnapshot>('update_status'),
     updateCheck: (manual) => call<UpdateSnapshot>('update_check', { manual }),
     updateDownload: () => call<UpdateSnapshot>('update_download'),

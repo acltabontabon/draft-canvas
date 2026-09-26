@@ -221,6 +221,8 @@ export function ExportDialog() {
       await task();
       close();
     } catch (error) {
+      // A cancelled native Save dialog (the desktop's file saver) aborts the export: nothing failed.
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       notify(
         error instanceof Error ? `${what} failed: ${error.message}` : `${what} failed.`,
         'error',

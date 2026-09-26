@@ -182,9 +182,6 @@ export type MenuCommand =
 export type HostEvent =
   | { type: 'open'; handle: Handle; name: string; displayPath: string }
   | { type: 'new-quick-draft' }
-  | { type: 'new-canvas' }
-  /** A draft chosen from the tray's Drafts section. */
-  | { type: 'recover-draft'; id: string }
   | { type: 'menu'; command: MenuCommand }
   | { type: 'quit-requested' }
   /** The quit question, asked before an update replaces the app. */
@@ -293,17 +290,6 @@ export type ProposalAction =
 
 export type QuitDecision = 'ready' | 'prompting' | 'cancel';
 
-/**
- * What the page draws for the tray menu, as base64 PNGs: the action icons, each recent file's
- * silhouette and each unsaved draft's, in the ink of the current appearance. Files go by handle,
- * drafts by recovery id — nothing here names a path.
- */
-export interface TrayArt {
-  actions: Partial<Record<'quickDraft' | 'newCanvas' | 'open' | 'openProject', string>>;
-  files: { handle: Handle; png: string }[];
-  drafts: { id: string; title: string; png?: string }[];
-}
-
 export interface FileFilter {
   name: string;
   extensions: string[];
@@ -377,9 +363,6 @@ export interface DesktopApi {
    */
   ask(title: string, message: string, buttons: string[]): Promise<number>;
   showError(title: string, message: string): Promise<void>;
-
-  // The tray
-  trayDecorate(art: TrayArt): Promise<void>;
 
   // Updates. Each returns the whole snapshot; the same arrives as an `update` event on every change.
   updateStatus(): Promise<UpdateSnapshot>;

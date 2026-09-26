@@ -40,7 +40,6 @@
     "allow-settings-set",
     "allow-ask",
     "allow-show-error",
-    "allow-tray-decorate",
     "allow-update-status",
     "allow-update-check",
     "allow-update-download",

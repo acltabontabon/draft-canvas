@@ -27,8 +27,6 @@ export interface ShellHandle {
   answer(...choices: number[]): void;
   /** The next export's Save dialog is cancelled. */
   cancelNextExport(): void;
-  /** What the app last drew for the tray menu. */
-  trayArt(): unknown;
   /**
    * What an earlier session left behind, set before the app starts: recent files and unsaved drafts,
    * each `ago` milliseconds old.
@@ -88,7 +86,6 @@ export async function installMockShell(page: Page): Promise<void> {
     let pickedOpen: string | null = null;
     let saveTarget: { name: string } | null = null;
     let cancelExport = false;
-    let trayArt: unknown = null;
     let update: Record<string, unknown> = { currentVersion: '1.9.4', state: { phase: 'idle' }, dismissed: false, held: null, error: null };
     const agentResponses = new Map<number, unknown>();
     let gateHeld = false;
@@ -313,22 +310,6 @@ export async function installMockShell(page: Page): Promise<void> {
         return answers.shift() ?? args.buttons.length - 1;
       },
       show_error: () => null,
-      tray_decorate: (args: { art: unknown }) => void (trayArt = args.art),
-      // The tray panel's own three (`capabilities/tray.json`), answered the way the shell would.
-      tray_panel: () => ({
-        recents: recents
-          .filter((item) => item.kind === 'file')
-          .slice(0, 6)
-          .map((item) => ({ choice: `recent:${item.handle}`, handle: item.handle, name: item.name, openedMs: item.lastOpenedMs })),
-        drafts: [...recovery.values()].slice(0, 3).map(({ entry }) => ({
-          choice: `draft:${entry.id as string}`,
-          id: entry.id,
-          title: entry.title,
-          updatedMs: entry.updatedAt,
-        })),
-      }),
-      tray_choose: () => null,
-      tray_panel_fit: () => null,
       // The updater: it answers with whatever the test set; what each step does is Rust's, tested there.
       update_status: () => update,
       update_check: () => update,
@@ -420,7 +401,6 @@ export async function installMockShell(page: Page): Promise<void> {
       nextSaveAs: (target) => void (saveTarget = target),
       answer: (...choices) => void answers.push(...choices),
       cancelNextExport: () => void (cancelExport = true),
-      trayArt: () => trayArt,
       setAgent: (patch) => {
         agentSettings = { ...agentSettings, ...patch };
         emit({ type: 'agent-changed' });

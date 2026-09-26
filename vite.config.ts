@@ -175,16 +175,6 @@ export default defineConfig(({ mode, command }) => {
       outDir: desktop ? 'dist-desktop' : 'dist',
       sourcemap: !desktop,
       rollupOptions: {
-        // The desktop build has a second page: the tray panel (src-tauri/src/panel.rs). The web build
-        // never ships it.
-        ...(desktop
-          ? {
-              input: {
-                main: fileURLToPath(new URL('./index.html', import.meta.url)),
-                tray: fileURLToPath(new URL('./tray.html', import.meta.url)),
-              },
-            }
-          : {}),
         output: {
           // The canvas engine and the syntax highlighter are both large and
           // rarely change; splitting them keeps the app chunk small and cacheable.

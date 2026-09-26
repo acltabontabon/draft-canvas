@@ -10,8 +10,10 @@ name: Desktop Release
 #                                       its own prerelease, "Draft Canvas X.Y.Z-alpha.N"; its notes say it
 #                                       is the desktop app's.
 #
-# The installers are NOT signed or notarized (no paid certificates). The release notes say how to
-# open them anyway, and ship checksums and a build attestation so they can still be verified.
+# The installers are signed for the operating system only when the repository has the secrets for
+# it (see "Prepare OS signing" below and docs/reference/desktop-updates.md). Without them — the case
+# today — they are ad-hoc signed on macOS and unsigned on Windows, the release notes say how to open
+# them anyway, and checksums plus a build attestation let them be verified regardless.
 on:
   push:
     tags:
@@ -171,18 +173,54 @@ jobs:
         run: |
           node -e 'require("fs").writeFileSync("src-tauri/tauri.version.conf.json", JSON.stringify({ version: process.env.VERSION }))'
           cat src-tauri/tauri.version.conf.json
-      # The one secret, in this step only. It signs the update packages for the in-app updater (Tauri's
-      # own minisign signing); it does not sign the app for the operating system, which stays unsigned.
-      # The signature records the version, which the app insists on, so a package can't be paired with
-      # another version's manifest.
+      # OS signing, only when the secrets for it exist. macOS: a Developer ID Application certificate
+      # (APPLE_CERTIFICATE, base64 .p12; APPLE_CERTIFICATE_PASSWORD; APPLE_SIGNING_IDENTITY) and, for
+      # notarization, APPLE_ID, APPLE_PASSWORD (an app-specific password) and APPLE_TEAM_ID — all read by
+      # tauri-action itself. Windows: a code-signing certificate (WINDOWS_CERTIFICATE, base64 .pfx;
+      # WINDOWS_CERTIFICATE_PASSWORD), imported here and named to the bundler by thumbprint. Without the
+      # secrets this writes an empty config and the build is exactly what it was: ad-hoc on macOS,
+      # unsigned on Windows. Nothing here ever weakens a signature check.
+      - name: Prepare OS signing
+        id: signing
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          config='{}'
+          if [[ "$RUNNER_OS" == "macOS" && -n "$APPLE_SIGNING_IDENTITY" ]]; then
+            config="$(node -e 'console.log(JSON.stringify({ bundle: { macOS: { signingIdentity: process.env.APPLE_SIGNING_IDENTITY } } }))')"
+            echo "::notice::macOS build will be signed as $APPLE_SIGNING_IDENTITY."
+          elif [[ "$RUNNER_OS" == "Windows" && -n "$WINDOWS_CERTIFICATE" ]]; then
+            echo "$WINDOWS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/signing.pfx"
+            thumbprint="$(powershell -NoProfile -Command "(Import-PfxCertificate -FilePath '$RUNNER_TEMP\\signing.pfx' -CertStoreLocation Cert:\\CurrentUser\\My -Password (ConvertTo-SecureString -String '$WINDOWS_CERTIFICATE_PASSWORD' -AsPlainText -Force)).Thumbprint")"
+            rm -f "$RUNNER_TEMP/signing.pfx"
+            config="$(THUMB="$thumbprint" node -e 'console.log(JSON.stringify({ bundle: { windows: { certificateThumbprint: process.env.THUMB, digestAlgorithm: "sha256", timestampUrl: "http://timestamp.digicert.com" } } }))')"
+            echo "::notice::Windows build will be signed with certificate $thumbprint."
+          else
+            echo "::notice::No OS signing secrets for $RUNNER_OS; the installer is built as before (ad-hoc on macOS, unsigned on Windows)."
+          fi
+          printf '%s\n' "$config" > src-tauri/tauri.signing.conf.json
+          cat src-tauri/tauri.signing.conf.json
+      # TAURI_SIGNING_* signs the update packages for the in-app updater (Tauri's own minisign signing),
+      # a separate thing from OS signing above. The signature records the version, which the app
+      # insists on, so a package can't be paired with another version's manifest. The APPLE_* values
+      # are tauri-action's own inputs for importing the certificate and notarizing; empty when unset.
       - name: Build the installer and the signed update package
         id: tauri
         uses: tauri-apps/tauri-action@v1
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          args: ${{ matrix.args }} --config src-tauri/tauri.sidecar.conf.json --config src-tauri/tauri.updater.conf.json --config src-tauri/tauri.version.conf.json
+          args: ${{ matrix.args }} --config src-tauri/tauri.sidecar.conf.json --config src-tauri/tauri.updater.conf.json --config src-tauri/tauri.version.conf.json --config src-tauri/tauri.signing.conf.json
       # The agent connector rides inside the app bundle (Settings → AI agents points agents at it): it
       # must be there, intact, and — where the runner can run it — built from this source (it reports
       # package.json's version, which a prerelease tag may lead).

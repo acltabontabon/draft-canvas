@@ -5,7 +5,6 @@
 //! than predefined wherever the page must decide what happens: a predefined Undo on macOS goes straight
 //! into the web view's text undo and would never reach the canvas.
 
-use crate::grants::Handle;
 use crate::state::{AppState, HostEvent, MenuCommand};
 use crate::window::{show_main, Platform};
 use std::sync::Arc;
@@ -14,8 +13,6 @@ use tauri::menu::{IconMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, 
 use tauri::{AppHandle, Manager, Runtime};
 
 pub const DOCS_URL: &str = "https://github.com/acltabontabon/draft-canvas/tree/main/docs";
-const RECENT_PREFIX: &str = "recent:";
-const DRAFT_PREFIX: &str = "draft:";
 
 /// A PNG the page drew for a menu item, shared rather than copied each time the menu is rebuilt.
 pub type Icon = Arc<Vec<u8>>;
@@ -59,16 +56,6 @@ fn item(id: &str, text: &str, accelerator: Option<&'static str>) -> Spec {
     }
 }
 
-fn icon_item(id: &str, text: &str, accelerator: Option<&'static str>, icon: Option<&Icon>) -> Spec {
-    Spec::Item {
-        id: id.to_string(),
-        text: text.to_string(),
-        accelerator,
-        enabled: true,
-        icon: icon.cloned(),
-    }
-}
-
 /// A section's name: a disabled line, the way macOS labels a group inside a menu.
 fn label(text: &str) -> Spec {
     Spec::Item {
@@ -81,10 +68,6 @@ fn label(text: &str) -> Spec {
 }
 
 /// `&` marks a keyboard mnemonic in native menus, so a file called "R&D" needs it doubled.
-fn menu_text(text: &str) -> String {
-    text.replace('&', "&&")
-}
-
 fn submenu(text: &str, items: Vec<Spec>) -> Spec {
     Spec::Submenu {
         text: text.to_string(),
@@ -100,7 +83,6 @@ pub enum Action {
     CloseWindow,
     Quit,
     ShowWindow,
-    OpenRecent(Handle),
     OpenDocs,
 }
 
@@ -108,26 +90,14 @@ fn menu_event(command: MenuCommand) -> Action {
     Action::Emit(HostEvent::Menu { command })
 }
 
-/// The one table that ties an item's id to its action. Ids are `app:*` for the menu bar, `tray:*` for
-/// the tray and `recent:<handle>` for a recent file in the tray.
+/// The one table that ties an item's id to its action. Ids are `app:*` for the menu bar and `tray:*`
+/// for the tray.
 pub fn action_for_id(id: &str) -> Option<Action> {
-    if let Some(handle) = id.strip_prefix(RECENT_PREFIX) {
-        return Some(Action::OpenRecent(handle.to_string()));
-    }
-    if let Some(draft) = id.strip_prefix(DRAFT_PREFIX) {
-        // Only ever an id the tray itself listed; anything else is not a draft.
-        return crate::recovery::is_valid_id(draft).then(|| {
-            Action::Emit(HostEvent::RecoverDraft {
-                id: draft.to_string(),
-            })
-        });
-    }
     Some(match id {
-        "app:new-quick-draft" | "tray:new-quick-draft" => Action::Emit(HostEvent::NewQuickDraft),
+        "app:new-quick-draft" => Action::Emit(HostEvent::NewQuickDraft),
         "app:new-canvas" => menu_event(MenuCommand::NewCanvas),
-        "tray:new-canvas" => Action::Emit(HostEvent::NewCanvas),
-        "app:open" | "tray:open" => menu_event(MenuCommand::Open),
-        "app:open-project" | "tray:open-project" => menu_event(MenuCommand::OpenProject),
+        "app:open" => menu_event(MenuCommand::Open),
+        "app:open-project" => menu_event(MenuCommand::OpenProject),
         "app:save" => menu_event(MenuCommand::Save),
         "app:save-as" => menu_event(MenuCommand::SaveAs),
         "app:revert" => menu_event(MenuCommand::Revert),
@@ -251,115 +221,34 @@ pub fn app_menu(platform: Platform) -> Vec<Spec> {
     bar
 }
 
-/// A file the tray offers under Recent: only what the tray needs to show and to hand back.
-pub struct TrayRecent {
-    pub handle: Handle,
-    pub name: String,
-    /// The diagram's own silhouette, as the page drew it for the Home tile (see `tray_decorate`).
-    pub icon: Option<Icon>,
+/// Whether agents may reach the app right now, and how many are connected — the one thing the tray
+/// menu reports, because it is the one thing a hidden window is doing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrayAgent {
+    Off,
+    On { connections: usize },
 }
 
-/// A draft that isn't in a file yet, as the tray lists it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TrayDraft {
-    pub id: String,
-    pub title: String,
-    pub icon: Option<Icon>,
-}
-
-/// The line icons the page drew for the tray's actions, in the ink of the current appearance.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TrayActionIcons {
-    pub quick_draft: Option<Icon>,
-    pub new_canvas: Option<Icon>,
-    pub open: Option<Icon>,
-    pub open_project: Option<Icon>,
-}
-
-/// How many recent files sit in the menu itself; the rest are one level down.
-const TRAY_INLINE_RECENTS: usize = 5;
-const TRAY_RECENTS: usize = 12;
-const TRAY_DRAFTS: usize = 5;
-
-/// The tray menu: the one thing to do first, then whatever isn't saved, then the files you had open,
-/// each drawn as the diagram it is, then the rest. Sections appear only when they have something in
-/// them, so a first launch is four actions and Quit.
-pub fn tray_menu(
-    recents: &[TrayRecent],
-    drafts: &[TrayDraft],
-    icons: &TrayActionIcons,
-) -> Vec<Spec> {
-    let mut menu = vec![
-        icon_item(
-            "tray:new-quick-draft",
-            "New Quick Draft",
-            Some("CmdOrCtrl+N"),
-            icons.quick_draft.as_ref(),
-        ),
-        icon_item(
-            "tray:new-canvas",
-            "New File\u{2026}",
-            Some("CmdOrCtrl+Shift+N"),
-            icons.new_canvas.as_ref(),
-        ),
-    ];
-
-    if !drafts.is_empty() {
-        menu.push(Spec::Separator);
-        menu.push(label("Drafts"));
-        menu.extend(drafts.iter().take(TRAY_DRAFTS).map(|d| Spec::Item {
-            id: format!("{DRAFT_PREFIX}{}", d.id),
-            text: menu_text(&d.title),
-            accelerator: None,
-            enabled: true,
-            icon: d.icon.clone(),
-        }));
-    }
-
-    if !recents.is_empty() {
-        let entry = |r: &TrayRecent| Spec::Item {
-            id: format!("{RECENT_PREFIX}{}", r.handle),
-            text: menu_text(&r.name),
-            accelerator: None,
-            enabled: true,
-            icon: r.icon.clone(),
-        };
-        menu.push(Spec::Separator);
-        menu.push(label("Recent"));
-        let listed: Vec<&TrayRecent> = recents.iter().take(TRAY_RECENTS).collect();
-        menu.extend(listed.iter().take(TRAY_INLINE_RECENTS).map(|r| entry(r)));
-        if listed.len() > TRAY_INLINE_RECENTS {
-            menu.push(submenu(
-                "More Recent",
-                listed[TRAY_INLINE_RECENTS..]
-                    .iter()
-                    .map(|r| entry(r))
-                    .collect(),
-            ));
+/// The tray menu: bring the window back, what the hidden app is up to, Settings, Quit. Nothing that
+/// Home does better — a draft, a recent file, a new document — is repeated here.
+pub fn tray_menu(agent: TrayAgent) -> Vec<Spec> {
+    let status = match agent {
+        TrayAgent::Off => "Agent access: off".to_string(),
+        TrayAgent::On { connections: 0 } => "Agent access: on".to_string(),
+        TrayAgent::On { connections: 1 } => "Agent access: on \u{b7} 1 agent connected".to_string(),
+        TrayAgent::On { connections } => {
+            format!("Agent access: on \u{b7} {connections} agents connected")
         }
-    }
-
-    menu.extend([
-        Spec::Separator,
-        icon_item(
-            "tray:open",
-            "Open File\u{2026}",
-            Some("CmdOrCtrl+O"),
-            icons.open.as_ref(),
-        ),
-        icon_item(
-            "tray:open-project",
-            "Add Project\u{2026}",
-            Some("CmdOrCtrl+Shift+O"),
-            icons.open_project.as_ref(),
-        ),
-        Spec::Separator,
+    };
+    vec![
         item("tray:show", "Show Draft Canvas", None),
+        Spec::Separator,
+        label(&status),
+        Spec::Separator,
         item("tray:settings", "Settings\u{2026}", Some("CmdOrCtrl+,")),
         Spec::Separator,
         item("tray:quit", "Quit Draft Canvas", Some("CmdOrCtrl+Q")),
-    ]);
-    menu
+    ]
 }
 
 // --- turning specs into native menus -----------------------------------------------------------
@@ -441,11 +330,6 @@ pub fn handle_event(app: &AppHandle, id: &str) {
         Action::CloseWindow => crate::lifecycle::request_close(app),
         Action::Quit => crate::quit::request_quit(app),
         Action::ShowWindow => show_main(app),
-        Action::OpenRecent(handle) => {
-            show_main(app);
-            let state = app.state::<AppState>();
-            state.deliver_opens(vec![handle]);
-        }
         // Handing a URL to the OS launches a process; not something to wait for on the event loop.
         Action::OpenDocs => {
             tauri::async_runtime::spawn_blocking(|| {
@@ -532,11 +416,7 @@ mod tests {
                 );
             }
         }
-        let tray = tray_menu(
-            &recents(8),
-            &[draft("Auth rework")],
-            &TrayActionIcons::default(),
-        );
+        let tray = tray_menu(TrayAgent::On { connections: 2 });
         for (id, _, _, enabled) in items(&tray) {
             // A disabled line is a section's name, not something to choose.
             if enabled {
@@ -695,26 +575,6 @@ mod tests {
         }
     }
 
-    const DRAFT_ID: &str = "q_0123abcd-0000-4000-8000-000000000000";
-
-    fn recents(n: usize) -> Vec<TrayRecent> {
-        (0..n)
-            .map(|i| TrayRecent {
-                handle: format!("h_{i}"),
-                name: format!("file {i}"),
-                icon: None,
-            })
-            .collect()
-    }
-
-    fn draft(title: &str) -> TrayDraft {
-        TrayDraft {
-            id: DRAFT_ID.into(),
-            title: title.into(),
-            icon: None,
-        }
-    }
-
     fn shape(specs: &[Spec]) -> Vec<String> {
         specs
             .iter()
@@ -733,97 +593,32 @@ mod tests {
     }
 
     #[test]
-    fn a_first_launch_tray_is_just_the_actions() {
-        let tray = tray_menu(&[], &[], &TrayActionIcons::default());
+    fn the_tray_is_the_window_the_agent_status_settings_and_quit() {
         assert_eq!(
-            shape(&tray),
+            shape(&tray_menu(TrayAgent::Off)),
             [
-                "New Quick Draft",
-                "New File\u{2026}",
-                "-",
-                "Open File\u{2026}",
-                "Add Project\u{2026}",
-                "-",
                 "Show Draft Canvas",
-                "Settings\u{2026}",
                 "-",
-                "Quit Draft Canvas"
-            ]
-        );
-    }
-
-    #[test]
-    fn unsaved_drafts_come_first_then_recent_files_inline() {
-        let tray = tray_menu(
-            &recents(3),
-            &[draft("Auth rework")],
-            &TrayActionIcons::default(),
-        );
-        assert_eq!(
-            shape(&tray),
-            [
-                "New Quick Draft",
-                "New File\u{2026}",
+                "<Agent access: off>",
                 "-",
-                "<Drafts>",
-                "Auth rework",
-                "-",
-                "<Recent>",
-                "file 0",
-                "file 1",
-                "file 2",
-                "-",
-                "Open File\u{2026}",
-                "Add Project\u{2026}",
-                "-",
-                "Show Draft Canvas",
                 "Settings\u{2026}",
                 "-",
                 "Quit Draft Canvas"
             ]
         );
         assert_eq!(
-            action_for_id(&format!("draft:{DRAFT_ID}")),
-            Some(Action::Emit(HostEvent::RecoverDraft {
-                id: DRAFT_ID.into()
-            }))
+            shape(&tray_menu(TrayAgent::On { connections: 0 }))[2],
+            "<Agent access: on>"
         );
-    }
-
-    #[test]
-    fn past_five_recent_files_the_rest_are_one_level_down_and_capped() {
-        let tray = tray_menu(&recents(20), &[], &TrayActionIcons::default());
-        let inline: Vec<_> = items(&tray)
-            .into_iter()
-            .filter(|(id, ..)| id.starts_with("recent:"))
-            .collect();
-        // Five in the menu itself, seven more under "More Recent": twelve in all.
-        assert_eq!(inline.len(), 12);
-        assert_eq!(inline[0], ("recent:h_0", "file 0", None, true));
-        assert_eq!(items(submenu_items(&tray, "More Recent")).len(), 7);
         assert_eq!(
-            action_for_id("recent:h_3"),
-            Some(Action::OpenRecent("h_3".into()))
+            shape(&tray_menu(TrayAgent::On { connections: 1 }))[2],
+            "<Agent access: on \u{b7} 1 agent connected>"
         );
-    }
-
-    #[test]
-    fn the_actions_wear_their_icons_and_their_shortcuts() {
-        let png: Icon = Arc::new(vec![1, 2, 3]);
-        let icons = TrayActionIcons {
-            quick_draft: Some(png.clone()),
-            ..Default::default()
-        };
-        let tray = tray_menu(&[], &[], &icons);
-        let Spec::Item {
-            icon, accelerator, ..
-        } = &tray[0]
-        else {
-            panic!("not an item")
-        };
-        assert_eq!(icon.as_ref(), Some(&png));
-        assert_eq!(*accelerator, Some("CmdOrCtrl+N"));
-        for (id, _, accel, _) in items(&tray) {
+        assert_eq!(
+            shape(&tray_menu(TrayAgent::On { connections: 3 }))[2],
+            "<Agent access: on \u{b7} 3 agents connected>"
+        );
+        for (id, _, accel, _) in items(&tray_menu(TrayAgent::Off)) {
             if let Some(accel) = accel {
                 assert!(accel.parse::<Accelerator>().is_ok(), "{id}: {accel:?}");
             }
@@ -831,48 +626,15 @@ mod tests {
     }
 
     #[test]
-    fn a_draft_id_that_isnt_one_is_not_an_action() {
-        assert_eq!(action_for_id("draft:../../etc"), None);
-        assert_eq!(action_for_id("draft:"), None);
-    }
-
-    #[test]
-    fn an_ampersand_in_a_file_name_is_escaped_so_it_is_not_a_mnemonic() {
-        let named = vec![TrayRecent {
-            handle: "h_1".into(),
-            name: "R&D plan".into(),
-            icon: None,
-        }];
-        let tray = tray_menu(&named, &[draft("Q&A")], &TrayActionIcons::default());
-        let texts: Vec<_> = items(&tray).into_iter().map(|(_, text, ..)| text).collect();
-        assert!(texts.contains(&"R&&D plan"));
-        assert!(texts.contains(&"Q&&A"));
-    }
-
-    #[test]
     fn tray_items_do_what_the_spec_says() {
-        assert_eq!(
-            action_for_id("tray:new-quick-draft"),
-            Some(Action::Emit(HostEvent::NewQuickDraft))
-        );
-        assert_eq!(
-            action_for_id("tray:new-canvas"),
-            Some(Action::Emit(HostEvent::NewCanvas))
-        );
-        assert_eq!(
-            action_for_id("tray:open"),
-            Some(menu_event(MenuCommand::Open))
-        );
-        assert_eq!(
-            action_for_id("tray:open-project"),
-            Some(menu_event(MenuCommand::OpenProject))
-        );
         assert_eq!(
             action_for_id("tray:settings"),
             Some(menu_event(MenuCommand::Settings))
         );
         assert_eq!(action_for_id("tray:show"), Some(Action::ShowWindow));
         assert_eq!(action_for_id("tray:quit"), Some(Action::Quit));
+        // The status line is a label, never an action.
+        assert_eq!(action_for_id("label:agent access: off"), None);
     }
 
     #[test]
@@ -904,7 +666,16 @@ mod tests {
 
     #[test]
     fn an_unknown_id_does_nothing() {
-        for id in ["", "app:", "save", "tray:nope", "recent", "About"] {
+        for id in [
+            "",
+            "app:",
+            "save",
+            "tray:nope",
+            "tray:open",
+            "recent:h_1",
+            "draft:x",
+            "About",
+        ] {
             assert_eq!(action_for_id(id), None, "{id}");
         }
     }

@@ -38,7 +38,7 @@ launch ──15 s──▶ look ──(daily)──▶ look …
 
 | Installed                 | Reads         | Is offered                                                    |
 | ------------------------- | ------------- | ------------------------------------------------------------- |
-| a prerelease (`-alpha.1`) | `alpha.json`  | the newest release of any kind: a newer alpha, or the release it led up to |
+| a prerelease (`-alpha.1`, `-beta.2` — any suffix) | `alpha.json`  | the newest release of any kind: a newer alpha, or the release it led up to |
 | a release                 | `stable.json` | newer releases only, never a prerelease                       |
 
 ## Versions
@@ -55,8 +55,21 @@ version needs a dated `## [X.Y.Z] - YYYY-MM-DD` section in `CHANGELOG.md`, previ
    private half signs every update package in CI; the public half is compiled into the app, which refuses
    any package that doesn't verify against it or wasn't signed for the version the manifest announces
    (`requireSignedVersion`).
-2. **macOS code signing / notarization** — unchanged: ad-hoc signed, not notarized.
-3. **Windows Authenticode** — unchanged: unsigned.
+2. **macOS code signing / notarization** — ad-hoc signed and not notarized today. The release workflow
+   is ready for the real thing: with the secrets below in place, `desktop-release.yml`'s "Prepare OS
+   signing" step names the identity to the bundler and `tauri-action` imports the certificate and
+   notarizes. Needed (an Apple Developer Program membership, paid): `APPLE_CERTIFICATE` (a Developer ID
+   Application certificate exported as base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`,
+   `APPLE_SIGNING_IDENTITY` (`Developer ID Application: Name (TEAMID)`), and for notarization
+   `APPLE_ID`, `APPLE_PASSWORD` (an app-specific password) and `APPLE_TEAM_ID`.
+3. **Windows Authenticode** — unsigned today. With `WINDOWS_CERTIFICATE` (a code-signing certificate as
+   base64 `.pfx`) and `WINDOWS_CERTIFICATE_PASSWORD` set, the same step imports it on the runner and
+   the bundler signs the installer by thumbprint (SHA-256, DigiCert timestamp). An OV or EV certificate
+   is bought from a CA; SmartScreen reputation still builds up over time.
+
+Neither is configured. Nothing in the workflow disables a check when the secrets are missing: the
+build is then exactly what it always was. Once either set exists, the sentence in
+`scripts/release-notes.mjs` and the README that says installers are unsigned has to change with it.
 
 Because the app downloads the package itself, an update doesn't meet the Gatekeeper or SmartScreen
 prompt a first manual install does. That is how the file arrives, not something bypassed.

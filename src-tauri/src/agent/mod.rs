@@ -118,6 +118,8 @@ impl Agent {
         self.ensure_ledger()?;
         self.ensure_proposals()?;
         *running = Some(bridge::listen(self.clone())?);
+        drop(running);
+        self.tray_changed();
         Ok(())
     }
 
@@ -128,6 +130,7 @@ impl Agent {
             running.stop();
         }
         endpoint::remove_info(&self.dir);
+        self.tray_changed();
     }
 
     /// Everything a connected sidecar should be told before the app goes away — and the connection
@@ -151,10 +154,21 @@ impl Agent {
 
     pub(crate) fn connection_opened(&self) {
         self.connections.fetch_add(1, Ordering::SeqCst);
+        self.tray_changed();
     }
 
     pub(crate) fn connection_closed(&self) {
         self.connections.fetch_sub(1, Ordering::SeqCst);
+        self.tray_changed();
+    }
+
+    /// The tray menu's one line of status follows access and connections; it is rebuilt off the
+    /// caller's thread, since a connection opens on the listener's.
+    fn tray_changed(&self) {
+        if let Some(app) = self.app() {
+            let app = app.clone();
+            tauri::async_runtime::spawn_blocking(move || crate::tray::refresh(&app));
+        }
     }
 
     fn ensure_ledger(&self) -> std::io::Result<()> {

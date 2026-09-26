@@ -17,7 +17,6 @@ import {
   type RecoveryEntry,
   type SavedAs,
   type StartLocation,
-  type TrayArt,
   type UpdateSnapshot,
 } from '../../src/desktop/api';
 import type { HostLink } from '../../src/desktop/channel';
@@ -283,7 +282,6 @@ export function createHarness() {
       return answers.shift() ?? buttons.length - 1;
     }),
     showError: vi.fn(async (title: string, message: string) => void errors.push({ title, message })),
-    trayDecorate: vi.fn(async (_art: TrayArt) => {}),
     // The shell decides everything about updates; the fake just answers with whatever the test set.
     updateStatus: vi.fn(async () => update),
     updateCheck: vi.fn(async (_manual: boolean) => update),

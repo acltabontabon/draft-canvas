@@ -7,17 +7,6 @@ use std::collections::BTreeSet;
 const LIB: &str = include_str!("lib.rs");
 const BUILD: &str = include_str!("../build.rs");
 const CAPABILITY: &str = include_str!("../capabilities/default.json");
-const PANEL_CAPABILITY: &str = include_str!("../capabilities/tray.json");
-/// The tray panel's own commands: the main window has no use for them.
-const PANEL_ONLY: [&str; 3] = ["tray_panel", "tray_choose", "tray_panel_fit"];
-/// Everything the tray panel may call, and nothing more.
-const PANEL_GRANTS: [&str; 5] = [
-    "tray_panel",
-    "tray_choose",
-    "tray_panel_fit",
-    "peek_document",
-    "recovery_read",
-];
 const CONFIG: &str = include_str!("../tauri.conf.json");
 
 fn in_handler() -> BTreeSet<String> {
@@ -65,37 +54,22 @@ fn in_capability(capability: &str) -> BTreeSet<String> {
 #[test]
 fn the_handler_the_manifest_and_the_capability_list_the_same_commands() {
     let handler = in_handler();
-    assert_eq!(handler.len(), 56, "{handler:?}");
+    assert_eq!(handler.len(), 52, "{handler:?}");
     assert_eq!(
         handler,
         in_manifest(),
         "lib.rs handler vs build.rs COMMANDS"
     );
-    let main: BTreeSet<String> = handler
-        .iter()
-        .filter(|command| !PANEL_ONLY.contains(&command.as_str()))
-        .cloned()
-        .collect();
     assert_eq!(
-        main,
+        handler,
         in_capability(CAPABILITY),
         "lib.rs handler vs capabilities/default.json"
     );
-    let panel = in_capability(PANEL_CAPABILITY);
-    assert_eq!(
-        panel,
-        PANEL_GRANTS.iter().map(|c| c.to_string()).collect(),
-        "capabilities/tray.json"
-    );
-    assert!(panel.is_subset(&handler));
 }
 
 #[test]
-fn each_window_is_granted_only_its_own_commands() {
-    for (capability, window) in [
-        (CAPABILITY, crate::window::MAIN),
-        (PANEL_CAPABILITY, crate::panel::PANEL),
-    ] {
+fn the_window_is_granted_only_its_own_commands() {
+    for (capability, window) in [(CAPABILITY, crate::window::MAIN)] {
         let json: serde_json::Value = serde_json::from_str(capability).expect("capability JSON");
         assert_eq!(json["windows"], serde_json::json!([window]));
         for permission in json["permissions"].as_array().unwrap() {

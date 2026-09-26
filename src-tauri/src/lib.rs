@@ -6,7 +6,6 @@ mod errors;
 mod grants;
 mod lifecycle;
 mod menu;
-mod panel;
 mod paths;
 mod project;
 mod quit;
@@ -79,10 +78,6 @@ pub fn run() {
             commands::host::settings_set,
             commands::host::ask,
             commands::host::show_error,
-            commands::tray::tray_decorate,
-            commands::tray::tray_panel,
-            commands::tray::tray_choose,
-            commands::tray::tray_panel_fit,
             commands::updates::update_status,
             commands::updates::update_check,
             commands::updates::update_download,

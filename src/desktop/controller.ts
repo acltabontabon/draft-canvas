@@ -226,10 +226,6 @@ export class DesktopController {
         return this.openHandle(event.handle);
       case 'new-quick-draft':
         return this.newQuickDraft();
-      case 'new-canvas':
-        return this.newCanvas();
-      case 'recover-draft':
-        return this.recover(event.id);
       case 'window-focused':
         return this.onFocus();
       case 'recents-changed':

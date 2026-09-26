@@ -40,8 +40,8 @@ test('opens on its own Home, not the browser’s library', async ({ page }) => {
 
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open file…' })).toBeVisible();
-  // With nothing opened yet, the fan points only at starters, and its label says so.
-  await expect(page.getByText('or cheat a little')).toBeVisible();
+  // With nothing opened yet, Home shows only the starters, and its label says so.
+  await expect(page.getByText('Or start from an architecture')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start from Microservices' })).toBeVisible();
   await expect(page.getByRole('tab')).toHaveCount(0);
   // Nothing of the browser's storage-backed Library.
@@ -194,29 +194,6 @@ test('recent files are drawn from their own contents, without being opened', asy
   expect(await page.locator('.dc-node').count()).toBeGreaterThan(3);
 });
 
-test('draws the tray menu: the actions, and each file and draft as its own diagram', async ({ page }) => {
-  await page.goto('/');
-  const text = await documentText(page, 'Flow', 3);
-  await page.addInitScript((text) => {
-    window.__shell.seed({
-      recents: [{ name: 'payment-flow', text, ago: 60_000 }],
-      drafts: [{ title: 'Auth rework', text, ago: 60_000 }],
-    });
-  }, text);
-  await page.reload();
-
-  type Art = { actions: Record<string, string>; files: { handle: string; png: string }[]; drafts: { id: string; title: string; png?: string }[] };
-  await expect.poll(() => page.evaluate(() => (window.__shell.trayArt() as Art | null)?.files.length ?? 0)).toBe(1);
-  const art = (await page.evaluate(() => window.__shell.trayArt())) as Art;
-  expect(Object.keys(art.actions).sort()).toEqual(['newCanvas', 'open', 'openProject', 'quickDraft']);
-  expect(art.drafts).toEqual([expect.objectContaining({ title: 'Auth rework', png: expect.any(String) })]);
-  // Real PNGs, and by handle: nothing in what the page sends names a path.
-  for (const image of [...Object.values(art.actions), art.files[0]!.png, art.drafts[0]!.png!]) {
-    expect(Buffer.from(image, 'base64').subarray(1, 4).toString()).toBe('PNG');
-  }
-  expect(JSON.stringify(art)).not.toContain('/work/');
-});
-
 test('keeps the row to one line, with the rest one click away', async ({ page }) => {
   await page.goto('/');
   const text = await documentText(page, 'Flow', 2);
@@ -240,9 +217,8 @@ test('keeps the row to one line, with the rest one click away', async ({ page })
   await expect(page.getByRole('button', { name: /^Recent/, pressed: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
-  // Back on Home, the row is as full as it was, with a connector to each tile.
+  // Back on Home, the row is as full as it was.
   await expect(row.locator('.dc-desk-tile')).toHaveCount(await row.locator('.dc-desk-tile').count());
-  await expect.poll(() => page.locator('.dc-desk-route').count()).toBe(await row.locator('.dc-desk-tile').count());
   expect(await row.locator('.dc-desk-tile').count()).toBeGreaterThan(2);
 });
 
@@ -764,40 +740,3 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   await expect(settings.getByRole('tab', { name: 'AI agents' })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('the tray panel draws each diagram and chooses only through the shell', async ({ page }) => {
-  await page.goto('/');
-  const text = await documentText(page, 'Payments', 3);
-  await page.addInitScript((text) => {
-    window.__shell.seed({
-      recents: [
-        { name: 'payment-flow', text, ago: 60_000 },
-        { name: 'checkout', text, ago: 120_000 },
-      ],
-      drafts: [{ title: 'Auth rework', text, ago: 60_000 }],
-    });
-  }, text);
-  await page.goto('/tray.html');
-
-  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
-  const recent = page.getByRole('region', { name: 'Recent' });
-  await expect(recent.getByRole('button')).toHaveCount(2);
-  // Each file is drawn as itself, read by its handle.
-  await expect(recent.locator('.dc-tray-thumb[data-state="drawn"]')).toHaveCount(2);
-  await expect(page.getByRole('region', { name: 'Drafts' }).getByRole('button', { name: /Auth rework/ })).toBeVisible();
-
-  const chosen = () =>
-    page.evaluate(() =>
-      window.__shell
-        .calls()
-        .filter((call) => call.command === 'tray_choose')
-        .map((call) => (call.args as { choice: string }).choice),
-    );
-  await recent.getByRole('button', { name: /payment-flow/ }).click();
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Open…' }).click();
-  expect(await chosen()).toEqual(['recent:h_1', 'panel:dismiss', 'tray:open']);
-
-  // It told the shell how tall it came out, and never asked for anything a panel shouldn't.
-  const commands = await page.evaluate(() => [...new Set(window.__shell.calls().map((call) => call.command))].sort());
-  expect(commands).toEqual(['peek_document', 'recovery_read', 'tray_choose', 'tray_panel', 'tray_panel_fit']);
-});

@@ -55,11 +55,6 @@ pub enum HostEvent {
         display_path: String,
     },
     NewQuickDraft,
-    NewCanvas,
-    /// A draft chosen from the tray's Drafts section, by its recovery id.
-    RecoverDraft {
-        id: String,
-    },
     Menu {
         command: MenuCommand,
     },
@@ -186,8 +181,6 @@ pub struct AppState {
     pub tray_ready: AtomicBool,
     /// Present only under `DRAFT_CANVAS_SMOKE`: fired once by `host_ready`.
     pub smoke_ready: Mutex<Option<Sender<()>>>,
-    /// What the page drew for the tray menu (see `tray_decorate`).
-    pub tray_art: Mutex<crate::tray::TrayArt>,
     /// Waiting to hear how the conversation before an update ended (see `quit::request_update`).
     pub update_gate: Mutex<Option<crate::quit::UpdateGate>>,
 }
@@ -204,7 +197,6 @@ impl AppState {
             window_shown: AtomicBool::new(false),
             tray_ready: AtomicBool::new(false),
             smoke_ready: Mutex::new(None),
-            tray_art: Mutex::default(),
             update_gate: Mutex::new(None),
         }
     }
@@ -324,7 +316,6 @@ mod tests {
                 json!({"type": "open", "handle": "h_1", "name": "flow", "displayPath": "~/flow.draftcanvas"}),
             ),
             (HostEvent::NewQuickDraft, json!({"type": "new-quick-draft"})),
-            (HostEvent::NewCanvas, json!({"type": "new-canvas"})),
             (
                 HostEvent::Menu {
                     command: MenuCommand::SaveAs,

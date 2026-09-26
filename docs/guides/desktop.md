@@ -99,19 +99,16 @@ open those in the browser version. (The desktop app can still create them, from 
 
 ## The menu bar and system tray
 
-Draft Canvas stays a click away. On macOS it has a menu-bar icon, on Windows a system-tray icon. Clicking it opens
-a small panel beside it, Home in miniature:
+Draft Canvas stays a click away after its window is closed. On macOS it has a menu-bar icon, on Windows a
+system-tray icon, and the icon's menu is deliberately short:
 
-- **New Quick Draft**
-- **Drafts**: Quick Drafts waiting to be carried on with, and **Recent**: your last few files, each drawn as the
-  diagram it is
-- **Open…**, **Project…**, **New file…**
-- the name at the top brings the window forward; **Settings** and **Quit** sit beside it
+- **Show Draft Canvas** brings the window back — Home, with your drafts, recent files and projects.
+- One line says whether **agent access** is on and how many agents are connected, since that is the one
+  thing a hidden Draft Canvas may be doing (see [Connect an AI agent](connect-an-ai-agent.md)).
+- **Settings…** and **Quit Draft Canvas**.
 
-Clicking anywhere else, or `Esc`, puts the panel away. On Windows, right-clicking the icon opens the same things as
-a plain menu. The icon wears a small dot while a draft is unsaved.
-
-Closing the window hides it rather than quitting, so the next Quick Draft is instant. The first time, Draft Canvas
+Closing the window hides it rather than quitting, so the next Quick Draft is instant and a connected agent
+keeps its app. The first time, Draft Canvas
 tells you where it went and asks whether that's what you want; **Settings** changes it later. **Quit** (from the
 menu, `⌘Q`) really quits. Logging out or shutting down never waits on Draft Canvas: anything unsaved is already
 kept.
@@ -184,8 +181,9 @@ Windows (x64) installer into it, with a checksum file and a build attestation. T
 cross-compiled on the same arm64 runner as the Apple Silicon one, which is why there is no third
 machine in the matrix.
 
-Before a release, the desktop app can have previews: a `desktop-vX.Y.Z-alpha.N` tag builds a prerelease of its
-own, titled "Draft Canvas X.Y.Z-alpha.N", whose `X.Y.Z` may lead `package.json`'s. Its notes are its dated section of
+Before a release, the desktop app can have previews: a `desktop-vX.Y.Z-alpha.N` (or `-beta.N`) tag builds a
+prerelease of its own, titled "Draft Canvas X.Y.Z-alpha.N", whose `X.Y.Z` may lead `package.json`'s. A preview
+install follows previews until the release it leads to; a release install is never offered a preview. Its notes are its dated section of
 `CHANGELOG.md` — the Shared and Desktop parts of it, generated the same way as any release's (see
 [Release notes](../../CONTRIBUTING.md#release-notes)).
 

@@ -57,12 +57,8 @@ fn path_of(state: &AppState, handle: &str) -> Result<std::path::PathBuf, AppErro
 
 #[tauri::command]
 pub async fn recents_list(app: AppHandle) -> Result<Vec<RecentItem>, AppError> {
-    run_blocking(&app, |app, state| {
-        let (items, pruned) = recent_items(state)?;
-        if pruned {
-            // The page asked and gets the corrected list; only the tray still shows the old one.
-            crate::tray::refresh(app);
-        }
+    run_blocking(&app, |_app, state| {
+        let (items, _pruned) = recent_items(state)?;
         Ok(items)
     })
     .await

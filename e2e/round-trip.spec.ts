@@ -140,7 +140,7 @@ test('a rich diagram survives save, reopen, export and import unchanged', async 
   expect((first.edges as Array<{ id: string; attachments?: unknown[] }>).find((e) => e.id === 'e1')?.attachments).toHaveLength(1);
   expect(first.actions).toBeUndefined();
   expect(((nodes.find((n) => n.id === 'a')?.attachments ?? []) as Array<{ text?: string }>).map((a) => a.text)).toContain('Action: Confirm the timeout @Priya');
-  expect((nodes as Array<{ type: string; text?: string }>).find((n) => n.type === 'note' && n.text?.startsWith('Actions\n'))?.text).toBe('Actions\n☑ Write up the migration plan');
+  expect((nodes as unknown as Array<{ type: string; text?: string }>).find((n) => n.type === 'note' && n.text?.startsWith('Actions\n'))?.text).toBe('Actions\n☑ Write up the migration plan');
   expect(first.flows).toHaveLength(1);
   expect(nodes.filter((n) => (n as { parentId?: string }).parentId === 'box').map((n) => n.id).sort()).toEqual(['a', 'b']);
 

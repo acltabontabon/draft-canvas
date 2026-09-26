@@ -11,7 +11,6 @@ pub mod projects;
 pub mod raw;
 pub mod recents;
 pub mod recovery;
-pub mod tray;
 pub mod updates;
 
 use crate::errors::AppError;
@@ -37,9 +36,8 @@ where
     .map_err(|_| AppError::internal())?
 }
 
-/// Called after anything changed the Recent list: the tray mirrors it, and the page is told to look again.
+/// Called after anything changed the Recent list: the page is told to look again.
 pub(crate) fn recents_changed(app: &AppHandle) {
-    crate::tray::refresh(app);
     app.state::<AppState>()
         .events
         .emit(HostEvent::RecentsChanged);
