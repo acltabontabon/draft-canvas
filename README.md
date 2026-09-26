@@ -11,7 +11,6 @@ It gives you architecture-aware shapes, familiar technical relationships, and sm
 [![CI](https://github.com/acltabontabon/draft-canvas/actions/workflows/ci.yml/badge.svg)](https://github.com/acltabontabon/draft-canvas/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Docker Hub](https://img.shields.io/badge/Docker-Hub-2496ED)](https://hub.docker.com/r/acltabontabon/draft-canvas)
-[![VS Code](https://img.shields.io/badge/VS%20Code-Marketplace-007ACC)](https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas)
 [![GitHub Release](https://img.shields.io/github/v/release/acltabontabon/draft-canvas)](https://github.com/acltabontabon/draft-canvas/releases)
 
 <img width="100%" alt="A run through Draft Canvas: drawing a Service, Queue and Worker with the keyboard, dropping in a composed CQRS architecture, attaching a note to a connector, presenting a flow step by step and moving to the next flow without leaving and looking inside a shape with Cmd+Down." src="docs/media/demo.gif">
@@ -19,8 +18,8 @@ It gives you architecture-aware shapes, familiar technical relationships, and sm
 **[Try it →](https://acltabontabon.com/draft-canvas/editor/)** Nothing you draw leaves your browser.
 There's a [landing page](https://acltabontabon.com/draft-canvas/) too, if you'd rather read about it first.
 
-Also lives [in VS Code](#in-vs-code), next to your code, [on your desktop](#desktop), in a window of its
-own, and [in Docker](#running-it-yourself), on your own server.
+Also lives [on your desktop](#desktop), in a window of its own with your diagrams as files, and
+[in Docker](#running-it-yourself), on your own server.
 
 **Documentation:** [Getting started](docs/guides/getting-started.md) ·
 [All guides](docs/index.md) ·
@@ -46,15 +45,15 @@ Diagrams live in one browser on one device. [Export anything you'd mind losing](
 
 ## Where it runs
 
-One editor, four ways to open it. The web app, the Docker image and the desktop app share a version
-and ship together in each [release](https://github.com/acltabontabon/draft-canvas/releases).
+One editor, two places to use it — the browser and the desktop — and a Docker image of the web app for
+your own server. All three share a version and ship together in each
+[release](https://github.com/acltabontabon/draft-canvas/releases).
 
 | | Runs on | Saves to | Status |
 | --- | --- | --- | --- |
 | [Web app](https://acltabontabon.com/draft-canvas/editor/) | A modern browser | The browser (IndexedDB) | Stable |
 | [Docker](#running-it-yourself) | Your own server, behind HTTPS | The visitor's browser, as above | Stable |
 | [Desktop](#desktop) | macOS (Apple Silicon, Intel), Windows x64 | `.draftcanvas` files and folders | Stable, with unsigned installers; `desktop-v…-alpha`/`-beta` tags are previews that never replace a stable install |
-| [VS Code](#in-vs-code) | VS Code 1.100 or later | The `.draftcanvas` file you opened | 0.x; loads the hosted editor, so it needs to reach `acltabontabon.com` |
 
 There's no Linux desktop build. Nothing is synced between them; a `.draftcanvas` file is how a
 diagram moves. Ideas and planned work are in [Issues](https://github.com/acltabontabon/draft-canvas/issues).
@@ -76,22 +75,11 @@ npm run dev        # http://localhost:5180
 
 ---
 
-## In VS Code
+## Draft Canvas for VS Code has been retired
 
-Keep the diagram next to the code it describes.
-
-```text
-payments-service/
-├── src/
-└── docs/
-    └── architecture/
-        └── checkout.draftcanvas   ← click it, you're on the canvas
-```
-
-Install [Draft Canvas for VS Code](https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas),
-open any `.draftcanvas` file, draw, and `⌘S`. The diagram saves back to that file as plain JSON, so
-it shows up in a pull request like everything else. `Draft Canvas: New Diagram` starts a fresh one.
-More in [Working with `.draftcanvas` files in VS Code](docs/guides/vscode.md).
+The extension that opened `.draftcanvas` files in a VS Code tab is retired; 0.2.0 is its last release
+and only says so. Your files are plain JSON and open as they are in the [desktop app](#desktop) or,
+through **Import**, in the web app. [How to move a diagram](docs/guides/vscode-retired.md).
 
 ---
 

@@ -64,11 +64,13 @@ test("the editor's service worker is scoped to the editor, and never to the land
   }
 });
 
-test('a released VS Code extension still reaches the editor', async ({ page }) => {
-  // Every published extension (0.1.0 through 0.1.6) loads this exact URL into its webview frame.
+test('a retired VS Code extension still reaches a page that says so', async ({ page }) => {
+  // Every published extension up to 0.1.6 loads this exact URL into its webview frame; the landing
+  // page forwards it to the editor, which shows the retirement notice rather than the Library.
   await page.goto(`${SITE}?host=vscode`);
   await expect(page).toHaveURL(/\/draft-canvas\/editor\/\?host=vscode$/);
-  await expect(page.locator('#root')).not.toBeEmpty();
+  await expect(page.getByRole('heading', { name: /has been retired/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Download the desktop app' })).toBeVisible();
 });
 
 test('an ordinary anchor stays on the landing page', async ({ page }) => {

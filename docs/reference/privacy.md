@@ -133,24 +133,6 @@ Reading a file uses the `File` API on a file you chose. Nothing is uploaded. A p
 and only then feeds the same validator — a wrong passphrase fails cleanly rather than importing
 garbage.
 
-### Embedded in VS Code
-
-The VS Code extension (`vscode-extension/`) loads this same app in an editor tab, at `?host=vscode`,
-and hands it one `.draftcanvas` file. In that mode (`src/host/`) the file is the only storage:
-IndexedDB is never opened, the document lives in memory, and every edit is sent back to VS Code
-with `postMessage`. VS Code writes the file.
-
-That message goes from one frame to another inside VS Code's window, never over the network. The app
-only accepts a file from, and only sends one to, a parent frame whose origin is a VS Code webview
-(`vscode-webview://`). The one message it sends to any parent is a data-free "ready".
-
-A few more messages travel the same way, only once the host has said it takes them. Copy and Paste
-hand text to, and ask for text from, VS Code's clipboard, because a key pressed in the frame never
-becomes VS Code's own Copy or Paste; the app asks for the clipboard only when you paste. A chord such
-as ⌘P is named to VS Code so it can run its own command. A canvas background image is sent as bytes
-for the extension to save beside the file, and asked for again when the file is opened. None of it
-leaves VS Code's window.
-
 ### The desktop app
 
 Draft Canvas Desktop (`src-tauri/`) is this same app in a window of its own, built with the editor
@@ -158,8 +140,8 @@ bundled inside it. It makes no network requests for editing, has no account, and
 or analytics. The editor is loaded from the app's own files, not from a website, so nothing about the
 diagram you draw needs a connection.
 
-Like the VS Code extension, the desktop app treats a `.draftcanvas` file as the storage: the browser's
-IndexedDB is never opened, and nothing is shared with the web app's library. What it touches on your
+The desktop app treats a `.draftcanvas` file as the storage: the browser's IndexedDB is never opened,
+and nothing is shared with the web app's library. What it touches on your
 computer is limited to:
 
 - **Files and folders you choose**: the ones you pick in an Open, Save or folder dialog, that the OS opens

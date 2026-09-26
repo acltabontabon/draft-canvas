@@ -787,8 +787,7 @@ and the page is where diagrams are composed. How that is handled depends on the 
 
 The MCP bridge is desktop-only. The document format isn't: schema v15 (`description`, `technology`)
 lives in the shared model, so a diagram an agent made opens, edits and saves the same way in the web
-app, in VS Code and on the desktop. `e2e/round-trip.spec.ts` and `tests/host-document.test.tsx` cover
-this.
+app and on the desktop. `e2e/round-trip.spec.ts` and `tests/desktop/host-channel.test.tsx` cover this.
 
 An older Draft Canvas refuses a v15 file with an actionable message rather than dropping the fields.
 This was checked against the released v14 reader:
@@ -796,10 +795,9 @@ This was checked against the released v14 reader:
 > This file was made with a newer version of Draft Canvas (document format v15, this app reads up to
 > v14).
 
-**Release constraint.** The VS Code extension frames the *deployed* web editor, so v15 files open in
-VS Code only once the web editor carrying v15 is deployed. The desktop app and the web editor must
-therefore ship in the same release, which the single `vX.Y.Z` tag already does. Pages deploys only
-released editor code.
+**Release constraint.** The desktop app and the web editor ship in the same release, which the single
+`vX.Y.Z` tag already does, so a file one writes is one the other reads. Pages deploys only released
+editor code.
 
 ## Performance
 

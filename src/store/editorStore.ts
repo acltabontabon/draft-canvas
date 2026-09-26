@@ -147,7 +147,6 @@ import type {
 import { C4_TEXT_TYPES } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
-import { hostClipboard } from '../host/hostClipboard';
 import { centerOf, clamp } from '../lib/math';
 import {
   EMPTY_HISTORY,
@@ -748,19 +747,13 @@ function applyComponentAutoLabel(doc: DraftDocument, nodeId: string, before: Dra
 
 /**
  * Best-effort: a missing/denied Clipboard API (insecure context, an older browser, a test env) never
- * breaks same-tab copy/paste, which the in-memory `clipboard` already covers on its own. Embedded in a
- * host that offers its clipboard, the copy goes there instead, since the frame is refused the API.
+ * breaks same-tab copy/paste, which the in-memory `clipboard` already covers on its own.
  *
  * Resolves to whether the text actually left the app. Copying shapes doesn't care (it has the
  * in-memory clipboard), but a copy whose whole point is *the system clipboard* — text copied for
  * another app — must not tell someone it worked when it didn't.
  */
 async function writeSystemClipboard(text: string): Promise<boolean> {
-  const host = hostClipboard();
-  if (host) {
-    host.write(text);
-    return true;
-  }
   try {
     if (!navigator.clipboard?.writeText) return false;
     await navigator.clipboard.writeText(text);
@@ -2111,13 +2104,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   async syncClipboardFromSystem() {
-    const host = hostClipboard();
-    if (host) {
-      const text = await host.read();
-      if (text === null) return false;
-      get().applyExternalClipboardText(text);
-      return true;
-    }
     try {
       const text = await navigator.clipboard?.readText?.();
       if (text === undefined) return false; // no Clipboard API, or a stub that returns nothing
@@ -2488,8 +2474,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   copyText(text) {
-    // The same writer `copySelection` uses, so a copy made from a panel reaches the VS Code
-    // host's clipboard rather than a `navigator.clipboard` the webview refuses.
+    // The same writer `copySelection` uses.
     return writeSystemClipboard(text);
   },
 

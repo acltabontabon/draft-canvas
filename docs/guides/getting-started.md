@@ -4,9 +4,8 @@ In a few minutes you'll draw a small system, annotate it, walk someone through i
 it. The system is an API that puts orders on a queue for a worker to process.
 
 You need the app open: the [hosted version](https://acltabontabon.com/draft-canvas/editor/), a
-[Docker copy](../../README.md#running-it-yourself), or the
-[VS Code extension](vscode.md). Nothing here needs an account, and nothing you draw leaves your
-browser.
+[Docker copy](../../README.md#running-it-yourself), or the [desktop app](desktop.md). Nothing here
+needs an account, and nothing you draw leaves your machine.
 
 Shortcuts are written for a Mac. On Windows and Linux, read `⌘` as `Ctrl`.
 

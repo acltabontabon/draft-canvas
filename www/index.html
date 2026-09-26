@@ -25,14 +25,15 @@
       /*
        * Sends a known editor link on to the editor, and leaves everything else alone.
        *
-       * The editor used to live at this address. Every Draft Canvas for VS Code released so far (0.1.0
-       * through 0.1.6) loads `https://acltabontabon.com/draft-canvas/?host=vscode` into a webview frame,
-       * and those copies will never be updated — so this file, not the extension source, is what keeps
-       * them working. The extension's webview CSP is `frame-src https://acltabontabon.com/draft-canvas/`;
-       * a source expression whose path ends in `/` matches by prefix, so navigating the frame on to
+       * The editor used to live at this address. Copies of the retired Draft Canvas for VS Code up to
+       * 0.1.6 load `https://acltabontabon.com/draft-canvas/?host=vscode` into a webview frame, and a copy
+       * that is never updated will keep doing so — so this file is what gets them to the editor's
+       * retirement notice (src/ui/RetiredHostNotice.tsx) rather than a marketing page inside an IDE. The
+       * extension's webview CSP is `frame-src https://acltabontabon.com/draft-canvas/`; a source
+       * expression whose path ends in `/` matches by prefix, so navigating the frame on to
        * `/draft-canvas/editor/?host=vscode` is allowed by it.
        *
-       * `host=vscode` is the *only* URL parameter the app has ever understood (src/host/embeddedHost.ts).
+       * `host=vscode` is the *only* URL parameter the app has ever understood (src/lib/retiredHost.ts).
        * That makes this an allowlist rather than a catch-all: an ordinary visit, a `#section` anchor, a
        * campaign parameter, or anything else stays on the marketing page where it belongs. Nothing here
        * guesses.

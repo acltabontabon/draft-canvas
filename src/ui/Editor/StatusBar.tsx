@@ -6,7 +6,6 @@ import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { motionMs } from '../../lib/motion';
 import { DesktopStatus } from '../../desktop/ui/DesktopStatus';
-import { embeddedHost } from '../../host/embeddedHost';
 import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';
 import { pointsOf, unresolvedOpenPoints } from '../../document/openPoints';
@@ -84,11 +83,6 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
     <footer className="dc-status">
       {__DESKTOP__ && hostKind() === 'desktop' ? (
         <DesktopStatus />
-      ) : embeddedHost ? (
-        // The host saves the file and shows whether it's dirty; this browser's storage isn't involved.
-        <div className="dc-status-left">
-          <span className="dc-muted dc-status-hint">This diagram is the open file. Nothing you draw is uploaded.</span>
-        </div>
       ) : (
         <div className="dc-status-left">
           <span className="dc-save" data-status={save.status}>

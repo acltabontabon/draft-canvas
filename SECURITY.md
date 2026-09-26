@@ -96,10 +96,6 @@ Draft Canvas store them differently, and have their own trust boundaries:
   on every call and every retry; its input is validated like an imported file. What an agent reads goes to
   that agent's own model provider — the person's choice, outside Draft Canvas. Details:
   [Agent integration](docs/reference/agent-integration.md#security).
-- **VS Code** (`vscode-extension/`) doesn't bundle the editor: it frames the hosted one from
-  `acltabontabon.com` and hands it one file over `postMessage`. So the code editing your file is what
-  that site serves at the time, and it changes only on a Draft Canvas release. The file is plain JSON,
-  written by VS Code.
 - **Docker** serves the same static web app, so the browser storage above applies. Serving it over
   HTTPS is what lets browsers install the offline cache; saving works either way.
 
@@ -111,7 +107,7 @@ Fixes, security fixes included, ship in the next release; older versions don't g
 | --- | --- |
 | Web app (hosted), Docker image, Desktop | The latest `vX.Y.Z` release. They share one version and ship together. |
 | Desktop previews (`desktop-vX.Y.Z-alpha.N`) | Only until the next alpha or the release it leads to |
-| VS Code extension | The latest `extension-vX.Y.Z` release on the Marketplace |
+| VS Code extension | Retired. 0.2.0 is the last release and only says so; `.draftcanvas` files open in the web app or the desktop app ([guide](docs/guides/vscode-retired.md)) |
 
 ## Reporting a concern
 

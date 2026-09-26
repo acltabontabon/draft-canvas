@@ -10,8 +10,8 @@ The agent never places anything by coordinates, and never touches a file outside
 allow. Draft Canvas doesn't send your diagrams anywhere. Your agent does send what it reads and
 writes to its own AI provider, as it does with your code.
 
-This needs the desktop app, on macOS or Windows. The web app and VS Code open the diagrams it makes,
-but agents can't reach them.
+This needs the desktop app, on macOS or Windows. The web app opens the diagrams it makes, but agents
+can't reach it.
 
 ## Turn it on
 

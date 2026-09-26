@@ -1,8 +1,0 @@
-# Allowlist: ship the compiled extension and its Marketplace files, nothing else.
-**
-!out/extension.js
-!media/icon.png
-!package.json
-!README.md
-!CHANGELOG.md
-!LICENSE

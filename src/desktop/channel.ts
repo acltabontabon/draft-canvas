@@ -15,7 +15,7 @@ export interface HostLink {
 /**
  * The desktop's end of the line between app and host. Both live in this one page, so there's no
  * frame or origin to check: a message is passed straight across, and the controller plays the part
- * VS Code's extension does — it owns the file, the app owns the canvas.
+ * a host does — it owns the file, the app owns the canvas.
  */
 export function createHostLink(): { channel: HostChannel; link: HostLink } {
   let sink: ((data: unknown) => void) | null = null;

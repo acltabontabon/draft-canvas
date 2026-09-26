@@ -1,5 +1,4 @@
 import { Suspense, useEffect } from 'react';
-import { embeddedHost } from './host/embeddedHost';
 import { currentDesktopHost, hostKind, returnHome } from './host/hostInfo';
 import { useHostDocument } from './host/useHostDocument';
 import { useDocumentSession } from './store/useDocumentSession';
@@ -93,9 +92,7 @@ function Shell() {
         // Leaving the canvas that crashed shows Home again, instead of this message staying up.
         resetKey={session.openId}
         actions={[
-          ...(session.openId && !embeddedHost
-            ? [{ label: 'Return home', onClick: () => returnHome(session.closeDocument) }]
-            : []),
+          ...(session.openId ? [{ label: 'Return home', onClick: () => returnHome(session.closeDocument) }] : []),
           { label: 'Reload app', onClick: () => window.location.reload() },
         ]}
         onError={(error, componentStack) => {
@@ -111,11 +108,6 @@ function Shell() {
           <Suspense fallback={<div className="dc-editor-loading" aria-busy="true" />}>
             <DesktopHomeChunk.Component />
           </Suspense>
-        ) : embeddedHost ? (
-          // The host's file is the only document there is, so there's no Library to fall back to.
-          <div className="dc-editor-loading dc-host-waiting" aria-busy={host.error ? undefined : true}>
-            {host.error && <p role="alert">This file couldn't be opened as a diagram. {host.error}</p>}
-          </div>
         ) : (
           <LibraryScreen session={session} />
         )}

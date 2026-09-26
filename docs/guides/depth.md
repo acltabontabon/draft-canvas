@@ -88,7 +88,7 @@ also shows it, and clicking that chip opens **View level…**.
   *That is as deep as a canvas goes.* If you find yourself wanting more, the detail probably belongs in a
   separate diagram.
 - **It's all one file.** Rooms are saved inside the shape that owns them in the same `.draftcanvas`
-  document, so one file (or one VS Code tab) holds the whole picture. Copying or deleting a shape takes
+  document, so one file holds the whole picture. Copying or deleting a shape takes
   its room with it. Limits such as the total number of shapes count across every room.
 - **It's C4-aware, not a C4 tool.** Levels are labels that steer suggestions. They don't add shape
   types, enforce C4 rules, or generate separate diagrams.

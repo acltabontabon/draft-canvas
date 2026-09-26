@@ -4,9 +4,9 @@ Draft Canvas Desktop is the same editor in a window of its own, made for the mom
 diagram: click Draft Canvas in the menu bar or system tray, start a Quick Draft, and draw. What you draw is
 kept on your computer, and when you're done it is a `.draftcanvas` file wherever you choose to put it.
 
-Nothing about it needs an account, a server or a network connection. It is one of three ways to use
-Draft Canvas, and all three work on the same file: the [web app](getting-started.md), the
-[VS Code extension](vscode.md), and this. It is for macOS, on Apple Silicon or Intel, and Windows on x64.
+Nothing about it needs an account, a server or a network connection. It is one of two ways to use
+Draft Canvas, and both work on the same file: the [web app](getting-started.md) and this. It is for
+macOS, on Apple Silicon or Intel, and Windows on x64.
 
 ## Quick Draft
 
@@ -88,10 +88,9 @@ my-service/
     └── deployment.draftcanvas
 ```
 
-They open in Draft Canvas Desktop, open in [VS Code](vscode.md), show up in a pull request, and move and copy like
-any other file. Desktop adds nothing to the file: what it writes is byte for byte what the web app's
-**Export → Document** writes. The one companion is a background image, kept beside the file the way the VS Code
-extension keeps it.
+They open in Draft Canvas Desktop, show up in a pull request, and move and copy like any other file. Desktop
+adds nothing to the file: what it writes is byte for byte what the web app's **Export → Document** writes.
+The one companion is a background image, kept beside the file.
 
 Diagrams you made in the browser aren't shared with the desktop app. Move one over with **Export → Document →
 Editable** in the browser, and open the file. Encrypted `.dcenc` exports can't be opened in the desktop app yet:

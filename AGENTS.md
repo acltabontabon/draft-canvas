@@ -2,9 +2,9 @@
 
 Draft Canvas is a local-first React + TypeScript SPA (Vite) for explaining software visually.
 No backend, no accounts, and no network calls in the editor's code. The same editor ships as the web
-app, a Docker image, a Tauri 2 desktop app (`src-tauri/` + `src/desktop/`) and a VS Code extension
-(`vscode-extension/`). [`CONTRIBUTING.md`](CONTRIBUTING.md) has the repository map and how each
-platform saves a document.
+app, a Docker image and a Tauri 2 desktop app (`src-tauri/` + `src/desktop/`). [`CONTRIBUTING.md`](CONTRIBUTING.md)
+has the repository map and how each platform saves a document. (A VS Code extension existed until 2.0
+and is retired; `?host=vscode` now shows a notice, see `src/ui/RetiredHostNotice.tsx`.)
 
 ## Commands
 
@@ -95,7 +95,7 @@ Each of these has a failure mode that is silent, delayed, or both.
   erased burst leaves a dead undo step.
 - **A room is reached only through `src/depth/tree.ts` and the store's lens.** `editorStore`'s
   `document` is the room being edited (the whole file at the top, by identity); `fileOf` reassembles
-  the file, and only the handful of places that persist or export a *file* — autosave, the VS Code
+  the file, and only the handful of places that persist or export a *file* — autosave, the desktop
   host, `.draftcanvas` export, conflict resolution, the document-wide limits — may call it.
   Everything else keeps treating `document` as the whole diagram, which is what stops depth from
   becoming a conditional in every component. A room exists exactly when it holds at least one
@@ -185,8 +185,8 @@ out of the editor and a `fetch` out of `src/`. The editor deploys by copying `di
 `dist-web/editor/` unchanged; `vite.config.ts` knows nothing about any of it, and must not.
 `tests/site-isolation.test.ts` fails if either of those stops being true, and
 [`docs/reference/website.md`](docs/reference/website.md) explains how the editor's move off
-`/draft-canvas/` was made safe for saved diagrams, released VS Code extensions and the old service
-worker.
+`/draft-canvas/` was made safe for saved diagrams, copies of the retired VS Code extension and the old
+service worker.
 
 `src/starters/` sits beside `document/` (it imports only that, and is not part of the file format);
 `store/` and `commands/` consume it. `src/continuation/` sits there too (it imports `document/` and

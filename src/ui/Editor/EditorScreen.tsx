@@ -53,7 +53,6 @@ import { ErrorBoundary } from '../common/ErrorBoundary';
 import { PanelBoundary } from '../common/PanelBoundary';
 import { retryableLazy } from '../common/retryableLazy';
 import { motionMs } from '../../lib/motion';
-import { embeddedHost } from '../../host/embeddedHost';
 import { returnHome } from '../../host/hostInfo';
 import { PRODUCT } from '../../product';
 
@@ -437,7 +436,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         <Toolbar
           title={title}
           onTitleChange={rename}
-          onBack={embeddedHost ? undefined : () => returnHome(session.closeDocument)}
+          onBack={() => returnHome(session.closeDocument)}
           onPresent={onPresent}
           onExport={() => setExportOpen(true)}
         />
@@ -465,7 +464,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
                   void session.openDocument(session.openId!).then(() => setCanvasInstanceKey((k) => k + 1));
                 },
               },
-              ...(embeddedHost ? [] : [{ label: 'Return home', onClick: () => returnHome(session.closeDocument) }]),
+              { label: 'Return home', onClick: () => returnHome(session.closeDocument) },
             ]}
             onError={(error, componentStack) =>
               logDiagnostic(error, { operation: 'canvas-render', documentId: session.openId }, componentStack)
@@ -862,21 +861,9 @@ export function useKeyboard({
             if (key === 'c') state.copySelection();
             else state.cutSelection();
             return;
-          case 'v': {
-            // Framed by VS Code, a key pressed here never becomes a native paste event (nor Copy or
-            // Cut, which is why those are handled above), so ⌘V pastes from here, reading the
-            // clipboard through the host. Everywhere else the paste event does it — see `onPaste`.
-            if (!embeddedHost || event.shiftKey || presenting || modalIsOpen()) return;
-            event.preventDefault();
-            const target = pointer.known ? { x: pointer.x, y: pointer.y } : screenToFlowPosition(canvasCenter());
-            void state.syncClipboardFromSystem().then(() => {
-              // The read is async: nothing lands if a gesture, a dialog or a presentation began meanwhile.
-              if (useUiStore.getState().interactionActive || modalIsOpen()) return;
-              if (useEditorStore.getState().mode === 'present') return;
-              useEditorStore.getState().paste(target);
-            });
+          case 'v':
+            // The native paste event does the work — see `onPaste`.
             return;
-          }
           case 'd':
             event.preventDefault();
             // Held down, key repeat would stamp out a copy per repeat tick.

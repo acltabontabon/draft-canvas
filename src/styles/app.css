@@ -5886,3 +5886,38 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
 .dc-open-points-row:not([data-done]) .dc-open-points-resolve {
   opacity: 0.75;
 }
+
+/* The page a retired VS Code extension's frame lands on (`ui/RetiredHostNotice.tsx`): text and links, nothing else. */
+.dc-retired-host {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  color: var(--dc-text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.dc-retired-host h1 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+.dc-retired-host p,
+.dc-retired-host ol {
+  margin: 0 0 14px;
+}
+
+.dc-retired-host li {
+  margin-bottom: 6px;
+}
+
+.dc-retired-host-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.dc-retired-host-actions a {
+  color: var(--dc-selection);
+}

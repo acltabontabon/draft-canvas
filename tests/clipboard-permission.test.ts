@@ -12,16 +12,6 @@ vi.mock('../src/lib/preferences', () => ({
   writePreference: (key: string, value: string) => void prefs.set(key, value),
 }));
 
-const host = vi.hoisted(() => ({ value: null as 'vscode' | null, clipboard: false }));
-vi.mock('../src/host/embeddedHost', () => ({
-  get embeddedHost() {
-    return host.value;
-  },
-}));
-vi.mock('../src/host/hostClipboard', () => ({
-  hostClipboard: () => (host.clipboard ? { write: vi.fn(), read: vi.fn() } : null),
-}));
-
 const { requestClipboardRead } = await import('../src/lib/clipboardPermission');
 
 function fakeEditor(syncResult: boolean) {
@@ -42,35 +32,6 @@ describe('requestClipboardRead', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    host.value = null;
-    host.clipboard = false;
-  });
-
-  it('framed by a host that offers its clipboard: reads through it, with no dialog and no notice', async () => {
-    host.value = 'vscode';
-    host.clipboard = true;
-    const editor = fakeEditor(true);
-    const ui = fakeUi(true);
-
-    await requestClipboardRead(editor, ui);
-
-    expect(ui.requestClipboardPermission).not.toHaveBeenCalled();
-    expect(editor.syncClipboardFromSystem).toHaveBeenCalledOnce();
-    expect(ui.notify).not.toHaveBeenCalled();
-  });
-
-  it('framed by VS Code, which always refuses the read: no dialog, no read, no "blocked" notice', async () => {
-    host.value = 'vscode';
-    prefs.set('clipboard-permission', 'denied');
-    vi.stubGlobal('navigator', { ...navigator, clipboard: { readText: vi.fn() } });
-    const editor = fakeEditor(false);
-    const ui = fakeUi(true);
-
-    await requestClipboardRead(editor, ui);
-
-    expect(ui.requestClipboardPermission).not.toHaveBeenCalled();
-    expect(editor.syncClipboardFromSystem).not.toHaveBeenCalled();
-    expect(ui.notify).not.toHaveBeenCalled();
   });
 
   it('does nothing when the Clipboard API is unavailable — no dialog, no read, no notify', async () => {

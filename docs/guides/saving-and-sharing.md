@@ -4,8 +4,8 @@ Draft Canvas saves your work in your browser as you draw. It does not save it an
 guide separates what happens on its own from what you have to do, because the second list is what
 protects you from losing a diagram.
 
-*In VS Code?* The file is the storage there, and none of this applies. See
-[Working with `.draftcanvas` files in VS Code](vscode.md).
+*On the desktop?* The file is the storage there, and none of this applies. See
+[Draft Canvas Desktop](desktop.md).
 
 ## What happens on its own
 
@@ -120,7 +120,7 @@ The full contract is in the [schema reference](../reference/schema.md).
 There are no share links or accounts. Pick whichever of these fits:
 
 - **Send the file.** A `.draftcanvas` is readable by anyone who has it, and opens in the hosted app,
-  a self-hosted copy, or VS Code. For anything you wouldn't send as plain text, use `.dcenc` and send
+  a self-hosted copy, or the desktop app. For anything you wouldn't send as plain text, use `.dcenc` and send
   the passphrase by a different route.
 - **Put it in the repository.** `.draftcanvas` is stable JSON with a fixed field order, so an unchanged
   diagram produces identical bytes and edits show up as small diffs in review.

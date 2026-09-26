@@ -1,14 +1,11 @@
 import type { HostChannel } from './channel';
-import { embeddedHost } from './embeddedHost';
 
 /**
- * Which host is running the app, if any. `embeddedHost` is only the VS Code frame: the file is the
- * document there and there is no Library to go back to. The desktop app is a host too — its file is
- * the document as well, and it has a Home of its own — so it registers itself here at startup
- * (`src/desktop/boot.ts`), before anything renders, rather than the app testing for a Tauri
- * global wherever it needs to know.
+ * Which host is running the app, if any. The desktop app is the one host: its file is the document,
+ * and it has a Home of its own. It registers itself here at startup (`src/desktop/boot.ts`), before
+ * anything renders, rather than the app testing for a Tauri global wherever it needs to know.
  */
-export type HostKind = 'vscode' | 'desktop';
+export type HostKind = 'desktop';
 
 export interface DesktopHost {
   channel: HostChannel;
@@ -27,7 +24,7 @@ export function currentDesktopHost(): DesktopHost | null {
 }
 
 export function hostKind(): HostKind | null {
-  return desktopHost ? 'desktop' : embeddedHost;
+  return desktopHost ? 'desktop' : null;
 }
 
 /** Leaves the open document for Home. Unsaved work is the desktop shell's to settle first; anywhere else it is just closed. */

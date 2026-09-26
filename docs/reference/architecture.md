@@ -93,7 +93,7 @@ neither React nor React Flow. That single rule is what makes the file format sur
 | `export/` | `.draftcanvas` / `.dcenc` files, SVG, PNG, sequence diagrams, and the seam that saves a download |
 | `history/` | the undo/redo stack |
 | `openPoints/` | the marker geometry both renderers draw, and the overview derived from `DraftDocument.openPoints` |
-| `host/` | the protocol with a host that owns the file — VS Code or the desktop app ([Desktop](#desktop)) |
+| `host/` | the protocol with a host that owns the file — the desktop app ([Desktop](#desktop)) |
 | `desktop/` | the desktop app's own screens and its only route to Tauri (`desktop/tauri/`), compiled out of the web build |
 | `ui/` · `lib/` · `releases/` | everything around the canvas · small shared utilities and preferences · What's New data |
 
@@ -349,22 +349,22 @@ build, connect, undo, reload, export, delete, import, edit.
 
 ## Desktop
 
-The desktop app is a third *host* for the same editor, not a second editor. There is one React
-application; what differs is who owns the document.
+The desktop app is a *host* for the same editor, not a second editor. There is one React application;
+what differs is who owns the document.
 
 | Host | The document lives in | It talks to the app through |
 | --- | --- | --- |
 | Web | the browser (IndexedDB, `DraftRepository`) | nothing: the app owns it |
-| VS Code | the `.draftcanvas` file, owned by the extension, which frames the hosted editor (`APP_URL` in `vscode-extension/src/extension.ts`) rather than bundling it | `postMessage` across the webview's frame |
-| Desktop | the `.draftcanvas` file, owned by the desktop shell | the same messages, in the same page |
+| Desktop | the `.draftcanvas` file, owned by the desktop shell | messages, in the same page |
 
 A host that owns a file speaks the protocol in `src/host/embeddedHost.ts`: it sends the file's text, the app
 sends back every committed edit as the whole serialized document, and saving is the host's. `useHostDocument`
-is the app's side of that conversation and knows only a `HostChannel` (`src/host/channel.ts`). VS Code's
-channel is the frame; the desktop's (`src/desktop/channel.ts`) hands the message across in-process.
+is the app's side of that conversation and knows only a `HostChannel` (`src/host/channel.ts`); the desktop's
+(`src/desktop/channel.ts`) hands the message across in-process. (The retired VS Code extension was a second
+host, over `postMessage` into a webview frame; the protocol kept its message names when it left.)
 
-The other end of the desktop's channel is `DesktopController` (`src/desktop/controller.ts`), which plays the
-part of VS Code's extension: it knows what file is open, whether it has unsaved changes, and how to save it,
+The other end of the desktop's channel is `DesktopController` (`src/desktop/controller.ts`): it knows what
+file is open, whether it has unsaved changes, and how to save it,
 and it keeps a recoverable copy of any work that isn't in a file yet. It has no React and no Tauri in it, and
 talks to the shell only through the `DesktopApi` interface (`src/desktop/api.ts`). Exactly one module
 implements that interface with Tauri calls, `src/desktop/tauri/`, and a test fails if any other imports

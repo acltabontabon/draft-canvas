@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createDocument } from '../document/factory';
 import { deserializeDocument, serializeDocument } from '../export/project';
 import { logDiagnostic } from '../lib/diagnostics';
@@ -6,22 +6,10 @@ import { isEditableTarget } from '../lib/isEditableTarget';
 import { useUiStore } from '../store/uiStore';
 import type { DocumentSession } from '../store/useDocumentSession';
 import type { HostChannel } from './channel';
-import {
-  chordOf,
-  embeddedHost,
-  type BackgroundMessage,
-  type ClipboardMessage,
-  type CommandMessage,
-  type LoadMessage,
-  type ToHostMessage,
-} from './embeddedHost';
-import { hostClipboard, setHostClipboard, type HostClipboard } from './hostClipboard';
+import type { BackgroundMessage, CommandMessage, LoadMessage, ToHostMessage } from './embeddedHost';
 import { base64ToBlob, blobToBase64 } from './hostBackground';
-import { handleTextChord } from './hostTextEditing';
-import { vscodeChannel } from './vscodeChannel';
 
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
-const CLIPBOARD_READ_TIMEOUT_MS = 1500;
 const BACKGROUND_READ_TIMEOUT_MS = 3000;
 
 export interface HostDocumentState {
@@ -33,24 +21,19 @@ export interface HostDocumentState {
 }
 
 /**
- * Connects the open document to the host's file when a host owns it: VS Code framing the app (see
- * `embeddedHost`), or the desktop shell in this same page. Which one is the `channel`'s business;
- * what is said across it is the same for both.
+ * Connects the open document to the host's file when a host owns it: the desktop shell, in this
+ * same page (`src/desktop/channel.ts`). With no `channel` given nothing happens — the web app owns
+ * its own documents.
  *
  * The host sends the file's text; every committed edit goes straight back as the whole serialized
- * document. There's no debounce: the host can remove the frame at any moment (closing its tab never
- * blurs the frame first), so anything not already posted would be lost. ⌘S is forwarded because a
- * key pressed inside a cross-origin frame never reaches the host's own shortcuts — and neither do the
- * others the host lists (⌘P, ⌘W), nor Select All, Copy, Cut, Paste and Undo in a text field, which the
- * app does itself. Links to other sites go to the host too, since the frame isn't allowed to open a window.
- *
- * With no `channel` given, VS Code's is used when the app is framed by it, and nothing happens otherwise.
+ * document. There's no debounce: the host can take the document away at any moment, so anything not
+ * already posted would be lost. ⌘S is forwarded so the shell saves; links to other sites go to the
+ * host too, which opens them in the system browser.
  */
 export function useHostDocument(session: DocumentSession, channel?: HostChannel | null): HostDocumentState {
   const [state, setState] = useState<HostDocumentState>({ error: null, invalidWhileOpen: false });
   const { ready, repository, openDocument } = session;
-  const framed = useMemo(() => (embeddedHost ? vscodeChannel() : null), []);
-  const host = channel ?? framed;
+  const host = channel ?? null;
 
   // Read through a ref: the session is a new object on every render, and putting it in the effect's
   // dependencies would tear the host down and set it up again on each one.
@@ -87,7 +70,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
     let lastChange: Promise<void> = Promise.resolve();
     let unsubscribe: (() => void) | undefined;
     let disposed = false;
-    // Loads run one at a time, and only the newest waiting one runs: VS Code can send the file twice
+    // Loads run one at a time, and only the newest waiting one runs: a host can send the file twice
     // in quick succession (on restore, the saved text and then the unsaved edits it kept), and an
     // older load finishing last would show — and then write back — stale contents.
     let queued: LoadMessage | null = null;
@@ -96,29 +79,8 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
 
     const post = (message: ToHostMessage) => host.post(message);
 
-    // What the host said it does for the app (see `LoadMessage`): none of it is used until then.
-    let textEditing = false;
-    let hostKeys = new Set<string>();
+    // What the host said it does for the app (see `LoadMessage`): not used until then.
     let hostKeepsBackground = false;
-
-    let clipboardReadId = 0;
-    const clipboardReads = new Map<number, (text: string | null) => void>();
-    const clipboard: HostClipboard = {
-      write: (text, plain) => post({ type: 'draft-canvas:clipboard-write', text, ...(plain ? { plain } : {}) }),
-      read: (plain) =>
-        new Promise((resolve) => {
-          const id = ++clipboardReadId;
-          const settle = (text: string | null) => {
-            window.clearTimeout(timeout);
-            clipboardReads.delete(id);
-            resolve(text);
-          };
-          // A paste waits on this; a host that never answers mustn't hold it forever.
-          const timeout = window.setTimeout(() => settle(null), CLIPBOARD_READ_TIMEOUT_MS);
-          clipboardReads.set(id, settle);
-          post({ type: 'draft-canvas:clipboard-read', id, ...(plain ? { plain } : {}) });
-        }),
-    };
 
     let backgroundReadId = 0;
     const backgroundReads = new Map<number, (image: Partial<BackgroundMessage>) => void>();
@@ -255,11 +217,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
 
     // What the channel hands over has already passed its check of who sent it.
     const onMessage = (message: unknown) => {
-      const reply = message as (Partial<ClipboardMessage> & Partial<BackgroundMessage>) | null;
-      if (reply?.type === 'draft-canvas:clipboard') {
-        if (typeof reply.id === 'number') clipboardReads.get(reply.id)?.(typeof reply.text === 'string' ? reply.text : null);
-        return;
-      }
+      const reply = message as Partial<BackgroundMessage> | null;
       if (reply?.type === 'draft-canvas:background') {
         if (typeof reply.id === 'number') backgroundReads.get(reply.id)?.(reply);
         return;
@@ -286,10 +244,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       }
       const data = message as Partial<LoadMessage> | null;
       if (data?.type !== 'draft-canvas:load' || typeof data.text !== 'string') return;
-      if (data.clipboard === true) setHostClipboard(clipboard);
-      textEditing = data.clipboard === true && data.textEditing === true;
       hostKeepsBackground = data.background === true;
-      hostKeys = new Set(Array.isArray(data.keys) ? data.keys.filter((chord): chord is string => typeof chord === 'string') : []);
       const seq = typeof data.seq === 'number' ? data.seq : undefined;
       // Only while a document is open: after Home has been showing, the same text is a file to open again.
       if (data.text === hostText && !queued && !invalid && sessionRef.current.openId !== null) {
@@ -327,31 +282,17 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-      if (textEditing && handleTextChord(event, clipboard)) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      if (!event.altKey && event.key.toLowerCase() === 's') {
-        event.preventDefault();
-        void flush().then(() => post({ type: 'draft-canvas:save', saveAs: event.shiftKey }));
-        return;
-      }
-      const chord = event.repeat ? null : chordOf(event);
-      if (!chord || !hostKeys.has(chord)) return;
-      // Whether the app used it is only known once every listener has run: its own ⌘K, ⌘E and the rest win.
-      window.setTimeout(() => {
-        if (!event.defaultPrevented) void flush().then(() => post({ type: 'draft-canvas:key', chord }));
-      }, 0);
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      void flush().then(() => post({ type: 'draft-canvas:save', saveAs: event.shiftKey }));
     };
 
     const onLinkClick = (event: MouseEvent) => {
       if (event.button > 1 || !(event.target instanceof Element)) return;
       const link = event.target.closest<HTMLAnchorElement>('a[href]');
       if (!link || !EXTERNAL_PROTOCOLS.has(link.protocol)) return;
-      // Only a jump within this page stays here. Any other page — this site's own home page included
-      // — would need a new window, which the frame isn't allowed to open.
+      // Only a jump within this page stays here. Any other page opens in the system browser, through
+      // the host.
       const inPage =
         link.origin === window.location.origin &&
         link.pathname === window.location.pathname &&
@@ -376,8 +317,6 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       window.removeEventListener('auxclick', onLinkClick, true);
       window.clearTimeout(pending);
       unsubscribe?.();
-      if (hostClipboard() === clipboard) setHostClipboard(null);
-      for (const settle of [...clipboardReads.values()]) settle(null);
       for (const settle of [...backgroundReads.values()]) settle({});
     };
   }, [ready, repository, openDocument, host]);

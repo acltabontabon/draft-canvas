@@ -20,9 +20,10 @@ const appVersion = JSON.parse(
  * The same promise the app makes, enforced by the browser: `connect-src 'none'` means this page
  * cannot fetch, XHR, beacon or open a socket to anywhere, including github.com.
  *
- * Deliberately absent: `frame-ancestors`. Every Draft Canvas for VS Code released so far loads
- * `/draft-canvas/?host=vscode` inside a webview frame, and public/boot.js is what forwards it to
- * the editor. A `frame-ancestors` directive here would break that frame before boot.js ever ran.
+ * Deliberately absent: `frame-ancestors`. Copies of the retired Draft Canvas for VS Code up to 0.1.6
+ * load `/draft-canvas/?host=vscode` inside a webview frame, and the inline script in index.html
+ * forwards it to the editor's retirement notice. A `frame-ancestors` directive here would break that
+ * frame before the script ever ran.
  */
 const DIRECTIVES = [
   "default-src 'self'",

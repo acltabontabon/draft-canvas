@@ -21,7 +21,7 @@ That's everything the editor needs. Two parts need more, and only when you work 
   minimum is `rust-version` in `src-tauri/Cargo.toml`) and Tauri's
   [system prerequisites](https://v2.tauri.app/start/prerequisites/) — see
   [Building it yourself](docs/guides/desktop.md#building-it-yourself).
-- **The landing page** (`www/`) and **the VS Code extension** (`vscode-extension/`) each have their own
+- **The landing page** (`www/`) has its own
   `package.json` and lockfile: `npm ci` inside the folder once.
 
 ## Commands
@@ -63,7 +63,6 @@ either one distribution's own shell or tooling around the editor.
 | `src/desktop/` | The desktop app's screens and logic (Home, Browse, updates, the tray panel), compiled out of the web build |
 | `src-tauri/` | The desktop app's native side in Rust (Tauri 2): windows, tray, dialogs, file I/O, updater |
 | `src-tauri/mcp/` | `draft-canvas-mcp`, the MCP connector an AI agent launches; bundled inside the desktop app ([Agent integration](docs/reference/agent-integration.md)) |
-| `vscode-extension/` | Draft Canvas for VS Code: one source file that frames the hosted editor. Own version, changelog and [release process](vscode-extension/RELEASING.md) |
 | `www/` | The landing page at <https://acltabontabon.com/draft-canvas/>: a separate Vite project sharing no dependency with the app ([The website](docs/reference/website.md)) |
 | `tests/` | Vitest unit and integration tests; `tests/desktop/` for the desktop controller |
 | `e2e/` | Playwright specs; `e2e/desktop/` runs the desktop screens against a mock shell |
@@ -100,14 +99,14 @@ laid out and checked in `src/agent/`, with the layout itself in `src/layout/`; n
 
 **Entry points.** `index.html` → `src/main.tsx` → `src/App.tsx`, which has no router: it shows the
 Library (web), Home (desktop), or the editor once a document is open. The desktop app starts with
-`src/desktop/boot.ts`; the VS Code extension's side is `vscode-extension/src/extension.ts`.
+`src/desktop/boot.ts`.
 
-**One editor, three hosts.** Shared code doesn't branch on the platform itself; a few seams do:
+**One editor, two hosts.** Shared code doesn't branch on the platform itself; a few seams do:
 
 - `__DESKTOP__` is a build-time constant (`vite build --mode desktop`), so desktop-only code is
   compiled out of the web build.
-- `hostKind()` in `src/host/hostInfo.ts` says, at run time, whether a host owns the file: VS Code
-  (the app is framed with `?host=vscode`) or the desktop app.
+- `hostKind()` in `src/host/hostInfo.ts` says, at run time, whether a host owns the file: the desktop
+  app, or nobody (the web app owns its own documents).
 - `getRepository()` in `src/storage/index.ts` picks where documents live, and `setFileSaver()` in
   `src/export/download.ts` picks how an export is saved.
 - Only `src/desktop/tauri/` may import `@tauri-apps/*`; `tests/privacy.test.ts` enforces it.
@@ -118,7 +117,6 @@ Library (web), Home (desktop), or the editor once a document is open. The deskto
 | --- | --- |
 | Web | `store/useDocumentSession.ts` → `storage/autosave.ts` → `IndexedDbRepository` (plain records; `src/crypto/` reads the rows earlier builds encrypted) |
 | Desktop | `host/useHostDocument.ts` → `desktop/controller.ts` → `desktop/tauri/api.ts` → Rust `src-tauri/src/commands/documents.rs` and `docio.rs` |
-| VS Code | `host/useHostDocument.ts` + `host/vscodeChannel.ts` ⇄ `vscode-extension/src/extension.ts`, which writes the file through VS Code |
 
 Everything that comes in — a file opened, imported or handed over by a host, a paste, a document
 read back from IndexedDB — goes through `parseDocument` in `src/document/validate.ts`, which migrates
@@ -135,7 +133,6 @@ reaches the canvas. Files arrive through `src/export/project.ts`.
 | Anything only the desktop app uses (`src/desktop/`, `src-tauri/`, `tray.html`) | `npm run desktop:check` and `npm run e2e:desktop` |
 | AI agent support (`src/agent/`, `src/layout/`, `src-tauri/src/agent/`, `src-tauri/mcp/`) | The above, plus `npm run agent:schemas` if `src/agent/schema.ts` changed, and `npx tsx e2e/agent-gallery.ts --base <dev server> --out <dir>` to look at the layout gallery in both themes |
 | The landing page (`www/`) or `scripts/assemble-web.mjs` | `npm run e2e:web` |
-| The VS Code extension | In `vscode-extension/`: `npm run compile`, `npx vsce package`, `npm run check:vsix -- <file>.vsix`, and `npm run smoke -- <file>.vsix` (it downloads VS Code) |
 | `Dockerfile`, `nginx.conf` | `docker build .`, then run the image and open it |
 | Offline behaviour or the service worker | `npm run e2e:offline` |
 
@@ -154,8 +151,8 @@ document model.
 ## Reporting a bug, proposing a change
 
 - **Bugs:** [open a bug report](https://github.com/acltabontabon/draft-canvas/issues/new/choose). Say
-  where you ran it (web, Docker, desktop, VS Code, or from source) and which version (About, or the
-  Extensions view for VS Code), with steps that reproduce it — ideally on a fresh canvas. A
+  where you ran it (web, Docker, desktop, or from source) and which version (About), with steps that
+  reproduce it — ideally on a fresh canvas. A
   `.draftcanvas` file that shows the problem is the most useful attachment there is, once you've
   checked it holds nothing private.
 - **Ideas:** open a feature request that starts from the problem, not the solution.
@@ -272,9 +269,6 @@ other `###` heading beside them is an error.
 
 A version may open with one short intro paragraph, which What's New shows as the release's summary.
 
-The VS Code extension keeps its own [`vscode-extension/CHANGELOG.md`](vscode-extension/CHANGELOG.md);
-a change to the extension alone goes there instead.
-
 ### Highlights for What's New
 
 What's New shows a handful of a release's bullets, not all of them. Mark the ones worth telling
@@ -343,8 +337,8 @@ worth putting in CI. It is written for someone who found the image before they f
 so it repeats what the README says rather than linking to it — which also means it does not follow
 along on its own. Give it a look when a release changes what the product is.
 
-Draft Canvas for VS Code (`vscode-extension/`) is released separately, from `extension-vX.Y.Z` tags,
-with its own version and changelog — see [`vscode-extension/RELEASING.md`](vscode-extension/RELEASING.md).
+Draft Canvas for VS Code is retired; its final release is the `extension-v0.2.0` tag, and its source,
+changelog and release process live at that tag.
 
 Draft Canvas Desktop (`src-tauri/`) has no version or release of its own: it ships in every `vX.Y.Z`
 release above. The one exception is a desktop preview ahead of a release, from a

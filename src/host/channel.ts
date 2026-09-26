@@ -1,12 +1,13 @@
 import type { ToHostMessage } from './embeddedHost';
 
 /**
- * The line between the app and whatever owns its file: a VS Code webview across a frame, or the
+ * The line between the app and whatever owns its file: the desktop shell, in the same page (once also a
+ * VS Code webview across a frame, before that extension was retired), or the
  * desktop shell in this same page. `useHostDocument` speaks only this, so what the app says to a
  * host — and what a host may say back — is the same whichever one is on the other end.
  */
 export interface HostChannel {
-  readonly kind: 'vscode' | 'desktop';
+  readonly kind: 'desktop';
   /**
    * Starts listening. `onMessage` receives every message the host sent that has passed this
    * channel's own check of who sent it. Returns a function that stops listening.

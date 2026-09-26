@@ -70,8 +70,8 @@ sentence does not have to wait for a release. The two share the `pages` concurre
 The editor half only ever changes on a release. On a `vX.Y.Z` tag, both halves come from that tag.
 Anywhere else — a site-only push, or a run on demand from a branch — `pages.yml` checks out the
 newest stable `vX.Y.Z`, lays the commit's `www/` and `scripts/assemble-web.mjs` over it, and builds
-that. So `/draft-canvas/editor/`, which installed VS Code extensions load, never serves unreleased
-code, and the site's download links carry a version whose installers exist.
+that. So `/draft-canvas/editor/` never serves unreleased code, and the site's download links carry a
+version whose installers exist.
 
 They are two files rather than two triggers on one because a `push` filtered by both refs and paths
 requires every filter to match — adding a path filter to `pages.yml` would also gate the release tags
@@ -101,15 +101,13 @@ still running the old editor keeps running it until it navigates. So a returning
 stale editor load at `/draft-canvas/` before the worker retires. Their work is autosaved throughout,
 and the next visit is the landing page.
 
-**Released VS Code extensions.** Every version up to 0.1.6 frames
-`https://acltabontabon.com/draft-canvas/?host=vscode` (0.1.7 frames `/draft-canvas/editor/` directly),
-and copies that are never updated will keep doing so. The
-landing page carries a small inline script that forwards a `?host=vscode` frame — the only URL
-parameter the app has ever understood — on to the editor. The webview's own CSP is
-`frame-src https://acltabontabon.com/draft-canvas/`, and a source expression whose path ends in `/`
-matches by prefix, so the hop is allowed. `e2e/web-deploy.spec.ts` loads the built page inside a
-reproduction of that webview to prove it.
-
-Updating `APP_URL` in the extension source only removes that hop for people who update; it does
-nothing for anyone already installed, which is why the script on the page is what the compatibility
-actually rests on.
+**The retired VS Code extension.** Draft Canvas for VS Code is retired (see
+[the guide](../guides/vscode-retired.md)); its last release, 0.2.0, frames nothing. But copies up to 0.1.6
+frame `https://acltabontabon.com/draft-canvas/?host=vscode`, 0.1.7 frames `/draft-canvas/editor/?host=vscode`,
+and a copy that is never updated will keep doing so. The landing page carries a small inline script
+that forwards a `?host=vscode` frame on to the editor (the webview's CSP, `frame-src
+https://acltabontabon.com/draft-canvas/`, matches by prefix, so the hop is allowed), and the editor
+answers that parameter with a static page saying the extension is retired and where the file opens
+(`src/ui/RetiredHostNotice.tsx`) — never the Library, which would open this origin's storage inside
+someone's IDE. `e2e/web-deploy.spec.ts` loads the built page inside a reproduction of that webview to
+prove the hop, and the notice at the end of it. Both stay until no such copy can plausibly be left.
