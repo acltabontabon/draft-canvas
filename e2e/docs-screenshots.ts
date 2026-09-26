@@ -41,6 +41,23 @@ const VIEWPORT = { width: 1200, height: 640 };
 
 const CANVAS = '.react-flow__pane';
 
+/** Every starter in the catalog, in `docs/guides/examples.md`'s order — id for the file name, name as the palette lists it. */
+const STARTERS: ReadonlyArray<readonly [string, string]> = [
+  ['monolith', 'Monolith'],
+  ['modular-monolith', 'Modular Monolith'],
+  ['microservices', 'Microservices'],
+  ['event-driven', 'Event-Driven'],
+  ['hexagonal', 'Hexagonal'],
+  ['bff', 'Backend for Frontend'],
+  ['cqrs', 'CQRS'],
+  ['medallion', 'Medallion'],
+  ['kappa', 'Kappa'],
+  ['cdc', 'Change Data Capture'],
+  ['saga-orchestration', 'Saga – Orchestration'],
+  ['saga-choreography', 'Saga – Choreography'],
+  ['transactional-outbox', 'Transactional Outbox'],
+];
+
 const log = (line: string) => process.stdout.write(`${line}\n`);
 
 async function startServer(): Promise<() => Promise<void>> {
@@ -152,6 +169,15 @@ async function connectNodes(page: Page, from: number, to: number) {
   await page.mouse.up();
   await page.keyboard.press('Escape');
   await levelWith(page, from, to);
+}
+
+/** Runs one palette command by name, the way a reader following the docs would. */
+async function palette(page: Page, query: string) {
+  await page.keyboard.press('Control+k');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.type(query);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toBeHidden();
 }
 
 async function main() {
@@ -330,6 +356,25 @@ async function main() {
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
     await expect(page.getByText('Order processing')).toBeVisible();
     await shot(page, 'library');
+
+    // ── Architecture examples ──────────────────────────────────────────────────────────────
+    // One picture per starter, each on its own fresh canvas, framed by "Fit to view" so the picture
+    // is the whole architecture and not wherever the camera happened to be. Names are typed into the
+    // palette exactly as `docs/guides/examples.md` lists them, so a renamed starter breaks here first.
+    log('examples');
+    for (const [id, name] of STARTERS) {
+      await page.getByRole('button', { name: 'New canvas' }).first().click();
+      await expect(page.locator('.dc-editor')).toBeVisible();
+      // The pane has to hold focus for the palette's chord, as in the keyboard section above.
+      await page.locator(CANVAS).click({ position: { x: 8, y: 8 } });
+      await palette(page, name);
+      await expect(page.locator('.dc-node').first()).toBeVisible();
+      await page.locator(CANVAS).click({ position: { x: 8, y: 8 } }); // nothing selected in the picture
+      await palette(page, 'Fit to view');
+      await shot(page, `example-${id}`, await box(page.locator(CANVAS)));
+      await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+      await expect(page.getByRole('button', { name: 'New canvas' }).first()).toBeVisible();
+    }
 
     await context.close();
   } finally {

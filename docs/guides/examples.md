@@ -35,5 +35,63 @@ ever a starting point. Every one lands on the canvas you are on and never replac
 The shapes it creates are ordinary shapes; delete, rename and rewire them as you would anything else,
 and the connectors keep labelling themselves as you do.
 
+
+## What each one draws
+
+Every picture below is the starter exactly as it lands, framed with **Fit to view** (`⌘K`, then
+`Fit to view`); the pictures are regenerated from the app with `npx tsx e2e/docs-screenshots.ts`.
+
+### Monolith
+
+![Monolith, as the starter draws it.](../media/guides/example-monolith.png)
+
+### Modular Monolith
+
+![Modular Monolith, as the starter draws it.](../media/guides/example-modular-monolith.png)
+
+### Microservices
+
+![Microservices, as the starter draws it.](../media/guides/example-microservices.png)
+
+### Event-Driven
+
+![Event-Driven, as the starter draws it.](../media/guides/example-event-driven.png)
+
+### Hexagonal
+
+![Hexagonal, as the starter draws it.](../media/guides/example-hexagonal.png)
+
+### Backend for Frontend
+
+![Backend for Frontend, as the starter draws it.](../media/guides/example-bff.png)
+
+### CQRS
+
+![CQRS, as the starter draws it.](../media/guides/example-cqrs.png)
+
+### Medallion
+
+![Medallion, as the starter draws it.](../media/guides/example-medallion.png)
+
+### Kappa
+
+![Kappa, as the starter draws it.](../media/guides/example-kappa.png)
+
+### Change Data Capture
+
+![Change Data Capture, as the starter draws it.](../media/guides/example-cdc.png)
+
+### Saga – Orchestration
+
+![Saga – Orchestration, as the starter draws it.](../media/guides/example-saga-orchestration.png)
+
+### Saga – Choreography
+
+![Saga – Choreography, as the starter draws it.](../media/guides/example-saga-choreography.png)
+
+### Transactional Outbox
+
+![Transactional Outbox, as the starter draws it.](../media/guides/example-transactional-outbox.png)
+
 See also [Shapes, connectors and boundaries](shapes-and-connectors.md) for what the shapes mean, and
 [Architecture semantics](../reference/semantics.md) for the rules every connector follows.

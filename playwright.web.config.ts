@@ -10,6 +10,11 @@ import { defineConfig, devices } from '@playwright/test';
  * a legacy editor link that stopped being forwarded. Those are exactly the failures that only
  * appear in production, which is why this config exists.
  */
+// A preview server left running from an earlier build (`reuseExistingServer`) serves the site as it
+// stood then, and the suite would quietly pass or fail against stale files. `DC_WEB_PORT=4199` puts
+// a run on a port of its own, with a fresh build behind it.
+const port = Number(process.env.DC_WEB_PORT ?? 4174);
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: 'web-deploy.spec.ts',
@@ -23,13 +28,13 @@ export default defineConfig({
     : [['list']],
   timeout: 60_000,
   use: {
-    baseURL: 'http://localhost:4174',
+    baseURL: `http://localhost:${port}`,
     trace: 'on-first-retry',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run site:preview',
-    url: 'http://localhost:4174/draft-canvas/',
+    command: `npm run site:preview -- ${port}`,
+    url: `http://localhost:${port}/draft-canvas/`,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
   },

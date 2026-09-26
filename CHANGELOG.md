@@ -43,7 +43,7 @@ system, keeps every diagram readable, and leaves two products: the web editor an
   and is the way to protect a diagram at rest. [What changed and why](SECURITY.md#browser-storage). <!-- highlight -->
 - **Five starters up front.** Monolith, Microservices, Event-Driven, Hexagonal and CQRS are offered
   wherever you start a diagram; the other eight stay in the catalog, by name in the command palette,
-  and are listed in [Architecture examples](docs/guides/examples.md). The Browse-all dialog, the
+  and are pictured in [Architecture examples](docs/guides/examples.md). The Browse-all dialog, the
   category index and the home screens' decorations (the connector to the starters, the daily line,
   the arrival animations) are gone. Diagrams already drawn from any starter are untouched.
 - **The command palette says "No matching commands."** when nothing matches, instead of handing the
