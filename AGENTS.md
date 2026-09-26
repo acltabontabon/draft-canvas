@@ -153,7 +153,9 @@ Each of these has a failure mode that is silent, delayed, or both.
   (`uiStore.presentation`) are transient; nothing about presenting is saved, undone or exported. The
   signal along the active connector (`DraftEdgeView`'s `.dc-signal`) is keyed on the transition so it
   plays once and unmounts when the step moves on — never a loop, and never anything that finishes
-  after a later press. The camera decides *whether* to move in `presentation/framing.ts` (pure) and
+  after a later press. The step's shapes are lit along their own contour (`canvas/emphasis.ts`
+  traces the silhouette `describeNode` drew; `DraftNodeView` paints it behind the surface with one
+  halo) — never a box around the node, and keyed the same way. The camera decides *whether* to move in `presentation/framing.ts` (pure) and
   judges against the camera it asked for while a move is in flight (`useFlowPlayback`), which is
   what makes a burst of presses converge instead of skipping a reframe. A presenter's own pan sets
   `framing: 'manual'`, and guided framing stands down until asked back.

@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type CSSProperties } from 'react';
 import { serialize, type SvgEl } from '../render/svg/element';
 
 interface SvgSurfaceProps {
@@ -6,6 +6,11 @@ interface SvgSurfaceProps {
   height: number;
   children: SvgEl[];
   className?: string;
+  /** Room past the display list's own box on every side, in its units — for chrome (a halo) that
+   *  has to show beyond the shape's edge. The list's origin stays where it is. */
+  bleed?: number;
+  style?: CSSProperties;
+  'data-role'?: string;
 }
 
 /**
@@ -27,14 +32,19 @@ export const SvgSurface = memo(function SvgSurface({
   height,
   children,
   className,
+  bleed = 0,
+  style,
+  'data-role': role,
 }: SvgSurfaceProps) {
   const markup = children.map(serialize).join('');
   return (
     <svg
       className={className}
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
+      style={style}
+      data-role={role}
+      width={width + bleed * 2}
+      height={height + bleed * 2}
+      viewBox={`${-bleed} ${-bleed} ${width + bleed * 2} ${height + bleed * 2}`}
       aria-hidden="true"
       focusable="false"
       dangerouslySetInnerHTML={{ __html: markup }}

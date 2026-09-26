@@ -116,8 +116,12 @@ describe('stepContextOf', () => {
     expect([...context.crossed]).toEqual(['g']);
     expect(context.transitionKey).toBe('f:1:request');
     expect(stepContextOf({ document, flowPlayback })).toBe(context);
-    // The reply half is its own transition.
-    expect(stepContextOf({ document, flowPlayback: { ...flowPlayback, phase: 'response' } })!.transitionKey).toBe('f:1:response');
+    // The reply half is its own transition, and it arrives back at the caller.
+    const reply = stepContextOf({ document, flowPlayback: { ...flowPlayback, phase: 'response' } })!;
+    expect(reply.transitionKey).toBe('f:1:response');
+    expect([...reply.sources]).toEqual(['b']);
+    expect([...reply.targets]).toEqual(['a']);
+    expect([...reply.crossed]).toEqual(['g']);
   });
 
   it('has no step context in an overview or with nothing playing', () => {

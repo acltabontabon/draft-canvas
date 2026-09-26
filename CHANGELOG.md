@@ -26,6 +26,16 @@ the release notes and the in-app What's New are generated from here. See
   an image without them. Deleting an element takes its point; undo brings both back. Document format
   v16. <!-- highlight -->
 
+#### Changed
+
+- **Presentation lights the shape, not a box around it.** The step's destination used to get a
+  rounded rectangle drawn around its whole bounds, label included — an editor's selection box on a
+  database cylinder. It now glows along its own outline: the shape's line a little heavier, with a
+  small soft halo that follows the cylinder, tube, card or bust it actually is, in the shape's own
+  colour. The source wears the same at half strength, so the pair reads as a pair. The halo arrives
+  with the signal and then holds still; reduced motion shows the settled state straight away. On a
+  request/response connector the reply lights the caller as it lands.
+
 ### Desktop
 
 #### Added

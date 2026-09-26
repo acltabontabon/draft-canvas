@@ -216,6 +216,11 @@ returns to the whole path after the last. The overviews light every member at on
 `edgeTierInPlayback`/`nodeTierInPlayback` in `document/flow.ts`); a step lights one interaction and
 plays its signal — one stroke along the active connector's own drawn path (`DraftEdgeView`'s
 `.dc-signal`, keyed per transition so it plays once and never finishes late), then stillness. The
+step's two shapes are lit along their own contour rather than boxed: `canvas/emphasis.ts` takes the
+filled bodies out of the very display list `describeNode` drew and `DraftNodeView` paints them
+behind the surface, heavier and with one soft halo, so a cylinder is lit as a cylinder and a label
+is never touched — the destination in full, the source at half strength, in the shape's own colour
+(chrome, so it never reaches an export). The
 camera is directed, not centred: `presentation/composition.ts` says what a step is a picture of
 (its shapes, the connector as drawn, a boundary it crosses) and `presentation/framing.ts` decides
 whether the camera holds, slides or cuts to show it — pure functions, tested on their own — while

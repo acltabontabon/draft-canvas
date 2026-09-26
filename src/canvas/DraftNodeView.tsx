@@ -34,6 +34,7 @@ import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 import { layerBehind } from './insideMark';
+import { emphasisColorOf, emphasisOf } from './emphasis';
 import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
 import { nodeMarkerOrigin } from '../openPoints/marker';
@@ -51,6 +52,10 @@ import { presentationScope, toggledReveal } from '../presentation/presentationAt
  * representable in a display list, which is exactly why it cannot leak into an
  * exported image.
  */
+/** How far past a shape's box its emphasis may reach (`canvas.css` positions `.dc-emphasis` by the
+ *  same amount): the heavier outline plus the halo's full extent, so neither is ever clipped. */
+const EMPHASIS_BLEED = 12;
+
 export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, height }: NodeProps) {
   const node = useEditorStore((state) => selectNode(state.document, id));
   const mode = useEditorStore((state) => state.mode);
@@ -58,12 +63,15 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // change, and only the nodes whose tier actually flips re-render.
   const explainTier = useEditorStore((state) => explainTierFor(state, id));
   // Its part in the step being explained (where the signal leaves from, where it arrives, or the
-  // boundary it crosses) — a string, for the same reason as the tier — and, for the destination
-  // only, the transition to greet the signal's arrival with; `null` everywhere else.
+  // boundary it crosses) — a string, for the same reason as the tier; `null` everywhere else.
   const explainRole = useEditorStore((state) => explainRoleFor(state, id));
-  const arrivalKey = useEditorStore((state) => {
+  // The emphasis is remounted on this key: per transition where the signal arrives, so the arrival
+  // plays once for each; constant where it leaves from, so a shape that stays the source across
+  // steps holds still. `null` (no emphasis) for a crossed boundary and for everything else.
+  const emphasisKey = useEditorStore((state) => {
     const role = explainRoleFor(state, id);
-    return role === 'target' || role === 'both' ? (stepContextOf(state)?.transitionKey ?? null) : null;
+    if (role === 'target' || role === 'both') return stepContextOf(state)?.transitionKey ?? null;
+    return role === 'source' ? 'source' : null;
   });
   const focused = useEditorStore((state) => isNodeFocused(state.focus, id));
   const lensMember = useEditorStore((state) => lensMemberFor(state, id));
@@ -283,6 +291,21 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     );
     return label ?? null;
   }, [editing, node, theme, preset, isCode, isNote, isText]);
+
+  /**
+   * The step's emphasis: this shape's silhouette, to be lit behind it (`canvas/emphasis.ts`). Built
+   * only for the one or two shapes a step is about — the memo is a no-op for every other node — and
+   * from the same `describeNode` as the surface, so it follows exactly the contour on screen at this
+   * theme, personality and size. Chrome: it never reaches the display list or an export.
+   */
+  const emphasis = useMemo(() => {
+    if (emphasisKey === null || !liveNode) return null;
+    beginClipScope(`emphasis-${liveNode.id}`);
+    const shapes = emphasisOf(describeNode(liveNode, describeContext(theme, preset)).shapes);
+    if (shapes.length === 0) return null;
+    return { markup: emitDisplayList({ width: liveNode.width, height: liveNode.height, shapes }), color: emphasisColorOf(shapes) };
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- same clip-scope reason as `shapes`.
+  }, [liveNode, theme, preset, emphasisKey !== null]);
 
   /**
    * The plane behind a shape that has an inside — its own outline, from the same `describeNode`, so
@@ -539,9 +562,23 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         );
       })()}
 
-      {/* The ring the signal arrives into: keyed on the transition so it plays once per arrival and
-          stays as the step's static emphasis after. Chrome — never exported. */}
-      {arrivalKey !== null && <span key={arrivalKey} className="dc-arrival" aria-hidden="true" />}
+      {/* The step's emphasis, behind the surface (`z-index: -1`, like the inside mark): the shape's
+          own silhouette a little heavier, with one soft halo — the shape's opaque fill hides what
+          falls inside the contour, so only the outline and the halo past it show. Keyed so the
+          arrival plays once per transition and nothing lingers when the step moves on. */}
+      {emphasis && (
+        <SvgSurface
+          key={emphasisKey ?? undefined}
+          className="dc-emphasis"
+          data-role={explainRole ?? undefined}
+          width={effectiveWidth}
+          height={effectiveHeight}
+          bleed={EMPHASIS_BLEED}
+          style={emphasis.color ? ({ ['--dc-emphasis-color']: emphasis.color } as CSSProperties) : undefined}
+        >
+          {emphasis.markup}
+        </SvgSurface>
+      )}
 
       <SvgSurface className="dc-node-surface" width={effectiveWidth} height={effectiveHeight}>
         {shapes}

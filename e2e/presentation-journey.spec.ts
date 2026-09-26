@@ -47,7 +47,11 @@ test.describe('Presentation journey', () => {
     await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 6');
     await expect(page.locator('.dc-canvas[data-explain-stage]')).toHaveCount(0);
     await expect(page.locator('.dc-edge[data-active="true"] .dc-signal')).toHaveCount(1);
-    await expect(page.locator('.dc-node[data-explain-role="target"] .dc-arrival')).toHaveCount(1);
+    // The step's two shapes are lit along their own contour — the destination in full, the source at
+    // half strength — and nothing draws a box around either.
+    await expect(page.locator('.dc-node[data-explain-role="target"] .dc-emphasis[data-role="target"]')).toHaveCount(1);
+    await expect(page.locator('.dc-node[data-explain-role="source"] .dc-emphasis[data-role="source"]')).toHaveCount(1);
+    await expect(page.locator('.dc-arrival')).toHaveCount(0);
     const caption = page.locator('.dc-present-caption');
     await expect(caption).toContainText('Step 1 of 6');
     await expect(caption).toContainText('Client');
@@ -104,6 +108,7 @@ test.describe('Presentation journey', () => {
     await page.keyboard.press('Shift+ArrowLeft');
     await expect(page.locator('.dc-present-card[data-kind="opening"]')).toContainText('Submit command');
     await expect(page.locator('.dc-signal')).toHaveCount(0);
+    await expect(page.locator('.dc-emphasis')).toHaveCount(0);
     await expect(page.locator('.dc-present-caption')).toHaveCount(0);
     await page.keyboard.press('3');
     await expect(page.locator('.dc-explain-count')).toHaveText('Step 3 / 6');
@@ -161,6 +166,7 @@ test.describe('Presentation journey', () => {
     await expect(page.locator('.dc-toolbar')).toBeVisible();
     await expect(page.locator('.dc-present-pointer')).toHaveCount(0);
     await expect(page.locator('.dc-signal')).toHaveCount(0);
+    await expect(page.locator('.dc-emphasis')).toHaveCount(0);
     await page.waitForTimeout(500);
     const after = await cameraOf(page);
     expect(after.x).toBeCloseTo(before.x, 0);

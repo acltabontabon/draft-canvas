@@ -53,9 +53,12 @@ function compute(document: DraftDocument, playback: FlowPlaybackState): StepCont
     const sources = new Set<string>();
     const targets = new Set<string>();
     const crossed = new Set<string>();
+    // In the reply half of a request/response step the signal runs back along the connector, so
+    // the caller is where it arrives: the two ends swap parts, and the emphasis follows the reply.
+    const replying = playback.phase === 'response';
     for (const edge of resolved.edges) {
-      sources.add(edge.source);
-      targets.add(edge.target);
+      sources.add(replying ? edge.target : edge.source);
+      targets.add(replying ? edge.source : edge.target);
       for (const boundary of crossedBoundaries(nodesById, edge.source, edge.target)) crossed.add(boundary.id);
     }
     return {

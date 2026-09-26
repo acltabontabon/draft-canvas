@@ -1094,7 +1094,7 @@
  *
  * `data-async` shortens the dash: an asynchronous interaction is a packet let go of, a synchronous
  * one a call being made — the same distinction the dashed base line already draws. Reduced motion
- * plays nothing: the static emphasis (below, and the arrival ring) carries the step alone.
+ * plays nothing: the static emphasis (below, and `.dc-emphasis` on the step's shapes) carries the step alone.
  */
 .dc-canvas {
   --dc-signal-ms: 760ms;
@@ -2997,45 +2997,63 @@
   border-color: var(--dc-explain-accent, var(--dc-selection));
 }
 
-/* Where the signal leaves from: a quiet ring, so the pair reads as a pair. */
-.dc-canvas[data-explain='on'] .dc-node[data-explain-role='source'] {
-  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--dc-explain-accent, var(--dc-selection)) 55%, transparent);
-  transition: box-shadow 180ms ease;
-}
-
-/* Where it arrives: the ring the signal lands in — timed to its arrival, then held as the step's
-   static emphasis. Keyed per transition in `DraftNodeView`, so it plays once per arrival. */
-.dc-arrival {
+/*
+ * The two ends of the step, lit along their own contour. `.dc-emphasis` is the shape's silhouette
+ * (`canvas/emphasis.ts`: its filled bodies traced again in their own line colour, 1.5 heavier, no
+ * fill) painted *behind* the surface — `z-index: -1`, as the inside mark is — with one halo on the
+ * whole layer. The shape's opaque fill hides whatever falls inside its outline, so a cylinder is
+ * lit as a cylinder, a lid or a seam never glows, and the label stays untouched. Where the signal
+ * arrives is the primary emphasis; where it leaves from wears the same treatment at half strength,
+ * so the pair reads as a pair without two things shouting. Both are in the shape's own colour: the
+ * presentation's accent stays on the connector, the caption and the timeline, and a shape keeps
+ * the colour it was given. The heavier line is a cue of its own, for a projector that washes the
+ * halo out. `--dc-emphasis-color` and the 12px bleed are set by `DraftNodeView`.
+ */
+.dc-emphasis {
   position: absolute;
-  inset: -5px;
-  border: 2px solid var(--dc-explain-accent, var(--dc-selection));
-  border-radius: calc(var(--dc-radius) + 4px);
+  top: -12px;
+  left: -12px;
+  z-index: -1;
+  overflow: visible;
   pointer-events: none;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 60%, transparent));
+  transition: opacity 200ms var(--dc-ease-out);
 }
 
-.dc-node[data-type='group'] .dc-arrival {
-  border-radius: 17px;
+.dc-emphasis[data-role='source'] {
+  opacity: 0.5;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 45%, transparent));
 }
 
-.dc-node[data-type='ellipse'] .dc-arrival {
-  border-radius: 50%;
-}
-
+/* One short fade in as the step changes; where the signal lands, the halo swells once as it
+   arrives (timed to `.dc-signal`'s travel) and settles into the steady state above. Keyed per
+   transition in `DraftNodeView`, so a burst of presses remounts it and nothing finishes late.
+   Reduced motion holds the steady state from the first frame. */
 @media (prefers-reduced-motion: no-preference) {
-  .dc-arrival {
-    animation: dc-arrival calc(var(--dc-signal-ms) * 0.7) var(--dc-ease-out) calc(var(--dc-signal-ms) * 0.82) both;
+  .dc-emphasis {
+    animation: dc-emphasis-in 220ms var(--dc-ease-out) both;
   }
 
-  @keyframes dc-arrival {
+  .dc-emphasis[data-role='target'],
+  .dc-emphasis[data-role='both'] {
+    animation:
+      dc-emphasis-in 220ms var(--dc-ease-out) both,
+      dc-emphasis-arrive 520ms var(--dc-ease-out) calc(var(--dc-signal-ms) * 0.82) both;
+  }
+
+  @keyframes dc-emphasis-in {
     from {
       opacity: 0;
-      scale: 1.08;
-      box-shadow: 0 0 0 10px color-mix(in srgb, var(--dc-explain-accent, var(--dc-selection)) 24%, transparent);
     }
-    to {
-      opacity: 1;
-      scale: 1;
-      box-shadow: 0 0 0 0 transparent;
+  }
+
+  @keyframes dc-emphasis-arrive {
+    0%,
+    100% {
+      filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 60%, transparent));
+    }
+    35% {
+      filter: drop-shadow(0 0 7px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 78%, transparent));
     }
   }
 }
