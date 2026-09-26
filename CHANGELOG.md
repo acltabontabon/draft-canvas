@@ -14,50 +14,23 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Fixed
 
-- Dragging a Note or Code card to attach it no longer drops the connectors attached to it for the
-  length of the drag — they were removed from hit-testing instead of just hidden, the one thing
-  every other handle in the app is careful not to do.
-- A diagram with three or more connectors sharing one Smart Routing trunk held onto a large chunk
-  of routing scratch work in every undo step, on top of the trunk plan itself — megabytes of dead
-  data per edit on Medium and Large diagrams. Only the plan is kept now.
+- Dragging a Note or Code card to attach it no longer hides its host's connectors for the drag duration.
+- Smart Routing trunks no longer retain routing scratch work in every undo step; only the plan is kept.
 
 ### Desktop
 
 #### Added
 
-- **See a proposed change on the canvas, not just in a list** — reviewing an agent's proposal now
-  shows it in place on the diagram: additions and changes outlined, removals crossed out, with a
-  legend, a toggle to hide the preview, and a "Focus changes" button. The panel itself leads with a
-  summary, status and counts, with the agent's reasoning collapsed underneath. <!-- highlight -->
-- A proposal interrupted mid-accept — Draft Canvas closed right after it actually landed — now
-  offers "Mark as applied" instead of asking you to decide something that already happened.
-- **Clearer diagrams from AI agents** — a diagram an agent draws over MCP now puts each external
-  system level with the service that calls it, keeps a note right beside what it describes (inside
-  its boundary), heads a boundary with its own note, and steers lines out of boundaries they don't
-  belong to. A note about a shape or a connector now attaches to it, so it moves, exports and goes
-  with its host; three or more labelled connectors out of one shape that mean the same thing share
-  one Smart Routing trunk, each branch keeping its caption. An external system called from the
-  middle of a boundary — a hub's credit bureau, fraud check and core banking calls — now hangs right
-  beside the hub, across the flow, instead of being pushed past the whole boundary with its line
-  running the width of the canvas; and a boundary that only gathers externals called from several
-  places is named in the receipt, with the ops that ungroup it. A whole-view "clean up" turns the
-  diagram to read the other way when that is clearly clearer, as a new diagram already chooses. The agent is told how clear the result
-  is — crossings, detours, stranded notes — and what in its request to change, so it can fix it in
-  the same turn. <!-- highlight -->
+- **See proposed changes on the canvas** — agent proposals now show on the diagram with additions outlined, removals crossed out, and a legend; the review panel leads with a summary and reason, collapsible. <!-- highlight -->
+- A proposal interrupted mid-accept now offers "Mark as applied" instead of asking you to decide something that's already happened.
+- **AI diagrams layout clearly** — notes attach to their shapes or connectors and move with them; multiple labelled connectors from one shape that share meaning bundle into one trunk with labelled branches; external systems called from a boundary sit beside it instead of far away; "Clean up" flips the whole view when it reads better. <!-- highlight -->
 
 #### Fixed
 
-- Accepting a proposal re-checks the diagram's revision as one atomic step, closing a narrow window
-  where an edit landing at just the wrong moment could have gone uncaught.
-- Recovering a proposal stuck mid-Accept no longer offers a Reject button that always failed —
-  it now only offers what that recovery can actually do: finish Accepting, or Dismiss.
-- Submitting a large proposal for review no longer works it out on the main thread with no time
-  limit — like every other agent request, it's now checked off-thread under the same budget, so a
-  big batch can no longer freeze the editor while it's validated.
-- A change scoped to a captured selection could still rewrite or remove any flow or action anywhere
-  in the diagram, even outside that selection — a selection can only ever capture elements and
-  relationships, so neither was actually protected by scope at all. Both are refused now, the same
-  as every other kind of change scope already covered.
+- Accepting a proposal re-checks the diagram's revision in one atomic step.
+- Recovering a proposal stuck mid-accept offers only what you can do: finish or dismiss.
+- Submitting a large proposal no longer freezes the editor; it's validated off-thread like other requests.
+- Proposal scope now correctly refuses changes to flows and actions outside the selection.
 
 ## [1.12.0-beta.1] - 2026-09-25
 
