@@ -6,11 +6,10 @@ import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
 import { Autosave, flushAllAutosaves } from '../src/storage/autosave';
 import { DocumentConflictError, QuotaExceededError } from '../src/storage/DraftRepository';
-import { decryptDocument } from '../src/crypto/documentCipher';
-import * as documentCipher from '../src/crypto/documentCipher';
 import { getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/keyStore';
-import { isEncryptedBody } from '../src/crypto/migrateStorage';
-import type { EncryptedBody } from '../src/crypto/types';
+import { isEncryptedBody, isLegacyBody, isPlainBody } from '../src/crypto/bodyShapes';
+import { encryptDocument } from '../src/crypto/documentCipher';
+import type { EncryptedBody, PlainBody } from '../src/crypto/types';
 import { CURRENT_VERSION, type DraftDocument } from '../src/document/types';
 
 
@@ -21,20 +20,42 @@ function documentWith(title: string, nodeCount = 2): DraftDocument {
   return addNodes(createDocument(title), nodes);
 }
 
-/**
- * Writes the plaintext `{ id, document }` shape every `bodies` row had
- * before encryption existed, bypassing `IndexedDbRepository.save()` (which
- * always encrypts now) — this is the only way left to simulate a record
- * genuinely written by a build before this phase, since nothing in the
- * current app can produce that shape anymore.
- */
-function writeLegacyPlaintextRow(document: unknown): Promise<void> {
+/** Writes a raw `bodies` row, bypassing `save()`: the way to seed what an older build left behind. */
+function writeRawRow<T extends { id: string }>(row: T): Promise<void> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open('draft-canvas');
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
       const tx = req.result.transaction('bodies', 'readwrite');
-      tx.objectStore('bodies').put({ id: (document as DraftDocument).metadata.id, document });
+      tx.objectStore('bodies').put(row);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+
+/** The versionless plaintext `{ id, document }` shape every `bodies` row had before 1.0. */
+function writeLegacyPlaintextRow(document: unknown): Promise<void> {
+  return writeRawRow({ id: (document as DraftDocument).metadata.id, document });
+}
+
+/** The encrypted row every build from 1.0 to 1.11 wrote, under the key such a build would have made. */
+async function writeEncryptedRow(document: DraftDocument): Promise<EncryptedBody> {
+  const row = await encryptDocument(document, await getOrCreateMasterKey());
+  await writeRawRow(row);
+  return row;
+}
+
+/** Empties the key store, as a profile that lost its key — the one loss plaintext rows cannot suffer.
+ *  (The store rather than the database: the app holds a connection open, and deleting the database
+ *  would wait on it forever.) */
+function loseKey(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('draft-canvas-keys');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction('keys', 'readwrite');
+      tx.objectStore('keys').delete('master');
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     };
@@ -242,10 +263,8 @@ describe('local persistence', () => {
   it('a rename of a body that exists but cannot be read fails instead of reporting success', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Unreadable');
-    await repository.save(doc);
-    const decrypt = vi.spyOn(documentCipher, 'decryptDocument').mockResolvedValue(null);
+    await writeRawRow({ id: doc.metadata.id, storageVersion: 2, stamp: 'b_x', document: { not: 'a document' } });
     await expect(repository.rename(doc.metadata.id, 'After')).rejects.toThrow();
-    decrypt.mockRestore();
   });
 
   it('renames without disturbing the canvas', async () => {
@@ -372,7 +391,7 @@ describe('local persistence', () => {
     expect(loaded!.edges[0]!.targetAnchor).toBeDefined();
   });
 
-  it('persists the migrated record — both schema and encryption — so neither is silently redone every load', async () => {
+  it('persists a migrated record in the plain shape, with a stamp, so the migration is not redone every load', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Migrate once', 2);
     const [a, b] = doc.nodes;
@@ -386,14 +405,11 @@ describe('local persistence', () => {
 
     // A second `load()` call would recompute the same migration in memory
     // either way, so it can't distinguish "persisted" from "re-derived every
-    // time" — read the raw stored bytes directly instead, bypassing `load`'s
-    // own decrypt/migrate, to confirm the record on disk was actually rewritten.
+    // time" — read the raw stored bytes directly instead to confirm the record on disk was rewritten.
     const raw = await readRawRow(doc.metadata.id);
-    expect(isEncryptedBody(raw)).toBe(true);
-
-    const key = await getOrCreateMasterKey();
-    const decrypted = await decryptDocument(raw as EncryptedBody, key);
-    expect((decrypted as { version: number }).version).toBe(CURRENT_VERSION);
+    expect(isPlainBody(raw)).toBe(true);
+    expect(((raw as PlainBody).document as { version: number }).version).toBe(CURRENT_VERSION);
+    expect(isEncryptedBody(raw)).toBe(false);
   });
 
   it('load() resolves null rather than rejecting when the raw record cannot be read', async () => {
@@ -432,35 +448,33 @@ describe('local persistence', () => {
     expect(summaryAndBodyReads).toHaveLength(1);
   });
 
-  it('a failed self-verification during a migration resave leaves the original record on disk untouched, but load() still returns the migrated document', async () => {
+  it('a migration resave that finds the row already replaced leaves the newer row alone', async () => {
     const repository = await IndexedDbRepository.open();
-    const doc = documentWith('Verify failure', 2);
+    const doc = documentWith('Raced migration', 2);
     const [a, b] = doc.nodes;
     await writeLegacyPlaintextRow({
       ...doc,
       version: 2,
       edges: [{ id: 'e1', source: a!.id, target: b!.id, directed: true, routing: 'smoothstep' }],
     });
-
-    // The only `decryptDocument` call this scenario reaches is `saveVerified`'s
-    // own internal verify step — the legacy row itself is plaintext, so
-    // `load()` never decrypts to read it.
-    const spy = vi.spyOn(documentCipher, 'decryptDocument').mockResolvedValueOnce(null);
+    // Another tab saves real edits between this tab's read and its write-back.
+    const dbField = (repository as unknown as { db: { transaction: (...args: unknown[]) => unknown } }).db;
+    const original = dbField.transaction.bind(dbField);
+    let injected = false;
+    vi.spyOn(dbField, 'transaction').mockImplementation((...args: unknown[]) => {
+      const stores = args[0];
+      if (!injected && Array.isArray(stores) && stores.includes('bodies') && args[1] === 'readwrite') {
+        injected = true;
+        void writeRawRow({ id: doc.metadata.id, storageVersion: 2, stamp: 'b_elsewhere', document: { ...doc, metadata: { ...doc.metadata, title: 'Newer' } } });
+      }
+      return original(...(args as Parameters<typeof original>));
+    });
 
     const loaded = await repository.load(doc.metadata.id);
-    // The caller still gets the correctly migrated in-memory document even
-    // though persisting it failed self-verification.
     expect(loaded).not.toBeNull();
-    expect(loaded!.version).toBe(CURRENT_VERSION);
-    expect(loaded!.edges[0]!.sourceAnchor).toBeDefined();
-
-    // The original row on disk was never overwritten — reading it back
-    // directly still finds the original legacy plaintext shape, not a
-    // partially-written or corrupted encrypted one.
-    const raw = await readRawRow(doc.metadata.id);
-    expect(isEncryptedBody(raw)).toBe(false);
-
-    spy.mockRestore();
+    const raw = (await readRawRow(doc.metadata.id)) as PlainBody;
+    expect(raw.stamp).toBe('b_elsewhere');
+    expect((raw.document as DraftDocument).metadata.title).toBe('Newer');
   });
 
   it('returns null for a record too broken to recognise', async () => {
@@ -978,6 +992,105 @@ async function stripShape(repository: IndexedDbRepository, id: string): Promise<
   await putRawSummary(rest);
 }
 
+describe('body shapes: plain since 2.0, encrypted and legacy still read', () => {
+  it('save() writes a plain row with a fresh stamp per write, and makes no key', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Plain', 2);
+    await repository.save(doc);
+    const first = (await readRawRow(doc.metadata.id)) as PlainBody;
+    expect(isPlainBody(first)).toBe(true);
+    expect(first.storageVersion).toBe(2);
+    expect((first.document as DraftDocument).metadata.title).toBe('Plain');
+    await repository.save({ ...doc, metadata: { ...doc.metadata, title: 'Plain again' } });
+    const second = (await readRawRow(doc.metadata.id)) as PlainBody;
+    expect(second.stamp).not.toBe(first.stamp);
+    const { getMasterKey } = await import('../src/crypto/keyStore');
+    expect(await getMasterKey()).toBeNull();
+  });
+
+  it('an encrypted row from a 1.x build loads, and stays encrypted until it is next saved', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Encrypted', 3);
+    const row = await writeEncryptedRow(doc);
+    __resetKeyCacheForTests();
+
+    const loaded = await repository.load(doc.metadata.id);
+    expect(loaded?.metadata.title).toBe('Encrypted');
+    expect(loaded?.nodes).toHaveLength(3);
+    // Opening is not a reason to rewrite: the row on disk is byte-for-byte the one that was there.
+    const raw = (await readRawRow(doc.metadata.id)) as EncryptedBody;
+    expect(isEncryptedBody(raw)).toBe(true);
+    expect(Array.from(raw.iv)).toEqual(Array.from(row.iv));
+    expect(Array.from(new Uint8Array(raw.ciphertext))).toEqual(Array.from(new Uint8Array(row.ciphertext)));
+
+    await repository.save({ ...loaded!, metadata: { ...loaded!.metadata, title: 'Edited' } });
+    expect(isPlainBody(await readRawRow(doc.metadata.id))).toBe(true);
+  });
+
+  it('a rename of an encrypted row writes it back plain, with the new title', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Before', 1);
+    await writeEncryptedRow(doc);
+    await putRawSummary((await import('../src/storage/DraftRepository')).summarize(doc));
+    __resetKeyCacheForTests();
+    await repository.rename(doc.metadata.id, 'After');
+    const raw = (await readRawRow(doc.metadata.id)) as PlainBody;
+    expect(isPlainBody(raw)).toBe(true);
+    expect((raw.document as DraftDocument).metadata.title).toBe('After');
+    expect((await repository.list())[0]!.title).toBe('After');
+  });
+
+  it('an encrypted row whose key is gone is unreadable and untouched, and no key is invented', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Lost key', 2);
+    const row = await writeEncryptedRow(doc);
+    await loseKey();
+    __resetKeyCacheForTests();
+
+    expect(await repository.load(doc.metadata.id)).toBeNull();
+    expect(await repository.has(doc.metadata.id)).toBe(true);
+    const raw = (await readRawRow(doc.metadata.id)) as EncryptedBody;
+    expect(Array.from(raw.iv)).toEqual(Array.from(row.iv));
+    expect(Array.from(new Uint8Array(raw.ciphertext))).toEqual(Array.from(new Uint8Array(row.ciphertext)));
+    const { getMasterKey } = await import('../src/crypto/keyStore');
+    expect(await getMasterKey()).toBeNull();
+    // A rename refuses rather than reporting a change it could not make.
+    await expect(repository.rename(doc.metadata.id, 'Nope')).rejects.toThrow(/could not be read/);
+  });
+
+  it('a corrupted encrypted row is unreadable and untouched', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Corrupt', 2);
+    const row = await writeEncryptedRow(doc);
+    const bytes = new Uint8Array(row.ciphertext.slice(0));
+    bytes[0] = (bytes[0] ?? 0) ^ 0xff;
+    await writeRawRow({ ...row, ciphertext: bytes.buffer });
+    __resetKeyCacheForTests();
+
+    expect(await repository.load(doc.metadata.id)).toBeNull();
+    const raw = (await readRawRow(doc.metadata.id)) as EncryptedBody;
+    expect(Array.from(new Uint8Array(raw.ciphertext))).toEqual(Array.from(bytes));
+  });
+
+  it('a mixed store — legacy, encrypted and plain rows — lists and loads every one', async () => {
+    const repository = await IndexedDbRepository.open();
+    const legacy = documentWith('Legacy', 1);
+    const encrypted = documentWith('Encrypted', 2);
+    const plain = documentWith('Plain', 3);
+    await writeLegacyPlaintextRow(legacy);
+    await writeEncryptedRow(encrypted);
+    await repository.save(plain);
+    __resetKeyCacheForTests();
+
+    expect((await repository.load(legacy.metadata.id))?.nodes).toHaveLength(1);
+    expect((await repository.load(encrypted.metadata.id))?.nodes).toHaveLength(2);
+    expect((await repository.load(plain.metadata.id))?.nodes).toHaveLength(3);
+    // The legacy row gained a version and a stamp on its way through `load()`; the encrypted one did not move.
+    expect(isPlainBody(await readRawRow(legacy.metadata.id))).toBe(true);
+    expect(isEncryptedBody(await readRawRow(encrypted.metadata.id))).toBe(true);
+  });
+});
+
 describe('library fingerprints', () => {
   it('every save writes a shape into the summary, and MemoryRepository derives one too', async () => {
     const repository = await IndexedDbRepository.open();
@@ -1022,7 +1135,7 @@ describe('library fingerprints', () => {
     expect(await repository.backfillSummaries()).toEqual({ updated: 0, failed: 0, skipped: 0 });
   });
 
-  it('fingerprints a legacy plaintext body without encrypting it — that is the other sweep\'s job', async () => {
+  it('fingerprints a legacy plaintext body without rewriting it — only the summary is written', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Legacy', 2);
     await writeLegacyPlaintextRow(doc);
@@ -1035,7 +1148,7 @@ describe('library fingerprints', () => {
 
     expect(await repository.backfillSummaries()).toMatchObject({ updated: 1, failed: 0 });
     expect((await repository.list())[0]!.shape?.nodes).toHaveLength(2);
-    expect(isEncryptedBody(await readRawRow(doc.metadata.id))).toBe(false);
+    expect(isLegacyBody(await readRawRow(doc.metadata.id))).toBe(true);
   });
 
   it('skips empty canvases, counts unreadable bodies as failed, and keeps going', async () => {

@@ -201,7 +201,7 @@ commits through the store. `src/depth/c4.ts` derives C4 role and scope, shared b
 schemas are single-sourced in `src/agent/schema.ts`; `src-tauri/mcp/tools.json` is generated from it
 (`npm run agent:schemas`) and a test fails if they drift. An agent's heavy work runs on a worker
 (`src/agent/worker.ts`) — keep `src/agent/` free of anything that touches `document`/`window`. The reasoning behind every module boundary — one renderer, the canvas/store boundary, history,
-persistence, the crypto boundary, untrusted input, schema evolution — lives in
+persistence, the storage boundary, untrusted input, schema evolution — lives in
 [`docs/reference/architecture.md`](docs/reference/architecture.md). The rules above are the invariants that document
 distills into "never break this"; read that file for *why* each one holds.
 

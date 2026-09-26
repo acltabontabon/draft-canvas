@@ -16,13 +16,12 @@ protects you from losing a diagram.
 - **Leaving.** Closing the tab, reloading, or switching away flushes a final save. That is
   best-effort: a browser can end a page before storage finishes, so don't rely on it for work you
   can't redraw. Going **Back to your diagrams** waits for the save and tells you if it failed.
-- **Encryption at rest.** The contents of each saved diagram are encrypted (AES-256-GCM) with a key
-  the browser generates and keeps. You are never asked for it. A diagram's title, dates, counts and
-  a rough silhouette of its shapes are stored unencrypted so the Library can list your diagrams
-  without opening each one. Name a diagram something neutral if its title is sensitive. A canvas
-  background image, if you set one, is stored unencrypted.
-  [Privacy](../reference/privacy.md) and [SECURITY.md](../../SECURITY.md) cover exactly what this
-  does and does not protect against.
+- **Plain records.** Diagrams are stored as plain records in the browser's own database, readable by
+  anything that can read this browser profile — the same as a file in your user folder. Earlier
+  versions encrypted them with a key kept in the same profile; those diagrams still open, and are
+  saved plain the next time you edit them. [Privacy](../reference/privacy.md) and
+  [SECURITY.md](../../SECURITY.md#browser-storage) say what that encryption did and why it was
+  retired. A diagram that must be protected at rest is a passphrase-encrypted export, below.
 - **Two tabs, one diagram.** If you edit the same diagram in two tabs, the second tab to save is
   stopped and the status bar asks which copy to keep: **Keep mine** or **Load the other tab's**.
   Nothing is overwritten until you choose.
@@ -30,13 +29,12 @@ protects you from losing a diagram.
 ## What you have to do
 
 - **Export anything you'd mind losing.** Diagrams live in one browser profile on one device. Clearing
-  site data for this site deletes them, and deletes the key that decrypts them with it. There is no
-  recovery: Draft Canvas has no server, so it has no copy. There is also no "back up everything"
+  site data for this site deletes them. There is no recovery: Draft Canvas has no server, so it has no copy. There is also no "back up everything"
   button; export is one diagram at a time.
 - **Move a diagram to another browser or machine.** Export it there, import it here. A diagram
   made in Chrome is not in Safari, and private windows usually discard their storage when closed.
-- **Use HTTPS, or `localhost`.** Browsers only allow the encryption Draft Canvas saves with on those
-  origins. Served over plain `http://` from another machine, it can't save anything and says so.
+- **Use HTTPS for offline.** Browsers install the offline cache only on HTTPS or `localhost`. Served
+  over plain `http://` from another machine, Draft Canvas saves normally but needs the network to load.
 
 If the browser blocks storage altogether (some private modes and embedded browsers), the status bar
 reads **In memory only** and a message explains it. Work in that state disappears when the tab
@@ -136,9 +134,9 @@ There are no share links or accounts. Pick whichever of these fits:
 ## If something looks wrong
 
 - **A diagram is in the Library but won't open** ("That diagram could not be read from local
-  storage"). The stored contents can't be decrypted, for example because the browser's copy of the key
-  was lost. The Library can still list it because titles aren't encrypted, but there's no way to
-  recover what was drawn. If you exported a file, import that.
+  storage"). The stored record is corrupted, or it was saved encrypted by an earlier version and the
+  browser's copy of the key is gone. The Library can still list it because the title is stored
+  separately, but there's no way to recover what was drawn. If you exported a file, import that.
 - **The Library is empty.** Diagrams are per browser profile and per origin: `localhost:5180`, a
   Docker copy on `:8080` and the hosted site each keep their own. Check you're on the same one, and not
   in a private window.

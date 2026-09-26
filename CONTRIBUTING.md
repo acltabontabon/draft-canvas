@@ -116,7 +116,7 @@ Library (web), Home (desktop), or the editor once a document is open. The deskto
 
 | Platform | Path |
 | --- | --- |
-| Web | `store/useDocumentSession.ts` → `storage/autosave.ts` → `IndexedDbRepository`, encrypting bodies with `src/crypto/` |
+| Web | `store/useDocumentSession.ts` → `storage/autosave.ts` → `IndexedDbRepository` (plain records; `src/crypto/` reads the rows earlier builds encrypted) |
 | Desktop | `host/useHostDocument.ts` → `desktop/controller.ts` → `desktop/tauri/api.ts` → Rust `src-tauri/src/commands/documents.rs` and `docio.rs` |
 | VS Code | `host/useHostDocument.ts` + `host/vscodeChannel.ts` ⇄ `vscode-extension/src/extension.ts`, which writes the file through VS Code |
 

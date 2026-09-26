@@ -278,25 +278,20 @@ describe('useDocumentSession — overlapping opens', () => {
 });
 
 describe('useDocumentSession — repository failures surface a toast, not an unhandled rejection', () => {
-  it('adoptDocument names the real reason on a page the browser will not encrypt on', async () => {
-    Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true });
-    try {
-      const repository = stubRepository({
-        save: async () => {
-          throw new TypeError("Cannot read properties of undefined (reading 'generateKey')");
-        },
-      });
-      const session = renderSession(repository);
-      await waitFor(() => expect(session().ready).toBe(true));
+  it('adoptDocument says local storage failed, whatever the repository threw', async () => {
+    const repository = stubRepository({
+      save: async () => {
+        throw new TypeError('simulated storage failure');
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
 
-      await act(async () => {
-        await session().adoptDocument(createDocument('Blank'));
-      });
-      const messages = useUiStore.getState().toasts.map((toast) => toast.message);
-      expect(messages).toContainEqual(expect.stringMatching(/needs HTTPS or localhost/));
-    } finally {
-      Reflect.deleteProperty(window, 'isSecureContext');
-    }
+    await act(async () => {
+      await session().adoptDocument(createDocument('Blank'));
+    });
+    const messages = useUiStore.getState().toasts.map((toast) => toast.message);
+    expect(messages).toContainEqual(expect.stringMatching(/local storage may be full or unavailable/));
   });
 
   it('renameDocument', async () => {

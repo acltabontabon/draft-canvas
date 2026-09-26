@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { canEncryptLocally } from '../crypto/availability';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
 import { createId } from '../document/ids';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
@@ -138,20 +137,12 @@ export function useDocumentSession(): DocumentSession {
           'error',
         );
       }
-      // Encrypts any record still left over from before encryption existed —
-      // not just documents the user happens to open this session. Kicked off
-      // once, fire-and-forget: it never blocks opening or editing anything,
-      // and a diagram it hasn't reached yet is just still plaintext, not
-      // broken (`load()` migrates it lazily the moment it is opened anyway).
+      // Gives rows written before fingerprints existed their shape. Kicked off once, fire-and-forget:
+      // it never blocks opening or editing anything. The library re-reads only when a row actually
+      // changed — the common case, every launch after the first, changes nothing.
       if (repo instanceof IndexedDbRepository) {
         void repo
-          .migrateLegacyRecords()
-          .catch((error: unknown) => logDiagnostic(error, { operation: 'encryption-sweep' }))
-          // Chained, not parallel: both sweeps decrypt bodies, and running
-          // them together would decrypt the oldest records twice at once.
-          // The library re-reads only when a row actually changed — the
-          // common case, every launch after the first, changes nothing.
-          .then(() => repo.backfillSummaries())
+          .backfillSummaries()
           .then(async ({ updated }) => {
             if (updated > 0 && !cancelled) setLibrary(await repo.list());
           })
@@ -348,12 +339,7 @@ export function useDocumentSession(): DocumentSession {
         await refreshLibrary();
       } catch (error) {
         logDiagnostic(error, { operation: 'adopt-document', documentId: document.metadata.id });
-        notify(
-          canEncryptLocally()
-            ? 'Could not save that diagram — local storage may be full or unavailable.'
-            : 'Could not save that diagram — Draft Canvas needs HTTPS or localhost to save anything.',
-          'error',
-        );
+        notify('Could not save that diagram — local storage may be full or unavailable.', 'error');
       }
     },
     [notify, projects, refreshLibrary, repository],

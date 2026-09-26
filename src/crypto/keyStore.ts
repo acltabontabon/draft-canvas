@@ -2,7 +2,12 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { AES_GCM, AES_KEY_LENGTH } from './types';
 
 /**
- * The local encryption key.
+ * The local encryption key that every build up to 1.11 encrypted stored diagrams with.
+ *
+ * Since 2.0 nothing is encrypted at rest (see `crypto/types.ts` for why), so this module is a
+ * reader: `getMasterKey` opens whatever key an earlier build left behind, and never makes one. A
+ * profile with encrypted rows but no key has lost them, and generating a fresh key would only
+ * disguise that as a decrypt failure.
  *
  * A single, non-extractable AES-256-GCM `CryptoKey`, generated once on first
  * use and shared by every document in this browser profile — see
@@ -46,12 +51,27 @@ function openKeyDb(): Promise<IDBPDatabase<KeyDb>> {
 }
 
 let cachedKey: Promise<CryptoKey> | null = null;
+let cachedRead: Promise<CryptoKey | null> | null = null;
 
 /**
- * The local encryption key — generated on first call, read from storage on
- * every call after that until the page reloads (the in-memory cache avoids
- * a round trip per save/load without holding the key anywhere longer-lived
- * than this module's own state).
+ * The key an earlier build stored, or `null` when this profile never had one. Read once per page
+ * load: a profile without a key stays without one, and a key that is there does not move.
+ */
+export function getMasterKey(): Promise<CryptoKey | null> {
+  cachedRead ??= (async () => {
+    const db = await openKeyDb();
+    return (await db.get(KEY_STORE, MASTER_KEY_ID)) ?? null;
+  })().catch((error: unknown) => {
+    cachedRead = null;
+    throw error;
+  });
+  return cachedRead;
+}
+
+/**
+ * The key, made if it is missing. No longer called by the app — it exists so tests can seed the
+ * encrypted rows an earlier build would have written — and kept exactly as it was, so a fixture is
+ * encrypted the way a real 1.x profile is.
  */
 export function getOrCreateMasterKey(): Promise<CryptoKey> {
   // Only a success is worth caching: one transient key-database error must not
@@ -96,5 +116,6 @@ async function loadOrGenerateMasterKey(): Promise<CryptoKey> {
  */
 export function __resetKeyCacheForTests(): void {
   cachedKey = null;
+  cachedRead = null;
   dbPromise = null;
 }

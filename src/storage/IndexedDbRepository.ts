@@ -1,10 +1,10 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { requestPersistentStorage } from '../lib/storagePersistence';
 import { parseDocument } from '../document/validate';
-import { decryptDocument, encryptDocument } from '../crypto/documentCipher';
-import { getOrCreateMasterKey } from '../crypto/keyStore';
-import { isEncryptedBody, isLegacyBody, migrateLegacyRecord, type LegacyBody } from '../crypto/migrateStorage';
-import type { EncryptedBody } from '../crypto/types';
+import { decryptDocument } from '../crypto/documentCipher';
+import { getMasterKey } from '../crypto/keyStore';
+import { isEncryptedBody, isLegacyBody, isPlainBody, type LegacyBody } from '../crypto/bodyShapes';
+import { PLAIN_STORAGE_VERSION, type EncryptedBody, type PlainBody } from '../crypto/types';
 import {
   DocumentConflictError,
   QuotaExceededError,
@@ -60,19 +60,26 @@ export function onStorageSuperseded(listener: (reason: StorageLossReason) => voi
  * needs titles and timestamps, and pulling a dozen full documents — code cards
  * and all — just to draw a list would make the landing screen sluggish.
  *
- * A `bodies` row is `EncryptedBody` for every document written by this build
- * or later, or the plaintext `LegacyBody` shape (`{ id, document }`) for one
- * still sitting untouched from before encryption existed. Distinguished by
- * shape, not a flag — the same repair-don't-reject discipline
- * `document/validate.ts` already uses. See `crypto/migrateStorage.ts`.
+ * A `bodies` row is one of three shapes, told apart by shape rather than a flag — the same
+ * repair-don't-reject discipline `document/validate.ts` uses (see `crypto/bodyShapes.ts`):
+ * `PlainBody`, what every save since 2.0 writes; `EncryptedBody`, what builds 1.0–1.11 wrote and
+ * this build still reads with the key those builds left in `draft-canvas-keys`; and the
+ * versionless `LegacyBody` from before 1.0. A row keeps its shape until it is next written:
+ * `load()` rewrites only what it always did (a legacy row, or a schema migration), and an encrypted
+ * row becomes plain on its next real save. Nothing sweeps the store.
  */
+type BodyRow = EncryptedBody | LegacyBody | PlainBody;
+
+/** The row a save writes: the document as it is, under a fresh stamp (see `sameBody`). */
+function plainBody(document: DraftDocument): PlainBody {
+  return { id: document.metadata.id, storageVersion: PLAIN_STORAGE_VERSION, stamp: createId('b'), document };
+}
+
 /**
  * One row per document id — deliberately not a generic, content-hashed asset
  * table. It only ever needs a single background image per document;
  * building dedup/reference-counting for a future asset system that doesn't
- * exist yet would be speculative. Stored unencrypted, unlike `bodies`: a
- * wallpaper image is far less sensitive than diagram content, and threading
- * AES-GCM through a `Blob` buys little for a lot of extra plumbing.
+ * exist yet would be speculative.
  */
 interface BackgroundImageRow {
   id: string;
@@ -90,7 +97,7 @@ interface DraftDb extends DBSchema {
   };
   bodies: {
     key: string;
-    value: EncryptedBody | LegacyBody;
+    value: BodyRow;
   };
   backgroundImages: {
     key: string;
@@ -168,19 +175,19 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   /**
-   * Loads, decrypts, migrates, and re-validates. A record can be corrupted by
-   * a crashed write, be sitting in an older schema because it was last saved
+   * Loads, decodes, migrates, and re-validates. A record can be corrupted by
+   * a crashed write, or be sitting in an older schema because it was last saved
    * by an earlier build (`parseDocument` handles this, the same way it does
-   * for an imported `.draftcanvas` file), or — before this build — never
-   * have been encrypted at all. All three are repaired here, in place, on
+   * for an imported `.draftcanvas` file). Both are repaired here, in place, on
    * next open, rather than staying frozen in their old shape forever.
    *
-   * A genuine change — decrypting a legacy plaintext row for the first time,
-   * or a real schema-version migration — is written straight back: "derive
-   * it once, then persist it" only holds if a load that never turns into an
-   * edit still ends up current on disk, rather than silently re-deriving the
-   * same work on every future open. A same-version repair (e.g. a dangling
-   * edge dropped) is left for the next real edit to persist, same as always.
+   * A real schema-version migration, or a versionless legacy row, is written
+   * straight back: "derive it once, then persist it" only holds if a load that
+   * never turns into an edit still ends up current on disk, rather than silently
+   * re-deriving the same work on every future open. A same-version repair (e.g. a
+   * dangling edge dropped) is left for the next real edit to persist, same as
+   * always — and so is an encrypted row's move to the plain shape: opening a
+   * diagram is not a reason to rewrite it.
    */
   async load(id: string): Promise<DraftDocument | null> {
     // Both stores are read from one transaction so the stamp recorded below always describes the
@@ -188,7 +195,7 @@ export class IndexedDbRepository implements DraftRepository {
     // (which writes `documents` and `bodies` together) and pair a fresh body with a stale stamp,
     // making this tab's next save report a spurious conflict against its own just-loaded content.
     let summary: DraftSummary | undefined;
-    let fetchedBody: EncryptedBody | LegacyBody | undefined;
+    let fetchedBody: BodyRow | undefined;
     try {
       const tx = this.db.transaction(['documents', 'bodies'], 'readonly');
       [summary, fetchedBody] = await Promise.all([
@@ -204,8 +211,8 @@ export class IndexedDbRepository implements DraftRepository {
     const read = await this.decodeBody(id, fetchedBody);
     if (!read) return null;
     this.stamps.set(id, summary?.contentStamp);
-    const { document, wasEncrypted, priorVersion } = read;
-    if (!wasEncrypted || priorVersion !== document.version) {
+    const { document, priorVersion } = read;
+    if (isLegacyBody(read.row) || priorVersion !== document.version) {
       // Best-effort: the caller still gets the correctly migrated in-memory
       // document either way, and the next real edit persists it through the
       // ordinary `save()` path — a failure here only loses the "derive once"
@@ -223,18 +230,16 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   /**
-   * The read half of `load()` — decrypt (or accept a legacy plaintext row),
-   * then validate and migrate in memory — with none of its write-back. Split
-   * out so `backfillSummaries()` can look at a body without also re-encrypting
-   * and rewriting it, which for the oldest records is the expensive part.
+   * The read half of `load()` — decode the row, then validate and migrate in
+   * memory — with none of its write-back. Split out so `backfillSummaries()`
+   * can look at a body without also rewriting it.
    */
   private async readBody(
     id: string,
   ): Promise<{
     document: DraftDocument;
-    wasEncrypted: boolean;
     priorVersion: unknown;
-    row: EncryptedBody | LegacyBody;
+    row: BodyRow;
   } | null> {
     let fetched;
     try {
@@ -247,22 +252,27 @@ export class IndexedDbRepository implements DraftRepository {
     return this.decodeBody(id, fetched);
   }
 
-  /** Decrypt (or accept a legacy plaintext row), then validate and migrate in memory — the shared
-   *  second half of `readBody()` and `load()`, which fetch the raw row differently (the latter
-   *  reads it alongside its `documents` summary in one transaction, see `load()`). */
+  /** Decode the row (plain, encrypted with the key an earlier build left, or legacy plaintext), then
+   *  validate and migrate in memory — the shared second half of `readBody()` and `load()`, which
+   *  fetch the raw row differently (the latter reads it alongside its `documents` summary in one
+   *  transaction, see `load()`). A row this cannot read is left exactly as it is. */
   private async decodeBody(
     id: string,
-    row: EncryptedBody | LegacyBody,
+    row: BodyRow,
   ): Promise<{
     document: DraftDocument;
-    wasEncrypted: boolean;
     priorVersion: unknown;
-    row: EncryptedBody | LegacyBody;
+    row: BodyRow;
   } | null> {
-    const wasEncrypted = isEncryptedBody(row);
     let rawDocument: unknown;
-    if (wasEncrypted) {
-      const key = await getOrCreateMasterKey();
+    if (isPlainBody(row)) {
+      rawDocument = row.document;
+    } else if (isEncryptedBody(row)) {
+      const key = await getMasterKey();
+      if (!key) {
+        console.warn(`[draft-canvas] Local record ${id} is encrypted, but this browser profile has no key for it.`);
+        return null;
+      }
       rawDocument = await decryptDocument(row, key);
       if (rawDocument === null) {
         console.warn(
@@ -284,24 +294,22 @@ export class IndexedDbRepository implements DraftRepository {
     }
 
     const priorVersion = isRecord(rawDocument) ? rawDocument.version : undefined;
-    return { document: result.document, wasEncrypted, priorVersion, row };
+    return { document: result.document, priorVersion, row };
   }
 
   /**
    * Gives every summary written before fingerprints existed its `shape`, once.
    *
-   * Same posture as `migrateLegacyRecords()`: kicked off at startup, never
-   * blocking, each row independent, a row it hasn't reached yet is simply a
-   * list entry without a thumbnail.
-   *
-   * Decrypting is the expensive part, so a library already carrying its shapes is not read at all.
+   * Kicked off at startup, never blocking, each row independent; a row it hasn't reached yet is
+   * simply a list entry without a thumbnail. Reading a body is the expensive part, so a library
+   * already carrying its shapes is not read at all.
    *
    * Only the `documents` store is written, and only its `shape` field. The
    * merge happens against the row as it is *at write time*, inside one
    * transaction, so a rename or autosave that landed while this body was
    * being decrypted keeps its title, project, and — critically — `updatedAt`,
    * which is the index the library is sorted by. Bodies are never touched:
-   * that is `load()`'s and the encryption sweep's job, not this one's.
+   * that is `load()`'s job, not this one's.
    */
   async backfillSummaries(): Promise<{ updated: number; failed: number; skipped: number }> {
     const rows = await this.db.getAll('documents');
@@ -321,7 +329,7 @@ export class IndexedDbRepository implements DraftRepository {
         const shape = libraryShapeOf(read.document.nodes, read.document.edges);
         const tx = this.db.transaction('documents', 'readwrite');
         const current = await tx.store.get(row.id);
-        // Re-read inside the transaction: an ordinary save landing while this body decrypted has
+        // Re-read inside the transaction: an ordinary save landing while this body was read has
         // already written the shape correctly, and must not be overwritten with an older one.
         if (!current || !needsShape(current)) {
           skipped += 1;
@@ -357,9 +365,8 @@ export class IndexedDbRepository implements DraftRepository {
     const conflictIn = (row: DraftSummary | undefined) =>
       !checked ? null : !row ? 'deleted' : row.contentStamp !== known ? 'changed' : null;
     try {
-      const key = await getOrCreateMasterKey();
-      // Encrypting can't happen inside the transaction, so a rename that lands between reading the
-      // summary and writing is caught by re-reading it there, and the merge is redone.
+      // Reconciling the summary happens outside the transaction, so a rename that lands between
+      // reading the summary and writing is caught by re-reading it there, and the merge is redone.
       for (let attempt = 1; ; attempt += 1) {
         const before = base ? await this.db.get('documents', id) : undefined;
         const early = conflictIn(before);
@@ -368,7 +375,7 @@ export class IndexedDbRepository implements DraftRepository {
           throw new DocumentConflictError(early);
         }
         const written = base && before ? reconcileMetadata(document, base, before) : document;
-        const encrypted = await encryptDocument(written, key);
+        const body = plainBody(written);
         const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
         if (before || checked) {
           const current = await tx.objectStore('documents').get(id);
@@ -388,7 +395,7 @@ export class IndexedDbRepository implements DraftRepository {
         const stamp = cameraOnly ? known! : createId('s');
         await Promise.all([
           tx.objectStore('documents').put({ ...summarize(written), contentStamp: stamp }),
-          tx.objectStore('bodies').put(encrypted),
+          tx.objectStore('bodies').put(body),
           tx.done,
         ]);
         this.stamps.set(id, stamp);
@@ -403,26 +410,17 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   /**
-   * Same write `save()` does, plus one extra step: the freshly encrypted
-   * body is decrypted back and compared before it ever replaces the row on
-   * disk — the same encrypt → verify → atomic-put contract
-   * `migrateLegacyRecord` already uses for the legacy-encryption sweep.
-   * Scoped to `load()`'s migration resave only, not the far hotter ordinary
-   * `save()` path autosave calls on every edit, where an extra decrypt round
-   * trip would add real, unrequested cost with no evidence it's needed.
+   * Same write `save()` does, plus one extra step: the row is read back inside the same transaction
+   * and checked — it is the write that was just made, and it parses — before the transaction is
+   * allowed to commit; anything else aborts it and the original row stays exactly as it was. Scoped
+   * to `load()`'s migration resave only, not the far hotter ordinary `save()` path autosave calls on
+   * every edit, where the extra round trip would add cost with no evidence it's needed.
    */
-  private async saveVerified(document: DraftDocument, readRow: EncryptedBody | LegacyBody): Promise<void> {
-    const key = await getOrCreateMasterKey();
-    const encrypted = await encryptDocument(document, key);
-    const verified = await decryptDocument(encrypted, key);
-    if (verified === null) {
-      throw new Error(
-        `Migrated record ${document.metadata.id} failed self-verification; leaving the original on disk untouched.`,
-      );
-    }
+  private async saveVerified(document: DraftDocument, readRow: BodyRow): Promise<void> {
+    const body = plainBody(document);
     const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
     // Only if the row is still the one that was read: another tab may have saved real edits while
-    // this one decrypted and re-encrypted, and the migrated copy of the older row must not win.
+    // this one migrated, and the migrated copy of the older row must not win.
     const [current, summary] = await Promise.all([
       tx.objectStore('bodies').get(document.metadata.id),
       tx.objectStore('documents').get(document.metadata.id),
@@ -431,22 +429,28 @@ export class IndexedDbRepository implements DraftRepository {
       await tx.done;
       return;
     }
-    await Promise.all([
-      // The same content in its current shape: an editor holding this row isn't looking at stale work.
-      tx.objectStore('documents').put(withStamp(summarize(document), summary?.contentStamp)),
-      tx.objectStore('bodies').put(encrypted),
-      tx.done,
-    ]);
+    // The same content in its current shape: an editor holding this row isn't looking at stale work.
+    await tx.objectStore('documents').put(withStamp(summarize(document), summary?.contentStamp));
+    await tx.objectStore('bodies').put(body);
+    const written = await tx.objectStore('bodies').get(document.metadata.id);
+    if (!written || !sameBody(written, body) || !isPlainBody(written) || !parseDocument(written.document).ok) {
+      tx.abort();
+      throw new Error(
+        `Migrated record ${document.metadata.id} failed self-verification; leaving the original on disk untouched.`,
+      );
+    }
+    await tx.done;
     requestPersistenceOnce();
   }
 
   /**
-   * A metadata-only edit (rename, move to a project) is a decrypt → change → encrypt round trip,
-   * which can't sit inside one IndexedDB transaction. Instead the write commits only if the body
-   * row is still the very one that was read — otherwise another tab saved in between, and the edit
-   * is redone against that newer content rather than overwriting it. The body, not the summary's
-   * `updatedAt`: a viewport-only autosave rewrites the body without touching `updatedAt`. Reads via
-   * `readBody`, not `load`, so an outdated row is migrated once, by this write, not twice.
+   * A metadata-only edit (rename, move to a project) is a read → change → write round trip whose
+   * read may decode an old encrypted row, so it can't sit inside one IndexedDB transaction. Instead
+   * the write commits only if the body row is still the very one that was read — otherwise another
+   * tab saved in between, and the edit is redone against that newer content rather than overwriting
+   * it. The body, not the summary's `updatedAt`: a viewport-only autosave rewrites the body without
+   * touching `updatedAt`. Reads via `readBody`, not `load`, so an outdated row is migrated once, by
+   * this write, not twice.
    */
   private async updateMetadata(
     id: string,
@@ -463,7 +467,7 @@ export class IndexedDbRepository implements DraftRepository {
       const { document } = read;
       const next = { ...document, metadata: change({ ...document.metadata, updatedAt: Date.now() }) };
       try {
-        const encrypted = await encryptDocument(next, await getOrCreateMasterKey());
+        const body = plainBody(next);
         const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
         const [summary, current] = await Promise.all([
           tx.objectStore('documents').get(id),
@@ -477,7 +481,7 @@ export class IndexedDbRepository implements DraftRepository {
         if (sameBody(current, read.row)) {
           await Promise.all([
             tx.objectStore('documents').put(withStamp(summarize(next), summary.contentStamp)),
-            tx.objectStore('bodies').put(encrypted),
+            tx.objectStore('bodies').put(body),
             tx.done,
           ]);
           return;
@@ -520,7 +524,7 @@ export class IndexedDbRepository implements DraftRepository {
   /**
    * Reassigns every member canvas to Unorganized before removing the
    * project row, mirroring `rename()`'s load-mutate-save shape for each one
-   * so the encrypted body and the plaintext summary stay in sync exactly as
+   * so the body and the summary stay in sync exactly as
    * a title edit already does. Projects are never large enough (this is a
    * flat, un-nested grouping, not a file tree) for that per-canvas cost to
    * matter at the scale this feature targets.
@@ -558,53 +562,6 @@ export class IndexedDbRepository implements DraftRepository {
     } catch {
       return null;
     }
-  }
-
-  /**
-   * Encrypts every legacy plaintext record still sitting in storage — not
-   * just the ones the user happens to open. `load()` already migrates a
-   * record the moment it's opened; this closes the rest of the gap, so a
-   * diagram nobody has looked at since before encryption existed doesn't
-   * stay plaintext indefinitely. Meant to be kicked off once, non-blocking,
-   * at app startup (see `src/store/useDocumentSession.ts`) — it does not
-   * block opening or editing any document while it runs.
-   *
-   * Each record is encrypted, verified by decrypting the result back, and
-   * only then written — one atomic `put` per record — exactly the same
-   * encrypt→verify→persist contract `load()`'s lazy path follows. A record
-   * this sweep hasn't reached yet is simply still plaintext; nothing here is
-   * a partially-migrated state.
-   */
-  async migrateLegacyRecords(): Promise<{ migrated: number; failed: number }> {
-    // Walked with a cursor, keeping only legacy rows: `getAll` would hold every encrypted body in
-    // memory at once on every launch, just to find what is almost always none.
-    const legacy: LegacyBody[] = [];
-    for (let cursor = await this.db.transaction('bodies').store.openCursor(); cursor; cursor = await cursor.continue()) {
-      if (isLegacyBody(cursor.value)) legacy.push(cursor.value);
-    }
-    if (legacy.length === 0) return { migrated: 0, failed: 0 };
-
-    const key = await getOrCreateMasterKey();
-    let migrated = 0;
-    let failed = 0;
-    for (const row of legacy) {
-      try {
-        const encrypted = await migrateLegacyRecord(row, key);
-        // `legacy` was read before any of this async work: if the diagram was opened and
-        // autosaved meanwhile, its row is already a newer encrypted body, and writing
-        // this stale plaintext snapshot's ciphertext over it would silently undo those
-        // edits. Every save encrypts, so "still legacy" means "still untouched".
-        const tx = this.db.transaction('bodies', 'readwrite');
-        const current = await tx.store.get(row.id);
-        if (current && isLegacyBody(current)) await tx.store.put(encrypted);
-        await tx.done;
-        migrated += 1;
-      } catch (error) {
-        failed += 1;
-        console.warn(`[draft-canvas] Could not migrate local record ${row.id} to encrypted storage:`, error);
-      }
-    }
-    return { migrated, failed };
   }
 
   async saveBackgroundImage(
@@ -661,10 +618,12 @@ function requestPersistenceOnce(): void {
   requestPersistentStorage();
 }
 
-/** Whether two reads of a `bodies` row are the same write. Every encryption draws a fresh IV, so
- *  an unchanged IV means an unchanged row; a legacy row can only have been replaced by an
- *  encrypted one, since nothing writes plaintext any more. */
-function sameBody(a: EncryptedBody | LegacyBody, b: EncryptedBody | LegacyBody): boolean {
+/** Whether two reads of a `bodies` row are the same write. A plain row carries a fresh stamp per
+ *  write and an encrypted one a fresh IV, so an unchanged stamp or IV means an unchanged row. A
+ *  legacy row has neither and can only ever be replaced by a stamped or encrypted row, so two legacy
+ *  reads are the same write; a pair of different shapes never is. */
+function sameBody(a: BodyRow, b: BodyRow): boolean {
+  if (isPlainBody(a) && isPlainBody(b)) return a.stamp === b.stamp;
   if (isEncryptedBody(a) && isEncryptedBody(b)) {
     return a.iv.length === b.iv.length && a.iv.every((byte, i) => byte === b.iv[i]);
   }

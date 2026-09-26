@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { canEncryptLocally } from '../../crypto/availability';
 import { PRODUCT } from '../../product';
 import type { StarterId } from '../../starters';
 import type { DocumentSession } from '../../store/useDocumentSession';
@@ -59,7 +58,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
 
   const note = <LocalNote durable={session.durable} repository={session.repository} />;
   // A note that has to warn moves up out of the footer, where it can't be missed.
-  const warn = !session.durable || !canEncryptLocally();
+  const warn = !session.durable;
 
   return (
     <div className="dc-home">

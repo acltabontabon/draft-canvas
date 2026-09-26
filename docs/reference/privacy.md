@@ -13,26 +13,27 @@ Everything you draw. Four object stores:
 
 | Store | Key | Contents | Encrypted? |
 | --- | --- | --- | --- |
-| `documents` | `id` | Title, created and updated timestamps, node and edge counts, a small topology sketch (shape kinds and their relative positions, for the list thumbnail), and how many actions the canvas has still open. Used to render the library list without loading any canvas. | No — plain text, by design (see below). |
-| `bodies` | `id` | The full document: nodes, connections, text, code, viewport, settings. | Yes — AES-256-GCM, before it ever reaches IndexedDB. |
+| `documents` | `id` | Title, created and updated timestamps, node and edge counts, and a small topology sketch (shape kinds and their relative positions, for the list thumbnail). Used to render the library list without loading any canvas. | No — plain text. |
+| `bodies` | `id` | The full document: nodes, connections, text, code, viewport, settings. | No, since 2.0 — a plain record with a per-write stamp. A row written by a build from 1.0 to 1.11 is still AES-256-GCM ciphertext, read with the key that build left, until the diagram is next saved (see below). |
 | `projects` | `id` | The names of the Library's flat project folders. | No — plain text, like the summaries. |
 | `backgroundImages` | `id` | The optional canvas background image, one per diagram, as a blob. | No. A wallpaper is far less sensitive than diagram content, and encrypting a blob would add a lot of plumbing for little. If a background image is sensitive, don't use it. |
 
 ### IndexedDB — database `draft-canvas-keys`
 
-One object store, `keys`, holding the non-extractable AES-256-GCM key that encrypts `bodies`
-(`src/crypto/keyStore.ts`). See [`SECURITY.md`](../../SECURITY.md) for its lifecycle.
+One object store, `keys`, holding the non-extractable AES-256-GCM key a build from 1.0 to 1.11
+generated to encrypt `bodies`. Since 2.0 it is only read (`src/crypto/keyStore.ts`), to open rows
+those builds wrote; a profile that never had one never gets one. See
+[`SECURITY.md`](../../SECURITY.md#browser-storage) for what it protected and why it was retired.
 
 `draft-canvas` is written by `src/storage/IndexedDbRepository.ts`, and by nothing else.
 
-The `documents` summary is left unencrypted deliberately: it exists specifically so the library
-screen can list your diagrams — including their titles — without decrypting every one of them just
-to draw a list. That is a real, disclosed tradeoff, not an oversight. Readable in IndexedDB without
-the local key: a diagram's **title**, its counts, the rough shape of it — which kinds of shapes it
-uses and roughly where they sit, which is what draws the thumbnail — and **how many actions it has
-open**, which is a number and nothing more. Not readable: everything anything is *called* — node
-labels, note and code text, connector text, and what any action says. If a title itself would be
-sensitive to expose this way, name the diagram something neutral.
+The `documents` summary exists so the library screen can list your diagrams — including their titles
+— without loading every one of them just to draw a list. Both stores are plain records: anything
+with access to this browser profile's storage can read what is in them, exactly as it could read a
+file in your user folder. That was true of the encrypted rows too for anything that could run the
+app as you; the difference now is that a copy of the `bodies` store on its own is readable as well.
+If a diagram must be protected at rest, keep it as a passphrase-encrypted export (`.dcenc`) rather
+than in the browser.
 
 If IndexedDB cannot be opened — a private window, a blocked-storage policy, some embedded
 webviews — the app falls back to an in-memory store, and the status bar says **In memory only**
@@ -199,13 +200,12 @@ Being honest about the limits:
 - **Diagrams are per-browser and per-device.** A diagram made in Chrome is not in Safari, and not
   on your other laptop. Moving one means exporting and importing it.
 - **Private windows usually discard storage** when the window closes.
-- **Diagrams are encrypted at rest** (AES-256-GCM) using a key generated locally and retained
-  non-exportably by this browser profile — Draft Canvas never receives, stores, or has any way to
-  export that key. This protects the stored bytes if they are copied or inspected without the key
-  (e.g. a stolen disk image, or someone browsing IndexedDB files directly). It does **not** protect
-  against someone with full access to an already-unlocked copy of this browser profile: the app
-  itself must be able to use the key to open your diagrams, so anyone who can run the app as you
-  can too. See [`SECURITY.md`](../../SECURITY.md) for the full threat model and key lifecycle.
+- **Diagrams are stored as plain records** since 2.0. Builds from 1.0 to 1.11 encrypted them with a
+  key kept in the same browser profile, which protected the stored bytes against a copy made without
+  that key and against little else, while making saving impossible over plain `http://` and losing
+  every diagram if only the key store was lost. Rows saved by those builds stay readable and are
+  rewritten plain when next saved. See [`SECURITY.md`](../../SECURITY.md#browser-storage) for the
+  reasoning, and use a `.dcenc` export for a diagram that needs protecting at rest.
 - **Storage quotas are finite.** If the browser runs out of space the app tells you and keeps the
   document in memory so you can export it.
 

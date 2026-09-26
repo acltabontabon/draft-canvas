@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEdge, createNode } from '../src/document/factory';
 import { libraryShapeOf } from '../src/document/shape';
 import type { DraftSummary, Project } from '../src/document/types';
@@ -310,29 +310,6 @@ describe('LibraryScreen — the local-first line', () => {
     const toggle = screen.getByRole('button', { name: /blocking local storage/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText(/lost when this tab closes/)).toBeInTheDocument();
-  });
-
-  describe('on a page the browser will not encrypt on (plain http, not localhost)', () => {
-    beforeEach(() => {
-      Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true });
-    });
-    afterEach(() => {
-      Reflect.deleteProperty(window, 'isSecureContext');
-    });
-
-    it('says plainly that nothing can be saved, already open, on the first-run home', () => {
-      const { container } = render(<LibraryScreen session={stubSession()} />);
-      const toggle = screen.getByRole('button', { name: /needs HTTPS or localhost/ });
-      expect(toggle).toHaveAttribute('aria-expanded', 'true');
-      expect(container.querySelector('.dc-home-warn')).toContainElement(toggle);
-      expect(screen.queryByRole('button', { name: /Stored on this device/ })).not.toBeInTheDocument();
-    });
-
-    it('takes precedence over the reassurance in the library footer too', () => {
-      render(<LibraryScreen session={stubSession({ library: [shaped()] })} />);
-      expect(screen.getByRole('button', { name: /needs HTTPS or localhost/ })).toHaveAttribute('aria-expanded', 'true');
-      expect(screen.queryByRole('button', { name: /Stored on this device/ })).not.toBeInTheDocument();
-    });
   });
 
   it('says nothing about storage before storage is known', () => {

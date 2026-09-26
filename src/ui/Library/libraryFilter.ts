@@ -18,10 +18,10 @@ const TITLE_ORDER = new Intl.Collator();
  * already in memory — no new storage reads.
  *
  * Deliberately title/project-name only for now. Matching element, connector,
- * note, or attachment text would require the full, decrypted `DraftDocument`
- * bodies, which the plaintext `documents`/`DraftSummary` store never holds —
- * that's the encryption-at-rest boundary `IndexedDbRepository.ts` already
- * establishes. (The summary's `shape` is the one body-derived field, and it
+ * note, or attachment text would require the full `DraftDocument` bodies,
+ * which the `documents`/`DraftSummary` store never holds — that's the
+ * summary/body split `IndexedDbRepository.ts` already establishes. (The
+ * summary's `shape` is the one body-derived field, and it
  * is silhouettes only — kinds and boxes, no words — so there is nothing in it
  * to search.) A future pass could add an in-memory, non-persisted index built
  * by decrypting bodies lazily or in a background sweep, rebuilt each session

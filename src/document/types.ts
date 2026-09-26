@@ -751,12 +751,12 @@ export interface LibraryShape {
 /**
  * Lightweight row for the local library listing. Never holds canvas text.
  *
- * `shape` is the one body-derived field, and it is stored in the plaintext
- * `documents` store alongside the title on purpose: it holds node kinds and
- * relative positions only — never a label, a note, a code card, or a
- * connector's words — and reading every encrypted body just to draw the
- * list would make the landing screen sluggish. Anything that would widen
- * this beyond silhouettes belongs in the encrypted body.
+ * `shape` is the one body-derived field, and it is stored in the `documents`
+ * store alongside the title on purpose: it holds node kinds and relative
+ * positions only — never a label, a note, a code card, or a connector's
+ * words — and reading every body just to draw the list would make the
+ * landing screen sluggish. Anything that would widen this beyond
+ * silhouettes belongs in the body.
  */
 export interface DraftSummary {
   id: string;

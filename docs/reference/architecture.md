@@ -86,7 +86,7 @@ neither React nor React Flow. That single rule is what makes the file format sur
 | `nodes/`, `edges/` | appearance as pure functions; routing and bundling |
 | `canvas/` | the React Flow surface, projection, snapping, spatial nav |
 | `store/` | `editorStore` (the document) · `uiStore` (ephemeral UI) |
-| `storage/`, `crypto/` | persistence, autosave, encryption at rest |
+| `storage/`, `crypto/` | persistence, autosave; the passphrase export and the reader for rows earlier builds encrypted |
 | `commands/` | one registry the palette, menu and shortcut sheet all read |
 | `depth/` | the tree of rooms a shape can hold (`tree.ts`) and the view level each one shows (`level.ts`) |
 | `starters/` `continuation/` `sequence/` `presentation/` | capabilities derived from the model |
@@ -240,37 +240,46 @@ Snapshot-based over the shared-structure model. A gesture brackets into one entr
 same continuous edit merge, so typing a name is one undo. Viewport changes persist but are never
 recorded — moving the camera is not an edit.
 
-### Persistence and the crypto boundary
+### Persistence and the storage boundary
 
 ```mermaid
 flowchart TD
     APP["the app<br/><i>sees plain JSON, always</i>"]
-    REPO["IndexedDbRepository<br/><i>the only caller of crypto/</i>"]
-    CIPHER["crypto/ — the only caller of crypto.subtle"]
+    REPO["IndexedDbRepository<br/><i>the only writer of draft-canvas</i>"]
     SUM[("documents<br/>titles · timestamps · silhouette")]
-    BOD[("bodies<br/>🔒 AES-256-GCM")]
-    KEY[("key store<br/>non-extractable")]
+    BOD[("bodies<br/>plain record + stamp")]
+    OLD[("bodies written by 1.0–1.11<br/>🔒 AES-256-GCM")]
+    KEY[("key store<br/>read, never written")]
+    CIPHER["crypto/ — the only caller of crypto.subtle"]
 
     APP --> REPO
     REPO --> SUM
-    REPO --> CIPHER --> BOD
-    CIPHER --> KEY
+    REPO --> BOD
+    OLD --> CIPHER --> REPO
+    KEY --> CIPHER
 
     style CIPHER fill:#1f6feb,color:#fff,stroke:#1f6feb
 ```
 
-The two-store split is what lets the library list itself without deserializing — or decrypting — a
-single canvas. The fingerprint drawn as a library thumbnail is **silhouettes, never words**.
+The two-store split is what lets the library list itself without deserializing a single canvas. The
+fingerprint drawn as a library thumbnail is **silhouettes, never words**.
+
+Bodies are plain records since 2.0. Builds 1.0–1.11 encrypted them under a key kept in the same
+profile; `crypto/` is now a reader for those rows (and the home of the passphrase export, which is a
+different mechanism with a different threat model — see `SECURITY.md`). A row keeps its shape until
+it is next written: nothing sweeps the store, and opening a diagram never rewrites it.
 
 Every content write mints a stamp, and an open editor's save is checked against the stamp it last read:
 a different one means another tab saved other content, and the user is asked which copy to keep. A
 **camera move** is saved too — a diagram reopens where it was left — but it is not content
 (`SaveOptions.cameraOnly`): it keeps the stamp it found, and if the stored copy has moved on it is
 dropped without complaint, so looking around in one tab never makes another tab's next edit
-conflict, and never overwrites anything.
+conflict, and never overwrites anything. The body row carries its own per-write stamp for the same
+reason at the row level: a metadata edit commits only against the very row it read.
 
-Failure posture: a failed decrypt never overwrites the only copy; no IndexedDB falls back to memory
-and says so plainly.
+Failure posture: a row that cannot be read — corrupted, or encrypted under a key this profile no
+longer has — is never overwritten and never becomes an empty document; no IndexedDB falls back to
+memory and says so plainly.
 
 ### Untrusted input and schema evolution
 

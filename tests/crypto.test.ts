@@ -1,13 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
 import { encryptDocument, decryptDocument } from '../src/crypto/documentCipher';
-import { getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/keyStore';
-import { isEncryptedBody, isLegacyBody, migrateLegacyRecord } from '../src/crypto/migrateStorage';
-import * as migrateStorage from '../src/crypto/migrateStorage';
+import { getMasterKey, getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/keyStore';
+import { isEncryptedBody, isLegacyBody, isPlainBody } from '../src/crypto/bodyShapes';
 import { CRYPTO_VERSION } from '../src/crypto/types';
 import { createDocument, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
-import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
+
 import type { EncryptedBody } from '../src/crypto/types';
 
 beforeEach(() => {
@@ -149,111 +148,40 @@ describe('shape guards', () => {
     expect(isLegacyBody(legacy)).toBe(true);
   });
 
-  it('rejects garbage that matches neither shape', () => {
+  it('tells a plain 2.0 row from both, and a 1.x build would read it as legacy plaintext', () => {
+    const plain = { id: 'd1', storageVersion: 2, stamp: 'b_1', document: createDocument('C') };
+    expect(isPlainBody(plain)).toBe(true);
+    expect(isEncryptedBody(plain)).toBe(false);
+    expect(isLegacyBody(plain)).toBe(false);
+    // What `isLegacyBody` was before the plain shape existed: has a `document`, is not encrypted.
+    expect('document' in plain && !isEncryptedBody(plain)).toBe(true);
+    expect(isPlainBody({ id: 'd1', document: createDocument('D') })).toBe(false);
+    expect(isPlainBody({ id: 'd1', storageVersion: 2, document: createDocument('D') })).toBe(false);
+  });
+
+  it('rejects garbage that matches no shape', () => {
     expect(isEncryptedBody({ nonsense: true })).toBe(false);
     expect(isLegacyBody({ nonsense: true })).toBe(false);
+    expect(isPlainBody({ nonsense: true })).toBe(false);
     expect(isEncryptedBody(null)).toBe(false);
     expect(isLegacyBody(undefined)).toBe(false);
   });
 });
 
-describe('migrateLegacyRecord', () => {
-  it('encrypts a legacy row and the result decrypts back to the same document', async () => {
-    const key = await getOrCreateMasterKey();
-    const doc = createDocument('Migrate me');
-    const encrypted = await migrateLegacyRecord({ id: doc.metadata.id, document: doc }, key);
-    expect(isEncryptedBody(encrypted)).toBe(true);
-    expect(await decryptDocument(encrypted, key)).toEqual(doc);
-  });
-});
-
-describe('IndexedDbRepository.migrateLegacyRecords — the proactive sweep', () => {
-  function seedLegacyRow(document: unknown): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open('draft-canvas');
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => {
-        const tx = req.result.transaction('bodies', 'readwrite');
-        tx.objectStore('bodies').put({ id: (document as { metadata: { id: string } }).metadata.id, document });
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      };
-    });
-  }
-
-  function readRawRow(id: string): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open('draft-canvas');
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => {
-        const tx = req.result.transaction('bodies', 'readonly');
-        const getReq = tx.objectStore('bodies').get(id);
-        getReq.onsuccess = () => resolve(getReq.result);
-        getReq.onerror = () => reject(getReq.error);
-      };
-    });
-  }
-
-  it('encrypts every legacy record in storage, not only the ones opened', async () => {
-    const repository = await IndexedDbRepository.open();
-    const untouched = createDocument('Never opened');
-    await seedLegacyRow(untouched);
-
-    const result = await repository.migrateLegacyRecords();
-    expect(result).toEqual({ migrated: 1, failed: 0 });
-
-    const raw = await readRawRow(untouched.metadata.id);
-    expect(isEncryptedBody(raw)).toBe(true);
-    const key = await getOrCreateMasterKey();
-    expect(await decryptDocument(raw as EncryptedBody, key)).toEqual(untouched);
+describe('reading the key an earlier build left', () => {
+  it('is null on a profile that never had one, and makes none', async () => {
+    expect(await getMasterKey()).toBeNull();
+    __resetKeyCacheForTests();
+    expect(await getMasterKey()).toBeNull();
   });
 
-  it('never overwrites a record that was saved while the sweep was encrypting it', async () => {
-    const repository = await IndexedDbRepository.open();
-    const stale = createDocument('Before edit');
-    await seedLegacyRow(stale);
-    const edited = { ...stale, metadata: { ...stale.metadata, title: 'After edit' } };
-    const spy = vi.spyOn(migrateStorage, 'migrateLegacyRecord').mockImplementationOnce(async (row, key) => {
-      await repository.save(edited);
-      return migrateLegacyRecord(row, key);
-    });
-
-    await repository.migrateLegacyRecords();
-    spy.mockRestore();
-
-    expect((await repository.load(stale.metadata.id))!.metadata.title).toBe('After edit');
-  });
-
-  it('leaves already-encrypted records untouched', async () => {
-    const repository = await IndexedDbRepository.open();
-    const doc = createDocument('Already safe');
-    await repository.save(doc);
-    const before = await readRawRow(doc.metadata.id);
-
-    const result = await repository.migrateLegacyRecords();
-    expect(result).toEqual({ migrated: 0, failed: 0 });
-
-    const after = await readRawRow(doc.metadata.id);
-    expect(after).toEqual(before);
-  });
-
-  it('is a no-op on an empty store', async () => {
-    const repository = await IndexedDbRepository.open();
-    expect(await repository.migrateLegacyRecords()).toEqual({ migrated: 0, failed: 0 });
-  });
-
-  it('never deletes the plaintext record before the encrypted one is verified and written', async () => {
-    // migrateLegacyRecord always verifies (decrypts its own output) before
-    // returning — the repository's sweep only calls `db.put`, a single
-    // atomic write, with what that function hands back. There is no
-    // intermediate "deleted but not yet re-written" state to land in.
-    const repository = await IndexedDbRepository.open();
-    const doc = createDocument('Safety net');
-    await seedLegacyRow(doc);
-
-    await repository.migrateLegacyRecords();
-    const raw = await readRawRow(doc.metadata.id);
-    expect(raw).not.toBeNull();
-    expect(isEncryptedBody(raw)).toBe(true);
+  it('finds the key a 1.x build stored', async () => {
+    const seeded = await getOrCreateMasterKey();
+    __resetKeyCacheForTests();
+    const read = await getMasterKey();
+    expect(read).not.toBeNull();
+    const doc = createDocument('E');
+    const encrypted = await encryptDocument(doc, seeded);
+    expect(await decryptDocument(encrypted, read!)).toEqual(doc);
   });
 });

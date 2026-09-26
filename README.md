@@ -37,7 +37,7 @@ own, and [in Docker](#running-it-yourself), on your own server.
 - **Flows and presentations**: group connectors into a flow and present it one step at a time, moving between flows without leaving the presentation; export a flow as a Mermaid or PlantUML sequence diagram
 - **Keyboard-first**: press a letter to drop a shape, `Tab` to accept a suggestion, `⌘K` for everything else
 - **Starters**: compose a known architecture from the command palette: Monolith, Microservices, Event-Driven, Hexagonal, CQRS, Saga, Outbox, Medallion and more
-- **Local by default**: diagrams are saved in your browser (IndexedDB) and encrypted at rest; no backend and no account. It works offline once loaded, and a test in the suite fails on any network API in the editor's source ([what's stored, and where](docs/reference/privacy.md))
+- **Local by default**: diagrams are saved in your browser (IndexedDB); no backend and no account. It works offline once loaded, and a test in the suite fails on any network API in the editor's source ([what's stored, and where](docs/reference/privacy.md))
 - **Export**: editable `.draftcanvas` JSON, passphrase-encrypted `.dcenc`, PNG, SVG, and Mermaid or PlantUML source
 
 Diagrams live in one browser on one device. [Export anything you'd mind losing](docs/guides/saving-and-sharing.md#what-you-have-to-do).
@@ -51,7 +51,7 @@ and ship together in each [release](https://github.com/acltabontabon/draft-canva
 
 | | Runs on | Saves to | Status |
 | --- | --- | --- | --- |
-| [Web app](https://acltabontabon.com/draft-canvas/editor/) | A modern browser | The browser (IndexedDB), encrypted | Stable |
+| [Web app](https://acltabontabon.com/draft-canvas/editor/) | A modern browser | The browser (IndexedDB) | Stable |
 | [Docker](#running-it-yourself) | Your own server, behind HTTPS | The visitor's browser, as above | Stable |
 | [Desktop](#desktop) | macOS (Apple Silicon, Intel), Windows x64 | `.draftcanvas` files and folders | Stable, with unsigned installers; `desktop-v…-alpha` tags are previews |
 | [VS Code](#in-vs-code) | VS Code 1.100 or later | The `.draftcanvas` file you opened | 0.x; loads the hosted editor, so it needs to reach `acltabontabon.com` |
@@ -122,8 +122,8 @@ Then open http://localhost:8080. `latest` follows stable releases; pin a
 [version tag](https://hub.docker.com/r/acltabontabon/draft-canvas/tags) (`X.Y.Z`, or `X.Y` for its
 patches) to stay put.
 
-Serving it to other machines? Put it behind HTTPS. Browsers only allow the encryption Draft Canvas
-saves with on HTTPS or `localhost`, so over plain `http://192.168.x.x` it can't save anything.
+Serving it to other machines? Put it behind HTTPS if you want the offline cache: browsers install a
+service worker only on HTTPS or `localhost`. Saving works either way.
 
 ---
 

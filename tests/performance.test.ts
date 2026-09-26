@@ -458,25 +458,23 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
   });
 
   /**
-   * Every autosave now runs through AES-GCM (Phase 8) before it ever reaches
-   * IndexedDB. Re-confirms the save (encrypt + put) and load (get + decrypt)
-   * round trip for the full fixture stays within budget with that extra step
-   * in the path — not just the plaintext operations above.
+   * The save (put) and load (get + validate) round trip for the full fixture stays within budget —
+   * not just the in-memory operations above.
    */
-  describe('save path with encryption in the loop', () => {
+  describe('save path through IndexedDB', () => {
     beforeEach(() => {
       globalThis.indexedDB = new IDBFactory();
       __resetKeyCacheForTests();
     });
 
-    it('encrypts and persists, then decrypts and loads, the full document within budget', async () => {
+    it('persists, then loads, the full document within budget', async () => {
       const repository = await IndexedDbRepository.open();
 
       const savedAt = performance.now();
       await repository.save(doc);
       const saveElapsed = performance.now() - savedAt;
       // Generous, for the same reason as the budgets above: this exists to
-      // catch an accidental quadratic in the encrypt-then-put path, not to
+      // catch an accidental quadratic in the save path, not to
       // police milliseconds on a variable CI machine.
       expect(saveElapsed).toBeLessThan(2000);
 
