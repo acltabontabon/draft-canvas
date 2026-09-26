@@ -65,7 +65,7 @@ describe('insertStarter', () => {
     store.getState().redo();
     const after = store.getState();
     expect(after.document.nodes.map((node) => node.id)).toEqual(created.map((node) => node.id));
-    expect(after.document.edges).toHaveLength(9);
+    expect(after.document.edges).toHaveLength(8);
     expect(after.selection.nodes).toEqual(created.map((node) => node.id));
   });
 
@@ -85,15 +85,15 @@ describe('insertStarter', () => {
     expect(intersects(first, second)).toBe(false);
     expect(second.x).toBeGreaterThanOrEqual(first.x + first.width + INSERT_GAP);
     // Both are still whole: nothing was merged, nothing reused an id.
-    expect(store.getState().document.nodes).toHaveLength(24);
-    expect(store.getState().document.edges).toHaveLength(18);
-    expect(new Set(store.getState().document.nodes.map((node) => node.id)).size).toBe(24);
+    expect(store.getState().document.nodes).toHaveLength(28);
+    expect(store.getState().document.edges).toHaveLength(16);
+    expect(new Set(store.getState().document.nodes.map((node) => node.id)).size).toBe(28);
   });
 
   it('clears one starter at a time, newest first', () => {
     store.getState().insertStarter(starterById('monolith')!);
     store.getState().insertStarter(starterById('event-driven')!);
-    expect(store.getState().document.nodes).toHaveLength(18);
+    expect(store.getState().document.nodes).toHaveLength(16);
     store.getState().undo();
     expect(store.getState().document.nodes).toHaveLength(7);
     store.getState().undo();
@@ -240,7 +240,7 @@ describe('a starter after insertion is an ordinary diagram', () => {
 
   it('can be edited, regrouped and deleted like anything else', () => {
     const created = store.getState().insertStarter(starterById('microservices')!);
-    const service = created.find((node) => node.text === 'Orders')!;
+    const service = created.find((node) => node.text === 'Capability B Service')!;
 
     store.getState().updateNodeText(service.id, 'Fulfilment');
     expect(store.getState().document.nodes.find((n) => n.id === service.id)!.text).toBe('Fulfilment');

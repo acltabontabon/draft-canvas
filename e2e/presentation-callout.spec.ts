@@ -4,8 +4,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  * Presentation callouts: while a flow plays, the step's element tells what it carries — no click.
  * Who speaks is covered in `tests/presentation-attachments.test.ts` and where the callout sits in
  * `tests/callout-placement.test.ts`; these cover the real thing on the CQRS starter's
- * "Submit command" flow: step 1 arrives at Command API (code), step 4 is the publish edge (note),
- * step 6 arrives at Read Store (note), and steps 2, 3 and 5 stay silent.
+ * "Submit command" flow: step 1 arrives at Command API (code), step 5 is the publish edge (note),
+ * step 7 arrives at Read Store (note), and steps 2, 3, 4 and 6 stay silent.
  */
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -20,7 +20,7 @@ async function presentSubmitCommand(page: Page) {
   await page.getByRole('menuitemradio', { name: 'Submit command' }).click();
   // Through the opening (the title over the whole path) to the first step.
   await page.keyboard.press('ArrowRight');
-  await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 6');
+  await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 7');
 }
 
 async function goToStep(page: Page, step: number) {
@@ -29,7 +29,7 @@ async function goToStep(page: Page, step: number) {
     const current = Number((await count.textContent())!.match(/Step (\d+)/)![1]);
     if (current === step) break;
     await page.keyboard.press(current < step ? 'ArrowRight' : 'ArrowLeft');
-    await expect(count).toHaveText(`Step ${current < step ? current + 1 : current - 1} / 6`);
+    await expect(count).toHaveText(`Step ${current < step ? current + 1 : current - 1} / 7`);
   }
 }
 
@@ -103,40 +103,40 @@ async function expectInViewAndClearOfChrome(page: Page, card: Box) {
 test.describe('Presentation callouts', () => {
   test('a step’s note appears beside its connector without a click, and leaves with the step', async ({ page }) => {
     await presentSubmitCommand(page);
-    await goToStep(page, 4);
+    await goToStep(page, 5);
 
     const callout = page.locator('.dc-callout');
     await expect(callout).toHaveCount(1);
-    await expect(callout).toContainText('OrderPlaced — a fact, published after the write store commits.');
-    // Only the story — no editing chrome, and not a repeat of the flow bar's "Write Model → Domain Events".
+    await expect(callout).toContainText('Published only after the commit');
+    // Only the story — no editing chrome, and not a repeat of the flow bar's "Outbox Relay → Domain Events".
     await expect(callout.locator('button, textarea')).toHaveCount(0);
-    await expect(callout).not.toContainText('Write Model');
+    await expect(callout).not.toContainText('Outbox Relay');
 
     const [card, chip] = await settledBoxes([
       callout.locator('.dc-callout-card'),
       page.locator('.dc-attachment-chip-row').filter({ hasText: 'Note' }),
     ]);
     expect(gapBetween(card, chip)).toBeLessThan(60);
-    expect(overlaps(card, (await nodeNamed(page, 'Write Model').boundingBox())!)).toBe(false);
+    expect(overlaps(card, (await nodeNamed(page, 'Outbox Relay').boundingBox())!)).toBe(false);
     expect(overlaps(card, (await nodeNamed(page, 'Domain Events').boundingBox())!)).toBe(false);
     await expectInViewAndClearOfChrome(page, card);
     // The flow bar's announcement carries the note too.
-    await expect(page.locator('.dc-explain [role="status"]')).toContainText('Note: OrderPlaced');
+    await expect(page.locator('.dc-explain [role="status"]')).toContainText('Note: Published only after');
 
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 5 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 6 / 7');
     await expect(callout).toHaveCount(0);
 
     await page.keyboard.press('ArrowLeft');
     await expect(callout).toHaveCount(1);
-    await expect(callout).toContainText('OrderPlaced');
+    await expect(callout).toContainText('Published only after');
   });
 
   test('a node introduces itself when the flow first reaches it, and code reads as code', async ({ page }) => {
     await presentSubmitCommand(page);
 
     const callout = page.locator('.dc-callout');
-    await expect(callout.locator('.dc-callout-code')).toContainText('"type": "PlaceOrder"');
+    await expect(callout.locator('.dc-callout-code')).toContainText('"type": "ChangeStatus"');
     const [card, commandApi] = await settledBoxes([callout.locator('.dc-callout-card'), nodeNamed(page, 'Command API')]);
     expect(overlaps(card, commandApi)).toBe(false);
     expect(gapBetween(card, commandApi)).toBeLessThan(80);
@@ -146,7 +146,7 @@ test.describe('Presentation callouts', () => {
     await goToStep(page, 2);
     await expect(callout).toHaveCount(0);
 
-    await goToStep(page, 6);
+    await goToStep(page, 7);
     await expect(callout).toContainText('Shaped for the questions asked of it');
     const [readStoreCard, readStore] = await settledBoxes([callout.locator('.dc-callout-card'), nodeNamed(page, 'Read Store')]);
     expect(overlaps(readStoreCard, readStore)).toBe(false);
@@ -156,21 +156,21 @@ test.describe('Presentation callouts', () => {
   test('stepping quickly converges on the step you land on, with nothing left behind', async ({ page }) => {
     await presentSubmitCommand(page);
     await expect(page.locator('.dc-callout')).toHaveCount(1);
-    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 6 / 6');
+    for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 7 / 7');
     await expect(page.locator('.dc-callout')).toHaveCount(1);
     await expect(page.locator('.dc-callout')).toContainText('Shaped for the questions');
     await expect(page.locator('.dc-callout[data-leaving]')).toHaveCount(0);
 
-    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft');
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 6');
+    for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowLeft');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 7');
     await expect(page.locator('.dc-callout')).toHaveCount(1);
-    await expect(page.locator('.dc-callout')).toContainText('PlaceOrder');
+    await expect(page.locator('.dc-callout')).toContainText('ChangeStatus');
   });
 
   test('stays attached through zoom and resize, and docks above the bar when there is no room', async ({ page }) => {
     await presentSubmitCommand(page);
-    await goToStep(page, 4);
+    await goToStep(page, 5);
     const card = page.locator('.dc-callout .dc-callout-card');
     const chipRow = page.locator('.dc-attachment-chip-row').filter({ hasText: 'Note' });
     const resting = await settledBox(card);
@@ -210,7 +210,7 @@ test.describe('Presentation callouts', () => {
   test('with reduced motion the note is simply there, and simply gone', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await presentSubmitCommand(page);
-    await goToStep(page, 4);
+    await goToStep(page, 5);
     await expect(page.locator('.dc-callout')).toBeVisible();
     const animations = await page.evaluate(
       () =>
@@ -224,24 +224,24 @@ test.describe('Presentation callouts', () => {
 
   test('a presenter can ask another element to speak, and the step change lets it go', async ({ page }) => {
     await presentSubmitCommand(page);
-    await goToStep(page, 4);
+    await goToStep(page, 5);
     await nodeNamed(page, 'Read Store').locator('.dc-attachment-badge').click();
     await expect(page.locator('.dc-callout')).toHaveCount(1);
     await expect(page.locator('.dc-callout')).toContainText('Shaped for the questions');
     // Clicking inside the callout neither steps the presentation nor dismisses it.
     await page.locator('.dc-callout-note').click();
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 4 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 5 / 7');
     await expect(page.locator('.dc-callout')).toContainText('Shaped for the questions');
 
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-callout')).toHaveCount(0);
     await page.keyboard.press('ArrowLeft');
-    await expect(page.locator('.dc-callout')).toContainText('OrderPlaced');
+    await expect(page.locator('.dc-callout')).toContainText('Published only after');
   });
 
   test('a reveal never flashes into the next step, and closes on a second click or Escape', async ({ page }) => {
     await presentSubmitCommand(page);
-    await goToStep(page, 4);
+    await goToStep(page, 5);
     const badge = nodeNamed(page, 'Read Store').locator('.dc-attachment-badge');
     await badge.click();
     await expect(page.locator('.dc-callout')).toHaveCount(1);
@@ -262,7 +262,7 @@ test.describe('Presentation callouts', () => {
       }).observe(document.body, { childList: true, subtree: true });
     });
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 5 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 6 / 7');
     await expect(page.locator('.dc-callout')).toHaveCount(0);
     expect(await page.evaluate(() => (window as unknown as { __calloutMounts: string[] }).__calloutMounts)).toEqual([]);
 
@@ -276,6 +276,6 @@ test.describe('Presentation callouts', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('.dc-callout')).toHaveCount(0);
     // Escape backed out of the reveal only — still presenting, still on the step.
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 5 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 6 / 7');
   });
 });

@@ -7,7 +7,7 @@
  */
 import type { EdgeSemantic } from '../document/types';
 
-const STRUCTURAL_SEMANTICS: ReadonlySet<EdgeSemantic> = new Set(['dependsOn', 'implementedBy']);
+const STRUCTURAL_SEMANTICS: ReadonlySet<EdgeSemantic> = new Set(['dependsOn', 'implementedBy', 'implements']);
 
 export function isStructural(edge: { semantic?: EdgeSemantic }): boolean {
   return edge.semantic !== undefined && STRUCTURAL_SEMANTICS.has(edge.semantic);

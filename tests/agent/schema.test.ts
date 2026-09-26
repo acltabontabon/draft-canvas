@@ -71,6 +71,8 @@ describe('MCP tool definitions', () => {
     // checklist is behind get_capabilities' `readability` topic rather than here. Raised a fourth
     // time, by a few hundred characters, for open points — the one new kind of thing an agent can
     // read and raise (`openPoint` in the add op, and its fields in `set`).
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(31_800);
+    // And once more, by a word, for the `implements` relationship — the mirror of `implementedBy`,
+    // so a Hexagonal adapter's dependency on its port can be drawn the way it points.
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(31_900);
   });
 });

@@ -230,11 +230,13 @@ const OBJECT_STORAGE_FAN_OUT = defineFanOut(
 /**
  * A Port already depended on but not implemented by anything — `MATRIX['port>component']`/
  * `['port>service']` (both `implementedBy`). Same "has inbound, nothing routed yet" evidence
- * `gateway-route` above already uses.
+ * `gateway-route` above already uses — except that an implementation may also have been drawn
+ * from the implementer's end (`implements`, arriving *at* the port), and a port already satisfied
+ * that way is not missing one.
  */
 const PORT_IMPLEMENTATION = defineFanOut(
   ['port'],
-  (nb) => hasInboundEvidence(nb) && nb.out.length === 0,
+  (nb) => hasInboundEvidence(nb) && nb.out.length === 0 && !nb.in.some(({ edge }) => edge.semantic === 'implements'),
   [
     {
       id: 'port-implementation-component',

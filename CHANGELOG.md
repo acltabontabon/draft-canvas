@@ -28,6 +28,30 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
+- **The seven architecture starters were redrawn for technical accuracy.** Monolith, Modular
+  Monolith and Microservices now share one frame — a software client over a `DEPLOYMENT` boundary
+  — so the comparison is what differs: layers in one deployment; encapsulated `Capability A/B/C`
+  modules in one deployment over one shared database of module-owned tables, collaborating only
+  through an *in-process public interface*; and three capabilities each in its own deployment,
+  each owning a store that sits outside the deployed artifact. Persistence reads `reads / writes`.
+  Event-Driven is named for what it is — pub/sub with a topic and per-subscriber queues — with the
+  queues named for their responsibility, a `publishes state-change event` caption instead of a
+  business event, a dead-letter route captioned `after configured retry limit`, and notes on
+  fan-out versus competing consumers and on at-least-once delivery. Hexagonal draws dependency
+  inversion instead of captioning it: adapters on both sides are Adapters, and each implementer's
+  hollow-headed **implements** arrow points back into the port the core owns while runtime calls
+  still read left to right; its flows walk only the runtime calls. Backend for Frontend gives the
+  Web Client a browser and the Mobile Client a phone, says on each BFF what it tailors, and calls
+  the shared group *Shared backend capabilities*. CQRS is explicitly *with an asynchronous read
+  projection*: a Command Handler writes state and an outbox record in one transaction, an Outbox
+  Relay publishes afterwards, and a Projection Worker maintains the read store — with notes saying
+  CQRS itself needs neither messaging, event sourcing nor separate databases. Every domain word
+  (orders, payments, customers) is gone from the seven. Diagrams already on your canvas are not
+  touched; only what a starter inserts from now on changes.
+- **"Implements" is a relationship.** An Adapter or Service → Port connector can now say
+  `implements` — the mirror of `implemented by`, drawn from the implementer toward the contract,
+  the way the source dependency points. Both wear a hollow arrowhead, so a realization is told
+  apart from the solid-headed calls beside it; sequence export leaves both out as structural.
 - **Presentation lights the shape, not a box around it.** The step's destination used to get a
   rounded rectangle drawn around its whole bounds, label included — an editor's selection box on a
   database cylinder. It now glows along its own outline: the shape's line a little heavier, with a

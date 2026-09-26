@@ -208,7 +208,7 @@ describe('LibraryScreen — first run', () => {
     render(<LibraryScreen session={stubSession()} />);
     const hexagonal = screen.getByRole('button', { name: 'Start from Hexagonal' });
     expect(hexagonal).not.toHaveAttribute('title');
-    expect(hexagonal).toHaveAccessibleDescription(/inbound\/outbound ports/);
+    expect(hexagonal).toHaveAccessibleDescription(/owns its ports/);
   });
 
   it('draws each starter from its own topology', () => {

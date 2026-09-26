@@ -54,10 +54,15 @@ application core, a plugin host, or a module defines and something else implemen
 a thing that does work, so it takes part in exactly two relationships: it is called (by a Service)
 or used (by a Component), and it is implemented by whatever sits behind it. It gets its own
 category and its own rows, and never folds to `service` or `component`: an unlisted pairing that
-touches a port stays neutral rather than inheriting verbs a contract can't have. Every arrow keeps
-its runtime direction; the word `implemented by` on the connector *leaving* a port is what says the
-thing after it depends on the port's owner — dependency inversion, stated rather than drawn
-backwards.
+touches a port stays neutral rather than inheriting verbs a contract can't have. The
+implementation can be drawn from either end, because both readings are true: `implemented by` on
+the connector *leaving* a port keeps the runtime reading (the port, then what sits behind it);
+`implements` on a connector *arriving* at a port from an adapter or a service points the way the
+source dependency actually points — the implementer depends on the port's owner, never the other
+way round. That second arrow is what the Hexagonal starter draws, so its "dependencies point
+inward" is a picture rather than a footnote. Either way a realization wears a hollow arrowhead
+(`edges/kindStyle.ts`), the one connector that carries no runtime traffic told apart from the
+solid-headed calls beside it.
 
 **Dead-letter queue** works the same way on the messaging side: a DLQ resolves to `queue` for every
 pairing without its own row (a re-drive worker consumes it exactly like any queue), and has its own
@@ -97,9 +102,9 @@ unrestricted connector.
 | Service → Service | calls, http, grpc, command, query, event, compensates, dependsOn | calls | the one pairing with a full sync/async/callback/conditional/retry/failure/fallback picker |
 | Service → External | same as Service → Service | calls | `external` is a flavour of `service` for any pairing without its own row |
 | Component → Component | uses, dependsOn, calls | uses | an in-process dependency, never a network call; checked before the `service` fold |
-| Service → Port | calls, dependsOn | calls | |
-| Component → Port | uses, dependsOn | uses | |
-| Port → Component / Service | implementedBy | implementedBy | the thing after the port depends on the port's owner |
+| Service → Port | calls, implements, dependsOn | calls | `implements` when the service is what stands behind the port, not what drives it |
+| Component → Port | uses, calls, implements, dependsOn | uses | an adapter may drive a port (`calls`) or implement it (`implements`); only the author knows which, so neither is the default |
+| Port → Component / Service | implementedBy | implementedBy | the same realization read from the port's end: the thing after the port depends on the port's owner |
 | Port → Database | dependsOn | *(none)* | **`status: 'unusual'`** — a port is a contract; something implements it and talks to the store |
 | Actor → Service | calls, http, command, query | calls | synchronous by predetermination, no behaviour picker |
 | Database → Database | ingests, replicates, cdc, syncs, transforms | ingests | data movement, not a request/response shape; `transforms` when the data's shape genuinely changes |
@@ -157,9 +162,9 @@ consumers; a Topic *delivers to* every subscriber and *fans out to* their queues
 path is its own dashed failure route. A Stream shares a Queue's words — publish, then consume —
 because the vendor-neutral verbs are the same; nothing here assumes a particular broker.
 
-**Ports and adapters stay neutral.** Arrows follow the runtime call, words carry the inversion:
-Adapter → Port "uses", Port → Core or Adapter "implemented by". The diagram can't tell a driving
-port from a driven one, so neither is guessed.
+**Ports and adapters stay neutral.** A fresh Adapter → Port connector infers the neutral "uses" and
+Port → Core or Adapter "implemented by"; "implements" (Adapter → Port, the dependency direction) is
+one pick away. The diagram can't tell a driving port from a driven one, so neither is guessed.
 
 ### Review notes
 

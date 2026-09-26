@@ -172,7 +172,7 @@ export type ActorKind = (typeof ACTOR_KINDS)[number];
  *
  * Kept deliberately small: `generic` (unspecified — no caption, same convention as every other
  * kind's default), `module` (an internal subdivision — the Modular Monolith starter's own
- * Customer/Orders/Payments are exactly this: named, sized modules living inside one deployment
+ * Capability A/B/C are exactly this: named, sized modules living inside one deployment
  * boundary, never independently deployable), `adapter` (a ports-and-adapters translation layer —
  * Hexagonal's own use case, and also the Modular Monolith starter's inbound API), and `port` (a
  * *contract* — an interface the thing that owns it defines and something else implements or
@@ -220,6 +220,12 @@ export const EDGE_SEMANTICS = [
   'routes',
   'triggers',
   'implementedBy',
+  /** The same realization read from the implementer's end: an adapter (or a whole service)
+   *  implementing a port it does not own. Drawn from the implementer *to* the port, which is the
+   *  way the source dependency actually points — the arrow Hexagonal's dependency rule is about —
+   *  where `implementedBy` keeps the runtime reading (port, then what sits behind it). One
+   *  relationship, two directions to draw it from, like `reads`/"read by". */
+  'implements',
   /** A compensating action: a new local transaction that semantically undoes an earlier one
    *  (a saga's "release payment" after "reserve payment"). A command in every other respect —
    *  offered where `command` is, never a rollback of anything. */

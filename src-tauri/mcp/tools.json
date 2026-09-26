@@ -492,6 +492,7 @@
                   "routes",
                   "triggers",
                   "implementedBy",
+                  "implements",
                   "compensates",
                   "transforms"
                 ],
@@ -1255,6 +1256,7 @@
                         "routes",
                         "triggers",
                         "implementedBy",
+                        "implements",
                         "compensates",
                         "transforms"
                       ],

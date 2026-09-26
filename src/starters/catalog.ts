@@ -8,17 +8,28 @@
  * and each starter carries only enough elements to establish its idea — a pattern starter is drawn
  * at the scope of the problem it solves, never grown to look like an architecture. The empty space
  * is part of the design — a starter is the first thirty seconds of a diagram, not a reference
- * architecture, and a real system composes several of them.
+ * architecture, and a real system composes several of them: Hexagonal and CQRS live happily inside
+ * a monolith or one microservice, and event-driven integration needs no microservices at all. The
+ * seven architectures are seven ideas at seven scopes, never seven rungs of a ladder.
  *
  * Two rules the compositions follow, and one they don't:
  *
  * - **Relationships are never stated here.** `build.ts` derives every connector's semantics from
  *   the capability matrix, so a starter says what it connects and Draft Canvas says what that means.
+ *   Where a composition needs a relation other than the pairing's default (`implements` on an
+ *   adapter, `reads` on a query), it picks one the matrix already offers for that pairing.
  * - **Anchors are always stated here.** Symmetry is the whole point; leaving `chooseSides` to
  *   re-derive a fan-out's sides would let it drift as soon as anything moves.
  * - Nothing here sets a colour, a font, or a personality. A starter is document content; how it
  *   looks is the canvas's business (`ui/personality/`, `render/theme/tokens.ts`), so a starter is
  *   automatically correct in every theme and every personality.
+ *
+ * One vocabulary across the seven: a software `Client` (an Actor of kind `system`, a machine — a
+ * person is only drawn where a person is meant), `Capability A/B/C` for the business-neutral
+ * capabilities a system is cut into, `Application API` for an in-process entry point, `External
+ * System` for anything outside the team's control. No loans, orders, payments or customers: a
+ * starter is about responsibilities and ownership, and a domain example would only be something
+ * to rename first.
  */
 
 import {
@@ -31,8 +42,11 @@ import {
   BOUNDARY_TITLE_SUBLINE_Y,
   GUTTER,
   INNER_BAND,
+  STACK_GAP,
+  SUBTITLE_HEIGHT,
   centeredAt,
   columnsAt,
+  columnsFrom,
 } from './compose';
 import { dataStoreGlyphBounds } from '../document/dataStoreGeometry';
 import { queueTubeSpan } from '../document/queueGeometry';
@@ -56,6 +70,10 @@ const NAMED_QUEUE = { width: QUEUE.width, height: 72 };
  *  again cannot work: the glyph scales with the box, so the caption moves down with it. */
 const TABLE = { width: STORE.width, height: STORE.height };
 const ACTOR = { width: 120, height: 92 };
+/** Component's own default footprint (`DEFAULTS.componentWidth`/`componentHeight`) — an internal
+ *  piece that is not a diagram's hero sits at exactly this, so it reads as *contained* next to the
+ *  Services around it. */
+const COMPONENT = { width: 152, height: 56 };
 const TOP: StarterEdgeSpec['sourceAnchor'] = { side: 'top', offset: 0.5 };
 const BOTTOM: StarterEdgeSpec['sourceAnchor'] = { side: 'bottom', offset: 0.5 };
 const LEFT: StarterEdgeSpec['sourceAnchor'] = { side: 'left', offset: 0.5 };
@@ -108,57 +126,114 @@ function across(from: string, to: string): StarterEdgeSpec {
   return { from, to, sourceAnchor: RIGHT, targetAnchor: LEFT };
 }
 
+/** The same level line drawn the other way — right to left. Hexagonal's implementation arrows,
+ *  which point from an adapter *back* into the port it satisfies while the request still travels
+ *  left to right around them. */
+function back(from: string, to: string): StarterEdgeSpec {
+  return { from, to, sourceAnchor: LEFT, targetAnchor: RIGHT };
+}
+
+/**
+ * The persistence caption every comparison starter shares. `service>database`'s default relation
+ * is `writes` and its caption "writes to", which understates a normal application's relationship
+ * with its own store — it reads at least as often as it writes. The relation stays the matrix's
+ * own (`writes`, inferred, re-inferable); only the words are the starter's.
+ */
+const READS_WRITES = 'reads / writes';
+
+/**
+ * The software client at the top of every request-shaped starter: an Actor of kind `system` — a
+ * machine, drawn as a monitor — never the human bust. A person is drawn only where a person is
+ * meant; what calls an API is a browser, an app or another program, and calling it a person would
+ * put a human on the wrong side of the first arrow. Centred on `cx`, one `BAND` above `y`.
+ */
+function softwareClient(cx: number, above: number, text = 'Client'): StarterNodeSpec {
+  return {
+    key: 'client',
+    type: 'actor',
+    actorKind: 'system',
+    text,
+    x: centeredAt(cx, ACTOR.width),
+    y: above - BAND - ACTOR.height,
+    ...ACTOR,
+  };
+}
+
+/** A title-only boundary's second header line — the shape every subtitled boundary here uses. */
+function boundarySubtitle(
+  key: string,
+  parent: string,
+  left: number,
+  text: string,
+  size: { width: number; height: number },
+  top = 0,
+): StarterNodeSpec {
+  return {
+    key,
+    type: 'text',
+    text,
+    annotation: true,
+    parent,
+    x: left + BOUNDARY_TITLE_INSET,
+    y: top + BOUNDARY_TITLE_SUBLINE_Y,
+    ...size,
+  };
+}
+
 /* --------------------------------------------------------------- monolith -- */
 /**
- * One deployable application, drawn as one box — and, inside it, the classic *layers*: an inbound
- * API, the business logic, and the data access that reaches the store. That horizontal layering is
- * the whole contrast with the Modular Monolith next to it in the palette (one deployable organised
- * in vertical *modules*), so it's the one thing this starter spends its elements on.
+ * One deployable application. That is the whole definition — not "one machine", not "one
+ * database", not "layers" — so the one element this starter spends everything on is the
+ * `DEPLOYMENT` boundary: build it, test it, version it, ship it, as a unit. What is drawn inside it
+ * is *one* common way to organise such an application, the classic layers (an inbound API, the
+ * application logic, the data access that reaches the store), and the boundary's own note says so.
  *
  * Every layer is a `Component`, never a `Service`: nothing inside one deployable is independently
- * deployable, and the same rule already holds inside Hexagonal's core and Modular Monolith's
- * boundary. `API` and `Data Access` are `adapter` Components — the two places the application
- * translates to and from the outside world (the same notched silhouette Hexagonal's adapters wear);
- * `Business Logic` is a plain Component between them. All three sit at Component's own default
- * footprint, as peers: a layered monolith has no hero layer, its hero is the boundary that holds
- * them. `Data Access` earns its place by making "the database is outside the application" literally
- * true — without it, business logic writes straight to the store and the layering isn't there to
- * read. The external call leaves from `Business Logic` (`calls`, level, crossing the boundary
- * edge on the right): the honest place most monoliths call out from, and drawn as the one line
- * that leaves sideways so it reads as "this one goes outside" before its caption is read.
+ * deployable, and the layers talk in-process (`component>component` infers `uses`, never `calls`).
+ * `API` and `Data Access` are `adapter` Components — the two places the application translates to
+ * and from the outside world; `Application Logic` is a plain Component between them. All three sit
+ * at Component's own height, drawn as three equal bands spanning the box: a layered monolith has no
+ * hero layer, its hero is the boundary that holds them.
  *
- * `Database` is a generic Data Store outside the boundary, directly beneath it — a separate runtime
- * resource, not part of the deployed artifact; which engine it is stays the team's decision. The
- * two notes carry the production facts a diagram this size can't afford to show as elements: what
- * "one artifact" means operationally, and that the schema ships with the release.
+ * `Application Database` is a generic Data Store outside the boundary, directly beneath it — a
+ * separate runtime resource, not part of the deployed artifact; which engine it is stays the
+ * team's decision. Its connector says `reads / writes` rather than the matrix's default "writes
+ * to", because that is what a data-access layer does with its store. `External System` sits
+ * outside on the right, level with the layer that calls it — the application logic, which is what
+ * decides to call out — so the one line that leaves sideways reads as "this one goes outside".
+ *
+ * Compact on purpose: the layers stack at `STACK_GAP`, the least room a one-word caption needs
+ * between two components inside a box, and the store sits one `INNER_BAND` under the boundary.
+ * Only the client keeps a full `BAND` above: its connector crosses the boundary's header row, and
+ * that is the room its caption needs to sit clear of the title.
  */
-/** Every layer at Component's own default footprint (`DEFAULTS.componentWidth`/`componentHeight`)
- *  — see this block's doc comment for why no layer is grown into a hero. */
-const LAYER = { width: 152, height: 56 };
+/**
+ * A layer is a *band*: Component's own height, but wide enough to span the application the way a
+ * layered diagram has always drawn its layers — a layer is the whole application at one level of
+ * abstraction, not a box among boxes. The width is also what keeps the client's connector honest:
+ * it enters the API layer at the layer's centre, and the `DEPLOYMENT` header (plate, title and
+ * caption) is drawn from the boundary's left edge, so a narrow box would run that connector
+ * straight through the header text. Wide bands put the centre well clear of it.
+ */
+const LAYER = { width: 376, height: COMPONENT.height };
 const MONOLITH_BOUNDARY_WIDTH = LAYER.width + BOUNDARY_PAD * 2;
 const MONOLITH_CX = MONOLITH_BOUNDARY_WIDTH / 2;
 const MONOLITH_API_Y = BOUNDARY_HEADER;
-const MONOLITH_LOGIC_Y = MONOLITH_API_Y + LAYER.height + INNER_BAND;
-const MONOLITH_DATA_Y = MONOLITH_LOGIC_Y + LAYER.height + INNER_BAND;
+const MONOLITH_LOGIC_Y = MONOLITH_API_Y + LAYER.height + STACK_GAP;
+const MONOLITH_DATA_Y = MONOLITH_LOGIC_Y + LAYER.height + STACK_GAP;
 const MONOLITH_BOUNDARY_HEIGHT = MONOLITH_DATA_Y + LAYER.height + BOUNDARY_PAD;
 const MONOLITH_EXTERNAL_X = MONOLITH_BOUNDARY_WIDTH + GUTTER;
+/** Wide enough for "Application Database" on one line — a cylinder's caption never wraps. */
+const DATABASE_BOX = { width: 176, height: STORE.height };
 
 const monolith: ArchitectureStarter = {
   id: 'monolith',
   category: 'architecture',
   name: 'Monolith',
-  description: 'One deployable application over one data store',
-  aliases: ['monolith', 'monolithic', 'single deployment', 'one application'],
+  description: 'One application, built and deployed as a unit',
+  aliases: ['monolith', 'monolithic', 'single deployment', 'one application', 'layered'],
   nodes: [
-    {
-      key: 'client',
-      type: 'actor',
-      actorKind: 'human',
-      text: 'Client',
-      x: centeredAt(MONOLITH_CX, ACTOR.width),
-      y: -(BAND + ACTOR.height),
-      ...ACTOR,
-    },
+    softwareClient(MONOLITH_CX, 0),
     {
       key: 'app',
       type: 'group',
@@ -169,7 +244,10 @@ const monolith: ArchitectureStarter = {
       width: MONOLITH_BOUNDARY_WIDTH,
       height: MONOLITH_BOUNDARY_HEIGHT,
       attachments: [
-        { type: 'note', text: 'Built, tested, versioned and deployed as one artifact. Scale by running more copies.' },
+        {
+          type: 'note',
+          text: 'Built, tested, versioned and deployed as one unit — that is the whole definition. Layers are one common way to organise the inside, not a requirement; nor is one database or one running copy.',
+        },
       ],
     },
     {
@@ -186,7 +264,7 @@ const monolith: ArchitectureStarter = {
       key: 'logic',
       type: 'component',
       componentKind: 'generic',
-      text: 'Business Logic',
+      text: 'Application Logic',
       parent: 'app',
       x: centeredAt(MONOLITH_CX, LAYER.width),
       y: MONOLITH_LOGIC_Y,
@@ -206,12 +284,14 @@ const monolith: ArchitectureStarter = {
       key: 'database',
       type: 'database',
       databaseKind: 'generic',
-      text: 'Database',
+      text: 'Application Database',
       accent: 'blue',
-      x: centeredAt(MONOLITH_CX, STORE.width),
-      y: MONOLITH_BOUNDARY_HEIGHT + BAND,
-      ...STORE,
-      attachments: [{ type: 'note', text: 'One schema, migrated with each release.' }],
+      x: centeredAt(MONOLITH_CX, DATABASE_BOX.width),
+      y: MONOLITH_BOUNDARY_HEIGHT + INNER_BAND,
+      ...DATABASE_BOX,
+      attachments: [
+        { type: 'note', text: 'A separate runtime resource, not part of the deployed artifact. One database is typical, not required.' },
+      ],
     },
     {
       // Outside the boundary, level with the layer that calls it, so the arrow crossing the
@@ -219,6 +299,7 @@ const monolith: ArchitectureStarter = {
       key: 'external',
       type: 'service',
       serviceKind: 'external',
+      text: 'External System',
       accent: 'teal',
       x: MONOLITH_EXTERNAL_X,
       y: centeredAt(MONOLITH_LOGIC_Y + LAYER.height / 2, SERVICE.height),
@@ -229,7 +310,7 @@ const monolith: ArchitectureStarter = {
     { key: 'call', ...down('client', 'api') },
     { key: 'dispatch', ...down('api', 'logic') },
     { key: 'access', ...down('logic', 'data') },
-    { key: 'persist', ...down('data', 'database') },
+    { key: 'persist', ...down('data', 'database'), label: READS_WRITES },
     { key: 'reach', ...across('logic', 'external') },
   ],
   flows: [
@@ -238,7 +319,7 @@ const monolith: ArchitectureStarter = {
       accent: 'green',
       steps: [
         { edgeKey: 'call' },
-        { edgeKey: 'dispatch' },
+        { edgeKey: 'dispatch', caption: 'In-process — no network between layers' },
         { edgeKey: 'access' },
         { edgeKey: 'persist' },
       ],
@@ -253,176 +334,61 @@ const monolith: ArchitectureStarter = {
 
 /* ------------------------------------------------------- modular monolith -- */
 /**
- * One deployable application whose internals are the whole point: three peer modules, each
- * reached individually through one internal adapter, each owning its own slice of one shared
- * database. Every choice below exists to keep this from reading as Microservices, a layered
- * architecture, a request-fan-out bus, or a linear pipeline — the four misreadings a Modular
- * Monolith most needs to avoid.
+ * The same `DEPLOYMENT` boundary as the Monolith, with the inside cut differently: three peer
+ * modules, each an explicitly encapsulated capability, behind one in-process `Application API`.
+ * Everything the Monolith starter says about the boundary holds here unchanged — one artifact, one
+ * deploy — and the two are drawn on the same axis with the same client, so the comparison is the
+ * inside, not the frame. Read against Microservices next to it in the palette, the difference is
+ * the frame: three modules in one deployment, three services in three.
  *
- * The outer boundary reads `Application` / `Single deployable unit`, not `Application` under a
- * fixed `DEPLOYMENT` tag. `boundaryPreset: 'deployment'`'s caption is a closed vocabulary word
- * (`nodes/describe.ts`'s `BOUNDARY_STYLES`) — there's no way to make it say anything but
- * `DEPLOYMENT` — so saying the actual phrase means dropping the preset caption
- * (`boundaryPreset: 'boundary'`, the same choice Hexagonal already made for `Application Core`)
- * and adding one small `annotation: true` text node directly under the boundary's own title, the
- * identical technique Hexagonal already uses for its own `Inbound ports`/`Outbound ports` labels.
- * `Application` stays the one real title (primary, in `groupTitle`);
- * `Single deployable unit` rides the quiet annotation style (secondary, muted, no chip) — and
- * says, specifically, *unit*: this boundary is the one thing that gets built and shipped as a
- * single artifact, not a generic "everything the application owns" container. That distinction is
- * what earns the database its place *outside* it (see below). The subtitle sits at
- * `BOUNDARY_TITLE_INSET`/`BOUNDARY_TITLE_SUBLINE_Y` (`compose.ts`) rather than an ordinary child's
- * `BOUNDARY_PAD` inset and `BOUNDARY_HEADER_CAPTION_ONLY` floor — it shares the title's own left
- * edge and sits as close beneath it as the title's own metrics allow, deliberately reading as the
- * second line of one header rather than a detached annotation that happens to be nearby.
- * `API` and all three modules still sit inside this one boundary: nothing here gets its own
- * separate boundary, which is precisely
- * what would turn this into Microservices.
+ * `Capability A/B/C` are `module` Components (never Services, never their own boundaries — either
+ * would turn this into Microservices). The one thing a modular monolith enforces is *how modules
+ * may talk*: through each other's public interface, in-process, never into each other's internals
+ * or tables. That rule is exactly one connector, `Capability B → Capability C`, captioned
+ * `in-process public interface` — "public API" alone can be read as HTTP, and the whole point is
+ * that it isn't. A is left fully independent: the point is that a controlled dependency is
+ * possible, not that every module needs one. The modules sit a wider gutter apart than the shared
+ * `GUTTER` so that caption has a corridor of its own.
  *
- * `Payments`, `Orders`, and `Customer` are `Component`/`module` nodes, not empty boundaries. An
- * empty boundary box says "here is a zone" and nothing else — it can't be the hero of a diagram,
- * only its container. A Component is a real, sized, named thing that can still sit inside
- * `Application`'s own boundary while reading as internal rather than a deployable peer — the same
- * read `docs/reference/architecture.md` already documents for Hexagonal's Use Cases and Domain Model,
- * applied here to the primitive it names for exactly this ("an internal subdivision" —
- * `document/types.ts`'s `COMPONENT_KINDS`). Grown past Component's own default footprint (152×56
- * → `MODULE`'s 176×76) the same way Hexagonal grew its one hub node past default for hero status —
- * except here there's no separate "core" competing for it, so the growth goes straight to the
- * three modules themselves. They stay larger than `API` and sit as visual peers of each other:
- * identical size, identical row, no nesting, no nesting hierarchy implied.
- *
- * `API` is a `Component`/`adapter`, not a `Service` — the monolith's own inbound dispatch point,
- * living entirely inside the one `Application` boundary, not an externally-reachable network
- * endpoint. `actor>component` infers the correct `calls` for the one crossing that's real here
- * (Client → API). Its three edges down into the modules are `component>component`, whose own
- * exact matrix row defaults to `uses`, not `service>service`'s `calls` — in-process dispatch never
- * reads as a network call. All three leave the same point on `API`'s bottom edge
- * (`down('api', …)`, the plain shared-anchor helper every other fan-out in this file uses), so
- * `edges/bundles.ts`'s Smart Routing bundles them into one shared trunk with one collapsed "uses"
- * caption — a symmetric fork reading as one deliberate relationship into three peer capabilities,
- * not three unrelated lines that happen to start nearby. An earlier revision kept these
- * individually unbundled (`routeMode: 'direct'`, spread anchors, straight lines) on the theory
- * that a shared trunk flattens three separately-owned relationships into one; the accepted design
- * came back to the bundle regardless — the symmetric, single-caption fork reads as more
- * intentional than three separate diagonals, and the document model underneath is identical
- * either way (three real, independent, individually-selectable edges — bundling is a rendering
- * choice, `edges/bundles.ts`'s own doc comment is explicit that nothing about the relationships
- * themselves changes). The API is an inbound adapter into three capabilities, never an
- * orchestration bus; the trunk says "one entry point," not "one relationship."
- *
- * Module-to-module coupling is exactly one edge: `Orders → Customer`, captioned `uses public API`
- * rather than the plain inferred `uses` — an explicit `label` override (the one documented escape
- * hatch from "relationships come from the matrix," `StarterEdgeSpec.label`) naming the *rule*
- * itself: modules may collaborate, but only through another module's own public surface, never by
- * reaching into its internals. `Payments` carries no module-to-module edge at all, staying a
- * fully independent peer. A chain (`Payments → Orders → Customer`) or a mesh would invent
- * domain coupling this pattern doesn't actually require; the point is that *a* controlled,
- * explicit, contract-shaped dependency is possible, not that every module needs one.
- *
- * `Shared Infrastructure` — an earlier revision's fourth internal layer — stays gone. It added a
- * whole extra tier purely to gesture at "some shared platform code exists," without being
- * load-bearing for what this starter is actually about: modules, their explicit contract, and
- * their data.
- *
- * The database sits *outside* the one `Application` boundary, centred directly beneath it — the
- * boundary is the single deployable *unit*, and a database is normally its own separate runtime
- * resource, not something that ships inside the same deployed artifact as the application code. A
- * previous revision moved it inside on the reasoning that a modular monolith's database "ships as
- * part of the one deployable unit"; that blurred exactly the distinction `Single deployable unit`
- * now exists to draw, and is reverted here. Placement alone still keeps it visibly, unambiguously
- * associated with the application above it: centred on the same axis, one ordinary gap below,
- * with nothing else nearby it could be mistaken for belonging to.
- *
- * It carries exactly one edge: `Application → Application Database` (`down('app', 'database')`),
- * from the boundary itself, not any one module. No per-module edge exists — an earlier revision
- * drew `Payments → Application Database`/`Orders → …`/`Customer → …`, each labelled `owns`, but
- * every one of those edges necessarily starts at a *module* and ends at the *database node
- * itself*, so the arrow's own endpoints say "Payments owns [the] Application Database" no matter
- * what word labels it — three modules can't each own the same one node without that reading like
- * three overlapping claims on the same thing, which is exactly backwards: the modules own their
- * *data*, not the shared physical store that happens to hold it. The boundary-level edge instead
- * says "the application, as a whole, persists here" — a claim only the boundary itself can
- * honestly make.
- *
- * That edge is deliberately uncaptioned. A `group` node has no category of its own in
- * `connectorSemantics.ts` (`categoryOf` falls through to `'generic'`, exactly alongside `text`,
- * `note`, and `code` — `tests/connector-semantics.test.ts` pins this explicitly, so it's a tested,
- * deliberate design decision, not a gap this file could patch on its own authority), and the
- * capability matrix's own doc comment lists "anything touching a generic node" among its
- * deliberately-absent pairs — so `inferRelationship` genuinely returns nothing for this pairing,
- * the same honest "no opinion" a hand-drawn boundary→database connection gets anywhere else in the
- * app. Rather than force a label onto a relationship the matrix doesn't recognise (which would say
- * something the rest of the app doesn't actually agree with — the one thing `docs/reference/architecture.md`'s
- * own rule for this file, "relationships come from the matrix, never from the catalog," exists to
- * prevent), this connector carries no `label` and gets none: `DraftEdgeView.tsx`'s caption block is
- * gated on `edge.semantic` being truthy, so an edge with neither an inferred semantic nor an
- * explicit label renders as a plain, honest line — present because the association is real, silent
- * because Draft Canvas has no opinion on what to call it at this level. `Application Database` is
- * sized to `MODULE`'s own width (176, not `STORE`'s own 172) because its label needs the room
- * on a single line — a data-store cylinder's caption never wraps (`nodes/describe.ts`'s
- * `dataStoreCylinder`). No annotation sits beneath it either: an earlier revision added
- * `Module-owned data` to spell out the ownership principle in words, but the boundary-level edge,
- * the database's own placement, and the module row above it already carry that weight — a caption
- * repeating what the diagram already shows is exactly the noise a starter should stay quiet about.
- *
- * What a later pass added is depth without elements: the store is a generic Data Store (which
- * engine is the team's decision, not the starter's), and two click-to-reveal notes carry the
- * production facts that make a modular monolith work in practice — the boundary's ("one artifact,
- * one deploy; module lines are enforced at build time, not by the network") and the database's
- * ("one database, three schemas; no query crosses a module line").
+ * Data: one `Shared Database` boundary holding one `table` Data Store per module — three schemas
+ * of one physical database, each written only by its own module, straight down its own column. Not
+ * three cylinders (that would say three database servers, which modularity does not require) and
+ * not one cylinder with three arrows into it (which cannot say *which* module owns *what*). The
+ * boundary is a `boundary`, not a `deployment`: it groups logically, and its note says a separate
+ * schema is enough. Its title is kept short so the leftmost column's connector crosses its top edge
+ * clear of the header text; the ownership rule lives in the note rather than a subtitle for the
+ * same reason.
  */
-/** The one inbound interface of the monolith — a routing/dispatch adapter, not an independently
- *  deployable network peer. Kept at Component's own default footprint (`document/limits.ts`'s
- *  `componentWidth`/`componentHeight`): a Component that isn't this diagram's hero gets no special
- *  treatment, exactly like Hexagonal's own Adapters. */
-const API = { width: 152, height: 56 };
-/** The three business modules — the entire reason this diagram exists. Grown past Component's
- *  default the way Hexagonal grew exactly one component, its hub — but by more, since these three
- *  aren't sharing hero status with a separate "core." */
 const MODULE = { width: 176, height: 76 };
-const MODULAR_CX = 396;
-const MODULE_COLUMNS = columnsAt(MODULAR_CX, 3, MODULE.width, GUTTER);
-const MODULAR_INNER_LEFT = MODULE_COLUMNS[0]!;
-const MODULAR_INNER_WIDTH = MODULE_COLUMNS[2]! + MODULE.width - MODULAR_INNER_LEFT;
-// `BOUNDARY_TITLE_SUBLINE_Y`, not `BOUNDARY_HEADER_CAPTION_ONLY`: the latter is the floor an
-// ordinary child of *any* boundary must clear, generous enough to also cover presets with a real
-// caption row above the title; this subtitle isn't ordinary content, it's the second line of the
-// boundary's own header, and sits exactly as close to the title as that header's own metrics
-// allow — see `tests/starters.test.ts`'s narrow, explicit exception for this one node.
-const MODULAR_SUBTITLE_Y = BOUNDARY_TITLE_SUBLINE_Y;
-/** The boundary's own `Single deployable unit` subtitle — the one small `annotation: true` label
- *  left in this starter. Width reuses `MODULE`'s own 176, comfortably past what the text needs at
- *  this style's real font metrics (`connectorCaption`, 9.5px/500, measured directly in a canvas
- *  context rather than estimated — the fallback text measurer this repo's own test environment
- *  uses under-measures real browser font metrics by a wide enough margin to pass a narrower check
- *  here and still visibly clip live). */
-const MODULAR_NOTE = { width: MODULE.width, height: 24 };
-const MODULAR_NOTE_GAP = 8;
-// Clears the `Single deployable unit` subtitle before the API begins — `BOUNDARY_HEADER` alone
-// (sized for a preset caption + title, not a title + a second annotation line) would overlap it.
-const MODULAR_API_Y = MODULAR_SUBTITLE_Y + MODULAR_NOTE.height + MODULAR_NOTE_GAP;
-/** A full `BAND`, not `INNER_BAND`: this is the one gap the API→module fan-out has to plan a
- *  shared trunk across (`edges/bundles.ts`), and a trunk that lands a few pixels above the modules
- *  it feeds reads as a near-miss rather than as routing. */
-const MODULAR_MODULES_Y = MODULAR_API_Y + API.height + BAND;
-// The module row is the last thing the boundary contains — the database moved back outside it
-// (see this block's own doc comment) — so `BOUNDARY_PAD` closes the boundary directly beneath it.
-const MODULAR_BOUNDARY_HEIGHT = MODULAR_MODULES_Y + MODULE.height + BOUNDARY_PAD;
+/** Wider than `GUTTER`: the one module-to-module connector carries the starter's longest caption
+ *  level between two modules, and the caption has to clear both. */
+const MODULE_GUTTER = 168;
+const MODULE_COLUMNS = columnsFrom(BOUNDARY_PAD, 3, MODULE.width, MODULE_GUTTER);
+const MODULAR_INNER_WIDTH = MODULE_COLUMNS[2]! + MODULE.width - MODULE_COLUMNS[0]!;
 const MODULAR_BOUNDARY_WIDTH = MODULAR_INNER_WIDTH + BOUNDARY_PAD * 2;
-/** `MODULE`'s width, not `STORE`'s own 172: "Application Database" needs the room on a single
- *  line — a data-store cylinder's caption never wraps (`nodes/describe.ts`'s `dataStoreCylinder`).
- */
-const DATABASE_BOX = { width: MODULE.width, height: STORE.height };
-// `INNER_BAND`, not the fuller `BAND`: the one boundary→database edge is a single uncaptioned
-// line, not a fan needing trunk-planning room (see this block's own doc comment) — only enough gap
-// to read as clearly its own separate runtime resource, not a part the boundary forgot to include.
-const MODULAR_DATABASE_Y = MODULAR_BOUNDARY_HEIGHT + INNER_BAND;
+const MODULAR_CX = MODULAR_BOUNDARY_WIDTH / 2;
+const MODULAR_API_Y = BOUNDARY_HEADER;
+/** A full `BAND`, not `STACK_GAP`: this is the gap the API → module fan-out plans its shared
+ *  trunk across (`edges/bundles.ts`), and a trunk that lands a few pixels above the modules it
+ *  feeds reads as a near-miss rather than as routing. */
+const MODULAR_MODULES_Y = MODULAR_API_Y + COMPONENT.height + BAND;
+const MODULAR_BOUNDARY_HEIGHT = MODULAR_MODULES_Y + MODULE.height + BOUNDARY_PAD;
+/** The database boundary is wider than a plain `BOUNDARY_PAD` on each side: its title is drawn at
+ *  the left, and the leftmost table's connector — which crosses the boundary's top edge at the
+ *  table's centre — has to land right of the title's last letter, not through it. */
+const MODULAR_DB_PAD = 64;
+const MODULAR_DB_Y = MODULAR_BOUNDARY_HEIGHT + INNER_BAND;
+const MODULAR_TABLES_Y = MODULAR_DB_Y + BOUNDARY_HEADER_TITLE_ONLY;
+const MODULAR_DB_X = MODULE_COLUMNS[0]! + MODULE.width / 2 - TABLE.width / 2 - MODULAR_DB_PAD;
+const MODULAR_DB_WIDTH = MODULE_COLUMNS[2]! + MODULE.width / 2 + TABLE.width / 2 + MODULAR_DB_PAD - MODULAR_DB_X;
+const MODULAR_DB_HEIGHT = BOUNDARY_HEADER_TITLE_ONLY + TABLE.height + BOUNDARY_PAD;
+const CAPABILITIES = ['A', 'B', 'C'] as const;
 
 const modularMonolith: ArchitectureStarter = {
   id: 'modular-monolith',
   category: 'architecture',
   name: 'Modular Monolith',
-  description: 'One deployment, strongly separated modules',
+  description: 'One deployable, explicitly encapsulated modules inside',
   aliases: [
     'modular monolith',
     'modular architecture',
@@ -432,226 +398,161 @@ const modularMonolith: ArchitectureStarter = {
     'monolith modules',
   ],
   nodes: [
+    softwareClient(MODULAR_CX, 0),
     {
-      key: 'client',
-      type: 'actor',
-      actorKind: 'human',
-      text: 'Client',
-      x: centeredAt(MODULAR_CX, ACTOR.width),
-      y: -(BAND + ACTOR.height),
-      ...ACTOR,
-    },
-    {
-      // `'boundary'`, not `'deployment'`: that preset's caption is the fixed word `DEPLOYMENT`,
-      // and this starter says the actual phrase "single deployable unit" instead, via the plain
-      // annotation right below (`app-subtitle`) — the same "preset caption is a closed
-      // vocabulary, an annotation is free text" split Hexagonal already established.
       key: 'app',
       type: 'group',
-      boundaryPreset: 'boundary',
+      boundaryPreset: 'deployment',
       text: 'Application',
-      x: MODULAR_INNER_LEFT - BOUNDARY_PAD,
+      x: 0,
       y: 0,
       width: MODULAR_BOUNDARY_WIDTH,
       height: MODULAR_BOUNDARY_HEIGHT,
       attachments: [
-        { type: 'note', text: 'One artifact, one deploy. Module boundaries are enforced by build rules, not by the network.' },
+        {
+          type: 'note',
+          text: 'One artifact, one deploy — the same unit as the Monolith. Module boundaries are enforced at build time (packages, visibility, dependency rules), not by the network.',
+        },
       ],
-    },
-    {
-      // Sits directly beneath the boundary's own title (drawn by `group()` itself, not a node) —
-      // a plain annotation, not a second title competing for the same line, but deliberately
-      // sharing the title's exact left edge (`BOUNDARY_TITLE_INSET`, 12) rather than falling back
-      // to an ordinary child's wider `BOUNDARY_PAD` inset: this is the second line of one header,
-      // not independent content, and reads as one only if it lines up with the first. See
-      // `tests/starters.test.ts`'s narrow, explicit exception for this one node.
-      key: 'app-subtitle',
-      type: 'text',
-      text: 'Single deployable unit',
-      annotation: true,
-      parent: 'app',
-      x: MODULAR_INNER_LEFT - BOUNDARY_PAD + BOUNDARY_TITLE_INSET,
-      y: MODULAR_SUBTITLE_Y,
-      ...MODULAR_NOTE,
     },
     {
       key: 'api',
       type: 'component',
       componentKind: 'adapter',
-      text: 'API',
+      text: 'Application API',
       parent: 'app',
-      x: centeredAt(MODULAR_CX, API.width),
+      x: centeredAt(MODULAR_CX, COMPONENT.width),
       y: MODULAR_API_Y,
-      ...API,
+      ...COMPONENT,
     },
-    // Left to right: Payments, Orders, Customer — Orders adjacent to Customer is what keeps the
-    // one module-to-module edge below (`Orders → Customer`) a short, non-crossing hop; Payments
-    // carries no module-to-module edge at all, staying a fully independent peer.
+    ...CAPABILITIES.map(
+      (letter, index): StarterNodeSpec => ({
+        key: `module-${letter.toLowerCase()}`,
+        type: 'component',
+        componentKind: 'module',
+        text: `Capability ${letter}`,
+        parent: 'app',
+        x: MODULE_COLUMNS[index]!,
+        y: MODULAR_MODULES_Y,
+        ...MODULE,
+      }),
+    ),
     {
-      key: 'module-payments',
-      type: 'component',
-      componentKind: 'module',
-      text: 'Payments',
-      parent: 'app',
-      x: MODULE_COLUMNS[0]!,
-      y: MODULAR_MODULES_Y,
-      ...MODULE,
-    },
-    {
-      key: 'module-orders',
-      type: 'component',
-      componentKind: 'module',
-      text: 'Orders',
-      parent: 'app',
-      x: MODULE_COLUMNS[1]!,
-      y: MODULAR_MODULES_Y,
-      ...MODULE,
-    },
-    {
-      key: 'module-customer',
-      type: 'component',
-      componentKind: 'module',
-      text: 'Customer',
-      parent: 'app',
-      x: MODULE_COLUMNS[2]!,
-      y: MODULAR_MODULES_Y,
-      ...MODULE,
-    },
-    {
-      // Outside `app`, not inside it — see this block's own doc comment. Centred on the same
-      // `MODULAR_CX` axis as everything above it, so the association reads from alignment alone.
       key: 'database',
-      type: 'database',
-      databaseKind: 'generic',
-      text: 'Application Database',
-      accent: 'blue',
-      x: centeredAt(MODULAR_CX, DATABASE_BOX.width),
-      y: MODULAR_DATABASE_Y,
-      ...DATABASE_BOX,
+      type: 'group',
+      boundaryPreset: 'boundary',
+      text: 'Shared Database',
+      x: MODULAR_DB_X,
+      y: MODULAR_DB_Y,
+      width: MODULAR_DB_WIDTH,
+      height: MODULAR_DB_HEIGHT,
       attachments: [
         {
           type: 'note',
-          text: 'One database, three schemas: each module owns its tables, and no query crosses a module line.',
+          text: 'One physical database, one schema per module. A module reads and writes only its own tables; anything it needs from another module goes through that module’s interface. Separate servers are not required.',
         },
       ],
     },
+    ...CAPABILITIES.map(
+      (letter, index): StarterNodeSpec => ({
+        key: `tables-${letter.toLowerCase()}`,
+        type: 'database',
+        databaseKind: 'table',
+        text: `Capability ${letter} Tables`,
+        accent: 'blue',
+        parent: 'database',
+        x: centeredAt(MODULE_COLUMNS[index]! + MODULE.width / 2, TABLE.width),
+        y: MODULAR_TABLES_Y,
+        ...TABLE,
+      }),
+    ),
   ],
   edges: [
     { key: 'call', ...down('client', 'api') },
-    // All three leave the same point on API's bottom edge, so Smart Routing bundles them into one
-    // shared trunk with one collapsed "uses" caption — three individual edges in the document
-    // model (each still its own relationship, still independently selectable/deletable), one
-    // deliberate, symmetric fork on screen. See this block's own doc comment for why this starter
-    // wants the bundle here, unlike the module→database connectors below.
-    { key: 'dispatch-payments', ...down('api', 'module-payments') },
-    { key: 'dispatch-orders', ...down('api', 'module-orders') },
-    { key: 'dispatch-customer', ...down('api', 'module-customer') },
-    // The one controlled, explicit module dependency — see this block's own doc comment for why
-    // it's exactly one, and why it's captioned as a contract rather than the plain inferred `uses`.
-    {
-      key: 'uses-public-api',
-      from: 'module-orders',
-      to: 'module-customer',
-      sourceAnchor: RIGHT,
-      targetAnchor: LEFT,
-      label: 'uses public API',
-    },
-    // The one high-level "this application persists somewhere" connector — from the boundary
-    // itself, not any one module. Deliberately uncaptioned: see this block's own doc comment.
-    { key: 'persist', ...down('app', 'database') },
+    // All three leave the same point on the API's bottom edge, so Smart Routing bundles them into
+    // one shared trunk with one collapsed "uses" caption — three individual edges in the document
+    // model, one deliberate, symmetric fork on screen: one entry point, three capabilities.
+    ...CAPABILITIES.map((letter) => ({ ...down('api', `module-${letter.toLowerCase()}`), key: `dispatch-${letter.toLowerCase()}` })),
+    // The one controlled, explicit module dependency — see this block's own doc comment.
+    { key: 'collaborate', ...across('module-b', 'module-c'), label: 'in-process public interface' },
+    // Each module persists straight down into its own tables, and nowhere else.
+    ...CAPABILITIES.map((letter) => ({
+      ...down(`module-${letter.toLowerCase()}`, `tables-${letter.toLowerCase()}`),
+      key: `persist-${letter.toLowerCase()}`,
+      label: READS_WRITES,
+    })),
   ],
   flows: [
     {
-      title: 'Handle a Payments request',
+      title: 'Handle a request',
       accent: 'green',
-      steps: [{ edgeKey: 'call' }, { edgeKey: 'dispatch-payments' }, { edgeKey: 'persist' }],
+      steps: [{ edgeKey: 'call' }, { edgeKey: 'dispatch-a' }, { edgeKey: 'persist-a', caption: 'Its own tables, nobody else’s' }],
     },
     {
-      title: 'Handle an Orders request',
+      title: 'Collaborate across modules',
       accent: 'amber',
       steps: [
         { edgeKey: 'call' },
-        { edgeKey: 'dispatch-orders' },
-        { edgeKey: 'uses-public-api', caption: 'Never reaches into Customer’s internals' },
-        { edgeKey: 'persist' },
+        { edgeKey: 'dispatch-b' },
+        { edgeKey: 'collaborate', caption: 'Through C’s public interface — never its internals or tables' },
+        { edgeKey: 'persist-c', caption: 'C writes its own tables on B’s behalf' },
       ],
-    },
-    {
-      title: 'Handle a Customer request',
-      accent: 'teal',
-      steps: [{ edgeKey: 'call' }, { edgeKey: 'dispatch-customer' }, { edgeKey: 'persist' }],
     },
   ],
 };
 
 /* --------------------------------------------------------- microservices -- */
 /**
- * The smallest microservices system worth starting from, in four lessons a reader meets top to
- * bottom:
+ * The frame the two monoliths share, cut three ways: each capability is its own `DEPLOYMENT`, and
+ * each owns its data. Read against Modular Monolith, everything that was one box is now three —
+ * that is the whole difference, and it is drawn so it cannot be mistaken for the modular monolith
+ * with new labels.
  *
- * 1. **One public entry point.** A Client calls the API Gateway and nothing else; the gateway
- *    `routes` to every service through one fan (Smart Routing draws it as one trunk with one
- *    collapsed caption), and each branch carries the route rule that selects it — `/accounts/*`,
- *    `/orders/*`, `/payments/*` — as a `condition`, the one Draft Canvas element whose meaning
- *    ("when this branch applies") is exactly what a route rule is. Every other starter has been
- *    careful *not* to put architecture words into `condition`; this is the case it exists for.
- * 2. **Independent deployables.** Each service sits inside its own `DEPLOYMENT` boundary. The
- *    boundaries carry no title of their own — the service inside already names the thing, and
- *    the `DEPLOYMENT` caption is the entire point they're making.
- * 3. **Database per service.** Every service `writes` its own store, and no store has a second
- *    writer. The stores are generic Data Stores, not SQL: which engine each team picks is
- *    exactly the kind of decision this pattern leaves to each service, and a starter shouldn't
- *    make it for them. The services are `api` Services — what a gateway routes to is an HTTP API,
- *    and the tag completes the sentence the `routes` caption starts.
- * 4. **Integrate through events, never through each other's tables.** `Orders` publishes to an
- *    `Order Events` Topic and `Payments` is delivered the event; no service calls another
- *    service, and no service reads another's store. One event path, not several: Payments
- *    reacting to an order is the canonical cross-service reaction, and the consumer-side detail
- *    (per-consumer queues, retries, a DLQ) is the Event-Driven starter's lesson, one right-click
- *    away here. An earlier revision left the services silent to keep the layout symmetric; a
- *    microservices baseline that never shows *how* services integrate leaves the single most
- *    common way these systems go wrong neither shown nor contradicted.
+ * Each column is two boundaries, deliberately distinct in kind:
+ * - An outer `Capability A` boundary (a plain `boundary`: ownership, logical) holds the service
+ *   *and* its store — one team, one capability, one set of data nobody else touches.
+ * - An inner `DEPLOYMENT` boundary holds the service alone. The store sits *outside* it, below:
+ *   a database is a separate runtime resource, and putting it inside the deployment would say it
+ *   ships in the same artifact or runs in the same process, which it does not.
+ * Ownership does not mean separate servers — three schemas on one instance qualify as long as no
+ * service reaches another's — and the first store's note says so.
  *
- * **Layout.** The Topic hangs below the gutter between the two services that talk, and both of
- * its connectors run straight down that gutter — `Orders` leaves from its right-middle handle,
- * the Topic feeds `Payments`' left-middle handle — so nothing crosses a neighbour's boundary and
- * nothing threads past a store. The gutter is wider than the shared `GUTTER` for exactly that
- * reason: two verticals with their own quiet captions need the room. Captions stay inferred and
- * quiet (`publishes`, `delivers to`); the event's name lives in the publish connector's note.
+ * The `API Gateway` is an optional front door, not the pattern's definition: one entry point that
+ * `routes` to each service — one trunk, one caption, three branches, each request taking one of
+ * them. An earlier revision hung a path rule on every branch as a `condition`; with two boundary
+ * headers under the fan the chips landed in the deployment header band, and made-up paths were
+ * exactly the kind of example the pattern doesn't need. Its note says clients may also call
+ * services directly.
  *
- * Three click-to-reveal notes carry the production detail a meeting-speed diagram can't: what the
- * gateway owns, why a store is private, and when an event may be emitted.
+ * Exactly one service-to-service interaction: `Capability B` `calls` `Capability C` — through its
+ * API, never its store, the connector's note says. A synchronous call is the simplest honest way
+ * to show that services integrate through contracts; asynchronous integration, sagas and retries
+ * are the Event-Driven and Saga starters' lessons, one right-click away.
  */
-const SERVICE_BOX = {
+const MICRO_DEPLOY = {
   width: SERVICE.width + BOUNDARY_PAD * 2,
-  height: BOUNDARY_HEADER_CAPTION_ONLY + SERVICE.height + INNER_BAND + STORE.height + BOUNDARY_PAD,
+  height: BOUNDARY_HEADER_CAPTION_ONLY + SERVICE.height + BOUNDARY_PAD,
 };
-/** Wider than the shared `GUTTER`: the Orders/Payments gutter carries two vertical connectors and
- *  their captions side by side, each clear of the boundary borders either side of it. */
-const MICRO_GUTTER = 200;
-const MICRO_CX = Math.round((SERVICE_BOX.width * 3 + MICRO_GUTTER * 2) / 2);
-const MICRO_COLUMNS = columnsAt(MICRO_CX, 3, SERVICE_BOX.width, MICRO_GUTTER);
-const MICRO_SERVICE_Y = BOUNDARY_HEADER_CAPTION_ONLY;
-const MICRO_STORE_Y = MICRO_SERVICE_Y + SERVICE.height + INNER_BAND;
-const MICRO_NAMES = ['Accounts', 'Orders', 'Payments'] as const;
-const MICRO_ROUTES = ['/accounts/*', '/orders/*', '/payments/*'] as const;
-/** Deeper than a plain `BAND`, because the fan's shared trunk is placed a fixed fraction down the
- *  corridor (`edges/bundles.ts`'s `TRUNK_BIAS`) and the corridor here ends at the *services*, one
- *  boundary header further down than the boxes the trunk visually has to clear. */
-const MICRO_GATEWAY_BAND = BAND + BOUNDARY_HEADER_CAPTION_ONLY;
-/** The event topic sits a full `BAND` below the deployments, centred under the Orders/Payments
- *  gutter. Its two connectors land on its top edge at different offsets so their verticals run
- *  side by side in the gutter with room for each one's caption between them. */
-const MICRO_EVENTS_Y = SERVICE_BOX.height + BAND;
-const MICRO_EVENTS_GUTTER_CENTER = MICRO_COLUMNS[2]! - MICRO_GUTTER / 2;
-const MICRO_PUBLISH_IN: StarterEdgeSpec['targetAnchor'] = { side: 'top', offset: 0.15 };
-const MICRO_DELIVER_OUT: StarterEdgeSpec['sourceAnchor'] = { side: 'top', offset: 0.65 };
+const MICRO_OWNER = {
+  width: MICRO_DEPLOY.width + BOUNDARY_PAD * 2,
+  height: BOUNDARY_HEADER_TITLE_ONLY + MICRO_DEPLOY.height + INNER_BAND + STORE.height + BOUNDARY_PAD,
+};
+const MICRO_COLUMNS = columnsFrom(0, 3, MICRO_OWNER.width, GUTTER);
+const MICRO_CX = (MICRO_COLUMNS[2]! + MICRO_OWNER.width) / 2;
+const MICRO_DEPLOY_Y = BOUNDARY_HEADER_TITLE_ONLY;
+const MICRO_SERVICE_Y = MICRO_DEPLOY_Y + BOUNDARY_HEADER_CAPTION_ONLY;
+const MICRO_STORE_Y = MICRO_DEPLOY_Y + MICRO_DEPLOY.height + INNER_BAND;
+/** The gateway's fan plans its trunk a fixed fraction down the corridor to the *services*
+ *  (`edges/bundles.ts`'s `TRUNK_BIAS`), two boundary headers below the boxes the trunk has to
+ *  visually clear — so the corridor above the boxes is grown by both. */
+const MICRO_GATEWAY_BAND = BAND + BOUNDARY_HEADER_TITLE_ONLY + BOUNDARY_HEADER_CAPTION_ONLY;
+const MICRO_GATEWAY_Y = -(MICRO_GATEWAY_BAND + SERVICE.height);
 
 const microservices: ArchitectureStarter = {
   id: 'microservices',
   category: 'architecture',
   name: 'Microservices',
-  description: 'Independent services behind a gateway, each owning its data',
+  description: 'Independently deployed services, each owning its data',
   aliases: [
     'microservices',
     'microservice',
@@ -660,15 +561,7 @@ const microservices: ArchitectureStarter = {
     'api gateway',
   ],
   nodes: [
-    {
-      key: 'client',
-      type: 'actor',
-      actorKind: 'human',
-      text: 'Client',
-      x: centeredAt(MICRO_CX, ACTOR.width),
-      y: -(MICRO_GATEWAY_BAND + BAND + SERVICE.height + ACTOR.height),
-      ...ACTOR,
-    },
+    softwareClient(MICRO_CX, MICRO_GATEWAY_Y),
     {
       key: 'gateway',
       type: 'service',
@@ -676,211 +569,181 @@ const microservices: ArchitectureStarter = {
       text: 'API Gateway',
       accent: 'teal',
       x: centeredAt(MICRO_CX, SERVICE.width),
-      y: -(MICRO_GATEWAY_BAND + SERVICE.height),
+      y: MICRO_GATEWAY_Y,
       ...SERVICE,
-      attachments: [{ type: 'note', text: 'Routing, auth, rate limits, TLS. The only public entry point.' }],
+      attachments: [
+        {
+          type: 'note',
+          text: 'Optional: one entry point for routing, auth and rate limits. Clients may also call services directly — the pattern is the independent services, not the gateway.',
+        },
+      ],
     },
-    ...MICRO_NAMES.flatMap((name, index): StarterNodeSpec[] => {
+    ...CAPABILITIES.flatMap((letter, index): StarterNodeSpec[] => {
+      const key = letter.toLowerCase();
       const left = MICRO_COLUMNS[index]!;
+      const cx = left + MICRO_OWNER.width / 2;
       return [
         {
-          key: `box-${index}`,
+          key: `owner-${key}`,
+          type: 'group',
+          boundaryPreset: 'boundary',
+          text: `Capability ${letter}`,
+          x: left,
+          y: 0,
+          ...MICRO_OWNER,
+        },
+        {
+          key: `deploy-${key}`,
           type: 'group',
           boundaryPreset: 'deployment',
           text: '',
-          x: left,
-          y: 0,
-          ...SERVICE_BOX,
+          parent: `owner-${key}`,
+          x: left + BOUNDARY_PAD,
+          y: MICRO_DEPLOY_Y,
+          ...MICRO_DEPLOY,
         },
         {
-          key: `service-${index}`,
+          key: `service-${key}`,
           type: 'service',
           serviceKind: 'api',
-          text: name,
+          text: `Capability ${letter} Service`,
           accent: 'teal',
-          parent: `box-${index}`,
-          x: left + BOUNDARY_PAD,
+          parent: `deploy-${key}`,
+          x: centeredAt(cx, SERVICE.width),
           y: MICRO_SERVICE_Y,
           ...SERVICE,
         },
         {
-          key: `store-${index}`,
+          key: `store-${key}`,
           type: 'database',
           databaseKind: 'generic',
-          text: `${name} DB`,
+          text: `Capability ${letter} Store`,
           accent: 'blue',
-          parent: `box-${index}`,
-          x: centeredAt(left + SERVICE_BOX.width / 2, STORE.width),
+          parent: `owner-${key}`,
+          x: centeredAt(cx, STORE.width),
           y: MICRO_STORE_Y,
           ...STORE,
-          ...(name === 'Orders'
-            ? { attachments: [{ type: 'note' as const, text: 'Private to Orders. Other services never read it directly.' }] }
+          ...(index === 0
+            ? {
+                attachments: [
+                  {
+                    type: 'note' as const,
+                    text: 'Private to Capability A: no other service reads or writes it. Ownership is logical — a separate schema on a shared instance qualifies; a separate server is not required.',
+                  },
+                ],
+              }
             : {}),
         },
       ];
     }),
-    {
-      key: 'events',
-      type: 'queue',
-      queueKind: 'topic',
-      text: 'Order Events',
-      x: centeredAt(MICRO_EVENTS_GUTTER_CENTER, NAMED_QUEUE.width),
-      y: MICRO_EVENTS_Y,
-      ...NAMED_QUEUE,
-    },
   ],
   edges: [
     { key: 'call', ...down('client', 'gateway') },
-    ...MICRO_NAMES.map((name, index) => ({
-      ...down('gateway', `service-${index}`),
-      condition: MICRO_ROUTES[index]!,
-      key: `route-${name.toLowerCase()}`,
+    ...CAPABILITIES.map((letter) => ({
+      ...down('gateway', `service-${letter.toLowerCase()}`),
+      key: `route-${letter.toLowerCase()}`,
     })),
-    ...MICRO_NAMES.map((name, index) => ({
-      ...down(`service-${index}`, `store-${index}`),
-      key: `write-${name.toLowerCase()}`,
+    ...CAPABILITIES.map((letter) => ({
+      ...down(`service-${letter.toLowerCase()}`, `store-${letter.toLowerCase()}`),
+      key: `persist-${letter.toLowerCase()}`,
+      label: READS_WRITES,
     })),
     {
-      key: 'publish',
-      from: 'service-1',
-      to: 'events',
-      sourceAnchor: RIGHT,
-      targetAnchor: MICRO_PUBLISH_IN,
-      attachments: [{ type: 'note', text: 'OrderPlaced — emitted after the Orders DB commit, never before.' }],
+      key: 'collaborate',
+      ...across('service-b', 'service-c'),
+      attachments: [
+        { type: 'note', text: 'Through Capability C’s API — its contract — never its store. Events are the other way to integrate; see Event-Driven.' },
+      ],
     },
-    { key: 'deliver', from: 'events', to: 'service-2', sourceAnchor: MICRO_DELIVER_OUT, targetAnchor: LEFT },
   ],
   flows: [
     {
-      title: 'Manage accounts',
-      accent: 'teal',
-      steps: [{ edgeKey: 'call' }, { edgeKey: 'route-accounts' }, { edgeKey: 'write-accounts' }],
+      title: 'Handle a request',
+      accent: 'green',
+      steps: [{ edgeKey: 'call' }, { edgeKey: 'route-a' }, { edgeKey: 'persist-a', caption: 'Its own store — nobody else’s' }],
     },
     {
-      title: 'Place an order',
+      title: 'Call another service',
       accent: 'amber',
       steps: [
         { edgeKey: 'call' },
-        { edgeKey: 'route-orders' },
-        { edgeKey: 'write-orders' },
-        { edgeKey: 'publish', caption: 'Only after the Orders DB commits' },
+        { edgeKey: 'route-b' },
+        { edgeKey: 'collaborate', caption: 'A network call to C’s contract, not a query on C’s data' },
+        { edgeKey: 'persist-c' },
       ],
-    },
-    {
-      title: 'Process a payment',
-      accent: 'green',
-      steps: [{ edgeKey: 'call' }, { edgeKey: 'route-payments' }, { edgeKey: 'write-payments' }],
-    },
-    {
-      title: 'React to an order event',
-      accent: 'rose',
-      steps: [{ edgeKey: 'publish' }, { edgeKey: 'deliver' }],
     },
   ],
 };
 
 /* ---------------------------------------------------------- event-driven -- */
 /**
- * The smallest event-driven architecture worth starting from: a producer publishes a fact, a Topic
- * fans it out, and every consumer gets its *own* delivery path — so one slow or failing consumer
- * never holds up another. Read top to bottom: producer → event → topic → fan-out → queue → worker →
- * side effect. Every element below earns its place by teaching one of those steps; anything that
- * didn't (a second topic, a saga, an outbox, consumer groups, a schema registry, an event store, a
- * boundary around "the consumers") is a separate, more opinionated starter this one deliberately
- * isn't.
+ * Publish/subscribe with a topic and per-subscriber queues — one concrete, common variant of
+ * event-driven architecture, named as such in the description so nobody reads it as *the*
+ * definition. Read top to bottom: producer → event → topic → fan-out → queue → worker → side
+ * effect. Everything else (a second topic, a saga, an outbox, a schema registry, an event store) is
+ * a separate, more opinionated starter this one deliberately isn't; event-driven communication
+ * needs none of them, and it needs no microservices either.
  *
  * **What each element is, and why it's that and not something else.**
- * - `Producer Service` is a plain generic Service: nothing in the pattern says it's an API or a
- *   scheduler, and it knows nothing about who reacts — its only connector goes to the Topic, so a
- *   fourth reaction later is purely a Topic-side change.
- * - `Domain Events` is a Topic (the one queue-family node a starter names — the broker is the
- *   architecture's centre, and "Domain Events" is what makes it reusable rather than an
- *   order-system diagram). `Producer → Domain Events` infers `publishes`/`event`, and the one
- *   explicit caption in this starter, `publishes OrderCreated`, names a concrete event on the
- *   connector that carries it — a fact that already happened, never a command (`CreateOrder`)
- *   dressed up as one. The event is a message, not a component, so it's a caption, not a node.
- * - Three plain, unnamed Queues sit between the Topic and its consumers. This is the pattern's
- *   real lesson and the reason the consumers don't hang off the Topic directly: `Topic → Queue`
- *   infers `fansOut` (one published event, three independently consumable copies) and
- *   `Queue → Service` infers `consumes`, and because each queue is owned by exactly one consumer
- *   nothing competes for a message, nothing shares a backlog, and each lane can retry on its own
- *   terms. A Queue is deliberately what they are, not a new "Subscription" kind: SNS→SQS, an
- *   exchange-bound RabbitMQ queue, a Service Bus subscription and a Kafka consumer group are all
- *   this same architectural shape, and Draft Canvas models the shape, not a vendor's name for it.
- *   Each queue sits directly above its worker, centred on the same axis, and shows only its kind
- *   caption — ownership reads from alignment, so a name would be noise.
- * - The three consumers are `worker` Services (`WORKER` caption): a queue-fed background process
- *   is exactly what a Worker already is, so no "event consumer" kind is needed — it would share
- *   every relationship rule Worker has and change nothing but a caption. Their *names* carry the
- *   three genuinely common reasons a system reacts to an event: `Projection Service` builds a read
- *   model (the only one that owns a store — `Read Store`, a technology-neutral generic Data Store,
- *   reached by `writes`); `Processing Service` runs internal business logic and deliberately owns
- *   nothing below it (persistence under every column would read as a rule of "being a consumer"
- *   rather than the per-role decision it is); `Integration Service` hands off to something the
- *   system doesn't control — `External System`, an `external` Service, reached by a solid
- *   synchronous `calls` line. That one solid line among dotted event lines is on purpose: it's
- *   the point where the asynchronous architecture touches a synchronous dependency, and it's
- *   exactly why this lane, and only this lane, gets failure handling.
- * - Failure handling is one DLQ, beside the Integration queue and only there. `Queue → DLQ` infers
- *   `deadLetters`/`failure` (dashed) from the same matrix row the "Add DLQ" command reads, and the
- *   authored `deliveryAttempts: 3` renders as "after 3 attempts": retries belong to the consumer's
- *   own delivery path, a poison message is parked rather than blocking the lane, and the shared
- *   Topic is never where a consumer's failures are dumped (`topic>deadLetter` is an `unusual`
- *   pairing for exactly that reason). One DLQ, not one per queue — the diagram shows the practice
- *   once, and the other two queues are a right-click away from the same treatment.
+ * - `Producer Service` is a plain generic Service that knows nothing about who reacts — its only
+ *   connector goes to the Topic, so a third reaction later is purely a Topic-side change. Its
+ *   connector says `publishes state-change event`: a fact that already happened, never a command
+ *   dressed up as one. The event's example envelope (an id to dedupe on, a type, a time) and the
+ *   delivery caveats — at-least-once, no global ordering, and no atomicity with the state change
+ *   that caused it — ride the connector as click-to-reveal attachments.
+ * - `Domain Events` is a Topic — the broker is the architecture's centre. Its note is the
+ *   pattern's real lesson: every subscription receives its own copy of every event, which is a
+ *   different thing from several workers sharing one queue and competing for each message.
+ * - The two queues are *named for their responsibility* — `Projection Queue`, `Integration Queue`
+ *   — because each is one subscriber's own delivery path, and two anonymous `QUEUE`s would read as
+ *   interchangeable. `Topic → Queue` infers `fansOut` (one trunk, one caption) and `Queue → Service`
+ *   infers `consumes`; nothing competes for a message and each lane retries on its own terms. A
+ *   Queue is deliberately what they are, not a "Subscription" kind: SNS→SQS, an exchange-bound
+ *   RabbitMQ queue, a Service Bus subscription and a Kafka consumer group are all this shape.
+ * - The consumers are `worker` Services named for what they do: `Projection Worker` maintains a
+ *   read model (`Read Store`, reached by `writes`), `Integration Worker` hands off to `External
+ *   System` by a solid synchronous `calls` — the one point where the asynchronous architecture
+ *   touches a synchronous dependency, and why that lane is the one drawn with failure handling.
+ * - One DLQ, beside the Integration queue only, on the inferred dashed `deadLetters` route
+ *   captioned `after configured retry limit` — a policy, not a number the architecture depends on.
+ *   The route's note names it an illustrative failure path: any subscription can have one.
  *
- * **Routing and hierarchy.** The three `Topic → Queue` connectors are left unoverridden so Smart
- * Routing bundles them into one stem, one trunk, and one collapsed `fans out` caption
- * (`edges/bundles.ts`): unlike an earlier revision's Topic → *Service* rays, these connectors *are*
- * delivery infrastructure, and one shared trunk is the honest picture of "one event, delivered
- * three ways." A full `BAND` above the queue row is that trunk's corridor and a full `BAND` above
- * the Topic holds the publish caption; the queue → worker and worker → side-effect gaps are the
- * tighter `INNER_BAND`, so a queue reads as *belonging to* its worker while the layers of the
- * architecture stay clearly separated. Services stay the visual heroes: queues are smaller,
- * captioned only by kind, and the DLQ is smaller and dashed again — secondary to its queue, never
- * mistakable for a fourth consumer.
- *
- * **Depth without noise.** Two click-to-reveal attachments carry the production detail a
- * meeting-speed diagram would otherwise have to leave out: the publish connector holds an example
- * `OrderCreated` payload in the CloudEvents core shape (an id to dedupe on, a type, a time — what
- * makes an event a fact consumers can process idempotently), and the dead-letter route holds the one operational note
- * that matters about a DLQ. Neither adds a visible node; each is a small chip until clicked.
+ * **Routing.** The two `Topic → Queue` connectors bundle into one stem, one trunk and one `fans
+ * out` caption; a full `BAND` above the queue row is that trunk's corridor and a full `BAND` above
+ * the Topic holds the publish caption. Queue → worker and worker → side-effect gaps are the tighter
+ * `INNER_BAND`, so a queue reads as *belonging to* its worker. The DLQ sits a caption's width to
+ * the right of its queue, tube to tube, so the failure route is a level line.
  */
-const EVENT_CX = 312;
-// Tighter than the shared `GUTTER` other starters' rows use — the three lanes should read as one
-// contained architecture around one Topic, not three services spread to fill the canvas.
-const EVENT_LANE_GUTTER = 48;
-const EVENT_LANES = columnsAt(EVENT_CX, 3, SERVICE.width, EVENT_LANE_GUTTER);
+const EVENT_LANES = columnsFrom(0, 2, SERVICE.width, GUTTER);
+/** A subscription queue carries a two-word name ("Integration Queue") under its tube, which the
+ *  named-queue default width wraps; a little wider keeps the name on one line. The topic keeps the
+ *  default: its name is shorter, and the queues reading a touch wider than the topic that feeds
+ *  them is the right hierarchy — they are where the work of this diagram lands. */
+const SUBSCRIPTION_QUEUE = { width: 152, height: NAMED_QUEUE.height };
+const EVENT_CX = (EVENT_LANES[1]! + SERVICE.width) / 2;
 const EVENT_PRODUCER_Y = 0;
 const EVENT_TOPIC_Y = EVENT_PRODUCER_Y + SERVICE.height + BAND;
-// A full `BAND`, not `INNER_BAND`: the fan-out's shared trunk needs the corridor (see the doc
-// comment above, and `BAND`'s own).
 const EVENT_QUEUE_Y = EVENT_TOPIC_Y + NAMED_QUEUE.height + BAND;
-const EVENT_WORKER_Y = EVENT_QUEUE_Y + QUEUE.height + INNER_BAND;
+const EVENT_WORKER_Y = EVENT_QUEUE_Y + NAMED_QUEUE.height + INNER_BAND;
 const EVENT_SIDE_EFFECT_Y = EVENT_WORKER_Y + SERVICE.height + INNER_BAND;
-/** Room for the dead-letter route's own "after 3 attempts" caption to sit between its two tubes
- *  with clear air either side — the same width `continuation/materialize.ts`'s `gapForCaption` would leave when
- *  "Add DLQ" places one interactively. */
-const EVENT_DLQ_GAP = BAND;
+/** Room for the dead-letter route's "after configured retry limit" caption to sit between its two
+ *  tubes with clear air either side. */
+const EVENT_DLQ_GAP = 176;
 /** The dead-letter route runs tube-to-tube: the sides are pinned so the route is a level line, and
  *  routing itself lands a left/right anchor on the tube glyph (`anchorBandOf`) — the same thing
- *  `addDeadLetterQueue` relies on when it places one interactively. */
-const EVENT_TUBE_OUT: StarterEdgeSpec['sourceAnchor'] = RIGHT;
-const EVENT_TUBE_IN: StarterEdgeSpec['targetAnchor'] = LEFT;
+ *  `addDeadLetterQueue` relies on when it places one interactively. The DLQ is the caption-only
+ *  box, and its tube is centred on the named queue's tube so the line stays level. */
+const EVENT_DLQ_Y = tubeCenteredAt(EVENT_QUEUE_Y + (queueTubeSpan(NAMED_QUEUE.height).top + queueTubeSpan(NAMED_QUEUE.height).bottom) / 2, QUEUE.height);
 
-/** The centre axis of one consumer lane — its queue, its worker and its side effect all share it. */
 function eventLaneCenter(lane: number): number {
   return EVENT_LANES[lane]! + SERVICE.width / 2;
 }
-
-const EVENT_LANE_KEYS = ['projection', 'processing', 'integration'] as const;
-const EVENT_LANE_NAMES = ['Projection Service', 'Processing Service', 'Integration Service'] as const;
 
 const eventDriven: ArchitectureStarter = {
   id: 'event-driven',
   category: 'architecture',
   name: 'Event-Driven',
-  description: 'A producer, a topic, and consumers that own their delivery',
+  description: 'Pub/sub: a topic fanning out to per-subscriber queues',
   aliases: [
     'event driven',
     'event-driven',
@@ -912,27 +775,51 @@ const eventDriven: ArchitectureStarter = {
       x: centeredAt(EVENT_CX, NAMED_QUEUE.width),
       y: EVENT_TOPIC_Y,
       ...NAMED_QUEUE,
+      attachments: [
+        {
+          type: 'note',
+          text: 'Fan-out, not competition: every subscription gets its own copy of every event. Workers sharing one queue would instead compete for each message.',
+        },
+      ],
     },
-    ...EVENT_LANE_KEYS.flatMap((lane, index): StarterNodeSpec[] => [
-      {
-        key: `${lane}-queue`,
-        type: 'queue',
-        queueKind: 'queue',
-        x: centeredAt(eventLaneCenter(index), QUEUE.width),
-        y: EVENT_QUEUE_Y,
-        ...QUEUE,
-      },
-      {
-        key: `${lane}-service`,
-        type: 'service',
-        serviceKind: 'worker',
-        text: EVENT_LANE_NAMES[index],
-        accent: 'teal',
-        x: EVENT_LANES[index]!,
-        y: EVENT_WORKER_Y,
-        ...SERVICE,
-      },
-    ]),
+    {
+      key: 'projection-queue',
+      type: 'queue',
+      queueKind: 'queue',
+      text: 'Projection Queue',
+      x: centeredAt(eventLaneCenter(0), SUBSCRIPTION_QUEUE.width),
+      y: EVENT_QUEUE_Y,
+      ...SUBSCRIPTION_QUEUE,
+    },
+    {
+      key: 'integration-queue',
+      type: 'queue',
+      queueKind: 'queue',
+      text: 'Integration Queue',
+      x: centeredAt(eventLaneCenter(1), SUBSCRIPTION_QUEUE.width),
+      y: EVENT_QUEUE_Y,
+      ...SUBSCRIPTION_QUEUE,
+    },
+    {
+      key: 'projection-worker',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Projection Worker',
+      accent: 'teal',
+      x: EVENT_LANES[0]!,
+      y: EVENT_WORKER_Y,
+      ...SERVICE,
+    },
+    {
+      key: 'integration-worker',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Integration Worker',
+      accent: 'teal',
+      x: EVENT_LANES[1]!,
+      y: EVENT_WORKER_Y,
+      ...SERVICE,
+    },
     {
       key: 'read-store',
       type: 'database',
@@ -949,7 +836,7 @@ const eventDriven: ArchitectureStarter = {
       serviceKind: 'external',
       text: 'External System',
       accent: 'teal',
-      x: EVENT_LANES[2]!,
+      x: EVENT_LANES[1]!,
       y: EVENT_SIDE_EFFECT_Y,
       ...SERVICE,
     },
@@ -958,8 +845,8 @@ const eventDriven: ArchitectureStarter = {
       type: 'queue',
       queueKind: 'queue',
       deliveryRole: 'dead-letter',
-      x: centeredAt(eventLaneCenter(2), QUEUE.width) + QUEUE.width + EVENT_DLQ_GAP,
-      y: EVENT_QUEUE_Y,
+      x: centeredAt(eventLaneCenter(1), SUBSCRIPTION_QUEUE.width) + SUBSCRIPTION_QUEUE.width + EVENT_DLQ_GAP,
+      y: EVENT_DLQ_Y,
       ...QUEUE,
     },
   ],
@@ -967,71 +854,73 @@ const eventDriven: ArchitectureStarter = {
     {
       key: 'publish',
       ...down('producer', 'topic'),
-      label: 'publishes OrderCreated',
+      label: 'publishes state-change event',
       attachments: [
         {
           type: 'code',
-          text: 'OrderCreated',
+          text: 'Event envelope',
           language: 'json',
-          // The CloudEvents core envelope (id/type/time/data): a vendor-neutral shape, and every
-          // line short enough to read in the attachment card without scrolling.
+          // The CloudEvents core shape (id/type/time/data): vendor-neutral, and every line short
+          // enough to read in the attachment card without scrolling. The id is what a consumer
+          // dedupes on; the type is a fact in the past tense.
           code: [
             '{',
             '  "id": "evt_8f3a1c2d",',
-            '  "type": "OrderCreated",',
+            '  "type": "StateChanged",',
             '  "time": "2026-09-10T08:15Z",',
             '  "data": {',
-            '    "orderId": "ord_4821"',
+            '    "entityId": "ent_4821"',
             '  }',
             '}',
           ].join('\n'),
         },
+        {
+          type: 'note',
+          text: 'Typically at-least-once and unordered across partitions: consumers dedupe on the event id and tolerate reordering. Publishing is not atomic with the state change that caused it — see Transactional Outbox.',
+        },
       ],
     },
-    // All three leave the same point on the Topic's bottom edge so Smart Routing bundles them into
-    // one trunk with one collapsed `fans out` caption — see this block's doc comment.
-    ...EVENT_LANE_KEYS.map((lane) => ({ ...down('topic', `${lane}-queue`), key: `fan-out-${lane}` })),
-    ...EVENT_LANE_KEYS.map((lane) => ({ ...down(`${lane}-queue`, `${lane}-service`), key: `consume-${lane}` })),
-    { key: 'project', ...down('projection-service', 'read-store') },
-    { key: 'call-external', ...down('integration-service', 'external') },
+    // Both leave the same point on the Topic's bottom edge so Smart Routing bundles them into one
+    // trunk with one collapsed `fans out` caption — see this block's doc comment.
+    { key: 'fan-out-projection', ...down('topic', 'projection-queue') },
+    { key: 'fan-out-integration', ...down('topic', 'integration-queue') },
+    { key: 'consume-projection', ...down('projection-queue', 'projection-worker') },
+    { key: 'consume-integration', ...down('integration-queue', 'integration-worker') },
+    { key: 'project', ...down('projection-worker', 'read-store'), label: 'updates projection' },
+    { key: 'call-external', ...down('integration-worker', 'external') },
     {
       key: 'dead-letter',
       from: 'integration-queue',
       to: 'integration-dlq',
-      sourceAnchor: EVENT_TUBE_OUT,
-      targetAnchor: EVENT_TUBE_IN,
-      deliveryAttempts: 3,
+      sourceAnchor: RIGHT,
+      targetAnchor: LEFT,
+      label: 'after configured retry limit',
       attachments: [
         {
           type: 'note',
           noteKind: 'note',
-          text: 'Poison messages park here for inspection and redrive. Alert on depth.',
+          text: 'An illustrative failure path — any subscription can have one. Poison messages park here for inspection and redrive; alert on depth.',
         },
       ],
     },
   ],
   flows: [
     {
-      title: 'Build a read model',
+      title: 'Update a projection',
       accent: 'green',
       steps: [
         { edgeKey: 'publish' },
-        { edgeKey: 'fan-out-projection' },
+        { edgeKey: 'fan-out-projection', caption: 'This subscription’s own copy' },
         { edgeKey: 'consume-projection' },
         { edgeKey: 'project' },
       ],
-    },
-    {
-      title: 'Run business logic',
-      accent: 'teal',
-      steps: [{ edgeKey: 'publish' }, { edgeKey: 'fan-out-processing' }, { edgeKey: 'consume-processing' }],
     },
     {
       title: 'Reach an external system',
       accent: 'amber',
       steps: [
         { edgeKey: 'publish' },
-        { edgeKey: 'fan-out-integration' },
+        { edgeKey: 'fan-out-integration', caption: 'The same event, delivered again — independently' },
         { edgeKey: 'consume-integration' },
         { edgeKey: 'call-external' },
       ],
@@ -1041,7 +930,7 @@ const eventDriven: ArchitectureStarter = {
       accent: 'rose',
       steps: [
         { edgeKey: 'fan-out-integration' },
-        { edgeKey: 'dead-letter', caption: 'After 3 failed delivery attempts' },
+        { edgeKey: 'dead-letter', caption: 'Parked after the configured retries, without blocking the lane' },
       ],
     },
   ],
@@ -1049,43 +938,49 @@ const eventDriven: ArchitectureStarter = {
 
 /* ------------------------------------------------------------- hexagonal -- */
 /**
- * Ports and adapters, drawn left to right: driving adapters → **port** → application core →
- * **ports** → driven adapters → infrastructure. Horizontal, not layered, is what lets that whole
- * sentence read before a single label does — and the ports are now real elements, not two floating
- * words in the gaps between boxes.
+ * Ports and adapters, drawn left to right — inbound adapters → **port** → application core →
+ * **ports** → outbound adapters → technology — with the one thing the pattern exists for made
+ * visible: the core owns its ports, and every dependency points *into* it.
  *
- * **Runtime flow and source dependency are different arrows, and this diagram draws only one.**
- * Every connector points the way a request travels: `REST API` calls the `Inbound` port, which
- * is implemented by `Use Cases`, which uses the `Persistence` port, which is implemented by
- * `Persistence Adapter`, which writes to `Database`. Dependency inversion — the thing Hexagonal
- * exists for — isn't carried by reversing arrows (a picture nobody can trace); it's carried by
- * *where the ports live* and *what the words say*. All three ports sit inside `Application Core`:
- * the core owns its contracts. And the connector leaving a port reads `implemented by`, not
- * `calls`: the adapter after it depends on the port's owner, never the other way round. The one
- * annotation in the starter, the core's own subtitle, says the rest in three words.
+ * **Two kinds of arrow, deliberately told apart.** A request still travels left to right: an
+ * adapter `calls` the inbound port, the use cases `use` the domain model and the outbound ports,
+ * an adapter `writes` the database or `calls` the external system — solid heads, the words of
+ * runtime. The three arrows that point the *other* way are not runtime at all: `Use Cases`
+ * `implements` the inbound port, and each outbound adapter `implements` its port. They point from
+ * the implementer to the contract, which is the way the source dependency points — adapters depend
+ * on the core, the core depends on nothing outside itself — and they wear the hollow head every
+ * realization gets (`edges/kindStyle.ts`), so they read as a different kind of line before their
+ * caption does. An earlier revision drew these as `implemented by` in the runtime direction and
+ * captioned the core "dependencies point inward"; the words were true and the arrows said the
+ * opposite. Now the arrows say it. Presentation walks only the runtime arrows: a flow is an
+ * execution, and a realization is not a step of one.
  *
  * **What each element is.**
- * - `REST API` (`api`) and `Message Consumer` (`worker`) stay `Service` — they're runtime roles,
- *   and two different kinds are what say "different things can drive the same application."
- * - `Inbound`, `Persistence`, `Integration` are `component`/`port` — dashed, small, and captioned
- *   `PORT` so the caption completes each name ("Inbound port"). One inbound port, not two: both
- *   driving adapters call the same use cases, and a shared contract is the honest picture of that.
- *   Two outbound ports, because persistence and integration are genuinely different needs.
+ * - `HTTP Adapter` and `Message Consumer` are `adapter` Components, not Services: a controller and
+ *   a listener are in-process translation layers, the driving mirror of the persistence and
+ *   integration adapters on the right — the same notched silhouette on both sides of the core. Two
+ *   different inbound technologies driving one port is what says "the core does not know how it
+ *   was called."
+ * - `Inbound`, `Persistence`, `Integration` are `port` Components inside the core — dashed, small,
+ *   captioned `PORT`. One inbound port, not two: both adapters call the same use cases, and a
+ *   shared contract is the honest picture of that. Two outbound ports, because persistence and
+ *   integration are genuinely different needs. Nothing says a real system has three; it has as
+ *   many as it has distinct conversations with the outside.
  * - `Use Cases` and `Domain Model` are plain Components inside the core — `Domain Model` hangs
  *   beneath `Use Cases`, reached by exactly one connector and touching nothing else: the deepest,
- *   most infrastructure-independent piece, orchestrated by the use cases above it.
- * - `Persistence Adapter` / `Integration Adapter` are `adapter` Components outside the core: the
- *   translation layer, notched on both sides because an adapter faces two worlds.
- * - `Database` is a generic Data Store (technology-neutral — SQL would be a decision this starter
- *   doesn't make) and `External System` an `external` Service; both a full gutter beyond their
- *   adapters, plainly infrastructure the core never touches.
+ *   most infrastructure-independent piece.
+ * - `Database` (a generic Data Store) and `External System` (an `external` Service) sit a full
+ *   gutter beyond their adapters: technology the core never touches, and the only Service on the
+ *   canvas.
  *
- * **Routing and hierarchy.** The two driving connectors share the inbound port's left-middle point,
- * so Smart Routing draws one funnel with one collapsed `calls`; `Use Cases` forks to both outbound
- * ports from its right-middle point, one trunk, one collapsed `uses`. Everything else is a level,
- * straight line between two centred handles. The core is the only boundary and the tallest thing
- * on the canvas — it spans both rows, with its ports on the rows and its use cases centred between
- * them — so it reads as the middle everything else adapts to, before any label is read.
+ * **Routing.** The two driving connectors share the inbound port's left-middle point, so Smart
+ * Routing draws one funnel with one collapsed `calls`; `Use Cases` forks to both outbound ports
+ * from its right-middle point, one trunk, one collapsed `uses`. Every implementation arrow is a
+ * level line from an implementer's left edge back into its port's right edge. The gap between the
+ * core and the outbound adapters is the wider `HEX_INNER_GAP`, so `implements` has room. The core
+ * is the only boundary and the tallest thing on the canvas, so it reads as the middle everything
+ * else adapts to before any label is read. Not a literal hexagon: the shape was always a metaphor
+ * for "many sides", never a rule of six.
  */
 const HEX_ROW_GAP = 160;
 const HEX_ROW_A_Y = 0;
@@ -1095,21 +990,21 @@ const HEX_ROW_B_CENTER = HEX_ROW_B_Y + SERVICE.height / 2;
 const HEX_CORE_CENTER = (HEX_ROW_A_CENTER + HEX_ROW_B_CENTER) / 2;
 
 // Sized to the same visual-hierarchy rule every Component follows — noticeably smaller than
-// Service's 176×68, so the core reads as *internal* next to the Service-shaped driving side. Use
+// Service's 176×68, so the core reads as *internal* next to the one Service on the canvas. Use
 // Cases stays the widest thing inside the boundary (the hub every connector meets); Domain Model
 // the smallest of the working pieces; a Port smaller still — a contract, not a thing doing work.
 const HEX_USE_CASES = { width: 172, height: 64 };
 const HEX_DOMAIN = { width: 140, height: 50 };
 /** Component's default height, but wider than its default 152: "Persistence Adapter" has to stay
- *  on one line above the ADAPTER tag row at real browser font metrics, and 172 is as wide as a
- *  Component may be while every Service in this starter still out-sizes it. */
+ *  on one line above the ADAPTER tag row at real browser font metrics. Both sides' adapters share
+ *  it — they are the same kind of thing facing opposite ways. */
 const HEX_ADAPTER = { width: 172, height: 56 };
 /** Wide enough for a one-word port name at `nodeLabel` with the family's own padding, tall enough
- *  for the name and the centred `PORT` tag beneath it (`nodes/describe.ts`'s `componentPort`). */
+ *  for the name and the `PORT` tag beneath it (`nodes/describe.ts`'s `componentPort`). */
 const HEX_PORT = { width: 120, height: 44 };
-/** The gap on either side of Use Cases inside the core: room for an `implemented by` caption on
- *  the left, and for the outbound fork's shared trunk on the right (`edges/bundles.ts` needs
- *  `MIN_STEM` + `MIN_BRANCH` = 56 at the very least). */
+/** The gap on either side of Use Cases inside the core, and between the core and the outbound
+ *  adapters: room for an `implements` caption, and for the outbound fork's shared trunk
+ *  (`edges/bundles.ts` needs `MIN_STEM` + `MIN_BRANCH` = 56 at the very least). */
 const HEX_INNER_GAP = 88;
 
 const HEX_USE_CASES_Y = HEX_CORE_CENTER - HEX_USE_CASES.height / 2;
@@ -1117,7 +1012,7 @@ const HEX_DOMAIN_GAP = 28;
 const HEX_DOMAIN_Y = HEX_USE_CASES_Y + HEX_USE_CASES.height + HEX_DOMAIN_GAP;
 
 const HEX_DRIVING_X = 0;
-const HEX_CORE_X = HEX_DRIVING_X + SERVICE.width + GUTTER;
+const HEX_CORE_X = HEX_DRIVING_X + HEX_ADAPTER.width + GUTTER;
 const HEX_INBOUND_PORT_X = HEX_CORE_X + BOUNDARY_PAD;
 const HEX_USE_CASES_X = HEX_INBOUND_PORT_X + HEX_PORT.width + HEX_INNER_GAP;
 const HEX_OUTBOUND_PORT_X = HEX_USE_CASES_X + HEX_USE_CASES.width + HEX_INNER_GAP;
@@ -1130,20 +1025,17 @@ const HEX_PORT_B_Y = centeredAt(HEX_ROW_B_CENTER, HEX_PORT.height);
 const HEX_CORE_Y = HEX_PORT_A_Y - BOUNDARY_HEADER_TITLE_ONLY;
 const HEX_CORE_HEIGHT =
   Math.max(HEX_DOMAIN_Y + HEX_DOMAIN.height, HEX_PORT_B_Y + HEX_PORT.height) + BOUNDARY_PAD - HEX_CORE_Y;
-/** The boundary's one subtitle — the same second-header-line technique Modular Monolith uses:
- *  `BOUNDARY_TITLE_INSET` for the title's own left edge, `BOUNDARY_TITLE_SUBLINE_Y` for the line
- *  right under it, and the same width that starter's subtitle uses (see its own comment on why the
- *  test environment's measurer under-reads real font metrics). */
-const HEX_SUBTITLE = { width: 176, height: 24 };
+/** The boundary's one subtitle — the second-header-line technique every subtitled boundary uses. */
+const HEX_SUBTITLE = { width: 200, height: SUBTITLE_HEIGHT };
 
-const HEX_DRIVEN_X = HEX_CORE_X + HEX_CORE_WIDTH + GUTTER;
+const HEX_DRIVEN_X = HEX_CORE_X + HEX_CORE_WIDTH + HEX_INNER_GAP;
 const HEX_TECH_X = HEX_DRIVEN_X + HEX_ADAPTER.width + GUTTER;
 
 const hexagonal: ArchitectureStarter = {
   id: 'hexagonal',
   category: 'architecture',
   name: 'Hexagonal',
-  description: 'A domain core reached only through inbound/outbound ports',
+  description: 'Adapters around a core that owns its ports',
   aliases: [
     'hexagonal',
     'hexagonal architecture',
@@ -1158,24 +1050,22 @@ const hexagonal: ArchitectureStarter = {
   ],
   nodes: [
     {
-      key: 'rest',
-      type: 'service',
-      serviceKind: 'api',
-      text: 'REST API',
-      accent: 'teal',
+      key: 'http-adapter',
+      type: 'component',
+      componentKind: 'adapter',
+      text: 'HTTP Adapter',
       x: HEX_DRIVING_X,
-      y: HEX_ROW_A_Y,
-      ...SERVICE,
+      y: centeredAt(HEX_ROW_A_CENTER, HEX_ADAPTER.height),
+      ...HEX_ADAPTER,
     },
     {
-      key: 'consumer',
-      type: 'service',
-      serviceKind: 'worker',
+      key: 'message-consumer',
+      type: 'component',
+      componentKind: 'adapter',
       text: 'Message Consumer',
-      accent: 'teal',
       x: HEX_DRIVING_X,
-      y: HEX_ROW_B_Y,
-      ...SERVICE,
+      y: centeredAt(HEX_ROW_B_CENTER, HEX_ADAPTER.height),
+      ...HEX_ADAPTER,
     },
     {
       key: 'core',
@@ -1186,18 +1076,14 @@ const hexagonal: ArchitectureStarter = {
       y: HEX_CORE_Y,
       width: HEX_CORE_WIDTH,
       height: HEX_CORE_HEIGHT,
+      attachments: [
+        {
+          type: 'note',
+          text: 'Owns its ports, depends on nothing outside itself. Solid arrows are runtime calls; hollow-headed “implements” arrows are source dependencies, and every one of them points in. Fits inside a monolith or a single microservice.',
+        },
+      ],
     },
-    {
-      // The one annotation: the second line of the core's own header, not a floating label.
-      key: 'core-subtitle',
-      type: 'text',
-      text: 'Dependencies point inward',
-      annotation: true,
-      parent: 'core',
-      x: HEX_CORE_X + BOUNDARY_TITLE_INSET,
-      y: HEX_CORE_Y + BOUNDARY_TITLE_SUBLINE_Y,
-      ...HEX_SUBTITLE,
-    },
+    boundarySubtitle('core-subtitle', 'core', HEX_CORE_X, 'Dependencies point inward', HEX_SUBTITLE, HEX_CORE_Y),
     {
       key: 'inbound-port',
       type: 'component',
@@ -1249,7 +1135,7 @@ const hexagonal: ArchitectureStarter = {
       ...HEX_PORT,
     },
     {
-      key: 'persistence',
+      key: 'persistence-adapter',
       type: 'component',
       componentKind: 'adapter',
       text: 'Persistence Adapter',
@@ -1258,7 +1144,7 @@ const hexagonal: ArchitectureStarter = {
       ...HEX_ADAPTER,
     },
     {
-      key: 'integration',
+      key: 'integration-adapter',
       type: 'component',
       componentKind: 'adapter',
       text: 'Integration Adapter',
@@ -1280,6 +1166,7 @@ const hexagonal: ArchitectureStarter = {
       key: 'external',
       type: 'service',
       serviceKind: 'external',
+      text: 'External System',
       accent: 'teal',
       x: HEX_TECH_X,
       y: HEX_ROW_B_Y,
@@ -1287,41 +1174,40 @@ const hexagonal: ArchitectureStarter = {
     },
   ],
   edges: [
-    // Both driving adapters meet the inbound port at one point — one funnel, one `calls`.
-    { key: 'rest-call', ...across('rest', 'inbound-port') },
-    { key: 'consumer-call', ...across('consumer', 'inbound-port') },
-    { key: 'dispatch', ...across('inbound-port', 'use-cases') },
+    // Runtime, left to right. Both driving adapters meet the inbound port at one point — one
+    // funnel, one `calls` (an adapter may drive a port or stand behind it, so the matrix's default
+    // for the pairing is the neutral `uses`; these two drive).
+    { key: 'http-call', ...across('http-adapter', 'inbound-port'), semantic: 'calls' },
+    { key: 'consumer-call', ...across('message-consumer', 'inbound-port'), semantic: 'calls' },
     { key: 'use-domain', ...down('use-cases', 'domain') },
     // One fork from Use Cases to both outbound ports — one trunk, one `uses`.
     { key: 'use-persistence-port', ...across('use-cases', 'persistence-port') },
     { key: 'use-integration-port', ...across('use-cases', 'integration-port') },
-    { key: 'impl-persistence', ...across('persistence-port', 'persistence') },
-    { key: 'impl-integration', ...across('integration-port', 'integration') },
-    { key: 'write-database', ...across('persistence', 'database') },
-    { key: 'call-external', ...across('integration', 'external') },
+    { key: 'write-database', ...across('persistence-adapter', 'database'), label: READS_WRITES },
+    { key: 'call-external', ...across('integration-adapter', 'external') },
+    // Source dependencies, pointing in: from each implementer back to the contract it satisfies.
+    { key: 'implement-inbound', ...back('use-cases', 'inbound-port'), semantic: 'implements' },
+    { key: 'implement-persistence', ...back('persistence-adapter', 'persistence-port'), semantic: 'implements' },
+    { key: 'implement-integration', ...back('integration-adapter', 'integration-port'), semantic: 'implements' },
   ],
   flows: [
     {
       title: 'Handle an HTTP request',
       accent: 'green',
       steps: [
-        { edgeKey: 'rest-call' },
-        { edgeKey: 'dispatch' },
-        { edgeKey: 'use-domain' },
-        { edgeKey: 'use-persistence-port' },
-        { edgeKey: 'impl-persistence' },
-        { edgeKey: 'write-database' },
+        { edgeKey: 'http-call', caption: 'The adapter translates HTTP into a call on the port' },
+        { edgeKey: 'use-domain', caption: 'The use case behind the port runs the domain model' },
+        { edgeKey: 'use-persistence-port', caption: 'The core asks its own port — not a database' },
+        { edgeKey: 'write-database', caption: 'The adapter behind the port does the technology' },
       ],
     },
     {
       title: 'Consume a message',
       accent: 'amber',
       steps: [
-        { edgeKey: 'consumer-call' },
-        { edgeKey: 'dispatch' },
+        { edgeKey: 'consumer-call', caption: 'A different technology, the same port' },
         { edgeKey: 'use-domain' },
         { edgeKey: 'use-integration-port' },
-        { edgeKey: 'impl-integration' },
         { edgeKey: 'call-external' },
       ],
     },
@@ -1330,89 +1216,69 @@ const hexagonal: ArchitectureStarter = {
 
 /* ------------------------------------------------------ backend for frontend -- */
 /**
- * Two client experiences, each with its own backend adapter, sharing one set of domain services —
- * drawn with the shared services *in the middle* and an experience on either side, so the sentence
- * "different clients get tailored backends; the domain stays shared and independent" reads before
+ * Two client experiences, each with a backend of its own, sharing one set of backend capabilities
+ * — drawn with the shared capabilities *in the middle* and an experience on either side, so the
+ * sentence "each frontend gets a backend tailored to it; the capabilities stay shared" reads before
  * a single label does, and no connector ever crosses another.
  *
  * **What each element is.**
- * - `Web Client` / `Mobile Client` are `device` Actors: the pattern is about *client experiences*,
- *   and a browser and a phone are the two that most often diverge in what they need.
- * - `Web BFF` / `Mobile BFF` are plain `api` Services — Backend for Frontend is an architectural
- *   role, not its own shape kind, so the label and the diagram itself carry the distinction from
- *   an API Gateway rather than a dedicated silhouette. A gateway is one shared front door (routing,
- *   auth, rate limits — see Microservices) and its connectors say `routes`; a BFF is *one client's*
- *   adapter that shapes and aggregates calls for that experience alone, and its connectors say
- *   `calls`. There is deliberately **no gateway** here: drawing both would blur exactly the
- *   distinction this starter exists to make, and the Web BFF's note says so in one line.
+ * - `Web Client` is an Actor of kind `system` (a monitor — a browser) and `Mobile Client` one of
+ *   kind `device` (a phone): the pattern is about client experiences, and a browser and a phone are
+ *   the two that most often diverge in what they need. Neither is a person.
+ * - `Web BFF` / `Mobile BFF` are `api` Services: Backend for Frontend is a role, not a shape kind.
+ *   Each carries its responsibility as its own C4 description, drawn inside the shape — the web
+ *   one *composes page data*, the mobile one *tailors compact responses* — because a BFF that
+ *   merely forwards is a gateway with extra steps. There is deliberately **no gateway** here: a
+ *   gateway is one shared front door and its connectors say `routes`; a BFF is *one client's*
+ *   adapter and its connectors say `calls`. Drawing both would blur exactly that.
  * - Each client and its BFF share a boundary titled for the *experience* and subtitled with who
- *   owns it: the BFF belongs to the team that owns that client, which is the whole reason it may be
- *   tailored. Two boundaries, not one, is what says "not a shared layer." Nothing here says every
- *   client *must* have one — the diagram shows the shape once per experience that wants it.
- * - `Customer`, `Orders`, `Recommendations` are `api` Services inside a `Domain services`
- *   boundary — shared capabilities with their own owners, and the boundary's subtitle says so. A
- *   BFF composes them; it never owns them, and it is never where business rules live (the
- *   boundary's note carries that rule).
+ *   owns it — a logical/ownership grouping, never a deployment: browser code and a BFF do not run
+ *   together, they belong together. Ownership is why a BFF may be tailored without a committee.
+ * - `Capability A/B/C Service` sit inside `Shared backend capabilities`, subtitled with where the
+ *   business rules live. A BFF composes them; it never owns them and never holds the rules.
  *
  * **Routing.** The Web BFF's three connectors leave its right-middle point, so Smart Routing draws
  * one trunk with one collapsed `calls`; the Mobile BFF's two leave its left-middle point for one
  * funnel of its own. The two fans meet the services from opposite sides, so the asymmetry — only
- * the web experience uses Recommendations — is visible as a shorter fan, not as a crossing line.
- * The adapter row sits level with the middle service so each stem meets its trunk at the trunk's
- * own centre. Everything is a synchronous request: a BFF is a request-time adapter, and this is
- * the one starter where nothing is dashed on purpose.
+ * the web experience uses Capability C — is visible as a shorter fan, not as a crossing line, and
+ * says "a different subset" without claiming every client uses every service. Everything is a
+ * synchronous request: a BFF is a request-time adapter.
  */
 const BFF_BOX_WIDTH = SERVICE.width + BOUNDARY_PAD * 2;
+/** A BFF carries a one-line C4 description under its name, which Service's default height has no
+ *  row for — grown just enough to hold the name, the description and the API tag. */
+const BFF_ADAPTER = { width: SERVICE.width, height: 88 };
 /** A boundary subtitle spans the box's inner width, sharing the title's own left inset. */
-const BFF_SUBTITLE = { width: BFF_BOX_WIDTH - BOUNDARY_TITLE_INSET * 2, height: 24 };
-/** First content row clears the boundary's subtitle — the same arithmetic as `MODULAR_API_Y`. */
-const BFF_TOP = BOUNDARY_TITLE_SUBLINE_Y + BFF_SUBTITLE.height + 8;
+const BFF_SUBTITLE = { width: BFF_BOX_WIDTH - BOUNDARY_TITLE_INSET * 2, height: SUBTITLE_HEIGHT };
+/** First content row clears the boundary's subtitle. */
+const BFF_TOP = BOUNDARY_TITLE_SUBLINE_Y + SUBTITLE_HEIGHT + 8;
 const BFF_CLIENT_Y = BFF_TOP;
 /** Tighter than `INNER_BAND`: the `calls` caption between a client and its adapter sits inside a
  *  boundary that already separates them from everything else. */
 const BFF_CLIENT_GAP = 64;
 const BFF_ADAPTER_Y = BFF_CLIENT_Y + ACTOR.height + BFF_CLIENT_GAP;
-const BFF_BOX_HEIGHT = BFF_ADAPTER_Y + SERVICE.height + BOUNDARY_PAD;
+const BFF_BOX_HEIGHT = BFF_ADAPTER_Y + BFF_ADAPTER.height + BOUNDARY_PAD;
 /** Wider than `INNER_BAND`: each service row also hosts a fan branch and its tap-off. */
 const BFF_SERVICE_GAP = 88;
 const BFF_SERVICE_Y = (index: number) => BFF_TOP + index * (SERVICE.height + BFF_SERVICE_GAP);
-const BFF_DOMAIN_HEIGHT = BFF_SERVICE_Y(2) + SERVICE.height + BOUNDARY_PAD;
-/** A full `BAND` either side of the domain: room for a fan's trunk corridor and its caption. */
+const BFF_SHARED_HEIGHT = BFF_SERVICE_Y(2) + SERVICE.height + BOUNDARY_PAD;
+/** A full `BAND` either side of the shared capabilities: room for a fan's trunk corridor and its
+ *  caption. */
 const BFF_GUTTER = BAND;
 const BFF_WEB_X = 0;
-const BFF_DOMAIN_X = BFF_WEB_X + BFF_BOX_WIDTH + BFF_GUTTER;
-const BFF_MOBILE_X = BFF_DOMAIN_X + BFF_BOX_WIDTH + BFF_GUTTER;
-const BFF_SERVICES = ['customer', 'orders', 'recommendations'] as const;
-const BFF_SERVICE_NAMES = ['Customer Service', 'Orders Service', 'Recommendations Service'] as const;
-
-/** A title-only boundary's second header line — the same shape CQRS and the Outbox use. */
-function boundarySubtitle(
-  key: string,
-  parent: string,
-  left: number,
-  text: string,
-  size: { width: number; height: number },
-): StarterNodeSpec {
-  return {
-    key,
-    type: 'text',
-    text,
-    annotation: true,
-    parent,
-    x: left + BOUNDARY_TITLE_INSET,
-    y: BOUNDARY_TITLE_SUBLINE_Y,
-    ...size,
-  };
-}
+const BFF_SHARED_X = BFF_WEB_X + BFF_BOX_WIDTH + BFF_GUTTER;
+const BFF_MOBILE_X = BFF_SHARED_X + BFF_BOX_WIDTH + BFF_GUTTER;
+/** The experience boxes are shorter than the shared one; centring them on its middle row keeps
+ *  each BFF level with the middle service, so every stem meets its trunk at the trunk's own centre. */
+const BFF_EXPERIENCE_Y = Math.round(BFF_SERVICE_Y(1) + SERVICE.height / 2 - (BFF_ADAPTER_Y + BFF_ADAPTER.height / 2));
 
 function bffExperience(
   key: 'web' | 'mobile',
   left: number,
   title: string,
   owner: string,
-  client: string,
-  adapter: string,
-  note: string,
+  client: { text: string; kind: 'system' | 'device' },
+  adapter: { text: string; description: string; note: string },
 ): StarterNodeSpec[] {
   const cx = left + BFF_BOX_WIDTH / 2;
   return [
@@ -1422,32 +1288,33 @@ function bffExperience(
       boundaryPreset: 'boundary',
       text: title,
       x: left,
-      y: 0,
+      y: BFF_EXPERIENCE_Y,
       width: BFF_BOX_WIDTH,
       height: BFF_BOX_HEIGHT,
     },
-    boundarySubtitle(`${key}-subtitle`, `${key}-box`, left, owner, BFF_SUBTITLE),
+    boundarySubtitle(`${key}-subtitle`, `${key}-box`, left, owner, BFF_SUBTITLE, BFF_EXPERIENCE_Y),
     {
       key: `${key}-client`,
       type: 'actor',
-      actorKind: 'device',
-      text: client,
+      actorKind: client.kind,
+      text: client.text,
       parent: `${key}-box`,
       x: centeredAt(cx, ACTOR.width),
-      y: BFF_CLIENT_Y,
+      y: BFF_EXPERIENCE_Y + BFF_CLIENT_Y,
       ...ACTOR,
     },
     {
       key: `${key}-bff`,
       type: 'service',
       serviceKind: 'api',
-      text: adapter,
+      text: adapter.text,
+      description: adapter.description,
       accent: 'teal',
       parent: `${key}-box`,
       x: left + BOUNDARY_PAD,
-      y: BFF_ADAPTER_Y,
-      ...SERVICE,
-      attachments: [{ type: 'note', text: note }],
+      y: BFF_EXPERIENCE_Y + BFF_ADAPTER_Y,
+      ...BFF_ADAPTER,
+      attachments: [{ type: 'note', text: adapter.note }],
     },
   ];
 }
@@ -1456,7 +1323,7 @@ const backendForFrontend: ArchitectureStarter = {
   id: 'bff',
   category: 'architecture',
   name: 'Backend for Frontend',
-  description: 'Backend adapters tailored to each client experience',
+  description: 'A backend per frontend, over shared capabilities',
   aliases: ['bff', 'backend for frontend', 'backends for frontends', 'client adapter', 'per-client api'],
   nodes: [
     ...bffExperience(
@@ -1464,33 +1331,39 @@ const backendForFrontend: ArchitectureStarter = {
       BFF_WEB_X,
       'Web experience',
       'Owned by the web team',
-      'Web Client',
-      'Web BFF',
-      'Shapes and aggregates backend calls for the web app. Not a shared gateway, not the domain.',
+      { text: 'Web Client', kind: 'system' },
+      {
+        text: 'Web BFF',
+        description: 'Composes page data',
+        note: 'Aggregates several capability calls into one page-shaped response for the browser. Not a shared gateway, and not where business rules live.',
+      },
     ),
     {
-      key: 'domain',
+      key: 'shared',
       type: 'group',
       boundaryPreset: 'boundary',
-      text: 'Domain services',
-      x: BFF_DOMAIN_X,
+      text: 'Shared backend capabilities',
+      x: BFF_SHARED_X,
       y: 0,
       width: BFF_BOX_WIDTH,
-      height: BFF_DOMAIN_HEIGHT,
+      height: BFF_SHARED_HEIGHT,
       attachments: [
-        { type: 'note', text: 'Shared capabilities with their own owners. A BFF composes them; it never owns them.' },
+        {
+          type: 'note',
+          text: 'Shared capabilities with their own owners and the business rules. A BFF composes a subset of them for its client; it never owns them, and no client is required to use them all.',
+        },
       ],
     },
-    boundarySubtitle('domain-subtitle', 'domain', BFF_DOMAIN_X, 'Shared, reused by every client', BFF_SUBTITLE),
-    ...BFF_SERVICES.map(
-      (key, index): StarterNodeSpec => ({
-        key,
+    boundarySubtitle('shared-subtitle', 'shared', BFF_SHARED_X, 'Business rules live here', BFF_SUBTITLE),
+    ...CAPABILITIES.map(
+      (letter, index): StarterNodeSpec => ({
+        key: `capability-${letter.toLowerCase()}`,
         type: 'service',
         serviceKind: 'api',
-        text: BFF_SERVICE_NAMES[index],
+        text: `Capability ${letter} Service`,
         accent: 'teal',
-        parent: 'domain',
-        x: BFF_DOMAIN_X + BOUNDARY_PAD,
+        parent: 'shared',
+        x: BFF_SHARED_X + BOUNDARY_PAD,
         y: BFF_SERVICE_Y(index),
         ...SERVICE,
       }),
@@ -1500,94 +1373,115 @@ const backendForFrontend: ArchitectureStarter = {
       BFF_MOBILE_X,
       'Mobile experience',
       'Owned by the mobile team',
-      'Mobile Client',
-      'Mobile BFF',
-      'Fewer round trips, smaller payloads — what a phone on a slow network needs.',
+      { text: 'Mobile Client', kind: 'device' },
+      {
+        text: 'Mobile BFF',
+        description: 'Tailors compact responses',
+        note: 'Fewer round trips and smaller payloads — what a phone on a slow network needs. Uses only the capabilities the mobile experience needs.',
+      },
     ),
   ],
   edges: [
     { key: 'web-call', ...down('web-client', 'web-bff') },
     { key: 'mobile-call', ...down('mobile-client', 'mobile-bff') },
     // One fan per adapter, from opposite sides — see this block's doc comment.
-    ...BFF_SERVICES.map((key) => ({ ...across('web-bff', key), key: `web-${key}` })),
-    { key: 'mobile-customer', from: 'mobile-bff', to: 'customer', sourceAnchor: LEFT, targetAnchor: RIGHT },
-    { key: 'mobile-orders', from: 'mobile-bff', to: 'orders', sourceAnchor: LEFT, targetAnchor: RIGHT },
+    ...CAPABILITIES.map((letter) => ({ ...across('web-bff', `capability-${letter.toLowerCase()}`), key: `web-${letter.toLowerCase()}` })),
+    { key: 'mobile-a', ...back('mobile-bff', 'capability-a') },
+    { key: 'mobile-b', ...back('mobile-bff', 'capability-b') },
   ],
   flows: [
     {
       title: 'Web request',
       accent: 'teal',
       steps: [
-        { edgeKey: 'web-call' },
-        { edgeKey: 'web-customer' },
-        { edgeKey: 'web-orders' },
-        { edgeKey: 'web-recommendations' },
+        { edgeKey: 'web-call', caption: 'One request for a whole page' },
+        { edgeKey: 'web-a' },
+        { edgeKey: 'web-b' },
+        { edgeKey: 'web-c', caption: 'Composed into one page-shaped response' },
       ],
     },
     {
       title: 'Mobile request',
       accent: 'amber',
-      steps: [{ edgeKey: 'mobile-call' }, { edgeKey: 'mobile-customer' }, { edgeKey: 'mobile-orders' }],
+      steps: [
+        { edgeKey: 'mobile-call', caption: 'One compact request from the phone' },
+        { edgeKey: 'mobile-a' },
+        { edgeKey: 'mobile-b', caption: 'Only what the mobile experience needs, trimmed for it' },
+      ],
     },
   ],
 };
 
 /* ------------------------------------------------------------------- cqrs -- */
 /**
- * One client, two sides. Commands go left and change authoritative state; queries go right and
- * are answered from a model shaped for reading. The only bridge between the two is an event and
- * the projection that consumes it — which is also the only place eventual consistency enters, and
- * the diagram says so in as many words.
+ * One client, two sides, two models. Commands go left and change authoritative state through a
+ * handler that validates intent; queries go right and are answered from a model shaped for
+ * reading, without changing anything. That separation of *responsibilities* — not two cylinders
+ * with different names — is the pattern; everything on the bridge between the two sides is one
+ * particular way to keep the read model up to date, named as such: CQRS **with an asynchronous
+ * read projection**.
  *
  * **What each element is, and what it is careful not to say.**
- * - `Command API` → `Write Model` → `Write Store` is the command side: the API accepts an
- *   imperative (`command`, its attached example is `PlaceOrder` — a thing the caller wants, never a
- *   row to upsert), the model *executes* it (labelled so, since a second `command` caption in a
- *   row says nothing new), and the store holds current state in the write model's own shape.
- * - `Domain Events` is a Topic carrying *facts* (`OrderPlaced`), published by the write model after
- *   its store commits. It is **not an event store**: nothing here replays events to rebuild state,
- *   so this starter stays valid for a plain state-based write model that emits events. CQRS is
- *   not Event Sourcing, and the two are drawn apart on purpose.
- * - `Projection Service` is a Worker that turns each event into an update of the `Read Store`
- *   (a plain `writes`; the role is in the name and the side it sits on), and `Query API` →
- *   `Read Store` is the query side: it `reads` and mutates nothing (the boundary's subtitle is the
- *   rule).
- * - The "Eventually consistent" annotation sits under the bridge: a read straight after a command
- *   may not yet see it. That is the one honest cost of the pattern, so it is on the canvas, not in
- *   a footnote.
- * - Two models, not necessarily two databases — the read store's note carries that nuance.
+ * - `Command API` → `Command Handler` → `Write Store` is the command side: the API accepts an
+ *   imperative (`command`, its attached example names what the caller wants, never a row to
+ *   upsert), the handler *executes* it — validates, applies the rules, may reject — and the store
+ *   holds current state in the write model's own shape. One write does two things in one
+ *   transaction: the state, and an outbox record of what changed. The connector says so, and the
+ *   publish's note says why: a database write and a broker publish are never atomic on their own.
+ * - `Outbox Relay` is a Worker on the command side that reads committed outbox records *after* the
+ *   transaction and publishes them to `Domain Events`. It exists so that no passive model object
+ *   is drawn as a network publisher and no publish happens inside a transaction — one compact,
+ *   coherent propagation strategy (the Transactional Outbox starter is the same idea at its own
+ *   scope). The Topic carries facts, not state: it is **not an event store**, and nothing replays
+ *   it to rebuild anything. CQRS is not Event Sourcing.
+ * - `Projection Worker` is a Worker on the query side that turns each event into an update of
+ *   `Read Store`; `Query API` only ever `reads`. The one honest cost is written under the bridge:
+ *   the read projection is *eventually consistent* — a read straight after a command may not see
+ *   it yet — and that caption is tied to this propagation, not to CQRS as such.
+ * - Two models, not necessarily two databases, and no requirement for messaging, event sourcing or
+ *   separate deployments: the command side's and the Read Store's notes say so. The two boundaries
+ *   are `boundary`s — logical sides, not deployments.
  *
- * **Routing.** Rows line up across the three columns so every bridge connector is a level line
- * or a plain drop; the topic's *tube* (not its box) sits level with the write model so the
- * `publishes` line is straight. The client's two connectors leave its bottom-centre for one
- * `command` and one `query`, whose captions the router keeps clear of the fan's horizontal run.
+ * **Routing.** The whole propagation is one level line along the store row: Write Store ← Relay →
+ * Topic → Projection Worker → Read Store, so the asynchronous tail reads left to right as one
+ * sentence, and the two dashed event hops sit between two solid data hops. Rows line up across
+ * both boxes; the Topic's *tube* (not its box) and both stores' *glyphs* sit on that row so every
+ * hop is straight. The client's two connectors leave its bottom-centre and meet each API from the
+ * *side* facing the client — one `command` into the Command API's right edge, one `query` into the
+ * Query API's left edge — so they cross each boundary's edge in open space rather than descending
+ * through its title and subtitle.
  *
- * **Flows.** "Submit command" walks the whole write story including its asynchronous tail; "Read
- * projection" is the two-step read.
+ * **Flows.** "Submit command" walks the whole write story including its asynchronous tail;
+ * "Read projection" is the two-step read.
  */
-const CQRS_BOX_WIDTH = SERVICE.width + BOUNDARY_PAD * 2;
-const CQRS_SUBTITLE = { width: 176, height: 24 };
-/** First content row clears the boundary's subtitle — the same arithmetic as `MODULAR_API_Y`. */
-const CQRS_TOP = BOUNDARY_TITLE_SUBLINE_Y + CQRS_SUBTITLE.height + 8;
-/** Component's own default footprint (`DEFAULTS.componentWidth/Height`). */
-const CQRS_MODEL = { width: 152, height: 56 };
+const CQRS_INNER_GAP = 88;
+const CQRS_BOX_WIDTH = BOUNDARY_PAD * 2 + SERVICE.width * 2 + CQRS_INNER_GAP;
+const CQRS_SUBTITLE = { width: 200, height: SUBTITLE_HEIGHT };
+/** First content row clears the boundary's subtitle. */
+const CQRS_TOP = BOUNDARY_TITLE_SUBLINE_Y + SUBTITLE_HEIGHT + 8;
 const CQRS_API_Y = CQRS_TOP;
-const CQRS_MODEL_Y = CQRS_API_Y + SERVICE.height + INNER_BAND;
-const CQRS_STORE_Y = CQRS_MODEL_Y + CQRS_MODEL.height + INNER_BAND;
+const CQRS_HANDLER_Y = CQRS_API_Y + SERVICE.height + INNER_BAND;
+const CQRS_STORE_Y = CQRS_HANDLER_Y + COMPONENT.height + INNER_BAND;
 const CQRS_BOX_HEIGHT = CQRS_STORE_Y + STORE.height + BOUNDARY_PAD;
-const CQRS_COMMAND_X = 0;
-const CQRS_BRIDGE_X = CQRS_COMMAND_X + CQRS_BOX_WIDTH + GUTTER;
-const CQRS_BRIDGE_CX = CQRS_BRIDGE_X + SERVICE.width / 2;
-const CQRS_QUERY_X = CQRS_BRIDGE_X + SERVICE.width + GUTTER;
-const CQRS_COMMAND_CX = CQRS_COMMAND_X + CQRS_BOX_WIDTH / 2;
-const CQRS_QUERY_CX = CQRS_QUERY_X + CQRS_BOX_WIDTH / 2;
-const CQRS_MODEL_CENTER = CQRS_MODEL_Y + CQRS_MODEL.height / 2;
 const CQRS_STORE_CENTER = CQRS_STORE_Y + STORE_GLYPH_CENTER;
+/** The bridge gap on either side of the Topic: room for a dashed event hop's caption to sit clear
+ *  of the boundary edge the hop crosses, not straddling it. */
+const CQRS_BRIDGE_GAP = 120;
+const CQRS_COMMAND_X = 0;
+/** Command side: the write column on the left, the relay column beside the bridge. */
+const CQRS_WRITE_CX = CQRS_COMMAND_X + BOUNDARY_PAD + SERVICE.width / 2;
+const CQRS_RELAY_X = CQRS_COMMAND_X + BOUNDARY_PAD + SERVICE.width + CQRS_INNER_GAP;
+const CQRS_TOPIC_X = CQRS_COMMAND_X + CQRS_BOX_WIDTH + CQRS_BRIDGE_GAP;
+const CQRS_TOPIC_CX = CQRS_TOPIC_X + NAMED_QUEUE.width / 2;
+const CQRS_QUERY_X = CQRS_TOPIC_X + NAMED_QUEUE.width + CQRS_BRIDGE_GAP;
+/** Query side: the projection column beside the bridge, the read column on the right. */
+const CQRS_PROJECTOR_X = CQRS_QUERY_X + BOUNDARY_PAD;
+const CQRS_READ_CX = CQRS_PROJECTOR_X + SERVICE.width + CQRS_INNER_GAP + SERVICE.width / 2;
 /** The annotation sits just under the store row, still inside the boundaries' own bottom pad. */
 const CQRS_ANNOTATION_Y = CQRS_STORE_Y + STORE.height + 8;
-const CQRS_ANNOTATION = { width: 124, height: 24 };
+const CQRS_ANNOTATION = { width: 220, height: SUBTITLE_HEIGHT };
 
-function cqrsSide(key: 'command' | 'query', left: number, title: string, subtitle: string): StarterNodeSpec[] {
+function cqrsSide(key: 'command' | 'query', left: number, title: string, subtitle: string, note: string): StarterNodeSpec[] {
   return [
     {
       key: `${key}-box`,
@@ -1598,6 +1492,7 @@ function cqrsSide(key: 'command' | 'query', left: number, title: string, subtitl
       y: 0,
       width: CQRS_BOX_WIDTH,
       height: CQRS_BOX_HEIGHT,
+      attachments: [{ type: 'note', text: note }],
     },
     boundarySubtitle(`${key}-subtitle`, `${key}-box`, left, subtitle, CQRS_SUBTITLE),
   ];
@@ -1607,19 +1502,17 @@ const cqrs: ArchitectureStarter = {
   id: 'cqrs',
   category: 'architecture',
   name: 'CQRS',
-  description: 'Separate write and read models that evolve independently',
+  description: 'Distinct command and query paths, async read projection',
   aliases: ['cqrs', 'command query', 'command query responsibility segregation', 'read model', 'write model', 'projection'],
   nodes: [
-    {
-      key: 'client',
-      type: 'actor',
-      actorKind: 'human',
-      text: 'Client',
-      x: centeredAt(CQRS_BRIDGE_CX, ACTOR.width),
-      y: -(BAND + ACTOR.height),
-      ...ACTOR,
-    },
-    ...cqrsSide('command', CQRS_COMMAND_X, 'Command', 'Expresses intent'),
+    softwareClient(CQRS_TOPIC_CX, 0),
+    ...cqrsSide(
+      'command',
+      CQRS_COMMAND_X,
+      'Command side',
+      'Validates intent, changes state',
+      'A logical side, not a deployment: the two sides can be one process and one database. CQRS requires neither messaging, event sourcing nor separate services — this starter adds an asynchronous projection as one common variant. Its topic carries facts about what changed and is not an event store: nothing replays it. A direct in-process update or a database change feed would feed the projection just as well.',
+    ),
     {
       key: 'command-api',
       type: 'service',
@@ -1627,30 +1520,29 @@ const cqrs: ArchitectureStarter = {
       text: 'Command API',
       accent: 'teal',
       parent: 'command-box',
-      x: CQRS_COMMAND_X + BOUNDARY_PAD,
+      x: centeredAt(CQRS_WRITE_CX, SERVICE.width),
       y: CQRS_API_Y,
       ...SERVICE,
       attachments: [
         {
           type: 'code',
-          text: 'PlaceOrder',
+          text: 'Example command',
           language: 'json',
-          // An imperative, named for what the caller wants — never a row to upsert.
-          code: ['{', '  "type": "PlaceOrder",', '  "customerId": "cus_1182",', '  "lines": [{ "sku": "A-100", "qty": 2 }]', '}'].join(
-            '\n',
-          ),
+          // An imperative, named for what the caller wants — never a row to upsert. The handler
+          // may still say no.
+          code: ['{', '  "type": "ChangeStatus",', '  "entityId": "ent_4821",', '  "status": "active"', '}'].join('\n'),
         },
       ],
     },
     {
-      key: 'write-model',
+      key: 'command-handler',
       type: 'component',
       componentKind: 'generic',
-      text: 'Write Model',
+      text: 'Command Handler',
       parent: 'command-box',
-      x: centeredAt(CQRS_COMMAND_CX, CQRS_MODEL.width),
-      y: CQRS_MODEL_Y,
-      ...CQRS_MODEL,
+      x: centeredAt(CQRS_WRITE_CX, COMPONENT.width),
+      y: CQRS_HANDLER_Y,
+      ...COMPONENT,
     },
     {
       key: 'write-store',
@@ -1659,40 +1551,46 @@ const cqrs: ArchitectureStarter = {
       text: 'Write Store',
       accent: 'blue',
       parent: 'command-box',
-      x: centeredAt(CQRS_COMMAND_CX, STORE.width),
+      x: centeredAt(CQRS_WRITE_CX, STORE.width),
       y: CQRS_STORE_Y,
       ...STORE,
+    },
+    {
+      key: 'relay',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Outbox Relay',
+      accent: 'teal',
+      parent: 'command-box',
+      x: CQRS_RELAY_X,
+      y: centeredAt(CQRS_STORE_CENTER, SERVICE.height),
+      ...SERVICE,
     },
     {
       key: 'events',
       type: 'queue',
       queueKind: 'topic',
       text: 'Domain Events',
-      x: centeredAt(CQRS_BRIDGE_CX, NAMED_QUEUE.width),
-      y: tubeCenteredAt(CQRS_MODEL_CENTER, NAMED_QUEUE.height),
+      x: CQRS_TOPIC_X,
+      y: tubeCenteredAt(CQRS_STORE_CENTER, NAMED_QUEUE.height),
       ...NAMED_QUEUE,
-    },
-    {
-      key: 'projection',
-      type: 'service',
-      serviceKind: 'worker',
-      text: 'Projection Service',
-      accent: 'teal',
-      x: CQRS_BRIDGE_X,
-      y: centeredAt(CQRS_STORE_CENTER, SERVICE.height),
-      ...SERVICE,
     },
     {
       key: 'consistency',
       type: 'text',
-      text: 'Eventually consistent',
+      text: 'Eventually consistent read projection',
       annotation: true,
-      // Sized to its own text so the left-aligned annotation sits centred under the bridge.
-      x: centeredAt(CQRS_BRIDGE_CX, CQRS_ANNOTATION.width),
+      x: centeredAt(CQRS_TOPIC_CX, CQRS_ANNOTATION.width),
       y: CQRS_ANNOTATION_Y,
       ...CQRS_ANNOTATION,
     },
-    ...cqrsSide('query', CQRS_QUERY_X, 'Query', 'Never mutates state'),
+    ...cqrsSide(
+      'query',
+      CQRS_QUERY_X,
+      'Query side',
+      'Answers questions, changes nothing',
+      'Reads are answered from a model shaped for the questions asked. Only the projection writes here; the Query API never does.',
+    ),
     {
       key: 'query-api',
       type: 'service',
@@ -1700,8 +1598,19 @@ const cqrs: ArchitectureStarter = {
       text: 'Query API',
       accent: 'teal',
       parent: 'query-box',
-      x: CQRS_QUERY_X + BOUNDARY_PAD,
+      x: centeredAt(CQRS_READ_CX, SERVICE.width),
       y: CQRS_API_Y,
+      ...SERVICE,
+    },
+    {
+      key: 'projector',
+      type: 'service',
+      serviceKind: 'worker',
+      text: 'Projection Worker',
+      accent: 'teal',
+      parent: 'query-box',
+      x: CQRS_PROJECTOR_X,
+      y: centeredAt(CQRS_STORE_CENTER, SERVICE.height),
       ...SERVICE,
     },
     {
@@ -1711,29 +1620,38 @@ const cqrs: ArchitectureStarter = {
       text: 'Read Store',
       accent: 'blue',
       parent: 'query-box',
-      x: centeredAt(CQRS_QUERY_CX, STORE.width),
+      x: centeredAt(CQRS_READ_CX, STORE.width),
       y: CQRS_STORE_Y,
       ...STORE,
       attachments: [
         {
           type: 'note',
-          text: 'Shaped for the questions asked of it — a projection, not the write model. May share a physical database: CQRS separates models, not necessarily databases.',
+          text: 'Shaped for the questions asked of it — a projection, not the write model. It may be a second schema in the same database: CQRS separates models, not necessarily databases.',
         },
       ],
     },
   ],
   edges: [
-    { key: 'submit', ...down('client', 'command-api'), semantic: 'command' },
-    { key: 'handle', ...down('command-api', 'write-model'), semantic: 'command', label: 'executes' },
-    { key: 'persist', ...down('write-model', 'write-store') },
+    { key: 'submit', from: 'client', to: 'command-api', sourceAnchor: BOTTOM, targetAnchor: RIGHT, semantic: 'command' },
+    { key: 'handle', ...down('command-api', 'command-handler'), semantic: 'command', label: 'executes' },
+    { key: 'persist', ...down('command-handler', 'write-store'), label: 'writes state + outbox record' },
+    { key: 'relay-read', ...back('relay', 'write-store'), semantic: 'reads', label: 'reads outbox' },
     {
+      // The transaction's story rides the publish, not the handler's write: the write sits in a
+      // crowded column where a presentation callout has nowhere to open, and the publish is the
+      // moment the guarantee matters — it is what the outbox makes safe.
       key: 'publish',
-      ...across('write-model', 'events'),
-      attachments: [{ type: 'note', text: 'OrderPlaced — a fact, published after the write store commits.' }],
+      ...across('relay', 'events'),
+      attachments: [
+        {
+          type: 'note',
+          text: 'Published only after the commit: the new state and its outbox record were written in one transaction, or not at all, and nothing left it from inside. Delivery is at-least-once, so the projection dedupes on the record id.',
+        },
+      ],
     },
-    { key: 'project', ...down('events', 'projection') },
-    { key: 'materialize', ...across('projection', 'read-store') },
-    { key: 'query', ...down('client', 'query-api'), semantic: 'query' },
+    { key: 'deliver', ...across('events', 'projector') },
+    { key: 'materialize', ...across('projector', 'read-store'), label: 'updates projection' },
+    { key: 'query', from: 'client', to: 'query-api', sourceAnchor: BOTTOM, targetAnchor: LEFT, semantic: 'query' },
     { key: 'read', ...down('query-api', 'read-store'), semantic: 'reads' },
   ],
   flows: [
@@ -1742,10 +1660,11 @@ const cqrs: ArchitectureStarter = {
       accent: 'amber',
       steps: [
         { edgeKey: 'submit', caption: 'The client states what it wants' },
-        { edgeKey: 'handle' },
-        { edgeKey: 'persist', caption: 'Current state, in the write model’s shape' },
+        { edgeKey: 'handle', caption: 'Validated against the rules — it may be rejected' },
+        { edgeKey: 'persist', caption: 'State and outbox record, one transaction' },
+        { edgeKey: 'relay-read', caption: 'After the commit, the relay picks up the record' },
         { edgeKey: 'publish', caption: 'A fact leaves the command side' },
-        { edgeKey: 'project' },
+        { edgeKey: 'deliver' },
         { edgeKey: 'materialize', caption: 'The read model catches up — eventually' },
       ],
     },

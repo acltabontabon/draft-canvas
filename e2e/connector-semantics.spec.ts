@@ -150,6 +150,7 @@ test.describe('contextual connector toolbar', () => {
       'Routes',
       'Triggers',
       'Implemented by',
+      'Implements',
       'Compensates',
       'Transforms',
     ]);
@@ -345,6 +346,7 @@ test.describe('Junction connector', () => {
       'Routes',
       'Triggers',
       'Implemented by',
+      'Implements',
       'Compensates',
       'Transforms',
     ]);

@@ -38,9 +38,15 @@ export function dashForEdge(edge: DraftEdge): number[] | undefined {
 export const RESPONSE_DASH = [3, 3];
 
 /** A callback's return arrow reads as hollow, so a forward/return pair is
- *  distinct even before lane separation or direction is noticed. */
+ *  distinct even before lane separation or direction is noticed. So does a
+ *  realization (`implements` / `implementedBy`): the one connector that
+ *  carries no runtime traffic at all — an adapter satisfying a port's
+ *  contract — wears UML's own hollow head for exactly that, so it is told
+ *  apart from the solid-headed calls beside it before its caption is read. */
 export function markerVariantForEdge(edge: DraftEdge): MarkerVariant {
-  return edge.kind === 'callback' ? 'open' : 'closed';
+  return edge.kind === 'callback' || edge.semantic === 'implements' || edge.semantic === 'implementedBy'
+    ? 'open'
+    : 'closed';
 }
 
 /**

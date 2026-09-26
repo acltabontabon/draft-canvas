@@ -33,18 +33,18 @@ test.describe('Presentation journey', () => {
     // whole path lit at once, with no single step active and nothing speaking yet.
     const opening = page.locator('.dc-present-card[data-kind="opening"]');
     await expect(opening).toContainText('Submit command');
-    await expect(opening).toContainText('6 steps');
+    await expect(opening).toContainText('7 steps');
     await expect(opening.locator('.dc-present-route')).toContainText('Client');
     await expect(page.locator('.dc-canvas[data-explain-stage="overview"]')).toBeVisible();
-    await expect(page.locator('.dc-edge[data-shown="true"]')).toHaveCount(6);
+    await expect(page.locator('.dc-edge[data-shown="true"]')).toHaveCount(7);
     await expect(page.locator('.dc-edge[data-active="true"]')).toHaveCount(0);
     await expect(page.locator('.dc-callout')).toHaveCount(0);
-    await expect(page.locator('.dc-explain-count')).toHaveText('6 steps');
+    await expect(page.locator('.dc-explain-count')).toHaveText('7 steps');
 
     // The first press begins the story: one signal, on the step's own connector, and a caption
     // that names the interaction with words already on the canvas.
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 7');
     await expect(page.locator('.dc-canvas[data-explain-stage]')).toHaveCount(0);
     await expect(page.locator('.dc-edge[data-active="true"] .dc-signal')).toHaveCount(1);
     // The step's two shapes are lit along their own contour — the destination in full, the source at
@@ -53,11 +53,11 @@ test.describe('Presentation journey', () => {
     await expect(page.locator('.dc-node[data-explain-role="source"] .dc-emphasis[data-role="source"]')).toHaveCount(1);
     await expect(page.locator('.dc-arrival')).toHaveCount(0);
     const caption = page.locator('.dc-present-caption');
-    await expect(caption).toContainText('Step 1 of 6');
+    await expect(caption).toContainText('Step 1 of 7');
     await expect(caption).toContainText('Client');
     await expect(caption).toContainText('Command API');
-    // Client sits outside the Command boundary; the API inside it — the crossing is named.
-    await expect(caption.locator('.dc-present-chip')).toContainText(['crosses Command']);
+    // Client sits outside the Command side boundary; the API inside it — the crossing is named.
+    await expect(caption.locator('.dc-present-chip')).toContainText(['crosses Command side']);
     await expect(page.locator('.dc-node[data-explain-crossed="true"]')).toHaveCount(1);
     await expect(page.locator('.dc-present-tick[aria-current="step"]')).toHaveAttribute('aria-label', /Step 1/);
 
@@ -67,7 +67,7 @@ test.describe('Presentation journey', () => {
 
     // The last step, then the closing: the whole path again, replay and the next flow offered.
     await page.keyboard.press('End');
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 6 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 7 / 7');
     await page.keyboard.press('ArrowRight');
     const closing = page.locator('.dc-present-card[data-kind="closing"]');
     await expect(closing).toContainText('End of flow');
@@ -77,7 +77,7 @@ test.describe('Presentation journey', () => {
     await expect(page.locator('.dc-present-caption')).toHaveCount(0);
 
     await closing.getByRole('button', { name: 'Replay' }).click();
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 7');
     await page.keyboard.press('End');
     await page.keyboard.press('ArrowRight');
     await closing.getByRole('button', { name: /^Next: Read projection/ }).click();
@@ -92,11 +92,11 @@ test.describe('Presentation journey', () => {
     await expect(page.locator('.dc-present-card[data-kind="opening"]')).toBeVisible();
 
     await page.locator('.dc-present-tick').nth(3).click();
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 4 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 4 / 7');
     await page.keyboard.press('2');
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 2 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 2 / 7');
     await page.keyboard.press('Home');
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 7');
   });
 
   test('the latest press wins: a burst of navigation converges with one signal and no stale card', async ({ page }) => {
@@ -111,7 +111,7 @@ test.describe('Presentation journey', () => {
     await expect(page.locator('.dc-emphasis')).toHaveCount(0);
     await expect(page.locator('.dc-present-caption')).toHaveCount(0);
     await page.keyboard.press('3');
-    await expect(page.locator('.dc-explain-count')).toHaveText('Step 3 / 6');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 3 / 7');
     await expect(page.locator('.dc-signal')).toHaveCount(1);
     await expect(page.locator('.dc-present-card')).toHaveCount(0);
   });
@@ -127,7 +127,7 @@ test.describe('Presentation journey', () => {
     const before = await cameraOf(page);
 
     await page.getByRole('button', { name: 'Present', exact: true }).click();
-    await page.getByRole('menuitemradio', { name: 'Place an order' }).click();
+    await page.getByRole('menuitemradio', { name: 'Call another service' }).click();
     await expect(page.locator('.dc-present-card[data-kind="opening"]')).toBeVisible();
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 4');

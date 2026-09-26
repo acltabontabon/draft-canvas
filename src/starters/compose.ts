@@ -22,6 +22,21 @@ export const BAND = 104;
 /** A layer gap inside a boundary, where the containing box already provides visual separation. */
 export const INNER_BAND = 72;
 
+/**
+ * The gap between two Components stacked inside one boundary — a layered monolith's layers. Less
+ * than `INNER_BAND`: the two are in-process peers whose connector carries a one-word caption
+ * (`uses`) and no trunk, so this is the least room that caption needs with clear air either side.
+ */
+export const STACK_GAP = 52;
+
+/** A boundary subtitle's box: one line of annotation text at the minimum node height. */
+export const SUBTITLE_HEIGHT = 24;
+
+/** Left edges for `count` columns of `width` a `gutter` apart, the first at `left`. */
+export function columnsFrom(left: number, count: number, width: number, gutter = GUTTER): number[] {
+  return Array.from({ length: count }, (_, index) => Math.round(left + index * (width + gutter)));
+}
+
 /** Left, right and bottom breathing room inside a boundary. */
 export const BOUNDARY_PAD = 36;
 

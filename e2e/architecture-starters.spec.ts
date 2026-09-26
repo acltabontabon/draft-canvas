@@ -22,6 +22,20 @@ async function insertViaPalette(page: Page, query: string) {
   await expect(page.getByRole('dialog', { name: 'Commands' })).toBeHidden();
 }
 
+/** Selects a connector by its position in creation order — `.dc-edge-line`'s DOM order — clicking
+ *  the midpoint of its drawn path, the same way `critical-journey.spec.ts` does. */
+async function clickEdgeBetween(page: Page, edgeIndex: number) {
+  const path = page.locator('.dc-edge-line').nth(edgeIndex);
+  const point = await path.evaluate((el: SVGPathElement) => {
+    const len = el.getTotalLength();
+    const p = el.getPointAtLength(len / 2);
+    const ctm = el.getScreenCTM()!;
+    const screenPoint = new DOMPoint(p.x, p.y).matrixTransform(ctm);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
+  await page.mouse.click(point.x, point.y);
+}
+
 test.describe('architecture starters', () => {
   test('⌘K, "microservices", Enter — and the whole thing undoes in one step', async ({ page }) => {
     await newCanvas(page, 'Starter keyboard');
@@ -34,16 +48,16 @@ test.describe('architecture starters', () => {
     await expect(row).toContainText('Architectures');
     await page.keyboard.press('Enter');
 
-    await expect(page.locator('.dc-node')).toHaveCount(12);
+    await expect(page.locator('.dc-node')).toHaveCount(14);
     // Selected, so the next thing typed acts on what was just inserted.
-    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(12);
-    await expect(page.locator('.dc-status-right')).toContainText('12 elements · 9 connectors');
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(14);
+    await expect(page.locator('.dc-status-right')).toContainText('14 elements · 8 connectors');
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect(page.locator('.dc-node')).toHaveCount(0);
 
     await page.keyboard.press('ControlOrMeta+Shift+z');
-    await expect(page.locator('.dc-node')).toHaveCount(12);
+    await expect(page.locator('.dc-node')).toHaveCount(14);
   });
 
   test('every starter is reachable by the words people actually type', async ({ page }) => {
@@ -62,21 +76,28 @@ test.describe('architecture starters', () => {
     }
   });
 
-  test('a route rule on the gateway fan is edited in place — double-click the chip, type, Enter', async ({
+  test('a condition set on a starter’s service call is edited in place — double-click the chip, type, Enter', async ({
     page,
   }) => {
-    await newCanvas(page, 'Editable route rule');
+    await newCanvas(page, 'Editable condition');
     await insertViaPalette(page, 'microservices');
     await page.locator('.dc-canvas, .react-flow').first().click({ position: { x: 20, y: 20 } });
 
-    const chip = page.locator('.dc-edge-condition', { hasText: '/payments/*' });
+    // The one service-to-service call (the last connector the starter creates) carries the full
+    // Service → Service editor, condition field included.
+    await clickEdgeBetween(page, 7);
+    const condition = page.getByLabel('Condition');
+    await condition.fill('when B needs C');
+    await condition.blur();
+    const chip = page.locator('.dc-edge-condition', { hasText: 'when B needs C' });
     await expect(chip).toHaveCount(1);
+
     await chip.dblclick();
     const input = page.locator('.dc-edge-condition-input');
     await expect(input).toBeVisible();
-    await input.fill('/payments/v2/*');
+    await input.fill('on every B request');
     await page.keyboard.press('Enter');
-    await expect(page.locator('.dc-edge-condition', { hasText: '/payments/v2/*' })).toHaveCount(1);
+    await expect(page.locator('.dc-edge-condition', { hasText: 'on every B request' })).toHaveCount(1);
     await expect(page.locator('.dc-edge-condition-input')).toHaveCount(0);
   });
 
@@ -90,7 +111,7 @@ test.describe('architecture starters', () => {
     await expect(starters).toBeVisible();
 
     await starters.getByRole('button', { name: 'Start from Event-Driven', exact: true }).click();
-    await expect(page.locator('.dc-node')).toHaveCount(11);
+    await expect(page.locator('.dc-node')).toHaveCount(9);
     await expect(starters).toBeHidden();
   });
 
@@ -143,9 +164,9 @@ test.describe('architecture starters', () => {
   test('a second starter lands clear of the first, and both survive a reload', async ({ page }) => {
     await newCanvas(page, 'Starter twice');
     await insertViaPalette(page, 'microservices');
-    await expect(page.locator('.dc-node')).toHaveCount(12);
+    await expect(page.locator('.dc-node')).toHaveCount(14);
     await insertViaPalette(page, 'microservices');
-    await expect(page.locator('.dc-node')).toHaveCount(24);
+    await expect(page.locator('.dc-node')).toHaveCount(28);
 
     // The two blocks occupy disjoint horizontal ranges in document space — nothing was dropped on
     // top of anything, and nothing already on the canvas moved to make room.
@@ -157,9 +178,9 @@ test.describe('architecture starters', () => {
       boxes.sort((a, b) => a.left - b.left);
       return boxes;
     });
-    expect(spans.length).toBe(24);
-    const firstBlockRight = Math.max(...spans.slice(0, 12).map((box) => box.right));
-    const secondBlockLeft = Math.min(...spans.slice(12).map((box) => box.left));
+    expect(spans.length).toBe(28);
+    const firstBlockRight = Math.max(...spans.slice(0, 14).map((box) => box.right));
+    const secondBlockLeft = Math.min(...spans.slice(14).map((box) => box.left));
     expect(secondBlockLeft).toBeGreaterThan(firstBlockRight);
 
     // A reload lands back in the library, the same way `critical-journey.spec.ts` re-opens.
@@ -167,6 +188,6 @@ test.describe('architecture starters', () => {
     await page.reload();
     await page.locator('.dc-library-item', { hasText: 'Starter twice' }).click();
     await expect(page.locator('.dc-editor')).toBeVisible();
-    await expect(page.locator('.dc-node')).toHaveCount(24);
+    await expect(page.locator('.dc-node')).toHaveCount(28);
   });
 });

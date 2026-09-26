@@ -265,13 +265,19 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // service-like toward infrastructure" falls out of `categoryOf` alone, no new sub-category needed.
   'component>component': capability(['uses', 'dependsOn', 'calls'], 'uses', []),
   // A port is a contract owned by whatever sits behind it (an application core's inbound/outbound
-  // ports, a plugin boundary, a module's published interface). Every arrow keeps its runtime
-  // direction — a caller calls the port, the port is implemented by what sits behind it — and the
-  // words are what carry dependency inversion: `implementedBy` says the thing *after* the port
-  // depends on the port's owner, not the other way round. `port` never folds (see `resolved()`),
-  // so any pairing not listed here has no opinion: a port doesn't write, publish, or route.
-  'service>port': capability(['calls', 'dependsOn'], 'calls', []),
-  'component>port': capability(['uses', 'dependsOn'], 'uses', []),
+  // ports, a plugin boundary, a module's published interface). A caller calls or uses the port;
+  // what satisfies it *implements* it — and that arrow is offered from either end, because the two
+  // readings are both true and a diagram usually needs one of them: drawn from the port
+  // (`implementedBy`) the arrow follows the runtime reading, port then what sits behind it; drawn
+  // from the implementer (`implements`, the Hexagonal starter's choice) it points the way the
+  // source dependency actually points, adapter toward the port the core owns — which is the whole
+  // of dependency inversion, made visible rather than left to a footnote. Neither is a default an
+  // adapter gets for free: an adapter that touches a port may be driving it (`calls`) or standing
+  // behind it (`implements`), and only the author knows which. `port` never folds (see
+  // `resolved()`), so any pairing not listed here has no opinion: a port doesn't write, publish,
+  // or route.
+  'service>port': capability(['calls', 'implements', 'dependsOn'], 'calls', []),
+  'component>port': capability(['uses', 'calls', 'implements', 'dependsOn'], 'uses', []),
   'port>component': capability(['implementedBy'], 'implementedBy', []),
   'port>service': capability(['implementedBy'], 'implementedBy', []),
   // The one mistake worth a nudge: wiring a port straight to storage makes the port look like an

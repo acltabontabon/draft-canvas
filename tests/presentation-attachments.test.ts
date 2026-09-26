@@ -38,11 +38,11 @@ describe('resolvePresentationSubject', () => {
     const spoken = steps.map((entry) =>
       resolvePresentationSubject({ flowId: flow.id, steps, step: entry.step, nodesById, edgesById }),
     );
-    expect(spoken.map((subject) => (subject ? subject.hostKind : null))).toEqual(['node', null, null, 'edge', null, 'node']);
+    expect(spoken.map((subject) => (subject ? subject.hostKind : null))).toEqual(['node', null, null, null, 'edge', null, 'node']);
     expect(spoken[0]!.hostId).toBe(byText('Command API').id);
     expect(spoken[0]!.attachments[0]!.type).toBe('code');
-    expect(spoken[3]!.attachments[0]!.text).toMatch(/^OrderPlaced/);
-    expect(spoken[5]!.hostId).toBe(byText('Read Store').id);
+    expect(spoken[4]!.attachments[0]!.text).toMatch(/^Published only after the commit/);
+    expect(spoken[6]!.hostId).toBe(byText('Read Store').id);
     // The key is the step's identity — distinct per step, stable across calls.
     expect(new Set(spoken.filter(Boolean).map((subject) => subject!.key)).size).toBe(3);
   });

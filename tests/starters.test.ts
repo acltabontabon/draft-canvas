@@ -144,7 +144,7 @@ describe('the starter catalog', () => {
     const byKey = new Map(starter.nodes.map((spec) => [spec.key, spec]));
     for (const spec of starter.nodes) {
       if (!spec.parent) continue;
-      // A boundary-header subtitle (Modular Monolith's, Hexagonal's) is a deliberate, narrow exception: it's
+      // A boundary-header subtitle (Hexagonal's, BFF's, CQRS's) is a deliberate, narrow exception: it's
       // authored as the second line of the boundary's own header (`compose.ts`'s
       // `BOUNDARY_TITLE_INSET`/`BOUNDARY_TITLE_SUBLINE_Y`), sharing the title's own left edge and
       // sitting exactly as close beneath it as the title's own metrics allow — not an ordinary
@@ -259,134 +259,128 @@ describe('buildStarter', () => {
     });
   });
 
-  it('models microservices as one entry point, independent deployables, service-owned data, and event integration', () => {
-    const { nodes, edges } = buildStarter(starterById('microservices')!, { x: 0, y: 0 });
+  it('models microservices as an optional gateway over three capabilities, each its own deployment owning its own store', () => {
+    const { nodes, edges, flows } = buildStarter(starterById('microservices')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
-    expect(nodes).toHaveLength(12);
-    expect(edges).toHaveLength(9);
+    expect(nodes).toHaveLength(14);
+    expect(edges).toHaveLength(8);
     expect(nodes.filter((n) => n.type === 'text')).toHaveLength(0);
 
-    // One public entry point: the gateway routes to every API service, each branch with the route
-    // rule that selects it — a Condition used for what a Condition means.
+    // The client is software, not a person.
+    expect(byText('Client')).toMatchObject({ type: 'actor', actorKind: 'system' });
+
+    // One optional entry point: the gateway routes to every API service — no made-up path rules on
+    // the branches — and its note says a gateway is optional.
     const gateway = nodes.find((node) => node.serviceKind === 'gateway')!;
+    expect(gateway.attachments?.[0]?.text).toMatch(/Optional/);
     const routes = edges.filter((edge) => edge.source === gateway.id);
     expect(routes).toHaveLength(3);
     expect(routes.map((edge) => edge.semantic)).toEqual(['routes', 'routes', 'routes']);
-    expect(new Set(routes.map((edge) => edge.condition))).toEqual(new Set(['/accounts/*', '/orders/*', '/payments/*']));
+    expect(edges.every((edge) => edge.condition === undefined)).toBe(true);
     // All three leave the same point, so Smart Routing can draw them as one trunk.
     expect(new Set(routes.map((edge) => JSON.stringify(edge.sourceAnchor))).size).toBe(1);
-    const apis = nodes.filter((node) => node.serviceKind === 'api');
-    expect(apis).toHaveLength(3);
-    expect(new Set(routes.map((edge) => edge.target))).toEqual(new Set(apis.map((node) => node.id)));
+    const services = nodes.filter((node) => node.serviceKind === 'api');
+    expect(services.map((node) => node.text)).toEqual(['Capability A Service', 'Capability B Service', 'Capability C Service']);
+    expect(new Set(routes.map((edge) => edge.target))).toEqual(new Set(services.map((node) => node.id)));
 
-    // Database per service: three generic stores, each written by exactly one service.
+    // Two boundaries per capability, distinct in kind: an ownership boundary (logical) holding the
+    // service and its store, and a deployment boundary inside it holding the service alone — the
+    // store is never inside the deployment.
+    const owners = nodes.filter((node) => node.type === 'group' && node.boundaryPreset === 'boundary');
+    const deployments = nodes.filter((node) => node.boundaryPreset === 'deployment');
+    expect(owners.map((node) => node.text)).toEqual(['Capability A', 'Capability B', 'Capability C']);
+    expect(deployments).toHaveLength(3);
     const stores = nodes.filter((node) => node.type === 'database');
     expect(stores).toHaveLength(3);
-    for (const store of stores) {
+    services.forEach((service, index) => {
+      const deployment = nodes.find((node) => node.id === service.parentId)!;
+      expect(deployment.boundaryPreset).toBe('deployment');
+      expect(deployment.parentId).toBe(owners[index]!.id);
+      expect(nodes.filter((node) => node.parentId === deployment.id)).toEqual([service]);
+      const store = stores[index]!;
+      expect(store.parentId).toBe(owners[index]!.id);
       expect(store.databaseKind).toBe('generic');
+      expect(overlaps(store, deployment)).toBe(false);
+      // Each store is written by exactly one service — its own — with the shared persistence caption.
       const writers = edges.filter((edge) => edge.target === store.id);
       expect(writers).toHaveLength(1);
-      expect(writers[0]!.semantic).toBe('writes');
+      expect(writers[0]).toMatchObject({ source: service.id, semantic: 'writes', label: 'reads / writes' });
+    });
+    expect(stores[0]!.attachments?.[0]?.text).toMatch(/separate server is not required/);
+
+    // Exactly one service-to-service interaction: a synchronous call through C's API, never its
+    // store — and no store is ever reached from another capability.
+    const serviceIds = new Set(services.map((node) => node.id));
+    const between = edges.filter((edge) => serviceIds.has(edge.source) && serviceIds.has(edge.target));
+    expect(between).toHaveLength(1);
+    expect(between[0]).toMatchObject({ source: byText('Capability B Service').id, target: byText('Capability C Service').id, semantic: 'calls' });
+    expect(between[0]!.async).toBeUndefined();
+    expect(between[0]!.attachments?.[0]?.text).toMatch(/never its store/);
+    expect(nodes.some((node) => node.type === 'queue')).toBe(false);
+
+    // Nothing domain-specific anywhere.
+    for (const text of nodes.flatMap((node) => [node.text ?? '', ...(node.attachments ?? []).map((a) => a.text ?? '')])) {
+      expect(text).not.toMatch(/order|payment|account|customer/i);
     }
-
-    // Independent deployables: every service sits inside its own deployment boundary, no two
-    // share one, and the topic belongs to none of them.
-    const boundaries = nodes.filter((node) => node.boundaryPreset === 'deployment');
-    expect(boundaries).toHaveLength(3);
-    expect(new Set(nodes.filter((node) => node.parentId).map((node) => node.parentId)).size).toBe(3);
-    const topic = byText('Order Events');
-    expect(topic).toMatchObject({ type: 'queue', queueKind: 'topic' });
-    expect(topic.parentId).toBeUndefined();
-    for (const boundary of boundaries) expect(overlaps(topic, boundary)).toBe(false);
-
-    // Integrate through events: Orders publishes, the topic delivers to Payments — and no service
-    // ever calls another service or touches another's store.
-    const publish = edges.find((edge) => edge.source === byText('Orders').id && edge.target === topic.id)!;
-    expect(publish).toMatchObject({ semantic: 'publishes', kind: 'event' });
-    expect(publish.label).toBeUndefined();
-    const deliver = edges.find((edge) => edge.source === topic.id)!;
-    expect(deliver).toMatchObject({ target: byText('Payments').id, semantic: 'deliversTo', kind: 'event' });
-    const services = new Set(nodes.filter((node) => node.type === 'service').map((node) => node.id));
-    for (const edge of edges) {
-      if (edge.source === gateway.id) continue;
-      expect(services.has(edge.source) && services.has(edge.target)).toBe(false);
-    }
-
-    // Exactly three notes of production depth: the gateway's job, a private store, when an event
-    // may be emitted — all click-to-reveal, never a visible node.
-    const nodeNotes = nodes.flatMap((node) => node.attachments ?? []);
-    const edgeNotes = edges.flatMap((edge) => edge.attachments ?? []);
-    expect(nodeNotes.map((a) => a.type)).toEqual(['note', 'note']);
-    expect(gateway.attachments).toHaveLength(1);
-    expect(byText('Orders DB').attachments).toHaveLength(1);
-    expect(edgeNotes).toHaveLength(1);
-    expect(publish.attachments?.[0]?.text).toMatch(/OrderPlaced/);
+    expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
+      ['Handle a request', 3],
+      ['Call another service', 4],
+    ]);
   });
 
-  it('models the modular monolith as one application boundary holding three modules with a controlled, acyclic dependency chain', () => {
-    const { nodes, edges } = buildStarter(starterById('modular-monolith')!, { x: 0, y: 0 });
+  it('models the modular monolith as one deployment holding three modules over one shared database of module-owned tables', () => {
+    const { nodes, edges, flows } = buildStarter(starterById('modular-monolith')!, { x: 0, y: 0 });
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
     const boundaries = nodes.filter((node) => node.type === 'group');
-    expect(boundaries).toHaveLength(1);
-    const app = boundaries[0]!;
-    // No fixed `DEPLOYMENT` preset caption — the starter says "single deployment" itself, via a
-    // plain annotation, so the boundary uses the one preset with no caption of its own.
-    expect(app.boundaryPreset).toBe('boundary');
+    expect(boundaries.map((node) => [node.text, node.boundaryPreset])).toEqual([
+      ['Application', 'deployment'],
+      ['Shared Database', 'boundary'],
+    ]);
+    const [app, database] = boundaries as [DraftNode, DraftNode];
+    expect(nodes.filter((node) => node.type === 'text')).toHaveLength(0);
+    expect(byText('Client')).toMatchObject({ type: 'actor', actorKind: 'system' });
 
-    const modules = nodes.filter((node) => node.type === 'component' && node.componentKind === 'module');
-    expect(modules).toHaveLength(3);
+    // Three peer modules, neutrally named, all inside the one deployment — no Service anywhere.
+    const modules = nodes.filter((node) => node.componentKind === 'module');
+    expect(modules.map((node) => node.text)).toEqual(['Capability A', 'Capability B', 'Capability C']);
     for (const module of modules) expect(module.parentId).toBe(app.id);
-
-    const api = nodes.find((node) => node.type === 'component' && node.componentKind === 'adapter')!;
-    expect(api).toBeDefined();
-    expect(api.parentId).toBe(app.id);
-
-    // No Shared Infrastructure layer, and no independent Service node at all — everything inside
-    // the boundary is a Component.
     expect(nodes.some((node) => node.type === 'service')).toBe(false);
+    const api = byText('Application API');
+    expect(api).toMatchObject({ type: 'component', componentKind: 'adapter', parentId: app.id });
+    for (const module of modules) expect(edges.some((e) => e.source === api.id && e.target === module.id)).toBe(true);
 
-    // Exactly one edge among the modules — a controlled, explicit dependency, not a chain or a
-    // mesh — captioned as a contract rather than the plain inferred "uses".
+    // Exactly one edge among the modules — a controlled, explicit dependency captioned as what it
+    // is: an in-process call on a public interface, never HTTP, never another module's internals.
     const moduleIds = new Set(modules.map((node) => node.id));
     const moduleEdges = edges.filter((edge) => moduleIds.has(edge.source) && moduleIds.has(edge.target));
     expect(moduleEdges).toHaveLength(1);
-    expect(moduleEdges[0]!.semantic).toBe('uses');
-    expect(moduleEdges[0]!.label).toBe('uses public API');
+    expect(moduleEdges[0]).toMatchObject({ source: byText('Capability B').id, target: byText('Capability C').id, semantic: 'uses', label: 'in-process public interface' });
 
-    // The API reaches every module individually — three distinct edges in the document model,
-    // even though Smart Routing bundles them into one shared trunk with one collapsed caption on
-    // screen (bundling changes rendering, never the underlying relationships).
-    for (const module of modules) {
-      expect(edges.some((e) => e.source === api.id && e.target === module.id)).toBe(true);
-    }
-
-    // The database sits outside the boundary — it's a separate runtime resource, not part of the
-    // one deployable unit — and carries exactly one edge, from the boundary itself, not any one
-    // module: a module owns its own *data*, not the shared physical store, so a per-module edge
-    // would misstate exactly that no matter how it's labelled. The boundary-level edge is
-    // deliberately uncaptioned — a `group` node has no category in the capability matrix, so
-    // there's genuinely no inferred relationship to show, and forcing a label onto one would say
-    // something the rest of the app doesn't agree with.
-    const database = nodes.find((node) => node.type === 'database')!;
-    expect(database.databaseKind).toBe('generic');
+    // One shared database: a logical boundary (not a deployment) holding one table per module,
+    // each written only by its own module, straight down its own column — so which module owns
+    // which data is on the canvas, without three database servers.
     expect(database.parentId).toBeUndefined();
-    const databaseEdges = edges.filter((e) => e.source === database.id || e.target === database.id);
-    expect(databaseEdges).toHaveLength(1);
-    expect(databaseEdges[0]!.source).toBe(app.id);
-    expect(databaseEdges[0]!.target).toBe(database.id);
-    expect(databaseEdges[0]!.semantic).toBeUndefined();
-    expect(databaseEdges[0]!.label).toBeUndefined();
+    expect(database.y).toBeGreaterThan(app.y + app.height);
+    const tables = nodes.filter((node) => node.type === 'database');
+    expect(tables.map((node) => [node.text, node.databaseKind, node.parentId])).toEqual([
+      ['Capability A Tables', 'table', database.id],
+      ['Capability B Tables', 'table', database.id],
+      ['Capability C Tables', 'table', database.id],
+    ]);
+    modules.forEach((module, index) => {
+      const table = tables[index]!;
+      expect(table.x + table.width / 2).toBe(module.x + module.width / 2);
+      const writers = edges.filter((edge) => edge.target === table.id);
+      expect(writers).toHaveLength(1);
+      expect(writers[0]).toMatchObject({ source: module.id, semantic: 'writes', label: 'reads / writes' });
+    });
+    expect(database.attachments?.[0]?.text).toMatch(/one schema per module/i);
+    expect(app.attachments?.[0]?.text).toMatch(/build time/);
 
-    // The boundary's own subtitle is the only annotation in the starter — no separate
-    // "module-owned data" caption, and no repeated module-name list either.
-    const subtitle = nodes.find((node) => node.parentId === app.id && node.type === 'text');
-    expect(subtitle?.text).toBe('Single deployable unit');
-    expect(nodes.filter((node) => node.type === 'text')).toHaveLength(1);
-
-    // Two notes of production depth — on the boundary and on the store — and nothing on any edge.
-    expect(app.attachments).toHaveLength(1);
-    expect(database.attachments).toHaveLength(1);
-    expect(nodes.flatMap((node) => node.attachments ?? [])).toHaveLength(2);
-    expect(edges.flatMap((edge) => edge.attachments ?? [])).toHaveLength(0);
+    expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
+      ['Handle a request', 3],
+      ['Collaborate across modules', 4],
+    ]);
   });
 
   it('models the monolith as one deployment boundary holding three layered components over one outside store', () => {
@@ -395,10 +389,11 @@ describe('buildStarter', () => {
     expect(nodes).toHaveLength(7);
     expect(edges).toHaveLength(5);
     expect(nodes.filter((node) => node.type === 'text')).toHaveLength(0);
+    expect(byText('Client')).toMatchObject({ type: 'actor', actorKind: 'system' });
 
     const app = nodes.find((node) => node.type === 'group')!;
     expect(app.boundaryPreset).toBe('deployment');
-    const layers = ['API', 'Business Logic', 'Data Access'].map(byText);
+    const layers = ['API', 'Application Logic', 'Data Access'].map(byText);
     for (const layer of layers) {
       expect(layer.type).toBe('component');
       expect(layer.parentId).toBe(app.id);
@@ -412,77 +407,76 @@ describe('buildStarter', () => {
     expect(nodes.some((node) => node.type === 'service' && node.parentId === app.id)).toBe(false);
 
     // The store is generic, outside, below; the external system is outside, level with the logic.
-    const database = byText('Database');
+    const database = byText('Application Database');
     expect(database).toMatchObject({ type: 'database', databaseKind: 'generic' });
     expect(database.parentId).toBeUndefined();
     expect(database.y).toBeGreaterThan(app.y + app.height);
     const external = byText('External System');
     expect(external).toMatchObject({ type: 'service', serviceKind: 'external' });
     expect(external.x).toBeGreaterThan(app.x + app.width);
-    const logic = byText('Business Logic');
+    const logic = byText('Application Logic');
     expect(external.y + external.height / 2).toBe(logic.y + logic.height / 2);
 
     const edgeBetween = (fromText: string, toText: string) =>
       edges.find((e) => e.source === byText(fromText).id && e.target === byText(toText).id)!;
-    for (const [fromText, toText, semantic] of [
-      ['Client', 'API', 'calls'],
-      ['API', 'Business Logic', 'uses'],
-      ['Business Logic', 'Data Access', 'uses'],
-      ['Data Access', 'Database', 'writes'],
-      ['Business Logic', 'External System', 'calls'],
+    for (const [fromText, toText, semantic, label] of [
+      ['Client', 'API', 'calls', undefined],
+      ['API', 'Application Logic', 'uses', undefined],
+      ['Application Logic', 'Data Access', 'uses', undefined],
+      ['Data Access', 'Application Database', 'writes', 'reads / writes'],
+      ['Application Logic', 'External System', 'calls', undefined],
     ] as const) {
       const edge = edgeBetween(fromText, toText);
       expect(edge, `${fromText} → ${toText}`).toBeDefined();
       expect(edge.semantic).toBe(semantic);
-      expect(edge.label).toBeUndefined();
+      expect(edge.label).toBe(label);
       expect(edge.condition).toBeUndefined();
     }
 
-    // Two notes: what "one artifact" means, and that the schema ships with the release.
+    // Two notes: what "one unit" means (and what it doesn't require), and that the store is a
+    // separate runtime resource.
     expect(app.attachments).toHaveLength(1);
+    expect(app.attachments![0]!.text).toMatch(/not a requirement/);
     expect(database.attachments).toHaveLength(1);
     expect(nodes.flatMap((node) => node.attachments ?? [])).toHaveLength(2);
   });
 
-  it('models event-driven flow as one producer, a topic fanning out to three consumer-owned queues, and one failure route', () => {
-    const { nodes, edges } = buildStarter(starterById('event-driven')!, { x: 0, y: 0 });
+  it('models event-driven flow as one producer, a topic fanning out to two named subscriber queues, and one illustrative failure route', () => {
+    const { nodes, edges, flows } = buildStarter(starterById('event-driven')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     const edgesFrom = (id: string) => edges.filter((e) => e.source === id);
     const edgesTo = (id: string) => edges.filter((e) => e.target === id);
 
     const producer = byText('Producer Service');
     const topic = byText('Domain Events');
-    const workers = ['Projection Service', 'Processing Service', 'Integration Service'].map(byText);
-    const [projection, processing, integration] = workers as [DraftNode, DraftNode, DraftNode];
+    const queues = [byText('Projection Queue'), byText('Integration Queue')];
+    const workers = [byText('Projection Worker'), byText('Integration Worker')];
     const store = byText('Read Store');
     const external = byText('External System');
-    const queues = nodes.filter((n) => n.type === 'queue' && n.queueKind === 'queue' && !n.deliveryRole);
     const dlq = nodes.find((n) => n.deliveryRole === 'dead-letter')!;
 
-    // Eleven elements, ten connections, no free-floating text, no boundary, no junction.
-    expect(nodes).toHaveLength(11);
-    expect(edges).toHaveLength(10);
+    // Nine elements, eight connections, no free-floating text, no boundary, no junction.
+    expect(nodes).toHaveLength(9);
+    expect(edges).toHaveLength(8);
     expect(nodes.filter((n) => n.type === 'text' || n.type === 'group' || n.type === 'ellipse')).toHaveLength(0);
     expect(nodes.filter((n) => n.queueKind === 'topic')).toEqual([topic]);
-    expect(queues).toHaveLength(3);
-    // Delivery queues carry no name of their own — ownership reads from sitting above their worker.
-    for (const queue of queues) expect(queue.text ?? '').toBe('');
+    // Subscriptions are named for their responsibility — never two interchangeable QUEUEs.
+    expect(nodes.filter((n) => n.type === 'queue' && n.queueKind === 'queue' && !n.deliveryRole)).toEqual(queues);
 
-    // The producer publishes exactly once, to the topic, and names one concrete past-tense event.
+    // The producer publishes exactly once, to the topic, and names a state-change event rather than
+    // a business one; the envelope and the delivery caveats ride the connector.
     expect(edgesFrom(producer.id)).toHaveLength(1);
     const published = edgesTo(topic.id);
     expect(published).toHaveLength(1);
-    expect(published[0]!.source).toBe(producer.id);
-    expect(published[0]!.semantic).toBe('publishes');
-    expect(published[0]!.kind).toBe('event');
-    expect(published[0]!.label).toBe('publishes OrderCreated');
-    expect(published[0]!.attachments).toHaveLength(1);
-    expect(published[0]!.attachments![0]!.type).toBe('code');
-    expect(published[0]!.attachments![0]!.code).toContain('"type": "OrderCreated"');
+    expect(published[0]).toMatchObject({ source: producer.id, semantic: 'publishes', kind: 'event', label: 'publishes state-change event' });
+    expect(published[0]!.attachments?.map((a) => a.type)).toEqual(['code', 'note']);
+    expect(published[0]!.attachments![0]!.code).toContain('"type": "StateChanged"');
+    expect(published[0]!.attachments![1]!.text).toMatch(/at-least-once/i);
+    expect(topic.attachments?.[0]?.text).toMatch(/own copy/);
 
     // The topic fans out to each queue — inferred, unoverridden, and bundle-eligible (one trunk).
     const fanned = edgesFrom(topic.id);
-    expect(fanned).toHaveLength(3);
+    expect(fanned).toHaveLength(2);
     expect(new Set(fanned.map((e) => e.target))).toEqual(new Set(queues.map((q) => q.id)));
     for (const edge of fanned) {
       expect(edge.semantic).toBe('fansOut');
@@ -493,50 +487,42 @@ describe('buildStarter', () => {
       expect(edge.targetAnchor).toEqual({ side: 'top', offset: 0.5 });
     }
 
-    // Every consumer is a Worker fed by exactly one queue of its own, directly above it.
-    for (const worker of workers) {
-      expect(worker.type).toBe('service');
+    // Every consumer is a Worker fed by exactly one queue of its own, directly above it — the
+    // producer never reaches a consumer directly.
+    workers.forEach((worker, index) => {
       expect(worker.serviceKind).toBe('worker');
       const consumes = edgesTo(worker.id);
       expect(consumes).toHaveLength(1);
-      expect(consumes[0]!.semantic).toBe('consumes');
-      expect(consumes[0]!.kind).toBe('event');
-      const queue = nodes.find((n) => n.id === consumes[0]!.source)!;
-      expect(queues).toContain(queue);
-      expect(queue.x + queue.width / 2).toBe(worker.x + worker.width / 2);
-      expect(queue.y + queue.height).toBeLessThan(worker.y);
-    }
+      expect(consumes[0]).toMatchObject({ source: queues[index]!.id, semantic: 'consumes', kind: 'event' });
+      expect(queues[index]!.x + queues[index]!.width / 2).toBe(worker.x + worker.width / 2);
+      expect(queues[index]!.y + queues[index]!.height).toBeLessThan(worker.y);
+    });
+    expect(edges.some((e) => e.source === producer.id && workers.some((w) => w.id === e.target))).toBe(false);
 
-    // Projection owns the only store (writes); Integration calls the only external system (a
-    // synchronous, solid call — the one non-event line); Processing owns nothing below it.
+    // Projection owns the only store; Integration calls the only external system (a synchronous,
+    // solid call — the one non-event line).
     expect(nodes.filter((n) => n.type === 'database')).toEqual([store]);
-    expect(store.databaseKind).toBe('generic');
-    expect(edgesFrom(projection.id).map((e) => [e.target, e.semantic])).toEqual([[store.id, 'writes']]);
+    expect(edgesFrom(workers[0]!.id).map((e) => [e.target, e.semantic])).toEqual([[store.id, 'writes']]);
     expect(external.serviceKind).toBe('external');
-    const calls = edgesFrom(integration.id);
-    expect(calls.map((e) => [e.target, e.semantic, e.kind, e.async])).toEqual([[external.id, 'calls', undefined, undefined]]);
-    expect(edgesFrom(processing.id)).toHaveLength(0);
+    expect(edgesFrom(workers[1]!.id).map((e) => [e.target, e.semantic, e.kind, e.async])).toEqual([[external.id, 'calls', undefined, undefined]]);
 
-    // One DLQ, beside the Integration queue only, on a dashed, inferred dead-letter route.
-    expect(nodes.filter((n) => n.deliveryRole === 'dead-letter')).toEqual([dlq]);
-    const integrationQueue = nodes.find((n) => n.id === edgesTo(integration.id)[0]!.source)!;
+    // One DLQ, beside the Integration queue only, on a dashed, inferred dead-letter route captioned
+    // as a policy rather than a count, and named an illustrative path.
     const deadLetters = edgesTo(dlq.id);
     expect(deadLetters).toHaveLength(1);
-    expect(deadLetters[0]!.source).toBe(integrationQueue.id);
-    expect(deadLetters[0]!.semantic).toBe('deadLetters');
-    expect(deadLetters[0]!.kind).toBe('failure');
-    expect(deadLetters[0]!.async).toBe(true);
-    expect(deadLetters[0]!.semanticsOrigin).toBe('inferred');
-    expect(deadLetters[0]!.deliveryAttempts).toBe(3);
-    expect(deadLetters[0]!.attachments?.[0]?.type).toBe('note');
-    expect(dlq.y).toBe(integrationQueue.y);
-    expect(dlq.x).toBeGreaterThan(integrationQueue.x + integrationQueue.width);
+    expect(deadLetters[0]).toMatchObject({ source: queues[1]!.id, semantic: 'deadLetters', kind: 'failure', async: true, semanticsOrigin: 'inferred', label: 'after configured retry limit' });
+    expect(deadLetters[0]!.deliveryAttempts).toBeUndefined();
+    expect(deadLetters[0]!.attachments?.[0]?.text).toMatch(/illustrative/i);
+    expect(dlq.x).toBeGreaterThan(queues[1]!.x + queues[1]!.width);
     expect(edgesFrom(dlq.id)).toHaveLength(0);
-    // The DLQ is the only node right of the three lanes — never mistakable for a fourth consumer.
+    // The DLQ is the only node right of the two lanes — never mistakable for a third consumer.
     expect(nodes.filter((n) => n.x >= dlq.x)).toEqual([dlq]);
 
-    // Exactly two attachments in the whole starter — depth on click, never a visible extra node.
-    expect(edges.flatMap((e) => e.attachments ?? [])).toHaveLength(2);
+    expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
+      ['Update a projection', 4],
+      ['Reach an external system', 4],
+      ['Handle a failed delivery', 2],
+    ]);
   });
 
   it('keeps hexagonal technology outside the core, and routes every crossing through a port the core owns', () => {
@@ -551,7 +537,7 @@ describe('buildStarter', () => {
     expect(nodes.filter((node) => node.type === 'group')).toEqual([core]);
 
     // The core owns its contracts: all three ports live inside it. Everything infrastructural —
-    // adapters, the store, the external system, the driving services — lives outside it.
+    // adapters on both sides, the store, the external system — lives outside it.
     expect(ports).toHaveLength(3);
     for (const port of ports) expect(inside.has(port.id)).toBe(true);
     for (const node of nodes) {
@@ -567,49 +553,52 @@ describe('buildStarter', () => {
     // touches Use Cases or the Domain Model directly, in either direction.
     const crossingIn = edges.filter((edge) => inside.has(edge.target) && !inside.has(edge.source));
     const crossingOut = edges.filter((edge) => inside.has(edge.source) && !inside.has(edge.target));
-    expect(crossingIn).toHaveLength(2);
+    expect(crossingIn).toHaveLength(4);
     for (const edge of crossingIn) expect(portIds.has(edge.target)).toBe(true);
-    expect(crossingOut).toHaveLength(2);
-    for (const edge of crossingOut) expect(portIds.has(edge.source)).toBe(true);
+    expect(crossingOut).toHaveLength(0);
 
-    // One shared inbound port (both driving adapters call the same use cases), and each outbound
-    // port has exactly one implementer.
+    // One shared inbound port (both driving adapters call the same use cases), and each port has
+    // exactly one implementer arriving at it.
     const inboundPort = nodes.find((node) => node.text === 'Inbound')!;
-    expect(crossingIn.every((edge) => edge.target === inboundPort.id)).toBe(true);
+    expect(crossingIn.filter((edge) => edge.semantic === 'calls').every((edge) => edge.target === inboundPort.id)).toBe(true);
     for (const port of ports) {
-      const out = edges.filter((edge) => edge.source === port.id);
-      expect(out).toHaveLength(1);
+      expect(edges.filter((edge) => edge.target === port.id && edge.semantic === 'implements')).toHaveLength(1);
+      expect(edges.filter((edge) => edge.source === port.id)).toHaveLength(0);
     }
   });
 
-  it('gives every piece the kind that is true of it: Services drive, Components work, Ports promise', () => {
+  it('gives every piece the kind that is true of it: Adapters translate, Components work, Ports promise', () => {
     const { nodes, edges } = buildStarter(starterById('hexagonal')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     const core = nodes.find((node) => node.type === 'group')!;
 
-    expect(byText('REST API')).toMatchObject({ type: 'service', serviceKind: 'api' });
-    expect(byText('Message Consumer')).toMatchObject({ type: 'service', serviceKind: 'worker' });
-    expect(byText('Use Cases')).toMatchObject({ type: 'component', componentKind: 'generic' });
-    expect(byText('Domain Model')).toMatchObject({ type: 'component', componentKind: 'generic' });
+    // Adapters on both sides of the core, the same kind facing opposite ways.
+    for (const name of ['HTTP Adapter', 'Message Consumer', 'Persistence Adapter', 'Integration Adapter']) {
+      expect(byText(name)).toMatchObject({ type: 'component', componentKind: 'adapter' });
+      expect(byText(name).parentId).toBeUndefined();
+    }
+    expect(byText('Use Cases')).toMatchObject({ type: 'component', componentKind: 'generic', parentId: core.id });
+    expect(byText('Domain Model')).toMatchObject({ type: 'component', componentKind: 'generic', parentId: core.id });
     for (const name of ['Inbound', 'Persistence', 'Integration']) {
       expect(byText(name)).toMatchObject({ type: 'component', componentKind: 'port', parentId: core.id });
     }
-    expect(byText('Persistence Adapter')).toMatchObject({ type: 'component', componentKind: 'adapter' });
-    expect(byText('Integration Adapter')).toMatchObject({ type: 'component', componentKind: 'adapter' });
     expect(byText('External System')).toMatchObject({ type: 'service', serviceKind: 'external' });
-    expect(nodes.some((n) => n.type === 'service' && n.serviceKind === undefined)).toBe(false);
+    // The one Service on the canvas is the external system; the application itself is components.
+    expect(nodes.filter((n) => n.type === 'service')).toEqual([byText('External System')]);
 
     // The one annotation is the core's own subtitle — never a floating label, never a Condition.
     const labels = nodes.filter((n) => n.type === 'text');
     expect(labels).toHaveLength(1);
     expect(labels[0]).toMatchObject({ text: 'Dependencies point inward', annotation: true, parentId: core.id });
     expect(edges.every((e) => e.condition === undefined)).toBe(true);
+    expect(core.attachments?.[0]?.text).toMatch(/hollow/);
   });
 
-  // Every arrow points the way a request travels; dependency inversion is carried by where the
-  // ports sit (inside the core) and by the word on the connector leaving each one.
-  it('reads runtime flow left to right while the relationship words carry dependency inversion', () => {
-    const { nodes, edges } = buildStarter(starterById('hexagonal')!, { x: 0, y: 0 });
+  // Runtime reads left to right with solid heads; the three realizations point the other way —
+  // from each implementer back into the port it satisfies — which is the way the source dependency
+  // points. "Dependencies point inward" is drawn, not just captioned.
+  it('draws runtime calls left to right and every implementation arrow back into the core', () => {
+    const { nodes, edges, flows } = buildStarter(starterById('hexagonal')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     const edgeBetween = (fromText: string, toText: string) => {
       const from = byText(fromText).id;
@@ -617,30 +606,42 @@ describe('buildStarter', () => {
       return edges.find((e) => e.source === from && e.target === to)!;
     };
 
-    const expected: Array<[string, string, string]> = [
-      ['REST API', 'Inbound', 'calls'],
-      ['Message Consumer', 'Inbound', 'calls'],
-      ['Inbound', 'Use Cases', 'implementedBy'],
-      ['Use Cases', 'Domain Model', 'uses'],
-      ['Use Cases', 'Persistence', 'uses'],
-      ['Use Cases', 'Integration', 'uses'],
-      ['Persistence', 'Persistence Adapter', 'implementedBy'],
-      ['Integration', 'Integration Adapter', 'implementedBy'],
-      ['Persistence Adapter', 'Database', 'writes'],
-      ['Integration Adapter', 'External System', 'calls'],
+    const expected: Array<[string, string, string, 'explicit' | 'inferred']> = [
+      ['HTTP Adapter', 'Inbound', 'calls', 'explicit'],
+      ['Message Consumer', 'Inbound', 'calls', 'explicit'],
+      ['Use Cases', 'Inbound', 'implements', 'explicit'],
+      ['Use Cases', 'Domain Model', 'uses', 'inferred'],
+      ['Use Cases', 'Persistence', 'uses', 'inferred'],
+      ['Use Cases', 'Integration', 'uses', 'inferred'],
+      ['Persistence Adapter', 'Persistence', 'implements', 'explicit'],
+      ['Integration Adapter', 'Integration', 'implements', 'explicit'],
+      ['Persistence Adapter', 'Database', 'writes', 'inferred'],
+      ['Integration Adapter', 'External System', 'calls', 'inferred'],
     ];
-    for (const [fromText, toText, semantic] of expected) {
+    for (const [fromText, toText, semantic, origin] of expected) {
       const edge = edgeBetween(fromText, toText);
       expect(edge, `${fromText} → ${toText}`).toBeDefined();
       expect(edge.semantic, `${fromText} → ${toText}`).toBe(semantic);
-      expect(edge.label).toBeUndefined();
-      expect(edge.semanticsOrigin).toBe('inferred');
+      expect(edge.semanticsOrigin).toBe(origin);
+      expect(edge.condition).toBeUndefined();
+    }
+    // Nothing is drawn from a port outward, and nothing is captioned the old way round.
+    expect(edges.some((edge) => edge.semantic === 'implementedBy')).toBe(false);
+    // A realization is a level line from the implementer's left edge back into the port's right.
+    for (const edge of edges.filter((edge) => edge.semantic === 'implements')) {
+      expect(edge.sourceAnchor).toEqual({ side: 'left', offset: 0.5 });
+      expect(edge.targetAnchor).toEqual({ side: 'right', offset: 0.5 });
     }
 
     // The funnel shares one point on the inbound port; the fork shares one point on Use Cases —
     // that's what lets Smart Routing draw each as one trunk with one collapsed caption.
-    expect(edgeBetween('REST API', 'Inbound').targetAnchor).toEqual(edgeBetween('Message Consumer', 'Inbound').targetAnchor);
+    expect(edgeBetween('HTTP Adapter', 'Inbound').targetAnchor).toEqual(edgeBetween('Message Consumer', 'Inbound').targetAnchor);
     expect(edgeBetween('Use Cases', 'Persistence').sourceAnchor).toEqual(edgeBetween('Use Cases', 'Integration').sourceAnchor);
+
+    // Presentation walks runtime only: no flow steps across a realization.
+    const realizations = new Set(edges.filter((edge) => edge.semantic === 'implements').map((edge) => edge.id));
+    expect(flows).toHaveLength(2);
+    for (const flow of flows) for (const step of flow.steps) expect(realizations.has(step.edgeId!)).toBe(false);
   });
 
   // The visual-hierarchy point of the whole Component primitive: in a starter that mixes both,
@@ -660,13 +661,7 @@ describe('buildStarter', () => {
     }
   });
 
-  // Regression: the "Inbound ports"/"Outbound ports" labels' invisible hit-boxes used to be wide
-  // enough (and off-centre enough) to sit inside `edges/routing.ts`'s `OBSTACLE_BAND` of the
-  // vertical connector running through the same band, so the router quietly detoured a
-  // should-be-straight line a few pixels sideways — worse-looking under Sketch/Draft's hand-drawn
-  // stroke, but a real routing decision, not personality styling. Every connector authored as a
-  // plain vertical (same x on both ends) must stay one — no interior `Q` (quadratic) command.
-  it('models BFF as one tailored adapter per client experience over shared, independent domain services', () => {
+  it('models BFF as one tailored adapter per client experience over shared backend capabilities', () => {
     const { nodes, edges, flows } = buildStarter(starterById('bff')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     expect(nodes).toHaveLength(13);
@@ -677,83 +672,111 @@ describe('buildStarter', () => {
       ['Mobile request', 3],
     ]);
 
+    // A browser and a phone — software clients, never people.
+    expect(byText('Web Client')).toMatchObject({ type: 'actor', actorKind: 'system' });
+    expect(byText('Mobile Client')).toMatchObject({ type: 'actor', actorKind: 'device' });
+
     // Two BFFs, both plain `api`-kind services (never `gateway`), each inside its own experience
-    // boundary with its own client — and no gateway anywhere: BFF ≠ API Gateway is the whole
-    // lesson, carried by label and connections rather than a dedicated shape kind.
+    // boundary with its own client, each saying what it tailors — and no gateway anywhere.
     expect(nodes.some((node) => node.serviceKind === 'gateway')).toBe(false);
     const adapters = [byText('Web BFF'), byText('Mobile BFF')];
     expect(adapters.every((node) => node.serviceKind === 'api')).toBe(true);
-    expect(adapters.map((node) => node.text).sort()).toEqual(['Mobile BFF', 'Web BFF']);
+    expect(adapters.map((node) => node.description)).toEqual(['Composes page data', 'Tailors compact responses']);
     expect(new Set(adapters.map((node) => node.parentId)).size).toBe(2);
+    const shared = byText('Shared backend capabilities');
+    expect(shared.boundaryPreset).toBe('boundary');
     for (const adapter of adapters) {
       const client = nodes.find((node) => node.type === 'actor' && node.parentId === adapter.parentId)!;
-      expect(client.actorKind).toBe('device');
       expect(edges.filter((edge) => edge.source === client.id).map((edge) => edge.target)).toEqual([adapter.id]);
-      // Every connector leaving an adapter *calls* into the domain — a BFF composes, it never
-      // routes — and never reaches another adapter.
+      // Every connector leaving an adapter *calls* into the shared capabilities — a BFF composes, it
+      // never routes — and never reaches another adapter.
       for (const edge of edges.filter((edge) => edge.source === adapter.id)) {
         expect(edge.semantic).toBe('calls');
-        expect(nodes.find((node) => node.id === edge.target)!.parentId).toBe(byText('Domain services').id);
+        expect(nodes.find((node) => node.id === edge.target)!.parentId).toBe(shared.id);
       }
     }
     // Tailored, not uniform: the web experience uses one more capability than mobile does.
     expect(edges.filter((edge) => edge.source === byText('Web BFF').id)).toHaveLength(3);
     expect(edges.filter((edge) => edge.source === byText('Mobile BFF').id)).toHaveLength(2);
-    // Every boundary says who owns it — that ownership is why a BFF may be tailored.
+    // Every boundary says who owns it — that ownership is why a BFF may be tailored — and the
+    // shared one says where the rules live. All three are logical groupings, none a deployment.
     const subtitles = nodes.filter((node) => node.type === 'text' && node.annotation).map((node) => node.text);
-    expect(subtitles).toEqual(['Owned by the web team', 'Shared, reused by every client', 'Owned by the mobile team']);
-    // Shared domain services are independent of each other, and nothing here is asynchronous.
-    const domain = nodes.filter((node) => node.parentId === byText('Domain services').id && node.type === 'service');
-    expect(domain).toHaveLength(3);
+    expect(subtitles).toEqual(['Owned by the web team', 'Business rules live here', 'Owned by the mobile team']);
+    expect(nodes.filter((node) => node.type === 'group').every((node) => node.boundaryPreset === 'boundary')).toBe(true);
+    // Shared capabilities are neutral, independent of each other, and nothing here is asynchronous.
+    const capabilities = nodes.filter((node) => node.parentId === shared.id && node.type === 'service');
+    expect(capabilities.map((node) => node.text)).toEqual(['Capability A Service', 'Capability B Service', 'Capability C Service']);
     for (const edge of edges) {
-      expect(domain.some((node) => node.id === edge.source)).toBe(false);
+      expect(capabilities.some((node) => node.id === edge.source)).toBe(false);
       expect(edge.async).toBeUndefined();
       expect(edge.kind === undefined || edge.kind === 'sync').toBe(true);
     }
   });
 
-  it('models CQRS as intent in, questions answered from a projection, with an event as the only bridge', () => {
+  it('models CQRS as intent in, questions answered from a projection, with an outbox relay and a topic as the only bridge', () => {
     const { nodes, edges, flows } = buildStarter(starterById('cqrs')!, { x: 0, y: 0 });
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     const between = (from: string, to: string) =>
       edges.find((edge) => edge.source === byText(from).id && edge.target === byText(to).id)!;
-    expect(nodes).toHaveLength(13);
-    expect(edges).toHaveLength(8);
+    expect(nodes).toHaveLength(14);
+    expect(edges).toHaveLength(9);
+    expect(byText('Client')).toMatchObject({ type: 'actor', actorKind: 'system' });
 
     // Commands express intent; queries never mutate — said by the relationship words themselves.
     expect(between('Client', 'Command API').semantic).toBe('command');
     // Handling a command is *executing* it — not a second "command" caption in a row.
-    expect(between('Command API', 'Write Model').label).toBe('executes');
+    expect(between('Command API', 'Command Handler')).toMatchObject({ semantic: 'command', label: 'executes' });
+    expect(byText('Command Handler').type).toBe('component');
     expect(between('Client', 'Query API').semantic).toBe('query');
     expect(between('Query API', 'Read Store').semantic).toBe('reads');
-    expect(between('Write Model', 'Write Store').semantic).toBe('writes');
-    // Not Event Sourcing: no event store, and the topic carries facts, not state.
-    expect(nodes.filter((node) => node.type === 'database').map((node) => node.text).sort()).toEqual(['Read Store', 'Write Store']);
+    // State and the outbox record commit together; nothing publishes from inside the transaction.
+    expect(between('Command Handler', 'Write Store')).toMatchObject({ semantic: 'writes', label: 'writes state + outbox record' });
+    expect(between('Command Handler', 'Write Store').attachments).toBeUndefined();
+    // The relay — a worker, never the handler or a model object — reads committed records and
+    // publishes; the topic carries facts and is not an event store.
+    expect(byText('Outbox Relay').serviceKind).toBe('worker');
+    expect(between('Outbox Relay', 'Write Store')).toMatchObject({ semantic: 'reads', semanticsOrigin: 'explicit', label: 'reads outbox' });
+    expect(between('Outbox Relay', 'Write Store').attachments).toBeUndefined();
+    expect(between('Outbox Relay', 'Domain Events')).toMatchObject({ semantic: 'publishes', kind: 'event' });
+    expect(between('Outbox Relay', 'Domain Events').attachments?.[0]?.text).toMatch(/one transaction/);
+    expect(edges.some((edge) => edge.source === byText('Command Handler').id && edge.target === byText('Domain Events').id)).toBe(false);
     expect(byText('Domain Events').queueKind).toBe('topic');
-    expect(between('Write Model', 'Domain Events').semantic).toBe('publishes');
-    // The only path between the two sides is event → projection → read store.
-    const command = byText('Command').id;
-    const query = byText('Query').id;
+    expect(byText('Domain Events').attachments).toBeUndefined();
+    expect(byText('Command side').attachments?.[0]?.text).toMatch(/not an event store/);
+    expect(nodes.filter((node) => node.type === 'database').map((node) => node.text).sort()).toEqual(['Read Store', 'Write Store']);
+    // Only the projection writes the read store; the query API only reads it.
+    expect(between('Domain Events', 'Projection Worker')).toMatchObject({ semantic: 'deliversTo', kind: 'event' });
+    expect(between('Projection Worker', 'Read Store')).toMatchObject({ semantic: 'writes', label: 'updates projection' });
+    expect(byText('Projection Worker').serviceKind).toBe('worker');
+    expect(edges.filter((edge) => edge.target === byText('Read Store').id).map((edge) => edge.semantic).sort()).toEqual(['reads', 'writes']);
+    expect(edges.filter((edge) => edge.target === byText('Write Store').id).map((edge) => edge.semantic).sort()).toEqual(['reads', 'writes']);
+
+    // Two logical sides, each owning its workers: the relay is on the command side, the projection
+    // on the query side, and the topic between them is the only thing that crosses.
+    const command = byText('Command side');
+    const query = byText('Query side');
+    expect([command.boundaryPreset, query.boundaryPreset]).toEqual(['boundary', 'boundary']);
+    expect(byText('Outbox Relay').parentId).toBe(command.id);
+    expect(byText('Projection Worker').parentId).toBe(query.id);
+    expect(byText('Domain Events').parentId).toBeUndefined();
     const sideOf = (id: string) => nodes.find((node) => node.id === id)!.parentId;
     for (const edge of edges) {
-      const crosses = sideOf(edge.source) === command && sideOf(edge.target) === query;
-      expect(crosses).toBe(false);
-      expect(sideOf(edge.source) === query && sideOf(edge.target) === command).toBe(false);
+      expect(sideOf(edge.source) === command.id && sideOf(edge.target) === query.id).toBe(false);
+      expect(sideOf(edge.source) === query.id && sideOf(edge.target) === command.id).toBe(false);
     }
-    // A projection's write is a write like any other: the role lives in the names and the layout,
-    // not in a relationship of its own.
-    expect(between('Projection Service', 'Read Store').semantic).toBe('writes');
-    expect(byText('Projection Service').serviceKind).toBe('worker');
-    // The one honest cost of the pattern is on the canvas, under the bridge.
-    expect(byText('Eventually consistent').annotation).toBe(true);
-    expect(byText('Eventually consistent').parentId).toBeUndefined();
-    // Nothing on the query side is written by the command side, and vice versa.
-    expect(edges.filter((edge) => edge.target === byText('Read Store').id).map((edge) => edge.semantic).sort()).toEqual(['reads', 'writes']);
-    expect(edges.filter((edge) => edge.target === byText('Write Store').id)).toHaveLength(1);
+    // The propagation is one level line along the store row.
+    const row = [byText('Write Store'), byText('Outbox Relay'), byText('Domain Events'), byText('Projection Worker'), byText('Read Store')];
+    for (let i = 1; i < row.length; i += 1) expect(row[i]!.x).toBeGreaterThan(row[i - 1]!.x + row[i - 1]!.width);
+    // The one honest cost of the pattern is on the canvas, under the bridge, tied to the projection.
+    expect(byText('Eventually consistent read projection').annotation).toBe(true);
+    expect(byText('Eventually consistent read projection').parentId).toBeUndefined();
+    // What CQRS does not require is said, not left to be assumed.
+    expect(command.attachments?.[0]?.text).toMatch(/neither messaging, event sourcing nor separate services/);
+    expect(byText('Read Store').attachments?.[0]?.text).toMatch(/not necessarily databases/);
 
     // Two flows: the whole write story including the async tail, and the two-step read.
     expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
-      ['Submit command', 6],
+      ['Submit command', 7],
       ['Read projection', 2],
     ]);
     const edgeIds = new Set(edges.map((edge) => edge.id));

@@ -414,11 +414,11 @@ describe('useDocumentSession — newDocument', () => {
 
     const doc = saved[0]!;
     expect(doc.metadata.title).toBe('Microservices');
-    expect(doc.nodes).toHaveLength(12);
-    expect(doc.edges).toHaveLength(9);
+    expect(doc.nodes).toHaveLength(14);
+    expect(doc.edges).toHaveLength(8);
     expect(doc.viewport.zoom).toBeGreaterThanOrEqual(0.1);
     expect(doc.viewport.zoom).toBeLessThanOrEqual(1);
-    expect(useEditorStore.getState().document.nodes).toHaveLength(12);
+    expect(useEditorStore.getState().document.nodes).toHaveLength(14);
     expect(useEditorStore.getState().canUndo()).toBe(false);
     expect(session().openId).toBe(doc.metadata.id);
   });
