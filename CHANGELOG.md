@@ -11,106 +11,52 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
-A smaller Draft Canvas. This release removes what was not helping a developer draw and explain a
-system, keeps every diagram readable, and leaves two products: the web editor and the desktop app.
+A smaller, more focused Draft Canvas: the web editor and the desktop app, with less in the way of
+drawing. Every diagram you already have still opens.
 
 ### Shared
 
-#### Removed
-
-- **Takeaways.** The actions list, its capture line, the status-bar chip and the Markdown copy are
-  gone. Nothing written down is lost: on opening, an action anchored to a shape or connector becomes a
-  note attached to it (`Action: …`, `Done: …`), and the rest gather into one **Actions** note below the
-  diagram. **Open points** are now the one way to mark what a discussion has not settled — press `I`
-  with something selected, or right-click and choose **Add open point…**. Document format v17. <!-- highlight -->
-- **The Learn drawer.** The in-app handbook of animated recipes is replaced by the documentation:
-  two new guides ([shapes, connectors and boundaries](docs/guides/shapes-and-connectors.md) and
-  [flows and presenting](docs/guides/flows-and-presentation.md)) join the existing ones, and the
-  toolbar's More menu has **Documentation**. The shortcut sheet (`?`) stays the in-app reference.
-- **GIF export.** The animated export of a flow is gone; present the flow live or record the screen.
-  PNG, SVG, `.draftcanvas`, `.dcenc` and the Mermaid and PlantUML sequence exports are unchanged.
-- **Draft Canvas for VS Code.** The extension is retired; 0.2.0 is its last release and only says so.
-  `.draftcanvas` files open as they are in the desktop app or, through **Import**, in the web editor.
-  [How to move a diagram](docs/guides/vscode-retired.md).
-
-#### Changed
-
-- **Diagrams in the browser are stored as plain records.** Versions 1.0 to 1.11 encrypted each stored
-  diagram with a key kept in the same browser profile, which protected the bytes against a copy made
-  without that key and against little else — while saving needed HTTPS and losing only the key lost
-  every diagram. Diagrams saved by those versions still open and are saved plain the next time you
-  edit them; nothing is rewritten on upgrade. The passphrase-protected `.dcenc` export is unchanged
-  and is the way to protect a diagram at rest. [What changed and why](SECURITY.md#browser-storage). <!-- highlight -->
-- **Five starters up front.** Monolith, Microservices, Event-Driven, Hexagonal and CQRS are offered
-  wherever you start a diagram; the other eight stay in the catalog, by name in the command palette,
-  and are pictured in [Architecture examples](docs/guides/examples.md). The Browse-all dialog, the
-  category index and the home screens' decorations (the connector to the starters, the daily line,
-  the arrival animations) are gone. Diagrams already drawn from any starter are untouched.
-- **The command palette says "No matching commands."** when nothing matches, instead of handing the
-  question to the handbook.
-
 #### Added
 
-- **Open points** — mark what the discussion has not settled, on the shape or connector it concerns.
-  Right-click and choose **Add open point…**, then **Tentative**, **Awaiting input** or **Parked**;
-  the marker is on the element straight away, and a sentence of context is optional. A small tab with
-  its own glyph per kind sits off a shape's shoulder, inside a boundary's corner or beside a
-  connector's label, and several points on one element fold into one tab with a count. Hover for a
-  preview, click to edit, resolve or delete. The status bar counts what is still open and opens the
-  **Open points** list, with a way to each element and **Focus open points**; resolved points stay
-  folded underneath, to reopen or delete. Markers survive presenting (click one for a read-only look)
-  and image exports, which add a key naming the kinds that appear — untick **Open point markers** for
-  an image without them. Deleting an element takes its point; undo brings both back. Document format
-  v16. <!-- highlight -->
+- **Open points** — mark what a discussion hasn't settled on the shape or connector it concerns:
+  select it and press `I`, or right-click and choose **Add open point…**. The status bar counts what
+  is still open. <!-- highlight -->
+- An [Architecture examples](docs/guides/examples.md) guide pictures every starter.
 
 #### Changed
 
-- **The seven architecture starters were redrawn for technical accuracy.** Monolith, Modular
-  Monolith and Microservices now share one frame — a software client over a `DEPLOYMENT` boundary
-  — so the comparison is what differs: layers in one deployment; encapsulated `Capability A/B/C`
-  modules in one deployment over one shared database of module-owned tables, collaborating only
-  through an *in-process public interface*; and three capabilities each in its own deployment,
-  each owning a store that sits outside the deployed artifact. Persistence reads `reads / writes`.
-  Event-Driven is named for what it is — pub/sub with a topic and per-subscriber queues — with the
-  queues named for their responsibility, a `publishes state-change event` caption instead of a
-  business event, a dead-letter route captioned `after configured retry limit`, and notes on
-  fan-out versus competing consumers and on at-least-once delivery. Hexagonal draws dependency
-  inversion instead of captioning it: adapters on both sides are Adapters, and each implementer's
-  hollow-headed **implements** arrow points back into the port the core owns while runtime calls
-  still read left to right; its flows walk only the runtime calls. Backend for Frontend gives the
-  Web Client a browser and the Mobile Client a phone, says on each BFF what it tailors, and calls
-  the shared group *Shared backend capabilities*. CQRS is explicitly *with an asynchronous read
-  projection*: a Command Handler writes state and an outbox record in one transaction, an Outbox
-  Relay publishes afterwards, and a Projection Worker maintains the read store — with notes saying
-  CQRS itself needs neither messaging, event sourcing nor separate databases. Every domain word
-  (orders, payments, customers) is gone from the seven. Diagrams already on your canvas are not
-  touched; only what a starter inserts from now on changes.
-- **"Implements" is a relationship.** An Adapter or Service → Port connector can now say
-  `implements` — the mirror of `implemented by`, drawn from the implementer toward the contract,
-  the way the source dependency points. Both wear a hollow arrowhead, so a realization is told
-  apart from the solid-headed calls beside it; sequence export leaves both out as structural.
-- **Presentation lights the shape, not a box around it.** The step's destination used to get a
-  rounded rectangle drawn around its whole bounds, label included — an editor's selection box on a
-  database cylinder. It now glows along its own outline: the shape's line a little heavier, with a
-  small soft halo that follows the cylinder, tube, card or bust it actually is, in the shape's own
-  colour. The source wears the same at half strength, so the pair reads as a pair. The halo arrives
-  with the signal and then holds still; reduced motion shows the settled state straight away. On a
-  request/response connector the reply lights the caller as it lands.
+- **Five starters up front** — Monolith, Microservices, Event-Driven, Hexagonal and CQRS. The rest are
+  a name away in the command palette (`⌘K`). The starters were also redrawn to be more accurate.
+  <!-- highlight -->
+- **Browser storage is no longer encrypted.** It protected little, needed HTTPS to save, and one
+  lost key lost every diagram. Your diagrams still open and nothing is rewritten on upgrade. For a
+  protected copy, export a passphrase-protected `.dcenc`. [Why](SECURITY.md#browser-storage).
+  <!-- highlight -->
+- Presenting lights a shape along its own outline instead of drawing a box around it.
+- A connector from an Adapter or Service to a Port can say **implements**.
+
+#### Removed
+
+- **Takeaways.** Your actions become notes on the diagram when it opens, so nothing is lost. Use open
+  points instead.
+- **The Learn drawer.** Its content is now in the [documentation](docs/index.md), reachable from the
+  More menu. The shortcut sheet (`?`) stays.
+- **GIF export.** Present the flow live or record your screen. PNG, SVG and the other exports are
+  unchanged.
+- **Draft Canvas for VS Code.** Your `.draftcanvas` files open in the desktop app or the web editor.
+  [How to move a diagram](docs/guides/vscode-retired.md).
 
 ### Desktop
 
 #### Changed
 
-- **The tray menu is four lines.** Show Draft Canvas, whether agent access is on and how many agents
-  are connected, Settings, Quit. The panel of drafts and recent files, the icon's unsaved dot and the
-  new/open/project shortcuts are gone; Home has all of that one click away. Closing the window still
-  hides it, so a connected agent keeps its app.
-- Home's **More ways in** gains **Connect an agent…**, which opens Settings → AI agents.
+- **The tray menu is simpler:** show the window, agent status, Settings and Quit. Closing the window
+  still keeps connected agents running.
+- Home has **Connect an agent…** under More ways in.
 
 #### Added
 
-- An agent can read a diagram's open points and, when asked, raise, change or resolve them through
-  `update_diagram` and proposals — never inferred from a label, never resolved by accepting a proposal.
+- A connected agent can read, raise and resolve open points when you ask it to.
 
 ## [1.12.0-beta.2] - 2026-09-26
 
