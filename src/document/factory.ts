@@ -387,6 +387,7 @@ export function createDocument(title = 'Untitled canvas'): DraftDocument {
     },
     flows: [],
     actions: [],
+    openPoints: [],
   };
 }
 

@@ -15,6 +15,18 @@
  */
 
 import { addAction, createAction, removeAction, setActionDone, updateActionText } from '../document/actions';
+import {
+  addOpenPoint,
+  createOpenPoint,
+  findOpenPoint,
+  removeOpenPoint,
+  reopenOpenPoint,
+  resolveOpenPoint,
+  setOpenPointContext,
+  setOpenPointKind,
+  setOpenPointResolution,
+} from '../document/openPoints';
+import { OPEN_POINT_KINDS } from '../document/types';
 import { inferRelationship, isEligibleForReinference } from '../document/connectorSemantics';
 import { createFlow, setFlowVariantOf } from '../document/flow';
 import {
@@ -37,7 +49,7 @@ import { embed, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
 import { assignAnchors } from '../layout/anchors';
 import { anchorOf } from './compile';
 import { AgentError, Problems } from './errors';
-import { AGENT_LIMITS, readActions, readLayout, readRoom, Reader, type LayoutSpec, type RoomSpec } from './input';
+import { AGENT_LIMITS, readActions, readLayout, readOpenPoints, readRoom, Reader, type LayoutSpec, type RoomSpec } from './input';
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
 import { pastDeadline, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
@@ -73,6 +85,7 @@ export function idsInFile(file: DraftDocument): Set<string> {
     for (const f of graph.flows) out.add(f.id);
   });
   for (const a of file.actions) out.add(a.id);
+  for (const p of file.openPoints ?? []) out.add(p.id);
   return out;
 }
 
@@ -166,6 +179,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       const room = readRoom(r, op, at, { taken, depth: path.length, existing });
       const anchorable = new Set([...existing.elements, ...existing.relationships, ...room.nodes.map((n) => n.id), ...room.relationships.map((e) => e.id)]);
       const newActions = readActions(r, op.actions, `${at}/actions`, taken, anchorable);
+      const newPoints = readOpenPoints(r, op.openPoints, `${at}/openPoints`, taken, anchorable);
       // One flow per title: a second "Main flow" is almost always the first one asked for again.
       room.flows.forEach((flow, j) => {
         const same = view?.flows.find((f) => sameTitle(f.title, flow.title));
@@ -185,6 +199,22 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
         if (a.id) action.id = a.id;
         if (a.done) action.done = true;
         actions = addAction({ ...file, actions }, action).actions;
+        counts.added += 1;
+      }
+      // Root-only like actions, but kept *on the view* (`viewOf` hands every room the file's list, and
+      // `embed` carries it home) so `removeElements` below can prune what a later op deletes.
+      for (const spec of newPoints) {
+        const targets = spec.about.map((id) => ({ kind: view!.edges.some((e) => e.id === id) ? ('edge' as const) : ('node' as const), id }));
+        const point = createOpenPoint(spec.kind, targets, spec.context);
+        if (!point) continue;
+        if (spec.id) point.id = spec.id;
+        const next = addOpenPoint(view, point);
+        if (next === view) {
+          problems.add('LIMIT_EXCEEDED', `${at}/openPoints`, `the diagram holds as many open points as it can (${AGENT_LIMITS.openPointsPerRequest * 4})`);
+          continue;
+        }
+        view = next;
+        touched.add(point.id);
         counts.added += 1;
       }
       counts.added += view.nodes.length - before.nodes.length + (view.edges.length - before.edges.length) + (view.flows.length - before.flows.length);
@@ -259,6 +289,17 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
           counts.removed += 1;
           continue;
         }
+        if (findOpenPoint(view, id)) {
+          // A point id is never part of a captured node/edge selection, so a scoped request naming one
+          // is reaching outside it.
+          if (scope) {
+            refuseOutOfScope(r, `${at}/ids`, [id]);
+            continue;
+          }
+          view = removeOpenPoint(view, id);
+          counts.removed += 1;
+          continue;
+        }
         const attached = findAttachment(view, id);
         if (attached) {
           if (outOfScope(scope, [attached.hostId], attached.kind === 'node' ? 'nodes' : 'edges').length) {
@@ -283,6 +324,18 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const set = r.object(op.set, `${at}/set`);
     if (!id || !set) {
       if (!id) problems.add('INVALID_INPUT', `${at}/id`, 'is required');
+      return;
+    }
+    const point = findOpenPoint(view, id);
+    if (point) {
+      if (scope) {
+        refuseOutOfScope(r, `${at}/set`, [id]);
+        return;
+      }
+      view = updateOpenPointOp(r, view, id, set, `${at}/set`);
+      if (!problems.empty) return;
+      touched.add(id);
+      counts.updated += 1;
       return;
     }
     const result = updateOne(r, view, file, actions, id, set, `${at}/set`, ctx, touched, advisories, layout.direction, scope);
@@ -702,6 +755,45 @@ function addToView(
     if (f.variantOf) next = setFlowVariantOf(next, f.id, f.variantOf);
   }
   for (const id of [...newIds, ...room.relationships.map((e) => e.id)]) touched.add(id);
+  return next;
+}
+
+/**
+ * An open point's kind, context, resolution or targets changed — explicitly, field by field. Resolving
+ * one is `resolved: true`; it says the discussion moved on, never that a person agreed to anything,
+ * and it is as visible in a proposal's review as any other change.
+ */
+function updateOpenPointOp(r: Reader, view: DraftDocument, id: string, set: Json, at: string): DraftDocument {
+  let next = view;
+  if (set.kind !== undefined) {
+    const kind = r.oneOf(set.kind, `${at}/kind`, OPEN_POINT_KINDS);
+    if (kind) next = setOpenPointKind(next, id, kind);
+  }
+  if (set.context !== undefined) {
+    const context = set.context === null ? '' : r.text(set.context, `${at}/context`, AGENT_LIMITS.openPointContextLength);
+    if (context !== undefined) next = setOpenPointContext(next, id, context);
+  }
+  if (set.resolved !== undefined) {
+    const resolved = r.bool(set.resolved, `${at}/resolved`);
+    if (resolved === true) next = resolveOpenPoint(next, id);
+    else if (resolved === false) next = reopenOpenPoint(next, id);
+  }
+  if (set.resolution !== undefined) {
+    const resolution = set.resolution === null ? '' : r.text(set.resolution, `${at}/resolution`, AGENT_LIMITS.openPointContextLength);
+    if (resolution !== undefined) next = setOpenPointResolution(next, id, resolution);
+  }
+  if (set.about !== undefined) {
+    const raw = typeof set.about === 'string' ? [set.about] : r.array(set.about, `${at}/about`, AGENT_LIMITS.openPointTargets);
+    const about = raw.filter((entry): entry is string => typeof entry === 'string');
+    const known = new Set([...view.nodes.map((n) => n.id), ...view.edges.map((e) => e.id)]);
+    const missing = about.filter((target) => !known.has(target));
+    if (missing.length) r.problems.add('INVALID_REFERENCE', `${at}/about`, `no element or relationship ${missing.map((m) => `"${m}"`).join(', ')} in this view`);
+    else if (about.length === 0) r.problems.add('INVALID_INPUT', `${at}/about`, 'a point has to be about at least one element or relationship; remove it instead');
+    else {
+      const targets = about.map((target) => ({ kind: view.edges.some((e) => e.id === target) ? ('edge' as const) : ('node' as const), id: target }));
+      next = { ...next, openPoints: next.openPoints.map((p) => (p.id === id ? { ...p, targets } : p)) };
+    }
+  }
   return next;
 }
 

@@ -34,6 +34,9 @@ import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 import { layerBehind } from './insideMark';
+import { OpenPointMarker } from './OpenPointMarker';
+import { unresolvedOpenPointsFor } from '../document/openPoints';
+import { nodeMarkerOrigin } from '../openPoints/marker';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { count } from '../lib/plural';
 import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
@@ -96,6 +99,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     (state) => state.openAttachmentDetail?.hostKind === 'node' && state.openAttachmentDetail?.hostId === id,
   );
   const editRequested = useUiStore((state) => state.editRequestId === id);
+  // Identity-stable out of a per-document index (`unresolvedIndex`), so this costs every node one
+  // map lookup per store update and re-renders only the nodes whose own points changed.
+  const openPoints = useEditorStore((state) => unresolvedOpenPointsFor(state.document.openPoints, { kind: 'node', id }));
 
   const [editing, setEditing] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
@@ -517,6 +523,21 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           {'<>'} {attachmentCount}
         </button>
       )}
+
+      {openPoints.length > 0 && !capsule && (() => {
+        const origin = nodeMarkerOrigin({ type: node.type, width: effectiveWidth, height: effectiveHeight });
+        return (
+          <OpenPointMarker
+            target={{ kind: 'node', id: node.id }}
+            points={openPoints}
+            variant="node"
+            // Reachable while presenting for the same reason the attachment badge is: nothing is
+            // selected then, and the presenter still has to be able to ask what is open here.
+            tabbable={Boolean(selected) || mode === 'present'}
+            style={{ left: origin.x, top: origin.y }}
+          />
+        );
+      })()}
 
       {/* The ring the signal arrives into: keyed on the transition so it plays once per arrival and
           stays as the step's static emphasis after. Chrome — never exported. */}

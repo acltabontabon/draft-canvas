@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 15;
+export const CURRENT_VERSION = 16;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -672,6 +672,48 @@ export interface DraftAction {
   anchor?: { kind: 'node' | 'edge'; id: string };
 }
 
+/**
+ * What kind of open discussion an Open point records — three descriptions, not stages of a workflow.
+ * `tentative` is a working assumption nobody has settled; `awaiting` means a specific answer,
+ * review or agreement is still needed from someone; `parked` is a topic deliberately put off. They
+ * are deliberately not confidence levels: a parked topic may be perfectly well understood, and
+ * waiting on someone says nothing about how sure anybody is. See `document/openPoints.ts`.
+ */
+export const OPEN_POINT_KINDS = ['tentative', 'awaiting', 'parked'] as const;
+export type OpenPointKind = (typeof OPEN_POINT_KINDS)[number];
+
+/** One thing an open point is about. Ids are unique across the whole file (see `validate.ts`), so no
+ *  room path is needed to resolve one — the same convention `DraftAction.anchor` follows. */
+export interface OpenPointTarget {
+  kind: 'node' | 'edge';
+  id: string;
+}
+
+/**
+ * A piece of the discussion that is still open, attached to the architecture it concerns.
+ *
+ * Structured metadata with a small marker, never a shape: it has no coordinates of its own, it
+ * changes no connector's routing, no node's size and no relationship's meaning. Its absence means
+ * only "nothing was noted here" — never "verified", "approved" or "built".
+ *
+ * Root-only, like `DraftAction`: the meeting is the file, and one point may concern shapes in
+ * several rooms. Stored once and pointing at every target, so a question that concerns three
+ * connectors is one record with three attachments rather than three copies of the same sentence.
+ */
+export interface OpenPoint {
+  id: string;
+  kind: OpenPointKind;
+  /** Plain text, exactly as typed, newlines kept. Optional — a marker alone is often enough. */
+  context?: string;
+  /** At least one. A point whose last target is deleted goes with it (`operations.ts`'s
+   *  `removeElements`); a file carrying one with none is repaired by dropping it (`validate.ts`). */
+  targets: OpenPointTarget[];
+  /** Absent means open — the same "absent is the default" rule `DraftAction.done` follows. */
+  resolved?: true;
+  /** How it was settled, when somebody wrote that down. Plain text; kept when a point is reopened. */
+  resolution?: string;
+}
+
 export interface DraftDocument {
   format: DraftFormat;
   /** The document's schema version — see `CURRENT_VERSION` and `migrate.ts`.
@@ -692,6 +734,12 @@ export interface DraftDocument {
    * back to the root the way it already carries `metadata` and `settings`.
    */
   actions: DraftAction[];
+  /**
+   * Root-only for the same reason `actions` is, and carried home by `embed` the same way. What the
+   * discussion has not settled yet, attached to the shapes and connectors it concerns — see
+   * `OpenPoint` and `document/openPoints.ts`.
+   */
+  openPoints: OpenPoint[];
   /** The canvas's own level, when it has one — same rule as `DraftInside.level`. */
   level?: ViewLevel;
 }

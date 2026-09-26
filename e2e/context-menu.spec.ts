@@ -407,7 +407,7 @@ test.describe('context menu — multi-selection contents and commands', () => {
     await expect(page.getByRole('button', { name: 'Distribute ↔' })).toBeVisible();
   });
 
-  test('an edges-only multi-selection shows only Spotlight and Delete', async ({ page }) => {
+  test('an edges-only multi-selection shows only Spotlight, Delete and a shared open point', async ({ page }) => {
     await newCanvas(page, 'Context menu multi edges only');
     await create(page, 'Service', { x: 250, y: 200 });
     await create(page, 'Data Store', { x: 550, y: 200 });
@@ -437,7 +437,9 @@ test.describe('context menu — multi-selection contents and commands', () => {
     await page.mouse.click(mid.x, mid.y, { button: 'right' });
     await expect(menuItem(page, 'Spotlight selection')).toBeVisible();
     await expect(menuItem(page, 'Delete selection')).toBeVisible();
-    await expect(menu(page).getByRole('menuitem')).toHaveCount(2);
+    // …plus one shared open point about both connectors, which any selection may raise.
+    await expect(menuItem(page, 'Add open point for 2 elements…')).toBeVisible();
+    await expect(menu(page).getByRole('menuitem')).toHaveCount(3);
   });
 
   test('Group into boundary, then Ungroup, both from the menu', async ({ page }) => {

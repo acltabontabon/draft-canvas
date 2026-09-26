@@ -35,6 +35,8 @@ import { count } from '../lib/plural';
 import { indexFile, isEmpty, openCount, resolveTarget, takeawaysFor } from '../takeaways/collect';
 import { takeawaysMarkdown } from '../takeaways/markdown';
 import { CAPTURE_ACTION_KEY, captureAnchorFor, type CaptureSource } from '../takeaways/capture';
+import { openPointsOverview, unresolvedTargetsIn } from '../openPoints/collect';
+import type { OpenPointTarget } from '../document/types';
 
 /**
  * The whole command catalog, derived fresh from context on every call. Nothing
@@ -392,6 +394,62 @@ export function takeawaysCommands(ctx: CommandContext): Command[] {
         .then((ok) => inner.ui.notify(ok ? 'Takeaways copied.' : 'The browser wouldn’t let us copy.'));
     },
   });
+  return commands;
+}
+
+/**
+ * Open points — what the discussion has not settled yet.
+ *
+ * Three names for three existing surfaces, like every other entry here: raising a point opens the
+ * popover (`canvas/OpenPointPopover.tsx`) in its raise-a-point face, the overview is the panel the
+ * status bar's count opens, and Focus is the editor's own Focus mode over the elements that carry a
+ * marker. Raising is offered for whatever is selected — one element, or several as one shared point,
+ * said as such in the title so nobody is surprised by one marker on each.
+ */
+export function openPointCommands(ctx: CommandContext): Command[] {
+  const commands: Command[] = [];
+  const { selection, document, mode, focus } = ctx.editor;
+  const targets: OpenPointTarget[] = [
+    ...selection.nodes.map((id) => ({ kind: 'node', id }) as const),
+    ...selection.edges.map((id) => ({ kind: 'edge', id }) as const),
+  ];
+  const anchor = targets[0];
+  if (mode !== 'present' && anchor) {
+    const subject = anchor.kind === 'node' ? document.nodes.find((node) => node.id === anchor.id) : undefined;
+    commands.push({
+      id: 'open-point-add',
+      title: targets.length === 1 ? 'Add open point…' : `Add open point for ${count(targets.length, 'element')}…`,
+      group: 'openPoints',
+      keywords: ['tentative', 'awaiting input', 'parked', 'unsettled', 'undecided', 'assumption', 'tbd', 'still open', 'mark'],
+      hint: targets.length === 1 ? (subject ? displayNameFor(subject) : 'Connector') : 'One shared point',
+      run: (inner) => inner.ui.setOpenPointPopover({ anchor, targets, creating: true }),
+    });
+  }
+
+  const overview = openPointsOverview(fileOf(ctx.editor));
+  if (overview.open.length + overview.resolved.length > 0 && mode !== 'present') {
+    commands.push({
+      id: 'open-points',
+      title: 'Open points',
+      group: 'openPoints',
+      keywords: ['review', 'unresolved', 'still open', 'resume', 'where we left off'],
+      hint: overview.open.length > 0 ? count(overview.open.length, 'open') : 'All resolved',
+      run: (inner) => inner.ui.setOpenPointsPanelOpen(true),
+    });
+  }
+
+  const here = unresolvedTargetsIn(document);
+  const marked = here.nodeIds.length + here.edgeIds.length;
+  if (marked > 0 && mode !== 'present') {
+    commands.push({
+      id: 'open-points-focus',
+      title: focus.active ? 'Exit focus' : 'Focus open points',
+      group: 'openPoints',
+      keywords: ['spotlight', 'dim others', 'unresolved', 'review'],
+      hint: focus.active ? undefined : count(marked, 'element'),
+      run: (inner) => (inner.editor.focus.active ? inner.editor.exitFocus() : inner.editor.enterFocus(here.nodeIds, here.edgeIds)),
+    });
+  }
   return commands;
 }
 
@@ -1727,6 +1785,7 @@ export function commandsFor(ctx: CommandContext): Command[] {
     ...starterCommands(),
     ...flowCommands(ctx),
     ...takeawaysCommands(ctx),
+    ...openPointCommands(ctx),
     ...viewCommands(ctx),
     ...canvasCommands(ctx),
   ];

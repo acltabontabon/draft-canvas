@@ -15,6 +15,7 @@ import { el, serialize, n } from './element';
 import { shadowFilter } from './emit';
 import { markerDefs } from './markers';
 import { backgroundEls, buildScene, type Decoration, type ResolvedBackground } from './document';
+import { unresolvedOpenPoints } from '../../document/openPoints';
 import type { RenderedSvg } from './document';
 import { PERSONALITY_PROFILES } from '../roughness/presets';
 import type { PersonalityPreset } from '../../ui/personality/usePersonality';
@@ -83,6 +84,8 @@ export function renderFlowFrameSvg(
     selectedFlow: flow,
     decorateNode,
     decorateEdge,
+    // A frame is a picture of the canvas as presented, markers included — they are on it there.
+    openPoints: unresolvedOpenPoints(document),
   });
 
   // The camera viewBox is the whole story: unlike `renderDocumentSvg`'s
@@ -118,6 +121,7 @@ export function renderFlowFrameSvg(
     ...scene.edgeLines,
     ...scene.nodeEls,
     ...scene.edgeOverlays,
+    ...scene.markerEls,
   ];
 
   const root = el(

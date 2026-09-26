@@ -13,6 +13,7 @@ import { DesktopStatus } from '../../desktop/ui/DesktopStatus';
 import { embeddedHost } from '../../host/embeddedHost';
 import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';
+import { pointsOf, unresolvedOpenPoints } from '../../document/openPoints';
 
 /** The nudge leaves by folding down into the chip, which wants a beat longer than a fade. */
 const NUDGE_EXIT_MS = 200;
@@ -115,6 +116,7 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
       )}
 
       <div className="dc-status-right">
+        <OpenPointsChip />
         <TakeawaysChip />
         <LevelChip />
         <span className="dc-muted">
@@ -125,6 +127,40 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
         <ZoomControls />
       </div>
     </footer>
+  );
+}
+
+/**
+ * What the discussion has not settled yet — the count of points still open, and the way to the list.
+ *
+ * Same bargain as the chips beside it: absent until there is something to count, so an ordinary
+ * diagram never grows a permanent empty panel; a count you can open once there is. Points are
+ * counted, not the markers they put on the canvas — one point about three connectors is one thing to
+ * settle. Once everything is resolved the chip stays, quietly, as the way back to what was settled.
+ */
+function OpenPointsChip() {
+  // Root-only and carried into every room, so the room's own view already holds the whole list.
+  const total = useEditorStore((state) => pointsOf(state.document).length);
+  const open = useEditorStore((state) => unresolvedOpenPoints(state.document).length);
+  const panelOpen = useUiStore((state) => state.openPointsPanelOpen);
+  if (total === 0) return null;
+  const label = count(open, 'open point');
+  return (
+    <>
+      <button
+        type="button"
+        className="dc-status-open-points"
+        data-none={open === 0 || undefined}
+        title={open > 0 ? 'Still open — review open points' : 'Every open point is resolved'}
+        aria-label={open > 0 ? `${label}, review` : 'Open points, all resolved'}
+        aria-expanded={panelOpen}
+        onClick={() => useUiStore.getState().setOpenPointsPanelOpen(!panelOpen)}
+      >
+        <span className="dc-status-open-points-glyph" aria-hidden="true" />
+        {open > 0 ? `${open} open` : 'resolved'}
+      </button>
+      <span className="dc-inspector-divider" />
+    </>
   );
 }
 

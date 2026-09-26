@@ -130,7 +130,10 @@ function sameContent(a: DraftDocument, b: DraftDocument, path: readonly string[]
     // Read off the file, not the view, because actions are root-only — and compared for the same
     // reason the rest of this is: typing an action and erasing it again inside the coalesce
     // window has to come out as a burst that changed nothing, not a dead undo step.
-    equivalent(a.actions, b.actions, 4)
+    equivalent(a.actions, b.actions, 4) &&
+    // Root-only too, and typed into the same way: a point's context typed and erased again within the
+    // coalesce window must net out to nothing.
+    equivalent(a.openPoints, b.openPoints, 5)
   );
 }
 

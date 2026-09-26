@@ -15,6 +15,10 @@ interface ImagePanelProps {
   selectionCount: number;
   selectionOnly: boolean;
   onSelectionOnlyChange: (value: boolean) => void;
+  /** Whether anything in the picture carries an open-point marker — the checkbox only shows then. */
+  hasOpenPoints: boolean;
+  includeOpenPoints: boolean;
+  onIncludeOpenPointsChange: (value: boolean) => void;
 }
 
 const DESCRIPTIONS: Record<ImageFormat, string> = {
@@ -35,6 +39,9 @@ export function ExportImagePanel({
   selectionCount,
   selectionOnly,
   onSelectionOnlyChange,
+  hasOpenPoints,
+  includeOpenPoints,
+  onIncludeOpenPointsChange,
 }: ImagePanelProps) {
   return (
     <div className="dc-export-panel">
@@ -80,6 +87,19 @@ export function ExportImagePanel({
               onChange={(event) => onIncludeBackgroundChange(event.target.checked)}
             />
             <span>Canvas background</span>
+          </label>
+        )}
+
+        {hasOpenPoints && (
+          // Kept by default: an image that quietly dropped them would make every unsettled assumption
+          // look decided. Leaving them out is a plain choice about the picture, worded as one.
+          <label className="dc-check" title="The tabs marking what is still open, with a key naming them. Untick for an image without them.">
+            <input
+              type="checkbox"
+              checked={includeOpenPoints}
+              onChange={(event) => onIncludeOpenPointsChange(event.target.checked)}
+            />
+            <span>Open point markers</span>
           </label>
         )}
 

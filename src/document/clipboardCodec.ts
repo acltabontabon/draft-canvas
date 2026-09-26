@@ -19,7 +19,7 @@ import { parseDocument } from './validate';
 import type { Clipboard } from './operations';
 
 export function encodeClipboard(fragment: Clipboard): string {
-  const envelope = { ...createDocument(), nodes: fragment.nodes, edges: fragment.edges };
+  const envelope = { ...createDocument(), nodes: fragment.nodes, edges: fragment.edges, openPoints: fragment.openPoints ?? [] };
   return JSON.stringify(envelope);
 }
 
@@ -29,5 +29,7 @@ export function decodeClipboard(text: string): Clipboard | null {
   if (!text) return null;
   const result = parseDocument(text);
   if (!result.ok) return null;
-  return { nodes: result.document.nodes, edges: result.document.edges };
+  // The validator has already cut every point down to the targets this fragment holds.
+  const { nodes, edges, openPoints } = result.document;
+  return openPoints.length > 0 ? { nodes, edges, openPoints } : { nodes, edges };
 }

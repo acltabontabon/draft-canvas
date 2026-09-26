@@ -65,10 +65,15 @@ import {
   type ServiceKind,
   type TextAlign,
   type TextRole,
+  type OpenPoint,
+  type OpenPointKind,
+  type OpenPointTarget,
+  OPEN_POINT_KINDS,
   type ViewLevel,
 } from './types';
 import { clamp, isFiniteNumber } from '../lib/math';
 import { isRecord } from '../lib/isRecord';
+import { normalizeOpenPointText, normalizeTargets } from './openPoints';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
@@ -893,6 +898,62 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     }
   }
 
+  /* --------------------------------------------------------- open points -- */
+
+  /*
+   * Root-only, exactly like actions, and for the same reason: a point may concern shapes in
+   * several rooms, so it belongs to the file. Targets are only shape-checked here — whether each
+   * still points at something is settled once every room is in, below — and a point that ends up
+   * with none is dropped there rather than kept as a marker on nothing.
+   */
+  const openPoints: OpenPoint[] = [];
+  if (isRoot) {
+    const rawPoints = Array.isArray(raw.openPoints) ? raw.openPoints : [];
+    let droppedPoints = 0;
+    const seenPointIds = new Set<string>();
+    if (rawPoints.length > LIMITS.maxOpenPoints) {
+      repairs.push(`Document had too many open points; kept the first ${LIMITS.maxOpenPoints}.`);
+    }
+    for (const candidate of rawPoints.slice(0, LIMITS.maxOpenPoints)) {
+      if (!isRecord(candidate)) {
+        droppedPoints += 1;
+        continue;
+      }
+      const kind = oneOfOptional<OpenPointKind>(candidate.kind, OPEN_POINT_KINDS);
+      if (!kind) {
+        droppedPoints += 1;
+        continue;
+      }
+      const rawTargets = Array.isArray(candidate.targets) ? candidate.targets : [];
+      const targets: OpenPointTarget[] = [];
+      for (const entry of rawTargets) {
+        if (!isRecord(entry)) continue;
+        const targetId = safeId(entry.id);
+        if (targetId && (entry.kind === 'node' || entry.kind === 'edge')) targets.push({ kind: entry.kind, id: targetId });
+      }
+      if (targets.length === 0) {
+        droppedPoints += 1;
+        continue;
+      }
+      let id = safeId(candidate.id) ?? createId('op');
+      if (seenPointIds.has(id)) id = createId('op');
+      seenPointIds.add(id);
+
+      const point: OpenPoint = { id, kind, targets: normalizeTargets(targets) };
+      const context = text(candidate.context, LIMITS.maxOpenPointContextLength);
+      const normalizedContext = context === undefined ? '' : normalizeOpenPointText(context);
+      if (normalizedContext) point.context = normalizedContext;
+      if (candidate.resolved === true) point.resolved = true;
+      const resolution = text(candidate.resolution, LIMITS.maxOpenPointContextLength);
+      const normalizedResolution = resolution === undefined ? '' : normalizeOpenPointText(resolution);
+      if (normalizedResolution) point.resolution = normalizedResolution;
+      openPoints.push(point);
+    }
+    if (droppedPoints > 0) {
+      repairs.push(`Dropped ${droppedPoints} open point(s) that were unreadable or attached to nothing.`);
+    }
+  }
+
   /* ------------------------------------------------------------ document -- */
 
   const viewportRaw = isRecord(raw.viewport) ? raw.viewport : {};
@@ -929,6 +990,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     },
     flows,
     actions,
+    openPoints,
     // Absent stays absent: a view with no level behaves exactly as every canvas did before
     // levels existed, and nothing here ever invents one.
     ...(() => {
@@ -958,6 +1020,29 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     }
     if (strandedAnchors > 0) {
       repairs.push(`${strandedAnchors} action(s) pointed at something no longer here; kept the action.`);
+    }
+    // An open point is *about* its targets in a way an action is not about its anchor: an
+    // attachment to a shape that is gone is dropped, and a point with none left is dropped with it
+    // — a marker on nothing would be a lie the canvas could never show. Shared points keep going
+    // on whatever they still concern.
+    let strandedTargets = 0;
+    let orphanedPoints = 0;
+    const survivingPoints: OpenPoint[] = [];
+    for (const point of document.openPoints) {
+      const kept = point.targets.filter((target) => (target.kind === 'node' ? ctx.nodeIds : ctx.edgeIds).has(target.id));
+      strandedTargets += point.targets.length - kept.length;
+      if (kept.length === 0) {
+        orphanedPoints += 1;
+        continue;
+      }
+      if (kept.length !== point.targets.length) point.targets = kept;
+      survivingPoints.push(point);
+    }
+    if (survivingPoints.length !== document.openPoints.length) document.openPoints = survivingPoints;
+    if (strandedTargets > 0) {
+      repairs.push(
+        `${strandedTargets} open point attachment(s) pointed at something no longer here${orphanedPoints > 0 ? `; dropped ${orphanedPoints} point(s) left with nothing to be about` : ''}.`,
+      );
     }
   }
 

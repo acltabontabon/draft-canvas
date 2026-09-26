@@ -40,6 +40,7 @@ const FIXTURE_DOCUMENT = {
   // to show are in the catalog this file builds — a command absent from the fixture is a shortcut
   // the help sheet would be told doesn't exist.
   actions: [{ id: 'a_fixture', text: 'Confirm the timeout' }],
+  openPoints: [{ id: 'op_fixture', kind: 'tentative', targets: [{ kind: 'node', id: NODE_A.id }] }],
 };
 
 /** The same fixture seen from outside, with `NODE_A` holding it as its inside — see `path` below. */

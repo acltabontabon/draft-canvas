@@ -107,6 +107,20 @@ import {
   setActionDone as setActionDoneOp,
   updateActionText as updateActionTextOp,
 } from '../document/actions';
+import {
+  addOpenPoint as addOpenPointOp,
+  addOpenPointTargets as addOpenPointTargetsOp,
+  createOpenPoint,
+  pruneOpenPoints,
+  removeOpenPoint as removeOpenPointOp,
+  removeOpenPointTarget as removeOpenPointTargetOp,
+  reopenOpenPoint as reopenOpenPointOp,
+  resolveOpenPoint as resolveOpenPointOp,
+  retargetOpenPoints,
+  setOpenPointContext as setOpenPointContextOp,
+  setOpenPointKind as setOpenPointKindOp,
+  setOpenPointResolution as setOpenPointResolutionOp,
+} from '../document/openPoints';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { DEFAULTS, LIMITS } from '../document/limits';
 import {
@@ -134,6 +148,8 @@ import type {
   EdgeSemantic,
   QueueKind,
   RouteMode,
+  OpenPointKind,
+  OpenPointTarget,
   ServiceKind,
   Side,
   ViewLevel,
@@ -563,6 +579,22 @@ export interface EditorStore {
   clearActionAnchor: (actionId: string) => void;
   removeAction: (actionId: string) => void;
   clearDoneActions: () => void;
+
+  /* Open points — what the discussion has not settled yet, attached to the elements it concerns */
+  /** Raises one point about every target at once; `null` when it couldn't land (nothing to attach
+   *  to, or the cap). */
+  addOpenPoint: (kind: OpenPointKind, targets: readonly OpenPointTarget[], context?: string) => string | null;
+  setOpenPointKind: (pointId: string, kind: OpenPointKind) => void;
+  /** Coalesces a burst of typing into one undo step, like `updateActionText`. */
+  setOpenPointContext: (pointId: string, context: string) => void;
+  /** Settles a point. Changes nothing about the shapes it concerns; the point stays, folded away. */
+  resolveOpenPoint: (pointId: string, resolution?: string) => void;
+  setOpenPointResolution: (pointId: string, resolution: string) => void;
+  reopenOpenPoint: (pointId: string) => void;
+  removeOpenPoint: (pointId: string) => void;
+  addOpenPointTargets: (pointId: string, targets: readonly OpenPointTarget[]) => void;
+  /** Detaches one element from a shared point; the last one takes the point with it. */
+  removeOpenPointTarget: (pointId: string, target: OpenPointTarget) => void;
   /** Puts plain text on the system clipboard, through the VS Code host bridge when embedded.
    *  Not a document edit — no undo step, nothing touched. */
   /** Resolves to whether the text reached the system clipboard. */
@@ -981,6 +1013,8 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     // was resolved there. Left open, the next canvas would arrive with a focused input swallowing
     // the keys somebody meant as shortcuts.
     actionCaptureOpen: false,
+    // Anchored to an element of the canvas being left.
+    openPointPopover: null,
   });
   return {
     selection: EMPTY_SELECTION,
@@ -1615,12 +1649,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       'Insert worker',
       // Replacements are added and spliced into any flow steps *before* the original connector
       // goes, so a flow that told `A → B` now tells `A → W`, `W → B` instead of losing the beat.
+      // An open point about the connector rides on the leg the message enters the worker by, the
+      // same leg its label and attachments ride — never silently lost with the connector it was on.
       (doc) =>
         removeElements(
-          spliceEdgeInFlows(
-            addEdges(addNodes(doc, [worker]), [edgeToWorker, edgeFromWorker]),
-            edgeId,
-            [edgeToWorker.id, edgeFromWorker.id],
+          retargetOpenPoints(
+            spliceEdgeInFlows(
+              addEdges(addNodes(doc, [worker]), [edgeToWorker, edgeFromWorker]),
+              edgeId,
+              [edgeToWorker.id, edgeFromWorker.id],
+            ),
+            { kind: 'edge', id: edgeId },
+            { kind: 'edge', id: edgeToWorker.id },
           ),
           [],
           [edgeId],
@@ -2204,10 +2244,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         const edges = detached.edges.filter((e) => !boundaryIds.has(e.source) && !boundaryIds.has(e.target));
         const kept = new Set(edges);
         const removedEdgeIds = new Set(detached.edges.filter((e) => !kept.has(e)).map((e) => e.id));
-        return pruneFlowSteps(
-          { ...detached, nodes: detached.nodes.filter((n) => !boundaryIds.has(n.id)), edges },
-          removedEdgeIds,
+        // A point about the boundary itself was about its scope, not its members — it goes with the
+        // boundary rather than being spread over the children; one about a member is untouched.
+        return pruneOpenPoints(
+          pruneFlowSteps(
+            { ...detached, nodes: detached.nodes.filter((n) => !boundaryIds.has(n.id)), edges },
+            removedEdgeIds,
+            boundaryIds,
+          ),
           boundaryIds,
+          removedEdgeIds,
         );
       },
       // A nested boundary ungrouped in the same pass is gone, so it can't stay selected.
@@ -2454,6 +2500,51 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   clearDoneActions() {
     get().apply('Clear completed actions', (doc) => clearDoneActionsOp(doc));
+  },
+
+  addOpenPoint(kind, targets, context) {
+    const point = createOpenPoint(kind, targets, context);
+    if (!point) return null;
+    get().apply('Add open point', (doc) => addOpenPointOp(doc, point));
+    // `addOpenPoint` refuses at the cap rather than dropping the oldest, so the caller has to be
+    // told it didn't land — the same contract `captureAction` has.
+    return get().document.openPoints.some((entry) => entry.id === point.id) ? point.id : null;
+  },
+
+  setOpenPointKind(pointId, kind) {
+    get().apply('Change open point', (doc) => setOpenPointKindOp(doc, pointId, kind));
+  },
+
+  setOpenPointContext(pointId, context) {
+    get().apply('Edit open point', (doc) => setOpenPointContextOp(doc, pointId, context), {
+      coalesceKey: `open-point-context:${pointId}`,
+    });
+  },
+
+  resolveOpenPoint(pointId, resolution) {
+    get().apply('Resolve open point', (doc) => resolveOpenPointOp(doc, pointId, resolution));
+  },
+
+  setOpenPointResolution(pointId, resolution) {
+    get().apply('Edit resolution', (doc) => setOpenPointResolutionOp(doc, pointId, resolution), {
+      coalesceKey: `open-point-resolution:${pointId}`,
+    });
+  },
+
+  reopenOpenPoint(pointId) {
+    get().apply('Reopen open point', (doc) => reopenOpenPointOp(doc, pointId));
+  },
+
+  removeOpenPoint(pointId) {
+    get().apply('Delete open point', (doc) => removeOpenPointOp(doc, pointId));
+  },
+
+  addOpenPointTargets(pointId, targets) {
+    get().apply('Attach open point', (doc) => addOpenPointTargetsOp(doc, pointId, targets));
+  },
+
+  removeOpenPointTarget(pointId, target) {
+    get().apply('Detach open point', (doc) => removeOpenPointTargetOp(doc, pointId, target));
   },
 
   copyText(text) {
@@ -2708,6 +2799,8 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
     // Capturing, completing or clearing an action touches nothing on the canvas, so leaving this
     // out would discard every one of those edits as a write that changed nothing.
     a.actions === b.actions &&
+    // Raising, editing or resolving an open point touches nothing on the canvas either.
+    a.openPoints === b.openPoints &&
     // Saying what a view shows changes nothing else about it, so without this the one edit that
     // only ever changes `level` would be thrown away as a no-op.
     a.level === b.level &&

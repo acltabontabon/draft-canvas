@@ -79,9 +79,11 @@ Notes on each:
   to the one that protects your saved diagrams.
 - **Image** offers a **Light** or **Dark** palette, **Transparent**, and **Selection only**.
   PNGs export at 2× and SVGs are vector. Inside a shape, you choose between that shape's canvas
-  and the whole diagram.
+  and the whole diagram. A diagram with [open points](open-points.md) keeps their markers, with a
+  key, unless you untick **Open point markers**.
 - **Animated** needs a flow with at least one step. Choose speed and whether it loops.
 - **Source** needs a flow. See [Getting started](getting-started.md#present-a-flow) for making one.
+  Sequence diagrams have no notation for open points, so those are left out.
 
 Files are named from the diagram's title: `Payment Service!` becomes `payment-service.png`.
 Exporting happens in your browser; the file goes to your browser's normal download flow and nothing

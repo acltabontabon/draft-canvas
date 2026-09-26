@@ -45,6 +45,13 @@ export const LIMITS = {
   /** One line said out loud. Long enough for "Confirm the timeout with the settlement team
    *  @Kevin", short enough that the list stays scannable at a glance. */
   maxActionLength: 200,
+  /** Twice the actions cap: a point can be raised for every connector of a busy diagram, and a meeting
+   *  that raises more than this has stopped being a meeting. */
+  maxOpenPoints: 200,
+  /** A sentence or two of context — "Confirm sync vs async with the payments team" — not a spec. */
+  maxOpenPointContextLength: 500,
+  /** One point may be about this many shapes and connectors at once — a whole boundary's worth. */
+  maxOpenPointTargets: 40,
   maxConditionLength: 120,
   maxResponseLength: 120,
 } as const;

@@ -164,6 +164,7 @@ describe('contextMenuCommandsFor — a regular node', () => {
       'attach-note',
       'attach-code',
       'capture-action',
+      'open-point-add',
       'sep',
       'duplicate',
       'copy',
@@ -220,6 +221,7 @@ describe('contextMenuCommandsFor — a regular node', () => {
       'attach-note',
       'attach-code',
       'capture-action',
+      'open-point-add',
       'sep',
       'add-consumer',
       'add-dead-letter-queue',
@@ -329,6 +331,7 @@ describe('contextMenuCommandsFor — an edge', () => {
       'attach-note',
       'attach-code',
       'capture-action',
+      'open-point-add',
       'sep',
       'spotlight',
       'sep',
@@ -383,6 +386,7 @@ describe('contextMenuCommandsFor — a boundary', () => {
       'attach-note',
       'attach-code',
       'capture-action',
+      'open-point-add',
       'sep',
       'duplicate',
       'copy',
@@ -451,7 +455,7 @@ describe('contextMenuCommandsFor — a multi-selection', () => {
     expect(ids).toContain('distribute-x');
   });
 
-  it('an edges-only multi-selection shows only Spotlight and Delete', () => {
+  it('an edges-only multi-selection shows only Spotlight, Delete and a shared open point', () => {
     const state = useEditorStore.getState();
     const a = state.addNode({ type: 'service', x: 0, y: 0 });
     const b = state.addNode({ type: 'database', x: 300, y: 0 });
@@ -460,7 +464,8 @@ describe('contextMenuCommandsFor — a multi-selection', () => {
     const e2 = state.connect(a.id, c.id)!;
     state.setSelection({ nodes: [], edges: [e1.id, e2.id] });
     const types = selectionMenu().map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
-    expect(types).toEqual(['spotlight', 'sep', 'delete']);
+    // …plus one shared open point about both connectors, which any selection may raise.
+    expect(types).toEqual(['open-point-add', 'sep', 'spotlight', 'sep', 'delete']);
   });
 
   it('Group → Ungroup round-trips via the menu', () => {

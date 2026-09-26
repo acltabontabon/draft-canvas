@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Preset } from '../canvas/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
-import type { DraftEdge, DraftNode, Side } from '../document/types';
+import type { DraftEdge, DraftNode, OpenPointTarget, Side } from '../document/types';
 import type { RecipeCategory } from '../learn/types';
 import type { PresentationReveal } from '../presentation/presentationAttachments';
 import { readPreference, writePreference } from '../lib/preferences';
@@ -207,6 +207,22 @@ export const PRESENTATION_AT_REST: PresentationState = {
   focus: null,
 };
 
+/**
+ * The open-point popover: which element it is anchored to, what a point raised from it would be
+ * about, and whether it opened to raise one. Transient like every other popover here — never saved,
+ * and cleared when the document changes underneath it.
+ */
+export interface OpenPointPopoverState {
+  /** The element the popover sits beside and lists points for. */
+  anchor: OpenPointTarget;
+  /** Every element a new point raised from here concerns: the anchor alone, or a whole selection. */
+  targets: OpenPointTarget[];
+  /** Opened to raise a new point — the kind picker leads, and applies on the first click. */
+  creating: boolean;
+  /** One point to bring into view, when opened from the overview's list. */
+  pointId?: string;
+}
+
 export interface UiStore {
   /** The preset a canvas click will place, or null for plain selection. */
   armed: Preset | null;
@@ -284,6 +300,12 @@ export interface UiStore {
   presentationReveal: PresentationReveal | null;
   /** How the presentation is being shown — see `PresentationState`. */
   presentation: PresentationState;
+  /** The open-point popover, when one is up — see `OpenPointPopoverState`. */
+  openPointPopover: OpenPointPopoverState | null;
+  /** Whether the Open points overview (`OpenPointsPanel.tsx`) is showing. */
+  openPointsPanelOpen: boolean;
+  /** Whether the overview's resolved section is unfolded — kept for the session, like a disclosure. */
+  openPointsResolvedOpen: boolean;
   /** Whether the Flows panel — the one surface for flows (`FlowPanel.tsx`) — is visible. */
   flowPanelOpen: boolean;
   /** Whether the proposal review panel (`desktop/ui/ProposalPanel.tsx`, desktop only) is open, and
@@ -501,6 +523,9 @@ export interface UiStore {
   setPresentation: (patch: Partial<PresentationState>) => void;
   /** Everything back to rest: the exit every way out of presenting goes through. */
   resetPresentation: () => void;
+  setOpenPointPopover: (state: OpenPointPopoverState | null) => void;
+  setOpenPointsPanelOpen: (open: boolean) => void;
+  setOpenPointsResolvedOpen: (open: boolean) => void;
   setFlowPanelOpen: (open: boolean) => void;
   requestFlowRename: (flowId: string | null) => void;
   /** Opens the proposal panel (optionally straight to one proposal), or closes it. */
@@ -621,6 +646,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   openAttachmentDetail: null,
   presentationReveal: null,
   presentation: PRESENTATION_AT_REST,
+  openPointPopover: null,
+  openPointsPanelOpen: false,
+  openPointsResolvedOpen: false,
   flowPanelOpen: false,
   proposalPanelOpen: false,
   proposalPanelId: null,
@@ -725,6 +753,11 @@ export const useUiStore = create<UiStore>((set, get) => ({
     }),
   resetPresentation: () =>
     set((state) => (state.presentation === PRESENTATION_AT_REST ? state : { presentation: PRESENTATION_AT_REST })),
+  setOpenPointPopover: (openPointPopover) => set({ openPointPopover }),
+  // The two bottom-right surfaces share one corner, so opening one puts the other away.
+  setOpenPointsPanelOpen: (openPointsPanelOpen) =>
+    set(openPointsPanelOpen ? { openPointsPanelOpen, takeawaysOpen: false, takeawaysView: 'actions' } : { openPointsPanelOpen }),
+  setOpenPointsResolvedOpen: (openPointsResolvedOpen) => set({ openPointsResolvedOpen }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   setProposalPanelOpen: (proposalPanelOpen, proposalId = null) => set({ proposalPanelOpen, proposalPanelId: proposalPanelOpen ? proposalId : null }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
@@ -737,7 +770,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
     // show the list you are still adding to, not the summary you read once at the end.
     set((state) =>
       takeawaysOpen
-        ? { takeawaysOpen, ...(view ? { takeawaysView: view } : {}), ...settledRecall(state) }
+        ? { takeawaysOpen, openPointsPanelOpen: false, ...(view ? { takeawaysView: view } : {}), ...settledRecall(state) }
         : { takeawaysOpen: false, takeawaysView: 'actions' },
     ),
   setTakeawaysView: (takeawaysView) => set({ takeawaysView }),

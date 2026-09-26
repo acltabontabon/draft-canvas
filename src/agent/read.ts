@@ -272,6 +272,24 @@ function project(
     ...(path.length === 0 && file.actions.length
       ? { actions: file.actions.map((a) => ({ id: a.id, text: a.text, ...(a.done ? { done: true } : {}), ...(a.anchor ? { about: a.anchor.id } : {}) })) }
       : {}),
+    // What the people have not settled yet — every point at the root, and in a nested view the ones
+    // about something in it. Read as data an agent may act on when asked; nothing here is a request.
+    ...(() => {
+      const here = new Set([...view.nodes.map((n) => n.id), ...view.edges.map((e) => e.id)]);
+      const points = (file.openPoints ?? []).filter((p) => path.length === 0 || p.targets.some((t) => here.has(t.id)));
+      return points.length
+        ? {
+            openPoints: points.map((p) => ({
+              id: p.id,
+              kind: p.kind,
+              ...(p.context ? { context: p.context } : {}),
+              about: p.targets.map((t) => t.id),
+              ...(p.resolved ? { resolved: true } : {}),
+              ...(p.resolution ? { resolution: p.resolution } : {}),
+            })),
+          }
+        : {};
+    })(),
     ...(Object.keys(suggestions).length ? { suggestions } : {}),
     ...(outside.size ? { outsideEndpoints: [...outside.values()] } : {}),
   };

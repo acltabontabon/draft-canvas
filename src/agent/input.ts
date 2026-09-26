@@ -18,6 +18,8 @@ import {
   type ConnectorKind,
   type EdgeSemantic,
   type NoteKind,
+  type OpenPointKind,
+  OPEN_POINT_KINDS,
   type ViewLevel,
 } from '../document/types';
 import { LIMITS } from '../document/limits';
@@ -35,6 +37,9 @@ export const AGENT_LIMITS = {
   stepsPerFlow: 60,
   notesPerRequest: 60,
   actionsPerRequest: 50,
+  openPointsPerRequest: 50,
+  openPointContextLength: LIMITS.maxOpenPointContextLength,
+  openPointTargets: LIMITS.maxOpenPointTargets,
   opsPerRequest: 100,
   attachmentsPerElement: 4,
   idLength: 64,
@@ -126,6 +131,14 @@ export interface ActionSpec {
   text: string;
   done?: boolean;
   about?: string;
+}
+
+/** An open point an agent raises: its kind, what it is about (one or more ids), and optional context. */
+export interface OpenPointSpec {
+  id?: string;
+  kind: OpenPointKind;
+  context?: string;
+  about: string[];
 }
 
 export interface RoomSpec {
@@ -541,6 +554,33 @@ export function readActions(r: Reader, value: unknown, path: string, taken: Set<
     const about = typeof item.about === 'string' ? item.about : undefined;
     if (about !== undefined && !anchorable.has(about)) r.problems.add('INVALID_REFERENCE', `${at}/about`, `no element or relationship "${about}"`);
     if (text) out.push({ ...(id ? { id } : {}), text, ...(done ? { done } : {}), ...(about && anchorable.has(about) ? { about } : {}) });
+  });
+  return out;
+}
+
+/**
+ * Open points an `add` op raises. `about` is required and must name elements or relationships in the
+ * view (existing or added in the same op) — a point about nothing is refused, and an agent never
+ * marks anything it wasn't asked to: nothing here infers a kind from a label's wording.
+ */
+export function readOpenPoints(r: Reader, value: unknown, path: string, taken: Set<string>, anchorable: Set<string>): OpenPointSpec[] {
+  const out: OpenPointSpec[] = [];
+  r.array(value, path, AGENT_LIMITS.openPointsPerRequest).forEach((raw, i) => {
+    const at = `${path}/${i}`;
+    const item = r.object(raw, at);
+    if (!item) return;
+    const id = item.id === undefined ? undefined : r.newId(item.id, `${at}/id`, taken);
+    const kind = r.oneOf(item.kind, `${at}/kind`, OPEN_POINT_KINDS);
+    const context = r.text(item.context, `${at}/context`, AGENT_LIMITS.openPointContextLength);
+    const aboutRaw = typeof item.about === 'string' ? [item.about] : r.array(item.about, `${at}/about`, AGENT_LIMITS.openPointTargets);
+    const about = aboutRaw.filter((entry): entry is string => typeof entry === 'string');
+    if (about.length === 0) r.problems.add('INVALID_INPUT', `${at}/about`, 'is required: the id(s) of what this point is about');
+    for (const target of about) {
+      if (!anchorable.has(target)) r.problems.add('INVALID_REFERENCE', `${at}/about`, `no element or relationship "${target}"`);
+    }
+    if (kind && about.length && about.every((target) => anchorable.has(target))) {
+      out.push({ ...(id ? { id } : {}), kind, ...(context ? { context } : {}), about });
+    }
   });
   return out;
 }

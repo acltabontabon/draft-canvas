@@ -3926,3 +3926,438 @@
      something drawn on it — the same four the empty canvas uses. Only the weight softens. */
   opacity: 0.4;
 }
+
+/* ------------------------------------------------------------ open points -- */
+
+/*
+ * The open-point marker: a 16px tab an element wears while something about it is still unsettled.
+ * The picture is the display list `openPoints/marker.ts` describes (the export draws the very same
+ * shapes); everything here is the chrome around it — a hit target a little larger than the tab, a
+ * hover/focus preview, and the fades it shares with its host. It scales with the canvas like the
+ * shape it sits on, so zoomed far out it collapses to a small violet mark and stops asking to be
+ * read — never to nothing, since a marker that vanished would read as a point resolved.
+ */
+.dc-open-point-marker {
+  position: absolute;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--dc-accent-violet-chip);
+  cursor: pointer;
+  /* Clickable while presenting too, when React Flow stops nodes receiving the pointer: the tab is
+     how a presenter shows what is still open here. */
+  pointer-events: all;
+}
+
+/* The invisible reach: a 28px target around a 16px tab. */
+.dc-open-point-marker::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.dc-open-point-glyph {
+  display: block;
+  overflow: visible;
+  transition: transform 120ms var(--dc-ease-out);
+}
+
+.dc-open-point-marker:hover .dc-open-point-glyph,
+.dc-open-point-marker[data-open='true'] .dc-open-point-glyph {
+  transform: scale(1.12);
+}
+
+.dc-open-point-marker:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+.dc-open-point-marker[data-open='true'] {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dc-accent-violet-chip) 40%, transparent);
+}
+
+/* Fades with whatever its host fades for — a flow's lens, Focus, a presented step. */
+.dc-open-point-marker[data-dimmed='true'],
+.dc-open-point-marker[data-focus-dimmed='true'],
+.dc-open-point-marker[data-lens-dimmed='true'] {
+  opacity: 0.35;
+}
+
+.dc-canvas[data-explain='on'] .dc-open-point-marker[data-explain-tier='hidden'] {
+  opacity: 0.3;
+}
+
+/*
+ * The preview: the kind and the words, readable on hover or keyboard focus without a click — and
+ * with nothing in it to click, so nothing is reachable by hover alone. It waits a beat so a pointer
+ * crossing the tab on its way somewhere never flashes it.
+ */
+.dc-open-point-preview {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 7px);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: max-content;
+  min-width: 96px;
+  max-width: 220px;
+  padding: 7px 9px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  color: var(--dc-text);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    visibility 0s linear 120ms;
+}
+
+.dc-open-point-marker[data-variant='edge'] .dc-open-point-preview {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.dc-open-point-marker:hover .dc-open-point-preview,
+.dc-open-point-marker:focus-visible .dc-open-point-preview {
+  visibility: visible;
+  opacity: 1;
+  transition:
+    opacity 120ms ease 260ms,
+    visibility 0s linear 260ms;
+}
+
+/* While the popover is up the preview would only repeat it. */
+.dc-open-point-marker[data-open='true'] .dc-open-point-preview {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.dc-open-point-preview-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dc-open-point-preview-kind {
+  color: var(--dc-accent-violet-chip);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+}
+
+.dc-open-point-preview-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.dc-open-point-preview-shared {
+  color: var(--dc-text-faint);
+  font-size: 10.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-open-point-glyph,
+  .dc-open-point-preview,
+  .dc-open-point-marker:hover .dc-open-point-preview,
+  .dc-open-point-marker:focus-visible .dc-open-point-preview {
+    transition: none;
+  }
+}
+
+/* ---- the popover ---- */
+
+.dc-open-point-popover {
+  width: 268px;
+}
+
+.dc-open-point-popover[data-read-only='true'] {
+  width: 240px;
+}
+
+.dc-open-point-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 12px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-open-point-title {
+  flex: none;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+}
+
+.dc-open-point-subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dc-text);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-open-point-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+
+.dc-open-point-prompt {
+  color: var(--dc-text);
+  font-size: 12.5px;
+}
+
+.dc-open-point-kinds {
+  display: flex;
+  gap: 4px;
+}
+
+/* One kind: the tab it would put on the canvas, and its name. Applies on click — no confirm. */
+.dc-open-point-kind {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 7px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-canvas);
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    border-color 90ms ease,
+    color 90ms ease,
+    background-color 90ms ease;
+}
+
+.dc-open-point-kind:hover {
+  border-color: var(--dc-border-strong);
+  color: var(--dc-text);
+}
+
+.dc-open-point-kind:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-open-point-kind[aria-checked='true'] {
+  border-color: var(--dc-accent-violet-chip);
+  background: color-mix(in srgb, var(--dc-accent-violet-chip) 10%, var(--dc-canvas));
+  color: var(--dc-text);
+}
+
+/* The compact switch on an existing point: glyph and name side by side, one row. */
+.dc-open-point-kind[data-compact='true'] {
+  flex-direction: row;
+  gap: 5px;
+  padding: 3px 7px 3px 4px;
+  font-size: 10.5px;
+}
+
+.dc-open-point-kind-glyph {
+  display: block;
+  flex: none;
+  overflow: visible;
+}
+
+.dc-open-point-list {
+  margin: 0;
+  padding: 0;
+  max-height: 340px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dc-open-point-row {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px;
+}
+
+.dc-open-point-row + .dc-open-point-row,
+.dc-open-point-picker + .dc-open-point-list,
+.dc-open-point-resolved {
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-open-point-context {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-canvas);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.dc-open-point-context:focus {
+  outline: none;
+  border-color: var(--dc-selection);
+}
+
+.dc-open-point-context::placeholder {
+  color: var(--dc-text-faint);
+}
+
+.dc-open-point-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dc-open-point-spacer {
+  flex: 1;
+}
+
+.dc-open-point-shared {
+  flex: 1;
+  min-width: 0;
+  color: var(--dc-text-faint);
+  font-size: 11px;
+}
+
+/* A quiet in-line action, the weight of a link rather than a button. */
+.dc-open-point-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  text-decoration-color: var(--dc-border-strong);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.dc-open-point-link:hover,
+.dc-open-point-link:focus-visible {
+  color: var(--dc-text);
+}
+
+.dc-open-point-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin: 0 12px 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.dc-open-point-add:hover,
+.dc-open-point-add:focus-visible {
+  color: var(--dc-text);
+}
+
+.dc-open-point-list + .dc-open-point-add {
+  margin-top: 2px;
+}
+
+.dc-open-point-kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dc-accent-violet-chip);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+}
+
+.dc-open-point-kind-chip[data-resolved='true'] {
+  color: var(--dc-text-faint);
+}
+
+.dc-open-point-text {
+  margin: 0;
+  color: var(--dc-text);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.dc-open-point-text-empty {
+  color: var(--dc-text-faint);
+  font-style: italic;
+}
+
+.dc-open-point-row[data-resolved='true'] .dc-open-point-text {
+  color: var(--dc-text-muted);
+}
+
+.dc-open-point-resolution {
+  padding-left: 8px;
+  border-left: 2px solid var(--dc-border-strong);
+  color: var(--dc-text) !important;
+}
+
+.dc-open-point-resolved-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 12px;
+  border: 0;
+  background: none;
+  color: var(--dc-text-faint);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-open-point-resolved-toggle:hover,
+.dc-open-point-resolved-toggle:focus-visible {
+  color: var(--dc-text-muted);
+}
+
+.dc-open-point-resolved-toggle svg {
+  width: 11px;
+  height: 11px;
+}
+
+.dc-open-point-resolved .dc-open-point-list {
+  border-top: 1px solid var(--dc-border);
+}

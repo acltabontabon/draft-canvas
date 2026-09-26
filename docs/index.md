@@ -11,6 +11,7 @@ New here? Start with [Getting started](guides/getting-started.md). It takes a fe
 | --- | --- |
 | [Getting started](guides/getting-started.md) | Draw a Service → Queue → Worker, add a note, present it as a flow, and export it |
 | [Explain a system at different levels](guides/depth.md) | Keep the overview small and draw the detail inside a shape, C4-style |
+| [Mark what is still open](guides/open-points.md) | Attach a tentative, awaiting-input or parked point to a shape or connector, and pick the discussion up next time |
 | [Keyboard shortcuts and the command palette](guides/keyboard-and-commands.md) | Draw quickly without the mouse |
 | [Saving, backing up and sharing](guides/saving-and-sharing.md) | Know what is saved for you, what isn't, and how to move a diagram between browsers |
 | [Working with `.draftcanvas` files in VS Code](guides/vscode.md) | Keep diagrams in your repository and edit them in an editor tab |

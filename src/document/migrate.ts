@@ -316,6 +316,20 @@ function migrateAddC4Text(doc: Record<string, unknown>): Record<string, unknown>
 }
 
 /**
+ * v16 gives a document its canvas-level `openPoints` — what the discussion has not settled yet,
+ * attached to the shapes and connectors it concerns (`OpenPoint`). Structurally a no-op: a v15 file
+ * simply has none, and `normalizeDocument` fills in the empty list every document without one
+ * already means. Root-only like `actions`, so deliberately **not** wrapped in `everyRoom`.
+ *
+ * The version moves for v13's reason: a v15 build's whitelist would silently strip the points out of
+ * a v16 file and, where every edit saves straight back (VS Code), write the stripped file over the
+ * original. Refusing the file by name is the only safe reading an older build can give it.
+ */
+function migrateAddOpenPoints(doc: Record<string, unknown>): Record<string, unknown> {
+  return doc;
+}
+
+/**
  * Applies `fn` to the document's own graph and to every room nested inside it, however deep.
  *
  * Exists so a migration can say what it changes once and have it reach the whole file — which
@@ -379,6 +393,7 @@ const MIGRATIONS: Record<number, Migration> = {
   12: migrateAddActions,
   13: everyRoom(migrateProjectsToWrites),
   14: migrateAddC4Text,
+  15: migrateAddOpenPoints,
 };
 
 export class UnsupportedVersionError extends Error {

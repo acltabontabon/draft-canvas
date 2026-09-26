@@ -86,9 +86,9 @@ Each of these has a failure mode that is silent, delayed, or both.
   of those migrations exists to rewrite at all four levels and insists every level came through, so
   forgetting is a failing test rather than a silently half-migrated file.
 - **A root-only document field has to be named in `depth/tree.ts`'s `embed`.** `viewOf` hands a
-  room every root-level field through a spread, so `DraftDocument.actions` (and `settings`, and
-  `metadata`) is readable inside a room for free — and is dropped on the way back out unless
-  `embed` carries it home too. The failure is silent and only shows up as "the action I captured
+  room every root-level field through a spread, so `DraftDocument.actions` and `openPoints` (and
+  `settings`, and `metadata`) are readable inside a room for free — and are dropped on the way back
+  out unless `embed` carries them home too. The failure is silent and only shows up as "the action I captured
   while inside that service is gone." Anything added beside them needs a line in `embed`, in
   `shallowEqualDocument` (`store/editorStore.ts`) and in `sameContent` (`history/HistoryStack.ts`);
   miss the second and every edit to it is discarded as a no-op, miss the third and a typed-then-
@@ -133,6 +133,14 @@ Each of these has a failure mode that is silent, delayed, or both.
   result.get(id)`) quietly keeps the planner's segment grid and hash alive with it — over a
   megabyte per step at Large, all of it dead the moment the function returned. Build the returned
   object in a module-level function, as `planOf` in `crossings.ts` does.
+- **An open point is metadata, never a shape, and its marker is one display list.** `DraftDocument.
+  openPoints` is root-only like `actions` (same `embed`/`shallowEqualDocument`/`sameContent` tax) and
+  points at elements by id; nothing about it may change routing, a node's size or a connector's
+  semantics, and its absence means only "nothing noted". The picture is `openPoints/marker.ts`,
+  emitted by `DraftNodeView`/`DraftEdgeView` and by `edges/describe.ts`/`render/svg/document.ts`
+  alike — a change to the glyph goes there, never into a component. Deleting an element goes through
+  `removeElements`, which prunes the attachments in the same operation; a new way of removing
+  elements has to do the same (see `pruneOpenPoints`).
 - **Edges are the one exception to "one renderer."** Unlike nodes, `src/canvas/DraftEdgeView.tsx`
   (on-screen) and `src/edges/describe.ts` (SVG export) are two independent implementations of the
   same connector. A visual addition to a connector — a badge, a dash pattern, a chip — must be

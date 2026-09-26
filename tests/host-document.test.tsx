@@ -2,6 +2,7 @@ import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decodeClipboard, encodeClipboard } from '../src/document/clipboardCodec';
 import { createDocument, createNode } from '../src/document/factory';
+import { CURRENT_VERSION } from '../src/document/types';
 import { serializeDocument } from '../src/export/project';
 
 // Framed by VS Code: jsdom's window is its own parent, which stands in for the host's webview.
@@ -133,7 +134,7 @@ describe('embedded in a host', () => {
 
     await waitFor(() => expect(messages('draft-canvas:change')).toHaveLength(1));
     const sent = JSON.parse(messages('draft-canvas:change')[0]!.message.text!) as typeof original & { version: number };
-    expect(sent.version).toBe(15);
+    expect(sent.version).toBe(CURRENT_VERSION);
     for (const node of original.nodes) {
       const back = sent.nodes.find((n) => n.id === node.id);
       expect(back?.technology).toBe(node.technology);

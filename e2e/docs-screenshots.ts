@@ -227,6 +227,20 @@ async function main() {
     await page.keyboard.press('Escape');
     await shot(page, 'note-docked');
 
+    // An open point: raised on the API in two clicks, then the list it can be picked up from.
+    await page.locator('.dc-node').first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Add open point…' }).click();
+    await expect(page.locator('.dc-open-point-popover')).toBeVisible();
+    await shot(page, 'open-point-raise');
+    await page.getByRole('button', { name: 'Tentative' }).click();
+    await page.keyboard.type('We think this call is asynchronous — the fulfilment team still has to confirm.');
+    await page.keyboard.press('Escape');
+    await page.mouse.click(700, 560);
+    await page.locator('.dc-status-open-points').click();
+    await expect(page.locator('.dc-open-points')).toBeVisible();
+    await shot(page, 'open-point-review');
+    await page.keyboard.press('Escape');
+
     // Two connectors become a flow.
     await clickConnector(page, 0, 1);
     const inspector = page.locator('.dc-edge-inspector');

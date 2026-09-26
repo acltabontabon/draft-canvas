@@ -35,6 +35,8 @@ import { useThemeValue } from '../theme/useTheme';
 import { backOut, lookInside } from './depthNavigation';
 import { CAPTURE_ACTION_KEY } from '../../takeaways/capture';
 import { TakeawaysPanel } from './TakeawaysPanel';
+import { OpenPointsPanel } from './OpenPointsPanel';
+import { OpenPointPopover } from '../../canvas/OpenPointPopover';
 import { DepthAnnouncer, DepthStack } from './DepthStack';
 import { DepthTransition } from './DepthTransition';
 import { EmptyState } from './EmptyState';
@@ -513,6 +515,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
             />
           )}
           {!presenting && <AttachmentPopover />}
+          {/* In every mode: while presenting it opens read-only, so a presenter can show what is still
+              open here without any editing surface appearing over the story. */}
+          <OpenPointPopover />
           {!presenting && <EdgeInspectorPopover />}
           {!presenting && <ElementInspectorPopover buildCommandContext={buildCommandContext} />}
           <PresentationCalloutLayer />
@@ -528,6 +533,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           {/* Ungated on purpose — the only surface here besides the flow bar that presentation
               lets through, and then only its one-line capture. See `TakeawaysPanel`. */}
           <TakeawaysPanel playback={playback} buildCommandContext={buildCommandContext} />
+          {!presenting && <OpenPointsPanel buildCommandContext={buildCommandContext} />}
           <FlowBar playback={playback} />
           <FocusIndicator />
           <DepthStack />
@@ -1063,6 +1069,12 @@ export function useKeyboard({
           // first Escape of a walkthrough do nothing at all.
           if (useUiStore.getState().takeawaysOpen && state.mode !== 'present') {
             useUiStore.getState().setTakeawaysOpen(false);
+            return;
+          }
+          // Same corner, same rule: a surface you opened closes before anything on the canvas does.
+          // (The open-point popover has its own capture-phase Escape, like every popover.)
+          if (useUiStore.getState().openPointsPanelOpen && state.mode !== 'present') {
+            useUiStore.getState().setOpenPointsPanelOpen(false);
             return;
           }
           // A presenter's reveal closes first — Escape backs out one thing, not the whole presentation.

@@ -68,7 +68,9 @@ describe('MCP tool definitions', () => {
     // twice in the compiled JSON. Raised a third time for the readability guidance in create_diagram,
     // group.kind and note.about — the sentences that stop an agent sending a request the layout can
     // only draw badly (externals grouped for tidiness, notes with no subject, no main path); the full
-    // checklist is behind get_capabilities' `readability` topic rather than here.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(31_000);
+    // checklist is behind get_capabilities' `readability` topic rather than here. Raised a fourth
+    // time, by a few hundred characters, for open points — the one new kind of thing an agent can
+    // read and raise (`openPoint` in the add op, and its fields in `set`).
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(31_800);
   });
 });

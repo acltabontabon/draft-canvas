@@ -35,6 +35,12 @@ import { badgeCrowds, badgePoint } from '../edges/badgePoint';
 import { bridgePath } from '../edges/bridge';
 import { NO_CROSSINGS, crossingPlan, withoutMoving } from '../edges/crossings';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
+import { OpenPointMarker } from './OpenPointMarker';
+import { unresolvedOpenPointsFor } from '../document/openPoints';
+import { captionAnchor as captionAnchorRect, labelChipRect } from '../edges/describe';
+import { edgeMarkerCenter, type OccupiedRect } from '../openPoints/marker';
+import { layoutText } from '../render/text/layout';
+import { LINE_HEIGHTS } from '../render/text/fonts';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { roughenPath } from '../render/roughness/roughPath';
@@ -191,6 +197,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // flow itself does — this subscription doesn't re-render every edge on unrelated store writes.
   const lensFlowValue = useEditorStore(lensFlow);
   const mode = useEditorStore((state) => state.mode);
+  // Identity-stable out of a per-document index — see `DraftNodeView`'s matching subscription.
+  const openPoints = useEditorStore((state) => unresolvedOpenPointsFor(state.document.openPoints, { kind: 'edge', id }));
   const updateEdgeLabel = useEditorStore((state) => state.updateEdgeLabel);
   const setEdgeCondition = useEditorStore((state) => state.setEdgeCondition);
   const updateEdgeAttachment = useEditorStore((state) => state.updateEdgeAttachment);
@@ -523,6 +531,40 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const strokeColor =
     selected || attachTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
   const conditionText = edge.condition ? `[${edge.condition}]` : null;
+
+  // Where the open-point tab sits: beside the label chip or the caption this connector draws at its
+  // label point, in reading direction — the same rule `edges/describe.ts` applies for the export.
+  // Followers in a label group, and captions hoisted onto a shared trunk, have nothing of their own
+  // there, so their tab sits at their own label point.
+  const openPointCenter = (() => {
+    if (openPoints.length === 0) return null;
+    let occupied: OccupiedRect | undefined;
+    if (hasLabel && !hidesOwnLabel && labelLayout && !sharedLabel) {
+      // `.dc-edge-label`: 3px 6px padding, and — for a numbered step — a 16px badge plus a 6px gap.
+      const stepWidth = hasStep ? 16 + 6 : 0;
+      const w = labelLayout.width + stepWidth + LABEL_PADDING_X * 2;
+      const h = Math.max(labelLayout.height, hasStep ? 16 : 0) + LABEL_PADDING_Y * 2;
+      const { left, top } = labelChipRect(chipSide, chipX, chipY, w, h);
+      occupied = { left, top, width: w, height: h };
+    } else if (!hasLabel && !badgeOverCaption && edge.semantic && !captionCollapsed) {
+      const text = relationshipCaptionLabel(edge.semantic, {
+        hasResponse: edge.hasResponse,
+        deliveryAttempts: edge.deliveryAttempts,
+        source: sourceCategory,
+        target: targetCategory,
+      });
+      const layout = layoutText(captionIsUnusual ? `▲ ${text}` : text, {
+        font: FONTS.connectorCaption,
+        maxWidth: 120,
+        lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
+        maxLines: 1,
+      });
+      const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout.height, edge.hasResponse ? Math.sign(responseLaneFor(laneOffset)) : 0);
+      const left = caption.align === 'start' ? caption.x : caption.align === 'end' ? caption.x - layout.width : caption.x - layout.width / 2;
+      occupied = { left, top: caption.y, width: layout.width, height: layout.height };
+    }
+    return edgeMarkerCenter({ x: labelX, y: labelY }, route.labelSide, occupied);
+  })();
 
   // Only the drawn stroke wobbles — every geometry value above (`route`,
   // `labelX`/`labelY`, attachment points) already reads from the unperturbed
@@ -1057,6 +1099,17 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               {responseLayout?.lines[0]?.text}
             </span>
           </div>
+        )}
+
+        {openPointCenter && (
+          <OpenPointMarker
+            target={{ kind: 'edge', id: edge.id }}
+            points={openPoints}
+            variant="edge"
+            tabbable={Boolean(selected) || mode === 'present'}
+            dim={{ dimmed, focusDimmed, lensDimmed, explainTier: playbackActive ? tier : undefined }}
+            style={{ position: 'absolute', transform: `translate(-50%, -50%) translate(${openPointCenter.x}px, ${openPointCenter.y}px)` }}
+          />
         )}
 
         {/* Mounted only when there is something to reveal — no cost, no listeners, when an

@@ -9,7 +9,7 @@ this drifts from it, trust the code.
 
 Every `.draftcanvas` file (and everything in IndexedDB's `bodies` store) carries a `version:
 number` and a `format: "draft-canvas"` marker. `CURRENT_VERSION` is declared in
-`src/document/types.ts`, currently **14**. A file missing the marker, or whose `version` isn't a
+`src/document/types.ts`, currently **16**. A file missing the marker, or whose `version` isn't a
 finite integer, is treated as version 1 — the oldest shape the app has ever written.
 
 ## The migration funnel
@@ -35,6 +35,7 @@ v(n+1)-shaped one:
 | v12 → v13 | `migrateAddActions` | Structural no-op — a v12 file simply has no canvas-level `actions`, which is what absent already means. Root-only, so deliberately *not* wrapped in `everyRoom`. The version still moves for v12's own reason: an older build's whitelist would strip the actions out of a v13 file and (in VS Code) write the stripped version back. |
 | v13 → v14 | `migrateProjectsToWrites` | The `projects` relationship is gone — a projection's write into a read store is a write — so any `semantic: 'projects'` becomes `'writes'`, keeping whether it was inferred or chosen and any label. |
 | v14 → v15 | `migrateAddC4Text` | Structural no-op — a v14 node simply has no `description` or `technology` (C4 text, kept only on services, data stores, queues, actors and components). The version still moves so an older build refuses a v15 file by name instead of its whitelist silently dropping the text, and (in VS Code) writing the stripped file back. |
+| v15 → v16 | `migrateAddOpenPoints` | Structural no-op — a v15 file simply has no canvas-level `openPoints` (what the discussion has not settled yet, attached to the shapes and connectors it concerns). Root-only like `actions`, so not wrapped in `everyRoom`. The version moves for the same reason v13's did: an older build's whitelist would strip the points and, in VS Code, write the stripped file back. |
 
 Several of these are deliberate **structural no-ops**: versions where the on-disk shape didn't
 actually need to change, but an entry is still required. `migrateToCurrent` walks the chain from a
@@ -73,7 +74,7 @@ assume is well-formed. Its policy is **repair, don't reject**, applied only afte
   outermost-first — an enormous file loses its deepest detail, never the overview. A room left
   with no shapes is dropped, since a room exists exactly when it holds something.
 - Collections over their `LIMITS` cap (`maxNodes: 5000`, `maxEdges: 10000`,
-  `maxAttachmentsPerNode: 12`, `maxAttachmentsPerEdge: 4`, `maxFlows: 50`, `maxStepsPerFlow: 200`, `maxActions: 100`,
+  `maxAttachmentsPerNode: 12`, `maxAttachmentsPerEdge: 4`, `maxFlows: 50`, `maxStepsPerFlow: 200`, `maxActions: 100`, `maxOpenPoints: 200`,
   `maxExtraMembersPerStep: 40`, …) are truncated, not rejected, and the truncation is reported back
   as a repair the caller can show the user.
 - Dangling references (an edge whose source/target no longer exists, a `parentId` pointing at a
@@ -82,8 +83,12 @@ assume is well-formed. Its policy is **repair, don't reject**, applied only afte
   *after* every room is in — ids are unique file-wide, so a valid anchor may point into a room
   that hasn't been validated yet — and only the anchor is dropped, never the action.
 
-`actions` is the one collection read at the root only. A room carrying one is ignored rather than
-merged upward: a room is a room, but the meeting is the file.
+`actions` and `openPoints` are the two collections read at the root only. A room carrying either is
+ignored rather than merged upward: a room is a room, but the meeting is the file. An open point's
+`targets` are resolved after every room is in, like an action's anchor — but unlike an anchor, an
+attachment to something gone is dropped, and a point left with no target is dropped with it: a marker
+on nothing is a lie the canvas could never draw. A point shared across several elements keeps the
+ones that remain.
 
 The same `parseDocument()` funnel backs every entry point that reads a document from outside the
 live session: file import, IndexedDB load, secure (`.dcenc`) import, and clipboard paste

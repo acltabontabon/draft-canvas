@@ -166,9 +166,9 @@ export function viewOf(file: DraftDocument, path: DepthPath): DraftDocument | un
 /**
  * The file that results from `view` being the room at `path`.
  *
- * The room's graph is written into the owner chain; `metadata`, `settings` and `actions` travel
- * back to the root, since a rename, a grid change or an action captured while inside belongs to
- * the whole file. Returns the same file object when nothing actually changed, so the store's
+ * The room's graph is written into the owner chain; `metadata`, `settings`, `actions` and
+ * `openPoints` travel back to the root, since a rename, a grid change, an action captured or a point
+ * raised while inside belongs to the whole file. Returns the same file object when nothing actually changed, so the store's
  * "this operation was a no-op" identity check keeps working at any depth, and refuses (returning
  * the file untouched) if the path stopped resolving rather than inventing a room somewhere else.
  *
@@ -183,7 +183,10 @@ export function embed(file: DraftDocument, path: DepthPath, view: DraftDocument)
   if (nodes === undefined) return file;
 
   const shared =
-    view.metadata !== file.metadata || view.settings !== file.settings || view.actions !== file.actions;
+    view.metadata !== file.metadata ||
+    view.settings !== file.settings ||
+    view.actions !== file.actions ||
+    view.openPoints !== file.openPoints;
   if (nodes === file.nodes && !shared) return file;
 
   const next: DraftDocument = {
@@ -192,6 +195,7 @@ export function embed(file: DraftDocument, path: DepthPath, view: DraftDocument)
     metadata: view.metadata,
     settings: view.settings,
     actions: view.actions,
+    openPoints: view.openPoints,
   };
   // The view this file was just built from is the view it yields — recording that here keeps
   // `viewOf(embed(...))` identity-stable, which is what lets an unchanged room compare equal.

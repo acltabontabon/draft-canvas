@@ -40,7 +40,7 @@ describe('C4 text in the document (v15)', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.document.version).toBe(CURRENT_VERSION);
-    expect(result.repairs).toEqual(['Upgraded document format from v14 to v15.']);
+    expect(result.repairs).toEqual([`Upgraded document format from v14 to v${CURRENT_VERSION}.`]);
     expect(result.document.nodes[0]?.description).toBeUndefined();
   });
 

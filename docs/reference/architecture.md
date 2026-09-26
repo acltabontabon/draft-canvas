@@ -94,6 +94,7 @@ neither React nor React Flow. That single rule is what makes the file format sur
 | `export/` | `.draftcanvas` / `.dcenc` files, SVG, PNG, GIF, sequence diagrams, and the seam that saves a download |
 | `history/` | the undo/redo stack |
 | `takeaways/` | actions, decisions and questions derived from a diagram's notes |
+| `openPoints/` | the marker geometry both renderers draw, and the overview derived from `DraftDocument.openPoints` |
 | `host/` | the protocol with a host that owns the file — VS Code or the desktop app ([Desktop](#desktop)) |
 | `desktop/` | the desktop app's own screens and its only route to Tauri (`desktop/tauri/`), compiled out of the web build |
 | `ui/` · `lib/` · `releases/` | everything around the canvas · small shared utilities and preferences · What's New data |
@@ -301,6 +302,7 @@ from becoming separate systems.
 | **Commands** | selection + mode + document → what makes sense now | Re-derived, never registered. Each one calls an existing store action. |
 | **Depth** | a node's `inside` + where you are standing → the room being edited | One seam (`depth/tree.ts` + the store's `path`): everything else still edits a plain document. A room exists exactly when it holds a shape, so navigating writes nothing. A level is stored only when someone said it; what the rooms inside show follows from it, and is never written down. |
 | **Takeaways** | the notes already on the canvas + one root-level list → what the meeting produced | Only `actions` is stored. Decisions and open questions are `note` nodes and note attachments tagged `decision`/`question`, gathered from every room — so a diagram drawn before this existed has something to show, with no migration. `warning` stays out: it annotates the architecture, not the discussion. |
+| **Open points** | one root-level list of `{kind, context?, targets[], resolved?}` → a marker per attached element, a count in the status bar, a list to return to | Metadata, never a shape: a point has no coordinates and changes no routing, size or semantics; its absence means only "nothing noted". Stored once and pointing at every element it concerns, so a shared question is one record. `removeElements` prunes attachments in the same operation and drops a point left with none — undo restores both. The marker is one pure display list (`openPoints/marker.ts`) the canvas and the exporter both emit; the edge placement is computed in each connector renderer by the same rule. Resolving keeps the point, folded away. |
 
 ### Keyboard model
 

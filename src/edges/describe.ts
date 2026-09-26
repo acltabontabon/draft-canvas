@@ -1,4 +1,5 @@
-import type { DraftEdge, DraftNode } from '../document/types';
+import type { DraftEdge, DraftNode, OpenPoint } from '../document/types';
+import { MARKER_SIZE, describeMarker, edgeMarkerCenter, type OccupiedRect } from '../openPoints/marker';
 import type { Shape, TextAlign } from '../render/displayList';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { roughenPath } from '../render/roughness/roughPath';
@@ -66,6 +67,11 @@ export interface EdgeDescribeContext {
   /** Intentional Roughness. Defaults to `'clean'` at call sites
    *  that construct this object directly without a preset. */
   preset?: PersonalityPreset;
+  /**
+   * The unresolved open points about this connector, when an export keeps them (`ExportOptions.
+   * openPoints`). Absent draws no marker — every caller that builds a bare context is unchanged.
+   */
+  openPoints?: readonly OpenPoint[];
 }
 
 const BADGE_RADIUS = 8;
@@ -85,7 +91,7 @@ const OPPOSITE_SIDE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 
  * picked instead of centered on it — mirrors `labelChipTransform` in `DraftEdgeView.tsx`, computed
  * directly here since this renderer already knows the chip's exact `w`/`h` up front.
  */
-function labelChipRect(side: Side, x: number, y: number, w: number, h: number): { left: number; top: number } {
+export function labelChipRect(side: Side, x: number, y: number, w: number, h: number): { left: number; top: number } {
   // Set back by the chip's padding, so the text — not the chip — is `LABEL_LINE_GAP` from the line,
   // where a relationship caption's text sits (`captionAnchor`).
   switch (side) {
@@ -107,7 +113,7 @@ function labelChipRect(side: Side, x: number, y: number, w: number, h: number): 
  * direction of this connector's own response line (0 when there is none) — see the live renderer's
  * own doc comment for why the flip is keyed off that sign rather than a single hardcoded side.
  */
-function captionAnchor(
+export function captionAnchor(
   side: Side,
   x: number,
   y: number,
@@ -246,6 +252,8 @@ export function describeEdge(
   ];
 
   const overlay: Shape[] = [];
+  // What already sits at the label point, for the open-point marker to take its place beside.
+  let markerOccupied: OccupiedRect | undefined;
 
   // The reply half of a request/response connector — reuses `routeBetween` a second time with
   // source/target (and their anchors) swapped, so the path naturally runs target → source, plus a
@@ -425,6 +433,12 @@ export function describeEdge(
           fill: isUnusual ? ctx.theme.accents.amber.text : ctx.theme.textFaint,
           align: caption.align,
         });
+        // A caption on a shared trunk belongs to every member; a marker beside it would too, so a
+        // bundled connector's marker sits at its own label point instead.
+        if (!collapsed) {
+          const left = caption.align === 'start' ? caption.x : caption.align === 'end' ? caption.x - captionLayout.width : caption.x - captionLayout.width / 2;
+          markerOccupied = { left, top: caption.y, width: captionLayout.width, height: captionLayout.height };
+        }
       }
     }
   }
@@ -469,6 +483,8 @@ export function describeEdge(
     const chip = ctx.sharedLabel ?? { side: route.labelSide, x: labelX, y: labelY };
     const { left, top } = labelChipRect(chip.side, chip.x, chip.y, w, h);
     const centerY = top + h / 2;
+    // A shared label is drawn once, so only the member drawing it has a chip to sit beside.
+    if (!ctx.sharedLabel) markerOccupied = { left, top, width: w, height: h };
 
     overlay.push({
       t: 'rect',
@@ -591,6 +607,17 @@ export function describeEdge(
         align: 'middle',
       },
     );
+  }
+
+  // The open-point tab, last so it paints over the chip it sits beside — the same picture the
+  // canvas draws (`canvas/OpenPointMarker.tsx`), from the same `describeMarker`.
+  if (ctx.openPoints?.length) {
+    const center = edgeMarkerCenter({ x: labelX, y: labelY }, route.labelSide, markerOccupied);
+    overlay.push({
+      t: 'group',
+      translate: { x: center.x - MARKER_SIZE / 2, y: center.y - MARKER_SIZE / 2 },
+      children: describeMarker(ctx.openPoints, { theme: ctx.theme, measurer: ctx.measurer }),
+    });
   }
 
   return { route, line, responseLine, overlay, color };

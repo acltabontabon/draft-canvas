@@ -6734,3 +6734,141 @@ button.dc-status-takeaways[data-arrived] {
     animation: none;
   }
 }
+
+/* ------------------------------------------------------------ open points -- */
+
+/* The status bar's count of what is still open — the same all-small-caps, click-to-open treatment as
+   the Takeaways chip beside it, and gone entirely when the canvas has never had a point. */
+button.dc-status-open-points {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+button.dc-status-open-points:hover,
+button.dc-status-open-points:focus-visible,
+button.dc-status-open-points[aria-expanded='true'] {
+  color: var(--dc-text);
+}
+
+/* The same tab the canvas draws, at chip scale: a violet-outlined square with rounded corners. */
+.dc-status-open-points-glyph {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 1.4px solid var(--dc-accent-violet-chip);
+  border-radius: 2.5px;
+}
+
+button.dc-status-open-points[data-none] .dc-status-open-points-glyph {
+  border-color: var(--dc-text-faint);
+}
+
+/* The overview reuses the Takeaways surface (`.dc-takeaways`); only its rows differ. */
+.dc-open-points-row {
+  padding: 5px 0;
+}
+
+.dc-open-points-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  text-align: left;
+}
+
+button.dc-open-points-main {
+  cursor: pointer;
+}
+
+button.dc-open-points-main:hover .dc-open-points-text,
+button.dc-open-points-main:focus-visible .dc-open-points-text,
+button.dc-open-points-main:hover .dc-open-points-kind,
+button.dc-open-points-main:focus-visible .dc-open-points-kind {
+  text-decoration: underline;
+  text-decoration-color: var(--dc-border-strong);
+  text-underline-offset: 2px;
+}
+
+.dc-open-points-glyph {
+  display: block;
+  flex: none;
+  margin-top: 1px;
+  overflow: visible;
+}
+
+.dc-open-points-check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 4px;
+  background: var(--dc-text-faint);
+  color: var(--dc-surface);
+}
+
+.dc-open-points-words {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dc-open-points-kind {
+  color: var(--dc-accent-violet-chip);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+}
+
+.dc-takeaways-row[data-done] .dc-open-points-kind {
+  color: var(--dc-text-faint);
+}
+
+.dc-open-points-text {
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.dc-open-points-resolution {
+  padding-left: 7px;
+  border-left: 2px solid var(--dc-border-strong);
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.dc-open-points-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+}
+
+/* Resolve stays legible at rest on the open rows — it is the one thing the return visit is for. */
+.dc-open-points-row:not([data-done]) .dc-open-points-resolve {
+  opacity: 0.75;
+}

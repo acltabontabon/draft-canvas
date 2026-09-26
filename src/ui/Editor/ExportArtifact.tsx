@@ -80,7 +80,7 @@ function Thumbnail({
       return null;
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [document, theme, transparent, onlyKey, options.selectedFlowId, options.preset, empty]);
+  }, [document, theme, transparent, onlyKey, options.selectedFlowId, options.preset, options.openPoints, empty]);
 
   const src = useMemo(
     () => (rendered ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(rendered.svg)}` : null),
@@ -101,7 +101,7 @@ function Thumbnail({
           // Keyed on the look, so a palette/transparency/selection change gets the same quick
           // settle-in the panel does, rather than an abrupt swap.
           <img
-            key={`${theme}-${transparent}-${onlyKey}-${options.selectedFlowId ?? ''}`}
+            key={`${theme}-${transparent}-${onlyKey}-${options.selectedFlowId ?? ''}-${options.openPoints === false ? 'plain' : 'marked'}`}
             src={src}
             alt=""
             draggable={false}

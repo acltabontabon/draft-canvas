@@ -3,7 +3,9 @@ import { obstaclesForEdge } from '../../edges/obstacles';
 import { describeNode, describeContext } from '../../nodes/describe';
 import { findFlow, stepIndexOf } from '../../document/flow';
 import { boundsOf } from '../../document/operations';
-import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../../document/types';
+import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../../document/types';
+import { unresolvedOpenPoints, unresolvedOpenPointsFor } from '../../document/openPoints';
+import { MARKER_SIZE, describeMarker, describeMarkerKey, nodeMarkerOrigin } from '../../openPoints/marker';
 import { laneIndex } from '../../edges/routing';
 import { routingPlan } from '../../edges/bundles';
 import { crossingPlan, withoutMoving } from '../../edges/crossings';
@@ -46,6 +48,13 @@ export interface ExportOptions {
   background?: ResolvedBackground;
   /** Intentional Roughness preset. Defaults to `'clean'`. */
   preset?: PersonalityPreset;
+  /**
+   * Whether the picture keeps the open-point markers, with a key naming the kinds that appear.
+   * Defaults to `true`: an image that silently dropped them would make every unsettled assumption
+   * look decided. `false` is the deliberate choice to leave them out — nothing about it is an
+   * approval.
+   */
+  openPoints?: boolean;
 }
 
 /**
@@ -111,6 +120,8 @@ export interface RenderedSvg {
 }
 
 const DEFAULT_PADDING = 32;
+/** Clear space between the bottom of the architecture and the open-point key beneath it. */
+const KEY_GAP = 18;
 
 /** A node or edge's visual decoration beyond its own describer — opacity/filter tiering, plus a
  *  connector's pulse phase. `undefined` from a decorator means "no change from the plain export". */
@@ -136,6 +147,8 @@ export interface SceneOptions {
   decorateEdge?: (
     edge: DraftEdge,
   ) => (Decoration & { pulsePhase?: number; pulseTarget?: 'request' | 'response' }) | undefined;
+  /** The unresolved points whose markers the scene draws. Absent or empty draws none. */
+  openPoints?: readonly OpenPoint[];
 }
 
 export interface Scene {
@@ -145,6 +158,8 @@ export interface Scene {
   nodeEls: SvgEl[];
   edgeLines: SvgEl[];
   edgeOverlays: SvgEl[];
+  /** Open-point tabs on nodes, painted over everything; a connector's ride in its own overlay. */
+  markerEls: SvgEl[];
   arrowColors: Set<string>;
   /**
    * The same elements again, kept per id and in paint order, for a renderer that needs to address
@@ -270,13 +285,18 @@ export function buildScene(
   const edgeEntries: Scene['edgeEntries'] = [];
   const overlayRects: Rect[] = [];
 
+  const points = options.openPoints ?? [];
+  const markerEls: SvgEl[] = [];
+
   for (const edge of edges) {
     const stepIndex = stepIndexOf(options.selectedFlow, edge.id);
     const lane = lanes.get(edge.id)?.offset ?? 0;
+    const edgePoints = points.length ? unresolvedOpenPointsFor(points, { kind: 'edge', id: edge.id }) : [];
     const described = describeEdge(edge, nodeMap, {
       ...edgeCtx,
       stepIndex,
       lane,
+      ...(edgePoints.length ? { openPoints: edgePoints } : {}),
       spine: plan.spineFor(edge.id),
       sharedLabel: sharedLabelOf(edge.id),
       obstacles: obstaclesForEdge(obstacleNodes, edge.source, edge.target),
@@ -323,9 +343,25 @@ export function buildScene(
     if (node.type === 'group') backdropEls.push(group);
     else nodeEls.push(group);
     nodeEntries.push({ node, els });
+
+    // The same tab, at the same place, `DraftNodeView` puts it — from the same two functions.
+    const nodePoints = points.length ? unresolvedOpenPointsFor(points, { kind: 'node', id: node.id }) : [];
+    if (nodePoints.length) {
+      const origin = nodeMarkerOrigin(node);
+      const x = node.x + origin.x;
+      const y = node.y + origin.y;
+      markerEls.push(
+        el('g', { transform: `translate(${n(x)} ${n(y)})`, ...decorateGroupAttrs(decoration) }, emitDisplayList({
+          width: MARKER_SIZE,
+          height: MARKER_SIZE,
+          shapes: describeMarker(nodePoints, { theme: nodeCtx.theme, measurer: nodeCtx.measurer }),
+        })),
+      );
+      overlayRects.push({ x, y, width: MARKER_SIZE, height: MARKER_SIZE });
+    }
   }
 
-  return { nodes, backdropEls, nodeEls, edgeLines, edgeOverlays, arrowColors, nodeEntries, edgeEntries, overlayRects };
+  return { nodes, backdropEls, nodeEls, edgeLines, edgeOverlays, markerEls, arrowColors, nodeEntries, edgeEntries, overlayRects };
 }
 
 /**
@@ -348,11 +384,26 @@ export function renderDocumentSvg(
   const edgeCtx = { theme, measurer, showSequence: document.settings.showSequence, preset };
   const selectedFlow = options.selectedFlowId ? findFlow(document, options.selectedFlowId) : undefined;
 
-  const scene = buildScene(document, nodeCtx, edgeCtx, { only: options.only, selectedFlow });
+  const openPoints = options.openPoints === false ? [] : unresolvedOpenPoints(document);
+  const scene = buildScene(document, nodeCtx, edgeCtx, { only: options.only, selectedFlow, openPoints });
 
   const bounds = boundsOf([...scene.nodes, ...scene.overlayRects]) ?? { x: 0, y: 0, width: 320, height: 160 };
-  const width = Math.max(1, Math.round(bounds.width + padding * 2));
-  const height = Math.max(1, Math.round(bounds.height + padding * 2));
+  // Only the kinds actually in the picture — a "selection only" export of an unmarked corner needs
+  // no key at all. Below the architecture, inside the margin, so it never reads as part of it.
+  const shown = scene.markerEls.length || scene.edgeEntries.some((entry) => unresolvedOpenPointsFor(openPoints, { kind: 'edge', id: entry.edge.id }).length);
+  const key = shown
+    ? describeMarkerKey(
+        openPoints.filter((point) =>
+          point.targets.some((target) =>
+            target.kind === 'node' ? scene.nodes.some((node) => node.id === target.id) : scene.edgeEntries.some((entry) => entry.edge.id === target.id),
+          ),
+        ),
+        { theme, measurer },
+      )
+    : null;
+  const keyBlock = key ? key.height + KEY_GAP : 0;
+  const width = Math.max(1, Math.round(Math.max(bounds.width, key?.width ?? 0) + padding * 2));
+  const height = Math.max(1, Math.round(bounds.height + keyBlock + padding * 2));
   const originX = bounds.x - padding;
   const originY = bounds.y - padding;
 
@@ -381,8 +432,14 @@ export function renderDocumentSvg(
       ...scene.edgeLines,
       ...scene.nodeEls,
       ...scene.edgeOverlays,
+      ...scene.markerEls,
     ]),
   );
+  if (key) {
+    children.push(
+      el('g', { transform: `translate(${n(padding)} ${n(bounds.height + padding + KEY_GAP)})` }, emitDisplayList({ width: key.width, height: key.height, shapes: key.shapes })),
+    );
+  }
 
   const root = el(
     'svg',

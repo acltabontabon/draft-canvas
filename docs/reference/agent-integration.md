@@ -696,6 +696,7 @@ view, or a data store at context level.
 | Notes (note, question, warning, decision): beside an element, inside a boundary, or attached | ✓ | ✓ add, edit text and kind, move, remove | ✓ with a derived `nearest` |
 | Attachments: note and code chips on elements and relationships | ✓ | ✓ add, edit, move to another host, remove — by id | ✓ with `include: ["attachments"]`, or in full in a focused read |
 | Actions (the canvas's to-do list, optionally about an element) | ✓ | ✓ | ✓ |
+| Open points (what the people have not settled: tentative / awaiting / parked, about one or more elements) | — (raised on an existing diagram, not at creation) | ✓ `add` op `openPoints`, `update` (kind, context, resolved, resolution, about), `remove` — explicit fields only, never inferred from a label's wording; accepting a proposal never resolves one | ✓ at the root, and in a nested view the ones about something in it |
 | Architecture Starters, with overrides and extra elements | ✓ `starter: {id, prefix?, overrides?}` | — (a starter is only a starting point) | ✓ as ordinary elements |
 | Next-step suggestions | — | — | ✓ `include: ["suggestions"]`, never applied |
 | Presentation, sequence diagrams, exports (PNG, SVG, Mermaid, PlantUML, draw.io, `.draftcanvas`) | not tools: the diagram is native, so the person presents and exports it from the app | | |
@@ -710,7 +711,7 @@ with a JSON pointer to it.
 | --- | --- |
 | elements / relationships / groups | 300 / 600 / 60 |
 | flows / steps per flow | 20 / 60 |
-| notes / actions / ops | 60 / 50 / 100 |
+| notes / actions / open points / ops | 60 / 50 / 50 / 100 |
 | attachments per element | 4 |
 | label / relationship label / group label | 120 / 80 / 80 characters |
 | description / technology | 280 / 60 characters |

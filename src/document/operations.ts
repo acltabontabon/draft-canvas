@@ -5,6 +5,7 @@
  * stack keep whole snapshots cheaply.
  */
 import { createId } from './ids';
+import { pruneOpenPoints } from './openPoints';
 import { defaultSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
@@ -20,6 +21,8 @@ import type {
   DraftViewport,
   DraftSettings,
   Side,
+  OpenPoint,
+  OpenPointTarget,
 } from './types';
 
 export { boundsOf, freeOriginFor, INSERT_GAP, type Bounds } from './geometry';
@@ -277,12 +280,32 @@ export function removeElements(
 
   const keptEdges = new Set(edges);
   const removedEdgeIds = new Set(doc.edges.filter((e) => !keptEdges.has(e)).map((e) => e.id));
-  return pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds, removingNodes);
+  // A point attached to something in a removed shape's rooms is attached to something gone too:
+  // the room leaves with its owner, so every id inside it counts as removed here.
+  const removedNodes = doc.nodes.filter((n) => removingNodes.has(n.id));
+  for (const node of removedNodes) collectInsideIds(node, removingNodes, removedEdgeIds);
+  return pruneOpenPoints(pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds, removingNodes), removingNodes, removedEdgeIds);
+}
+
+/** Every node and connector id inside `node`'s rooms, however deep, added to the two sets. */
+export function collectInsideIds(node: DraftNode, nodeIds: Set<string>, edgeIds: Set<string>): void {
+  if (!node.inside) return;
+  for (const inner of node.inside.nodes) {
+    nodeIds.add(inner.id);
+    collectInsideIds(inner, nodeIds, edgeIds);
+  }
+  for (const edge of node.inside.edges) edgeIds.add(edge.id);
 }
 
 export interface Clipboard {
   nodes: DraftNode[];
   edges: DraftEdge[];
+  /**
+   * The open points about anything in the fragment, cut down to the targets the fragment holds — a
+   * point shared with something left behind travels with only its copied half, context and all, and
+   * the original keeps every target it had. Absent on a fragment made before this existed.
+   */
+  openPoints?: OpenPoint[];
 }
 
 /**
@@ -297,7 +320,15 @@ export function extractFragment(doc: DraftDocument, nodeIds: Iterable<string>): 
   }
   const nodes = doc.nodes.filter((n) => ids.has(n.id));
   const edges = doc.edges.filter((e) => ids.has(e.source) && ids.has(e.target));
-  return { nodes: structuredClone(nodes), edges: structuredClone(edges) };
+  const edgeIds = new Set(edges.map((e) => e.id));
+  const openPoints: OpenPoint[] = [];
+  for (const point of doc.openPoints ?? []) {
+    const targets = point.targets.filter((target) => (target.kind === 'node' ? ids.has(target.id) : edgeIds.has(target.id)));
+    if (targets.length > 0) openPoints.push({ ...point, targets });
+  }
+  const fragment: Clipboard = { nodes: structuredClone(nodes), edges: structuredClone(edges) };
+  if (openPoints.length > 0) fragment.openPoints = structuredClone(openPoints);
+  return fragment;
 }
 
 /**
@@ -423,10 +454,13 @@ function instantiateFragment(
     return next;
   });
 
+  const edgeIdMap = new Map<string, string>();
   const edges = fragment.edges.map((edge) => {
+    const id = createId('e');
+    edgeIdMap.set(edge.id, id);
     const next: DraftEdge = {
       ...edge,
-      id: createId('e'),
+      id,
       source: idMap.get(edge.source)!,
       target: idMap.get(edge.target)!,
     };
@@ -436,7 +470,19 @@ function instantiateFragment(
     return next;
   });
 
-  return { nodes, edges };
+  // A copy's points are its own: fresh ids, and targets re-pointed at the copies — never at the
+  // originals, or two independent copies would share one question.
+  const openPoints: OpenPoint[] = [];
+  for (const point of fragment.openPoints ?? []) {
+    const targets: OpenPointTarget[] = [];
+    for (const target of point.targets) {
+      const mapped = target.kind === 'node' ? idMap.get(target.id) : edgeIdMap.get(target.id);
+      if (mapped) targets.push({ kind: target.kind, id: mapped });
+    }
+    if (targets.length > 0) openPoints.push({ ...point, id: createId('op'), targets });
+  }
+
+  return openPoints.length > 0 ? { nodes, edges, openPoints } : { nodes, edges };
 }
 
 export function pasteFragment(
@@ -498,7 +544,20 @@ export function pasteFragment(
       .filter((e) => keptNodeIds.has(e.source) && keptNodeIds.has(e.target))
       .slice(0, Math.max(0, edgeRoom - spentEdges)),
   };
-  const next = addEdges(addNodes(doc, created.nodes), created.edges);
+  let next = addEdges(addNodes(doc, created.nodes), created.edges);
+  // Only what actually landed can be pointed at; a point cut down to nothing by the cap is dropped,
+  // and past the file's own cap the rest are left out rather than the oldest pushed off.
+  if (instantiated.openPoints?.length) {
+    const keptEdgeIds = new Set(created.edges.map((e) => e.id));
+    const room = Math.max(0, LIMITS.maxOpenPoints - (doc.openPoints?.length ?? 0));
+    const landed: OpenPoint[] = [];
+    for (const point of instantiated.openPoints) {
+      if (landed.length >= room) break;
+      const targets = point.targets.filter((t) => (t.kind === 'node' ? keptNodeIds.has(t.id) : keptEdgeIds.has(t.id)));
+      if (targets.length > 0) landed.push(targets.length === point.targets.length ? point : { ...point, targets });
+    }
+    if (landed.length > 0) next = { ...next, openPoints: [...next.openPoints, ...landed] };
+  }
   return {
     doc: next,
     nodeIds: created.nodes.map((n) => n.id),

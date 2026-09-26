@@ -31,6 +31,8 @@ export function serializeDocument(document: DraftDocument): string {
     // and an empty array written into every one of them would change the bytes of every file in
     // every repository the moment this shipped. Absent is what `normalizeDocument` reads as none.
     ...(document.actions.length === 0 ? {} : { actions: document.actions }),
+    // Same again: a canvas nobody has raised a point on writes exactly the bytes it always did.
+    ...((document.openPoints?.length ?? 0) === 0 ? {} : { openPoints: document.openPoints }),
     // Only written when the canvas actually has one, so a file from a canvas nobody said anything
     // about is byte-identical to what this has always produced.
     ...(document.level === undefined ? {} : { level: document.level }),

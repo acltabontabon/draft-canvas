@@ -9,7 +9,8 @@
 
 import type { DepthPath } from '../depth/tree';
 import { viewOf } from '../depth/tree';
-import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
+import type { DraftDocument, DraftEdge, DraftNode, OpenPoint } from '../document/types';
+import { OPEN_POINT_LABELS } from '../document/openPoints';
 import { applyUpdate, type PatchResult } from './patch';
 
 export interface PreconditionSnapshot {
@@ -90,7 +91,7 @@ export interface DiffField {
 }
 
 export interface ElementDiffRow {
-  kind: 'element' | 'group' | 'relationship';
+  kind: 'element' | 'group' | 'relationship' | 'open point';
   id: string;
   change: 'added' | 'modified' | 'removed';
   label: string;
@@ -240,5 +241,37 @@ export function diffForReview(before: DraftDocument, after: DraftDocument, path:
     if (!afterEdges.has(id)) rows.push({ kind: 'relationship', id, change: 'removed', label: was.label ?? '' });
   }
 
+  // Open points are root-only, so they are compared on the file. A point is never an element: one a
+  // proposal raises, resolves or rewords shows as its own row — resolving one is a change a reviewer
+  // accepts knowingly, never a side effect of accepting the architecture.
+  const beforePoints = new Map((before.openPoints ?? []).map((p) => [p.id, p]));
+  const afterPoints = new Map((after.openPoints ?? []).map((p) => [p.id, p]));
+  for (const [id, point] of afterPoints) {
+    const was = beforePoints.get(id);
+    if (!was) {
+      rows.push({ kind: 'open point', id, change: 'added', label: pointLabel(point) });
+      continue;
+    }
+    const fields = changedFields(pointFields(was), pointFields(point));
+    if (fields.length) rows.push({ kind: 'open point', id, change: 'modified', label: pointLabel(point), fields });
+  }
+  for (const [id, was] of beforePoints) {
+    if (!afterPoints.has(id)) rows.push({ kind: 'open point', id, change: 'removed', label: pointLabel(was) });
+  }
+
   return rows;
+}
+
+function pointLabel(point: OpenPoint): string {
+  return `${OPEN_POINT_LABELS[point.kind]}${point.context ? ` · ${point.context}` : ''}`;
+}
+
+function pointFields(point: OpenPoint): Record<string, string | undefined> {
+  return {
+    kind: point.kind,
+    context: point.context,
+    resolved: point.resolved ? 'yes' : undefined,
+    resolution: point.resolution,
+    about: point.targets.map((t) => t.id).join(', '),
+  };
 }

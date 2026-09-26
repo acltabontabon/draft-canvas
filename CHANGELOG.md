@@ -10,6 +10,29 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Shared
+
+#### Added
+
+- **Open points** — mark what the discussion has not settled, on the shape or connector it concerns.
+  Right-click and choose **Add open point…**, then **Tentative**, **Awaiting input** or **Parked**;
+  the marker is on the element straight away, and a sentence of context is optional. A small tab with
+  its own glyph per kind sits off a shape's shoulder, inside a boundary's corner or beside a
+  connector's label, and several points on one element fold into one tab with a count. Hover for a
+  preview, click to edit, resolve or delete. The status bar counts what is still open and opens the
+  **Open points** list, with a way to each element and **Focus open points**; resolved points stay
+  folded underneath, to reopen or delete. Markers survive presenting (click one for a read-only look)
+  and image exports, which add a key naming the kinds that appear — untick **Open point markers** for
+  an image without them. Deleting an element takes its point; undo brings both back. Document format
+  v16. <!-- highlight -->
+
+### Desktop
+
+#### Added
+
+- An agent can read a diagram's open points and, when asked, raise, change or resolve them through
+  `update_diagram` and proposals — never inferred from a label, never resolved by accepting a proposal.
+
 ## [1.12.0-beta.2] - 2026-09-26
 
 A second beta of Draft Canvas Desktop 1.12: presenting a flow now tells it as a story, an agent's

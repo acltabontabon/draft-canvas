@@ -37,6 +37,7 @@ import { SecureExportPrompt } from './SecureExportPrompt';
 import type { DocumentFormat, ExportMode, ImageFormat } from './exportTypes';
 import type { ThemeName } from '../../render/theme/tokens';
 import { count } from '../../lib/plural';
+import { hasUnresolvedIn } from '../../openPoints/collect';
 
 const EXPORT_MODE_PREFERENCE = 'export-mode';
 const EXPORT_DOCUMENT_FORMAT_PREFERENCE = 'export-document-format';
@@ -104,6 +105,7 @@ export function ExportDialog() {
   const [transparent, setTransparent] = useState(false);
   const [selectionOnly, setSelectionOnly] = useState(false);
   const [includeBackground, setIncludeBackground] = useState(true);
+  const [includeOpenPoints, setIncludeOpenPoints] = useState(true);
   const [busy, setBusy] = useState(false);
   // A GIF of a long flow takes a while: its progress drives the button, and Cancel (or closing the
   // dialog) aborts it between frames.
@@ -169,6 +171,11 @@ export function ExportDialog() {
   const only =
     effectiveSelectionOnly && selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
   const hasBackground = document.settings.background.enabled;
+  // Only what is in the picture counts: a selection-only export of an unmarked corner has no
+  // markers to offer leaving out.
+  const hasOpenPoints = hasUnresolvedIn(
+    only ? { ...document, nodes: document.nodes.filter((node) => only.has(node.id)), edges: document.edges.filter((edge) => only.has(edge.source) && only.has(edge.target)) } : document,
+  );
   const options = {
     theme: paletteName,
     transparent,
@@ -176,6 +183,7 @@ export function ExportDialog() {
     selectedFlowId: selectedFlowId ?? undefined,
     includeBackground: hasBackground ? includeBackground : false,
     preset,
+    openPoints: hasOpenPoints ? includeOpenPoints : false,
   };
 
   const playableFlowCount = playableFlows.length;
@@ -378,6 +386,9 @@ export function ExportDialog() {
                 setSelectionOnly(checked);
                 requestExportSelection(false);
               }}
+              hasOpenPoints={hasOpenPoints}
+              includeOpenPoints={includeOpenPoints}
+              onIncludeOpenPointsChange={setIncludeOpenPoints}
             />
           )}
 
