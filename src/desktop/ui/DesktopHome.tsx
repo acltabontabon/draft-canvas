@@ -2,13 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { relativeTime } from '../../lib/relativeTime';
 import { PRODUCT } from '../../product';
-import type { ArchitectureStarter, StarterId } from '../../starters';
-import { StarterBrowser } from '../../ui/Editor/StarterBrowser';
+import type { ArchitectureStarter } from '../../starters';
 import { Button } from '../../ui/common/Button';
 import { Icon } from '../../ui/common/Icon';
 import { LibraryBrand } from '../../ui/Library/LibraryBrand';
 import { starterShape } from '../../ui/Library/starterShapes';
-import { useSpotlight } from '../../ui/Library/useSpotlight';
 import { useStarters } from '../../ui/Library/useStarters';
 import type { ProjectFile } from '../api';
 import { recallBrowse } from '../browseMemory';
@@ -19,7 +17,6 @@ import { DeskBrowse, type BrowseScope, type BrowseTile } from './DeskBrowse';
 import { DocTile } from './DocTile';
 import { draftTile, everythingTiles, recentTile } from './tiles';
 import { UpdateChip } from './Updates';
-import { useDeskGeometry, type DeskGeometry } from './useDeskGeometry';
 import './desktop.css';
 
 /** A tile's drawing is 144px wide at scale 1; the row keeps this much air between them. */
@@ -69,12 +66,9 @@ export function DesktopHome() {
   const controller = useDesktopController();
   const catalog = useStarters();
   const rootRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement>(null);
-  const mottoRef = useRef<HTMLDivElement>(null);
   const actionRef = useRef<HTMLButtonElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
-  const spotlight = useSpotlight(canvasRef);
   const mac = state.platform !== 'windows' && state.platform !== 'linux';
   const returning = hasWork(state);
   const scale = returning ? SCALE.returning : SCALE.first;
@@ -84,13 +78,11 @@ export function DesktopHome() {
   const [hot, setHot] = useState<{ index: number; description: string } | null>(null);
   // Reopening Browse (after a diagram closed and Home remounted) lands back where it was left.
   const [browse, setBrowse] = useState<BrowseScope | null>(() => recallBrowse()?.scope ?? null);
-  const [browsing, setBrowsing] = useState(false);
   // Browsing unmounts the stage; coming back is a new one to measure and observe.
   const capacity = useCapacity(stageRef, scale, gap, browse !== null);
 
-  const sources = sourcesFor(state, controller, catalog?.FEATURED_STARTERS ?? [], returning, {
+  const sources = sourcesFor(state, controller, catalog?.PRIMARY_STARTERS ?? [], returning, {
     showAll: (scope) => setBrowse(scope),
-    browseStarters: () => setBrowsing(true),
   });
   // A row picked by hand stays picked, even once it is empty; otherwise the first with anything in it.
   const active = sources.find((source) => source.id === activeId) ?? sources.find((source) => source.tiles.length > 0) ?? sources[0];
@@ -98,16 +90,9 @@ export function DesktopHome() {
 
   // The row: as many tiles as fit, the last slot giving way to "more" when there is more.
   const room = Math.max(1, capacity);
-  const overflow = active ? active.tiles.length > room || (active.more !== undefined && active.id === 'starters') : false;
+  const overflow = active ? active.tiles.length > room : false;
   const shown = active ? active.tiles.slice(0, overflow ? room - 1 : room) : [];
   const moreShown = overflow && active?.more ? active.more : undefined;
-  const geometry = useDeskGeometry(
-    stageRef,
-    mottoRef,
-    actionRef,
-    rowRef,
-    `${browse !== null}:${state.listed}:${returning}:${active?.id}:${shown.map((tile) => tile.entryKey).join('|')}:${moreShown ? 1 : 0}`,
-  );
 
   // The projects in the row are listed (names and dates) so their stacks can be drawn; the rest wait.
   const rowProjects = active?.id === 'projects' ? shown.map((tile) => tile.entryKey.slice('projects:'.length)).join('|') : '';
@@ -176,7 +161,7 @@ export function DesktopHome() {
   if (browse) {
     return (
       <div className="dc-desk" ref={rootRef} data-browsing="">
-        <div className="dc-desk-canvas" ref={canvasRef} aria-hidden="true" />
+        <div className="dc-desk-canvas" aria-hidden="true" />
         <UpdateChip placement="home" />
         <DeskBrowse
           state={state}
@@ -198,10 +183,8 @@ export function DesktopHome() {
       ref={rootRef}
       data-mode={!state.listed ? 'pending' : returning ? 'returning' : 'first'}
       style={{ '--tile-scale': scale, '--tile-gap': `${gap}px` } as CSSProperties}
-      onPointerMove={spotlight.move}
-      onPointerLeave={spotlight.leave}
     >
-      <div className="dc-desk-canvas" ref={canvasRef} aria-hidden="true" />
+      <div className="dc-desk-canvas" aria-hidden="true" />
       <UpdateChip placement="home" />
 
       <header className="dc-desk-top">
@@ -212,9 +195,7 @@ export function DesktopHome() {
         {/* Nothing is drawn until Home knows whether this is a first run: then the right hero arrives once. */}
         {state.listed && (
           <>
-            {geometry && <Connectors geometry={geometry} hot={hot?.index ?? null} dashedLast={moreShown !== undefined} />}
-
-            <div className="dc-desk-motto" ref={mottoRef}>
+            <div className="dc-desk-motto">
               <span className="dc-desk-motto-frame" aria-hidden="true">
                 <span data-at="nw" />
                 <span data-at="ne" />
@@ -271,7 +252,7 @@ export function DesktopHome() {
                   ))}
                 </div>
               ) : (
-                <span className="dc-desk-caption">or cheat a little</span>
+                <span className="dc-desk-caption">Or start from an architecture</span>
               )}
             </div>
 
@@ -344,15 +325,6 @@ export function DesktopHome() {
         </footer>
       )}
 
-      {browsing && (
-        <StarterBrowser
-          onStart={(id: StarterId) => {
-            setBrowsing(false);
-            void controller.newQuickDraft(id);
-          }}
-          onClose={() => setBrowsing(false)}
-        />
-      )}
     </div>
   );
 }
@@ -362,67 +334,6 @@ function hasWork(state: DesktopState): boolean {
   return state.recovery.length > 0 || state.projects.length > 0 || state.recents.some((item) => item.kind === 'file');
 }
 
-/**
- * The desk's connectors, in the canvas's own hand: the motto into the Quick Draft node, and one
- * trunk from it down to a bus with a drop into every tile — rounded orthogonal corners and small
- * arrowheads, the way the editor routes a fan-out. The tile under the pointer gets its whole route
- * lit, with one pulse travelling down it.
- */
-function Connectors({ geometry, hot, dashedLast }: { geometry: DeskGeometry; hot: number | null; dashedLast: boolean }) {
-  const { width, height, motto, actionTop, actionBottom, busY, tiles } = geometry;
-  const routes = tiles.map((tile) => routeTo(actionBottom, busY, tile));
-  const gap = actionTop.y - 3 - (motto.y + 3);
-  return (
-    <svg className="dc-desk-wires" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" focusable="false">
-      {/* Too short a link reads as a glitch, not a connector: then the two nodes simply stack. */}
-      {gap >= 14 && (
-        <>
-          <circle className="dc-desk-anchor" cx={motto.x} cy={motto.y} r={3} />
-          <path className="dc-desk-link" d={`M${motto.x} ${motto.y + 3}V${actionTop.y - 3}`} pathLength={1} />
-          <path className="dc-desk-arrow dc-desk-link-arrow" d={arrow(actionTop.x, actionTop.y - 3)} />
-        </>
-      )}
-      {/* The lit route last, so the trunk and bus it shares with the others are drawn in its colour. */}
-      {routes
-        .map((route, i) => ({ route, i }))
-        .sort((a, b) => Number(a.i === hot) - Number(b.i === hot))
-        .map(({ route, i }) => (
-          <g key={i} className="dc-desk-route" data-hot={hot === i ? '' : undefined} data-dashed={dashedLast && i === routes.length - 1 ? '' : undefined}>
-            <path className="dc-desk-route-line" d={route.d} pathLength={1} />
-            <path className="dc-desk-arrow" d={arrow(route.end.x, route.end.y)} />
-            <path className="dc-desk-route-pulse" d={route.d} pathLength={1} />
-          </g>
-        ))}
-      {tiles.length > 1 && <circle className="dc-desk-junction" cx={actionBottom.x} cy={busY} r={2.5} />}
-    </svg>
-  );
-}
-
-const CORNER = 10;
-
-function routeTo(from: { x: number; y: number }, busY: number, to: { x: number; y: number }) {
-  // Air between the arrowhead and the drawing, as the canvas never lets a connector touch its node.
-  const end = { x: to.x, y: to.y - 6 };
-  const dx = to.x - from.x;
-  if (Math.abs(dx) < 1) return { d: `M${from.x} ${from.y}V${end.y}`, end };
-  const r = Math.min(CORNER, Math.abs(dx) / 2, (busY - from.y) / 2, (end.y - busY) / 2);
-  const s = Math.sign(dx);
-  const d = [
-    `M${from.x} ${from.y}`,
-    `V${busY - r}`,
-    `Q${from.x} ${busY} ${from.x + s * r} ${busY}`,
-    `H${to.x - s * r}`,
-    `Q${to.x} ${busY} ${to.x} ${busY + r}`,
-    `V${end.y}`,
-  ].join('');
-  return { d, end };
-}
-
-function arrow(x: number, y: number): string {
-  return `M${x - 4} ${y - 5}L${x} ${y}L${x + 4} ${y - 5}`;
-}
-
-/** How many tiles of the given scale fit the stage's width, kept current as the window is resized. */
 function useCapacity(stageRef: RefObject<HTMLElement | null>, scale: number, gap: number, away: boolean): number {
   const [capacity, setCapacity] = useState(MAX_TILES);
   useLayoutEffect(() => {
@@ -480,7 +391,7 @@ function chord(mac: boolean, key: string, shift = false): string {
 }
 
 /**
- * Everything the fan can point at, most pressing first: the drafts, what was open, the projects, the
+ * Everything Home can point at, most pressing first: the drafts, what was open, the projects, the
  * starters. Four at most, however many projects there are: the Projects row shows the most recent,
  * and "All" opens every one of them in the browse view. Once there is any work at all, Drafts and
  * Recent keep their place even when empty, so the tabs don't shift as a draft is saved or discarded.
@@ -490,7 +401,7 @@ function sourcesFor(
   controller: DesktopController,
   featured: readonly ArchitectureStarter[],
   returning: boolean,
-  { showAll, browseStarters }: { showAll: (scope: BrowseScope) => void; browseStarters: () => void },
+  { showAll }: { showAll: (scope: BrowseScope) => void },
 ): Source[] {
   const sources: Source[] = [];
   // Home's row never shows "Everything" — only Browse does — so this skips building it (it costs a
@@ -552,8 +463,7 @@ function sourcesFor(
       haystack: starter.name.toLowerCase(),
       onOpen: () => void controller.newQuickDraft(starter.id),
     })),
-    note: 'Each starts a Quick Draft with it',
-    more: { label: 'All starters', description: 'Every architecture and pattern Draft Canvas knows', run: browseStarters },
+    note: 'Each starts a Quick Draft with it; more are in the command palette once you are drawing',
   });
 
   return sources;

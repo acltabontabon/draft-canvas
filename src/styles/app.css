@@ -261,7 +261,7 @@ kbd {
 
 .dc-library-search:focus-within {
   /* The input itself drops its outline, and the soft halo alone is ~1:1 against a light surface —
-     the solid edge is what makes focus findable. */
+  the solid edge is what makes focus findable. */
   border-color: var(--dc-selection);
   box-shadow: 0 0 0 3px var(--dc-selection-soft);
 }
@@ -399,7 +399,7 @@ kbd {
   padding-left: 4px;
   border-radius: 0 var(--dc-radius-sm) var(--dc-radius-sm) 0;
   /* Opaque (it covers the end of a long name) and painted as the row beneath it: the page, plus the
-     row's own hover or active tint layered on top — `--dc-selection-soft` is translucent. */
+  row's own hover or active tint layered on top — `--dc-selection-soft` is translucent. */
   --dc-project-row-tint: transparent;
   background: linear-gradient(var(--dc-project-row-tint), var(--dc-project-row-tint)), var(--dc-canvas);
   opacity: 0;
@@ -770,10 +770,10 @@ kbd {
 }
 
 .dc-home-stage {
-  --gutter: 160px;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(240px, 360px) var(--gutter) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
+  column-gap: clamp(48px, 8vw, 120px);
   margin-top: clamp(32px, 6vh, 60px);
 }
 
@@ -813,43 +813,14 @@ kbd {
   outline-color: transparent;
 }
 
-/* The canvas's own dot grid — same colour the editor draws its background in — fading out
-   toward the edges, so the sheet has an area without having a border. */
-.dc-sheet::before,
-.dc-sheet::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background-image: radial-gradient(circle, var(--dc-home-dot) 1.2px, transparent 1.6px);
-  background-position: center;
-  background-size: 16px 16px;
-  -webkit-mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 35%, transparent 100%);
-  mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 35%, transparent 100%);
-  pointer-events: none;
-}
-
 .dc-sheet::before {
   opacity: 1;
 }
 
-/* The spotlight: the same grid in the selection colour, revealed only around the pointer. */
-.dc-sheet::after {
-  background-image: radial-gradient(circle, var(--dc-selection) 1.2px, transparent 1.6px);
-  -webkit-mask-image: radial-gradient(circle 110px at var(--x) var(--y), rgba(0, 0, 0, 0.7), transparent);
-  mask-image: radial-gradient(circle 110px at var(--x) var(--y), rgba(0, 0, 0, 0.7), transparent);
-  opacity: 0;
-  transition: opacity 180ms ease;
-}
-
 @media (hover: hover) {
   .dc-sheet:hover::after {
-    opacity: 1;
+  opacity: 1;
   }
-}
-
-.dc-sheet:focus-visible::after {
-  opacity: 0.55;
 }
 
 /* Dark mode only: on the near-black canvas the home's dots read far louder than on white and
@@ -861,12 +832,8 @@ kbd {
 
 @media (hover: hover) {
   :root[data-theme='dark'] .dc-sheet:hover::after {
-    opacity: 0.55;
+  opacity: 0.55;
   }
-}
-
-:root[data-theme='dark'] .dc-sheet:focus-visible::after {
-  opacity: 0.4;
 }
 
 /* Crop marks, not a box: where the page is, not a frame around it. */
@@ -876,8 +843,8 @@ kbd {
   height: 16px;
   border: 0 solid var(--dc-border-strong);
   transition:
-    border-color 120ms ease,
-    transform 180ms var(--dc-ease-out);
+  border-color 120ms ease,
+  transform 180ms var(--dc-ease-out);
 }
 
 .dc-sheet-crops [data-at='nw'] {
@@ -949,9 +916,9 @@ kbd {
     0 1px 0 rgba(255, 255, 255, 0.14) inset,
     0 10px 28px -14px var(--dc-selection);
   transition:
-    transform 80ms ease,
-    filter 120ms ease,
-    box-shadow 180ms ease;
+  transform 80ms ease,
+  filter 120ms ease,
+  box-shadow 180ms ease;
 }
 
 .dc-sheet:hover .dc-sheet-pill {
@@ -1081,7 +1048,7 @@ kbd {
    does. Same here. */
 @media (hover: hover) {
   :is(.dc-sheet, .dc-starter):hover .dc-chrome-anchor {
-    opacity: 1;
+  opacity: 1;
   }
 }
 
@@ -1090,181 +1057,48 @@ kbd {
   opacity: 1;
 }
 
-/* ---- the connector ------------------------------------------------------ */
-
-.dc-home-wire {
-  position: relative;
-  pointer-events: none;
-}
-
-.dc-wire {
-  position: absolute;
-  inset: 0;
-  overflow: visible;
-  fill: none;
-  stroke: var(--dc-edge);
-  stroke-width: 1.25;
-}
-
-.dc-wire-arrow {
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.dc-wire-junction {
-  fill: var(--dc-edge);
-  stroke: none;
-}
-
-.dc-wire-source {
-  fill: var(--dc-canvas);
-  stroke-width: 1.5;
-}
-
-/* The home's spine, one step quieter than its trunk: it organises the branches, it doesn't
-   frame them. The open branch is the one drawn at full strength. */
-.dc-home .dc-wire {
-  stroke-width: 1;
-}
-
-.dc-home .dc-wire-trunk {
-  stroke-width: 1.25;
-}
-
-.dc-home .dc-wire-branch {
-  opacity: 0.8;
-  transition:
-    opacity 120ms ease,
-    stroke 120ms ease;
-}
-
-.dc-home .dc-wire-branch[data-active] {
-  opacity: 1;
-  stroke: var(--dc-text-muted);
-}
-
-/* An edge label, the way the canvas draws one: no box, just a halo of canvas behind the words. */
-.dc-wire-caption {
-  position: absolute;
-  padding: 2px 7px;
-  border-radius: var(--dc-radius-xs);
-  background: var(--dc-canvas);
+/* The primary starters, one row of drawings. The description is laid out under each name and only
+   shown on hover or focus, so it reads as the tile answering a question rather than five captions. */
+.dc-home-starters-label,
+.dc-empty-pick-label {
+  margin: 0 0 12px;
   color: var(--dc-text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.35;
-  white-space: nowrap;
-  transform: translate(-50%, -50%);
+  font-size: 12.5px;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+}
+
+.dc-starter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  justify-content: flex-start;
+}
+
+.dc-starter-grid-pending {
+  min-height: 132px;
+}
+
+.dc-home-more {
+  margin: 18px 0 0;
+  font-size: 12.5px;
+}
+
+.dc-home-more kbd {
+  font: 600 11px/1 var(--dc-mono);
+  padding: 2px 5px;
+  border: 1px solid var(--dc-border);
+  border-radius: 4px;
+}
+
+.dc-home-more kbd + kbd {
+  margin-left: 2px;
 }
 
 /* ---- the starters ------------------------------------------------------- */
 
 .dc-home-starters {
   min-width: 0;
-}
-
-.dc-home-cheat {
-  display: none;
-}
-
-.dc-shelf-categories {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-.dc-shelf-label {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  color: var(--dc-text-muted);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  line-height: 18px;
-  white-space: nowrap;
-  text-transform: uppercase;
-  transition: color 120ms ease;
-}
-
-/*
- * The index: every category a branch on the spine, one of them open. A closed branch is its
- * label, nothing more — the open branch's tiles say what the rest hold. Rows keep one height open
- * or closed, so the wire's branches, which are measured once, never drift.
- */
-.dc-shelf-index {
-  display: grid;
-  justify-content: start;
-}
-
-.dc-shelf-branch {
-  display: flex;
-  align-items: baseline;
-  margin-left: -8px;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: 3px;
-  background: none;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.dc-shelf-branch:focus-visible {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: 0;
-}
-
-/* Closed branches a step quieter; the open one is the one whose tiles are underneath. */
-.dc-shelf-branch .dc-shelf-label {
-  opacity: 0.8;
-  transition:
-    color 120ms ease,
-    opacity 120ms ease;
-}
-
-.dc-shelf-branch:hover .dc-shelf-label,
-.dc-shelf-branch[data-active] .dc-shelf-label {
-  color: var(--dc-text);
-  opacity: 1;
-}
-
-.dc-shelf-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
-  gap: 10px 14px;
-  margin-top: 8px;
-}
-
-/* The shelf: every category's tiles laid in the same cell, so the region is always as tall as
-   the largest of them and opening a branch changes nothing above, below, or beside it. Only the
-   open one is visible, focusable, or hit-testable. */
-.dc-shelf-stack {
-  display: grid;
-}
-
-.dc-shelf-stack > .dc-shelf-grid {
-  grid-area: 1 / 1;
-  grid-template-columns: repeat(auto-fill, 144px);
-  justify-content: start;
-  gap: 18px 14px;
-  margin-top: 0;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(3px);
-  pointer-events: none;
-  transition:
-    opacity 120ms ease,
-    transform 120ms var(--dc-ease-out),
-    visibility 0s linear 120ms;
-}
-
-.dc-shelf-stack > .dc-shelf-grid[data-active] {
-  opacity: 1;
-  visibility: visible;
-  transform: none;
-  pointer-events: auto;
-  transition-delay: 0s, 0s, 0s;
 }
 
 .dc-starter {
@@ -1356,49 +1190,6 @@ kbd {
   opacity: 0.6;
 }
 
-.dc-starter-edge-pulse {
-  fill: none;
-  stroke: var(--dc-text);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-dasharray: 0.2 2;
-  stroke-dashoffset: 0.2;
-  opacity: 0;
-}
-
-/* A request travelling through the system, once, in the order the system reads. */
-.dc-starter:hover .dc-starter-edge-pulse,
-.dc-starter:focus-visible .dc-starter-edge-pulse {
-  animation: dc-starter-pulse 420ms var(--dc-ease-out) calc(var(--d, 0) * 70ms) 1 both;
-}
-
-/* Wherever a starter tile appears — home, the library shelf, the Browse-all dialog — not only
-   inside `.dc-home`'s own reduced-motion block. */
-@media (prefers-reduced-motion: reduce) {
-  .dc-starter:hover .dc-starter-edge-pulse,
-  .dc-starter:focus-visible .dc-starter-edge-pulse {
-    animation: none;
-  }
-
-  .dc-shelf-stack > .dc-shelf-grid {
-    transition: none;
-  }
-}
-
-@keyframes dc-starter-pulse {
-  0% {
-    stroke-dashoffset: 0.2;
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    stroke-dashoffset: -1;
-    opacity: 0;
-  }
-}
-
 .dc-starter-name {
   min-width: 0;
   padding: 0 2px;
@@ -1414,41 +1205,6 @@ kbd {
 .dc-starter:hover .dc-starter-name,
 .dc-starter:focus-visible .dc-starter-name {
   color: var(--dc-text);
-}
-
-
-.dc-shelf-readout {
-  margin: 20px 0 0;
-  min-height: 20px;
-  overflow: hidden;
-  color: var(--dc-text-muted);
-  font-size: 12.5px;
-  line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dc-shelf-readout[data-idle] {
-  font-family: var(--dc-mono);
-  font-size: 11.5px;
-}
-
-.dc-shelf-readout-name {
-  color: var(--dc-text);
-  font-weight: 550;
-}
-
-.dc-shelf-readout-sep {
-  margin: 0 8px;
-}
-
-.dc-shelf-readout-key {
-  min-width: 0;
-  margin-left: 10px;
-  padding: 0 5px;
-  color: var(--dc-text-muted);
-  font-size: 10.5px;
-  line-height: 16px;
 }
 
 /*
@@ -1480,146 +1236,6 @@ kbd {
   padding: 2px 24px 24px;
 }
 
-.dc-starters-lede {
-  margin: 0 0 22px;
-  color: var(--dc-text-muted);
-  font-size: 13px;
-}
-
-/* One set of seven columns for the whole sheet: the architectures fill them, and the two smaller
-   categories take three each beneath, with the middle column left as the air between them — so
-   every plate is the same size and each sits exactly under the one above it. */
-.dc-shelf[data-mode='all'] .dc-shelf-categories {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 26px 12px;
-}
-
-.dc-shelf[data-mode='all'] .dc-shelf-categories > * {
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: span 3;
-  align-content: start;
-}
-
-.dc-shelf[data-mode='all'] .dc-shelf-categories > :first-child {
-  grid-column: 1 / -1;
-}
-
-.dc-shelf[data-mode='all'] .dc-shelf-categories > :nth-child(3) {
-  grid-column: 5 / span 3;
-}
-
-.dc-shelf[data-mode='all'] .dc-shelf-label {
-  grid-column: 1 / -1;
-  margin-left: 2px;
-  color: var(--dc-text-faint);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-}
-
-.dc-shelf[data-mode='all'] .dc-shelf-grid {
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-  gap: 14px 12px;
-  margin: 10px 0 0;
-}
-
-.dc-shelf[data-mode='all'] .dc-starter {
-  gap: 7px;
-  padding: 0;
-  border-radius: 12px;
-}
-
-/* The plate: a small canvas the drawing sits on. */
-.dc-shelf[data-mode='all'] .dc-starter-swatch {
-  width: 100%;
-  height: 92px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--dc-border) 80%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--dc-canvas) 55%, var(--dc-surface));
-  transition:
-    border-color 140ms ease,
-    background-color 140ms ease,
-    box-shadow 180ms ease;
-}
-
-.dc-shelf[data-mode='all'] .dc-starter-swatch::before {
-  background-size: 11px 11px;
-  -webkit-mask-image: radial-gradient(ellipse 70% 72% at 50% 50%, #000 30%, transparent 100%);
-  mask-image: radial-gradient(ellipse 70% 72% at 50% 50%, #000 30%, transparent 100%);
-  opacity: 0.5;
-}
-
-/* The plate's own edge does what the selection frame does elsewhere. */
-.dc-shelf[data-mode='all'] .dc-chrome {
-  display: none;
-}
-
-.dc-shelf[data-mode='all'] .dc-starter:hover .dc-starter-swatch,
-.dc-shelf[data-mode='all'] .dc-starter:focus-visible .dc-starter-swatch {
-  border-color: color-mix(in srgb, var(--dc-selection) 62%, transparent);
-  background: var(--dc-canvas);
-  box-shadow: 0 10px 28px -18px var(--dc-selection);
-}
-
-.dc-shelf[data-mode='all'] .dc-starter:focus-visible .dc-starter-swatch {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: 2px;
-}
-
-/* Drawn a size down, so seven fit a row and every drawing keeps air inside its plate. */
-.dc-shelf[data-mode='all'] .dc-starter-glyph {
-  width: 112px;
-  height: 60px;
-  opacity: 0.82;
-  transition:
-    color 120ms ease,
-    opacity 120ms ease;
-}
-
-.dc-shelf[data-mode='all'] .dc-starter-name {
-  padding: 0 2px;
-  color: var(--dc-text);
-  font-size: 13px;
-  line-height: 17px;
-  white-space: normal;
-  text-wrap: balance;
-}
-
-.dc-shelf[data-mode='all'] .dc-starter:hover .dc-starter-glyph,
-.dc-shelf[data-mode='all'] .dc-starter:focus-visible .dc-starter-glyph {
-  opacity: 1;
-}
-
-/* Always the whole sentence: every row is already laid out with room for its longest one, so
-   revealing it moves nothing. */
-.dc-shelf[data-mode='all'] .dc-starter-description {
-  margin-top: -3px;
-  font-size: 11.5px;
-  line-height: 15px;
-}
-
-/* Narrower than the sheet was drawn for: the categories stack, each wrapping onto its own rows. */
-@media (max-width: 1100px) {
-  .dc-shelf[data-mode='all'] .dc-shelf-categories {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .dc-shelf[data-mode='all'] .dc-shelf-categories > *,
-  .dc-shelf[data-mode='all'] .dc-shelf-categories > :first-child,
-  .dc-shelf[data-mode='all'] .dc-shelf-categories > :nth-child(3) {
-    display: block;
-    grid-column: auto;
-  }
-
-  /* Plates keep the size they have on the full sheet; the row wraps rather than stretching them. */
-  .dc-shelf[data-mode='all'] .dc-shelf-grid {
-    grid-template-columns: repeat(auto-fill, minmax(128px, 150px));
-  }
-}
-
 .dc-starter-description {
   padding: 0 2px;
   color: var(--dc-text-muted);
@@ -1629,8 +1245,8 @@ kbd {
   opacity: 0;
   transform: translateY(2px);
   transition:
-    opacity 120ms ease,
-    transform 120ms var(--dc-ease-out);
+  opacity 120ms ease,
+  transform 120ms var(--dc-ease-out);
 }
 
 .dc-starter:hover .dc-starter-description,
@@ -1641,44 +1257,30 @@ kbd {
 
 @media (prefers-reduced-motion: reduce) {
   .dc-starter-description {
-    transform: none;
+  transform: none;
   }
 }
 
 /* No hover to ask with: the space is reserved anyway, so the descriptions simply stay. */
 @media (hover: none) {
   .dc-starter-description {
-    opacity: 1;
-    transform: none;
+  opacity: 1;
+  transform: none;
   }
 }
 
 /* No pointer, no arrow keys likely: the idle hint would be advice nobody can take. */
 @media (hover: none) {
-  .dc-shelf-readout[data-idle] {
-    visibility: hidden;
-  }
-
-  /* Hover-revealed row actions have no hover to reveal them on touch — they'd be invisible yet
-     still tappable. Shown outright instead. */
+    /* Hover-revealed row actions have no hover to reveal them on touch — they'd be invisible yet
+  still tappable. Shown outright instead. */
   /* The panel prefix out-ranks the at-rest rules declared further down this file. */
   .dc-sidebar-project-actions,
   .dc-library-list .dc-library-item-actions,
   .dc-flow-panel .dc-flow-item-actions .dc-button,
   .dc-flow-panel .dc-flow-step-actions .dc-button {
-    opacity: 1;
-    pointer-events: auto;
+  opacity: 1;
+  pointer-events: auto;
   }
-}
-
-.dc-library-welcome .dc-shelf {
-  margin-top: 20px;
-}
-
-/* Holds the shelf's place for the moment the starter catalog's chunk is arriving, so the page
-   doesn't jump when the tiles land. */
-.dc-shelf-pending {
-  min-height: 240px;
 }
 
 /* ---- the foot ----------------------------------------------------------- */
@@ -1716,98 +1318,23 @@ kbd {
   margin-top: 32px;
 }
 
-/* ---- arrival ------------------------------------------------------------ */
-
-@keyframes dc-home-rise {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.dc-home-head,
-.dc-home-start,
-.dc-home .dc-starter,
-.dc-home .dc-shelf-readout {
-  animation: dc-home-rise 260ms var(--dc-ease-out) both;
-}
-
-/* Backwards only: a forwards fill would hold opacity at 1 and a closed branch would never go quiet. */
-.dc-home .dc-shelf-label {
-  animation: dc-home-rise 260ms var(--dc-ease-out) backwards;
-}
-
 .dc-home-start {
   animation-delay: 60ms;
-}
-
-.dc-home .dc-shelf-label {
-  animation-delay: 200ms;
 }
 
 .dc-home .dc-starter {
   animation-delay: calc(220ms + var(--i, 0) * 16ms);
 }
 
-.dc-home .dc-shelf-readout {
-  animation-delay: 420ms;
-}
-
-/* Scoped: `Wire` is shared with the editor's empty canvas, which arrives on its own schedule. */
-.dc-home .dc-wire-trunk,
-.dc-home .dc-wire-spine,
-.dc-home .dc-wire-branch path:first-child {
-  stroke-dasharray: 1;
-  animation: dc-draw-in 260ms var(--dc-ease-out) both;
-}
-
-.dc-home .dc-wire-trunk {
-  animation-delay: 160ms;
-}
-
-.dc-home .dc-wire-spine {
-  animation-delay: 340ms;
-}
-
-.dc-home .dc-wire-branch path:first-child {
-  animation-delay: 460ms;
-}
-
-.dc-home .dc-wire-arrow,
-.dc-home .dc-wire-junction,
-.dc-home .dc-wire-caption {
-  animation: dc-fade-in 200ms ease both;
-}
-
-.dc-home .dc-wire-junction {
-  animation-delay: 320ms;
-}
-
-.dc-home .dc-wire-caption {
-  animation-delay: 240ms;
-}
-
-.dc-home .dc-wire-arrow {
-  animation-delay: 580ms;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .dc-home *,
   .dc-home *::before,
   .dc-home *::after {
-    animation: none !important;
-  }
-
-  .dc-sheet::after {
-    display: none;
+  animation: none !important;
   }
 
   .dc-sheet:hover .dc-sheet-crops span {
-    transform: none;
+  transform: none;
   }
 }
 
@@ -1817,107 +1344,68 @@ kbd {
    under it — fits without a scroll. */
 @media (min-width: 1080px) and (max-height: 880px) {
   .dc-home-inner {
-    padding-top: 28px;
-    padding-bottom: 28px;
+  padding-top: 28px;
+  padding-bottom: 28px;
   }
 
   .dc-home-motto {
-    margin-top: 20px;
-    font-size: clamp(32px, 2.6vw + 8px, 46px);
+  margin-top: 20px;
+  font-size: clamp(32px, 2.6vw + 8px, 46px);
   }
 
   .dc-home-tagline {
-    margin-top: 10px;
+  margin-top: 10px;
   }
 
   .dc-home-stage {
-    margin-top: 30px;
-  }
-
-  .dc-shelf-categories {
-    gap: 16px;
-  }
-
-  .dc-shelf-grid {
-    row-gap: 6px;
-  }
-
-  .dc-shelf-stack > .dc-shelf-grid {
-    row-gap: 10px;
+  margin-top: 30px;
   }
 
   .dc-starter-swatch {
-    height: 78px;
+  height: 78px;
   }
-
-  .dc-shelf-readout {
-    margin-top: 12px;
   }
-}
 
 /* A very wide screen gets a little more of everything, not a stretched version of the same. */
 @media (min-width: 1800px) {
   .dc-home-inner,
   .dc-home-status-inner {
-    max-width: 1380px;
+  max-width: 1380px;
   }
 
   .dc-home-stage {
-    --gutter: 184px;
-    grid-template-columns: minmax(240px, 400px) var(--gutter) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 400px) minmax(0, 1fr);
   }
 
   .dc-sheet {
-    max-height: 420px;
+  max-height: 420px;
   }
 }
 
 /* Without a keyboard, ↵ is advice nobody can take. */
 @media (hover: none) and (pointer: coarse) {
   .dc-sheet-pill kbd {
-    display: none;
+  display: none;
   }
 }
 
-/* The connector needs a gutter to run through; below this there isn't one worth drawing, so
-   the page stacks and the caption becomes the heading it was standing in for. */
+/* Below this the two columns stack. */
 @media (max-width: 1079px) {
   .dc-home-stage {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: 36px;
-  }
-
-  .dc-home-wire {
-    display: none;
-  }
-
-  .dc-home-cheat {
-    display: block;
-    margin: 0 0 16px;
-    color: var(--dc-text-muted);
-    font-size: 15px;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 36px;
   }
 
   .dc-sheet {
-    flex: none;
-    height: clamp(168px, 24vh, 220px);
-    min-height: 0;
+  flex: none;
+  height: clamp(168px, 24vh, 220px);
+  min-height: 0;
   }
 }
 
 @media (max-width: 720px) {
-  .dc-shelf-grid {
-    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
-    gap: 6px 12px;
-  }
-
-  .dc-shelf-stack > .dc-shelf-grid {
-    grid-template-columns: repeat(auto-fill, 124px);
-    row-gap: 14px;
-  }
-
   .dc-home-tagline {
-    font-size: 15px;
+  font-size: 15px;
   }
 }
 
@@ -1937,22 +1425,6 @@ kbd {
   margin-top: 48px;
   padding-top: 14px;
   border-top: 1px solid var(--dc-border);
-}
-
-.dc-thought {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin: 0;
-  max-width: 46ch;
-  color: var(--dc-text-faint);
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-
-.dc-thought svg {
-  flex-shrink: 0;
-  margin-top: 3px;
 }
 
 .dc-local {
@@ -2030,56 +1502,56 @@ kbd {
  */
 @media (max-width: 720px) {
   .dc-library {
-    padding: 32px 0 48px;
+  padding: 32px 0 48px;
   }
 
   .dc-library-search kbd {
-    display: none;
+  display: none;
   }
 
   /* Search on its own row; the two actions under it, never off the edge. */
   .dc-library-toolbar {
-    flex-wrap: wrap;
-    gap: 10px;
+  flex-wrap: wrap;
+  gap: 10px;
   }
 
   .dc-library-search {
-    flex-basis: 100%;
-    max-width: none;
+  flex-basis: 100%;
+  max-width: none;
   }
 
   .dc-library-body {
-    flex-direction: column;
+  flex-direction: column;
   }
 
   .dc-library-sidebar {
-    width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 4px 12px;
+  width: 100%;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   }
 
   .dc-sidebar-section {
-    margin-top: 12px;
-    width: 100%;
+  margin-top: 12px;
+  width: 100%;
   }
 
   .dc-library-item-actions {
-    opacity: 1;
+  opacity: 1;
   }
 
   .dc-library-foot {
-    flex-direction: column;
-    align-items: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
   }
 
   .dc-local {
-    align-items: flex-start;
-    max-width: none;
+  align-items: flex-start;
+  max-width: none;
   }
 
   .dc-local-toggle {
-    text-align: left;
+  text-align: left;
   }
 }
 
@@ -2103,18 +1575,18 @@ kbd {
    another diagram; `dc-screen-in` is shared with the desktop shell's own screens (see `desktop.css`). */
 @keyframes dc-screen-in {
   from {
-    opacity: 0;
-    transform: translateY(4px);
+  opacity: 0;
+  transform: translateY(4px);
   }
   to {
-    opacity: 1;
-    transform: none;
+  opacity: 1;
+  transform: none;
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .dc-editor {
-    animation: dc-screen-in 160ms var(--dc-ease-out) both;
+  animation: dc-screen-in 160ms var(--dc-ease-out) both;
   }
 }
 
@@ -2228,8 +1700,8 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
   transition:
-    background-color 120ms var(--dc-ease-out),
-    border-color 120ms var(--dc-ease-out);
+  background-color 120ms var(--dc-ease-out),
+  border-color 120ms var(--dc-ease-out);
 }
 
 .dc-title-input:hover {
@@ -2309,10 +1781,10 @@ kbd {
   color: var(--dc-text-muted);
   font-size: 12.5px;
   transition:
-    background-color 120ms var(--dc-ease-out),
-    border-color 120ms var(--dc-ease-out),
-    color 120ms var(--dc-ease-out),
-    box-shadow 120ms var(--dc-ease-out);
+  background-color 120ms var(--dc-ease-out),
+  border-color 120ms var(--dc-ease-out),
+  color 120ms var(--dc-ease-out),
+  box-shadow 120ms var(--dc-ease-out);
 }
 
 .dc-create-rail .dc-button:hover:not(:disabled) {
@@ -2486,22 +1958,22 @@ kbd {
 @media (max-width: 1319px) {
   .dc-mode-label,
   /* The active flow's name goes with them: once Flows is a 28px square, a 150px name hanging off
-     it would overflow the square rather than shorten it. */
+  it would overflow the square rather than shorten it. */
   .dc-flow-toggle-sep,
   .dc-flow-toggle-title {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
   }
 
   .dc-toolbar-mode {
-    width: 28px;
-    padding: 0;
-    justify-content: center;
+  width: 28px;
+  padding: 0;
+  justify-content: center;
   }
 }
 
@@ -2509,20 +1981,20 @@ kbd {
    has to scroll. Cosmetic only — the toolbar's own track sizing is what prevents overlap. */
 @media (max-width: 1259px) {
   .dc-toolbar {
-    gap: 14px;
+  gap: 14px;
   }
 
   .dc-create-rail {
-    justify-self: stretch;
-    gap: 6px;
+  justify-self: stretch;
+  gap: 6px;
   }
 
   .dc-create-rail .dc-button {
-    padding: 0 6px;
+  padding: 0 6px;
   }
 
   .dc-title-input {
-    max-width: 170px;
+  max-width: 170px;
   }
 }
 
@@ -2739,9 +2211,9 @@ button.dc-status-level:focus-visible {
   backdrop-filter: blur(6px);
   font-size: 12.5px;
   transition:
-    background-color 160ms var(--dc-ease-out),
-    border-color 160ms var(--dc-ease-out),
-    box-shadow 160ms var(--dc-ease-out);
+  background-color 160ms var(--dc-ease-out),
+  border-color 160ms var(--dc-ease-out),
+  box-shadow 160ms var(--dc-ease-out);
 }
 
 .dc-depth[data-open='true'] {
@@ -2901,10 +2373,10 @@ button.dc-depth-plate-step {
   transform: rotateX(56deg) rotateZ(-38deg);
   transition:
     --fade 180ms var(--dc-ease-out),
-    translate 180ms var(--dc-ease-out),
-    scale 180ms var(--dc-ease-out),
-    border-color 180ms var(--dc-ease-out),
-    background-color 180ms var(--dc-ease-out);
+  translate 180ms var(--dc-ease-out),
+  scale 180ms var(--dc-ease-out),
+  border-color 180ms var(--dc-ease-out),
+  background-color 180ms var(--dc-ease-out);
 }
 
 /* What is drawn on a plane clarifies as the plane is reached for. */
@@ -2943,8 +2415,8 @@ button.dc-depth-plate-step {
 
 @keyframes dc-depth-deal {
   from {
-    opacity: 0;
-    transform: translateY(calc(var(--i) * -8px));
+  opacity: 0;
+  transform: translateY(calc(var(--i) * -8px));
   }
 }
 
@@ -3241,12 +2713,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   .dc-depth {
     --plane-w: 76px;
     --plane-h: 46px;
-    max-width: calc(100vw - 24px);
+  max-width: calc(100vw - 24px);
   }
 
   .dc-depth-plate-name,
   .dc-depth-room[data-current='true'] .dc-depth-room-name {
-    max-width: 110px;
+  max-width: 110px;
   }
 }
 
@@ -3256,8 +2728,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   .dc-depth-tier,
   .dc-depth-plate .dc-fingerprint,
   .dc-depth-plate .dc-fingerprint > * {
-    transition: none;
-    animation: none;
+  transition: none;
+  animation: none;
   }
 }
 
@@ -3310,7 +2782,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   height: 16px;
   padding: 0;
   /* Relative to the text colour, so a pale swatch keeps a visible edge on the light theme's white
-     surface as well as the dark one's. */
+  surface as well as the dark one's. */
   border: 1px solid color-mix(in srgb, var(--dc-text) 16%, transparent);
   border-radius: var(--dc-radius-xs);
   cursor: pointer;
@@ -3505,13 +2977,13 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 @media (prefers-reduced-motion: no-preference) {
   .dc-present-card,
   .dc-present-caption {
-    animation: dc-present-card-in 260ms var(--dc-ease-out) both;
+  animation: dc-present-card-in 260ms var(--dc-ease-out) both;
   }
 
   @keyframes dc-present-card-in {
-    from {
-      opacity: 0;
-      translate: 0 6px;
+  from {
+  opacity: 0;
+  translate: 0 6px;
     }
   }
 }
@@ -4193,7 +3665,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-proposal-diff-added,
 .dc-proposal-diff-modified {
   /* Matches the canvas ghost: an addition and a modification draw the same way there too — only a
-     removal gets a colour of its own. */
+  removal gets a colour of its own. */
   border-left-color: var(--dc-selection);
 }
 
@@ -4564,9 +4036,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 @media (prefers-reduced-motion: no-preference) {
   .dc-modal {
-    transition:
-      width 160ms ease,
-      max-height 160ms ease;
+  transition:
+  width 160ms ease,
+  max-height 160ms ease;
   }
 }
 
@@ -4606,8 +4078,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-text-faint);
   cursor: pointer;
   transition:
-    color 90ms ease,
-    background-color 90ms ease;
+  color 90ms ease,
+  background-color 90ms ease;
 }
 
 .dc-modal-back:hover,
@@ -4763,10 +4235,10 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   -webkit-user-select: none;
   user-select: none;
   transition:
-    border-color 120ms ease,
-    background-color 120ms ease,
-    color 120ms ease,
-    box-shadow 160ms ease;
+  border-color 120ms ease,
+  background-color 120ms ease,
+  color 120ms ease,
+  box-shadow 160ms ease;
 }
 
 .dc-export-mode svg {
@@ -4819,14 +4291,14 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   .dc-export-config,
   .dc-export-stage img,
   .dc-export-file {
-    animation: dc-export-settle 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: dc-export-settle 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
   }
 }
 
 @keyframes dc-export-settle {
   from {
-    opacity: 0;
-    transform: translateY(3px);
+  opacity: 0;
+  transform: translateY(3px);
   }
 }
 
@@ -5005,18 +4477,18 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 @media (max-width: 600px) {
   .dc-export-body {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
   }
 
   .dc-export-stage {
-    height: 96px;
+  height: 96px;
   }
 }
 
 @media (max-width: 460px) {
   .dc-export-modes {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -5053,9 +4525,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   -webkit-user-select: none;
   user-select: none;
   transition:
-    background-color 120ms ease,
-    color 120ms ease,
-    box-shadow 120ms ease;
+  background-color 120ms ease,
+  color 120ms ease,
+  box-shadow 120ms ease;
 }
 
 .dc-segmented-option:hover {
@@ -5111,7 +4583,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   padding: 0 14px 0 12px;
   border-radius: var(--dc-radius-sm);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent),
+  inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent),
     0 6px 16px -8px color-mix(in srgb, var(--dc-selection) 80%, transparent);
 }
 
@@ -5299,7 +4771,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-about-version-row {
   display: flex;
   /* Centre, not baseline: the action is an inline-flex box whose first item can be the unread dot,
-     which has no text baseline of its own — baseline alignment dropped the label below the version. */
+  which has no text baseline of its own — baseline alignment dropped the label below the version. */
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -5373,18 +4845,18 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 @keyframes dc-view-enter-fade {
   from {
-    opacity: 0;
-    transform: translateY(3px);
+  opacity: 0;
+  transform: translateY(3px);
   }
   to {
-    opacity: 1;
-    transform: translateY(0);
+  opacity: 1;
+  transform: translateY(0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dc-view-enter {
-    animation: none;
+  animation: none;
   }
 }
 
@@ -5640,9 +5112,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   border-radius: var(--dc-radius-sm);
   color: var(--dc-text-faint);
   transition:
-    color 90ms ease,
-    background-color 90ms ease,
-    transform 90ms ease;
+  color 90ms ease,
+  background-color 90ms ease,
+  transform 90ms ease;
 }
 
 .dc-about-link:hover {
@@ -5659,12 +5131,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 @media (prefers-reduced-motion: reduce) {
   .dc-about-link {
-    transition:
-      color 90ms ease,
-      background-color 90ms ease;
+  transition:
+  color 90ms ease,
+  background-color 90ms ease;
   }
   .dc-about-link:hover {
-    transform: none;
+  transform: none;
   }
 }
 
@@ -5771,56 +5243,56 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
  */
 @media (max-width: 720px) {
   .dc-shortcuts-grid {
-    grid-template-columns: 1fr;
+  grid-template-columns: 1fr;
   }
 
   /* Title and workspace actions on the first row, the create rail on its own below — as grid
-     areas now, which says the arrangement outright instead of implying it with `order`. */
+  areas now, which says the arrangement outright instead of implying it with `order`. */
   .dc-toolbar {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
       'lead trail'
       'rail rail';
-    height: auto;
-    gap: 6px 12px;
-    padding: 6px 8px;
+  height: auto;
+  gap: 6px 12px;
+  padding: 6px 8px;
   }
 
   /* Held to its track: sized to its content, the title's own intrinsic width ran under Undo/Redo. */
   .dc-toolbar-lead {
-    grid-area: lead;
-    justify-self: stretch;
+  grid-area: lead;
+  justify-self: stretch;
   }
 
   .dc-toolbar-trail {
-    grid-area: trail;
+  grid-area: trail;
   }
 
   .dc-create-rail {
-    grid-area: rail;
+  grid-area: rail;
   }
 
   .dc-title-input {
-    min-width: 0;
-    max-width: 42vw;
+  min-width: 0;
+  max-width: 42vw;
   }
 
   .dc-status {
-    height: auto;
-    padding: 6px 10px;
+  height: auto;
+  padding: 6px 10px;
   }
 
   .dc-status-hint,
   .dc-status-right > .dc-muted,
   .dc-status-right > .dc-inspector-divider {
-    display: none;
+  display: none;
   }
 
   .dc-inspector {
-    left: 8px;
-    right: 8px;
-    transform: none;
-    max-width: none;
+  left: 8px;
+  right: 8px;
+  transform: none;
+  max-width: none;
   }
 }
 
@@ -5857,12 +5329,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 @keyframes dc-palette-in {
   from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.985);
+  opacity: 0;
+  transform: translateY(-6px) scale(0.985);
   }
   to {
-    opacity: 1;
-    transform: none;
+  opacity: 1;
+  transform: none;
   }
 }
 
@@ -6032,7 +5504,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 @media (prefers-reduced-motion: reduce) {
   .dc-palette {
-    animation: none;
+  animation: none;
   }
 }
 

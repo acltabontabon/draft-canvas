@@ -188,17 +188,17 @@
   background: var(--dc-canvas);
   opacity: 0;
   /* Hidden, not only transparent, until something reveals it. Every handle is positioned, so each
-     is a layer the browser visits on every hit test — every pointer move, every click — and at
-     twelve a shape that was 3–4 ms a test at 500 shapes, wherever the pointer was. A hidden one is
-     skipped, and still laid out, so React Flow measures it and connectors still end on it. It also
-     stops an invisible ring past a shape's edge from claiming the pointer over empty canvas. Each
-     reveal below sets `visibility` with `opacity`; `visibility` transitions discretely, so the fade
-     still runs both ways. */
+  is a layer the browser visits on every hit test — every pointer move, every click — and at
+  twelve a shape that was 3–4 ms a test at 500 shapes, wherever the pointer was. A hidden one is
+  skipped, and still laid out, so React Flow measures it and connectors still end on it. It also
+  stops an invisible ring past a shape's edge from claiming the pointer over empty canvas. Each
+  reveal below sets `visibility` with `opacity`; `visibility` transitions discretely, so the fade
+  still runs both ways. */
   visibility: hidden;
   /* Grown by size, never `transform`/`scale`: React Flow centres every handle on its anchor with
      `transform: translate(±50%, ±50%)`. A transform rule replaces that (the dot jumps 4.5px off its
-     anchor); `scale` composes but multiplies the translate too. A percentage translate of a bigger
-     box stays centred exactly. */
+  anchor); `scale` composes but multiplies the translate too. A percentage translate of a bigger
+  box stays centred exactly. */
   transition: opacity 90ms ease, visibility 90ms, width 90ms ease, height 90ms ease;
 }
 
@@ -492,8 +492,8 @@
   cursor: move;
   touch-action: none;
   /* The label-renderer portal that hosts this sets `pointer-events: none` on
-     itself so it never blocks the pane underneath — opt back in explicitly,
-     same as `.dc-edge-label` does. */
+  itself so it never blocks the pane underneath — opt back in explicitly,
+  same as `.dc-edge-label` does. */
   pointer-events: all;
 }
 
@@ -534,8 +534,8 @@
   border-radius: var(--dc-radius-xs);
   background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
   /* The same size and tone as the relationship caption a label replaces (`.dc-edge-caption`):
-     a connector's words are annotation, and shouldn't outweigh the shapes they join. They come
-     back to full strength while hovered or being edited, so reaching for one still reads. Keep
+  a connector's words are annotation, and shouldn't outweigh the shapes they join. They come
+  back to full strength while hovered or being edited, so reaching for one still reads. Keep
      `font-size` equal to `TEXT_SIZES.edgeLabel` — the export lays the label out with it, and
      `tests/connector-text.test.ts` holds the two together. */
   color: var(--dc-text-faint);
@@ -546,13 +546,13 @@
   pointer-events: all;
   cursor: text;
   /* One halo, not four stacked blurs: every label repaints it on each zoom step, and the
-     translucent chip behind the text already does most of the separating. */
+  translucent chip behind the text already does most of the separating. */
   text-shadow: 0 0 3px var(--dc-canvas);
   transition:
-    background 120ms ease,
-    opacity 180ms ease;
+  background 120ms ease,
+  opacity 180ms ease;
   /* Same Safari flicker note as `.dc-edge` above — `.dc-edge-label-input` (the actual editable
-     text once double-clicked open) opts back in. */
+  text once double-clicked open) opts back in. */
   -webkit-user-select: none;
   user-select: none;
 }
@@ -645,15 +645,15 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   /* The chip itself is editable in place (double-click — see `DraftEdgeView.tsx`), so it takes
-     pointer events even though its `.dc-edge-meta` row doesn't; the row stays inert so the empty
-     space around the chip never competes with the line's own hit-box. */
+  pointer events even though its `.dc-edge-meta` row doesn't; the row stays inert so the empty
+  space around the chip never competes with the line's own hit-box. */
   pointer-events: all;
   cursor: text;
   -webkit-user-select: none;
   user-select: none;
   transition:
-    border-color 120ms ease,
-    opacity 180ms ease;
+  border-color 120ms ease,
+  opacity 180ms ease;
 }
 
 .dc-edge-condition:hover,
@@ -686,10 +686,10 @@
 .dc-edge-response-line {
   pointer-events: none;
   /* 0.28 measured as effectively invisible — a 1px stroke at that opacity
-     blends to within a few RGB steps of a light-theme canvas background,
-     defeating the "never fully invisible" intent above. 0.5 keeps it
-     clearly softer than the 0.85 revealed state while staying perceptible
-     against either theme's background. */
+  blends to within a few RGB steps of a light-theme canvas background,
+  defeating the "never fully invisible" intent above. 0.5 keeps it
+  clearly softer than the 0.85 revealed state while staying perceptible
+  against either theme's background. */
   opacity: 0.5;
   transition: opacity 120ms ease;
 }
@@ -778,7 +778,7 @@
 .dc-attachment-chip:focus-visible {
   box-shadow:
     0 0 0 2px var(--dc-selection),
-    var(--dc-shadow-panel);
+  var(--dc-shadow-panel);
 }
 
 /* Suppressed while the chip's own card is showing (`data-open`) — this scale would otherwise run
@@ -814,11 +814,11 @@
 @media (prefers-reduced-motion: no-preference) {
   .dc-attachment-chip-row[data-compact='true'] .dc-attachment-chip,
   .dc-attachment-chip-row[data-compact='true'] .dc-attachment-chip-label {
-    transition:
-      max-width 140ms var(--dc-ease-out),
-      opacity 110ms ease,
-      gap 140ms var(--dc-ease-out),
-      padding 140ms var(--dc-ease-out);
+  transition:
+  max-width 140ms var(--dc-ease-out),
+  opacity 110ms ease,
+  gap 140ms var(--dc-ease-out),
+  padding 140ms var(--dc-ease-out);
   }
 }
 
@@ -835,7 +835,7 @@
 .dc-attachment-chip-row[data-compact='true']:focus-within .dc-attachment-chip-label,
 .dc-attachment-chip-row[data-compact='true'] .dc-attachment-slot[data-open='true'] .dc-attachment-chip-label {
   /* Wide enough for the longest label a chip can carry (`PLAINTEXT`), and a cap rather than a
-     size — the label is `white-space: nowrap`, so it simply takes what it needs. */
+  size — the label is `white-space: nowrap`, so it simply takes what it needs. */
   max-width: 8rem;
   opacity: 1;
 }
@@ -870,7 +870,7 @@
   pointer-events: all;
   cursor: default;
   /* The card's content (a note's actual text, code, or an editing textarea) keeps the user's real
-     casing; only the card header re-applies uppercase for itself, the same way the chip's label does. */
+  casing; only the card header re-applies uppercase for itself, the same way the chip's label does. */
   text-transform: none;
   letter-spacing: normal;
   font-weight: 400;
@@ -921,7 +921,7 @@
   .dc-popover-caret,
   .dc-popover[data-closing='true'] .dc-popover-caret,
   .dc-tooltip {
-    animation: none;
+  animation: none;
   }
 }
 
@@ -996,23 +996,23 @@
 
 @keyframes dc-attachment-card-in {
   from {
-    opacity: 0;
-    transform: scale(0.97);
+  opacity: 0;
+  transform: scale(0.97);
   }
   to {
-    opacity: 1;
-    transform: scale(1);
+  opacity: 1;
+  transform: scale(1);
   }
 }
 
 @keyframes dc-attachment-card-out {
   from {
-    opacity: 1;
-    transform: scale(1);
+  opacity: 1;
+  transform: scale(1);
   }
   to {
-    opacity: 0;
-    transform: scale(0.97);
+  opacity: 0;
+  transform: scale(0.97);
   }
 }
 
@@ -1126,39 +1126,39 @@
 
 @media (prefers-reduced-motion: no-preference) {
   /* Visible only while travelling: the dash is off both ends of the path at rest, so holding the
-     end state (`both`) shows nothing — but the opacity still has to come up for the ride. */
+  end state (`both`) shows nothing — but the opacity still has to come up for the ride. */
   .dc-signal-stroke {
-    animation:
-      dc-signal-travel var(--dc-signal-ms) var(--dc-ease-in-out) both,
-      dc-signal-shown var(--dc-signal-ms) linear both;
+  animation:
+  dc-signal-travel var(--dc-signal-ms) var(--dc-ease-in-out) both,
+  dc-signal-shown var(--dc-signal-ms) linear both;
   }
 
   .dc-signal-glow {
-    animation:
-      dc-signal-travel var(--dc-signal-ms) var(--dc-ease-in-out) both,
-      dc-signal-glow-shown var(--dc-signal-ms) linear both;
+  animation:
+  dc-signal-travel var(--dc-signal-ms) var(--dc-ease-in-out) both,
+  dc-signal-glow-shown var(--dc-signal-ms) linear both;
   }
 
   @keyframes dc-signal-travel {
-    from {
-      stroke-dashoffset: var(--dc-signal-dash-here);
+  from {
+  stroke-dashoffset: var(--dc-signal-dash-here);
     }
-    to {
-      stroke-dashoffset: -1;
+  to {
+  stroke-dashoffset: -1;
     }
   }
 
   @keyframes dc-signal-shown {
     0%,
     100% {
-      opacity: 1;
+  opacity: 1;
     }
   }
 
   @keyframes dc-signal-glow-shown {
     0%,
     100% {
-      opacity: 0.22;
+  opacity: 0.22;
     }
   }
 }
@@ -1166,7 +1166,7 @@
 /* The lens's one-shot pulse (below) keeps its own keyframe. */
 @keyframes dc-flow-pulse {
   to {
-    stroke-dashoffset: -24;
+  stroke-dashoffset: -24;
   }
 }
 
@@ -1176,8 +1176,8 @@
    time), never retriggered by anything else. */
 @media (prefers-reduced-motion: no-preference) {
   .dc-edge[data-lens-pulse='true'] .dc-edge-line {
-    stroke-dasharray: 3 9;
-    animation: dc-flow-pulse 650ms ease-out 1;
+  stroke-dasharray: 3 9;
+  animation: dc-flow-pulse 650ms ease-out 1;
   }
 }
 
@@ -1273,7 +1273,7 @@
   top: 0;
   transform-origin: 0 0;
   transform: scale(calc(1 / var(--dc-zoom, 1)))
-    translate(calc(14px + var(--dc-capsule-nudge-x, 0px)), calc(18px + var(--dc-capsule-nudge-y, 0px)));
+  translate(calc(14px + var(--dc-capsule-nudge-x, 0px)), calc(18px + var(--dc-capsule-nudge-y, 0px)));
   cursor: grabbing;
   /* Inert: the pointer is mid-drag and owns the card underneath. */
   pointer-events: none;
@@ -1285,7 +1285,7 @@
    lag at all, which is why it rides React Flow's own node transform rather than a transition. */
 @media (prefers-reduced-motion: no-preference) {
   .dc-drag-capsule {
-    transition: transform 90ms var(--dc-ease-out);
+  transition: transform 90ms var(--dc-ease-out);
   }
 }
 
@@ -1298,14 +1298,14 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .dc-edge-landing {
-    animation: dc-landing-in 120ms var(--dc-ease-out) 1;
+  animation: dc-landing-in 120ms var(--dc-ease-out) 1;
   }
 }
 
 @keyframes dc-landing-in {
   from {
-    r: 0;
-    opacity: 0;
+  r: 0;
+  opacity: 0;
   }
 }
 
@@ -1314,25 +1314,25 @@
    swapping. */
 @media (prefers-reduced-motion: no-preference) {
   .dc-attachment-chip[data-settle='true'] {
-    animation: dc-chip-arrive 140ms var(--dc-ease-out) 1;
+  animation: dc-chip-arrive 140ms var(--dc-ease-out) 1;
   }
 }
 
 @keyframes dc-chip-arrive {
   from {
-    transform: scale(0.92);
-    opacity: 0.4;
+  transform: scale(0.92);
+  opacity: 0.4;
   }
 }
 
 .dc-attachment-badge {
   position: absolute;
   /* Clickable even while presenting, when React Flow stops nodes receiving the pointer — the badge
-     is how a presenter asks a node to speak (same as a connector's chips). */
+  is how a presenter asks a node to speak (same as a connector's chips). */
   pointer-events: all;
   /* Sits fully above the node's top edge rather than straddling the
-     top-right corner, which is exactly where the resize handle grabs —
-     a badge there would sit on top of it and block that corner. */
+  top-right corner, which is exactly where the resize handle grabs —
+  a badge there would sit on top of it and block that corner. */
   top: -22px;
   right: 6px;
   display: inline-flex;
@@ -1395,8 +1395,8 @@
   opacity: 0.32;
   transform: translate(5px, 5px);
   transition:
-    transform 200ms var(--dc-ease-out),
-    opacity 160ms var(--dc-ease-out);
+  transform 200ms var(--dc-ease-out),
+  opacity 160ms var(--dc-ease-out);
 }
 
 .dc-node:hover .dc-inside-mark,
@@ -1408,7 +1408,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dc-inside-mark {
-    transition: none;
+  transition: none;
   }
 }
 
@@ -1426,7 +1426,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dc-depth-glyph path {
-    transition: none;
+  transition: none;
   }
 }
 
@@ -1491,7 +1491,7 @@
   --dc-popover-font: 12px;
   --dc-popover-caret: 8px;
   /* Portaled into React Flow's root in screen space (see `useOverlayPosition`) and placed purely by
-     its inline transform — so it keeps its size at every zoom and sits above every node. */
+  its inline transform — so it keeps its size at every zoom and sits above every node. */
   position: absolute;
   top: 0;
   left: 0;
@@ -1612,8 +1612,8 @@
   border-radius: var(--dc-radius-sm);
   font-size: var(--dc-popover-font);
   transition:
-    background 90ms ease,
-    color 90ms ease;
+  background 90ms ease,
+  color 90ms ease;
 }
 
 .dc-popover-row .dc-button[data-icon-only='true'] {
@@ -1719,41 +1719,41 @@
 
 @keyframes dc-popover-in {
   from {
-    opacity: 0;
-    transform: scale(0.96);
+  opacity: 0;
+  transform: scale(0.96);
   }
   to {
-    opacity: 1;
-    transform: scale(1);
+  opacity: 1;
+  transform: scale(1);
   }
 }
 
 @keyframes dc-popover-out {
   from {
-    opacity: 1;
-    transform: scale(1);
+  opacity: 1;
+  transform: scale(1);
   }
   to {
-    opacity: 0;
-    transform: scale(0.96);
+  opacity: 0;
+  transform: scale(0.96);
   }
 }
 
 @keyframes dc-popover-fade-in {
   from {
-    opacity: 0;
+  opacity: 0;
   }
   to {
-    opacity: 1;
+  opacity: 1;
   }
 }
 
 @keyframes dc-popover-fade-out {
   from {
-    opacity: 1;
+  opacity: 1;
   }
   to {
-    opacity: 0;
+  opacity: 0;
   }
 }
 
@@ -1886,8 +1886,8 @@
   font: inherit;
   font-size: var(--dc-popover-font, 12px);
   transition:
-    border-color 90ms ease,
-    background 90ms ease;
+  border-color 90ms ease,
+  background 90ms ease;
 }
 
 .dc-inspector-control:hover {
@@ -2229,8 +2229,8 @@
   border-radius: 50%;
   cursor: pointer;
   transition:
-    transform 90ms ease,
-    border-color 90ms ease;
+  transform 90ms ease,
+  border-color 90ms ease;
 }
 
 .dc-inspector-color-swatch:hover {
@@ -2461,14 +2461,14 @@
 
 @keyframes dc-empty-note-in {
   from {
-    opacity: 0;
-    transform: translateY(4px);
+  opacity: 0;
+  transform: translateY(4px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dc-empty-room-note {
-    animation: none;
+  animation: none;
   }
 }
 
@@ -2519,10 +2519,11 @@
 .dc-empty-stage {
   display: flex;
   align-items: center;
+  gap: 56px;
   max-width: 100%;
   padding: 0 32px;
   /* Optically centred, not mathematically: the composition's weight sits low (names under
-     drawings), so lifting it off the true middle is what makes it look centred. */
+  drawings), so lifting it off the true middle is what makes it look centred. */
   margin-bottom: 5vh;
 }
 
@@ -2597,25 +2598,20 @@
 
 /* ---- the connector ---- */
 
-/*
- * Wide enough that the trunk still reads on both sides of its caption. The caption is an edge
- * label the way the canvas draws one — opaque, sitting on the line — so a short gutter doesn't
- * produce a subtle connector, it produces no connector at all.
- */
-.dc-empty-wire {
-  position: relative;
-  flex: none;
-  align-self: stretch;
-  width: 172px;
-}
-
-/* The wide-screen composition says this with a drawn connector; below that breakpoint there is no
-   gutter to draw one through, so the same beat is a caption on a short vertical stem. */
-.dc-empty-cheat {
-  display: none;
-}
-
 /* ---- the starters ---- */
+
+.dc-empty-more {
+  margin: 12px 0 0;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+.dc-empty-more kbd {
+  font: 600 10.5px/1 var(--dc-mono);
+  padding: 1px 4px;
+  border: 1px solid var(--dc-border);
+  border-radius: 4px;
+}
 
 .dc-empty-pick {
   flex: none;
@@ -2650,89 +2646,7 @@
   display: none;
 }
 
-.dc-empty-browse {
-  margin: 14px 0 0 2px;
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  color: var(--dc-text-faint);
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: color 120ms ease;
-}
-
-.dc-empty-browse:hover {
-  color: var(--dc-text);
-}
-
-.dc-empty-browse:focus-visible {
-  border-radius: 3px;
-  outline: 2px solid var(--dc-selection);
-  outline-offset: 3px;
-}
-
 /* ---- arrival and exit -------------------------------------------------- */
-
-/*
- * One pass, under 400ms end to end, in the order the composition reads: the instruction, then
- * the connector drawing itself out of it, then the starters it arrives at. `data-intro` is set
- * only for the canvas someone just opened — see `EmptyState.tsx`.
- */
-
-@keyframes dc-empty-rise {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-
-.dc-empty[data-intro='true'] .dc-empty-crops span {
-  animation: dc-fade-in 200ms ease both;
-}
-
-.dc-empty[data-intro='true'] .dc-empty-title,
-.dc-empty[data-intro='true'] .dc-empty-hint,
-.dc-empty[data-intro='true'] .dc-empty-keys {
-  animation: dc-empty-rise 220ms var(--dc-ease-out) both;
-}
-
-.dc-empty[data-intro='true'] .dc-empty-hint {
-  animation-delay: 50ms;
-}
-
-.dc-empty[data-intro='true'] .dc-empty-keys {
-  animation-delay: 90ms;
-}
-
-.dc-empty[data-intro='true'] .dc-wire-trunk,
-.dc-empty[data-intro='true'] .dc-wire-spine,
-.dc-empty[data-intro='true'] .dc-wire-branch path:first-child {
-  stroke-dasharray: 1;
-  animation: dc-draw-in 200ms var(--dc-ease-out) 100ms both;
-}
-
-.dc-empty[data-intro='true'] .dc-wire-source,
-.dc-empty[data-intro='true'] .dc-empty-cheat {
-  animation: dc-fade-in 160ms ease 100ms both;
-}
-
-.dc-empty[data-intro='true'] .dc-wire-caption {
-  animation: dc-fade-in 160ms ease 180ms both;
-}
-
-.dc-empty[data-intro='true'] .dc-wire-junction,
-.dc-empty[data-intro='true'] .dc-wire-arrow {
-  animation: dc-fade-in 160ms ease 260ms both;
-}
-
-.dc-empty[data-intro='true'] .dc-starter {
-  animation: dc-empty-rise 220ms var(--dc-ease-out) calc(100ms + var(--i, 0) * 25ms) both;
-}
-
-.dc-empty[data-intro='true'] .dc-empty-browse {
-  animation: dc-fade-in 200ms ease 250ms both;
-}
 
 /*
  * Leaving. The fade is a courtesy; the pointer-events kill is not — it lands on the same render
@@ -2754,11 +2668,11 @@
   .dc-empty *,
   .dc-empty *::before,
   .dc-empty *::after {
-    animation: none !important;
+  animation: none !important;
   }
 
   .dc-empty[data-leaving='true'] {
-    transition: none;
+  transition: none;
   }
 }
 
@@ -2772,111 +2686,35 @@
  */
 @media (max-width: 1139px) {
   .dc-empty-stage {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    margin-bottom: 3vh;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 3vh;
   }
 
   .dc-empty-start {
-    max-width: 272px;
-  }
-
-  .dc-empty-wire {
-    display: none;
-  }
-
-  .dc-empty-cheat {
-    display: block;
-    position: relative;
-    /* Room above for the source dot to sit clear of the legend row it leaves from. */
-    margin: 46px 0 40px;
-    color: var(--dc-text-muted);
-    font-size: 12px;
-    font-weight: 500;
-  }
-
-  /* The stem, above and below the words — the horizontal connector stood on its end, with the
-     same source dot and arrowhead, so it is the same drawing rather than a decorative rule. */
-  .dc-empty-cheat::before,
-  .dc-empty-cheat::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    width: 1px;
-    height: 20px;
-    background: var(--dc-edge);
-    opacity: 0.55;
-  }
-
-  .dc-empty-cheat::before {
-    top: -26px;
-  }
-
-  .dc-empty-cheat::after {
-    bottom: -26px;
-  }
-
-  .dc-empty-cheat span::before,
-  .dc-empty-cheat span::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    border: 1.25px solid var(--dc-edge);
-  }
-
-  /* Where the connector leaves the instruction: hollow, the way the canvas draws a source. */
-  .dc-empty-cheat span::before {
-    top: -34px;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--dc-canvas);
-    transform: translate(-50%, 0);
-  }
-
-  /* And where it arrives. */
-  .dc-empty-cheat span::after {
-    bottom: -32px;
-    width: 6px;
-    height: 6px;
-    border-top: 0;
-    border-left: 0;
-    border-radius: 1px;
-    transform: translate(-50%, 0) rotate(45deg);
+  max-width: 272px;
   }
 
   .dc-empty-row:nth-child(2) {
-    margin-left: 0;
+  margin-left: 0;
   }
 
   .dc-empty-pick {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   }
 }
 
 /* One pair is still a composition; four crammed into this width is not. */
 @media (max-width: 759px) {
   .dc-empty-crops {
-    display: none;
+  display: none;
   }
 
   .dc-empty-row:nth-child(2) {
-    display: none;
-  }
-}
-
-/* No room to draw anything without crowding the instruction it exists to support. */
-@media (max-width: 559px), (max-height: 559px) {
-  .dc-empty-rows,
-  .dc-empty-cheat {
-    display: none;
-  }
-
-  .dc-empty-browse {
-    margin-top: 22px;
+  display: none;
   }
 }
 
@@ -3026,29 +2864,29 @@
    Reduced motion holds the steady state from the first frame. */
 @media (prefers-reduced-motion: no-preference) {
   .dc-emphasis {
-    animation: dc-emphasis-in 220ms var(--dc-ease-out) both;
+  animation: dc-emphasis-in 220ms var(--dc-ease-out) both;
   }
 
   .dc-emphasis[data-role='target'],
   .dc-emphasis[data-role='both'] {
-    animation:
-      dc-emphasis-in 220ms var(--dc-ease-out) both,
-      dc-emphasis-arrive 520ms var(--dc-ease-out) calc(var(--dc-signal-ms) * 0.82) both;
+  animation:
+  dc-emphasis-in 220ms var(--dc-ease-out) both,
+  dc-emphasis-arrive 520ms var(--dc-ease-out) calc(var(--dc-signal-ms) * 0.82) both;
   }
 
   @keyframes dc-emphasis-in {
-    from {
-      opacity: 0;
+  from {
+  opacity: 0;
     }
   }
 
   @keyframes dc-emphasis-arrive {
     0%,
     100% {
-      filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 60%, transparent));
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 60%, transparent));
     }
     35% {
-      filter: drop-shadow(0 0 7px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 78%, transparent));
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 78%, transparent));
     }
   }
 }
@@ -3071,7 +2909,7 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .dc-node[data-explain-crossed='true']::before {
-    animation: dc-fade-in 420ms var(--dc-ease-out) both;
+  animation: dc-fade-in 420ms var(--dc-ease-out) both;
   }
 }
 
@@ -3130,14 +2968,14 @@
   color: var(--dc-text);
   box-shadow:
     0 0 0 4px color-mix(in srgb, var(--dc-callout-accent) 6%, transparent),
-    var(--dc-shadow-panel);
+  var(--dc-shadow-panel);
 }
 
 /* The thread: one hairline runs down the leaves, each attachment knotted onto it in its own accent —
    the connector's line, continued into what it has to say. */
 .dc-callout-thread {
   /* `--dc-callout-room`: docked on a short canvas, the space left above the flow bar (less the
-     card's border) — set by `PresentationCallout`, so the thread scrolls instead of covering it. */
+  card's border) — set by `PresentationCallout`, so the thread scrolls instead of covering it. */
   max-height: min(320px, 45vh, calc(var(--dc-callout-room, 9999px) - 2px));
   margin: 0;
   padding: 11px 16px 13px 13px;
@@ -3176,9 +3014,9 @@
   left: 3px;
   width: 1px;
   background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--dc-leaf-line) 90%, transparent),
-    color-mix(in srgb, var(--dc-leaf-line) 35%, transparent)
+  to bottom,
+  color-mix(in srgb, var(--dc-leaf-line) 90%, transparent),
+  color-mix(in srgb, var(--dc-leaf-line) 35%, transparent)
   );
 }
 
@@ -3297,79 +3135,79 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .dc-callout-pulse {
-    animation: dc-callout-pulse 380ms ease-out 40ms both;
+  animation: dc-callout-pulse 380ms ease-out 40ms both;
   }
 
   .dc-callout-leader {
-    transform-origin: 0 50%;
-    animation: dc-callout-draw 150ms var(--dc-ease-out) 60ms both;
+  transform-origin: 0 50%;
+  animation: dc-callout-draw 150ms var(--dc-ease-out) 60ms both;
   }
 
   .dc-callout-card {
-    animation: dc-callout-in 240ms var(--dc-ease-out) 120ms both;
+  animation: dc-callout-in 240ms var(--dc-ease-out) 120ms both;
   }
 
   .dc-callout-leaf {
-    animation: dc-callout-leaf-in 220ms var(--dc-ease-out) calc(170ms + var(--i, 0) * 45ms) both;
+  animation: dc-callout-leaf-in 220ms var(--dc-ease-out) calc(170ms + var(--i, 0) * 45ms) both;
   }
 
   .dc-callout[data-leaving='true'] {
-    animation: dc-callout-out 140ms ease forwards;
+  animation: dc-callout-out 140ms ease forwards;
   }
 }
 
 @keyframes dc-callout-pulse {
   from {
-    opacity: 0.7;
-    scale: 1;
+  opacity: 0.7;
+  scale: 1;
   }
   to {
-    opacity: 0;
-    scale: 1.55;
+  opacity: 0;
+  scale: 1.55;
   }
 }
 
 @keyframes dc-callout-draw {
   from {
-    scale: 0 1;
+  scale: 0 1;
   }
   to {
-    scale: 1 1;
+  scale: 1 1;
   }
 }
 
 @keyframes dc-callout-in {
   from {
-    opacity: 0;
-    translate: var(--dc-callout-from);
-    scale: 0.97;
+  opacity: 0;
+  translate: var(--dc-callout-from);
+  scale: 0.97;
   }
   to {
-    opacity: 1;
-    translate: 0 0;
-    scale: 1;
+  opacity: 1;
+  translate: 0 0;
+  scale: 1;
   }
 }
 
 @keyframes dc-callout-leaf-in {
   from {
-    opacity: 0;
-    translate: 0 3px;
+  opacity: 0;
+  translate: 0 3px;
   }
   to {
-    opacity: 1;
-    translate: 0 0;
+  opacity: 1;
+  translate: 0 0;
   }
 }
 
 @keyframes dc-callout-out {
   from {
-    opacity: 1;
-    translate: 0 0;
+  opacity: 1;
+  translate: 0 0;
   }
   to {
-    opacity: 0;
-    translate: 0 -3px;
+  opacity: 0;
+  translate: 0 -3px;
   }
 }
 
@@ -3522,35 +3360,35 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .dc-node[data-jump-flash='true']::after {
-    animation: dc-jump-flash 900ms ease-out 1;
+  animation: dc-jump-flash 900ms ease-out 1;
   }
 
   .dc-edge[data-jump-flash='true'] .dc-edge-line {
-    animation: dc-jump-flash-edge 900ms ease-out 1;
+  animation: dc-jump-flash-edge 900ms ease-out 1;
   }
 }
 
 @keyframes dc-jump-flash {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--dc-selection) 55%, transparent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--dc-selection) 55%, transparent);
   }
   40% {
-    box-shadow: 0 0 0 14px color-mix(in srgb, var(--dc-selection) 22%, transparent);
+  box-shadow: 0 0 0 14px color-mix(in srgb, var(--dc-selection) 22%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 0%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 0%, transparent);
   }
 }
 
 @keyframes dc-jump-flash-edge {
   0% {
-    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
+  filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
   }
   40% {
-    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--dc-selection) 95%, transparent));
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--dc-selection) 95%, transparent));
   }
   100% {
-    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 60%, transparent));
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 60%, transparent));
   }
 }
 
@@ -3658,7 +3496,7 @@
    therefore React keys) now stay stable across such a recompute; see `uiStore.ts`'s `sameOffer`. */
 @media (prefers-reduced-motion: no-preference) {
   .dc-ghost-node {
-    transition: transform 140ms ease;
+  transition: transform 140ms ease;
   }
 }
 
@@ -3762,20 +3600,20 @@
 @media (prefers-reduced-motion: no-preference) {
   .dc-ghost-node-body,
   .dc-ghost-pill {
-    animation: dc-attachment-card-in 120ms ease;
+  animation: dc-attachment-card-in 120ms ease;
   }
 
   .dc-node[data-settle='true'] {
-    animation: dc-ghost-settle 180ms ease-out 1;
+  animation: dc-ghost-settle 180ms ease-out 1;
   }
 }
 
 @keyframes dc-ghost-settle {
   from {
-    opacity: 0.42;
+  opacity: 0.42;
   }
   to {
-    opacity: 1;
+  opacity: 1;
   }
 }
 
@@ -3936,7 +3774,7 @@
 [data-personality='sketch'] .dc-room-mark,
 [data-personality='draft'] .dc-room-mark {
   /* Register marks stay square in every personality: they are printer's marks on the sheet, not
-     something drawn on it — the same four the empty canvas uses. Only the weight softens. */
+  something drawn on it — the same four the empty canvas uses. Only the weight softens. */
   opacity: 0.4;
 }
 
@@ -3962,7 +3800,7 @@
   color: var(--dc-accent-violet-chip);
   cursor: pointer;
   /* Clickable while presenting too, when React Flow stops nodes receiving the pointer: the tab is
-     how a presenter shows what is still open here. */
+  how a presenter shows what is still open here. */
   pointer-events: all;
 }
 
@@ -4035,8 +3873,8 @@
   visibility: hidden;
   opacity: 0;
   transition:
-    opacity 120ms ease,
-    visibility 0s linear 120ms;
+  opacity 120ms ease,
+  visibility 0s linear 120ms;
 }
 
 .dc-open-point-marker[data-variant='edge'] .dc-open-point-preview {
@@ -4050,8 +3888,8 @@
   visibility: visible;
   opacity: 1;
   transition:
-    opacity 120ms ease 260ms,
-    visibility 0s linear 260ms;
+  opacity 120ms ease 260ms,
+  visibility 0s linear 260ms;
 }
 
 /* While the popover is up the preview would only repeat it. */
@@ -4093,7 +3931,7 @@
   .dc-open-point-preview,
   .dc-open-point-marker:hover .dc-open-point-preview,
   .dc-open-point-marker:focus-visible .dc-open-point-preview {
-    transition: none;
+  transition: none;
   }
 }
 
@@ -4168,9 +4006,9 @@
   line-height: 1.2;
   cursor: pointer;
   transition:
-    border-color 90ms ease,
-    color 90ms ease,
-    background-color 90ms ease;
+  border-color 90ms ease,
+  color 90ms ease,
+  background-color 90ms ease;
 }
 
 .dc-open-point-kind:hover {

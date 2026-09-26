@@ -1,39 +1,30 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { PRODUCT } from '../../product';
 import type { StarterId } from '../../starters';
 import type { DocumentSession } from '../../store/useDocumentSession';
+import { MOD_SYMBOL } from '../../lib/platform';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
-import { Wire } from '../common/Wire';
-import { useWireGeometry } from '../common/wireGeometry';
 import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { SelectionChrome } from './SelectionChrome';
-import { StarterShelf } from './StarterShelf';
-import { useSpotlight } from './useSpotlight';
+import { StarterGrid } from './StarterGrid';
 import { useStarters } from './useStarters';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 
 /**
  * The home screen for a library with nothing in it — the first thing anyone sees, so it does one
- * job: get them drawing. It is laid out as the smallest diagram that explains itself: a blank
- * canvas, a connector captioned "or cheat a little", fanning out to every starter Draft Canvas
- * already knows. Primary → head start → import, in that order and at those weights, and nothing
- * that describes the product instead of being it.
+ * job: get them drawing. A blank canvas to start on, an import for a file someone sent, and the
+ * primary starters for a head start — in that order and at those weights, and nothing that
+ * describes the product instead of being it.
  *
  * Enter on an otherwise unfocused page starts a blank canvas — the ↵ on the sheet says so, and
  * disappears the moment anything else on the page holds focus (where Enter means that thing).
  */
 export function FirstRunHome({ session, onImport }: { session: DocumentSession; onImport: () => void }) {
   const sheetRef = useRef<HTMLButtonElement>(null);
-  const shelfRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const wireRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const importHintId = useId();
-  const wire = useWireGeometry(stageRef, wireRef, sheetRef, '.dc-shelf-label');
-  const spotlight = useSpotlight(sheetRef);
-  // Which branch of the index is open, so the wire can light that one.
-  const [branch, setBranch] = useState(0);
 
   const startBlank = () => void session.newDocument();
   const starters = useStarters();
@@ -69,7 +60,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
           <p className="dc-home-tagline">{PRODUCT.tagline}</p>
         </header>
 
-        <div className="dc-home-stage" ref={stageRef}>
+        <div className="dc-home-stage">
           <div className="dc-home-start">
             <button
               ref={sheetRef}
@@ -77,12 +68,9 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
               className="dc-sheet"
               aria-label="New canvas"
               onClick={startBlank}
-              onPointerMove={spotlight.move}
-              onPointerLeave={spotlight.leave}
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowRight' && event.key !== 'ArrowDown') return;
-                // The open branch's first tile; the other panels are inert and can't take focus.
-                const first = shelfRef.current?.querySelector<HTMLButtonElement>('.dc-shelf-grid:not([inert]) .dc-starter');
+                const first = gridRef.current?.querySelector<HTMLButtonElement>('.dc-starter');
                 if (!first) return;
                 event.preventDefault();
                 first.focus();
@@ -109,26 +97,18 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
             </span>
           </div>
 
-          <div className="dc-home-wire" ref={wireRef} aria-hidden="true">
-            {wire && <Wire geometry={wire} caption="or cheat a little" active={branch} />}
-          </div>
-
           <div className="dc-home-starters">
-            <p className="dc-home-cheat" aria-hidden="true">
-              Or cheat a little.
-            </p>
+            <p className="dc-home-starters-label">Or start from an architecture</p>
             {starters ? (
-              <StarterShelf
-                starters={starters.ARCHITECTURE_STARTERS}
-                onStart={startFrom}
-                onExitStart={() => sheetRef.current?.focus()}
-                onActiveChange={setBranch}
-                shelfRef={shelfRef}
-                mode="index"
-              />
+              <StarterGrid starters={starters.PRIMARY_STARTERS} onStart={startFrom} onExitStart={() => sheetRef.current?.focus()} gridRef={gridRef} />
             ) : (
-              <div className="dc-shelf-pending" aria-hidden="true" />
+              <div className="dc-starter-grid-pending" aria-hidden="true" />
             )}
+            <p className="dc-home-more dc-muted">
+              More architectures and patterns are in the command palette once a canvas is open: press{' '}
+              <kbd>{MOD_SYMBOL}</kbd>
+              <kbd>K</kbd> and type a name.
+            </p>
           </div>
         </div>
 

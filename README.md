@@ -36,7 +36,7 @@ own, and [in Docker](#running-it-yourself), on your own server.
 - **C4-aware depth**: look inside a Service or Component to draw what runs there, and [explain a system at different levels](docs/guides/depth.md)
 - **Flows and presentations**: group connectors into a flow and present it one step at a time, moving between flows without leaving the presentation; export a flow as a Mermaid or PlantUML sequence diagram
 - **Keyboard-first**: press a letter to drop a shape, `Tab` to accept a suggestion, `⌘K` for everything else
-- **Starters**: compose a known architecture from the command palette: Monolith, Microservices, Event-Driven, Hexagonal, CQRS, Saga, Outbox, Medallion and more
+- **Starters**: begin from a composed architecture — Monolith, Microservices, Event-Driven, Hexagonal or CQRS up front, [eight more](docs/guides/examples.md) by name in the command palette
 - **Local by default**: diagrams are saved in your browser (IndexedDB); no backend and no account. It works offline once loaded, and a test in the suite fails on any network API in the editor's source ([what's stored, and where](docs/reference/privacy.md))
 - **Export**: editable `.draftcanvas` JSON, passphrase-encrypted `.dcenc`, PNG, SVG, and Mermaid or PlantUML source
 
@@ -53,7 +53,7 @@ and ship together in each [release](https://github.com/acltabontabon/draft-canva
 | --- | --- | --- | --- |
 | [Web app](https://acltabontabon.com/draft-canvas/editor/) | A modern browser | The browser (IndexedDB) | Stable |
 | [Docker](#running-it-yourself) | Your own server, behind HTTPS | The visitor's browser, as above | Stable |
-| [Desktop](#desktop) | macOS (Apple Silicon, Intel), Windows x64 | `.draftcanvas` files and folders | Stable, with unsigned installers; `desktop-v…-alpha` tags are previews |
+| [Desktop](#desktop) | macOS (Apple Silicon, Intel), Windows x64 | `.draftcanvas` files and folders | Stable, with unsigned installers; `desktop-v…-alpha`/`-beta` tags are previews that never replace a stable install |
 | [VS Code](#in-vs-code) | VS Code 1.100 or later | The `.draftcanvas` file you opened | 0.x; loads the hosted editor, so it needs to reach `acltabontabon.com` |
 
 There's no Linux desktop build. Nothing is synced between them; a `.draftcanvas` file is how a

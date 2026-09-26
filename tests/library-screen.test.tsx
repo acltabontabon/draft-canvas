@@ -7,7 +7,7 @@ import type { DraftSummary, Project } from '../src/document/types';
 import { useUiStore } from '../src/store/uiStore';
 import type { DocumentSession } from '../src/store/useDocumentSession';
 import { LibraryScreen } from '../src/ui/Library/LibraryScreen';
-import { STARTER_IDS } from '../src/starters';
+import { PRIMARY_STARTERS } from '../src/starters';
 import { loadStarters } from '../src/starters/load';
 
 /**
@@ -79,7 +79,7 @@ describe('LibraryScreen — first run', () => {
     expect(await screen.findByRole('button', { name: 'Start from Monolith' })).toBeInTheDocument();
   });
 
-  it('offers every starter and none of the library a first run has nothing to fill', async () => {
+  it('offers the primary starters and none of the library a first run has nothing to fill', () => {
     const session = stubSession();
     const { container } = render(<LibraryScreen session={session} />);
 
@@ -90,36 +90,15 @@ describe('LibraryScreen — first run', () => {
     expect(screen.getByRole('button', { name: 'About Draft Canvas' })).toBeInTheDocument();
     // Still exactly one file input, whatever state the screen is in.
     expect(container.querySelectorAll('input[type="file"]')).toHaveLength(1);
-    // The index names every category the catalog has, in its order, and opens the first.
+    // One flat row of the five, in the catalog's order; no categories, no browser behind it.
     const group = screen.getByRole('group', { name: 'Starters' });
-    const tabs = within(group).getAllByRole('tab');
-    // A closed branch says its name, and nothing else.
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Architectures', 'Data Architectures', 'Patterns']);
-    expect(tabs.map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
-    expect(within(group).getByRole('tab', { name: 'Architectures' })).toBe(tabs[0]);
-    // Only the open branch's tiles are on the page; the others are drawn, but inert and hidden.
-    expect(group.querySelector('[aria-label="Start from Kappa"]')?.closest('[inert]')).not.toBeNull();
-    const visible = () => within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'));
-    expect(visible()).toEqual([
-      'Start from Monolith',
-      'Start from Modular Monolith',
-      'Start from Microservices',
-      'Start from Event-Driven',
-      'Start from Hexagonal',
-      'Start from Backend for Frontend',
-      'Start from CQRS',
-    ]);
-    await userEvent.click(within(group).getByRole('tab', { name: 'Data Architectures' }));
-    expect(visible()).toEqual(['Start from Medallion', 'Start from Kappa', 'Start from Change Data Capture']);
-    expect(within(group).getByRole('tab', { name: 'Data Architectures' })).toHaveAttribute('aria-selected', 'true');
-    await userEvent.click(within(group).getByRole('tab', { name: 'Patterns' }));
-    expect(visible()).toEqual([
-      'Start from Saga – Orchestration',
-      'Start from Saga – Choreography',
-      'Start from Transactional Outbox',
-    ]);
-    // Every tile is still in the document: the shelf keeps the tallest branch's height.
-    expect(within(group).getAllByRole('button', { hidden: true })).toHaveLength(STARTER_IDS.length);
+    expect(within(group).queryAllByRole('tab')).toHaveLength(0);
+    expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(
+      PRIMARY_STARTERS.map((starter) => `Start from ${starter.name}`),
+    );
+    expect(PRIMARY_STARTERS.map((starter) => starter.id)).toEqual(['monolith', 'microservices', 'event-driven', 'hexagonal', 'cqrs']);
+    // The rest are a name away in the palette, and said to be.
+    expect(screen.getByText(/More architectures and patterns are in the command palette/)).toBeInTheDocument();
   });
 
   it('seeds a canvas from a starter, from the keyboard', async () => {
@@ -135,11 +114,9 @@ describe('LibraryScreen — first run', () => {
     render(<LibraryScreen session={stubSession()} />);
     expect(screen.getAllByRole('button', { name: /new canvas/i })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /import/i })).toHaveLength(1);
-    // Only the starters live inside the starter group — nothing else may join it: the open
-    // branch's seven on the page, all thirteen in the document.
+    // Only the starters live inside the starter group — nothing else may join it.
     const group = screen.getByRole('group', { name: 'Starters' });
-    expect(within(group).getAllByRole('button')).toHaveLength(7);
-    expect(within(group).getAllByRole('button', { hidden: true })).toHaveLength(STARTER_IDS.length);
+    expect(within(group).getAllByRole('button')).toHaveLength(PRIMARY_STARTERS.length);
   });
 
   it('starts a blank canvas on Enter when nothing on the page has focus', async () => {
@@ -169,39 +146,13 @@ describe('LibraryScreen — first run', () => {
     await userEvent.keyboard('{ArrowRight}');
     expect(screen.getByRole('button', { name: 'Start from Monolith' })).toHaveFocus();
     await userEvent.keyboard('{ArrowRight}');
-    expect(screen.getByRole('button', { name: 'Start from Modular Monolith' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Start from Microservices' })).toHaveFocus();
     await userEvent.keyboard('{End}');
     expect(screen.getByRole('button', { name: 'Start from CQRS' })).toHaveFocus();
-    // Past the shelf's last row, ↓ opens the next branch and lands in it; ↑ comes back.
-    await userEvent.keyboard('{ArrowDown}');
-    expect(screen.getByRole('tab', { name: 'Data Architectures' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('button', { name: 'Start from Medallion' })).toHaveFocus();
-    await userEvent.keyboard('{ArrowUp}');
-    expect(screen.getByRole('tab', { name: 'Architectures' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{ArrowRight}');
     expect(screen.getByRole('button', { name: 'Start from CQRS' })).toHaveFocus();
     await userEvent.keyboard('{Home}{ArrowLeft}');
     expect(sheet).toHaveFocus();
-  });
-
-  it('walks the index itself: ↑/↓ open a branch, → steps into it', async () => {
-    render(<LibraryScreen session={stubSession()} />);
-    const architectures = screen.getByRole('tab', { name: 'Architectures' });
-    // The open branch is the index's one Tab stop.
-    expect(architectures).toHaveAttribute('tabindex', '0');
-    expect(screen.getByRole('tab', { name: 'Patterns' })).toHaveAttribute('tabindex', '-1');
-    architectures.focus();
-    await userEvent.keyboard('{ArrowDown}');
-    const data = screen.getByRole('tab', { name: 'Data Architectures' });
-    expect(data).toHaveFocus();
-    expect(data).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('button', { name: 'Start from Kappa' }).closest('[inert]')).toBeNull();
-    // End opens the last branch, whichever it is.
-    await userEvent.keyboard('{End}');
-    expect(screen.getByRole('tab', { name: 'Patterns' })).toHaveFocus();
-    await userEvent.keyboard('{ArrowRight}');
-    expect(screen.getByRole('button', { name: 'Start from Saga – Orchestration' })).toHaveFocus();
-    await userEvent.keyboard('{ArrowLeft}');
-    expect(screen.getByRole('button', { name: 'New canvas' })).toHaveFocus();
   });
 
   it('names what a starter is to a screen reader without a tooltip', () => {
@@ -214,7 +165,7 @@ describe('LibraryScreen — first run', () => {
   it('draws each starter from its own topology', () => {
     const { container } = render(<LibraryScreen session={stubSession()} />);
     const tiles = container.querySelectorAll('.dc-starter');
-    expect(tiles).toHaveLength(STARTER_IDS.length);
+    expect(tiles).toHaveLength(PRIMARY_STARTERS.length);
     for (const tile of tiles) {
       expect(tile.querySelector('svg.dc-starter-glyph .dc-starter-edge-line')).not.toBeNull();
     }

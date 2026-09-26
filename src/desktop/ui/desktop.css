@@ -7,7 +7,7 @@
 
 .dc-desk {
   /* The editor's grid dot, a step quieter than the web home's: here it runs behind the words and
-     the drawings too, so it stays well under both. */
+  the drawings too, so it stays well under both. */
   --dc-home-dot: color-mix(in srgb, var(--dc-text-faint) 17%, transparent);
   /* How large the row's drawings are: Home sets it, larger once there is work to come back to. */
   --tile-scale: 1;
@@ -47,18 +47,9 @@
   mask-image: radial-gradient(ellipse 70% 72% at 50% 44%, #000 30%, transparent 100%);
 }
 
-/* …and it notices the pointer: the dots nearest it light up in the selection colour. */
-.dc-desk-canvas::after {
-  background-image: radial-gradient(circle, var(--dc-selection) 1.1px, transparent 1.5px);
-  -webkit-mask-image: radial-gradient(circle 140px at var(--x) var(--y), rgba(0, 0, 0, 0.32), transparent);
-  mask-image: radial-gradient(circle 140px at var(--x) var(--y), rgba(0, 0, 0, 0.32), transparent);
-  opacity: 0;
-  transition: opacity 240ms ease;
-}
-
 @media (hover: hover) {
   .dc-desk:hover .dc-desk-canvas::after {
-    opacity: 1;
+  opacity: 1;
   }
 }
 
@@ -79,7 +70,7 @@
 
 @media (hover: hover) {
   :root[data-theme='dark'] .dc-desk:hover .dc-desk-canvas::after {
-    opacity: 0.5;
+  opacity: 0.5;
   }
 }
 
@@ -105,24 +96,8 @@
    `dc-screen-in` is defined once, in app.css, and shared with `.dc-editor` and `.dc-browse`. */
 @media (prefers-reduced-motion: no-preference) {
   .dc-desk-stage {
-    animation: dc-screen-in 160ms var(--dc-ease-out) both;
+  animation: dc-screen-in 160ms var(--dc-ease-out) both;
   }
-}
-
-.dc-desk-stage > :not(.dc-desk-wires) {
-  position: relative;
-  z-index: 1;
-}
-
-.dc-desk-wires {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: visible;
-  fill: none;
-  stroke: var(--dc-edge);
-  stroke-width: 1.25;
-  pointer-events: none;
 }
 
 /* ---- the motto: a text node, just placed, still selected ---------------- */
@@ -234,9 +209,9 @@
     0 1px 2px rgba(0, 0, 0, 0.1),
     0 8px 20px -14px var(--dc-selection);
   transition:
-    transform 80ms ease,
-    filter 120ms ease,
-    box-shadow 200ms ease;
+  transform 80ms ease,
+  filter 120ms ease,
+  box-shadow 200ms ease;
 }
 
 .dc-desk[data-mode='returning'] .dc-desk-action {
@@ -327,8 +302,8 @@
   font-weight: 550;
   cursor: pointer;
   transition:
-    color 120ms ease,
-    background 120ms ease;
+  color 120ms ease,
+  background 120ms ease;
 }
 
 .dc-desk-label [role='tab']:hover {
@@ -416,7 +391,7 @@
 .dc-desk-row .dc-desk-tile {
   width: calc(144px * var(--tile-scale));
   /* The drops end inside the swatch, at each drawing's frame: a halo over the whole tile would fade
-     them out. Here only the words get clean canvas behind them. */
+  them out. Here only the words get clean canvas behind them. */
   background: none;
 }
 
@@ -452,7 +427,7 @@
 
 @media (hover: hover) {
   .dc-desk-row .dc-starter:hover .dc-starter-swatch::before {
-    background: color-mix(in srgb, var(--dc-text) 3%, transparent);
+  background: color-mix(in srgb, var(--dc-text) 3%, transparent);
   }
 }
 
@@ -597,9 +572,9 @@
   cursor: pointer;
   opacity: 0;
   transition:
-    opacity 120ms ease,
-    color 120ms ease,
-    background 120ms ease;
+  opacity 120ms ease,
+  color 120ms ease,
+  background 120ms ease;
 }
 
 .dc-desk-tile:hover .dc-desk-tile-action,
@@ -620,7 +595,7 @@
 
 @media (hover: none) {
   .dc-desk-tile-action {
-    opacity: 1;
+  opacity: 1;
   }
 }
 
@@ -717,7 +692,7 @@
    by `.dc-desk-stage` above. */
 @media (prefers-reduced-motion: no-preference) {
   .dc-browse {
-    animation: dc-screen-in 160ms var(--dc-ease-out) both;
+  animation: dc-screen-in 160ms var(--dc-ease-out) both;
   }
 }
 
@@ -774,8 +749,8 @@
   background: var(--dc-surface);
   color: var(--dc-text-faint);
   transition:
-    border-color 120ms ease,
-    box-shadow 160ms ease;
+  border-color 120ms ease,
+  box-shadow 160ms ease;
 }
 
 .dc-browse-search:focus-within {
@@ -1017,11 +992,11 @@
 
 @media (max-width: 720px) {
   .dc-browse {
-    padding: 0 16px 56px;
+  padding: 0 16px 56px;
   }
 
   .dc-browse-add {
-    display: none;
+  display: none;
   }
 }
 
@@ -1048,89 +1023,6 @@
   stroke-linecap: round;
 }
 
-/* ---- the connectors ----------------------------------------------------- */
-
-.dc-desk-link,
-.dc-desk-route-line {
-  stroke-dasharray: 1;
-}
-
-.dc-desk-arrow {
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.dc-desk-anchor {
-  fill: var(--dc-canvas);
-  stroke-width: 1.5;
-}
-
-.dc-desk-junction {
-  fill: var(--dc-edge);
-  stroke: none;
-}
-
-.dc-desk-route {
-  transition: opacity 140ms ease;
-}
-
-/* The way to "more" is a promise, not a place: drawn dashed. */
-.dc-desk-route[data-dashed] .dc-desk-route-line {
-  stroke-dasharray: 0.012 0.018;
-}
-
-/* The route to what the pointer is on, lit end to end, and one pulse travelling down it. */
-.dc-desk-route[data-hot] .dc-desk-route-line,
-.dc-desk-route[data-hot] .dc-desk-arrow {
-  stroke: var(--dc-selection);
-}
-
-.dc-desk-route-pulse {
-  stroke: var(--dc-text);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-dasharray: 0.08 2;
-  stroke-dashoffset: 0.08;
-  opacity: 0;
-}
-
-.dc-desk-route[data-hot] .dc-desk-route-pulse {
-  animation: dc-desk-pulse 560ms var(--dc-ease-out) 1 both;
-}
-
-@keyframes dc-desk-pulse {
-  0% {
-    stroke-dashoffset: 0.08;
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    stroke-dashoffset: -1;
-    opacity: 0;
-  }
-}
-
-/* ---- arrival: the diagram draws itself, once ----------------------------- */
-
-@keyframes dc-desk-rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-
-.dc-desk-motto h1,
-.dc-desk-motto p,
-.dc-desk-action,
-.dc-desk-label,
-.dc-desk-tile,
-.dc-desk-readout,
-.dc-desk-ways {
-  animation: dc-desk-rise 300ms var(--dc-ease-out) both;
-}
-
 .dc-desk-motto p {
   animation-delay: 40ms;
 }
@@ -1143,26 +1035,8 @@
   animation-delay: 80ms;
 }
 
-.dc-desk-link {
-  animation: dc-draw-in 220ms var(--dc-ease-out) 160ms both;
-}
-
 .dc-desk-label {
   animation-delay: 200ms;
-}
-
-.dc-desk-route-line {
-  animation: dc-draw-in 360ms var(--dc-ease-out) 240ms both;
-}
-
-.dc-desk-route[data-dashed] .dc-desk-route-line {
-  animation: dc-fade-in 300ms ease 360ms both;
-}
-
-.dc-desk-link-arrow,
-.dc-desk-route .dc-desk-arrow,
-.dc-desk-junction {
-  animation: dc-fade-in 160ms ease 420ms both;
 }
 
 .dc-desk-tile {
@@ -1183,33 +1057,33 @@
 /* A short window: the same diagram, closer together, so the row and the ways stay in view. */
 @media (max-height: 680px) {
   .dc-desk-top {
-    padding-top: 12px;
+  padding-top: 12px;
   }
 
   .dc-desk-motto {
-    padding: 16px 30px 18px;
+  padding: 16px 30px 18px;
   }
 
   .dc-desk-motto h1 {
-    font-size: clamp(34px, 2.6vw + 12px, 48px);
+  font-size: clamp(34px, 2.6vw + 12px, 48px);
   }
 
   .dc-desk-action,
   .dc-desk[data-mode='returning'] .dc-desk-action {
-    margin-top: 24px;
+  margin-top: 24px;
   }
 
   .dc-desk-label,
   .dc-desk[data-mode='returning'] .dc-desk-label {
-    margin-top: 18px;
+  margin-top: 18px;
   }
 
   .dc-desk-row {
-    margin-top: 34px;
+  margin-top: 34px;
   }
 
   .dc-desk-ways {
-    margin-top: 12px;
+  margin-top: 12px;
   }
 }
 
@@ -1217,8 +1091,8 @@
   .dc-desk *,
   .dc-desk *::before,
   .dc-desk *::after {
-    animation: none !important;
-    transition: none !important;
+  animation: none !important;
+  transition: none !important;
   }
 }
 
@@ -1241,8 +1115,8 @@
   white-space: nowrap;
   cursor: pointer;
   transition:
-    border-color 140ms ease,
-    background 140ms ease;
+  border-color 140ms ease,
+  background 140ms ease;
 }
 
 .dc-update-chip:hover {
@@ -1313,29 +1187,29 @@
 
 @keyframes dc-update-ping {
   0% {
-    opacity: 0.7;
-    transform: scale(0.6);
+  opacity: 0.7;
+  transform: scale(0.6);
   }
   60%,
   100% {
-    opacity: 0;
-    transform: scale(1.6);
+  opacity: 0;
+  transform: scale(1.6);
   }
 }
 
 @keyframes dc-update-travel {
   from {
-    transform: translateX(-100%);
+  transform: translateX(-100%);
   }
   to {
-    transform: translateX(280%);
+  transform: translateX(280%);
   }
 }
 
 @keyframes dc-update-arrive {
   from {
-    opacity: 0;
-    transform: translateY(-4px);
+  opacity: 0;
+  transform: translateY(-4px);
   }
 }
 
@@ -1482,7 +1356,7 @@
   .dc-update-chip *,
   .dc-update-chip *::after,
   .dc-update-gauge > span {
-    animation: none !important;
+  animation: none !important;
   }
 }
 
@@ -1536,13 +1410,13 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .dc-agent-activity-line[data-phase='working'] .dc-agent-activity-dot {
-    animation: dc-agent-pulse 1.4s ease-in-out infinite;
+  animation: dc-agent-pulse 1.4s ease-in-out infinite;
   }
 }
 
 @keyframes dc-agent-pulse {
   50% {
-    opacity: 0.35;
+  opacity: 0.35;
   }
 }
 

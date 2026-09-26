@@ -12,6 +12,7 @@ New here? Start with [Getting started](guides/getting-started.md). It takes a fe
 | [Getting started](guides/getting-started.md) | Draw a Service → Queue → Worker, add a note, present it as a flow, and export it |
 | [Shapes, connectors and boundaries](guides/shapes-and-connectors.md) | Pick the kind of a shape, say what an arrow means, show the reply, mark the failure path |
 | [Flows and presenting](guides/flows-and-presentation.md) | Build a numbered path through the diagram and walk the room through it |
+| [Architecture examples](guides/examples.md) | Start from one of thirteen composed architectures and patterns, and see which five are offered up front |
 | [Explain a system at different levels](guides/depth.md) | Keep the overview small and draw the detail inside a shape, C4-style |
 | [Mark what is still open](guides/open-points.md) | Attach a tentative, awaiting-input or parked point to a shape or connector, and pick the discussion up next time |
 | [Keyboard shortcuts and the command palette](guides/keyboard-and-commands.md) | Draw quickly without the mouse |

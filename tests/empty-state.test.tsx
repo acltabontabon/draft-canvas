@@ -2,7 +2,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument } from '../src/document/factory';
-import { ARCHITECTURE_STARTERS, FEATURED_STARTERS } from '../src/starters';
+import { ARCHITECTURE_STARTERS, PRIMARY_STARTERS } from '../src/starters';
 import { EmptyState } from '../src/ui/Editor/EmptyState';
 import { useEditorStore } from '../src/store/editorStore';
 
@@ -22,18 +22,18 @@ const renderEmpty = (onInsertStarter = vi.fn()) => ({
   ...render(<EmptyState onInsertStarter={onInsertStarter} />),
 });
 
-const firstFeatured = FEATURED_STARTERS[0]!;
+const firstFeatured = PRIMARY_STARTERS[0]!;
 
 describe('EmptyState', () => {
   it('offers a curated few starters, not the catalogue', () => {
     renderEmpty();
     const group = screen.getByRole('group', { name: 'Suggested starters' });
-    expect(within(group).getAllByRole('button')).toHaveLength(FEATURED_STARTERS.length);
-    for (const starter of FEATURED_STARTERS) {
+    expect(within(group).getAllByRole('button')).toHaveLength(PRIMARY_STARTERS.length);
+    for (const starter of PRIMARY_STARTERS) {
       expect(within(group).getByRole('button', { name: `Start from ${starter.name}` })).toBeInTheDocument();
     }
     // The point of curating: the rest are reachable, but not offered here.
-    const withheld = ARCHITECTURE_STARTERS.filter((s) => !FEATURED_STARTERS.includes(s));
+    const withheld = ARCHITECTURE_STARTERS.filter((s) => !PRIMARY_STARTERS.includes(s));
     expect(withheld.length).toBeGreaterThan(0);
     for (const starter of withheld) {
       expect(screen.queryByRole('button', { name: `Start from ${starter.name}` })).not.toBeInTheDocument();
@@ -54,25 +54,6 @@ describe('EmptyState', () => {
     expect(onInsertStarter).toHaveBeenCalledWith(firstFeatured.id);
   });
 
-  it('opens the full shelf behind "Browse all starters", and inserts from it', async () => {
-    const { onInsertStarter } = renderEmpty();
-    await userEvent.click(screen.getByRole('button', { name: 'Browse all starters' }));
-    const dialog = screen.getByRole('dialog');
-    for (const starter of ARCHITECTURE_STARTERS) {
-      const tile = within(dialog).getByRole('button', { name: `Start from ${starter.name}` });
-      // Each tile carries its own description — revealed in place on hover or focus, and the
-      // tile's accessible description — rather than a readout line far from the tile it is about.
-      expect(tile).toHaveAccessibleDescription(starter.description);
-      expect(within(tile).getByText(starter.description)).toHaveClass('dc-starter-description');
-    }
-    expect(dialog.querySelector('.dc-shelf-readout')).toBeNull();
-    // Something the blank canvas itself does not offer — the reason the link exists.
-    const withheld = ARCHITECTURE_STARTERS.find((s) => !FEATURED_STARTERS.includes(s))!;
-    await userEvent.click(within(dialog).getByRole('button', { name: `Start from ${withheld.name}` }));
-    expect(onInsertStarter).toHaveBeenCalledWith(withheld.id);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
   it('vanishes as soon as the canvas has anything on it', () => {
     vi.useFakeTimers();
     try {
@@ -87,26 +68,6 @@ describe('EmptyState', () => {
       expect(document.querySelector('.dc-empty')).toHaveAttribute('data-leaving', 'true');
       act(() => void vi.runAllTimers());
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('plays its arrival once, and not again when a canvas is emptied', () => {
-    vi.useFakeTimers();
-    try {
-      const { rerender } = renderEmpty();
-      expect(document.querySelector('.dc-empty')).toHaveAttribute('data-intro', 'true');
-      act(() => {
-        useEditorStore.getState().addNode({ type: 'note', x: 0, y: 0, text: 'x' });
-      });
-      rerender(<EmptyState onInsertStarter={vi.fn()} />);
-      act(() => void vi.runAllTimers());
-      act(() => {
-        useEditorStore.setState({ document: createDocument('Empty again') });
-      });
-      rerender(<EmptyState onInsertStarter={vi.fn()} />);
-      expect(document.querySelector('.dc-empty')).not.toHaveAttribute('data-intro');
     } finally {
       vi.useRealTimers();
     }

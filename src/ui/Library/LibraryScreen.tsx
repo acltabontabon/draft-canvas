@@ -17,10 +17,9 @@ import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
 import { ProjectSidebar } from './ProjectSidebar';
-import { StarterShelf } from './StarterShelf';
+import { StarterGrid } from './StarterGrid';
 import { useStarters } from './useStarters';
 import type { StarterId } from '../../starters/types';
-import { thoughtForDay } from './draftThoughts';
 import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
 
 /**
@@ -240,7 +239,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
             {session.library.length === 0 && (
               <div className="dc-library-empty dc-library-welcome">
                 <p>Nothing here yet.</p>
-                <p className="dc-muted">Start blank, or cheat a little.</p>
+                <p className="dc-muted">Start blank, or from an architecture.</p>
                 <LibraryStarterShelf onStart={(id) => void session.newDocument(undefined, id)} />
               </div>
             )}
@@ -333,10 +332,6 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
         </div>
 
         <footer className="dc-library-foot">
-          <p className="dc-thought">
-            <Icon name="pencil" size={13} />
-            <span>{thoughtForDay()}</span>
-          </p>
           <LocalNote durable={session.durable} repository={session.repository} />
         </footer>
       </main>
@@ -592,7 +587,7 @@ function RenameDialog({
 function LibraryStarterShelf({ onStart }: { onStart: (id: StarterId) => void }) {
   const starters = useStarters();
   return starters ? (
-    <StarterShelf starters={starters.ARCHITECTURE_STARTERS} onStart={onStart} />
+    <StarterGrid starters={starters.PRIMARY_STARTERS} onStart={onStart} />
   ) : (
     <div className="dc-shelf-pending" aria-hidden="true" />
   );

@@ -78,39 +78,31 @@ test.describe('Home screen', () => {
     await sheet.focus();
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
-    await expect(page.getByRole('button', { name: 'Start from Modular Monolith' })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Start from Microservices' })).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page.getByLabel('Diagram title')).toHaveValue('Modular Monolith');
+    await expect(page.getByLabel('Diagram title')).toHaveValue('Microservices');
   });
 
-  test('the starter index opens one branch at a time, and the arrows cross between them', async ({ page }) => {
+  test('the starters are one row of five, walked with the arrows, and the rest are named as a palette away', async ({ page }) => {
     await page.goto('/');
     const group = page.getByRole('group', { name: 'Starters' });
     await expect(group).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Architectures', exact: true })).toHaveAttribute('aria-selected', 'true');
-    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    await expect(page.getByRole('tab')).toHaveCount(0);
+    await expect(group.getByRole('button')).toHaveCount(5);
+    await expect(page.getByText(/More architectures and patterns are in the command palette/)).toBeVisible();
 
-    // Past the last row of the open branch, ↓ opens the next one and lands in it — the closed
-    // branches are inert, so this is the one place that hand-off is really exercised.
     await page.getByRole('button', { name: 'New canvas' }).focus();
     await page.keyboard.press('ArrowRight');
     await expect(page.getByRole('button', { name: 'Start from Monolith' })).toBeFocused();
     await page.keyboard.press('End');
     await expect(page.getByRole('button', { name: 'Start from CQRS' })).toBeFocused();
-    await page.keyboard.press('ArrowDown');
-    await expect(page.getByRole('tab', { name: 'Data Architectures', exact: true })).toHaveAttribute('aria-selected', 'true');
-    // Which data tile depends on how many columns the viewport gives the shelf (↓ keeps the
-    // column); that it is one of them, in the panel that just opened, is the contract.
-    await expect(page.locator('[role="tabpanel"][data-active] .dc-starter:focus')).toHaveAttribute(
-      'aria-label',
-      /^Start from (Medallion|Kappa|Change Data Capture)$/,
-    );
-
-    // Opening a branch by pointer swaps the shelf and moves nothing else on the page.
-    await page.getByRole('tab', { name: 'Patterns', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Start from Transactional Outbox' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Start from Monolith' })).toBeHidden();
-    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(height);
+    // A description appears in the tile itself on focus, and appearing moves nothing.
+    const before = await group.boundingBox();
+    await expect(page.getByRole('button', { name: 'Start from CQRS' }).locator('.dc-starter-description')).toHaveCSS('opacity', '1');
+    expect(await group.boundingBox()).toEqual(before);
+    await page.keyboard.press('Home');
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.getByRole('button', { name: 'New canvas' })).toBeFocused();
   });
 
   test('the local-first line opens to the honest detail, and the toolbar fits a narrow screen', async ({ page }) => {
