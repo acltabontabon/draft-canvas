@@ -175,13 +175,15 @@ export function together(a: { id?: string; spine?: string }, b: Other): boolean 
   return Boolean((a.spine && a.spine === b.spine) || (a.id && b.shares?.includes(a.id)));
 }
 
-/** `edge` as the canvas draws it among `nodes` and `edges` (which must include `edge`). */
-export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: readonly DraftEdge[], caption?: CaptionSize): Drawn | null {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
+/** `edge` as the canvas draws it among `nodes` and `edges` (which must include `edge`). `byId`, when
+ *  the caller already has every node keyed by id, saves rebuilding that map — this runs inside
+ *  `repairAnchors`'s per-candidate loop, up to `MAX_CHECKS` times per problem connector. */
+export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: readonly DraftEdge[], caption?: CaptionSize, byId?: Map<string, DraftNode>): Drawn | null {
+  const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
   const spine = routingPlan(nodes, edges).spineFor(edge.id);
   let route;
   try {
-    route = routeEdge(edge, byId, {
+    route = routeEdge(edge, nodeMap, {
       obstacles: obstaclesForEdge(nodes, edge.source, edge.target),
       spine,
       lane: laneIndex(edges).get(edge.id)?.offset ?? 0,
@@ -252,11 +254,12 @@ export function crosses(a: Drawn & { id?: string }, b: Other): boolean {
 }
 
 /** Every connector in `edges` as drawn, for `routeProblem`'s `others`. */
-export function othersOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], caption?: CaptionSize, except?: string): Other[] {
+export function othersOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], caption?: CaptionSize, except?: string, byId?: Map<string, DraftNode>): Other[] {
   const groups = labelGroupPlan(nodes, edges);
+  const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
   return edges.flatMap((e) => {
     if (e.id === except) return [];
-    const drawn = drawnRoute(e, nodes, edges, caption);
+    const drawn = drawnRoute(e, nodes, edges, caption, nodeMap);
     const members = groups.groupFor(e.id)?.members;
     return drawn ? [{ id: e.id, chip: drawn.chip, points: drawn.points, ...(drawn.ownChip ? { ownChip: true } : {}), ...(drawn.spine ? { spine: drawn.spine } : {}), ...(members ? { shares: members } : {}) }] : [];
   });
@@ -290,10 +293,11 @@ export function routeProblem(
   edges: readonly DraftEdge[],
   caption?: CaptionSize,
   others?: readonly Other[],
+  byId?: Map<string, DraftNode>,
 ): RouteProblem | undefined {
-  const drawn = drawnRoute(edge, nodes, edges, caption);
+  const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
+  const drawn = drawnRoute(edge, nodes, edges, caption, nodeMap);
   if (!drawn) return undefined;
-  const byId = new Map(nodes.map((n) => [n.id, n]));
   if (drawn.chip) {
     const covered = nodes.find((n) => n.type !== 'group' && overlaps(drawn.chip!, inset(n, CAPTION_INSET)));
     if (covered) return { kind: 'label-over-node', node: covered.id };
@@ -304,7 +308,7 @@ export function routeProblem(
   if (crossed) return { kind: 'label-crossed', node: crossed.id };
   const onTop = others?.find((o) => stacked({ ...drawn, id: edge.id }, o));
   if (onTop) return { kind: 'shared-run', node: onTop.id };
-  const ends = endsOf(edge, byId);
+  const ends = endsOf(edge, nodeMap);
   for (const node of nodes) {
     if (ends.has(node.id) || node.type === 'group') continue;
     const box = inset(node, THROUGH_INSET);
@@ -378,7 +382,7 @@ export function repairAnchors(
   const moving = new Map(targets.map((t) => [t.id, t]));
   const current = () => all.map((e) => moving.get(e.id) ?? e);
   let edges = current();
-  let drawn = new Map(othersOf(nodes, edges, caption).map((o) => [o.id, o]));
+  let drawn = new Map(othersOf(nodes, edges, caption, undefined, byId).map((o) => [o.id, o]));
   /**
    * Re-anchors `mover` until every connector in `clean` is drawn without a problem — the first such
    * anchoring, cheapest first — or puts it back and says it couldn't.
@@ -432,9 +436,9 @@ export function repairAnchors(
       // two hops out is everything that can move. The final quality check plans the whole diagram.
       const next = current();
       const local = next.filter((e) => hood.has(e.source) || hood.has(e.target));
-      const fresh = new Map(othersOf(nodes, local, caption).filter((o) => neighbours.has(o.id)).map((o) => [o.id, o]));
+      const fresh = new Map(othersOf(nodes, local, caption, undefined, byId).filter((o) => neighbours.has(o.id)).map((o) => [o.id, o]));
       const others = [...drawn.values()].map((o) => fresh.get(o.id) ?? o);
-      const problems = clean.map((e) => routeProblem(moving.get(e.id) ?? e, nodes, local, caption, others));
+      const problems = clean.map((e) => routeProblem(moving.get(e.id) ?? e, nodes, local, caption, others, byId));
       if (problems.every((p) => !p)) {
         fixed = true;
         edges = next;
@@ -458,7 +462,7 @@ export function repairAnchors(
 
   for (const edge of targets) {
     if (performance.now() > deadline) return;
-    const problem = routeProblem(edge, nodes, edges, caption, [...drawn.values()]);
+    const problem = routeProblem(edge, nodes, edges, caption, [...drawn.values()], byId);
     if (!problem) continue;
     // Trouble between two connectors (a line through the other's caption, the two on top of each
     // other): moving the *other* one first often keeps this one straight — cheaper than sending a

@@ -23,6 +23,8 @@ const base = () =>
       { id: 'u', from: 'user', to: 'api', label: 'Places orders' },
       { id: 'd', from: 'api', to: 'db' },
     ],
+    flows: [{ id: 'f', title: 'Order', steps: ['u', 'd'] }],
+    actions: [{ id: 'act', text: 'Confirm retention with legal', about: 'db' }],
   });
 
 const refusal = (run: () => unknown): AgentError => {
@@ -109,5 +111,39 @@ describe('update_diagram scope enforcement', () => {
     const file = base();
     const { file: next } = applyUpdate(file, [], [{ op: 'update', id: 'db', set: { label: 'Renamed' } }], undefined, undefined);
     expect(next.nodes.find((n) => n.id === 'db')?.text).toBe('Renamed');
+  });
+
+  // `read_selection` never returns flow or action ids, so a captured scope can never contain one —
+  // any request that restricts itself to a selection is, by construction, reaching outside it if it
+  // touches either. See docs/reference/agent-integration.md#selection-aware-editing.
+  it('refuses to update a flow while a scope is active, even one that names no flow at all', () => {
+    const file = base();
+    const error = refusal(() => applyUpdate(file, [], [{ op: 'update', id: 'f', set: { title: 'Renamed' } }], undefined, { nodes: ['api', 'db'], edges: ['u', 'd'] }));
+    expect(error.code).toBe('OUT_OF_SCOPE');
+  });
+
+  it('refuses to remove a flow while a scope is active', () => {
+    const file = base();
+    const error = refusal(() => applyUpdate(file, [], [{ op: 'remove', ids: ['f'] }], undefined, { nodes: ['api', 'db'], edges: ['u', 'd'] }));
+    expect(error.code).toBe('OUT_OF_SCOPE');
+  });
+
+  it('refuses to update an action while a scope is active', () => {
+    const file = base();
+    const error = refusal(() => applyUpdate(file, [], [{ op: 'update', id: 'act', set: { done: true } }], undefined, { nodes: ['api', 'db'], edges: ['u', 'd'] }));
+    expect(error.code).toBe('OUT_OF_SCOPE');
+  });
+
+  it('refuses to remove an action while a scope is active', () => {
+    const file = base();
+    const error = refusal(() => applyUpdate(file, [], [{ op: 'remove', ids: ['act'] }], undefined, { nodes: ['api', 'db'], edges: ['u', 'd'] }));
+    expect(error.code).toBe('OUT_OF_SCOPE');
+  });
+
+  it('permits updating a flow and an action when no scope is passed at all', () => {
+    const file = base();
+    const { file: next } = applyUpdate(file, [], [{ op: 'update', id: 'f', set: { title: 'Renamed' } }, { op: 'update', id: 'act', set: { done: true } }], undefined, undefined);
+    expect(next.flows.find((f) => f.id === 'f')?.title).toBe('Renamed');
+    expect(next.actions.find((a) => a.id === 'act')?.done).toBe(true);
   });
 });

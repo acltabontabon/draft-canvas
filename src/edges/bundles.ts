@@ -507,6 +507,14 @@ function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): 
   }
 
   if (assigned.size === 0) return EMPTY_PLAN;
+  return planOf(assigned, members);
+}
+
+/** Built outside `computePlan` on purpose. A closure created inside it would share `computePlan`'s
+ *  scope with `nodeMap`, `candidates`, `obstacles` and `ordered` and keep all of them alive for as
+ *  long as the plan is. Undo history holds a plan per step, so that was a large chunk of scratch
+ *  structure per edit at Medium and Large, all of it dead the moment `computePlan` returned. */
+function planOf(assigned: ReadonlyMap<string, EdgeSpine>, members: ReadonlyMap<string, readonly string[]>): RoutingPlan {
   return {
     spineFor: (edgeId) => assigned.get(edgeId),
     membersOf: (spineId) => members.get(spineId) ?? EMPTY_MEMBERS,

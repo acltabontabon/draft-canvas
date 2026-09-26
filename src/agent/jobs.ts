@@ -9,6 +9,7 @@ import { viewOf, type DepthPath } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 import { compose, type Composed } from './compile';
 import { applyUpdate, type PatchResult } from './patch';
+import { prepareProposal, type PreparedProposal } from './proposal';
 import { silent, type Report } from './progress';
 import { type QualityIssue, type QualityReport } from './quality';
 import { withDeadline } from './route';
@@ -16,7 +17,8 @@ import { legibilityOf, type Legibility } from './legibility';
 
 export type Job =
   | { kind: 'compose'; raw: unknown; diagramId: string }
-  | { kind: 'update'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown; scope?: unknown };
+  | { kind: 'update'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown; scope?: unknown }
+  | { kind: 'proposal'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown; scope?: unknown };
 
 export type JobResult =
   | { kind: 'compose'; composed: Composed }
@@ -35,7 +37,8 @@ export type JobResult =
       quality: QualityReport;
       /** How the edited view reads as a whole (see `legibility.ts`) — absent when nothing changed. */
       legibility?: Legibility;
-    };
+    }
+  | { kind: 'proposal'; prepared: PreparedProposal };
 
 /**
  * Runs `job`, repairing layouts until `deadline` (a `performance.now()` time), telling `report` where
@@ -43,6 +46,12 @@ export type JobResult =
  */
 export function runJob(job: Job, deadline: number, report: Report = silent): JobResult {
   if (job.kind === 'compose') return { kind: 'compose', composed: compose(job.raw, job.diagramId, { deadline, report }) };
+  if (job.kind === 'proposal') {
+    return withDeadline(deadline, () => {
+      report('preparing');
+      return { kind: 'proposal', prepared: prepareProposal(job.file, job.path, job.ops, job.layout, job.scope) };
+    });
+  }
   return withDeadline(deadline, () => {
     report('preparing');
     const result = applyUpdate(job.file, job.path, job.ops, job.layout, job.scope);

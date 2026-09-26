@@ -239,11 +239,22 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
         }
         const flow = view.flows.find((f) => f.id === id);
         if (flow) {
+          // A scope is always a captured node/edge selection (`read_selection` never returns flow
+          // ids), so a flow is never *in* one — a scoped request removing one is always reaching
+          // outside it.
+          if (scope) {
+            refuseOutOfScope(r, `${at}/ids`, [id]);
+            continue;
+          }
           view = { ...view, flows: view.flows.filter((f) => f.id !== id) };
           counts.removed += 1;
           continue;
         }
         if (path.length === 0 && actions.some((a) => a.id === id)) {
+          if (scope) {
+            refuseOutOfScope(r, `${at}/ids`, [id]);
+            continue;
+          }
           actions = removeAction({ ...file, actions }, id).actions;
           counts.removed += 1;
           continue;
@@ -437,6 +448,11 @@ function updateOne(
   }
   const flowIndex = view.flows.findIndex((f) => f.id === id);
   if (flowIndex >= 0) {
+    // Same reasoning as the flow-removal branch above: no scope can ever contain a flow id.
+    if (scope) {
+      refuseOutOfScope(r, at, [id]);
+      return undefined;
+    }
     const existing = view.flows[flowIndex] as DraftFlow;
     const flow: DraftFlow = { ...existing };
     if (set.title !== undefined) {
@@ -482,6 +498,11 @@ function updateOne(
   }
   const action = actions.find((a) => a.id === id);
   if (action) {
+    // Same reasoning again: an action id can never be part of a captured node/edge selection.
+    if (scope) {
+      refuseOutOfScope(r, at, [id]);
+      return undefined;
+    }
     let next = { ...file, actions };
     if (set.text !== undefined) {
       const text = r.text(set.text, `${at}/text`, AGENT_LIMITS.actionLength, { required: true, singleLine: true });
