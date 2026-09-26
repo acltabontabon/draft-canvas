@@ -10,6 +10,17 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Shared
+
+#### Fixed
+
+- Dragging a Note or Code card to attach it no longer drops the connectors attached to it for the
+  length of the drag — they were removed from hit-testing instead of just hidden, the one thing
+  every other handle in the app is careful not to do.
+- A diagram with three or more connectors sharing one Smart Routing trunk held onto a large chunk
+  of routing scratch work in every undo step, on top of the trunk plan itself — megabytes of dead
+  data per edit on Medium and Large diagrams. Only the plan is kept now.
+
 ### Desktop
 
 #### Added
@@ -38,6 +49,15 @@ the release notes and the in-app What's New are generated from here. See
 
 - Accepting a proposal re-checks the diagram's revision as one atomic step, closing a narrow window
   where an edit landing at just the wrong moment could have gone uncaught.
+- Recovering a proposal stuck mid-Accept no longer offers a Reject button that always failed —
+  it now only offers what that recovery can actually do: finish Accepting, or Dismiss.
+- Submitting a large proposal for review no longer works it out on the main thread with no time
+  limit — like every other agent request, it's now checked off-thread under the same budget, so a
+  big batch can no longer freeze the editor while it's validated.
+- A change scoped to a captured selection could still rewrite or remove any flow or action anywhere
+  in the diagram, even outside that selection — a selection can only ever capture elements and
+  relationships, so neither was actually protected by scope at all. Both are refused now, the same
+  as every other kind of change scope already covered.
 
 ## [1.12.0-beta.1] - 2026-09-25
 

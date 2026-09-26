@@ -1169,9 +1169,15 @@
 .dc-node[data-drag-capsule='true'] .dc-attachment-badge,
 .dc-node[data-drag-capsule='true'] .dc-code-copy,
 .dc-node[data-drag-capsule='true'] .dc-note-placeholder,
-.dc-node[data-drag-capsule='true'] .dc-handle,
 .dc-node[data-drag-capsule='true'] .react-flow__resize-control {
   display: none;
+}
+
+/* Handles stay in the DOM and hit-testable during the drag — React Flow resolves every edge
+   endpoint through them, so `display: none` here would drop any connector attached to the card
+   being carried. `visibility: hidden` keeps them out of the capsule's look without touching that. */
+.dc-node[data-drag-capsule='true'] .dc-handle {
+  visibility: hidden;
 }
 
 /* The selection ring too — it is drawn from the card's own box, so leaving it on would keep

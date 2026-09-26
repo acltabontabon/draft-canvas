@@ -34,7 +34,7 @@ import { runOffThread, type Progress } from '../agent/offThread';
 import { STAGE_TEXT } from '../agent/progress';
 import { readDiagram, viewPathOf } from '../agent/read';
 import { buildImplementationContext } from '../agent/context';
-import { prepareProposal } from '../agent/proposal';
+import type { PreparedProposal } from '../agent/proposal';
 import { readSelectionContext } from '../agent/selection';
 import { viewOf } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
@@ -425,8 +425,17 @@ async function submitProposal(host: AgentHost, event: Request) {
   const opsGiven = Array.isArray(args.ops) ? args.ops : [];
   const noImpact = opsGiven.length === 0;
   // Not committed, ever: `applyUpdate`'s resulting file is discarded here — only its validation,
-  // counts and preconditions survive, to be persisted as the proposal (see broker.rs).
-  const prepared = noImpact ? { counts: { added: 0, updated: 0, removed: 0 }, advisories: [], preconditions: { nodes: {}, edges: {} } } : prepareProposal(file, path, args.ops, args.layout, args.scope);
+  // counts and preconditions survive, to be persisted as the proposal (see broker.rs). Worked out
+  // off the main thread, under the same soft/hard budgets as `update_diagram` — a large `ops` batch
+  // did the identical layout/repair work synchronously on the page before this, with no deadline.
+  let prepared: PreparedProposal;
+  if (noImpact) {
+    prepared = { counts: { added: 0, updated: 0, removed: 0 }, advisories: [], preconditions: { nodes: {}, edges: {} } };
+  } else {
+    const result = await runOffThread({ kind: 'proposal', file, path, ops: args.ops, layout: args.layout, scope: args.scope });
+    if (result.kind !== 'proposal') throw new AgentError('INTERNAL', 'The proposal could not be worked out.');
+    prepared = result.prepared;
+  }
 
   return {
     diagramId: context.diagramId,

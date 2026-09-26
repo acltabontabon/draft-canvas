@@ -253,6 +253,11 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
   // fingerprint of a crash between the document commit and recording it, not a real conflict. Never
   // true for `pending`: only an interrupted Accept can leave a proposal in this position.
   const alreadyApplied = proposal.status === 'accepting' && looksAlreadyApplied(proposal.ops, conflictingIds, viewOf(live, path));
+  // The backend's own state machine (`resolve_outcome` in `src-tauri/src/commands/agent.rs`) only
+  // allows `Accepting → Accepted` or `Accepting → Dismissed`; `Accepting → Rejected` is refused as
+  // `WRONG_STAGE`. Offering Reject here would be a dead-end action dressed up as a real recovery
+  // choice, right next to the banner that already tells the person the only two ways out.
+  const recoveringAccept = proposal.status === 'accepting' && !alreadyApplied;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `path`'s content is `pathKeyStr`; see the `dryRun` memo above for why this is keyed on content, not the array's own (churning) reference
   const breadcrumb = useMemo(() => pathBreadcrumb(live, path), [live, pathKeyStr]);
   const targetsCurrentView = pathKey(path) === pathKey(currentPath);
@@ -517,9 +522,11 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
           </>
         ) : (
           <>
-            <Button variant="danger" disabled={busy} onClick={reject}>
-              Reject
-            </Button>
+            {!recoveringAccept && (
+              <Button variant="danger" disabled={busy} onClick={reject}>
+                Reject
+              </Button>
+            )}
             <Button variant="quiet" disabled={busy} onClick={dismiss}>
               Dismiss
             </Button>
