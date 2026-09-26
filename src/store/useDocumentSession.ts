@@ -285,7 +285,7 @@ export function useDocumentSession(): DocumentSession {
       // still-live autosave subscription sees that revision bump, and must recognise the copy it
       // hands over as the stored one rather than write it again.
       autosave.current?.track(loaded);
-      // Reopening the same canvas — VS Code reloading the file after an outside edit, or taking
+      // Reopening the same canvas — the desktop shell reloading the file after an outside edit, or taking
       // another tab's copy — should leave you standing in the room you were in, as long as the
       // shape you were inside is still there. Opening a *different* canvas always starts at the
       // top, the same way it never opens into a flow.

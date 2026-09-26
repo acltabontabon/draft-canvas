@@ -1,7 +1,7 @@
 /**
- * The longest side a stored canvas background keeps. Every SVG export and every GIF frame embeds
- * the image, so a photo straight off a phone would make those slow and memory-hungry for detail no
- * canvas ever shows.
+ * The longest side a stored canvas background keeps. Every SVG and PNG export embeds the image,
+ * so a photo straight off a phone would make those slow and memory-hungry for detail no canvas
+ * ever shows.
  */
 export const MAX_BACKGROUND_SIDE = 4096;
 

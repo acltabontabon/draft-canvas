@@ -310,7 +310,7 @@ export function buildScene(
     const primaryEls = described.line.flatMap(emitShape);
     const responseEls = described.responseLine?.flatMap(emitShape) ?? [];
     // Kept as two separate element groups, not one merged pulse target: a request/response
-    // connector's two-phase Presentation/GIF pulse (see `pulseTarget`) needs to animate the
+    // connector's two-phase Presentation pulse (see `pulseTarget`) needs to animate the
     // primary or the response line independently, never both at once for the wrong phase.
     if (decoration?.pulsePhase !== undefined) {
       applyPulse(decoration.pulseTarget === 'response' ? responseEls : primaryEls, decoration.pulsePhase);

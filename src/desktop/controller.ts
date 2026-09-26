@@ -150,8 +150,7 @@ function describe(error: unknown): string {
 }
 
 /**
- * The desktop shell's half of the conversation with the app — the part VS Code's extension plays
- * there. The app owns the canvas and says every change; this owns the file: what is open, whether it
+ * The desktop shell's half of the conversation with the app — the host that owns the file. The app owns the canvas and says every change; this owns the file: what is open, whether it
  * has unsaved changes, saving it safely, and keeping a recoverable copy of any work that isn't in a
  * file yet, so that nothing the user drew depends on a save they haven't made.
  *
@@ -461,7 +460,7 @@ export class DesktopController {
         this.onClosed();
         return;
       default:
-        // The clipboard, chords and the like are VS Code's: this webview does those itself.
+        // The clipboard, chords and the like are the webview's own; nothing here to relay.
         return;
     }
   }
@@ -549,7 +548,7 @@ export class DesktopController {
     this.outside = null;
     this.snapshotFirstAt = null;
     this.clearSnapshotTimer();
-    // `background` says the shell keeps the canvas's image beside the file, as VS Code's extension does.
+    // `background` says the shell keeps the canvas's image beside the file rather than inside it.
     const message: LoadMessage = { type: 'draft-canvas:load', text, title, seq: this.seq, background: true };
     this.link.deliver(message);
   }

@@ -70,7 +70,7 @@ export function flash(ctx: CommandContext, id: string) {
  * Pans and zooms so `nodeIds` fill the view — capped so a single node never becomes a wall.
  * Computed from the document's own geometry with the same `getViewportForBounds` Presentation
  * Mode uses (`useFlowPlayback.ts`'s `resolveStepViewport`), rather than React Flow's `fitView`
- * — this is pure, so it's unit-testable, and it's the camera math the GIF exporter already
+ * — this is pure, so it's unit-testable, and it's the camera math Presentation Mode already
  * trusts.
  */
 export function focusNodes(ctx: CommandContext, nodeIds: string[]) {
@@ -94,7 +94,7 @@ export function focusBounds(ctx: CommandContext, bounds: Bounds | null) {
 /**
  * `focusBounds`'s actual camera move, decoupled from the full `CommandContext` a palette command
  * carries — so a surface with no reason to build one of those (`ProposalPanel`'s "Focus changes")
- * can still trust the exact same math the palette and the GIF exporter do, rather than a second
+ * can still trust the exact same math the palette and Presentation Mode do, rather than a second
  * inline copy of it.
  */
 export function focusBoundsInView(camera: Pick<CommandContext['camera'], 'viewWidth' | 'viewHeight' | 'setViewport'>, bounds: Bounds | null) {

@@ -768,7 +768,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           and unmounted the moment the step moves on so nothing stale finishes afterwards. Drawn
           with `pathLength="1"` so the CSS keyframes are the same for a short bend and a long
           sweep; the dash is the signal, the gap hides everything else. Canvas-only chrome, never
-          exported (`edges/describe.ts` has the GIF's own looping pulse instead). */}
+          exported (`edges/describe.ts` keeps its own pulse for a decorated export instead). */}
       {isActiveStep && transitionKey !== null && (
         <g key={transitionKey} className="dc-signal" data-async={asyncSignal ? 'true' : undefined} aria-hidden="true">
           <path

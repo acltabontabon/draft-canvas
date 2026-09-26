@@ -21,9 +21,10 @@ export interface LoadFailureNotice {
  * 404 page. `retryableLazy`'s `reset()` was written for this, but it can only try the same dead URL
  * again — nothing short of reloading can fix it, because the fix is a newer index.
  *
- * It bit hardest where a document lives longest. Draft Canvas for VS Code frames the hosted editor
- * in a webview that is kept alive deliberately (`retainContextWhenHidden`), so a browser tab's
- * "reload and it sorts itself out" never comes around, and the panel stays broken for good.
+ * It bit hardest where a document lives longest: the retired VS Code extension framed the hosted
+ * editor in a webview kept alive deliberately (`retainContextWhenHidden`), so a browser tab's
+ * "reload and it sorts itself out" never came around. The desktop app's long-lived window is the
+ * same shape of problem.
  */
 export function isStaleChunkError(error: unknown): boolean {
   const described = error instanceof Error ? `${error.name}: ${error.message}` : String(error);

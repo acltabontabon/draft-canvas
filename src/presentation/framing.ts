@@ -16,7 +16,7 @@
  * The safe area is the view less the room presentation chrome needs (the control strip below, the
  * exit control above), so a framed interaction never lands under a card. Every input and output is
  * in screen pixels or React Flow's own `{ x, y, zoom }` camera, and the headless caller is free to
- * pass any view size — the GIF exporter keeps its own, simpler `resolveStepViewport`.
+ * pass any view size; `useFlowPlayback.ts`'s simpler `resolveStepViewport` is the headless starting box.
  */
 import type { Bounds } from '../document/geometry';
 import type { DraftViewport } from '../document/types';

@@ -275,7 +275,7 @@ function migrateProjectsToWrites(doc: Record<string, unknown>): Record<string, u
  * no-op — a v11 node simply has no inside, which is exactly what absent already means — but the
  * version still has to move, and for a reason worth stating: a v11 build's validator rebuilds
  * every node from a field whitelist, so it would silently strip the rooms out of a v12 file and,
- * in VS Code, write the stripped version straight back over it. Refusing the file by name is the
+ * where every edit writes straight back to disk, save the stripped version over it. Refusing the file by name is the
  * only safe reading an older build can give it.
  *
  * Note for whoever adds v13: a migration that touches nodes, edges or flows has to reach every
@@ -297,7 +297,7 @@ function migrateAddInsides(doc: Record<string, unknown>): Record<string, unknown
  *
  * The version still moves, for the same reason v12's did: a v12 build's validator rebuilds the
  * document from a field whitelist, so it would quietly drop the actions out of a v13 file and —
- * in VS Code, where every edit writes straight back to disk — save the stripped version over the
+ * where every edit writes straight back to disk — save the stripped version over the
  * original. Refusing the file by name is the only safe reading an older build can give it.
  */
 function migrateAddActions(doc: Record<string, unknown>): Record<string, unknown> {
@@ -310,7 +310,7 @@ function migrateAddActions(doc: Record<string, unknown>): Record<string, unknown
  *
  * Not wrapped in `everyRoom`, because there is nothing to rewrite at any level. The version moves
  * for v13's reason: a v14 build's whitelist would silently strip both fields and, where every edit
- * saves straight back (VS Code), write the stripped file over the original.
+ * saves straight back to disk, write the stripped file over the original.
  */
 function migrateAddC4Text(doc: Record<string, unknown>): Record<string, unknown> {
   return doc;
@@ -323,7 +323,7 @@ function migrateAddC4Text(doc: Record<string, unknown>): Record<string, unknown>
  * already means. Root-only like `actions`, so deliberately **not** wrapped in `everyRoom`.
  *
  * The version moves for v13's reason: a v15 build's whitelist would silently strip the points out of
- * a v16 file and, where every edit saves straight back (VS Code), write the stripped file over the
+ * a v16 file and, where every edit saves straight back to disk, write the stripped file over the
  * original. Refusing the file by name is the only safe reading an older build can give it.
  */
 function migrateAddOpenPoints(doc: Record<string, unknown>): Record<string, unknown> {

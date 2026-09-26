@@ -153,7 +153,7 @@ export interface DescribedEdge {
   line: Shape[];
   /**
    * A request/response connector's own reply line — present only when `edge.hasResponse` is set.
-   * Kept separate from `line` (never merged into it) specifically so a two-phase Presentation/GIF
+   * Kept separate from `line` (never merged into it) specifically so a two-phase Presentation
    * pulse (see `pulseTarget` in `render/svg/document.ts`) can animate one without the other.
    * Unlike the live canvas (compact by default, revealed on hover/selection), a static export has
    * no hover concept, so this always renders when present — quieter than the primary line (thinner,

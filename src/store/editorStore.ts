@@ -573,7 +573,7 @@ export interface EditorStore {
   addOpenPointTargets: (pointId: string, targets: readonly OpenPointTarget[]) => void;
   /** Detaches one element from a shared point; the last one takes the point with it. */
   removeOpenPointTarget: (pointId: string, target: OpenPointTarget) => void;
-  /** Puts plain text on the system clipboard, through the VS Code host bridge when embedded.
+  /** Puts plain text on the system clipboard.
    *  Not a document edit — no undo step, nothing touched. */
   /** Resolves to whether the text reached the system clipboard. */
   copyText: (text: string) => Promise<boolean>;
@@ -925,7 +925,7 @@ const fileCache = new WeakMap<DraftDocument, { outer: DraftDocument; key: string
  * The whole file, with the current room folded back into it.
  *
  * At the root this is `document` itself, so a canvas nobody has looked inside pays nothing.
- * Used only where a *file* is the unit — autosave, the VS Code host, `.draftcanvas` export,
+ * Used only where a *file* is the unit — autosave, the desktop shell, `.draftcanvas` export,
  * conflict resolution and the document-wide limits — never for drawing.
  */
 export function fileOf(state: FileState): DraftDocument {
@@ -1167,13 +1167,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setDocument(document, options) {
     interaction = null;
     // Popovers, menus and one-shot requests aimed at the previous contents: node ids survive a
-    // reload of the same file (the VS Code host reopens it on every outside change), so an open
+    // reload of the same file (the desktop shell reopens it on every outside change), so an open
     // attachment card or quick-connect menu would otherwise reattach to whatever those ids are now.
     // The armed tool goes too — one armed on the canvas just closed would place a node on the
     // next one's first click.
     const cleared = resetViewSession();
     set((state) => {
-      // A reload of the same file — VS Code posts one on every outside edit — should leave you
+      // A reload of the same file — the desktop shell posts one on every outside edit — should leave you
       // standing where you were, as long as the shape you were inside is still there.
       const path = options?.keepPath ? resolvePath(document, state.path) : ROOT_PATH;
       const view = path.length > 0 ? viewOf(document, path) : undefined;
