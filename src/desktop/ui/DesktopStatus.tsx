@@ -1,5 +1,6 @@
 import { Button } from '../../ui/common/Button';
 import { Icon } from '../../ui/common/Icon';
+import { desktopStore } from '../store';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { UpdateChip } from './Updates';
 
@@ -10,8 +11,20 @@ import { UpdateChip } from './Updates';
  * waits at the end of the line.
  */
 export function DesktopStatus() {
-  const { doc, saving } = useDesktopState();
+  const { doc, saving, agent } = useDesktopState();
   const controller = useDesktopController();
+  // Only while access is on: a status bar that mentioned agents to someone who never turned them on
+  // would make the setup look like a prerequisite. Off, it says nothing.
+  const agents = agent?.enabled ? (
+    <button
+      type="button"
+      className="dc-muted dc-status-hint dc-status-agents"
+      title="Agent access is on — Settings → AI agents"
+      onClick={() => desktopStore.update({ settingsOpen: true, settingsCategory: 'agents' })}
+    >
+      {agent.connections > 0 ? `${agent.connections === 1 ? '1 agent' : `${agent.connections} agents`} connected` : 'Agents: on'}
+    </button>
+  ) : null;
 
   if (doc.kind === 'quick') {
     return (
@@ -23,6 +36,7 @@ export function DesktopStatus() {
         <Button variant="quiet" onClick={() => void controller.save()}>
           Save…
         </Button>
+        {agents}
         <UpdateChip placement="status" />
       </div>
     );
@@ -31,6 +45,7 @@ export function DesktopStatus() {
   if (doc.kind !== 'file') {
     return (
       <div className="dc-status-left">
+        {agents}
         <UpdateChip placement="status" />
       </div>
     );
@@ -67,6 +82,7 @@ export function DesktopStatus() {
               ? `${doc.displayPath} · read-only`
               : doc.displayPath}
       </span>
+      {agents}
       <UpdateChip placement="status" />
     </div>
   );

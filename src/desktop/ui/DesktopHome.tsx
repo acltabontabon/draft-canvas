@@ -10,6 +10,7 @@ import { starterShape } from '../../ui/Library/starterShapes';
 import { useStarters } from '../../ui/Library/useStarters';
 import type { ProjectFile } from '../api';
 import { recallBrowse } from '../browseMemory';
+import { desktopStore } from '../store';
 import type { DesktopController } from '../controller';
 import type { DesktopState, ProjectState } from '../store';
 import { useDesktopController, useDesktopState } from '../useDesktop';
@@ -310,6 +311,15 @@ export function DesktopHome() {
               <DeskWay icon="upload" label="Open file…" keys={chord(mac, 'O')} onClick={() => void controller.openFile()} />
               <DeskWay icon="folder" label="Add project…" keys={chord(mac, 'O', true)} onClick={() => void controller.pickProject()} />
               {history && <DeskWay icon="search" label="Find a diagram" keys={chord(mac, 'F')} onClick={() => setBrowse('all')} />}
+              <span className="dc-desk-ways-rule" aria-hidden="true" />
+              {/* The one door to agents from Home. Optional, and off until turned on: Settings → AI agents
+                  says how to connect a client, and drawing by hand never waits on it. */}
+              <DeskWay
+                icon="help"
+                label="Connect an agent…"
+                hint={state.agent?.enabled ? (state.agent.connections > 0 ? `${state.agent.connections} connected` : 'Access is on') : 'Let a coding agent draw here, over MCP'}
+                onClick={() => desktopStore.update({ settingsOpen: true, settingsCategory: 'agents' })}
+              />
             </nav>
           </>
         )}
@@ -358,17 +368,18 @@ function DeskWay({
   keys,
   onClick,
 }: {
-  icon: 'upload' | 'folder' | 'file' | 'search';
+  icon: 'upload' | 'folder' | 'file' | 'search' | 'help';
   label: string;
   /** What it does that its name alone doesn't say. */
   hint?: string;
-  keys: string;
+  /** The chord that also does it, when there is one. */
+  keys?: string;
   onClick: () => void;
 }) {
   return (
-    <Button variant="quiet" icon={icon} className="dc-desk-way" onClick={onClick} title={hint ? `${hint}  ${keys}` : keys}>
+    <Button variant="quiet" icon={icon} className="dc-desk-way" onClick={onClick} title={[hint, keys].filter(Boolean).join('  ') || undefined}>
       {label}
-      <kbd aria-hidden="true">{keys}</kbd>
+      {keys && <kbd aria-hidden="true">{keys}</kbd>}
     </Button>
   );
 }

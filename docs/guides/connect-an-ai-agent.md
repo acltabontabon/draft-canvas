@@ -15,7 +15,9 @@ can't reach it.
 
 ## Turn it on
 
-1. Open **Settings** (`⌘,` / `Ctrl+,`, or from the tray menu) and choose **AI agents**.
+1. On Home, choose **Connect an agent…** under *More ways in* — or open **Settings** (`⌘,` / `Ctrl+,`,
+   or from the tray menu) and choose **AI agents**. While access is on, the status bar says so and
+   how many agents are connected; off, nothing about agents is on screen.
 2. Turn on **Allow agent access**.
 3. Tick each project folder an agent may use. A folder appears here once you have opened it in Draft
    Canvas. Agents can list, read, create and change diagrams only in the folders you tick — and in
