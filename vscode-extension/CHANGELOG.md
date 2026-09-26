@@ -4,6 +4,31 @@ All notable changes to Draft Canvas for VS Code are documented here.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-26
+
+The last release. Draft Canvas for VS Code is retired; Draft Canvas continues as the web editor and
+the desktop app.
+
+### Changed
+
+- The extension no longer opens the editor. A `.draftcanvas` file opens as text by default; **Open
+  With → Draft Canvas** shows a page that says what happened and where the file opens now, with
+  **Reopen as text**. It loads nothing from the network and never writes to the file.
+- **Draft Canvas: New Diagram** is now **Where did Draft Canvas go?**, and shows the same notice. The
+  notice also appears once, on its own, the first time the extension is activated after updating.
+
+### Migration
+
+- Your diagrams are unchanged: a `.draftcanvas` file is plain JSON. Open it in the
+  [desktop app](https://github.com/acltabontabon/draft-canvas/releases/latest) (open the file, or add
+  its folder as a project) or import it into the
+  [web editor](https://acltabontabon.com/draft-canvas/editor/) from the Library.
+- Unsaved edits VS Code kept for a tab (hot exit) are in VS Code's own backup: open the file with the
+  text editor, and save.
+- A canvas background image saved beside a diagram (`name.draftcanvas.background.png` and the like)
+  is not read by the web editor or the desktop app; set it again there if you want it.
+- Uninstall the extension to have `.draftcanvas` files open as text without this page.
+
 ## [0.1.7] - 2026-09-24
 
 ### Changed

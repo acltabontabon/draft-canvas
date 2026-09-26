@@ -1,5 +1,11 @@
 # Releasing Draft Canvas for VS Code
 
+> **Retired.** 0.2.0 is the extension's final release: a notice that Draft Canvas now lives in the web
+> editor and the desktop app, and that `.draftcanvas` files open there as they are. After it is tagged
+> (`extension-v0.2.0`) and uploaded to the Marketplace, `vscode-extension/` and its two workflows are
+> removed from `main`; this file stays reachable through that tag. The steps below are what that last
+> release follows.
+
 This repository ships two products, each on its own schedule:
 
 | Tag | Releases | Version | Changelog | Workflow |

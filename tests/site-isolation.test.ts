@@ -83,12 +83,9 @@ describe('the landing page and the app stay apart', () => {
     expect(editorHtml).not.toMatch(/styles\.css/);
   });
 
-  it('keeps the desktop and VS Code entry points pointed at the app, not the page', () => {
+  it('keeps the desktop entry point pointed at bundled files, not the page', () => {
     const tauri = JSON.parse(readFileSync(join(ROOT, 'src-tauri/tauri.conf.json'), 'utf8'));
     // Bundled files, never a URL: the desktop app must open with no network at all.
     expect(tauri.build.frontendDist).toBe('../dist-desktop');
-
-    const extension = readFileSync(join(ROOT, 'vscode-extension/src/extension.ts'), 'utf8');
-    expect(extension).toContain("const APP_URL = 'https://acltabontabon.com/draft-canvas/editor/'");
   });
 });

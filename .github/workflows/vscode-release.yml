@@ -47,22 +47,6 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      # The extension edits files through the hosted app's host mode (src/host/). Publishing before
-      # the site serves it would ship an editor that can't load.
-      #
-      # The address is read from the extension's own source rather than repeated here. Written out a
-      # second time it went stale the moment the editor moved to /draft-canvas/editor/: the old
-      # address still answered, with the landing page's bundle, so this looked like the editor had
-      # lost host mode rather than like the check was pointed at the wrong page.
-      - name: The hosted app supports the extension
-        run: |
-          APP_URL="$(node -p "/APP_URL = '([^']+)'/.exec(require('fs').readFileSync('vscode-extension/src/extension.ts','utf8'))[1]")"
-          ENTRY="$(curl -fsSL "$APP_URL" | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1)"
-          if [ -z "$ENTRY" ] || ! curl -fsSL "$APP_URL$ENTRY" | grep -q 'draft-canvas:load'; then
-            echo "::error::$APP_URL doesn't serve the host mode the extension needs yet. Release the web app first."
-            exit 1
-          fi
-
   package:
     needs: verify
     uses: ./.github/workflows/vscode-extension.yml

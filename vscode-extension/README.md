@@ -1,71 +1,32 @@
-# Draft Canvas for VS Code
+# Draft Canvas for VS Code — retired
 
-Architecture diagrams that live next to your code.
+**This extension is retired, and 0.2.0 is its last release.** Draft Canvas continues as the
+[web editor](https://acltabontabon.com/draft-canvas/editor/) and the
+[desktop app](https://github.com/acltabontabon/draft-canvas/releases/latest).
 
-Open a `.draftcanvas` file and you're straight in the [Draft Canvas](https://acltabontabon.com/draft-canvas/editor/)
-editor. Draw, hit ⌘S / Ctrl+S, and the diagram is saved back to that file: plain JSON you can diff,
-review and commit.
+Your diagrams are unchanged. A `.draftcanvas` file is plain JSON, and it opens exactly as it is:
 
-![A run through Draft Canvas: drawing a Service, Queue and Worker with the keyboard, dropping in a composed CQRS architecture, attaching a note to a connector, presenting a flow step by step, looking inside a shape with Cmd+Down, and opening the Learn handbook.](https://raw.githubusercontent.com/acltabontabon/draft-canvas/main/docs/media/demo.gif)
+- **In the desktop app**: open the file, or add its folder as a project. The desktop app saves back to
+  the same file, so a diagram can keep living in your repository.
+- **In the web editor**: choose **Import** in the Library and pick the file. **Export → Document**
+  writes it back as a `.draftcanvas` file.
 
-## Usage
+Unsaved edits VS Code kept for a tab (hot exit) are in VS Code's own backup: open the file with the
+text editor and save. A background image saved beside a diagram (`name.draftcanvas.background.png`) is
+not read by the web editor or the desktop app; set it again there if you want it.
 
-- **Open a diagram:** click any `.draftcanvas` file in the Explorer.
-- **Start a new one:** run `Draft Canvas: New Diagram` from the Command Palette, draw, then save it
-  wherever it belongs (`docs/architecture/payments.draftcanvas`, say).
-- **Save:** ⌘S / Ctrl+S, from the canvas or anywhere else. The tab shows unsaved changes like any
-  other file, and closing it asks before throwing them away.
+## What this version does
 
-Got diagrams in the browser version? Export them there (Export → Document, editable) and drop the
-`.draftcanvas` files into your repo.
+With 0.2.0 installed, a `.draftcanvas` file opens as text by default. **Open With → Draft Canvas**
+shows a page that says what happened, with **Reopen as text**; it loads nothing from the network and
+never writes to the file. **Draft Canvas: Where did Draft Canvas go?** shows the same notice.
 
-To see a diagram's raw JSON, right-click its tab and choose **Reopen Editor With… → Text Editor**.
+To have `.draftcanvas` files open as text with nothing in between, uninstall the extension.
 
-## What this extension does
+## Why
 
-It opens `.draftcanvas` files in the Draft Canvas web app, inside an editor tab. VS Code reads and
-writes the file; the app draws it. That's it.
-
-Shapes you look inside (⌘↓) keep what you draw there in the same `.draftcanvas` file, so one file
-still holds the whole picture, from the big one down to the detail.
-
-- It doesn't scan your workspace, read your source code or upload anything. The only files it touches
-  are the diagram you open and, if you gave the canvas a background image, the image saved beside it.
-- It collects no telemetry.
-- The file is handed to the app inside VS Code and never sent anywhere. The app itself makes no
-  network requests with your diagram.
-- Copy and Paste go through VS Code's clipboard: shapes between diagrams, and text in the canvas's
-  text fields. The app asks for the clipboard's text only when you paste.
-
-The app is loaded from `https://acltabontabon.com/draft-canvas/editor/`, so the first open needs a network
-connection. After that, the app's offline cache usually lets it open without one.
-
-## Known limits
-
-- **Only some VS Code shortcuts work while the canvas has focus.** Keys pressed inside the canvas go
-  to Draft Canvas first. ⌘S, ⌘P, ⌘⇧P, ⌘W, ⌘⇧T, ⌘⇧F, ⌘J and ⌘, are passed on to VS Code (Ctrl on
-  Windows and Linux), with VS Code's default keys, not any you've changed. Any other VS Code
-  shortcut does nothing there: click the tab title or anywhere outside the canvas first. Where Draft
-  Canvas has its own shortcut, such as ⌘K, that one wins.
-- **A canvas with shapes drawn inside other shapes needs a current Draft Canvas.** An older copy of
-  the app, such as one left in its offline cache, won't open it and says so, rather than dropping
-  what's inside.
-- **A canvas background image is a second file.** When you save, it's written next to the diagram as
-  `name.draftcanvas.background.png` (or `.jpg`, `.webp`, `.gif`), not inside it. Keep the two together:
-  renaming the diagram in VS Code moves it along and Save As takes a copy, but moving or copying the
-  diagram anywhere else leaves the background behind, and the diagram then opens without one.
-- Desktop VS Code only, for now. Not available on vscode.dev.
-
-## About Draft Canvas
-
-A diagramming tool for developers, built for the moment in a meeting when someone needs to draw the
-architecture instead of just describing it. Services, queues, databases, flows you can present step
-by step, and sequence diagrams from those flows. Open source, no account.
-
-## Links
-
-- [Working with `.draftcanvas` files in VS Code](https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/vscode.md), the longer guide
-- [Getting started](https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/getting-started.md)
-- [Draft Canvas](https://acltabontabon.com/draft-canvas/)
-- [GitHub](https://github.com/acltabontabon/draft-canvas)
-- [Issues](https://github.com/acltabontabon/draft-canvas/issues)
+Draft Canvas is a small, local-first tool made by one person. The extension framed the hosted web
+editor rather than bundling it, so it needed a connection and a second release lane, and it did one
+thing the desktop app now does better: keep a diagram as a file next to the code it describes. Two
+platforms — web and desktop — are what Draft Canvas can keep excellent. The full note is in
+[the repository's guide](https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/vscode-retired.md).

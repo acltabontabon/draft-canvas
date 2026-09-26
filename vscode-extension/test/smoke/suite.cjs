@@ -1,7 +1,6 @@
-// Runs inside VS Code (see run.mjs). Checks the packaged extension's part of the file workflow:
-// that it's installed, stays idle until a diagram is opened, and opens `.draftcanvas` files in its
-// own editor without touching them. Drawing and saving happen inside the Draft Canvas app, which this
-// can't drive; the app's side is covered by tests/host-document.test.tsx.
+// Runs inside VS Code (see run.mjs). Checks the retired extension keeps out of the way: it's installed,
+// a `.draftcanvas` file opens as text by default and is never modified, and its own editor — the
+// retirement page — is there under Open With, still touching nothing.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vscode = require('vscode');
@@ -50,52 +49,44 @@ exports.run = async () => {
     assert.equal(extension.isActive, false);
   });
 
-  await step('a .draftcanvas file opens in the Draft Canvas editor', async () => {
-    await vscode.commands.executeCommand('vscode.open', payments);
-    await until('the Draft Canvas editor for payments.draftcanvas', () => draftCanvasTabs(payments).length === 1);
-    assert.ok(extension.isActive, 'opening a diagram activates the extension');
-  });
-
-  await step('opening it again reuses the same tab', async () => {
-    await vscode.commands.executeCommand('vscode.open', payments);
-    await sleep(500);
-    assert.equal(draftCanvasTabs(payments).length, 1);
-  });
-
-  await step('opening a file does not modify it', async () => {
+  await step('a .draftcanvas file opens as text by default, untouched', async () => {
     const before = fs.readFileSync(payments.fsPath, 'utf8');
-    await sleep(3000);
+    await vscode.commands.executeCommand('vscode.open', payments);
+    await until('a text editor for payments.draftcanvas', () => {
+      const current = activeInput();
+      return current instanceof vscode.TabInputText && current.uri.toString() === payments.toString();
+    });
+    assert.equal(draftCanvasTabs(payments).length, 0);
     const document = vscode.workspace.textDocuments.find((d) => d.uri.toString() === payments.toString());
-    assert.equal(document?.isDirty ?? false, false);
     assert.equal(document?.languageId, 'draftcanvas');
     assert.equal(fs.readFileSync(payments.fsPath, 'utf8'), before);
   });
 
-  await step('a file that is not a diagram opens without being modified', async () => {
-    const before = fs.readFileSync(broken.fsPath, 'utf8');
-    await vscode.commands.executeCommand('vscode.open', broken);
-    await until('the Draft Canvas editor for broken.draftcanvas', () => draftCanvasTabs(broken).length === 1);
-    await sleep(3000);
-    const document = vscode.workspace.textDocuments.find((d) => d.uri.toString() === broken.toString());
+  await step('Open With → Draft Canvas shows the retirement page and modifies nothing', async () => {
+    const before = fs.readFileSync(payments.fsPath, 'utf8');
+    await vscode.commands.executeCommand('vscode.openWith', payments, VIEW_TYPE);
+    await until('the Draft Canvas editor for payments.draftcanvas', () => draftCanvasTabs(payments).length === 1);
+    assert.ok(extension.isActive, 'opening the page activates the extension');
+    await sleep(2000);
+    const document = vscode.workspace.textDocuments.find((d) => d.uri.toString() === payments.toString());
     assert.equal(document?.isDirty ?? false, false);
+    assert.equal(fs.readFileSync(payments.fsPath, 'utf8'), before);
+  });
+
+  await step('a file that is not a diagram is left alone too', async () => {
+    const before = fs.readFileSync(broken.fsPath, 'utf8');
+    await vscode.commands.executeCommand('vscode.openWith', broken, VIEW_TYPE);
+    await until('the Draft Canvas editor for broken.draftcanvas', () => draftCanvasTabs(broken).length === 1);
+    await sleep(2000);
     assert.equal(fs.readFileSync(broken.fsPath, 'utf8'), before);
   });
 
-  await step('Draft Canvas: New Diagram opens an untitled .draftcanvas in the editor', async () => {
+  await step('the command exists and opens no editor', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes('draftCanvas.newDiagram'));
-    await vscode.commands.executeCommand('draftCanvas.newDiagram');
-    const input = await until('an untitled Draft Canvas editor', () => {
-      const current = activeInput();
-      return current instanceof vscode.TabInputCustom && current.viewType === VIEW_TYPE && current.uri.scheme === 'untitled' ? current : null;
-    });
-    assert.ok(input.uri.path.endsWith('.draftcanvas'));
-    // The blank diagram the app writes is JSON; language detection must not rename it, or Save
-    // suggests `Untitled-1.json`, which doesn't reopen in Draft Canvas.
-    await sleep(3000);
-    const document = vscode.workspace.textDocuments.find((d) => d.uri.toString() === input.uri.toString());
-    assert.equal(document?.languageId, 'draftcanvas');
-    // Once the hosted app has written a blank diagram into it, it's dirty; close it without asking.
-    await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+    const tabsBefore = allTabs().length;
+    void vscode.commands.executeCommand('draftCanvas.newDiagram');
+    await sleep(1500);
+    assert.equal(allTabs().length, tabsBefore);
   });
 };

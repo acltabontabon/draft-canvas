@@ -1,8 +1,8 @@
 {
   "name": "draft-canvas",
   "displayName": "Draft Canvas",
-  "description": "Open and edit .draftcanvas diagrams in VS Code.",
-  "version": "0.1.7",
+  "description": "Retired. Draft Canvas diagrams open in the web editor and the desktop app; .draftcanvas files are plain JSON.",
+  "version": "0.2.0",
   "publisher": "acltabontabon",
   "license": "Apache-2.0",
   "pricing": "Free",
@@ -63,13 +63,13 @@
             "filenamePattern": "*.draftcanvas"
           }
         ],
-        "priority": "default"
+        "priority": "option"
       }
     ],
     "commands": [
       {
         "command": "draftCanvas.newDiagram",
-        "title": "New Diagram",
+        "title": "Where did Draft Canvas go?",
         "category": "Draft Canvas"
       }
     ]
