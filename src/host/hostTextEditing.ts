@@ -18,7 +18,7 @@ function selectedTextOf(field: TextField | null): string {
 
 /**
  * Select All, Copy, Cut, Paste and Undo for a text the app shows — a field being typed in, or plain
- * text being read (the Learn drawer, a dialog).
+ * text being read (a panel, a dialog).
  *
  * Framed by a host, a key pressed here never becomes the host's Edit-menu action, so none of these
  * did anything (see `LoadMessage.textEditing`). The frame's own document can do all of it except the
@@ -71,7 +71,7 @@ export function handleTextChord(event: KeyboardEvent, clipboard: HostClipboard):
   }
 
   if (editable || event.shiftKey || (key !== 'c' && key !== 'a')) return false;
-  // Plain text on the page. Only Learn's own text and what's selected in a dialog count: with
+  // Plain text on the page. Only a keyboard region's own text and what's selected in a dialog count: with
   // anything else the chord is the canvas's (copy the selected shapes).
   const region = event.target instanceof Element ? event.target.closest('[data-dc-keyboard-region]') : null;
   if (key === 'a') {

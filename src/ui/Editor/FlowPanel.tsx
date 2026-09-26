@@ -11,7 +11,6 @@ import { edgeIndex, nodeIndex } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
-import { LearnLink } from '../learn/LearnLink';
 
 /**
  * The one surface for flows — a small story navigator, not a management dialog. Every row is a
@@ -175,7 +174,6 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
     <div className="dc-flow-panel" role="region" aria-label="Flows" ref={rootRef} onKeyDown={onKeyDown}>
       <header className="dc-flow-panel-header">
         <strong>Flows</strong>
-        <LearnLink recipeId="add-to-flow" />
         {document.flows.length > 0 && (
           <Button variant="quiet" icon="plus" aria-label="New flow" title="New flow" onClick={createNewFlow} />
         )}

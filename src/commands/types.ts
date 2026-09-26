@@ -26,7 +26,6 @@ export type CommandGroup =
   | 'flow'
   | 'openPoints'
   | 'jump'
-  | 'learn'
   | 'view'
   | 'canvas';
 
@@ -50,7 +49,6 @@ export const GROUP_LABELS: Record<CommandGroup, string> = {
   flow: 'Flows',
   openPoints: 'Open points',
   jump: 'Jump to',
-  learn: 'Learn',
   view: 'View',
   canvas: 'Canvas',
 };

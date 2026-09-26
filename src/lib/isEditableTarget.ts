@@ -39,8 +39,8 @@ export function isActivatableTarget(target: EventTarget | null): boolean {
 }
 
 /**
- * Whether an event's target sits inside a surface that owns its own keys while it has focus — the
- * Learn drawer, docked beside a canvas that is still live. The editor's bare-key shortcuts (a
+ * Whether an event's target sits inside a surface that owns its own keys while it has focus — a
+ * panel docked beside a canvas that is still live. The editor's bare-key shortcuts (a
  * letter drops a shape, Backspace deletes, Escape deselects) stand down there; its ⌘ chords don't.
  * Mark such a surface with `data-dc-keyboard-region`.
  */
@@ -55,7 +55,7 @@ export function isInOwnKeyboardRegion(target: EventTarget | null): boolean {
  * ⌘K closed the palette and the attachment card behind it together.
  */
 export function overlayAboveCanvasIsOpen(): boolean {
-  return document.querySelector('[aria-modal="true"]:not(.dc-learn), [role="menu"]') !== null;
+  return document.querySelector('[aria-modal="true"], [role="menu"]') !== null;
 }
 
 /** An Enter/Escape that is part of an IME composition (confirming or cancelling a conversion). */
@@ -63,8 +63,8 @@ export function isImeKeyEvent(event: { isComposing?: boolean; keyCode?: number; 
   return event.isComposing === true || event.nativeEvent?.isComposing === true || event.keyCode === 229;
 }
 
-/** Whether this ⌘C/⌘X/⌘A belongs to the page's own text — reading Learn, or text selected in it —
- *  rather than to the canvas selection. */
+/** Whether this ⌘C/⌘X/⌘A belongs to the page's own text — a panel's text, or text selected in a
+ *  dialog — rather than to the canvas selection. */
 export function isTextChord(event: KeyboardEvent): boolean {
   if (isInOwnKeyboardRegion(event.target)) return true;
   // Clicking plain text (not a control) leaves focus on the page itself.

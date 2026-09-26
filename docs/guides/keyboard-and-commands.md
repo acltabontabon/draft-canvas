@@ -108,11 +108,11 @@ you used lately, then what applies to the current selection, then everything els
 - **Flows** and **Open points**: start a presentation, add a flow, raise a point about the selection,
   open the list of what is still unsettled.
 - **View** and **Canvas**: fit and zoom, **View level…**, **Tidy connectors**, **Export…**,
-  **Canvas settings…**, **Keyboard shortcuts**, and **Open Learn Draft Canvas**.
+  **Canvas settings…**, **Keyboard shortcuts**, and **Open the documentation**.
 
 Typing narrows the list with a forgiving match: `svc` finds **Add Service**. A few commands ask a
 follow-up question in a second list, such as **Connect to…** or **View level…**; `Esc` steps back.
-If nothing matches, the palette offers **Ask Learn about "…"**, which opens the in-app handbook.
+If nothing matches, the list says so.
 
 The palette only names things the app already does. Anything you can pick in it, you can also do
 with a shortcut or the mouse, and it is a good way to discover what exists.
@@ -149,8 +149,8 @@ reach — a document with five flows, two of them still empty, presents three.
 Leaving puts the editor back where you left it: the same view, and the same shape selected. See
 [Getting started](getting-started.md#present-a-flow).
 
-## Learn the rest in the app
+## Where the rest is
 
-**Learn Draft Canvas** (in the toolbar's More menu, or from the palette) is a handbook of short
-recipes, each a small animated scene using the real shortcuts. Use it for "how do I…" and come back
-here for the overview.
+**Keyboard shortcuts** (`?`, or the toolbar's More menu) lists every key the editor answers to, with a
+filter. The other guides in [the documentation index](../index.md) are the longer walkthroughs: shapes,
+connectors and boundaries; flows and presenting; depth; open points; saving and sharing.

@@ -51,7 +51,7 @@ const SPECS = {
   },
   export: { title: 'Export', commandId: 'export' },
   settings: { title: 'Canvas settings', commandId: 'settings' },
-  learn: { title: 'Learn Draft Canvas', commandId: 'open-learn' },
+  help: { title: 'Documentation', commandId: 'open-docs', description: 'The guides and reference, in a new tab.' },
   shortcuts: { title: 'Keyboard shortcuts', commandId: 'shortcuts' },
   about: { title: 'About Draft Canvas', commandId: 'about' },
   more: { title: 'More' },

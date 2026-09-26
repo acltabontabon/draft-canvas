@@ -1864,11 +1864,6 @@
   gap: 8px;
 }
 
-/* Right beside the label it explains, not pushed to the far edge of the popover. */
-.dc-inspector-section-header .dc-learn-link {
-  margin-left: -4px;
-}
-
 .dc-inspector-section-row {
   display: flex;
   align-items: center;

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
 import { Toolbar } from '../src/ui/Editor/Toolbar';
@@ -31,7 +31,6 @@ beforeEach(() => {
   useEditorStore.setState({ history: { past: [], future: [] } });
   useUiStore.setState({
     armed: null,
-    learnOpen: false,
     settingsOpen: false,
     shortcutsOpen: false,
     aboutOpen: false,
@@ -46,7 +45,7 @@ describe('toolbar overflow menu', () => {
     await openMenu(user);
 
     expect(screen.getByRole('menuitem', { name: 'Canvas settings' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Learn Draft Canvas' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Documentation' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'About Draft Canvas' })).toBeInTheDocument();
   });
@@ -60,18 +59,15 @@ describe('toolbar overflow menu', () => {
     expect(useUiStore.getState().settingsOpen).toBe(true);
   });
 
-  it('opens Learn as a place, not a mode — no check state, and choosing it twice keeps it open', async () => {
+  it('opens the documentation in a new tab, as a link rather than a mode', async () => {
     const user = userEvent.setup();
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     renderToolbar();
     expect(screen.queryByRole('menuitemcheckbox')).not.toBeInTheDocument();
     await openMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: 'Learn Draft Canvas' }));
-    expect(useUiStore.getState().learnOpen).toBe(true);
-
-    await openMenu(user);
-    expect(screen.queryByRole('menuitemcheckbox')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('menuitem', { name: 'Learn Draft Canvas' }));
-    expect(useUiStore.getState().learnOpen).toBe(true);
+    await user.click(screen.getByRole('menuitem', { name: 'Documentation' }));
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('/docs/'), '_blank', 'noopener');
+    open.mockRestore();
   });
 
   it('is reachable by keyboard alone, and Escape returns focus to the trigger', async () => {
@@ -80,8 +76,8 @@ describe('toolbar overflow menu', () => {
     await openMenu(user);
 
     // Real focus sits on the panel; `aria-activedescendant` names the current row. Opening puts
-    // the first row (Canvas settings) under it, so Keyboard shortcuts — Canvas settings, Learn,
-    // then this — is two rows down.
+    // the first row (Canvas settings) under it, so Keyboard shortcuts — Canvas settings,
+    // Documentation, then this — is two rows down.
     await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
     expect(useUiStore.getState().shortcutsOpen).toBe(true);
 

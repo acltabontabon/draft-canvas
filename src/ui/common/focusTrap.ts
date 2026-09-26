@@ -1,6 +1,6 @@
 /**
- * The Tab-trap shared by every surface that holds focus while it's up — `Modal`, and Learn when it
- * covers the canvas as a sheet on a narrow window.
+ * The Tab-trap shared by every surface that holds focus while it's up — `Modal`, and any sheet that
+ * covers the canvas on a narrow window.
  */
 
 /** Elements a Tab-trap should stop at — mirrors what these surfaces actually contain (buttons,

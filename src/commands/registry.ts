@@ -1,3 +1,4 @@
+import { PRODUCT } from '../product';
 import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../canvas/presets';
 import { capabilityFor, categoryOf, edgeRelationLabel } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
@@ -27,7 +28,6 @@ import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
 import { fileOf, ownsData, viewLevel } from '../store/editorStore';
 import { pointer } from '../store/uiStore';
 import { focusBounds, focusNodes } from './search';
-import { RECIPES } from '../learn/recipes';
 import { ARCHITECTURE_STARTERS } from '../starters';
 import type { StarterCategory } from '../starters';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
@@ -617,11 +617,15 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.ui.setShortcutsOpen(true),
     },
     {
-      id: 'open-learn',
-      title: 'Open Learn Draft Canvas',
+      id: 'open-docs',
+      title: 'Open the documentation',
       group: 'canvas',
-      keywords: ['learn', 'help', 'docs', 'how', 'guide', 'handbook'],
-      run: (inner) => inner.ui.openLearn(),
+      keywords: ['help', 'docs', 'how', 'guide', 'manual', 'learn'],
+      hint: 'Opens in a new tab',
+      // A link, not a fetch: nothing in `src/` makes a network request of its own.
+      run: () => {
+        window.open(PRODUCT.links.docs, '_blank', 'noopener');
+      },
     },
     {
       id: 'about',
@@ -1650,51 +1654,6 @@ export function starterCommands(): Command[] {
     hint: starter.description,
     run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter))),
   }));
-}
-
-/** How many Learn rows may join a typed query's results — a pointer to the handbook, never a flood. */
-export const LEARN_LIMIT = 3;
-/**
- * Ranked alongside commands, a Learn row gives up more than a jump does: someone typing "note"
- * most likely wants to add one, and "Attach a note" is there for when they want to know how.
- */
-export const LEARN_RANK_PENALTY = 1.5;
-
-/**
- * One row per Learn recipe, opening the drawer straight on it. Like jump rows these only join a
- * typed query (see `CommandPalette`), and they match on the title alone: a recipe's search keywords
- * ("service", "queue") are deliberately broad for Learn's own box, and here they'd shoulder aside
- * the command that actually does the thing.
- */
-export function learnCommands(): readonly Command[] {
-  // Recipes never change at runtime, so neither do their rows — built once, not on every keystroke.
-  learnRows ??= RECIPES.map((recipe) => ({
-    id: `learn-${recipe.id}`,
-    title: recipe.title,
-    group: 'learn' as const,
-    keywords: ['learn', 'how'],
-    run: (inner) => inner.ui.openLearn(recipe.id),
-  }));
-  return learnRows;
-}
-let learnRows: Command[] | undefined;
-
-/**
- * The palette's answer when nothing matches: carry the question over to Learn's own search, which
- * reads keywords and aliases the palette deliberately doesn't.
- */
-export function askLearnCommand(query: string): Command {
-  const question = query.trim();
-  return {
-    id: 'learn-ask',
-    title: `Ask Learn about “${question}”`,
-    group: 'learn',
-    run: (inner) => {
-      inner.ui.setLearnQuery(question);
-      inner.ui.showLearnRecipe(null);
-      inner.ui.openLearn();
-    },
-  };
 }
 
 /** Every command that applies to `ctx` right now, in display order. */

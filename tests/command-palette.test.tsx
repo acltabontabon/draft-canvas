@@ -38,8 +38,6 @@ function reset() {
   useUiStore.setState({
     commandPaletteOpen: true,
     quickConnect: null,
-    learnOpen: false,
-    learnRecipeId: null,
   });
   prefs.clear();
 }
@@ -245,49 +243,11 @@ describe('CommandPalette', () => {
     expect(prefs.get('command-recent.0')).toBeUndefined();
   });
 
-  it('offers Learn recipes for a typed question, behind the commands that do the thing', () => {
-    mount();
-    fireEvent.change(input(), { target: { value: 'note' } });
-    const rows = options().map((row) => row.textContent ?? '');
-    const learnAt = rows.findIndex((text) => text.includes('Attach a note') && text.includes('Learn'));
-    const doAt = rows.findIndex((text) => text.startsWith('Add Note'));
-    expect(learnAt).toBeGreaterThanOrEqual(0);
-    expect(doAt).toBeGreaterThanOrEqual(0);
-    expect(doAt).toBeLessThan(learnAt);
-    expect(rows.filter((text) => text.endsWith('Learn')).length).toBeLessThanOrEqual(3);
-
-    fireEvent.click(options()[learnAt]!);
-    expect(useUiStore.getState().learnOpen).toBe(true);
-    expect(useUiStore.getState().learnRecipeId).toBe('attach-note');
-    expect(useUiStore.getState().commandPaletteOpen).toBe(false);
-    // Reading isn't doing: a Learn row never takes a Recent slot from a real command.
-    expect([...prefs.keys()].some((name) => name.startsWith('command-recent.'))).toBe(false);
-  });
-
-  it('keeps Learn out of the list until something is typed', () => {
-    mount();
-    expect(options().some((row) => row.textContent?.includes('Attach a note'))).toBe(false);
-  });
-
-  it('keeps Learn out of a presentation, where it could not open', () => {
-    useEditorStore.setState({ mode: 'present' });
-    mount();
-    fireEvent.change(input(), { target: { value: 'flow' } });
-    expect(screen.queryAllByRole('option').some((row) => row.textContent?.includes('Learn'))).toBe(false);
-  });
-
-  it('hands a query nothing matches over to Learn', () => {
-    useUiStore.setState({ learnQuery: '', learnRecipeId: 'junction' });
+  it('shows "No matching commands." for a query nothing matches', () => {
     mount();
     fireEvent.change(input(), { target: { value: ' zzzzqq ' } });
-    expect(options()).toHaveLength(1);
-    expect(highlighted()).toHaveTextContent('Ask Learn about “zzzzqq”');
-    key('Enter');
-    const ui = useUiStore.getState();
-    expect(ui.commandPaletteOpen).toBe(false);
-    expect(ui.learnOpen).toBe(true);
-    expect(ui.learnQuery).toBe('zzzzqq');
-    expect(ui.learnRecipeId).toBeNull();
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByText('No matching commands.')).toBeInTheDocument();
   });
 
   it('shows "No matching commands." for a query nothing matches while presenting', () => {

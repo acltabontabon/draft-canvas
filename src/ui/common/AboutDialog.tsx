@@ -317,6 +317,16 @@ function AboutDialogBody() {
             <div className="dc-about-links">
               <a
                 className="dc-about-link"
+                href={PRODUCT.links.docs}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Documentation (opens in a new tab)"
+                title="Documentation"
+              >
+                <Icon name="help" size={15} />
+              </a>
+              <a
+                className="dc-about-link"
                 href={PRODUCT.links.github}
                 target="_blank"
                 rel="noreferrer"

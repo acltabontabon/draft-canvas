@@ -135,7 +135,7 @@ export interface SceneOptions {
   only?: ReadonlySet<string>;
   selectedFlow?: DraftFlow;
   /** Clip-path id scope (see `beginClipScope`). Defaults to `'export'`; anything drawn into the
-   *  live page beside the canvas — Learn's scenes — needs its own. */
+   *  live page beside the canvas needs its own. */
   clipScope?: string;
   /** Nodes mid-drag: connectors don't route around them, the same as on the live canvas while a
    *  gesture is in flight (`uiStore.movingNodeIds`). */
@@ -163,7 +163,7 @@ export interface Scene {
   arrowColors: Set<string>;
   /**
    * The same elements again, kept per id and in paint order, for a renderer that needs to address
-   * one node or connector at a time (Learn's scenes animate each on its own). Node children are
+   * one node or connector at a time. Node children are
    * in node-local coordinates — no `translate` — so the caller positions them.
    */
   nodeEntries: { node: DraftNode; els: SvgEl[] }[];
@@ -264,7 +264,7 @@ export function buildScene(
   // Planned over the same filtered arrays, and against the same obstacle set actually routed
   // against — otherwise it would place arcs on routes nobody draws. Mid-gesture, the crossings
   // against a connector attached to a moving node are dropped exactly as the live canvas drops
-  // them, so a Learn frame mid-drag looks like the canvas mid-drag.
+  // them, so a frame rendered mid-drag looks like the canvas mid-drag.
   const crossings = crossingPlan(nodes, edges, obstacleNodes);
   // Connectors that leave together under one label draw it once, as on the canvas — unless a flow's
   // numbered steps are showing, which ride inside each connector's own label.

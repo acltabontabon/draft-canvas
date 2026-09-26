@@ -3,7 +3,6 @@ import type { Preset } from '../canvas/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
 import type { DraftEdge, DraftNode, OpenPointTarget, Side } from '../document/types';
-import type { RecipeCategory } from '../learn/types';
 import type { PresentationReveal } from '../presentation/presentationAttachments';
 import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
@@ -438,20 +437,6 @@ export interface UiStore {
     nodeId: string;
     from: { x: number; y: number; width: number; height: number } | null;
   } | null;
-  /**
-   * The Learn drawer (`ui/learn/LearnDrawer.tsx`) and where it was left. Session memory only:
-   * reopening Learn returns to the recipe or search you were on, a reload starts at its home.
-   * `learnRecipeId` null means the home view; `learnCategory` is the Explore filter, if any.
-   */
-  learnOpen: boolean;
-  learnRecipeId: string | null;
-  learnQuery: string;
-  learnCategory: RecipeCategory | null;
-  /** Bumped by every `openLearn`, so a drawer that is already open still takes focus. */
-  learnFocusRequest: number;
-  /** Whether the latest `openLearn` still wants focus. Consumed by the drawer, so a drawer that merely
-   *  remounts (after a presentation, or on the next document) doesn't pull focus off the canvas. */
-  learnFocusPending: boolean;
 
   /** The homepage search box's current query — see `LibraryScreen.tsx`. Matches
    *  against canvas title and project name (see that file's search-filter comment
@@ -529,15 +514,6 @@ export interface UiStore {
   /** Consumes the pending fit for `documentId` — a no-op if a newer request has already replaced
    *  it, so a stale caller can never clear a request that isn't its own. */
   clearOpenFit: (documentId: string) => void;
-  /** Opens Learn — on `recipeId` when given (a deep link always wins), else where it was left. */
-  openLearn: (recipeId?: string) => void;
-  closeLearn: () => void;
-  /** Reads and clears `learnFocusPending`. */
-  takeLearnFocus: () => boolean;
-  /** Home (`null`) or one recipe, inside the drawer. */
-  showLearnRecipe: (recipeId: string | null) => void;
-  setLearnQuery: (query: string) => void;
-  setLearnCategory: (category: RecipeCategory | null) => void;
   /** Identity-preserving: an offer equal in trigger, rule, anchor and neighborhood keeps the node
    *  and edge ids already held (re-keying the fresh geometry onto them), so unrelated document
    *  changes never re-mint a ghost's React keys. */
@@ -625,12 +601,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   exportSelectionRequested: false,
   jumpFlashId: null,
   openFitDocumentId: null,
-  learnOpen: false,
-  learnRecipeId: null,
-  learnQuery: '',
-  learnCategory: null,
-  learnFocusRequest: 0,
-  learnFocusPending: false,
   continuation: null,
   agentPreview: null,
   proposalPreview: null,
@@ -793,22 +763,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   requestOpenFit: (documentId) => set({ openFitDocumentId: documentId }),
   clearOpenFit: (documentId) =>
     set((state) => (state.openFitDocumentId === documentId ? { openFitDocumentId: null } : state)),
-  openLearn: (recipeId) =>
-    set((state) => ({
-      learnOpen: true,
-      learnFocusRequest: state.learnFocusRequest + 1,
-      learnFocusPending: true,
-      ...(recipeId ? { learnRecipeId: recipeId } : {}),
-    })),
-  closeLearn: () => set({ learnOpen: false }),
-  takeLearnFocus: () => {
-    const pending = get().learnFocusPending;
-    if (pending) set({ learnFocusPending: false });
-    return pending;
-  },
-  showLearnRecipe: (learnRecipeId) => set({ learnRecipeId }),
-  setLearnQuery: (learnQuery) => set({ learnQuery }),
-  setLearnCategory: (learnCategory) => set({ learnCategory }),
   setAgentPreview: (agentPreview) => set({ agentPreview }),
   setProposalPreview: (proposalPreview) => set({ proposalPreview }),
   setProposalPreviewVisible: (visible) =>

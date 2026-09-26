@@ -33,7 +33,6 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
   const updateReady = useUiStore((state) => state.updateReady);
   const lastSeenProductRelease = useUiStore((state) => state.lastSeenProductRelease);
   const hasUnreadNotes = hasUnreadRelease(lastSeenProductRelease, applicableReleases(PRODUCT.version));
-  const openLearn = useUiStore((state) => state.openLearn);
   const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
@@ -68,11 +67,11 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
       },
     },
     {
-      id: 'learn',
-      label: toolbarLabel('learn'),
+      id: 'help',
+      label: toolbarLabel('help'),
       onSelect: () => {
         closeMenu();
-        openLearn();
+        window.open(PRODUCT.links.docs, '_blank', 'noopener');
       },
     },
     {

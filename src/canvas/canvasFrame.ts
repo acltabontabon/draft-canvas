@@ -1,5 +1,5 @@
 /**
- * Where the canvas actually is on screen. It used to be "the window, minus the toolbar"; with Learn
+ * Where the canvas actually is on screen. It used to be "the window, minus the toolbar"; with a panel
  * docked beside it, the canvas can end well short of the window's right edge — so anything that
  * means "the middle of the canvas" or "stay clear of its right edge" asks here instead of assuming.
  */

@@ -42,7 +42,6 @@ import { clampCenterX } from './popoverPlacement';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
-import { LearnLink } from '../ui/learn/LearnLink';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
@@ -258,7 +257,7 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
       popoverScreenBottom,
       [toScreenRect(sourceRect), toScreenRect(targetRect)],
     );
-    // …and never past the canvas's own edges: React Flow's root clips, and a docked Learn drawer or the
+    // …and never past the canvas's own edges: React Flow's root clips, and a docked panel or the
     // Flows panel can end the visible canvas well short of the window's right edge.
     const onCanvasX = clampCenterX(
       clampedScreenX,
@@ -754,7 +753,6 @@ function ServiceInteractionSection({ edge, relations }: { edge: DraftEdge; relat
       <section className="dc-inspector-section">
         <div className="dc-inspector-section-header">
           <span className="dc-inspector-section-label">Interaction</span>
-          <LearnLink recipeId="make-async" />
         </div>
         <div className="dc-inspector-section-row">
           <InspectorSelect
@@ -1054,7 +1052,6 @@ function ExpandedPanel({
           <section className="dc-inspector-section">
             <div className="dc-inspector-section-header">
               <span className="dc-inspector-section-label">Interaction</span>
-              <LearnLink recipeId="describe-interaction" />
             </div>
             <div className="dc-inspector-section-row">
               <InspectorSelect

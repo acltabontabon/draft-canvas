@@ -43,7 +43,7 @@
   --dc-z-popover: 7; /* anchored element/connector popovers */
   --dc-z-bar: 8; /* focus indicator, presentation bar, quick connect */
   --dc-z-menu: 9; /* context and move menus */
-  --dc-z-drawer: 30; /* Learn as a sheet over a narrow canvas — under any dialog opened from it */
+  --dc-z-drawer: 30; /* a sheet over a narrow canvas — under any dialog opened from it */
   --dc-z-modal: 40; /* modal and command-palette backdrops */
   --dc-z-toast: 60;
   --dc-z-prompt: 65; /* clipboard permission card */
@@ -60,7 +60,7 @@
 
   /* Decelerating, never springy: things arrive and settle, nothing bounces. */
   --dc-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  /* Accelerate, then settle — for something that travels (Learn's marquee), not something arriving. */
+  /* Accelerate, then settle — for something that travels, not something arriving. */
   --dc-ease-in-out: cubic-bezier(0.45, 0.05, 0.2, 1);
 
   color-scheme: dark;

@@ -274,7 +274,7 @@ function ElementInspectorBody({
   // nobody can see — it re-places on the render that ends the gesture.
   const { target, placement } = useOverlayPosition<Placement>(panelRef, 'above', (frame, current) => {
     if (!anchors) return null;
-    // Read at placement time, not render time: a docked Learn drawer changes where the canvas ends
+    // Read at placement time, not render time: a docked panel changes where the canvas ends
     // after this rendered (see `useOverlayPosition`'s canvas observer) — plus the Flows panel while
     // it's open. See `canvasFrame.ts`.
     const clearances = { ...baseClearances, right: rightClearance(flowPanelOpen, LEFT_CLEARANCE) };

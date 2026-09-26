@@ -1,3 +1,4 @@
+import { PRODUCT } from '../../product';
 import { useMemo, useState } from 'react';
 import { ALL_PRESETS } from '../../canvas/presets';
 import { shortcutFor, titleFor } from '../../commands/shortcutLookup';
@@ -118,6 +119,13 @@ function ShortcutSheetBody() {
           ))}
           {nothingMatched && <p className="dc-muted dc-shortcuts-empty">No shortcuts match “{query}”.</p>}
         </div>
+        <p className="dc-muted dc-shortcuts-foot">
+          The longer walkthroughs are in the{' '}
+          <a href={PRODUCT.links.docs} target="_blank" rel="noreferrer">
+            documentation
+          </a>
+          .
+        </p>
       </div>
     </Modal>
   );

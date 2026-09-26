@@ -60,9 +60,6 @@ import { PRODUCT } from '../../product';
 // Export (its panels, previews, and exporters) is a sizeable slice of the editor that most sessions
 // never open — fetched the first time it is, then kept mounted so its in-session choices survive.
 const ExportDialogChunk = retryableLazy(() => import('./ExportDialog').then((module) => ({ default: module.ExportDialog })));
-// Learn and every one of its scenes arrive the first time it's opened, and stay mounted after — so
-// the editor itself carries nothing but the recipe titles its palette can search.
-const LearnDrawerChunk = retryableLazy(() => import('../learn/LearnDrawer').then((module) => ({ default: module.LearnDrawer })));
 // Proposal review is desktop-only (an AI agent's own feature); `__DESKTOP__` drops it from the web
 // build entirely, the same way `App.tsx` gates every other desktop-only chunk.
 const ProposalPanelChunk = __DESKTOP__ ? retryableLazy(() => import('../../desktop/ui/ProposalPanel').then((module) => ({ default: module.ProposalPanel }))) : null;
@@ -72,10 +69,9 @@ function modalIsOpen(): boolean {
   return document.querySelector('[aria-modal="true"]') !== null;
 }
 
-/** A modal other than Learn's sheet. Learn covers the canvas on a narrow window but still teaches its
- *  ⌘ chords ("press ⌘K"), so those keep working over it; everything else stands down as for any modal. */
+/** A modal dialog is up: the editor's chords stand down as well as its bare keys. */
 function dialogIsOpen(): boolean {
-  return document.querySelector('[aria-modal="true"]:not(.dc-learn)') !== null;
+  return document.querySelector('[aria-modal="true"]') !== null;
 }
 
 /** Whether keyboard focus is on the canvas itself (or nowhere in particular) rather than on a
@@ -125,9 +121,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const exportOpen = useUiStore((state) => state.exportOpen);
   const [exportMounted, setExportMounted] = useState(exportOpen);
   if (exportOpen && !exportMounted) setExportMounted(true);
-  const learnOpen = useUiStore((state) => state.learnOpen);
-  const [learnMounted, setLearnMounted] = useState(learnOpen);
-  if (learnOpen && !learnMounted) setLearnMounted(true);
   // A panel that fails to load (or to render) closes with a toast rather than taking the editor down
   // with it — and unmounts, so the next open tries a fresh import.
   const onExportFailed = useCallback((error: Error, componentStack: string) => {
@@ -139,15 +132,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     // Otherwise a later plain ⌘⇧E would open still forced to "Selection only".
     ui.requestExportSelection(false);
     const notice = loadFailureNotice(error, 'Export couldn’t open. Check your connection and try again.');
-    ui.notify(notice.message, 'error', notice.action);
-  }, []);
-  const onLearnFailed = useCallback((error: Error, componentStack: string) => {
-    logDiagnostic(error, { operation: 'learn-panel' }, componentStack);
-    LearnDrawerChunk.reset();
-    setLearnMounted(false);
-    const ui = useUiStore.getState();
-    ui.closeLearn();
-    const notice = loadFailureNotice(error, 'Learn couldn’t open. Check your connection and try again.');
     ui.notify(notice.message, 'error', notice.action);
   }, []);
   const quickConnect = useUiStore((state) => state.quickConnect);
@@ -549,13 +533,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           )}
         </div>
 
-        {learnMounted && (
-          <PanelBoundary onError={onLearnFailed}>
-            <Suspense fallback={null}>
-              <LearnDrawerChunk.Component />
-            </Suspense>
-          </PanelBoundary>
-        )}
       </div>
 
       <StatusBar
@@ -777,7 +754,7 @@ export function useKeyboard({
   useEffect(() => {
     const onCopyOrCut = (event: ClipboardEvent) => {
       if (isEditableTarget(event.target)) return;
-      // Text selected on the page (a dialog, Learn) copies as text.
+      // Text selected on the page (a dialog) copies as text.
       const selected = window.getSelection();
       if (selected && !selected.isCollapsed) return;
       const ui = useUiStore.getState();
@@ -804,7 +781,7 @@ export function useKeyboard({
   useEffect(() => {
     const onEscapeCapture = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || isEditableTarget(event.target)) return;
-      // An Escape meant for a dialog or for Learn is theirs, not the ghost's.
+      // An Escape meant for a dialog is its own, not the ghost's.
       if (isInOwnKeyboardRegion(event.target) || modalIsOpen()) return;
       const uiState = useUiStore.getState();
       if (uiState.continuation?.trigger !== 'select') return;
@@ -838,7 +815,7 @@ export function useKeyboard({
       // A modal (Export, Settings, Shortcuts, About) focuses its own panel, which
       // `isEditableTarget` doesn't count — without this, Backspace deleted the selection
       // behind the dialog and letter keys dropped nodes under it. Its own Escape/Tab
-      // handling is untouched. (Learn's sheet stops bare keys further down, after the ⌘ chords.)
+      // handling is untouched. (A keyboard region stops bare keys further down, after the ⌘ chords.)
       if (dialogIsOpen()) return;
       // Mid-gesture (a node dragged or resized, a connector end being repointed), commands wait:
       // Delete removes the node React Flow is dragging, which aborts the drag without its stop
@@ -1008,7 +985,6 @@ export function useKeyboard({
       // layout produces for Shift+Digit1/Shift+Slash) — on a layout where Shift+1 doesn't type
       // '!', or Shift+/ doesn't type '?', matching the produced character would silently never
       // fire. Pulled out of the switch below since `switch (event.key)` can't express this.
-      // `?` works from inside Learn too, which shows it as the key for the shortcut sheet.
       if (event.shiftKey && event.code === 'Slash') {
         // Otherwise the "?" that opened the sheet types itself into the sheet's own filter.
         event.preventDefault();
@@ -1016,9 +992,9 @@ export function useKeyboard({
         return;
       }
 
-      // Focus in Learn (docked beside a live canvas): its buttons and links own the bare keys — a
-      // letter must not drop a shape behind it, nor Backspace delete the selection. ⌘ chords above
-      // still reach the canvas. As a sheet over the canvas, Learn holds them wherever focus is.
+      // Focus in a surface that owns its keys (`data-dc-keyboard-region`, e.g. the Open points panel):
+      // its buttons and links own the bare keys — a letter must not drop a shape behind it, nor
+      // Backspace delete the selection. ⌘ chords above still reach the canvas.
       if (isInOwnKeyboardRegion(event.target) || modalIsOpen()) return;
 
       if (event.shiftKey && event.code === 'Digit1') {

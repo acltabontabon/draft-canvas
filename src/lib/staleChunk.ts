@@ -17,7 +17,7 @@ export interface LoadFailureNotice {
  *
  * Every lazily loaded panel is a content-hashed file, and a deploy removes the previous one. A tab
  * left open across a deploy therefore holds an index that names chunks the server no longer has:
- * the app keeps working, and then the first Export, Learn or About asks for a file that is now a
+ * the app keeps working, and then the first Export or About asks for a file that is now a
  * 404 page. `retryableLazy`'s `reset()` was written for this, but it can only try the same dead URL
  * again — nothing short of reloading can fix it, because the fix is a newer index.
  *

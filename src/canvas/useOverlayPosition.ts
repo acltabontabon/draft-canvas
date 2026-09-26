@@ -123,7 +123,7 @@ export function useOverlayPosition<P extends string>(
     });
   }, [storeApi]);
 
-  // The canvas itself changing size — Learn docking beside it, or leaving — moves where its edges
+  // The canvas itself changing size — a panel docking beside it, or leaving — moves where its edges
   // are without moving the viewport or re-rendering anything here.
   useEffect(() => {
     if (!target || typeof ResizeObserver === 'undefined') return;

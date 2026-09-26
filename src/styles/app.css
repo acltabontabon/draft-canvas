@@ -2152,7 +2152,6 @@ kbd {
   min-height: 0;
 }
 
-/* Beside Learn when it's docked (`ui/learn/learn.css`), which is why it can't assume the full width. */
 /* Nothing on the canvas is page text to select. Without this, WebKit (Safari, and the desktop app's
    webview) turns a box-select drag into a native text selection too, painting edge labels and whole
    layers in the system highlight and flickering as the drag moves. The pieces that are meant to be
@@ -4238,49 +4237,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   border-top: 1px solid var(--dc-border);
 }
 
-/* Learn's "?" — a quiet way into one recipe from a dense control (`ui/learn/LearnLink.tsx`). Styled
-   here, not in `learn.css`, because it ships with the editor rather than with the drawer. */
-.dc-learn-link {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--dc-text-faint);
-  cursor: pointer;
-  transition:
-    color 140ms ease,
-    background-color 140ms ease;
-}
-
-.dc-learn-link:hover,
-.dc-learn-link:focus-visible {
-  background: var(--dc-selection-soft);
-  color: var(--dc-selection);
-}
-
-@media (hover: none) and (pointer: coarse) {
-  .dc-learn-link {
-    width: 28px;
-    height: 28px;
-  }
-}
-
-.dc-learn-link-inline {
-  margin-left: 4px;
-  vertical-align: -5px;
-}
-
-/* The "?" belongs to the title it explains; the panel's own buttons keep to the far edge. */
-.dc-flow-panel-header .dc-learn-link {
-  margin: 0 auto 0 4px;
-}
-
 /* The empty state teaches the concept and offers the one thing to do next. */
 .dc-flow-panel-empty {
   /* On a short canvas the panel is capped, and the "New flow" button must still be reachable. */
@@ -5194,6 +5150,15 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 .dc-shortcuts-empty {
   grid-column: 1 / -1;
+}
+
+.dc-shortcuts-foot {
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+
+.dc-shortcuts-foot a {
+  color: var(--dc-selection);
 }
 
 .dc-shortcuts section h3 {

@@ -139,7 +139,7 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
   // flipping (or oscillating) mid-drag or mid-resize.
   const { target, placement } = useOverlayPosition<Placement>(panelRef, 'right', (frame, current) => {
     if (!anchors) return null;
-    // Read at placement time, not render time: a docked Learn drawer changes where the canvas ends
+    // Read at placement time, not render time: a docked panel changes where the canvas ends
     // after this rendered (see `useOverlayPosition`'s canvas observer) — plus the Flows panel while
     // it's open. See `canvasFrame.ts`.
     const clearances = { ...baseClearances, right: rightClearance(flowPanelOpen, LEFT_CLEARANCE) };

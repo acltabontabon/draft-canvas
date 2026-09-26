@@ -90,7 +90,6 @@ neither React nor React Flow. That single rule is what makes the file format sur
 | `commands/` | one registry the palette, menu and shortcut sheet all read |
 | `depth/` | the tree of rooms a shape can hold (`tree.ts`) and the view level each one shows (`level.ts`) |
 | `starters/` `continuation/` `sequence/` `presentation/` | capabilities derived from the model |
-| `learn/` · `ui/learn/` | the Learn handbook: recipes, search and scene data (pure) · the drawer and scene renderer (its own lazy chunk) |
 | `export/` | `.draftcanvas` / `.dcenc` files, SVG, PNG, sequence diagrams, and the seam that saves a download |
 | `history/` | the undo/redo stack |
 | `openPoints/` | the marker geometry both renderers draw, and the overview derived from `DraftDocument.openPoints` |

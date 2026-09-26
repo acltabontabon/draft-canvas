@@ -10,6 +10,8 @@ New here? Start with [Getting started](guides/getting-started.md). It takes a fe
 | Guide | Read it to |
 | --- | --- |
 | [Getting started](guides/getting-started.md) | Draw a Service → Queue → Worker, add a note, present it as a flow, and export it |
+| [Shapes, connectors and boundaries](guides/shapes-and-connectors.md) | Pick the kind of a shape, say what an arrow means, show the reply, mark the failure path |
+| [Flows and presenting](guides/flows-and-presentation.md) | Build a numbered path through the diagram and walk the room through it |
 | [Explain a system at different levels](guides/depth.md) | Keep the overview small and draw the detail inside a shape, C4-style |
 | [Mark what is still open](guides/open-points.md) | Attach a tentative, awaiting-input or parked point to a shape or connector, and pick the discussion up next time |
 | [Keyboard shortcuts and the command palette](guides/keyboard-and-commands.md) | Draw quickly without the mouse |
@@ -18,9 +20,8 @@ New here? Start with [Getting started](guides/getting-started.md). It takes a fe
 | [Draft Canvas Desktop](guides/desktop.md) | Start a Quick Draft from the menu bar or tray, keep diagrams as files and folders, and build the app |
 | [Connect an AI agent](guides/connect-an-ai-agent.md) | Let a coding agent such as Claude Code draw and revise diagrams in the desktop app |
 
-Inside the app, **Learn Draft Canvas** (in the toolbar's More menu, or `⌘K` and then *Learn*) has short
-animated recipes for individual moves. The guides here are the longer walkthroughs, and Learn is the
-quick reminder while you're drawing.
+Inside the app, the toolbar's More menu has **Documentation** (this index) and **Keyboard shortcuts**
+(`?`), and the command palette (`⌘K`) searches every command by name.
 
 Running your own copy, and installing the VS Code extension, are covered in the
 [README](../README.md#try-it).

@@ -160,5 +160,5 @@ exports.
 - **Show more or less detail.** [Explain a system at different levels](depth.md) uses **Look inside**
   to keep the overview clean and draw the detail one level down.
 - **Go faster.** [Keyboard shortcuts and the command palette](keyboard-and-commands.md).
-- **Ask the app.** **Learn Draft Canvas**, in the toolbar's More menu, has short animated recipes for
-  each of the moves above.
+- **Say what is still open.** [Mark what is still open](open-points.md) attaches a tentative, awaiting-input
+  or parked point to a shape or connector, for the next conversation to pick up.
