@@ -38,7 +38,7 @@ own, and [in Docker](#running-it-yourself), on your own server.
 - **Keyboard-first**: press a letter to drop a shape, `Tab` to accept a suggestion, `⌘K` for everything else
 - **Starters**: compose a known architecture from the command palette: Monolith, Microservices, Event-Driven, Hexagonal, CQRS, Saga, Outbox, Medallion and more
 - **Local by default**: diagrams are saved in your browser (IndexedDB) and encrypted at rest; no backend and no account. It works offline once loaded, and a test in the suite fails on any network API in the editor's source ([what's stored, and where](docs/reference/privacy.md))
-- **Export**: editable `.draftcanvas` JSON, passphrase-encrypted `.dcenc`, PNG, SVG, GIF, and Mermaid or PlantUML source
+- **Export**: editable `.draftcanvas` JSON, passphrase-encrypted `.dcenc`, PNG, SVG, and Mermaid or PlantUML source
 
 Diagrams live in one browser on one device. [Export anything you'd mind losing](docs/guides/saving-and-sharing.md#what-you-have-to-do).
 

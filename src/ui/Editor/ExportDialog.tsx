@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react';
 import {
-  exportFlowGifFile,
   exportPngFile,
   exportProjectFile,
   exportSecureProjectFile,
@@ -11,12 +10,9 @@ import {
   MERMAID_EXTENSION,
   PLANTUML_EXTENSION,
   SECURE_EXPORT_FILE_EXTENSION,
-  type GifSpeed,
   type SequenceFormat,
 } from '../../export';
-import { findFlow, flowIsPlayable } from '../../document/flow';
-import type { DraftDocument } from '../../document/types';
-import { resolveFlowStep } from '../../presentation/useFlowPlayback';
+import { flowIsPlayable } from '../../document/flow';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { fileOf, fileWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { ownerAt } from '../../depth/tree';
@@ -30,7 +26,6 @@ import { Modal } from '../common/Modal';
 import { ExportModePicker } from './ExportModePicker';
 import { ExportDocumentPanel } from './ExportDocumentPanel';
 import { ExportImagePanel } from './ExportImagePanel';
-import { ExportAnimatedPanel } from './ExportAnimatedPanel';
 import { ExportSequencePanel } from './ExportSequencePanel';
 import { ExportArtifact, type ArtifactVisual } from './ExportArtifact';
 import { SecureExportPrompt } from './SecureExportPrompt';
@@ -48,9 +43,8 @@ const SEQUENCE_FORMAT_PREFERENCE = 'sequence-export-format';
 // Document, which was only ever first by accident of list order in the old flat layout.
 function readExportModePreference(): ExportMode {
   const value = readPreference(EXPORT_MODE_PREFERENCE);
-  return value === 'document' || value === 'image' || value === 'animated' || value === 'sequence'
-    ? value
-    : 'image';
+  // 'animated' (the retired GIF export) reads as the default, like any other stale value.
+  return value === 'document' || value === 'image' || value === 'sequence' ? value : 'image';
 }
 
 function readDocumentFormatPreference(): DocumentFormat {
@@ -66,7 +60,6 @@ function readSequenceFormatPreference(): SequenceFormat {
 }
 
 const SEQUENCE_FORMAT_LABEL: Record<SequenceFormat, string> = { mermaid: 'Mermaid', plantuml: 'PlantUML' };
-const SPEED_LABEL: Record<GifSpeed, string> = { slow: 'Slow', normal: 'Normal', fast: 'Fast' };
 
 /**
  * Export is choose → configure → export: one mode picker, one contextual panel for whatever's
@@ -107,15 +100,8 @@ export function ExportDialog() {
   const [includeBackground, setIncludeBackground] = useState(true);
   const [includeOpenPoints, setIncludeOpenPoints] = useState(true);
   const [busy, setBusy] = useState(false);
-  // A GIF of a long flow takes a while: its progress drives the button, and Cancel (or closing the
-  // dialog) aborts it between frames.
-  const [gifProgress, setGifProgress] = useState<number | null>(null);
-  const gifAbort = useRef<AbortController | null>(null);
   const [securePromptOpen, setSecurePromptOpen] = useState(false);
   const running = useRef(false);
-  const [gifFlowIdChoice, setGifFlowIdChoice] = useState<string | null>(null);
-  const [gifSpeed, setGifSpeed] = useState<GifSpeed>('normal');
-  const [gifLoop, setGifLoop] = useState(true);
   const [sequenceFormat, setSequenceFormat] = useState<SequenceFormat>(readSequenceFormatPreference);
 
   // "Export selection…" from the command palette: the request simply reads as Image mode with the
@@ -129,7 +115,6 @@ export function ExportDialog() {
   const effectiveMode: ExportMode = selectionRequested ? 'image' : mode;
 
   const close = () => {
-    gifAbort.current?.abort();
     requestExportSelection(false);
     // The checkbox is per open: left ticked, a reopen with nothing selected shows it ticked and
     // disabled, and a later single selection would export only that.
@@ -161,12 +146,6 @@ export function ExportDialog() {
   // after this dialog first mounted must still show up without a remount. Only a
   // flow with something to play is offered — an empty one would just fail to export.
   const playableFlows = document.flows.filter((flow) => flowIsPlayable(document, flow));
-  const isPlayable = (id: string | null | undefined) => Boolean(id) && playableFlows.some((flow) => flow.id === id);
-  const gifFlowId =
-    (isPlayable(gifFlowIdChoice) ? gifFlowIdChoice : null) ??
-    (isPlayable(selectedFlowId) ? selectedFlowId : null) ??
-    playableFlows[0]?.id ??
-    '';
 
   const only =
     effectiveSelectionOnly && selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
@@ -190,7 +169,6 @@ export function ExportDialog() {
 
   const title = document.metadata.title;
   const onlyKey = only ? selection.nodes.join(',') : '';
-  const gifSteps = playableStepCount(document, gifFlowId);
 
   const artifact: { fileName: string; visual: ArtifactVisual; empty?: boolean } =
     effectiveMode === 'document'
@@ -222,32 +200,16 @@ export function ExportDialog() {
                 imageFormat === 'png' ? `${width} × ${height} px · 2×` : `${width} × ${height} · vector`,
             },
           }
-        : effectiveMode === 'animated'
-          ? {
-              fileName: fileNameFor(title, '.gif'),
-              empty: !gifFlowId,
-              visual: {
-                type: 'thumbnail',
-                document,
-                theme: paletteName,
-                options: { theme: paletteName, selectedFlowId: gifFlowId || undefined, preset },
-                onlyKey: '',
-                scale: 1,
-                describe: () =>
-                  `${count(gifSteps, 'step')} · ${SPEED_LABEL[gifSpeed]}${gifLoop ? ' · loop' : ''}`,
-                motion: { speed: gifSpeed, loop: gifLoop },
-              },
-            }
-          : {
-              fileName: fileNameFor(title, sequenceFormat === 'mermaid' ? MERMAID_EXTENSION : PLANTUML_EXTENSION),
-              empty: playableFlowCount === 0,
-              visual: {
-                type: 'file',
-                icon: 'code',
-                badge: sequenceFormat === 'mermaid' ? 'MMD' : 'PUML',
-                meta: playableFlowCount > 0 ? `${count(playableFlowCount, 'Flow')} · plain text` : 'No Flow yet',
-              },
-            };
+        : {
+            fileName: fileNameFor(title, sequenceFormat === 'mermaid' ? MERMAID_EXTENSION : PLANTUML_EXTENSION),
+            empty: playableFlowCount === 0,
+            visual: {
+              type: 'file',
+              icon: 'code',
+              badge: sequenceFormat === 'mermaid' ? 'MMD' : 'PUML',
+              meta: playableFlowCount > 0 ? `${count(playableFlowCount, 'Flow')} · plain text` : 'No Flow yet',
+            },
+          };
 
   const run = async (task: () => void | Promise<void>, what: string) => {
     // `busy` only lands on the next render: a second Enter in the same moment would run it again
@@ -259,7 +221,6 @@ export function ExportDialog() {
       await task();
       close();
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return; // cancelled, not failed
       notify(
         error instanceof Error ? `${what} failed: ${error.message}` : `${what} failed.`,
         'error',
@@ -291,43 +252,18 @@ export function ExportDialog() {
               disabled: busy,
               onClick: () => void run(() => exportSvgFile(document, options), 'SVG export'),
             }
-        : effectiveMode === 'animated'
-          ? {
-              label: 'Export GIF',
-              disabled: busy || !gifFlowId,
-              onClick: () =>
-                void run(async () => {
-                  const controller = new AbortController();
-                  gifAbort.current = controller;
-                  setGifProgress(0);
-                  try {
-                    await exportFlowGifFile(document, gifFlowId, {
-                      theme: paletteName,
-                      speed: gifSpeed,
-                      loop: gifLoop,
-                      includeBackground: options.includeBackground,
-                      preset,
-                      signal: controller.signal,
-                      onProgress: (done, total) => setGifProgress(Math.floor((done / total) * 100)),
-                    });
-                  } finally {
-                    gifAbort.current = null;
-                    setGifProgress(null);
-                  }
-                }, 'GIF export'),
-            }
-          : {
-              label: `Export ${SEQUENCE_FORMAT_LABEL[sequenceFormat]}`,
-              disabled: busy || playableFlowCount === 0,
-              onClick: () =>
-                void run(
-                  () =>
-                    sequenceFormat === 'mermaid'
-                      ? exportSequenceMermaidFile(document)
-                      : exportSequencePlantUmlFile(document),
-                  'Sequence Diagram export',
-                ),
-            };
+        : {
+            label: `Export ${SEQUENCE_FORMAT_LABEL[sequenceFormat]}`,
+            disabled: busy || playableFlowCount === 0,
+            onClick: () =>
+              void run(
+                () =>
+                  sequenceFormat === 'mermaid'
+                    ? exportSequenceMermaidFile(document)
+                    : exportSequencePlantUmlFile(document),
+                'Sequence Diagram export',
+              ),
+          };
 
   return (
     <Modal
@@ -345,13 +281,8 @@ export function ExportDialog() {
             Generated locally in your browser.
           </span>
           <span className="dc-export-footer-actions">
-            {gifProgress !== null && (
-              <Button variant="quiet" onClick={() => gifAbort.current?.abort()}>
-                Cancel
-              </Button>
-            )}
             <Button variant="solid" icon="export" disabled={cta.disabled} aria-busy={busy || undefined} onClick={cta.onClick}>
-              {gifProgress !== null ? `Rendering GIF… ${gifProgress}%` : busy ? 'Exporting…' : cta.label}
+              {busy ? 'Exporting…' : cta.label}
             </Button>
           </span>
         </div>
@@ -392,19 +323,6 @@ export function ExportDialog() {
             />
           )}
 
-          {effectiveMode === 'animated' && (
-            <ExportAnimatedPanel
-              flows={playableFlows.map((flow) => ({ id: flow.id, title: flow.title }))}
-              hasUnplayableFlows={document.flows.length > 0}
-              flowId={gifFlowId}
-              onFlowChange={setGifFlowIdChoice}
-              speed={gifSpeed}
-              onSpeedChange={setGifSpeed}
-              loop={gifLoop}
-              onLoopChange={setGifLoop}
-            />
-          )}
-
           {effectiveMode === 'sequence' && (
             <ExportSequencePanel
               format={sequenceFormat}
@@ -430,15 +348,6 @@ export function ExportDialog() {
       )}
     </Modal>
   );
-}
-
-/** The steps a GIF of this flow would actually show — one whose connectors were all deleted is skipped. */
-function playableStepCount(document: DraftDocument, flowId: string): number {
-  const flow = findFlow(document, flowId);
-  if (!flow) return 0;
-  const edgesById = new Map(document.edges.map((edge) => [edge.id, edge]));
-  const nodesById = new Map(document.nodes.map((node) => [node.id, node]));
-  return flow.steps.filter((step, index) => resolveFlowStep(step, index, index + 1, edgesById, nodesById) !== null).length;
 }
 
 /**

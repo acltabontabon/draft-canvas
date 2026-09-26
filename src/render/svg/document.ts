@@ -60,8 +60,8 @@ export interface ExportOptions {
 /**
  * Builds the `<image>`/scrim (and, for `blur`, an SVG filter) for a resolved
  * background, sized to fill `frame` — the export's own visible bounds (the
- * whole canvas for `renderDocumentSvg`, the camera-cropped viewBox for
- * `renderFlowFrameSvg`) — the same "always fills the visible screen" behavior
+ * whole canvas for `renderDocumentSvg`, or any camera-cropped viewBox a
+ * caller passes) — the same "always fills the visible screen" behavior
  * `CanvasBackground.tsx` gives the live canvas, so panning/zooming and
  * exporting never disagree about how much of the image is showing.
  * `preserveAspectRatio` does the cover/contain fitting; `<image>` clips to
@@ -224,11 +224,10 @@ function applyPulse(lineEls: SvgEl[], pulsePhase: number): void {
 
 /**
  * Builds the node/edge SVG elements shared by every scene renderer — the
- * bounds-fit whole-document export (`renderDocumentSvg`) and the
- * camera-framed, tier-decorated single flow-step frame
- * (`renderFlowFrameSvg`). Both funnel through the same
- * `describeNode`/`describeEdge` calls; only the surrounding viewBox/root and
- * any tier decoration differ.
+ * bounds-fit whole-document export (`renderDocumentSvg`) and any other
+ * framing a caller wants (a camera-cropped viewBox, say). Everything funnels
+ * through the same `describeNode`/`describeEdge` calls; only the surrounding
+ * viewBox/root differs.
  */
 export function buildScene(
   document: DraftDocument,

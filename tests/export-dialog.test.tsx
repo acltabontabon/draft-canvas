@@ -80,9 +80,6 @@ describe('ExportDialog — mode picker', () => {
     await switchMode(user, /Document/);
     expect(screen.getByRole('button', { name: 'Export document' })).toBeInTheDocument();
 
-    await switchMode(user, /Animated/);
-    expect(screen.getByRole('button', { name: 'Export GIF' })).toBeInTheDocument();
-
     await switchMode(user, /Source/);
     expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeInTheDocument();
   });
@@ -109,49 +106,6 @@ describe('ExportDialog — Document panel', () => {
     await user.click(screen.getByRole('button', { name: 'Export securely…' }));
 
     expect(screen.getByRole('dialog', { name: 'Export securely' })).toBeInTheDocument();
-  });
-});
-
-describe('ExportDialog — Animated panel', () => {
-  it('is disabled with teaching copy when the diagram has no Flows', async () => {
-    const user = userEvent.setup();
-    useEditorStore.setState({ document: withoutFlows(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    renderDialog();
-    await switchMode(user, /Animated/);
-
-    expect(screen.getByText('Add a Flow to enable this export.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Export GIF' })).toBeDisabled();
-  });
-
-  it('exposes Speed and Loop once a Flow exists', async () => {
-    const user = userEvent.setup();
-    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    renderDialog();
-    await switchMode(user, /Animated/);
-
-    expect(screen.getByLabelText('Speed')).toBeInTheDocument();
-    expect(screen.getByText('Loop continuously')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Export GIF' })).toBeEnabled();
-  });
-
-  it('never offers a flow with nothing left to play — even the selected one', async () => {
-    const user = userEvent.setup();
-    const doc = withFlow();
-    const broken = createFlow({ title: 'Broken' });
-    broken.steps = [{ id: 'gone', edgeId: 'deleted-edge' }];
-    useEditorStore.setState({
-      document: { ...doc, flows: [broken, ...doc.flows] },
-      selection: { nodes: [], edges: [] },
-      selectedFlowId: broken.id,
-    });
-    renderDialog();
-    await switchMode(user, /Animated/);
-    expect(screen.queryByLabelText('Flow')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Export GIF' })).toBeEnabled();
-
-    useEditorStore.setState({ document: { ...doc, flows: [broken] }, selectedFlowId: broken.id });
-    expect(await screen.findByText('Add a step to a Flow to enable this export.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Export GIF' })).toBeDisabled();
   });
 });
 
@@ -216,9 +170,6 @@ describe('ExportDialog — output artifact', () => {
     expect(screen.getByTitle('my-diagram.draftcanvas')).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'Encrypted' }));
     expect(screen.getByTitle('my-diagram.dcenc')).toBeInTheDocument();
-
-    await switchMode(user, /Animated/);
-    expect(screen.getByTitle('my-diagram.gif')).toBeInTheDocument();
 
     await switchMode(user, /Source/);
     expect(screen.getByTitle('my-diagram.mmd')).toBeInTheDocument();

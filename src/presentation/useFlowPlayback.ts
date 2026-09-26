@@ -146,9 +146,9 @@ const STEP_PADDING = 0.4;
  * explicit `viewport` verbatim, or a bounds-fit of its members capped at
  * `MAX_STEP_ZOOM`. `null` when the step has neither (nothing to focus on).
  *
- * Pure — no React Flow instance required — so the headless GIF exporter
- * (`src/export/gif.ts`) computes the same simple camera path for a step it
- * always did, rather than reimplementing this math. The live presentation's
+ * Pure — no React Flow instance required — so a headless reader (the retired
+ * GIF exporter was one) can compute the same simple camera path for a step
+ * rather than reimplementing this math. The live presentation's
  * directed camera (`framing.ts`) starts from the same box and adds what only
  * a live view has: where the camera already is, and the room the chrome takes.
  */

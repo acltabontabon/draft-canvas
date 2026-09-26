@@ -673,7 +673,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       id: 'export',
       title: 'Export…',
       group: 'canvas',
-      keywords: ['png', 'svg', 'gif', 'download', 'save', 'share', 'image', 'sequence diagram', 'mermaid', 'plantuml', 'uml'],
+      keywords: ['png', 'svg', 'download', 'save', 'share', 'image', 'sequence diagram', 'mermaid', 'plantuml', 'uml'],
       // ⌘⇧E leads because it always reaches the page: browser extensions (Claude's, among others)
       // claim a bare ⌘E before Draft Canvas ever sees it. ⌘E still works wherever it gets through.
       shortcut: `${MOD_SYMBOL} Shift E`,

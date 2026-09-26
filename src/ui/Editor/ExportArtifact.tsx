@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import type { DraftDocument } from '../../document/types';
-import type { GifSpeed } from '../../export';
 import { renderDocumentSvg, type ExportOptions } from '../../render/svg/document';
 import { themeFor, type ThemeName } from '../../render/theme/tokens';
 import { Icon, type IconName } from '../common/Icon';
@@ -16,7 +15,6 @@ export type ArtifactVisual =
       /** PNG exports at 2× — the tile reports the real output size, not the layout size. */
       scale: number;
       describe: (width: number, height: number) => string;
-      motion?: { speed: GifSpeed; loop: boolean };
     }
   | { type: 'file'; icon: IconName; badge: string; meta: string };
 
@@ -67,7 +65,7 @@ function Thumbnail({
   fileName: string;
   empty?: boolean;
 }) {
-  const { document, theme, options, onlyKey, scale, describe, motion } = visual;
+  const { document, theme, options, onlyKey, scale, describe } = visual;
   const transparent = options.transparent === true;
 
   // Keyed on primitives, not `options` itself — the parent rebuilds that object (and its `only`
@@ -87,8 +85,7 @@ function Thumbnail({
     [rendered],
   );
 
-  // Nothing rendered: for an animation that means no flow to play; for an image, the render failed.
-  const meta = rendered ? describe(rendered.width * scale, rendered.height * scale) : motion ? 'No Flow yet' : 'Preview unavailable';
+  const meta = rendered ? describe(rendered.width * scale, rendered.height * scale) : 'Preview unavailable';
 
   return (
     <>
@@ -107,22 +104,7 @@ function Thumbnail({
             draggable={false}
           />
         ) : (
-          <Icon name={motion ? 'play' : 'image'} size={20} />
-        )}
-        {motion && src && (
-          <>
-            <span className="dc-export-play" aria-hidden="true">
-              <Icon name="play" size={11} />
-            </span>
-            <span
-              className="dc-export-progress"
-              aria-hidden="true"
-              data-speed={motion.speed}
-              data-loop={motion.loop ? 'true' : undefined}
-              // Re-mounts the bar when speed/loop change so the new pacing is visible at once.
-              key={`${motion.speed}-${motion.loop}`}
-            />
-          </>
+          <Icon name="image" size={20} />
         )}
       </div>
       <Caption fileName={fileName} meta={meta} />

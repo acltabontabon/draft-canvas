@@ -83,7 +83,6 @@ describe('nothing on the canvas can reach a network', () => {
     expect(deps).toEqual(
       expect.arrayContaining([
         '@xyflow/react',
-        'gifenc',
         'idb',
         'react',
         'react-dom',
@@ -92,7 +91,7 @@ describe('nothing on the canvas can reach a network', () => {
       ]),
     );
     // A short, auditable dependency list is part of the promise.
-    expect(deps).toHaveLength(7);
+    expect(deps).toHaveLength(6);
     for (const name of deps) {
       expect(name).not.toMatch(/analytics|telemetry|sentry|tracking|posthog|mixpanel|segment/i);
     }

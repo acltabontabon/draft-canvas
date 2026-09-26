@@ -13,8 +13,8 @@ function blobToDataUri(blob: Blob): Promise<string> {
 
 /**
  * Loads a document's configured background (if any) and base64-encodes it,
- * so every SVG renderer downstream (`renderDocumentSvg`, `renderFlowFrameSvg`)
- * stays a synchronous, pure function with no storage access of its own.
+ * so the SVG renderer downstream (`renderDocumentSvg`) stays a synchronous,
+ * pure function with no storage access of its own.
  */
 export async function resolveExportBackground(
   document: DraftDocument,

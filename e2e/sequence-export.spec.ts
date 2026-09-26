@@ -236,8 +236,7 @@ test.describe('Sequence Diagram export', () => {
     // drives — unlike an OS-native <select> dropdown, which is why this exercises arrow keys
     // directly instead of `.selectOption()`.
     await dialog.getByRole('radio', { name: /Image/ }).focus(); // the default mode
-    await page.keyboard.press('ArrowRight'); // Image -> Animated
-    await page.keyboard.press('ArrowRight'); // Animated -> Source
+    await page.keyboard.press('ArrowRight'); // Image -> Source
     await expect(dialog.getByRole('radio', { name: /Source/ })).toBeChecked();
 
     // `exact` matters: a substring match would also hit the "Source — Mermaid or PlantUML…" card.

@@ -78,28 +78,6 @@ export async function rasterizeSvg(
   });
 }
 
-export interface RasterizedPixels {
-  data: Uint8ClampedArray;
-  width: number;
-  height: number;
-}
-
-/**
- * Same rasterization `rasterizeSvg` uses, but returns raw RGBA pixels instead
- * of an encoded PNG — what the GIF exporter feeds to `gifenc`'s
- * quantizer one frame at a time.
- */
-export async function rasterizeSvgToPixels(
-  svg: string,
-  options: RasterizeOptions,
-): Promise<RasterizedPixels> {
-  const canvas = await drawSvgToCanvas(svg, options);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new RasterizeError('This browser did not provide a 2D canvas context.');
-  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  return { data, width: canvas.width, height: canvas.height };
-}
-
 function loadSvgImage(svg: string): Promise<HTMLImageElement> {
   // A blob URL avoids the size ceiling and the escaping pitfalls of data URIs.
   const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });

@@ -64,7 +64,6 @@ command palette. The dialog has four modes (Document comes in two kinds):
 | **Document → Editable** | `.draftcanvas`: plain, diffable JSON | Backups, moving diagrams, keeping one in a repository |
 | **Document → Encrypted** | `.dcenc`: locked with a passphrase | Sending a diagram somewhere you don't control |
 | **Image** | PNG or SVG | Slides, docs, chat |
-| **Animated** | GIF of a flow's steps | Showing a flow where you can't present live |
 | **Source** | Mermaid or PlantUML sequence diagram, from a flow | Docs that already render those |
 
 ![The Export dialog with Document selected.](../media/guides/export-document.png)
@@ -81,7 +80,6 @@ Notes on each:
   PNGs export at 2× and SVGs are vector. Inside a shape, you choose between that shape's canvas
   and the whole diagram. A diagram with [open points](open-points.md) keeps their markers, with a
   key, unless you untick **Open point markers**.
-- **Animated** needs a flow with at least one step. Choose speed and whether it loops.
 - **Source** needs a flow. See [Getting started](getting-started.md#present-a-flow) for making one.
   Sequence diagrams have no notation for open points, so those are left out.
 
@@ -131,7 +129,8 @@ There are no share links or accounts. Pick whichever of these fits:
   the passphrase by a different route.
 - **Put it in the repository.** `.draftcanvas` is stable JSON with a fixed field order, so an unchanged
   diagram produces identical bytes and edits show up as small diffs in review.
-- **Send a picture.** PNG for chat and slides, SVG for docs, GIF for a moving walkthrough.
+- **Send a picture.** PNG for chat and slides, SVG for docs. For a moving walkthrough, present the
+  flow live or screen-record it; there is no animated export.
 - **Copy shapes between diagrams.** `⌘C` on a selection and `⌘V` in another diagram, even in another tab,
   brings shapes and their connectors along. Copying puts them on your system clipboard as text, and
   the app reads the clipboard only when you paste. The first time you use **Paste** from the context

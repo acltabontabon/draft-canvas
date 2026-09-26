@@ -113,7 +113,7 @@ right typeface.
 
 ### Exports
 
-`.draftcanvas`, `.dcenc`, PNG, SVG, GIF and the Mermaid and PlantUML sequence sources (`.mmd`, `.puml`) are all generated in the page and handed to the
+`.draftcanvas`, `.dcenc`, PNG, SVG and the Mermaid and PlantUML sequence sources (`.mmd`, `.puml`) are all generated in the page and handed to the
 browser's download mechanism. No file passes through a server. What happens to a file after you
 save it is, of course, up to you.
 

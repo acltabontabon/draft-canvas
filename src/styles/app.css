@@ -5026,61 +5026,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   white-space: nowrap;
 }
 
-/* Animated: a play chip, plus a progress sweep paced by the chosen Speed that plays once or keeps
-   looping exactly as the GIF will. */
-.dc-export-play {
-  position: absolute;
-  right: 8px;
-  bottom: 9px;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  padding-left: 1px;
-  border: 1px solid color-mix(in srgb, var(--dc-selection) 40%, transparent);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--dc-surface) 82%, transparent);
-  color: var(--dc-selection);
-  backdrop-filter: blur(4px);
-}
-
-.dc-export-progress {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  height: 2px;
-  background: var(--dc-selection);
-  transform-origin: left center;
-  transform: scaleX(1);
-  opacity: 0.85;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .dc-export-progress {
-    transform: scaleX(0);
-    animation: dc-export-progress 2.2s linear forwards;
-  }
-
-  .dc-export-progress[data-speed='slow'] {
-    animation-duration: 3.4s;
-  }
-
-  .dc-export-progress[data-speed='fast'] {
-    animation-duration: 1.3s;
-  }
-
-  .dc-export-progress[data-loop='true'] {
-    animation-iteration-count: infinite;
-  }
-}
-
-@keyframes dc-export-progress {
-  to {
-    transform: scaleX(1);
-  }
-}
-
 .dc-export-caption {
   display: flex;
   flex-direction: column;

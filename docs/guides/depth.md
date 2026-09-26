@@ -77,7 +77,7 @@ also shows it, and clicking that chip opens **View level…**.
 
 - **Presenting.** `⌘↓` and `⌘↑` keep working while you present, so you can step into a system
   mid-walkthrough and come back out.
-- **Exporting.** Inside a room, the Image, Animated and Source exports ask **What to export**: the
+- **Exporting.** Inside a room, the Image and Source exports ask **What to export**: the
   room you're in, or the whole canvas. A `.draftcanvas` export always contains everything.
 
 ## What to know

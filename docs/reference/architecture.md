@@ -91,7 +91,7 @@ neither React nor React Flow. That single rule is what makes the file format sur
 | `depth/` | the tree of rooms a shape can hold (`tree.ts`) and the view level each one shows (`level.ts`) |
 | `starters/` `continuation/` `sequence/` `presentation/` | capabilities derived from the model |
 | `learn/` · `ui/learn/` | the Learn handbook: recipes, search and scene data (pure) · the drawer and scene renderer (its own lazy chunk) |
-| `export/` | `.draftcanvas` / `.dcenc` files, SVG, PNG, GIF, sequence diagrams, and the seam that saves a download |
+| `export/` | `.draftcanvas` / `.dcenc` files, SVG, PNG, sequence diagrams, and the seam that saves a download |
 | `history/` | the undo/redo stack |
 | `takeaways/` | actions, decisions and questions derived from a diagram's notes |
 | `openPoints/` | the marker geometry both renderers draw, and the overview derived from `DraftDocument.openPoints` |
@@ -113,7 +113,7 @@ flowchart LR
     NODE["DraftNode"] --> DESC["describeNode()<br/><i>pure → display list</i>"]
     DESC --> EMIT["SVG emit"]
     EMIT --> SCREEN["🖥 canvas"]
-    EMIT --> FILE["📄 .svg / .png / .gif"]
+    EMIT --> FILE["📄 .svg / .png"]
 
     CHROME["handles · resize frames<br/>selection rings · inline editors"] -.->|React + CSS only| SCREEN
 
@@ -203,7 +203,7 @@ flowchart LR
 ```
 
 So two flows share early steps and diverge later, and one diagram carries both stories. Playback,
-the lens, step badges, GIF export and sequence export are all readings of that same ordered list.
+the lens, step badges and sequence export are all readings of that same ordered list.
 
 Moving *between* flows is the same reading again: `nextFlow`/`previousFlow` are `pickFlow` with a
 different index into the document's own `flows` order, so a switch is a fresh start at the

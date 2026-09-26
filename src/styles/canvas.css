@@ -2901,7 +2901,7 @@
 
 /* Three tiers, and the surrounding architecture stays readable at the quietest of them: the
    audience keeps its bearings by seeing where the rest of the system is, at lower emphasis, not
-   by having it taken away. `render/svg/flowFrame.ts` mirrors these numbers for the GIF. */
+   by having it taken away. */
 .dc-canvas[data-explain='on'] .react-flow__node {
   opacity: 0.38;
   filter: grayscale(0.45);
