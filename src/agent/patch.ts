@@ -14,7 +14,6 @@
  *   `n_…` ones included — are addressed as they are.
  */
 
-import { addAction, createAction, removeAction, setActionDone, updateActionText } from '../document/actions';
 import {
   addOpenPoint,
   createOpenPoint,
@@ -47,9 +46,8 @@ import type { Accent, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlow
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
 import { embed, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
 import { assignAnchors } from '../layout/anchors';
-import { anchorOf } from './compile';
 import { AgentError, Problems } from './errors';
-import { AGENT_LIMITS, readActions, readLayout, readOpenPoints, readRoom, Reader, type LayoutSpec, type RoomSpec } from './input';
+import { AGENT_LIMITS, readLayout, readOpenPoints, readRoom, Reader, type LayoutSpec, type RoomSpec } from './input';
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
 import { pastDeadline, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
@@ -84,7 +82,6 @@ export function idsInFile(file: DraftDocument): Set<string> {
     }
     for (const f of graph.flows) out.add(f.id);
   });
-  for (const a of file.actions) out.add(a.id);
   for (const p of file.openPoints ?? []) out.add(p.id);
   return out;
 }
@@ -140,7 +137,6 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
   const scope = readScope(r, rawScope, '/scope', view);
   problems.throwIfAny();
-  let actions = file.actions;
   const touched = new Set<string>();
   const counts: PatchResult['counts'] = { added: 0, updated: 0, removed: 0 };
   const advisories: string[] = [];
@@ -178,7 +174,6 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       };
       const room = readRoom(r, op, at, { taken, depth: path.length, existing });
       const anchorable = new Set([...existing.elements, ...existing.relationships, ...room.nodes.map((n) => n.id), ...room.relationships.map((e) => e.id)]);
-      const newActions = readActions(r, op.actions, `${at}/actions`, taken, anchorable);
       const newPoints = readOpenPoints(r, op.openPoints, `${at}/openPoints`, taken, anchorable);
       // One flow per title: a second "Main flow" is almost always the first one asked for again.
       room.flows.forEach((flow, j) => {
@@ -193,16 +188,8 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       // the field unset.
       const blockLayout: LayoutSpec = { ...layout, normalizePeerSizes: layout.normalizePeerSizes ?? true };
       view = addToView(view, room, blockLayout, ctx, touched, advisories);
-      for (const a of newActions) {
-        const action = createAction(a.text, a.about ? { kind: view.edges.some((e) => e.id === a.about) ? 'edge' : 'node', id: a.about } : undefined);
-        if (!action) continue;
-        if (a.id) action.id = a.id;
-        if (a.done) action.done = true;
-        actions = addAction({ ...file, actions }, action).actions;
-        counts.added += 1;
-      }
-      // Root-only like actions, but kept *on the view* (`viewOf` hands every room the file's list, and
-      // `embed` carries it home) so `removeElements` below can prune what a later op deletes.
+      // Root-only, but kept *on the view* (`viewOf` hands every room the file's list, and `embed`
+      // carries it home) so `removeElements` below can prune what a later op deletes.
       for (const spec of newPoints) {
         const targets = spec.about.map((id) => ({ kind: view!.edges.some((e) => e.id === id) ? ('edge' as const) : ('node' as const), id }));
         const point = createOpenPoint(spec.kind, targets, spec.context);
@@ -280,15 +267,6 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
           counts.removed += 1;
           continue;
         }
-        if (path.length === 0 && actions.some((a) => a.id === id)) {
-          if (scope) {
-            refuseOutOfScope(r, `${at}/ids`, [id]);
-            continue;
-          }
-          actions = removeAction({ ...file, actions }, id).actions;
-          counts.removed += 1;
-          continue;
-        }
         if (findOpenPoint(view, id)) {
           // A point id is never part of a captured node/edge selection, so a scoped request naming one
           // is reaching outside it.
@@ -338,18 +316,15 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       counts.updated += 1;
       return;
     }
-    const result = updateOne(r, view, file, actions, id, set, `${at}/set`, ctx, touched, advisories, layout.direction, scope);
+    const result = updateOne(r, view, id, set, `${at}/set`, ctx, touched, advisories, layout.direction, scope);
     if (!result) return;
     view = result.view;
-    actions = result.actions;
     counts.updated += 1;
   });
   problems.throwIfAny();
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
 
-  // Actions are root-only; `embed` carries them home from any room.
-  const nextView: DraftDocument = { ...view, actions };
-  const nextFile = path.length ? embed(file, path, nextView) : nextView;
+  const nextFile = path.length ? embed(file, path, view) : view;
   // Only what this request could plausibly have broken — `touched` plus, through `checkQuality`'s
   // pairwise checks, anything untouched it collides with — never a claim the whole file is clean.
   const quality: QualityReport = touched.size ? checkQuality(view.nodes, view.edges, ctx, touched) : { errors: [], warnings: [] };
@@ -359,8 +334,6 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
 function updateOne(
   r: Reader,
   view: DraftDocument,
-  file: DraftDocument,
-  actions: DraftDocument['actions'],
   id: string,
   set: Json,
   at: string,
@@ -369,7 +342,7 @@ function updateOne(
   advisories: string[],
   direction: LayoutSpec['direction'],
   scope?: Scope,
-): { view: DraftDocument; actions: DraftDocument['actions'] } | undefined {
+): { view: DraftDocument } | undefined {
   const node = view.nodes.find((n) => n.id === id);
   if (node) {
     refuseOutOfScope(r, at, outOfScope(scope, [id], 'nodes'));
@@ -466,7 +439,7 @@ function updateOne(
     if (node.type === 'note' && typeof set.group === 'string' && set.group !== node.parentId) next = placeInGroup(next, id, set.group);
     else if (patch.parentId !== undefined || set.group !== undefined) next = fitGroups(next, id);
     touched.add(id);
-    return { view: next, actions };
+    return { view: next };
   }
   const edge = view.edges.find((e) => e.id === id);
   if (edge) {
@@ -497,7 +470,7 @@ function updateOne(
       }
     }
     touched.add(id);
-    return { view: updateEdge(view, id, patch), actions };
+    return { view: updateEdge(view, id, patch) };
   }
   const flowIndex = view.flows.findIndex((f) => f.id === id);
   if (flowIndex >= 0) {
@@ -541,36 +514,13 @@ function updateOne(
     const flows = [...view.flows];
     flows[flowIndex] = flow;
     touched.add(id);
-    return { view: { ...view, flows }, actions };
+    return { view: { ...view, flows } };
   }
   const attached = findAttachment(view, id);
   if (attached) {
     refuseOutOfScope(r, at, outOfScope(scope, [attached.hostId], attached.kind === 'node' ? 'nodes' : 'edges'));
     if (!r.problems.empty) return undefined;
-    return updateAttachmentOp(r, view, attached, set, at, touched, actions);
-  }
-  const action = actions.find((a) => a.id === id);
-  if (action) {
-    // Same reasoning again: an action id can never be part of a captured node/edge selection.
-    if (scope) {
-      refuseOutOfScope(r, at, [id]);
-      return undefined;
-    }
-    let next = { ...file, actions };
-    if (set.text !== undefined) {
-      const text = r.text(set.text, `${at}/text`, AGENT_LIMITS.actionLength, { required: true, singleLine: true });
-      if (text) next = updateActionText(next, id, text);
-    }
-    if (set.done !== undefined) {
-      const done = r.bool(set.done, `${at}/done`);
-      if (done !== undefined) next = setActionDone(next, id, done);
-    }
-    if (set.about !== undefined) {
-      const anchor = typeof set.about === 'string' ? anchorOf(file, set.about) : undefined;
-      if (set.about !== null && !anchor) r.problems.add('INVALID_REFERENCE', `${at}/about`, `no element or relationship "${String(set.about)}"`);
-      next = { ...next, actions: next.actions.map((a) => (a.id === id ? { ...a, ...(anchor ? { anchor } : {}), ...(set.about === null ? { anchor: undefined } : {}) } : a)) };
-    }
-    return { view, actions: next.actions };
+    return updateAttachmentOp(r, view, attached, set, at, touched);
   }
   r.problems.add('INVALID_REFERENCE', at.replace(/\/set$/, '/id'), `nothing with id "${id}" in this view`);
   return undefined;
@@ -833,8 +783,7 @@ function updateAttachmentOp(
   set: Json,
   at: string,
   touched: Set<string>,
-  actions: DraftDocument['actions'],
-): { view: DraftDocument; actions: DraftDocument['actions'] } | undefined {
+): { view: DraftDocument } | undefined {
   const { attachment, hostId, kind } = found;
   const patch: Partial<Omit<Attachment, 'id'>> = {};
   const isCode = attachment.type === 'code';
@@ -882,7 +831,7 @@ function updateAttachmentOp(
     touched.add(move.id);
   }
   touched.add(hostId);
-  return { view: next, actions };
+  return { view: next };
 }
 
 /**

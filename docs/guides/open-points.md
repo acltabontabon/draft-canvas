@@ -26,8 +26,8 @@ context text: "Rough estimate: a few days; depends on the interface decision."
 
 1. Select a shape, a connector or a boundary. Several elements selected at once make one shared
    point about all of them.
-2. Right-click and choose **Add open point…** (also in the command palette, `⌘K`, and from the
-   keyboard with `Shift+F10`).
+2. Press `I`, or right-click and choose **Add open point…** (also in the command palette, `⌘K`,
+   and from the keyboard with `Shift+F10`).
 3. Click **Tentative**, **Awaiting input** or **Parked**. The marker is on the element straight away.
 4. Optionally type a sentence of context. **Enter** commits and closes; **Shift+Enter** starts a new
    line; **Escape** closes and puts focus back on the marker.

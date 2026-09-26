@@ -53,9 +53,9 @@ let flashTimer: ReturnType<typeof setTimeout> | null = null;
 /**
  * Flashes one element, cancelling any flash still running from a previous jump.
  *
- * Exported because "go to it" is no longer only the palette's jump rows: a Takeaways row points
- * at the architecture an action came from and arrives the same way, and two pulses with two
- * timers would be able to fight each other over `jumpFlashId`.
+ * Exported because "go to it" is no longer only the palette's jump rows: an Open points row points
+ * at the element a point concerns and arrives the same way, and two pulses with two timers would
+ * be able to fight each other over `jumpFlashId`.
  */
 export function flash(ctx: CommandContext, id: string) {
   if (flashTimer) clearTimeout(flashTimer);

@@ -1,6 +1,6 @@
 import type { RecipeId } from '../recipes';
 import type { Scene } from '../types';
-import { addToFlow, captureAction, exportSequence, presentFlow } from './flows';
+import { addToFlow, exportSequence, presentFlow } from './flows';
 import { deadLetterQueue, intentContinuation, lookInside, starters } from './architecture';
 import { addResponse, attachToConnector, connect, describeInteraction, junctionScene, makeAsync } from './connections';
 import { addShape, attachNote, boundary, pickAKind } from './shapes';
@@ -27,7 +27,6 @@ export const SCENES = {
   'intent-continuation': intentContinuation,
   starters,
   'export-sequence': exportSequence,
-  'capture-action': captureAction,
 } as const satisfies Record<RecipeId, Scene>;
 
 export function sceneFor(id: string): Scene | undefined {

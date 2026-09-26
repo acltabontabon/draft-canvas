@@ -28,7 +28,6 @@ const base = () =>
     ],
     flows: [{ id: 'f', title: 'Order', steps: ['u', 'd'] }],
     notes: [{ id: 'n1', text: 'Orders are idempotent by client key.', kind: 'decision', near: 'api', attach: false }],
-    actions: [{ id: 'act', text: 'Confirm retention with legal', about: 'db' }],
   });
 
 const refusal = (run: () => unknown): AgentError => {
@@ -58,7 +57,7 @@ describe('update_diagram operations', () => {
     expect(touched.has('mail')).toBe(true);
   });
 
-  it('grows the boundary a new member joins, and keeps flows, notes and actions it did not name', () => {
+  it('grows the boundary a new member joins, and keeps flows and notes it did not name', () => {
     const file = base();
     const sys = file.nodes.find((n) => n.id === 'sys')!;
     const { file: next } = applyUpdate(file, [], [{ op: 'add', nodes: [{ id: 'cache', type: 'cache', label: 'Session cache', group: 'sys' }], relationships: [{ id: 'c', from: 'api', to: 'cache' }] }], undefined);
@@ -69,7 +68,6 @@ describe('update_diagram operations', () => {
     expect(cache.x).toBeGreaterThanOrEqual(grown.x);
     expect(cache.x + cache.width).toBeLessThanOrEqual(grown.x + grown.width);
     expect(next.flows).toEqual(file.flows);
-    expect(next.actions).toEqual(file.actions);
     expect(next.nodes.find((n) => n.id === 'n1')).toEqual(file.nodes.find((n) => n.id === 'n1'));
   });
 
@@ -213,7 +211,7 @@ describe('read_diagram', () => {
     const out = readDiagram(base(), {}, 'o:x.1', 'd_patchtest00');
     expect(out.elements).toContainEqual(expect.objectContaining({ id: 'db', type: 'database', technology: 'PostgreSQL', group: 'sys', c4: expect.objectContaining({ scope: 'internal', derived: true }) }));
     expect(JSON.stringify(out)).not.toContain('"x":');
-    expect(out.actions).toEqual([{ id: 'act', text: 'Confirm retention with legal', about: 'db' }]);
+    expect(out.actions).toBeUndefined();
     expect(out.partial).toBeUndefined();
   });
 

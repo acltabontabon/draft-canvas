@@ -40,13 +40,8 @@ export const LIMITS = {
   /** Per step, per array (`extraNodeIds`, `extraEdgeIds`) — a "frame" step spotlighting more than this is not a walkthrough anymore. */
   maxExtraMembersPerStep: 40,
   maxFlowTitleLength: 100,
-  /** A meeting's worth, several times over. Past this it isn't a meeting's takeaways any more. */
-  maxActions: 100,
-  /** One line said out loud. Long enough for "Confirm the timeout with the settlement team
-   *  @Kevin", short enough that the list stays scannable at a glance. */
-  maxActionLength: 200,
-  /** Twice the actions cap: a point can be raised for every connector of a busy diagram, and a meeting
-   *  that raises more than this has stopped being a meeting. */
+  /** A point can be raised for every connector of a busy diagram, and a meeting that raises more
+   *  than this has stopped being a meeting. */
   maxOpenPoints: 200,
   /** A sentence or two of context — "Confirm sync vs async with the payments team" — not a spec. */
   maxOpenPointContextLength: 500,

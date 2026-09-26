@@ -142,8 +142,8 @@ These are investigation sizes, not capacity claims.
 
 **Scenarios** (`benchmark/interaction/scenarios.ts`): pan (drag and wheel), zoom, dragging one shape /
 a multi-selection / a boundary with everything nested in it / a Note across dense connectors, drawing a
-connector, hovering, clicking through shapes, renaming a shape, and opening the palette, Flows and
-Takeaways. Each has an unmeasured `prepare` and a measured `run`, followed by a *tail* in which the
+connector, hovering, clicking through shapes, renaming a shape, and opening the palette and Flows.
+Each has an unmeasured `prepare` and a measured `run`, followed by a *tail* in which the
 debounced work the gesture caused (autosave, viewport save) lands — reported separately, because a
 stall 700 ms after a perfectly smooth drag is still felt.
 

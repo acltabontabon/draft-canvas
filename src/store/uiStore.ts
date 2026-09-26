@@ -155,11 +155,6 @@ let settleTimer: ReturnType<typeof setTimeout> | undefined;
 const CONTINUATION_PREFERENCE = 'continuation';
 const NO_MOVING_NODES: ReadonlySet<string> = new Set();
 
-/** The change that puts the arrival note away — nothing at all when it was not up, so opening
- *  Takeaways never pulses the chip for a note that was never there. */
-const settledRecall = (state: Pick<UiStore, 'takeawaysRecall' | 'takeawaysChipPulse'>) =>
-  state.takeawaysRecall ? { takeawaysRecall: false, takeawaysChipPulse: state.takeawaysChipPulse + 1 } : {};
-
 /** On unless the device says otherwise. Read once at startup; a preference store that is not
  *  usable at that moment (blocked storage, a test harness still wiring up) means "on". */
 function initialContinuationsEnabled(): boolean {
@@ -312,31 +307,6 @@ export interface UiStore {
    *  which proposal it's showing — `null` shows the list for the current diagram. */
   proposalPanelOpen: boolean;
   proposalPanelId: string | null;
-  /**
-   * Whether the Takeaways surface (`TakeawaysPanel.tsx`) is showing, and which of its two faces.
-   * `'actions'` is the working list during the meeting; `'readout'` is everything the discussion
-   * produced, for the end of it. One surface, two states, rather than two panels.
-   */
-  takeawaysOpen: boolean;
-  takeawaysView: 'actions' | 'readout';
-  /**
-   * Whether the one-line action capture is open. Deliberately separate from `takeawaysOpen`: the
-   * whole point is that capturing costs one key and doesn't make you look at a list, so the line
-   * can be up with the panel shut — and, unlike every other panel, while presenting.
-   */
-  actionCaptureOpen: boolean;
-  /**
-   * Whether the arrival card is up — the third face of the Takeaways surface, shown once when a
-   * canvas that still owes something is opened (`takeaways/recall.ts`). Set *after* `setDocument`,
-   * which clears this alongside the rest of the per-document UI state.
-   */
-  takeawaysRecall: boolean;
-  /**
-   * Bumped when the arrival card settles, so `TakeawaysChip` can pulse once as it receives it.
-   * A counter rather than a boolean: two recalls in a row must both be visible, and a flag that is
-   * already `true` would animate nothing the second time.
-   */
-  takeawaysChipPulse: number;
   /**
    * A flow id the panel should open in rename mode, with its title selected — set by every
    * "new flow" entry point so naming is part of creating, not a separate errand. One-shot, like
@@ -530,14 +500,6 @@ export interface UiStore {
   requestFlowRename: (flowId: string | null) => void;
   /** Opens the proposal panel (optionally straight to one proposal), or closes it. */
   setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
-  /** Opens Takeaways on one of its two faces, or closes it. */
-  setTakeawaysOpen: (open: boolean, view?: 'actions' | 'readout') => void;
-  setTakeawaysView: (view: 'actions' | 'readout') => void;
-  /** Opens or closes the capture line. Opening always shows the actions face behind it, so the
-   *  thing you just captured is where you'd look for it. */
-  setActionCaptureOpen: (open: boolean) => void;
-  /** Raises the arrival card, or settles it — settling also pulses the chip it returns to. */
-  setTakeawaysRecall: (open: boolean) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone'], action?: ToastAction) => void;
@@ -653,11 +615,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   proposalPanelOpen: false,
   proposalPanelId: null,
   flowRenameRequestId: null,
-  takeawaysOpen: false,
-  takeawaysView: 'actions',
-  actionCaptureOpen: false,
-  takeawaysRecall: false,
-  takeawaysChipPulse: 0,
   interactionActive: false,
   movingNodeIds: NO_MOVING_NODES,
   editRequestId: null,
@@ -754,42 +711,11 @@ export const useUiStore = create<UiStore>((set, get) => ({
   resetPresentation: () =>
     set((state) => (state.presentation === PRESENTATION_AT_REST ? state : { presentation: PRESENTATION_AT_REST })),
   setOpenPointPopover: (openPointPopover) => set({ openPointPopover }),
-  // The two bottom-right surfaces share one corner, so opening one puts the other away.
-  setOpenPointsPanelOpen: (openPointsPanelOpen) =>
-    set(openPointsPanelOpen ? { openPointsPanelOpen, takeawaysOpen: false, takeawaysView: 'actions' } : { openPointsPanelOpen }),
+  setOpenPointsPanelOpen: (openPointsPanelOpen) => set({ openPointsPanelOpen }),
   setOpenPointsResolvedOpen: (openPointsResolvedOpen) => set({ openPointsResolvedOpen }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   setProposalPanelOpen: (proposalPanelOpen, proposalId = null) => set({ proposalPanelOpen, proposalPanelId: proposalPanelOpen ? proposalId : null }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
-  // Opening Takeaways, or the capture line, by any route means the arrival note has done its job —
-  // it exists to teach where they live — and both are drawn over the very corner it hangs in, so
-  // leaving it up would stack the note under the thing it was pointing at. Settled the same way
-  // `setTakeawaysRecall(false)` does, pulse included.
-  setTakeawaysOpen: (takeawaysOpen, view) =>
-    // Closing also puts the surface back on its working face: reopening it mid-meeting should
-    // show the list you are still adding to, not the summary you read once at the end.
-    set((state) =>
-      takeawaysOpen
-        ? { takeawaysOpen, openPointsPanelOpen: false, ...(view ? { takeawaysView: view } : {}), ...settledRecall(state) }
-        : { takeawaysOpen: false, takeawaysView: 'actions' },
-    ),
-  setTakeawaysView: (takeawaysView) => set({ takeawaysView }),
-  setActionCaptureOpen: (actionCaptureOpen) =>
-    set((state) =>
-      actionCaptureOpen
-        ? { actionCaptureOpen, takeawaysView: 'actions', ...settledRecall(state) }
-        : { actionCaptureOpen: false },
-    ),
-  setTakeawaysRecall: (takeawaysRecall) =>
-    // Settling is what teaches where the thing lives, so the pulse is part of closing rather than
-    // a second call a caller could forget to make.
-    set((state) =>
-      takeawaysRecall
-        ? { takeawaysRecall: true }
-        : // Only a card that was actually up has something to settle back: pulsing on a close that
-          // closed nothing would blink the chip every time a document was swapped.
-          { takeawaysRecall: false, takeawaysChipPulse: state.takeawaysChipPulse + (state.takeawaysRecall ? 1 : 0) },
-    ),
   setInteractionActive: (interactionActive, movingNodeIds) =>
     set((state) => {
       const moving = interactionActive && movingNodeIds ? new Set(movingNodeIds) : NO_MOVING_NODES;

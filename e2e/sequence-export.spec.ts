@@ -265,7 +265,6 @@ test.describe('Sequence Diagram export', () => {
     await expect(dialog.getByRole('radio', { name: /Image/ })).toBeFocused();
     await expect(dialog.getByRole('radio', { name: /Image/ })).toBeChecked();
     await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowRight');
     await expect(dialog.getByRole('radio', { name: /Source/ })).toBeFocused();
     await expect(dialog.getByRole('radio', { name: /Source/ })).toBeChecked();
   });

@@ -5,7 +5,6 @@
  * request — so a request that fails anywhere in this module leaves nothing behind.
  */
 
-import { createAction } from '../document/actions';
 import { createDocument } from '../document/factory';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { levelAdvisories } from '../depth/c4';
@@ -249,26 +248,7 @@ function assemble(spec: CreateSpec, placed: PlacedRoom, diagramId: string): Draf
     flows: placed.flows,
     ...(spec.level ? { level: spec.level } : {}),
   };
-  const actions = spec.actions.flatMap((a) => {
-    const anchor = a.about ? anchorOf(document, a.about) : undefined;
-    const action = createAction(a.text, anchor);
-    if (!action) return [];
-    if (a.id) action.id = a.id;
-    if (a.done) action.done = true;
-    return [action];
-  });
-  return { ...document, actions };
-}
-
-/** Where an action points: an element or a relationship, in whichever room it lives. */
-export function anchorOf(document: DraftDocument, id: string): { kind: 'node' | 'edge'; id: string } | undefined {
-  let found: { kind: 'node' | 'edge'; id: string } | undefined;
-  walkGraphs(document, (graph) => {
-    if (found) return;
-    if (graph.nodes.some((n) => n.id === id)) found = { kind: 'node', id };
-    else if (graph.edges.some((e) => e.id === id)) found = { kind: 'edge', id };
-  });
-  return found;
+  return document;
 }
 
 export function countAll(document: DraftDocument) {
@@ -288,7 +268,7 @@ export function countAll(document: DraftDocument) {
     relationships += graph.edges.length;
     flows += graph.flows.length;
   });
-  return { elements, relationships, groups, flows, notes, insideViews: views, actions: document.actions.length };
+  return { elements, relationships, groups, flows, notes, insideViews: views };
 }
 
 /**

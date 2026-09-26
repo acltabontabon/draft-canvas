@@ -163,7 +163,6 @@ describe('contextMenuCommandsFor — a regular node', () => {
       'sep',
       'attach-note',
       'attach-code',
-      'capture-action',
       'open-point-add',
       'sep',
       'duplicate',
@@ -220,7 +219,6 @@ describe('contextMenuCommandsFor — a regular node', () => {
       'sep',
       'attach-note',
       'attach-code',
-      'capture-action',
       'open-point-add',
       'sep',
       'add-consumer',
@@ -247,39 +245,6 @@ describe('contextMenuCommandsFor — a regular node', () => {
     expect(ids).not.toContain('add-consumer');
     expect(ids).not.toContain('add-dead-letter-queue');
     expect(ids).not.toContain('remove-dead-letter-queue');
-  });
-});
-
-describe('contextMenuCommandsFor — capturing an action from the menu', () => {
-  beforeEach(reset);
-
-  /*
-   * `pick` silently skips an id it cannot find, which is exactly how this entry shipped as a
-   * no-op the first time: the ids were added to the menus, but `capture-action` lives in
-   * `takeawaysCommands` and the menus only ever searched `nodeCommands`/`edgeCommands`. A
-   * missing entry has to be a failing test, not an empty space nobody notices.
-   */
-  it('is offered on a shape, a connector and a boundary — and is the real registry command', () => {
-    const state = useEditorStore.getState();
-    const api = state.addNode({ type: 'service', x: 0, y: 0, text: 'API' });
-    const db = state.addNode({ type: 'database', x: 200, y: 0, text: 'DB' });
-    const edge = state.connect(api.id, db.id)!;
-    const boundary = state.addNode({ type: 'group', x: -40, y: -40, text: 'Payments' });
-
-    for (const entries of [
-      contextMenuCommandsFor(stubContext(), { kind: 'node', id: api.id }, { x: 0, y: 0 }),
-      contextMenuCommandsFor(stubContext(), { kind: 'node', id: boundary.id }, { x: 0, y: 0 }),
-      contextMenuCommandsFor(stubContext(), { kind: 'edge', id: edge.id }, { x: 0, y: 0 }),
-    ]) {
-      expect(ids(entries)).toContain('capture-action');
-    }
-  });
-
-  it('is left off a junction, which holds no content of its own', () => {
-    const state = useEditorStore.getState();
-    const junction = state.addNode({ type: 'ellipse', x: 0, y: 0 });
-    const entries = contextMenuCommandsFor(stubContext(), { kind: 'node', id: junction.id }, { x: 0, y: 0 });
-    expect(ids(entries)).not.toContain('capture-action');
   });
 });
 
@@ -330,7 +295,6 @@ describe('contextMenuCommandsFor — an edge', () => {
       'sep',
       'attach-note',
       'attach-code',
-      'capture-action',
       'open-point-add',
       'sep',
       'spotlight',
@@ -385,7 +349,6 @@ describe('contextMenuCommandsFor — a boundary', () => {
       'sep',
       'attach-note',
       'attach-code',
-      'capture-action',
       'open-point-add',
       'sep',
       'duplicate',

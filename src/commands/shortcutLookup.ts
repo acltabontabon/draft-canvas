@@ -1,5 +1,5 @@
 import type { DraftEdge, DraftNode } from '../document/types';
-import { commandsFor, edgeCommands, multiCommands, nodeCommands } from './registry';
+import { commandsFor, edgeCommands, multiCommands, nodeCommands, openPointCommands } from './registry';
 import type { Command, CommandContext } from './types';
 
 /**
@@ -36,10 +36,9 @@ const FIXTURE_DOCUMENT = {
   nodes: [NODE_A, NODE_B, NODE_C, NODE_GROUP, NODE_TEXT],
   edges: [EDGE_A],
   flows: [],
-  // One captured action, so the Takeaways commands that only exist once a canvas has something
-  // to show are in the catalog this file builds — a command absent from the fixture is a shortcut
-  // the help sheet would be told doesn't exist.
-  actions: [{ id: 'a_fixture', text: 'Confirm the timeout' }],
+  // One open point, so the commands that only exist once a canvas has something to show are in the
+  // catalog this file builds — a command absent from the fixture is a shortcut the help sheet would
+  // be told doesn't exist.
   openPoints: [{ id: 'op_fixture', kind: 'tentative', targets: [{ kind: 'node', id: NODE_A.id }] }],
 };
 
@@ -146,6 +145,8 @@ function buildCatalog(): ReadonlyMap<string, ShortcutEntry> {
 
   const nodeCtx = buildFixtureContext({ nodes: [NODE_A.id], edges: [] });
   record(map, nodeCommands(nodeCtx, NODE_A));
+  // Raising an open point is offered for whatever is selected; one selected shape is enough.
+  record(map, openPointCommands(nodeCtx));
 
   // Text-only commands (Bold/Italic/Text role…) only appear for `type: 'text'` — a second
   // single-node pass, otherwise identical, is what makes this catalog actually reach them.

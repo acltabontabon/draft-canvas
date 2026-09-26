@@ -99,15 +99,6 @@ import {
   updateFlowStepCaption as updateFlowStepCaptionOp,
 } from '../document/flow';
 import {
-  addAction,
-  clearActionAnchor as clearActionAnchorOp,
-  clearDoneActions as clearDoneActionsOp,
-  createAction as createActionEntity,
-  removeAction as removeActionOp,
-  setActionDone as setActionDoneOp,
-  updateActionText as updateActionTextOp,
-} from '../document/actions';
-import {
   addOpenPoint as addOpenPointOp,
   addOpenPointTargets as addOpenPointTargetsOp,
   createOpenPoint,
@@ -135,7 +126,6 @@ import type {
   Accent,
   AttachableType,
   Attachment,
-  DraftAction,
   DraftDocument,
   DraftEdge,
   DraftFlow,
@@ -569,23 +559,12 @@ export interface EditorStore {
   /** Which flow's step badges show on the canvas. `null` shows none. */
   setSelectedFlowId: (flowId: string | null) => void;
 
-  /* Actions */
-  /** Captures one. Returns the new action's id, or `null` when the text was empty or the
-   *  document is already at `LIMITS.maxActions`. */
-  captureAction: (text: string, anchor?: DraftAction['anchor']) => string | null;
-  updateActionText: (actionId: string, text: string) => void;
-  setActionDone: (actionId: string, done: boolean) => void;
-  /** Drops an action's architecture context, leaving what it says alone. */
-  clearActionAnchor: (actionId: string) => void;
-  removeAction: (actionId: string) => void;
-  clearDoneActions: () => void;
-
   /* Open points — what the discussion has not settled yet, attached to the elements it concerns */
   /** Raises one point about every target at once; `null` when it couldn't land (nothing to attach
    *  to, or the cap). */
   addOpenPoint: (kind: OpenPointKind, targets: readonly OpenPointTarget[], context?: string) => string | null;
   setOpenPointKind: (pointId: string, kind: OpenPointKind) => void;
-  /** Coalesces a burst of typing into one undo step, like `updateActionText`. */
+  /** Coalesces a burst of typing into one undo step, like `updateNodeText`. */
   setOpenPointContext: (pointId: string, context: string) => void;
   /** Settles a point. Changes nothing about the shapes it concerns; the point stays, folded away. */
   resolveOpenPoint: (pointId: string, resolution?: string) => void;
@@ -773,8 +752,8 @@ function applyComponentAutoLabel(doc: DraftDocument, nodeId: string, before: Dra
  * host that offers its clipboard, the copy goes there instead, since the frame is refused the API.
  *
  * Resolves to whether the text actually left the app. Copying shapes doesn't care (it has the
- * in-memory clipboard), but a copy whose whole point is *the system clipboard* — Takeaways as
- * Markdown — must not tell someone it worked when it didn't.
+ * in-memory clipboard), but a copy whose whole point is *the system clipboard* — text copied for
+ * another app — must not tell someone it worked when it didn't.
  */
 async function writeSystemClipboard(text: string): Promise<boolean> {
   const host = hostClipboard();
@@ -1005,14 +984,6 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     // A shape hovered as the room changed is no longer under the pointer to say it has left.
     depthShapeHoverId: null,
     depthPlateFocusId: null,
-    // The arrival card belongs to the document that was being opened when it was raised, which
-    // happens *after* this runs (`useDocumentSession.openDocument`). Clearing it here is what
-    // stops a card raised for one canvas surviving a switch to another.
-    takeawaysRecall: false,
-    // A half-typed capture belongs to the room it was started in — its context (the selected shape)
-    // was resolved there. Left open, the next canvas would arrive with a focused input swallowing
-    // the keys somebody meant as shortcuts.
-    actionCaptureOpen: false,
     // Anchored to an element of the canvas being left.
     openPointPopover: null,
   });
@@ -2471,43 +2442,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ selectedFlowId: flowId });
   },
 
-  captureAction(text, anchor) {
-    const action = createActionEntity(text, anchor);
-    if (!action) return null;
-    get().apply('Capture action', (doc) => addAction(doc, action));
-    // `addAction` refuses at the cap rather than dropping the oldest, so the caller has to be
-    // told it didn't land — the same contract `createFlow` has.
-    return get().document.actions.some((entry) => entry.id === action.id) ? action.id : null;
-  },
-
-  updateActionText(actionId, text) {
-    get().apply('Edit action', (doc) => updateActionTextOp(doc, actionId, text), {
-      coalesceKey: `action-text:${actionId}`,
-    });
-  },
-
-  setActionDone(actionId, done) {
-    get().apply(done ? 'Complete action' : 'Reopen action', (doc) => setActionDoneOp(doc, actionId, done));
-  },
-
-  clearActionAnchor(actionId) {
-    get().apply('Clear action context', (doc) => clearActionAnchorOp(doc, actionId));
-  },
-
-  removeAction(actionId) {
-    get().apply('Remove action', (doc) => removeActionOp(doc, actionId));
-  },
-
-  clearDoneActions() {
-    get().apply('Clear completed actions', (doc) => clearDoneActionsOp(doc));
-  },
-
   addOpenPoint(kind, targets, context) {
     const point = createOpenPoint(kind, targets, context);
     if (!point) return null;
     get().apply('Add open point', (doc) => addOpenPointOp(doc, point));
     // `addOpenPoint` refuses at the cap rather than dropping the oldest, so the caller has to be
-    // told it didn't land — the same contract `captureAction` has.
+    // told it didn't land — the same contract `createFlow` has.
     return get().document.openPoints.some((entry) => entry.id === point.id) ? point.id : null;
   },
 
@@ -2548,7 +2488,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   copyText(text) {
-    // The same writer `copySelection` uses, so a copy made from Takeaways reaches the VS Code
+    // The same writer `copySelection` uses, so a copy made from a panel reaches the VS Code
     // host's clipboard rather than a `navigator.clipboard` the webview refuses.
     return writeSystemClipboard(text);
   },
@@ -2796,10 +2736,8 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
     a.flows === b.flows &&
     a.settings === b.settings &&
     a.viewport === b.viewport &&
-    // Capturing, completing or clearing an action touches nothing on the canvas, so leaving this
-    // out would discard every one of those edits as a write that changed nothing.
-    a.actions === b.actions &&
-    // Raising, editing or resolving an open point touches nothing on the canvas either.
+    // Raising, editing or resolving an open point touches nothing on the canvas, so leaving this out
+    // would discard every one of those edits as a write that changed nothing.
     a.openPoints === b.openPoints &&
     // Saying what a view shows changes nothing else about it, so without this the one edit that
     // only ever changes `level` would be thrown away as a no-op.

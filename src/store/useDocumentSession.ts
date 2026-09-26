@@ -11,8 +11,6 @@ import { loadStarters } from '../starters/load';
 import { Autosave } from '../storage/autosave';
 import { getRepository, type DraftRepository } from '../storage';
 import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
-import { openActions } from '../document/actions';
-import { shouldRecall } from '../takeaways/recall';
 import { useUiStore } from './uiStore';
 
 type EditorStoreModule = typeof import('./editorStore');
@@ -29,15 +27,12 @@ async function loadEditorStore(): Promise<EditorStoreModule> {
 }
 
 /**
- * Say what this canvas is still owed, once, as it arrives.
+ * Fit a canvas as it arrives, when that is what arriving means.
  *
  * Shared by every path that puts a stored document into the editor — opening from the Library,
- * adopting an import, and the VS Code host — so the rule lives in one place rather than being
- * re-derived at each door. Must be called *after* `setDocument`, which clears the two fields it
- * sets along with the rest of the outgoing canvas's UI state.
- *
- * `presenting` is always false here: `setDocument` forces `mode: 'edit'`. The card checks it again
- * while it is up, for a presentation started during those few seconds.
+ * adopting an import, and the desktop host — so the rule lives in one place rather than being
+ * re-derived at each door. Must be called *after* `setDocument`, which clears the request it sets
+ * along with the rest of the outgoing canvas's UI state.
  */
 export function arriveWith(document: DraftDocument, context: { reopening: boolean; fresh?: boolean }): void {
   const ui = useUiStore.getState();
@@ -49,14 +44,6 @@ export function arriveWith(document: DraftDocument, context: { reopening: boolea
   // never got measured before this arrival superseded it — must not let that stale request fit the
   // canvas out from under whatever camera this arrival means to show instead.
   else ui.clearOpenFit(document.metadata.id);
-  const recall = shouldRecall({
-    reopening: context.reopening,
-    presenting: false,
-    alreadyOpen: ui.takeawaysOpen,
-    // Root-only field, and this is the whole file: no walk needed to count what is open.
-    openCount: openActions(document).length,
-  });
-  if (recall) ui.setTakeawaysRecall(true);
 }
 
 export interface DocumentSession {

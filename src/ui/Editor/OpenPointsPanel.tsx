@@ -7,7 +7,7 @@ import { usePopoverPresence } from '../../canvas/usePopoverPresence';
 import { openPointsOverview, unresolvedTargetsIn, type OpenPointRow } from '../../openPoints/collect';
 import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
-import type { TakeawayTarget } from '../../takeaways/collect';
+import type { ElementTarget } from '../../openPoints/locate';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { navigateToElement } from './depthNavigation';
@@ -17,8 +17,8 @@ import { navigateToElement } from './depthNavigation';
  *
  * Next week's meeting opens the diagram and needs to know where the last one left off. This is that
  * list: every point still open, what it says, and what it is about — each a way back to the shape or
- * connector, wherever in the file it lives. It grows out of the status bar's count the way Takeaways
- * does (the same corner, the same surface), and the two never show at once.
+ * connector, wherever in the file it lives. It grows out of the status bar's count, in the corner
+ * above it.
  *
  * Deliberately not a task board. No owners, no dates, no filters: a small list of what is still
  * unsettled, a way to settle each one, and the settled ones folded away underneath with a way back.
@@ -34,15 +34,15 @@ export function OpenPointsPanel({ buildCommandContext }: { buildCommandContext: 
   if (!mounted) return null;
   return (
     <div
-      className="dc-takeaways dc-open-points"
+      className="dc-points dc-open-points"
       data-mode="panel"
       data-closing={closing || undefined}
       data-dc-keyboard-region=""
       role="complementary"
       aria-label="Open points"
     >
-      <div className="dc-takeaways-header">
-        <strong className="dc-takeaways-title">Open points</strong>
+      <div className="dc-points-header">
+        <strong className="dc-points-title">Open points</strong>
         <Button variant="quiet" icon="close" aria-label="Close open points" onClick={() => useUiStore.getState().setOpenPointsPanelOpen(false)} />
       </div>
       <OpenPointsBody buildCommandContext={buildCommandContext} />
@@ -65,7 +65,7 @@ function OpenPointsBody({ buildCommandContext }: { buildCommandContext: () => Co
   const resolvedOpen = useUiStore((state) => state.openPointsResolvedOpen);
 
   const goTo = useCallback(
-    async (row: OpenPointRow, target: TakeawayTarget) => {
+    async (row: OpenPointRow, target: ElementTarget) => {
       await navigateToElement(target, buildCommandContext);
       // Arrived: the point's own popover opens beside the element, so what was said is one glance
       // away and settling it is one click — without the list having to grow controls of its own.
@@ -87,24 +87,24 @@ function OpenPointsBody({ buildCommandContext }: { buildCommandContext: () => Co
 
   return (
     <>
-      <div className="dc-takeaways-scroll">
+      <div className="dc-points-scroll">
         {overview.open.length === 0 ? (
-          <p className="dc-takeaways-empty">
+          <p className="dc-points-empty">
             Nothing is open. Select a shape or connector and choose <strong>Add open point</strong> to mark what the
             discussion has not settled yet.
           </p>
         ) : (
-          <ul className="dc-takeaways-list">
+          <ul className="dc-points-list">
             {overview.open.map((row) => (
               <OpenRow key={row.point.id} row={row} goTo={goTo} />
             ))}
           </ul>
         )}
         {overview.resolved.length > 0 && (
-          <div className="dc-takeaways-done">
+          <div className="dc-points-done">
             <button
               type="button"
-              className="dc-takeaways-done-toggle"
+              className="dc-points-done-toggle"
               aria-expanded={resolvedOpen}
               onClick={() => useUiStore.getState().setOpenPointsResolvedOpen(!resolvedOpen)}
             >
@@ -112,7 +112,7 @@ function OpenPointsBody({ buildCommandContext }: { buildCommandContext: () => Co
               {count(overview.resolved.length, 'resolved')}
             </button>
             {resolvedOpen && (
-              <ul className="dc-takeaways-list">
+              <ul className="dc-points-list">
                 {overview.resolved.map((row) => (
                   <ResolvedRowItem key={row.point.id} row={row} goTo={goTo} />
                 ))}
@@ -122,8 +122,8 @@ function OpenPointsBody({ buildCommandContext }: { buildCommandContext: () => Co
         )}
       </div>
       {(inRoom > 0 || focusActive) && (
-        <div className="dc-takeaways-foot">
-          <span className="dc-muted dc-takeaways-hint">{focusActive ? 'Focused on what is still open' : count(inRoom, 'element')} in this view</span>
+        <div className="dc-points-foot">
+          <span className="dc-muted dc-points-hint">{focusActive ? 'Focused on what is still open' : count(inRoom, 'element')} in this view</span>
           <Button variant="quiet" onClick={focusAll} title={focusActive ? 'Show everything again' : 'Dim everything that has no open point'}>
             {focusActive ? 'Exit focus' : 'Focus open points'}
           </Button>
@@ -133,35 +133,35 @@ function OpenPointsBody({ buildCommandContext }: { buildCommandContext: () => Co
   );
 }
 
-function TargetLinks({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, target: TakeawayTarget) => void }) {
+function TargetLinks({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, target: ElementTarget) => void }) {
   return (
     <div className="dc-open-points-targets">
       {row.targets.map((target) => (
         <button
           key={`${target.kind}:${target.id}`}
           type="button"
-          className="dc-takeaways-context"
+          className="dc-points-context"
           aria-label={`Go to ${target.label}`}
           title={`Go to ${target.label}`}
           onClick={() => goTo(row, target)}
         >
-          <span className="dc-takeaways-chip-arrow" aria-hidden="true">
+          <span className="dc-points-chip-arrow" aria-hidden="true">
             ↳
           </span>
-          <span className="dc-takeaways-context-label">{target.label}</span>
-          {target.room && <span className="dc-takeaways-room">{target.room}</span>}
+          <span className="dc-points-context-label">{target.label}</span>
+          {target.room && <span className="dc-points-room">{target.room}</span>}
         </button>
       ))}
     </div>
   );
 }
 
-function OpenRow({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, target: TakeawayTarget) => void }) {
+function OpenRow({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, target: ElementTarget) => void }) {
   const { point } = row;
   const first = row.targets[0];
   return (
-    <li className="dc-takeaways-row dc-open-points-row" data-kind={point.kind}>
-      <div className="dc-takeaways-line">
+    <li className="dc-points-row dc-open-points-row" data-kind={point.kind}>
+      <div className="dc-points-line">
         <button
           type="button"
           className="dc-open-points-main"
@@ -177,7 +177,7 @@ function OpenRow({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, t
         </button>
         <Button
           variant="quiet"
-          className="dc-takeaways-remove dc-open-points-resolve"
+          className="dc-points-remove dc-open-points-resolve"
           title="Resolve — settled, the marker goes"
           onClick={() => useEditorStore.getState().resolveOpenPoint(point.id)}
         >
@@ -189,11 +189,11 @@ function OpenRow({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, t
   );
 }
 
-function ResolvedRowItem({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, target: TakeawayTarget) => void }) {
+function ResolvedRowItem({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, target: ElementTarget) => void }) {
   const { point } = row;
   return (
-    <li className="dc-takeaways-row dc-open-points-row" data-kind={point.kind} data-done="">
-      <div className="dc-takeaways-line">
+    <li className="dc-points-row dc-open-points-row" data-kind={point.kind} data-done="">
+      <div className="dc-points-line">
         <span className="dc-open-points-main" data-static="">
           <span className="dc-open-points-check" aria-hidden="true">
             <Icon name="check" size={11} />
@@ -204,13 +204,13 @@ function ResolvedRowItem({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPoi
             {point.resolution && <span className="dc-open-points-resolution">{point.resolution}</span>}
           </span>
         </span>
-        <Button variant="quiet" className="dc-takeaways-remove" title="Reopen" onClick={() => useEditorStore.getState().reopenOpenPoint(point.id)}>
+        <Button variant="quiet" className="dc-points-remove" title="Reopen" onClick={() => useEditorStore.getState().reopenOpenPoint(point.id)}>
           Reopen
         </Button>
         <Button
           variant="quiet"
           icon="trash"
-          className="dc-takeaways-remove"
+          className="dc-points-remove"
           aria-label="Delete resolved point"
           title="Delete"
           onClick={() => useEditorStore.getState().removeOpenPoint(point.id)}

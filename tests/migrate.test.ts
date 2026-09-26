@@ -636,6 +636,117 @@ describe('v13 to v14 migration: the projects relationship removal', () => {
   });
 });
 
+describe('v16 to v17 migration: actions become notes', () => {
+  function v16Fixture(actions: unknown[], extra: Partial<Record<string, unknown>> = {}) {
+    return {
+      format: DRAFT_FORMAT,
+      version: 16,
+      metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0 },
+      nodes: [
+        { id: 'svc', type: 'service', x: 0, y: 0, width: 160, height: 60, z: 0, text: 'Orders' },
+        { id: 'db', type: 'database', x: 300, y: 100, width: 148, height: 88, z: 0, text: 'Orders DB' },
+        {
+          id: 'room',
+          type: 'service',
+          x: 600,
+          y: 0,
+          width: 160,
+          height: 60,
+          z: 0,
+          text: 'Billing',
+          inside: {
+            nodes: [{ id: 'inner', type: 'service', x: 0, y: 0, width: 160, height: 60, z: 0, text: 'Ledger' }],
+            edges: [],
+            flows: [],
+            viewport: { x: 0, y: 0, zoom: 1 },
+          },
+        },
+      ],
+      edges: [{ id: 'e1', source: 'svc', target: 'db', semantic: 'writes' }],
+      settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
+      flows: [],
+      actions,
+      openPoints: [],
+      ...extra,
+    };
+  }
+
+  function parse(raw: unknown) {
+    const result = parseDocument(JSON.stringify(raw));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error);
+    return result.document;
+  }
+
+  it('turns an anchored action into a note attachment on its shape or connector, keeping done-ness', () => {
+    const doc = parse(
+      v16Fixture([
+        { id: 'a_1', text: 'Confirm the retry budget', anchor: { kind: 'node', id: 'svc' } },
+        { id: 'a_2', text: 'Index the orders table', done: true, anchor: { kind: 'edge', id: 'e1' } },
+      ]),
+    );
+    expect(doc.version).toBe(CURRENT_VERSION);
+    expect('actions' in doc).toBe(false);
+    const svc = doc.nodes.find((node) => node.id === 'svc')!;
+    expect(svc.attachments).toEqual([expect.objectContaining({ type: 'note', noteKind: 'note', text: 'Action: Confirm the retry budget' })]);
+    expect(svc.attachments![0]!.id).not.toBe('a_1');
+    const e1 = doc.edges.find((edge) => edge.id === 'e1')!;
+    expect(e1.attachments).toEqual([expect.objectContaining({ type: 'note', text: 'Done: Index the orders table' })]);
+    // Nothing had to fall through, so no Actions note was made.
+    expect(doc.nodes.filter((node) => node.type === 'note')).toHaveLength(0);
+  });
+
+  it('resolves an anchor inside a room, the way the old panel did', () => {
+    const doc = parse(v16Fixture([{ id: 'a_1', text: 'Reconcile nightly', anchor: { kind: 'node', id: 'inner' } }]));
+    const room = doc.nodes.find((node) => node.id === 'room')!;
+    const inner = room.inside!.nodes.find((node) => node.id === 'inner')!;
+    expect(inner.attachments).toEqual([expect.objectContaining({ text: 'Action: Reconcile nightly' })]);
+    expect(doc.nodes.filter((node) => node.type === 'note')).toHaveLength(0);
+  });
+
+  it('gathers unanchored, dangling and overflowing actions into one Actions note below the diagram', () => {
+    const full = Array.from({ length: 12 }, (_, i) => ({ id: `x${i}`, type: 'note', text: `n${i}` }));
+    const raw = v16Fixture(
+      [
+        { id: 'a_1', text: 'Book the review' },
+        { id: 'a_2', text: 'Ask SRE about quotas', done: true, anchor: { kind: 'node', id: 'gone' } },
+        { id: 'a_3', text: 'One too many', anchor: { kind: 'node', id: 'db' } },
+        { id: 'a_4', text: '   ' },
+      ],
+    );
+    (raw.nodes[1] as Record<string, unknown>).attachments = full;
+    const doc = parse(raw);
+    const notes = doc.nodes.filter((node) => node.type === 'note');
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.text).toBe('Actions\n☐ Book the review\n☑ Ask SRE about quotas\n☐ One too many');
+    // Left-aligned with the diagram and just below its lowest shape (db: y 100 + h 88).
+    expect(notes[0]!.x).toBe(0);
+    expect(notes[0]!.y).toBe(188 + 40);
+    expect(doc.nodes.find((node) => node.id === 'db')!.attachments).toHaveLength(12);
+  });
+
+  it('splits into a second note only when the text would pass the note limit', () => {
+    const many = Array.from({ length: 150 }, (_, i) => ({ id: `a_${i}`, text: `${i} `.padEnd(200, 'x') }));
+    const doc = parse(v16Fixture(many));
+    const notes = doc.nodes.filter((node) => node.type === 'note');
+    expect(notes).toHaveLength(2);
+    expect(notes[0]!.text!.startsWith('Actions\n')).toBe(true);
+    expect(notes[1]!.text!.startsWith('Actions\n')).toBe(true);
+    expect(notes[0]!.text!.length).toBeLessThanOrEqual(20_000);
+    expect(notes[1]!.y).toBeGreaterThan(notes[0]!.y);
+    const lines = notes.flatMap((note) => note.text!.split('\n').slice(1));
+    expect(lines).toHaveLength(150);
+  });
+
+  it('is a plain version bump for a document with no actions, and repeatable', () => {
+    const doc = parse(v16Fixture([]));
+    expect(doc.version).toBe(CURRENT_VERSION);
+    expect(doc.nodes.filter((node) => node.type === 'note')).toHaveLength(0);
+    const again = parse({ ...doc });
+    expect(again.nodes).toHaveLength(doc.nodes.length);
+  });
+});
+
 describe('migration chain completeness', () => {
   it('has no gap between v1 and the current version', () => {
     const { applied } = migrateToCurrent({ version: 1 });

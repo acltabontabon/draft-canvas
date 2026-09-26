@@ -20,7 +20,6 @@ import {
   type SaveOptions,
   type SharedMetadata,
 } from './DraftRepository';
-import { openActions } from '../document/actions';
 import { createId } from '../document/ids';
 import { isLibraryShape, libraryShapeOf } from '../document/shape';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
@@ -289,18 +288,15 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   /**
-   * Gives every summary written before fingerprints existed its `shape`, and every one written
-   * before Takeaways its `openActions`, once.
+   * Gives every summary written before fingerprints existed its `shape`, once.
    *
    * Same posture as `migrateLegacyRecords()`: kicked off at startup, never
    * blocking, each row independent, a row it hasn't reached yet is simply a
    * list entry without a thumbnail.
    *
-   * Both fields are derived in the *one* pass a row's body is decrypted for, because decrypting is
-   * the expensive part and doing it twice for two numbers would double the cost of a first launch
-   * after upgrading. A library already carrying both is not read at all.
+   * Decrypting is the expensive part, so a library already carrying its shapes is not read at all.
    *
-   * Only the `documents` store is written, and only its `shape` and `openActions` fields. The
+   * Only the `documents` store is written, and only its `shape` field. The
    * merge happens against the row as it is *at write time*, inside one
    * transaction, so a rename or autosave that landed while this body was
    * being decrypted keeps its title, project, and — critically — `updatedAt`,
@@ -309,11 +305,9 @@ export class IndexedDbRepository implements DraftRepository {
    */
   async backfillSummaries(): Promise<{ updated: number; failed: number; skipped: number }> {
     const rows = await this.db.getAll('documents');
-    // A shape is only expected of a row that has nodes; a count is expected of every row, which is
-    // why the two halves of this predicate are not the same test.
+    // A shape is only expected of a row that has nodes.
     const needsShape = (row: DraftSummary) => row.nodeCount > 0 && !isLibraryShape(row.shape);
-    const needsCount = (row: DraftSummary) => row.openActions === undefined;
-    const stale = rows.filter((row) => needsShape(row) || needsCount(row));
+    const stale = rows.filter(needsShape);
     let updated = 0;
     let failed = 0;
     let skipped = 0;
@@ -325,17 +319,14 @@ export class IndexedDbRepository implements DraftRepository {
           continue;
         }
         const shape = libraryShapeOf(read.document.nodes, read.document.edges);
-        const openCount = openActions(read.document).length;
         const tx = this.db.transaction('documents', 'readwrite');
         const current = await tx.store.get(row.id);
         // Re-read inside the transaction: an ordinary save landing while this body decrypted has
-        // already written both fields correctly, and must not be overwritten with older values.
-        if (!current || (!needsShape(current) && !needsCount(current))) {
+        // already written the shape correctly, and must not be overwritten with an older one.
+        if (!current || !needsShape(current)) {
           skipped += 1;
         } else {
-          const next = { ...current, openActions: openCount };
-          if (needsShape(current)) next.shape = shape;
-          await tx.store.put(next);
+          await tx.store.put({ ...current, shape });
           updated += 1;
         }
         await tx.done;

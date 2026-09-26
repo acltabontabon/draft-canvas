@@ -32,7 +32,7 @@ const canvas = `
     <div class="react-flow__edge" data-id="e1"><path id="hit" class="dc-edge-hit" d="M0 0 L100 0" /></div>
     <div class="react-flow__pane" id="pane"></div>
   </div>
-  <aside class="dc-takeaways"><span id="panel-text">Actions</span></aside>
+  <aside class="dc-points"><span id="panel-text">Open points</span></aside>
   <div class="react-flow"><div class="dc-popover" id="popover"></div></div>
 `;
 const aim = { x: 50, y: 0 };

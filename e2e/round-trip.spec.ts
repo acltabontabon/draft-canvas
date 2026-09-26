@@ -6,8 +6,8 @@ import { CURRENT_VERSION } from '../src/document/types.ts';
  * Everything a discussion leaves on a canvas has to survive being saved, reopened and moved.
  *
  * One rich diagram — nested boundaries, a note and a code snippet on a shape and on a connector, a
- * shape with a room inside it, a flow, and actions with and without a place on the canvas — goes
- * through the whole loop: imported, saved to IndexedDB, reloaded and reopened from the Library,
+ * shape with a room inside it, a flow, and a v15 file's actions (which become notes on the way in)
+ * — goes through the whole loop: imported, saved to IndexedDB, reloaded and reopened from the Library,
  * exported as a `.draftcanvas`, imported again as a copy, and exported again. Each export has to say
  * the same thing, so a field that is dropped anywhere along the way is a failing test rather than a
  * diagram that quietly comes back thinner a week later.
@@ -125,27 +125,29 @@ test('a rich diagram survives save, reopen, export and import unchanged', async 
     buffer: Buffer.from(JSON.stringify(richDocument())),
   });
   await page.waitForSelector('.dc-editor');
-  await expect(page.locator('.dc-node')).toHaveCount(6);
+  await expect(page.locator('.dc-node')).toHaveCount(7);
   await expect(page.locator('.dc-save')).toContainText('Saved locally');
 
   const first = await exportDocument(page);
   // The things this test exists to protect are all present in what the app holds.
   const nodes = first.nodes as Array<{ id: string; attachments?: unknown[]; inside?: { nodes: unknown[]; edges: unknown[] } }>;
-  expect(nodes.find((n) => n.id === 'a')?.attachments).toHaveLength(2);
+  // The anchored action arrived as a third attachment on its shape; the unanchored one as an Actions note.
+  expect(nodes.find((n) => n.id === 'a')?.attachments).toHaveLength(3);
   expect(nodes.find((n) => n.id === 'b')?.inside?.nodes).toHaveLength(2);
   // Schema v15's C4 text, at the top and inside a room.
   expect(nodes.find((n) => n.id === 'a')).toMatchObject({ description: 'Takes and validates orders.', technology: 'Spring Boot' });
   expect(nodes.find((n) => n.id === 'b')?.inside?.nodes[0]).toMatchObject({ technology: 'Kotlin' });
   expect((first.edges as Array<{ id: string; attachments?: unknown[] }>).find((e) => e.id === 'e1')?.attachments).toHaveLength(1);
-  expect(first.actions).toHaveLength(2);
-  expect((first.actions as Array<{ anchor?: unknown }>)[0]?.anchor).toEqual({ kind: 'node', id: 'a' });
+  expect(first.actions).toBeUndefined();
+  expect((nodes.find((n) => n.id === 'a')?.attachments as Array<{ text?: string }>).map((a) => a.text)).toContain('Action: Confirm the timeout @Priya');
+  expect((nodes as Array<{ type: string; text?: string }>).find((n) => n.type === 'note' && n.text?.startsWith('Actions\n'))?.text).toBe('Actions\n☑ Write up the migration plan');
   expect(first.flows).toHaveLength(1);
   expect(nodes.filter((n) => (n as { parentId?: string }).parentId === 'box').map((n) => n.id).sort()).toEqual(['a', 'b']);
 
   // Saved, closed, reloaded from disk, reopened from the Library.
   await page.reload();
   await page.locator('.dc-library-item', { hasText: 'Round trip' }).click();
-  await expect(page.locator('.dc-node')).toHaveCount(6);
+  await expect(page.locator('.dc-node')).toHaveCount(7);
   const reopened = await exportDocument(page);
   expect(content(reopened)).toEqual(content(first));
 
@@ -157,7 +159,7 @@ test('a rich diagram survives save, reopen, export and import unchanged', async 
     buffer: Buffer.from(JSON.stringify(reopened)),
   });
   await page.waitForSelector('.dc-editor');
-  await expect(page.locator('.dc-node')).toHaveCount(6);
+  await expect(page.locator('.dc-node')).toHaveCount(7);
   const copy = await exportDocument(page);
   expect((copy.metadata as { id: string }).id).not.toBe((first.metadata as { id: string }).id);
   expect(content(copy)).toEqual(content(first));

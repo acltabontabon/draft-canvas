@@ -14,7 +14,7 @@
  */
 
 import { viewOf, type DepthPath } from '../depth/tree';
-import type { DraftAction, DraftDocument, DraftNode } from '../document/types';
+import type { DraftDocument, DraftNode } from '../document/types';
 import { nearestElement } from './read';
 import { groupKindOf } from './vocabulary';
 
@@ -25,23 +25,18 @@ export interface NoteRef {
   text: string;
   kind?: string;
   /** 'attached': a folded Attachment on the element/relationship it's about — unambiguous.
-   *  'anchored': a DraftAction whose own anchor names the element/relationship — unambiguous.
    *  'nearest': a freestanding note, positionally associated with something — proximity, not structure. */
-  provenance: 'attached' | 'anchored' | 'nearest';
+  provenance: 'attached' | 'nearest';
   about?: string;
-  done?: boolean;
 }
 
 export interface CollectNotesOptions {
   /** Restrict to notes about one of these ids. Omit to read every note in the view. */
   aboutIds?: ReadonlySet<string>;
-  /** Root-level actions to consider — only meaningful when `view` is the document root (actions are
-   *  root-only; a caller reading a nested room passes nothing here). */
-  actions?: readonly DraftAction[];
 }
 
 export function collectNotes(view: DraftDocument, options: CollectNotesOptions = {}): { notes: NoteRef[]; truncated: boolean } {
-  const { aboutIds, actions = [] } = options;
+  const { aboutIds } = options;
   const notes: NoteRef[] = [];
   let truncated = false;
   const want = (id: string) => !aboutIds || aboutIds.has(id);
@@ -66,11 +61,6 @@ export function collectNotes(view: DraftDocument, options: CollectNotesOptions =
       if (a.type !== 'note') continue;
       push({ id: a.id, text: a.text ?? '', kind: a.noteKind, provenance: 'attached', about: edge.id });
     }
-  }
-
-  for (const action of actions) {
-    if (!action.anchor || !want(action.anchor.id)) continue;
-    push({ id: action.id, text: action.text, provenance: 'anchored', about: action.anchor.id, ...(action.done ? { done: true } : {}) });
   }
 
   const freestanding = view.nodes.filter((n): n is DraftNode => n.type === 'note');
@@ -164,7 +154,7 @@ export function buildImplementationContext(
     }
   }
 
-  const { notes, truncated: notesTruncated } = collectNotes(view, { aboutIds, actions: path.length === 0 ? file.actions : [] });
+  const { notes, truncated: notesTruncated } = collectNotes(view, { aboutIds });
 
   const inFocus = (id: string) => !aboutIds || aboutIds.has(id);
   const groups = view.nodes.filter((n) => n.type === 'group' && (inFocus(n.id) || view.nodes.some((m) => m.parentId === n.id && inFocus(m.id))));

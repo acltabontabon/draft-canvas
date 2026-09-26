@@ -15,7 +15,7 @@ import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { offerFor, quickConnectItems, type QuickConnectItem } from '../../canvas/quickConnectItems';
 import { stepContinuation, type AskInstead } from '../../canvas/stepContinuation';
 import { contextMenuCommandsFor } from '../../commands/contextMenu';
-import { starterCommands } from '../../commands/registry';
+import { openPointTargetsOf, starterCommands } from '../../commands/registry';
 import type { Command } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
 import type { StarterId } from '../../starters';
@@ -33,8 +33,6 @@ import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { presentationScope, revealIn } from '../../presentation/presentationAttachments';
 import { useThemeValue } from '../theme/useTheme';
 import { backOut, lookInside } from './depthNavigation';
-import { CAPTURE_ACTION_KEY } from '../../takeaways/capture';
-import { TakeawaysPanel } from './TakeawaysPanel';
 import { OpenPointsPanel } from './OpenPointsPanel';
 import { OpenPointPopover } from '../../canvas/OpenPointPopover';
 import { DepthAnnouncer, DepthStack } from './DepthStack';
@@ -530,9 +528,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               <ProposalPanelChunk.Component />
             </Suspense>
           )}
-          {/* Ungated on purpose — the only surface here besides the flow bar that presentation
-              lets through, and then only its one-line capture. See `TakeawaysPanel`. */}
-          <TakeawaysPanel playback={playback} buildCommandContext={buildCommandContext} />
           {!presenting && <OpenPointsPanel buildCommandContext={buildCommandContext} />}
           <FlowBar playback={playback} />
           <FocusIndicator />
@@ -1032,21 +1027,8 @@ export function useKeyboard({
         return;
       }
 
-      // Every bare key but Escape is dead while presenting — with exactly one exception, and it
-      // earns it: capturing is the whole reason somebody would need a key mid-walkthrough
-      // ("can we verify this?"), the step supplies the context for free, and presenting has no
-      // text entry for it to collide with. Nothing else may join it here without the same case.
-      const capturing =
-        event.key.toUpperCase() === CAPTURE_ACTION_KEY && !event.shiftKey && !event.altKey;
-      if (presenting && event.key !== 'Escape' && !capturing) return;
-      // Handled ahead of the switch rather than as a case, since the key itself is a constant
-      // (`takeaways/capture.ts`) and a computed `case` would hide which key this is. Same grammar
-      // as the shape letters: one key, and what it makes opens ready to be typed into.
-      if (capturing) {
-        event.preventDefault();
-        useUiStore.getState().setActionCaptureOpen(true);
-        return;
-      }
+      // Every bare key but Escape is dead while presenting: the walkthrough owns the keyboard.
+      if (presenting && event.key !== 'Escape') return;
       // Enter and Space belong to a focused button, menu item or tab — they activate it.
       if ((event.key === 'Enter' || event.key === ' ') && isActivatableTarget(event.target)) return;
 
@@ -1060,19 +1042,11 @@ export function useKeyboard({
           // Mid endpoint drag, Escape cancels that drag (the handle's own listener) — and only that.
           if (useUiStore.getState().reconnectDragActive) return;
           arm(null);
-          // Takeaways is a surface you opened, so it closes before anything you were doing on the
-          // canvas does. The capture line handles its own Escape and stops it, so a press that
-          // reaches here never has one open.
-          //
-          // Only when it is actually on screen: presentation hides the panel without closing it
-          // (`TakeawaysPanel`), and consuming a press to shut something invisible would make the
-          // first Escape of a walkthrough do nothing at all.
-          if (useUiStore.getState().takeawaysOpen && state.mode !== 'present') {
-            useUiStore.getState().setTakeawaysOpen(false);
-            return;
-          }
-          // Same corner, same rule: a surface you opened closes before anything on the canvas does.
-          // (The open-point popover has its own capture-phase Escape, like every popover.)
+          // The Open points panel is a surface you opened, so it closes before anything you were
+          // doing on the canvas does. (The open-point popover has its own capture-phase Escape, like
+          // every popover.) Only when it is actually on screen: presentation hides the panel without
+          // closing it, and consuming a press to shut something invisible would make the first
+          // Escape of a walkthrough do nothing at all.
           if (useUiStore.getState().openPointsPanelOpen && state.mode !== 'present') {
             useUiStore.getState().setOpenPointsPanelOpen(false);
             return;
@@ -1121,6 +1095,18 @@ export function useKeyboard({
           event.preventDefault();
           openContextMenuFromKeyboard();
           return;
+        case 'I': // Caps Lock on, same as F below
+        case 'i': {
+          // Raise an open point about the selection — the same request the palette's and the context
+          // menu's `open-point-add` make. Nothing selected means nothing to be about, so the key
+          // falls through unclaimed rather than opening a popover on nothing.
+          if (event.shiftKey || event.altKey) break;
+          const targets = openPointTargetsOf(state.selection);
+          if (targets.length === 0) break;
+          event.preventDefault();
+          useUiStore.getState().setOpenPointPopover({ anchor: targets[0]!, targets, creating: true });
+          return;
+        }
         case 'F': // Caps Lock on (Shift+F is turned away just below)
         case 'f':
           // Plain F only — Cmd/Ctrl+F already returned above via the `meta`

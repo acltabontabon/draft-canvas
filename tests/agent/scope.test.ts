@@ -24,7 +24,6 @@ const base = () =>
       { id: 'd', from: 'api', to: 'db' },
     ],
     flows: [{ id: 'f', title: 'Order', steps: ['u', 'd'] }],
-    actions: [{ id: 'act', text: 'Confirm retention with legal', about: 'db' }],
   });
 
 const refusal = (run: () => unknown): AgentError => {
@@ -128,22 +127,9 @@ describe('update_diagram scope enforcement', () => {
     expect(error.code).toBe('OUT_OF_SCOPE');
   });
 
-  it('refuses to update an action while a scope is active', () => {
+  it('permits updating a flow when no scope is passed at all', () => {
     const file = base();
-    const error = refusal(() => applyUpdate(file, [], [{ op: 'update', id: 'act', set: { done: true } }], undefined, { nodes: ['api', 'db'], edges: ['u', 'd'] }));
-    expect(error.code).toBe('OUT_OF_SCOPE');
-  });
-
-  it('refuses to remove an action while a scope is active', () => {
-    const file = base();
-    const error = refusal(() => applyUpdate(file, [], [{ op: 'remove', ids: ['act'] }], undefined, { nodes: ['api', 'db'], edges: ['u', 'd'] }));
-    expect(error.code).toBe('OUT_OF_SCOPE');
-  });
-
-  it('permits updating a flow and an action when no scope is passed at all', () => {
-    const file = base();
-    const { file: next } = applyUpdate(file, [], [{ op: 'update', id: 'f', set: { title: 'Renamed' } }, { op: 'update', id: 'act', set: { done: true } }], undefined, undefined);
+    const { file: next } = applyUpdate(file, [], [{ op: 'update', id: 'f', set: { title: 'Renamed' } }], undefined, undefined);
     expect(next.flows.find((f) => f.id === 'f')?.title).toBe('Renamed');
-    expect(next.actions.find((a) => a.id === 'act')?.done).toBe(true);
   });
 });

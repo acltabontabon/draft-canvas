@@ -358,7 +358,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'panels',
-    title: 'Open and close the palette, Flows and Takeaways',
+    title: 'Open and close the palette and Flows',
     tailMs: 600,
     async run({ page }) {
       for (let round = 0; round < 3; round += 1) {
@@ -371,11 +371,6 @@ export const SCENARIOS: Scenario[] = [
         await settle(page, 4);
         await page.locator('.dc-flow-toggle').click();
         await settle(page, 4);
-        await page.keyboard.press('i');
-        await page.locator('.dc-takeaways-capture input').waitFor({ state: 'visible' });
-        await settle(page, 2);
-        await page.keyboard.press('Escape');
-        await settle(page, 2);
       }
       return { rounds: 3 };
     },

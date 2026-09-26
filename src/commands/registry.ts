@@ -32,9 +32,6 @@ import { ARCHITECTURE_STARTERS } from '../starters';
 import type { StarterCategory } from '../starters';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
 import { count } from '../lib/plural';
-import { indexFile, isEmpty, openCount, resolveTarget, takeawaysFor } from '../takeaways/collect';
-import { takeawaysMarkdown } from '../takeaways/markdown';
-import { CAPTURE_ACTION_KEY, captureAnchorFor, type CaptureSource } from '../takeaways/capture';
 import { openPointsOverview, unresolvedTargetsIn } from '../openPoints/collect';
 import type { OpenPointTarget } from '../document/types';
 
@@ -290,18 +287,6 @@ function presentModeCommands(ctx: CommandContext): Command[] {
   }
   commands.push(
     {
-      // The one capture path that matters most: somebody asks "can we verify this?" mid-flow, and
-      // the step being presented is the context, worked out for you. Offered here as well as on
-      // its bare key so it is discoverable without the walkthrough stopping.
-      id: 'capture-action',
-      title: 'Capture an action…',
-      group: 'takeaways',
-      keywords: ['todo', 'task', 'follow up', 'action item', 'next step', 'remember'],
-      hint: anchorHintFor(ctx),
-      shortcut: CAPTURE_ACTION_KEY,
-      run: (inner) => inner.ui.setActionCaptureOpen(true),
-    },
-    {
       id: 'fit',
       title: 'Fit to view',
       group: 'view',
@@ -333,69 +318,6 @@ function stepTitle(ctx: CommandContext, edgeId: string | undefined): string {
 }
 
 
-/** The live capture source: what is selected, or what the presentation step is about. */
-export function captureSourceFrom(ctx: CommandContext): CaptureSource {
-  const presenting = ctx.editor.mode === 'present';
-  const current = ctx.playback.active ? ctx.playback.current : null;
-  return {
-    presenting,
-    selection: ctx.editor.selection,
-    stepEdgeId: current?.edge?.id,
-    // A frame step holds up shapes rather than a connection; the first is the one it is about.
-    stepNodeId: current?.extraNodes[0]?.id,
-  };
-}
-
-/**
- * Takeaways — what the discussion produced.
- *
- * Three names for three store actions, like every other entry here. Capture is offered always:
- * it is the one thing in this group that has to be reachable before there is anything to review,
- * and an empty list is exactly when somebody needs to add the first thing to it. The other two
- * appear only once the canvas has something to show, which on an older diagram means the moment
- * it is opened — its decisions were already in the file.
- */
-export function takeawaysCommands(ctx: CommandContext): Command[] {
-  const commands: Command[] = [
-    {
-      id: 'capture-action',
-      title: 'Capture an action…',
-      group: 'takeaways',
-      keywords: ['todo', 'task', 'follow up', 'action item', 'next step', 'assign', 'remember'],
-      hint: anchorHintFor(ctx),
-      shortcut: CAPTURE_ACTION_KEY,
-      run: (inner) => inner.ui.setActionCaptureOpen(true),
-    },
-  ];
-
-  const takeaways = takeawaysFor(fileOf(ctx.editor));
-  if (isEmpty(takeaways)) return commands;
-
-  const open = openCount(takeaways);
-  commands.push({
-    id: 'takeaways',
-    title: 'Takeaways',
-    group: 'takeaways',
-    keywords: ['decisions', 'questions', 'actions', 'summary', 'outcome', 'review', 'meeting'],
-    hint: open > 0 ? `${count(open, 'open action')}` : undefined,
-    run: (inner) => inner.ui.setTakeawaysOpen(true, 'readout'),
-  });
-  commands.push({
-    id: 'copy-takeaways',
-    title: 'Copy takeaways',
-    group: 'takeaways',
-    keywords: ['markdown', 'clipboard', 'share', 'slack', 'teams', 'notes', 'minutes'],
-    hint: 'As Markdown',
-    run: (inner) => {
-      const text = takeawaysMarkdown(takeawaysFor(fileOf(inner.editor)), inner.editor.document.metadata.title);
-      if (!text) return;
-      void inner.editor
-        .copyText(text)
-        .then((ok) => inner.ui.notify(ok ? 'Takeaways copied.' : 'The browser wouldn’t let us copy.'));
-    },
-  });
-  return commands;
-}
 
 /**
  * Open points — what the discussion has not settled yet.
@@ -406,13 +328,18 @@ export function takeawaysCommands(ctx: CommandContext): Command[] {
  * marker. Raising is offered for whatever is selected — one element, or several as one shared point,
  * said as such in the title so nobody is surprised by one marker on each.
  */
-export function openPointCommands(ctx: CommandContext): Command[] {
-  const commands: Command[] = [];
-  const { selection, document, mode, focus } = ctx.editor;
-  const targets: OpenPointTarget[] = [
+/** What a point raised right now would be about: the selection, shapes first, as targets. */
+export function openPointTargetsOf(selection: { nodes: readonly string[]; edges: readonly string[] }): OpenPointTarget[] {
+  return [
     ...selection.nodes.map((id) => ({ kind: 'node', id }) as const),
     ...selection.edges.map((id) => ({ kind: 'edge', id }) as const),
   ];
+}
+
+export function openPointCommands(ctx: CommandContext): Command[] {
+  const commands: Command[] = [];
+  const { selection, document, mode, focus } = ctx.editor;
+  const targets = openPointTargetsOf(selection);
   const anchor = targets[0];
   if (mode !== 'present' && anchor) {
     const subject = anchor.kind === 'node' ? document.nodes.find((node) => node.id === anchor.id) : undefined;
@@ -422,6 +349,9 @@ export function openPointCommands(ctx: CommandContext): Command[] {
       group: 'openPoints',
       keywords: ['tentative', 'awaiting input', 'parked', 'unsettled', 'undecided', 'assumption', 'tbd', 'still open', 'mark'],
       hint: targets.length === 1 ? (subject ? displayNameFor(subject) : 'Connector') : 'One shared point',
+      // The key the old capture line had, kept for the same job — say what is still open — and
+      // dispatched by `EditorScreen`'s `useKeyboard`, like every other bare key.
+      shortcut: 'I',
       run: (inner) => inner.ui.setOpenPointPopover({ anchor, targets, creating: true }),
     });
   }
@@ -451,14 +381,6 @@ export function openPointCommands(ctx: CommandContext): Command[] {
     });
   }
   return commands;
-}
-
-/** What the capture line would keep if it opened right now, said in words. */
-function anchorHintFor(ctx: CommandContext): string | undefined {
-  const anchor = captureAnchorFor(captureSourceFrom(ctx));
-  if (!anchor) return undefined;
-  const target = resolveTarget(indexFile(fileOf(ctx.editor)), anchor.kind, anchor.id);
-  return target ? `From ${target.label}` : undefined;
 }
 
 function flowCommands(ctx: CommandContext): Command[] {
@@ -1784,7 +1706,6 @@ export function commandsFor(ctx: CommandContext): Command[] {
     ...ALL_PRESETS.map(createCommand),
     ...starterCommands(),
     ...flowCommands(ctx),
-    ...takeawaysCommands(ctx),
     ...openPointCommands(ctx),
     ...viewCommands(ctx),
     ...canvasCommands(ctx),

@@ -269,9 +269,6 @@ function project(
       // As update_diagram takes them back: a relationship id, {relationship, caption}, or a frame step.
       steps: f.steps.map((s) => (!s.edgeId ? { frame: s.id } : s.caption ? { relationship: s.edgeId, caption: s.caption } : s.edgeId)),
     })),
-    ...(path.length === 0 && file.actions.length
-      ? { actions: file.actions.map((a) => ({ id: a.id, text: a.text, ...(a.done ? { done: true } : {}), ...(a.anchor ? { about: a.anchor.id } : {}) })) }
-      : {}),
     // What the people have not settled yet — every point at the root, and in a nested view the ones
     // about something in it. Read as data an agent may act on when asked; nothing here is a request.
     ...(() => {

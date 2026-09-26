@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { collectNotes, NOTES_LIMIT } from '../../src/agent/context';
 import { createAttachment, createDocument, createNode } from '../../src/document/factory';
-import type { DraftAction, DraftDocument } from '../../src/document/types';
+import type { DraftDocument } from '../../src/document/types';
 
 function withNodes(...nodes: DraftDocument['nodes']): DraftDocument {
   return { ...createDocument(), nodes, edges: [] };
@@ -13,19 +13,6 @@ describe('collectNotes', () => {
     host.attachments = [createAttachment({ id: 'n1', type: 'note', text: 'Careful here' })];
     const { notes } = collectNotes(withNodes(host));
     expect(notes).toEqual([expect.objectContaining({ id: 'n1', provenance: 'attached', about: 'svc', text: 'Careful here' })]);
-  });
-
-  it('includes an anchored action as "anchored", about its anchor', () => {
-    const host = createNode({ id: 'svc', type: 'service', x: 0, y: 0 });
-    const actions: DraftAction[] = [{ id: 'act1', text: 'Confirm retry budget', anchor: { kind: 'node', id: 'svc' } }];
-    const { notes } = collectNotes(withNodes(host), { actions });
-    expect(notes).toEqual([expect.objectContaining({ id: 'act1', provenance: 'anchored', about: 'svc', text: 'Confirm retry budget' })]);
-  });
-
-  it('excludes an unanchored action entirely', () => {
-    const actions: DraftAction[] = [{ id: 'act1', text: 'Someday' }];
-    const { notes } = collectNotes(withNodes(), { actions });
-    expect(notes).toEqual([]);
   });
 
   it('includes a freestanding note near an element as "nearest"', () => {

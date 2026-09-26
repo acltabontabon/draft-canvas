@@ -13,9 +13,6 @@ import { isEncryptedBody } from '../src/crypto/migrateStorage';
 import type { EncryptedBody } from '../src/crypto/types';
 import { CURRENT_VERSION, type DraftDocument } from '../src/document/types';
 
-function action(id: string): { id: string; text: string } {
-  return { id, text: `Action ${id}` };
-}
 
 function documentWith(title: string, nodeCount = 2): DraftDocument {
   const nodes = Array.from({ length: nodeCount }, (_, index) =>
@@ -980,79 +977,6 @@ async function stripShape(repository: IndexedDbRepository, id: string): Promise<
   const { shape: _shape, ...rest } = row;
   await putRawSummary(rest);
 }
-
-/** The row an older build wrote: counts and a shape, but no idea what an action was. */
-async function stripOpenActions(repository: IndexedDbRepository, id: string): Promise<void> {
-  const row = (await repository.list()).find((entry) => entry.id === id)!;
-  const { openActions: _open, ...rest } = row;
-  await putRawSummary(rest);
-}
-
-describe('open actions in the library summary', () => {
-  it('every save writes the count, and zero is written rather than omitted', async () => {
-    const repository = await IndexedDbRepository.open();
-    const quiet = documentWith('Nothing owed', 2);
-    await repository.save(quiet);
-    // Absent has to mean "older build" and nothing else, or the backfill can never tell them apart.
-    expect((await repository.list())[0]!.openActions).toBe(0);
-
-    const owing = { ...documentWith('Owes three', 2), actions: [action('a_1'), action('a_2'), action('a_3')] };
-    await repository.save(owing);
-    expect((await repository.list()).find((row) => row.id === owing.metadata.id)!.openActions).toBe(3);
-  });
-
-  it('counts only what is still open', async () => {
-    const repository = await IndexedDbRepository.open();
-    const doc = { ...documentWith('Half done', 1), actions: [action('a_1'), { ...action('a_2'), done: true }] };
-    await repository.save(doc);
-    expect((await repository.list())[0]!.openActions).toBe(1);
-  });
-
-  it('a rename carries the count through — it recomputes the whole summary', async () => {
-    const repository = await IndexedDbRepository.open();
-    const doc = { ...documentWith('Before', 1), actions: [action('a_1')] };
-    await repository.save(doc);
-    await repository.rename(doc.metadata.id, 'After');
-    const row = (await repository.list())[0]!;
-    expect(row.title).toBe('After');
-    expect(row.openActions).toBe(1);
-  });
-
-  it('backfills rows written before the count existed, in the same pass as the shape', async () => {
-    const repository = await IndexedDbRepository.open();
-    const doc = { ...documentWith('Legacy row', 2), actions: [action('a_1'), action('a_2')] };
-    await repository.save(doc);
-    await stripOpenActions(repository, doc.metadata.id);
-    expect((await repository.list())[0]!.openActions).toBeUndefined();
-
-    expect(await repository.backfillSummaries()).toEqual({ updated: 1, failed: 0, skipped: 0 });
-    const row = (await repository.list())[0]!;
-    expect(row.openActions).toBe(2);
-    // The shape it already had is not disturbed on the way past.
-    expect(row.shape?.nodes).toHaveLength(2);
-
-    // Nothing left to do: a library already carrying both is never decrypted again.
-    expect(await repository.backfillSummaries()).toEqual({ updated: 0, failed: 0, skipped: 0 });
-  });
-
-  it('never clobbers a tick that lands while the sweep is reading the body', async () => {
-    const repository = await IndexedDbRepository.open();
-    const doc = { ...documentWith('Raced', 2), actions: [action('a_1'), action('a_2')] };
-    await repository.save(doc);
-    await stripOpenActions(repository, doc.metadata.id);
-
-    // Both actions get ticked mid-sweep. The count the sweep computed from the body it decrypted
-    // is already out of date by the time it tries to write it, and must lose to the newer row.
-    const done = repository.save({
-      ...doc,
-      actions: [{ ...action('a_1'), done: true }, { ...action('a_2'), done: true }],
-    });
-    const backfill = repository.backfillSummaries();
-    await Promise.all([done, backfill]);
-
-    expect((await repository.list())[0]!.openActions).toBe(0);
-  });
-});
 
 describe('library fingerprints', () => {
   it('every save writes a shape into the summary, and MemoryRepository derives one too', async () => {

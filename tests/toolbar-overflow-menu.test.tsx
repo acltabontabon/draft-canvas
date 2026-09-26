@@ -80,9 +80,9 @@ describe('toolbar overflow menu', () => {
     await openMenu(user);
 
     // Real focus sits on the panel; `aria-activedescendant` names the current row. Opening puts
-    // the first row (Takeaways) under it, so Keyboard shortcuts — Takeaways, Canvas settings,
-    // Learn, then this — is three rows down.
-    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{Enter}');
+    // the first row (Canvas settings) under it, so Keyboard shortcuts — Canvas settings, Learn,
+    // then this — is two rows down.
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
     expect(useUiStore.getState().shortcutsOpen).toBe(true);
 
     await openMenu(user);

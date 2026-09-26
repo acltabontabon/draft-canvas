@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 16;
+export const CURRENT_VERSION = 17;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -650,35 +650,6 @@ export interface DraftSettings {
 }
 
 /**
- * Something that has to happen because of the discussion — the third thing a technical meeting
- * produces, after the drawing and the notes on it.
- *
- * Canvas-level on purpose, and never a node: a Note (or a Decision, or a Question — see
- * `NoteKind`) is *about a place*, which is why it has coordinates; an action is about a person
- * and a time, and giving it coordinates would be a lie. The architecture it came from is a
- * back-reference, not a position, and it is optional — "follow up with SRE" belongs to the whole
- * canvas.
- *
- * Deliberately four fields. Anything that needs a fifth — a due date, a priority, an assignee
- * record, a status beyond open/done — is a different product.
- */
-export interface DraftAction {
-  id: string;
-  /** Plain text, exactly as typed. Any `@name` stays inline, so the text a file carries is the
-   *  text that was written — mentions are recognised when drawn, never stored apart. */
-  text: string;
-  /** Absent means open. */
-  done?: boolean;
-  /**
-   * What was on screen when it was captured, when anything was. Ids are unique across the whole
-   * file rather than per room (see `validate.ts`), so this needs no room path to resolve.
-   * `validate.ts` drops an anchor that no longer resolves and keeps the action — the action is
-   * the point, and the context is a bonus.
-   */
-  anchor?: { kind: 'node' | 'edge'; id: string };
-}
-
-/**
  * What kind of open discussion an Open point records — three descriptions, not stages of a workflow.
  * `tentative` is a working assumption nobody has settled; `awaiting` means a specific answer,
  * review or agreement is still needed from someone; `parked` is a topic deliberately put off. They
@@ -689,7 +660,7 @@ export const OPEN_POINT_KINDS = ['tentative', 'awaiting', 'parked'] as const;
 export type OpenPointKind = (typeof OPEN_POINT_KINDS)[number];
 
 /** One thing an open point is about. Ids are unique across the whole file (see `validate.ts`), so no
- *  room path is needed to resolve one — the same convention `DraftAction.anchor` follows. */
+ *  room path is needed to resolve one. */
 export interface OpenPointTarget {
   kind: 'node' | 'edge';
   id: string;
@@ -702,7 +673,7 @@ export interface OpenPointTarget {
  * changes no connector's routing, no node's size and no relationship's meaning. Its absence means
  * only "nothing was noted here" — never "verified", "approved" or "built".
  *
- * Root-only, like `DraftAction`: the meeting is the file, and one point may concern shapes in
+ * Root-only: the meeting is the file, and one point may concern shapes in
  * several rooms. Stored once and pointing at every target, so a question that concerns three
  * connectors is one record with three attachments rather than three copies of the same sentence.
  */
@@ -714,7 +685,7 @@ export interface OpenPoint {
   /** At least one. A point whose last target is deleted goes with it (`operations.ts`'s
    *  `removeElements`); a file carrying one with none is repaired by dropping it (`validate.ts`). */
   targets: OpenPointTarget[];
-  /** Absent means open — the same "absent is the default" rule `DraftAction.done` follows. */
+  /** Absent means open — "absent is the default", like every optional flag in the file. */
   resolved?: true;
   /** How it was settled, when somebody wrote that down. Plain text; kept when a point is reopened. */
   resolution?: string;
@@ -736,13 +707,9 @@ export interface DraftDocument {
   flows: DraftFlow[];
   /**
    * Root-only, like `settings` and unlike `flows`: a room is a room, but the meeting is the file.
-   * `DraftInside` deliberately has no counterpart, so `depth/tree.ts`'s `embed` has to carry this
-   * back to the root the way it already carries `metadata` and `settings`.
-   */
-  actions: DraftAction[];
-  /**
-   * Root-only for the same reason `actions` is, and carried home by `embed` the same way. What the
-   * discussion has not settled yet, attached to the shapes and connectors it concerns — see
+   * `DraftInside` deliberately has no counterpart, so `depth/tree.ts`'s `embed` has to carry this back
+   * to the root the way it already carries `metadata` and `settings`. What the discussion has not
+   * settled yet, attached to the shapes and connectors it concerns — see
    * `OpenPoint` and `document/openPoints.ts`.
    */
   openPoints: OpenPoint[];
@@ -807,17 +774,4 @@ export interface DraftSummary {
    *  editor tells that another tab saved different content since it last read or wrote. Absent on a
    *  row written before it existed. */
   contentStamp?: string;
-  /**
-   * How many actions this canvas still has open — the Library's half of the status bar's `□ 3`.
-   *
-   * The second body-derived field to live in the plaintext `documents` store, and it stays on the
-   * right side of the same line `shape` draws: it is a count and carries no words. What the actions
-   * *say* is in the encrypted body and never comes out into a summary — the Library's "Still open"
-   * band loads the bodies it needs rather than reading text from here.
-   *
-   * Written on every save including when it is `0`, so `undefined` means one thing only: a row
-   * summarised by a build from before this existed (backfilled once at startup — see
-   * `IndexedDbRepository.backfillSummaries`).
-   */
-  openActions?: number;
 }

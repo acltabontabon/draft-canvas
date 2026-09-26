@@ -11,7 +11,6 @@ import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Modal } from '../common/Modal';
 import { FirstRunHome } from './FirstRunHome';
-import { count } from '../../lib/plural';
 import { relativeTime } from '../../lib/relativeTime';
 import { Fingerprint } from './Fingerprint';
 import { LibraryBrand } from './LibraryBrand';
@@ -281,21 +280,8 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                       <span className="dc-library-item-title">{entry.title}</span>
                       {/* Element and connector counts used to live here. They said nothing anyone
                           was deciding between two rows on — the fingerprint already shows how big
-                          and how tangled a canvas is, and shows it faster. What is still owed is
-                          the one thing about a canvas you cannot see by looking at it.
-
-                          Said in words, and in the same words the status bar uses. A mark on its
-                          own — a box, a dot, a count — means nothing to somebody who has not met
-                          the feature yet, and the Library is exactly where they have not. */}
-                      <span className="dc-library-item-meta">
-                        {relativeTime(entry.updatedAt)}
-                        {entry.openActions !== undefined && entry.openActions > 0 && (
-                          <>
-                            <span className="dc-dot" />
-                            <span className="dc-library-item-open">{count(entry.openActions, 'open action')}</span>
-                          </>
-                        )}
-                      </span>
+                          and how tangled a canvas is, and shows it faster. */}
+                      <span className="dc-library-item-meta">{relativeTime(entry.updatedAt)}</span>
                     </span>
                   </button>
                   <div className="dc-library-item-actions">

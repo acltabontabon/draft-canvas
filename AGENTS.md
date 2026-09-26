@@ -86,9 +86,9 @@ Each of these has a failure mode that is silent, delayed, or both.
   of those migrations exists to rewrite at all four levels and insists every level came through, so
   forgetting is a failing test rather than a silently half-migrated file.
 - **A root-only document field has to be named in `depth/tree.ts`'s `embed`.** `viewOf` hands a
-  room every root-level field through a spread, so `DraftDocument.actions` and `openPoints` (and
-  `settings`, and `metadata`) are readable inside a room for free — and are dropped on the way back
-  out unless `embed` carries them home too. The failure is silent and only shows up as "the action I captured
+  room every root-level field through a spread, so `DraftDocument.openPoints` (and `settings`, and
+  `metadata`) are readable inside a room for free — and are dropped on the way back out unless
+  `embed` carries them home too. The failure is silent and only shows up as "the point I raised
   while inside that service is gone." Anything added beside them needs a line in `embed`, in
   `shallowEqualDocument` (`store/editorStore.ts`) and in `sameContent` (`history/HistoryStack.ts`);
   miss the second and every edit to it is discarded as a no-op, miss the third and a typed-then-
@@ -134,7 +134,7 @@ Each of these has a failure mode that is silent, delayed, or both.
   megabyte per step at Large, all of it dead the moment the function returned. Build the returned
   object in a module-level function, as `planOf` in `crossings.ts` does.
 - **An open point is metadata, never a shape, and its marker is one display list.** `DraftDocument.
-  openPoints` is root-only like `actions` (same `embed`/`shallowEqualDocument`/`sameContent` tax) and
+  openPoints` is root-only (the `embed`/`shallowEqualDocument`/`sameContent` tax above) and
   points at elements by id; nothing about it may change routing, a node's size or a connector's
   semantics, and its absence means only "nothing noted". The picture is `openPoints/marker.ts`,
   emitted by `DraftNodeView`/`DraftEdgeView` and by `edges/describe.ts`/`render/svg/document.ts`
@@ -191,9 +191,9 @@ worker.
 `src/starters/` sits beside `document/` (it imports only that, and is not part of the file format);
 `store/` and `commands/` consume it. `src/continuation/` sits there too (it imports `document/` and
 `render/text` only) — the deterministic next-move rules; `store/`, `commands/` and `canvas/` consume it.
-`src/takeaways/` sits beside them too (it imports `document/` and `depth/` only) — what the
-discussion produced, derived from the notes already on the canvas plus the document's own
-`actions`; `commands/` and `ui/` consume it. `src/depth/` sits there as well (it imports `document/` only) — the tree of rooms inside shapes and
+`src/openPoints/` sits beside them too (it imports `document/` and `depth/` only) — the marker
+geometry both renderers draw and the overview derived from `DraftDocument.openPoints`; `canvas/`,
+`commands/`, `render/` and `ui/` consume it. `src/depth/` sits there as well (it imports `document/` only) — the tree of rooms inside shapes and
 the view levels they show; `store/`, `commands/`, `canvas/`, `history/`, `storage/` and `ui/` consume it. `src/layout/` (it imports `document/` only) is the deterministic layered layout, and `src/agent/` (it imports
 `document/`, `depth/`, `continuation/`, `edges/`, `export/`, `layout/`, `nodes/`, `render/` and `starters/` —
 never React or the store) turns an AI agent's request into a document or a patch; `src/desktop/agent.ts` runs it and

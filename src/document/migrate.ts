@@ -287,8 +287,9 @@ function migrateAddInsides(doc: Record<string, unknown>): Record<string, unknown
 }
 
 /**
- * v13 gives a document its canvas-level `actions` — what the meeting decided somebody has to do
- * next (`DraftAction`). Structurally a no-op: a v12 file simply has none, and `normalizeDocument`
+ * v13 gave a document its canvas-level `actions` — what the meeting decided somebody has to do
+ * next. The field was removed again in v17 (`migrateActionsToNotes`), but this entry stays: the
+ * chain has no gaps, and a v12 file still has to pass through here. Structurally a no-op: a v12 file simply has none, and `normalizeDocument`
  * fills in the empty list every document without one already means.
  *
  * Document-wide, so deliberately **not** wrapped in `everyRoom`: actions are root-only, like
@@ -327,6 +328,111 @@ function migrateAddC4Text(doc: Record<string, unknown>): Record<string, unknown>
  */
 function migrateAddOpenPoints(doc: Record<string, unknown>): Record<string, unknown> {
   return doc;
+}
+
+/**
+ * v17 removes canvas-level `actions` (the Takeaways list, v13–v16) and turns each one into a note,
+ * so nothing anybody wrote down is lost when the panel goes away:
+ *
+ * - an action anchored to a shape or connector that still exists — at the root or inside any room,
+ *   which is where Takeaways resolved anchors too — becomes a note *attachment* on that element,
+ *   `Action: …` or `Done: …`, so the reference stays a real reference rather than a name in prose;
+ * - everything else (no anchor, an anchor to something deleted, or a host already carrying as many
+ *   attachments as it may) is gathered into one `Actions` note node placed just below the root
+ *   graph, one line per action with a ☐/☑ box, split into a second note only past the text limit.
+ *
+ * Root-only entry (the field was root-only), but it walks rooms itself to find anchors. Runs on raw
+ * records and mints fresh ids: an action's own `a_…` id shares the attachment prefix and the
+ * validator dedupes ids file-wide, so reusing one could collide. The caps and sizes are frozen here
+ * rather than read from `LIMITS`/`DEFAULTS`, for `nearestSides`' reason: a migration reproduces
+ * what the app did at the time, not what it does later.
+ */
+const V17_MAX_ATTACHMENTS_PER_NODE = 12;
+const V17_MAX_ATTACHMENTS_PER_EDGE = 4;
+const V17_MAX_NOTE_TEXT = 20_000;
+const V17_NOTE_WIDTH = 200;
+const V17_NOTE_MIN_HEIGHT = 56;
+const V17_NOTE_LINE_HEIGHT = 18;
+const V17_NOTE_MAX_HEIGHT = 2_000;
+
+function migrateActionsToNotes(doc: Record<string, unknown>): Record<string, unknown> {
+  const { actions: rawActions, ...rest } = doc;
+  if (!Array.isArray(rawActions) || rawActions.length === 0) return rest;
+
+  type Host = { record: Record<string, unknown>; max: number };
+  const hosts = new Map<string, Host>();
+  // Anchors are found by id, file-wide, exactly as `resolveTarget` found them: rooms included, bounded
+  // the way `mapGraphs` bounds itself so a hostile file cannot make this recurse without end.
+  const index = (graph: Record<string, unknown>, depth: number): void => {
+    if (depth > LIMITS.maxInsideDepth) return;
+    for (const raw of Array.isArray(graph.nodes) ? graph.nodes : []) {
+      if (!raw || typeof raw !== 'object') continue;
+      const node = raw as Record<string, unknown>;
+      if (typeof node.id === 'string' && !hosts.has(node.id)) hosts.set(node.id, { record: node, max: V17_MAX_ATTACHMENTS_PER_NODE });
+      if (node.inside && typeof node.inside === 'object') index(node.inside as Record<string, unknown>, depth + 1);
+    }
+    for (const raw of Array.isArray(graph.edges) ? graph.edges : []) {
+      if (!raw || typeof raw !== 'object') continue;
+      const edge = raw as Record<string, unknown>;
+      if (typeof edge.id === 'string' && !hosts.has(edge.id)) hosts.set(edge.id, { record: edge, max: V17_MAX_ATTACHMENTS_PER_EDGE });
+    }
+  };
+  index(rest, 0);
+
+  const lines: string[] = [];
+  for (const raw of rawActions) {
+    if (!raw || typeof raw !== 'object') continue;
+    const action = raw as Record<string, unknown>;
+    const text = typeof action.text === 'string' ? action.text.trim() : '';
+    if (!text) continue;
+    const done = action.done === true;
+    const anchor = action.anchor && typeof action.anchor === 'object' ? (action.anchor as Record<string, unknown>) : null;
+    const host = anchor && typeof anchor.id === 'string' ? hosts.get(anchor.id) : undefined;
+    if (host) {
+      const attachments = Array.isArray(host.record.attachments) ? host.record.attachments : [];
+      if (attachments.length < host.max) {
+        host.record.attachments = [
+          ...attachments,
+          { id: createId('a'), type: 'note', noteKind: 'note', text: `${done ? 'Done' : 'Action'}: ${text}` },
+        ];
+        continue;
+      }
+    }
+    lines.push(`${done ? '☑' : '☐'} ${text}`);
+  }
+  if (lines.length === 0) return rest;
+
+  // Below everything at the root, aligned with its left edge; the origin when there is nothing yet.
+  let minX = Infinity;
+  let maxBottom = -Infinity;
+  for (const raw of Array.isArray(rest.nodes) ? rest.nodes : []) {
+    const rect = rectOf(raw);
+    if (!rect) continue;
+    minX = Math.min(minX, rect.x);
+    maxBottom = Math.max(maxBottom, rect.y + rect.height);
+  }
+  const x = Number.isFinite(minX) ? minX : 0;
+  let y = Number.isFinite(maxBottom) ? maxBottom + 40 : 0;
+
+  const notes: Record<string, unknown>[] = [];
+  let chunk: string[] = ['Actions'];
+  let length = chunk[0]!.length;
+  const flush = () => {
+    if (chunk.length <= 1) return;
+    const height = Math.min(V17_NOTE_MAX_HEIGHT, Math.max(V17_NOTE_MIN_HEIGHT, chunk.length * V17_NOTE_LINE_HEIGHT + 20));
+    notes.push({ id: createId('n'), type: 'note', noteKind: 'note', x, y, width: V17_NOTE_WIDTH, height, z: 0, text: chunk.join('\n') });
+    y += height + 24;
+    chunk = ['Actions'];
+    length = chunk[0]!.length;
+  };
+  for (const line of lines) {
+    if (length + 1 + line.length > V17_MAX_NOTE_TEXT) flush();
+    chunk.push(line);
+    length += 1 + line.length;
+  }
+  flush();
+
+  return { ...rest, nodes: [...(Array.isArray(rest.nodes) ? rest.nodes : []), ...notes] };
 }
 
 /**
@@ -394,6 +500,7 @@ const MIGRATIONS: Record<number, Migration> = {
   13: everyRoom(migrateProjectsToWrites),
   14: migrateAddC4Text,
   15: migrateAddOpenPoints,
+  16: migrateActionsToNotes,
 };
 
 export class UnsupportedVersionError extends Error {

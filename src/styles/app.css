@@ -548,23 +548,6 @@ kbd {
 }
 
 /*
- * What this canvas still owes, in the meta line.
- *
- * It carries the line's only full-strength colour, which is the whole of its emphasis: weight,
- * never hue. A coloured badge or a dot would read as a notification, and this is a standing fact
- * about the drawing rather than something that just happened. Lifts to the selection colour with
- * the fingerprint and the title on hover, so the row still reads as one object.
- */
-.dc-library-item-open {
-  color: var(--dc-text);
-  font-variant-numeric: tabular-nums;
-}
-
-.dc-library-item:hover .dc-library-item-open {
-  color: var(--dc-selection);
-}
-
-/*
  * The fingerprint: each row's topology, in the row's own muted colour, lit
  * to the selection colour with the title on hover. Every mark is
  * `currentColor` (see `Fingerprint.tsx`), so these rules are the whole
@@ -6118,18 +6101,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-text);
 }
 
-/* ------------------------------------------------------------- takeaways -- */
+/* ---------------------------------------------------------- open points panel -- */
 
-/*
- * Grown out of the status bar rather than floating over the canvas: no bottom border, no bottom
- * radius, `bottom: 0` against the bar's own top edge. The count in the bar is what opens it, and
- * this is that count expanded — one object in two sizes, not a panel that arrived from somewhere.
- *
- * Above `--dc-z-chrome` because the capture line is allowed on screen while presenting, where the
- * flow bar and the callout layer already sit at `--dc-z-bar`; `PresentationCallout` is told to
- * keep clear of it (its `exclusions`) so a callout never places itself underneath.
- */
-.dc-takeaways {
+.dc-points {
   position: absolute;
   right: 12px;
   bottom: 0;
@@ -6144,30 +6118,14 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   border-radius: var(--dc-radius-lg) var(--dc-radius-lg) 0 0;
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
-  animation: dc-takeaways-in 140ms var(--dc-ease-out);
+  animation: dc-points-in 140ms var(--dc-ease-out);
 }
 
-/* Just the capture line: the same object, one row tall. */
-.dc-takeaways[data-mode='line'] {
-  width: min(420px, calc(100% - 24px));
+.dc-points[data-closing] {
+  animation: dc-points-in 140ms var(--dc-ease-out) reverse;
 }
 
-/*
- * Presenting: there is no status bar to grow out of, and the flow bar is sitting in the bottom
- * centre — wide enough at most widths to run straight into a right-aligned line. So the line
- * lifts clear above it and becomes an ordinary floating card again, rounded on all four corners.
- */
-.dc-takeaways[data-presenting] {
-  bottom: 76px;
-  border-bottom: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-lg);
-}
-
-.dc-takeaways[data-closing] {
-  animation: dc-takeaways-in 140ms var(--dc-ease-out) reverse;
-}
-
-.dc-takeaways-header {
+.dc-points-header {
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -6177,7 +6135,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 /* The same small-caps voice the depth map's DEPTH and a room's crop-marked name already speak. */
-.dc-takeaways-title {
+
+.dc-points-title {
   flex: 1;
   font-size: 12px;
   font-variant-caps: all-small-caps;
@@ -6185,105 +6144,58 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-text-muted);
 }
 
-.dc-takeaways-scroll {
+.dc-points-scroll {
   overflow-y: auto;
   padding: 6px 12px 8px;
 }
 
-.dc-takeaways-list {
+.dc-points-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.dc-takeaways-row {
+.dc-points-row {
   padding: 3px 0;
 }
 
-.dc-takeaways-line {
+.dc-points-line {
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
 
-/* The box. Achromatic on purpose — the teal in this product means "selected", and a checklist
-   that borrowed it would read as a canvas selection every time you glanced at it. */
-.dc-takeaways-box {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 13px;
-  height: 13px;
-  margin-top: 4px;
-  padding: 0;
-  border: 1px solid var(--dc-border-strong);
-  border-radius: var(--dc-radius-xs);
-  background: none;
-  color: var(--dc-surface);
-  cursor: pointer;
-  transition:
-    background-color 120ms ease,
-    border-color 120ms ease;
-}
-
-.dc-takeaways-box svg {
-  width: 9px;
-  height: 9px;
-}
-
-button.dc-takeaways-box:hover {
-  border-color: var(--dc-text-muted);
-}
-
-.dc-takeaways-row[data-done] .dc-takeaways-box {
+.dc-points-row[data-done] .dc-points-box {
   border-color: var(--dc-text-faint);
   background: var(--dc-text-faint);
 }
 
-.dc-takeaways-text {
-  flex: 1;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dc-text);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.45;
-  text-align: left;
-  cursor: text;
-}
-
 /* Quiet, not struck through: a finished item stops asking for attention, it doesn't get defaced. */
-.dc-takeaways-row[data-done] .dc-takeaways-text,
-.dc-takeaways-row[data-done] .dc-takeaways-note {
+
+.dc-points-row[data-done] .dc-points-text,
+.dc-points-row[data-done] .dc-points-note {
   color: var(--dc-text-faint);
 }
 
-/* Recognised where it sits, never lifted out: the document keeps the sentence as it was typed. */
-.dc-mention {
-  color: var(--dc-text);
-  font-weight: 550;
-}
-
-.dc-takeaways-row[data-done] .dc-mention {
+.dc-points-row[data-done] .dc-mention {
   color: inherit;
   font-weight: inherit;
 }
 
-.dc-takeaways-remove {
+.dc-points-remove {
   flex: none;
   opacity: 0;
   transition: opacity 120ms ease;
 }
 
-.dc-takeaways-row:hover .dc-takeaways-remove,
-.dc-takeaways-remove:focus-visible {
+.dc-points-row:hover .dc-points-remove,
+.dc-points-remove:focus-visible {
   opacity: 1;
 }
 
 /* Where it came from — one step in, so it reads as belonging to the line above it. */
-.dc-takeaways-context {
+
+.dc-points-context {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -6298,88 +6210,43 @@ button.dc-takeaways-box:hover {
   cursor: pointer;
 }
 
-.dc-takeaways-context:hover,
-.dc-takeaways-context:focus-visible {
+.dc-points-context:hover,
+.dc-points-context:focus-visible {
   color: var(--dc-text-muted);
 }
 
-.dc-takeaways-context-label {
+.dc-points-context-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dc-takeaways-chip-arrow {
+.dc-points-chip-arrow {
   flex: none;
   opacity: 0.7;
 }
 
 /* The room a note was written in, or the connector an action came from in the readout. */
-.dc-takeaways-room {
+
+.dc-points-room {
   margin-left: 6px;
   color: var(--dc-text-faint);
   font-size: 11px;
 }
 
-/* ---- capture line ---- */
-
-.dc-takeaways-capture {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-}
-
-.dc-takeaways[data-mode='panel'] .dc-takeaways-capture {
+.dc-points[data-mode='panel'] .dc-points-capture {
   border-bottom: 1px solid var(--dc-border);
-}
-
-.dc-takeaways-input {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dc-text);
-  font: inherit;
-  font-size: 13px;
-}
-
-.dc-takeaways-input:focus {
-  outline: none;
-}
-
-.dc-takeaways-input::placeholder {
-  color: var(--dc-text-faint);
-}
-
-/* What this action is about to remember. Backspace on an empty line drops it. */
-.dc-takeaways-chip {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-  max-width: 45%;
-  padding: 2px 7px;
-  border-radius: var(--dc-radius-pill);
-  background: var(--dc-surface-hover);
-  color: var(--dc-text-faint);
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ---- done group, foot, readout ---- */
 
-.dc-takeaways-done {
+.dc-points-done {
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid var(--dc-border);
 }
 
-.dc-takeaways-done-toggle {
+.dc-points-done-toggle {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -6392,31 +6259,31 @@ button.dc-takeaways-box:hover {
   cursor: pointer;
 }
 
-.dc-takeaways-done-toggle:hover,
-.dc-takeaways-done-toggle:focus-visible {
+.dc-points-done-toggle:hover,
+.dc-points-done-toggle:focus-visible {
   color: var(--dc-text-muted);
 }
 
-.dc-takeaways-done-toggle svg {
+.dc-points-done-toggle svg {
   width: 11px;
   height: 11px;
 }
 
-.dc-takeaways-empty {
+.dc-points-empty {
   margin: 8px 2px 10px;
   color: var(--dc-text-faint);
   font-size: 12.5px;
   line-height: 1.55;
 }
 
-.dc-takeaways-empty kbd {
+.dc-points-empty kbd {
   padding: 1px 5px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-xs);
   font-size: 11px;
 }
 
-.dc-takeaways-foot {
+.dc-points-foot {
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -6426,264 +6293,29 @@ button.dc-takeaways-box:hover {
   border-top: 1px solid var(--dc-border);
 }
 
-.dc-takeaways-hint {
+.dc-points-hint {
   font-size: 11.5px;
 }
 
-.dc-takeaways-hint kbd {
+.dc-points-hint kbd {
   padding: 1px 4px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-xs);
   font-size: 10.5px;
 }
 
-.dc-takeaways-more {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dc-text-muted);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.dc-takeaways-more:hover,
-.dc-takeaways-more:focus-visible {
-  color: var(--dc-text);
-}
-
-.dc-takeaways-more svg {
-  width: 11px;
-  height: 11px;
-}
-
-.dc-takeaways-section + .dc-takeaways-section {
-  margin-top: 14px;
-}
-
-.dc-takeaways-section-title {
-  margin: 0 0 4px;
-  color: var(--dc-text-faint);
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.07em;
-}
-
-.dc-takeaways-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dc-text);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.45;
-  text-align: left;
-}
-
-button.dc-takeaways-note {
-  cursor: pointer;
-}
-
-button.dc-takeaways-note:hover .dc-takeaways-note-text,
-button.dc-takeaways-note:focus-visible .dc-takeaways-note-text {
-  text-decoration: underline;
-  text-decoration-color: var(--dc-border-strong);
-  text-underline-offset: 2px;
-}
-
-/* The leading mark carries the note's own accent, so the readout is visibly the same material as
-   the notes sitting on the canvas — green for a decision, blue for a question. */
-.dc-takeaways-glyph {
-  flex: none;
-  width: 13px;
-  color: var(--dc-text-faint);
-  font-size: 12px;
-  text-align: center;
-}
-
-.dc-takeaways-row[data-kind='decision'] .dc-takeaways-glyph {
+.dc-points-row[data-kind='decision'] .dc-points-glyph {
   color: var(--dc-accent-green-chip);
 }
 
-.dc-takeaways-row[data-kind='question'] .dc-takeaways-glyph {
+.dc-points-row[data-kind='question'] .dc-points-glyph {
   color: var(--dc-accent-blue-chip);
-}
-
-.dc-takeaways-note-text {
-  flex: 1;
-  min-width: 0;
-}
-
-/* One narrow-screen rule, the same move the presentation callout already makes below 560px:
-   stop being a corner panel and take the width, rather than covering the drawing. */
-@media (max-width: 560px) {
-  .dc-takeaways,
-  .dc-takeaways[data-mode='line'] {
-    right: 0;
-    left: 0;
-    width: auto;
-    border-right: 0;
-    border-left: 0;
-    border-radius: 0;
-  }
-}
-
-/* The status bar's own count. Same muted, all-small-caps, click-to-open treatment as the level
-   chip beside it — and absent entirely when there is nothing to count. */
-button.dc-status-takeaways {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dc-text-muted);
-  font: inherit;
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-
-button.dc-status-takeaways:hover,
-button.dc-status-takeaways:focus-visible {
-  color: var(--dc-text);
-}
-
-.dc-status-takeaways-glyph {
-  font-size: 11px;
-  opacity: 0.8;
-}
-
-/*
- * The arrival nudge: a word above the chip, with a tail pointing down at it.
- *
- * Anchored to the chip's own slot rather than to the corner of the screen, so it keeps pointing at
- * the right thing as the level chip and the element counts come and go beside it.
- */
-.dc-status-takeaways-slot {
-  position: relative;
-  display: inline-flex;
-}
-
-.dc-takeaways-nudge {
-  position: absolute;
-  z-index: var(--dc-z-popover);
-  right: 0;
-  bottom: calc(100% + 9px);
-  padding: 6px 10px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-base);
-  background: var(--dc-surface-raised);
-  box-shadow: var(--dc-shadow-panel);
-  color: var(--dc-text);
-  font: inherit;
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-  /* Rises the short distance it will later fall back down. */
-  animation: dc-nudge-in 200ms var(--dc-ease-out);
-}
-
-.dc-takeaways-nudge:hover,
-.dc-takeaways-nudge:focus-visible {
-  border-color: var(--dc-border-strong);
-}
-
-/*
- * The tail. A rotated square with two of its sides hidden by the bubble sitting on top of it —
- * the borders line up because it carries the same border and background as the bubble does.
- */
-.dc-takeaways-nudge-tail {
-  position: absolute;
-  right: 12px;
-  bottom: -4px;
-  width: 7px;
-  height: 7px;
-  border-right: 1px solid var(--dc-border);
-  border-bottom: 1px solid var(--dc-border);
-  background: var(--dc-surface-raised);
-  transform: rotate(45deg);
-}
-
-.dc-takeaways-nudge:hover .dc-takeaways-nudge-tail,
-.dc-takeaways-nudge:focus-visible .dc-takeaways-nudge-tail {
-  border-color: var(--dc-border-strong);
-}
-
-/* Folds down into the chip it was pointing at, rather than fading where it stands: the movement
-   is the only thing that says where the count went. */
-.dc-takeaways-nudge[data-closing] {
-  animation: dc-nudge-out 200ms var(--dc-ease-in-out) forwards;
-  pointer-events: none;
-}
-
-@keyframes dc-nudge-in {
-  from {
-    transform: translateY(-5px);
-    opacity: 0;
-  }
-}
-
-@keyframes dc-nudge-out {
-  to {
-    transform: translateY(9px) scale(0.86);
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dc-takeaways-nudge {
-    animation: none;
-  }
-
-  /* The exit still has to end invisible: without the animation nothing else hides it during the
-     unmount delay. */
-  .dc-takeaways-nudge[data-closing] {
-    animation: none;
-    opacity: 0;
-  }
-}
-
-/* One soft pulse as the nudge folds into it — the end of a single movement, not an
-   attention-getter, so it brightens and returns rather than flashing a colour. */
-button.dc-status-takeaways[data-arrived] {
-  animation: dc-takeaways-received 600ms var(--dc-ease-out);
-}
-
-@keyframes dc-takeaways-received {
-  0% {
-    color: var(--dc-text-muted);
-  }
-
-  30% {
-    color: var(--dc-text);
-    transform: scale(1.08);
-  }
-
-  100% {
-    color: var(--dc-text-muted);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  button.dc-status-takeaways[data-arrived] {
-    animation: none;
-  }
 }
 
 /* ------------------------------------------------------------ open points -- */
 
 /* The status bar's count of what is still open — the same all-small-caps, click-to-open treatment as
-   the Takeaways chip beside it, and gone entirely when the canvas has never had a point. */
+   the level chip beside it, and gone entirely when the canvas has never had a point. */
 button.dc-status-open-points {
   display: inline-flex;
   align-items: center;
@@ -6718,7 +6350,7 @@ button.dc-status-open-points[data-none] .dc-status-open-points-glyph {
   border-color: var(--dc-text-faint);
 }
 
-/* The overview reuses the Takeaways surface (`.dc-takeaways`); only its rows differ. */
+/* The overview's rows, on the panel surface above (`.dc-points`). */
 .dc-open-points-row {
   padding: 5px 0;
 }
@@ -6786,7 +6418,7 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
   letter-spacing: 0.06em;
 }
 
-.dc-takeaways-row[data-done] .dc-open-points-kind {
+.dc-points-row[data-done] .dc-open-points-kind {
   color: var(--dc-text-faint);
 }
 

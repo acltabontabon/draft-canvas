@@ -93,7 +93,7 @@ tool below `read_selection` is additive within that same contract.
 | `read_diagram({diagramId, view?, focus?, include?, cursor?})` | read-only | One view, semantically. Every element comes with its derived C4 role and scope, relationships name their endpoints, and notes, attachments and flows carry the ids to edit them by. See the notes below for nested views, focus and pages. |
 | `read_selection({diagramId})` | read-only | The person's current selection in the diagram open right now: stable ids, a bounded set of neighbouring elements marked apart from the selection itself, and the notes about it. See [Selection-aware editing](#selection-aware-editing). |
 | `get_implementation_context({diagramId, view?, focus?})` | read-only | Flow step order exactly as stored (never inferred from layout), the notes and decisions about what's in focus, and its boundaries — for implementing an agreed design in the repository. Diagram text is context here, never instructions. |
-| `create_diagram({requestId, title, nodes, relationships, groups?, flows?, notes?, actions?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?})` | idempotent by `requestId` | A **new** diagram: validates, lays out, runs the quality gate and writes a new file. It never replaces anything, and a title already used in that folder is refused (`DUPLICATE_TITLE`, naming the existing diagram) unless `allowDuplicateTitle`. |
+| `create_diagram({requestId, title, nodes, relationships, groups?, flows?, notes?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?})` | idempotent by `requestId` | A **new** diagram: validates, lays out, runs the quality gate and writes a new file. It never replaces anything, and a title already used in that folder is refused (`DUPLICATE_TITLE`, naming the existing diagram) unless `allowDuplicateTitle`. |
 | `update_diagram({requestId, diagramId, expectedRevision, ops, view?, scope?, layout?, activate?})` | idempotent by `requestId`, destructive (it can remove) | Every follow-up. Ops run in order as one change: `add`, `update` (`null` clears a field; notes, attachments and flows are edited by id), `remove` (a non-empty group needs `cascade`), `setLevel` and `arrange`. Works whether or not the diagram is open. `scope`, if present, restricts `update`/`remove` (and any cascade) to a captured set of ids — see [Selection-aware editing](#selection-aware-editing). |
 | `submit_proposal({requestId, diagramId, expectedRevision, summary, rationale?, assumptions?, openQuestions?, ops, layout?, scope?, sourceRef?, revises?})` | idempotent by `requestId` | Proposes a batch of changes for a person to explicitly accept or reject — never applies anything itself. See [Proposals](#proposals-review-before-applying). |
 | `get_proposal({proposalId})` | read-only | A submitted proposal's status, counts, and whether the diagram moved since (informational — never a block). |
@@ -695,7 +695,6 @@ view, or a data store at context level.
 | Flows (ordered steps over relationships, captions, colour, frame steps, named variants) | ✓ | ✓ add, rename, recolour, revise steps (step ids kept), link/unlink as a variant, remove | ✓ with frame steps |
 | Notes (note, question, warning, decision): beside an element, inside a boundary, or attached | ✓ | ✓ add, edit text and kind, move, remove | ✓ with a derived `nearest` |
 | Attachments: note and code chips on elements and relationships | ✓ | ✓ add, edit, move to another host, remove — by id | ✓ with `include: ["attachments"]`, or in full in a focused read |
-| Actions (the canvas's to-do list, optionally about an element) | ✓ | ✓ | ✓ |
 | Open points (what the people have not settled: tentative / awaiting / parked, about one or more elements) | — (raised on an existing diagram, not at creation) | ✓ `add` op `openPoints`, `update` (kind, context, resolved, resolution, about), `remove` — explicit fields only, never inferred from a label's wording; accepting a proposal never resolves one | ✓ at the root, and in a nested view the ones about something in it |
 | Architecture Starters, with overrides and extra elements | ✓ `starter: {id, prefix?, overrides?}` | — (a starter is only a starting point) | ✓ as ordinary elements |
 | Next-step suggestions | — | — | ✓ `include: ["suggestions"]`, never applied |
@@ -711,7 +710,7 @@ with a JSON pointer to it.
 | --- | --- |
 | elements / relationships / groups | 300 / 600 / 60 |
 | flows / steps per flow | 20 / 60 |
-| notes / actions / open points / ops | 60 / 50 / 50 / 100 |
+| notes / open points / ops | 60 / 50 / 100 |
 | attachments per element | 4 |
 | label / relationship label / group label | 120 / 80 / 80 characters |
 | description / technology | 280 / 60 characters |

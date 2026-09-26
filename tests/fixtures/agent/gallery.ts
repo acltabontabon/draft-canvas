@@ -374,7 +374,7 @@ export const GALLERY: GalleryCase[] = [
   },
   {
     id: '15-feature-rich-edit',
-    title: 'Edit that preserves notes, actions, code and flows',
+    title: 'Edit that preserves notes, code and flows',
     kind: 'update',
     base: {
       title: 'Payments review',
@@ -389,7 +389,6 @@ export const GALLERY: GalleryCase[] = [
         { id: 'q', text: 'Do we need exactly-once posting, or is idempotency enough?', kind: 'question', near: 'worker' },
         { id: 'dec', text: 'Settle in batches of 500.', kind: 'decision', near: 'db' },
       ],
-      actions: [{ id: 'act', text: 'Confirm batch size with finance', about: 'db' }],
     },
     update: {
       ops: [

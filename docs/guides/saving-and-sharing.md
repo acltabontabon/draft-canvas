@@ -87,9 +87,6 @@ Files are named from the diagram's title: `Payment Service!` becomes `payment-se
 Exporting happens in your browser; the file goes to your browser's normal download flow and nothing
 is uploaded.
 
-The list of decisions, open questions and actions collected on the canvas can be copied as
-Markdown from the **Takeaways** panel (**Copy takeaways**). It isn't part of the Export dialog.
-
 ## Import a file
 
 In the Library, choose **Import** and pick a `.draftcanvas`, `.json` or `.dcenc` file. (On a first

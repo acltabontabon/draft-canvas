@@ -110,12 +110,8 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
-    title: 'Takeaways',
-    rows: [
-      { commandId: 'capture-action', label: 'Capture an action — works while presenting too' },
-      { keys: ['Shift', 'Enter'], label: 'Capture it and keep the line open for the next one' },
-      { keys: ['Backspace'], label: 'On an empty line: forget the shape it came from' },
-    ],
+    title: 'Open points',
+    rows: [{ commandId: 'open-point-add', label: 'Raise an open point about the selection — the list of what is still open is in the status bar' }],
   },
   {
     title: 'Flows & presentation',

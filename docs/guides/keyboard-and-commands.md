@@ -105,7 +105,8 @@ you used lately, then what applies to the current selection, then everything els
 - **Create**: **Add Service**, **Add Queue** and the rest, each showing its letter.
 - **Architectures**, **Data Architectures** and **Patterns**: starters that fill a blank canvas
   with a composed, editable architecture (Monolith, Microservices, CQRS, Saga, Outbox and others).
-- **Flows** and **Takeaways**: start a presentation, add a flow, capture an action.
+- **Flows** and **Open points**: start a presentation, add a flow, raise a point about the selection,
+  open the list of what is still unsettled.
 - **View** and **Canvas**: fit and zoom, **View level…**, **Tidy connectors**, **Export…**,
   **Canvas settings…**, **Keyboard shortcuts**, and **Open Learn Draft Canvas**.
 

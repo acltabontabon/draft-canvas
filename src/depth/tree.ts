@@ -166,7 +166,7 @@ export function viewOf(file: DraftDocument, path: DepthPath): DraftDocument | un
 /**
  * The file that results from `view` being the room at `path`.
  *
- * The room's graph is written into the owner chain; `metadata`, `settings`, `actions` and
+ * The room's graph is written into the owner chain; `metadata`, `settings` and
  * `openPoints` travel back to the root, since a rename, a grid change, an action captured or a point
  * raised while inside belongs to the whole file. Returns the same file object when nothing actually changed, so the store's
  * "this operation was a no-op" identity check keeps working at any depth, and refuses (returning
@@ -185,7 +185,6 @@ export function embed(file: DraftDocument, path: DepthPath, view: DraftDocument)
   const shared =
     view.metadata !== file.metadata ||
     view.settings !== file.settings ||
-    view.actions !== file.actions ||
     view.openPoints !== file.openPoints;
   if (nodes === file.nodes && !shared) return file;
 
@@ -194,7 +193,6 @@ export function embed(file: DraftDocument, path: DepthPath, view: DraftDocument)
     nodes,
     metadata: view.metadata,
     settings: view.settings,
-    actions: view.actions,
     openPoints: view.openPoints,
   };
   // The view this file was just built from is the view it yields — recording that here keeps

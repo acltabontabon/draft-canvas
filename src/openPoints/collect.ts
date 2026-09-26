@@ -1,20 +1,20 @@
 /**
  * Open points read back off the file for review — the overview's rows, the focus set, the copy.
  *
- * A derivation over `DraftDocument.openPoints` and the elements it names, resolved through the same
- * file index Takeaways uses (`takeaways/collect.ts`), so a point about a connector two rooms down is
- * called what the rest of the product calls it and can be walked to the same way. Framework-free,
- * like everything beside `document/`.
+ * A derivation over `DraftDocument.openPoints` and the elements it names, resolved through the file
+ * index in `locate.ts`, so a point about a connector two rooms down is called what the rest of the
+ * product calls it and can be walked to the same way. Framework-free, like everything beside
+ * `document/`.
  */
 
 import { OPEN_POINT_LABELS, pointsOf, unresolvedIndex } from '../document/openPoints';
 import type { DraftDocument, OpenPoint } from '../document/types';
-import { indexFile, resolveTarget, type TakeawayTarget } from '../takeaways/collect';
+import { indexFile, resolveTarget, type ElementTarget } from './locate';
 
 export interface OpenPointRow {
   point: OpenPoint;
   /** Every element the point is about that still resolves, in the point's own order. */
-  targets: TakeawayTarget[];
+  targets: ElementTarget[];
 }
 
 export interface OpenPointsOverview {
@@ -30,7 +30,7 @@ export function openPointsOverview(file: DraftDocument): OpenPointsOverview {
   for (const point of pointsOf(file)) {
     const targets = point.targets
       .map((target) => resolveTarget(index, target.kind, target.id))
-      .filter((target): target is TakeawayTarget => target !== undefined);
+      .filter((target): target is ElementTarget => target !== undefined);
     (point.resolved ? resolved : open).push({ point, targets });
   }
   return { open, resolved };

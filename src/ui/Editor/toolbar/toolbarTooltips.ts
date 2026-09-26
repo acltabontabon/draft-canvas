@@ -1,7 +1,6 @@
 import type { PrimitiveTooltipContent } from '../../../canvas/presets';
 import { shortcutFor } from '../../../commands/shortcutLookup';
 import { MOD_SYMBOL } from '../../../lib/platform';
-import { CAPTURE_ACTION_KEY } from '../../../takeaways/capture';
 
 /**
  * Tooltip copy for the toolbar's *actions* — what you do to the workspace, as opposed to the
@@ -51,14 +50,6 @@ const SPECS = {
     usageHint: 'With a flow active, reveals it one step at a time.',
   },
   export: { title: 'Export', commandId: 'export' },
-  takeaways: {
-    title: 'Takeaways',
-    // Offered only once the canvas has something to show, so the registry entry it would read
-    // isn't always there — and the key opens the capture line, not this.
-    literalShortcut: CAPTURE_ACTION_KEY,
-    description: 'What the discussion produced: decisions, open questions, and what to do next.',
-    usageHint: 'Decisions and questions are the notes already on the canvas — nothing to write twice.',
-  },
   settings: { title: 'Canvas settings', commandId: 'settings' },
   learn: { title: 'Learn Draft Canvas', commandId: 'open-learn' },
   shortcuts: { title: 'Keyboard shortcuts', commandId: 'shortcuts' },

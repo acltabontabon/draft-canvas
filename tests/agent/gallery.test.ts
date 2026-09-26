@@ -61,7 +61,6 @@ describe('layout gallery', () => {
           expect([now?.x, now?.y], node.id).toEqual([node.x, node.y]);
         }
         expect(doc.flows.map((f) => f.id)).toEqual(expect.arrayContaining(before.flows.map((f) => f.id)));
-        expect(doc.actions).toEqual(before.actions);
         // A note is never changed by an edit that didn't name it (an arrange may move it, with its shape).
         for (const note of before.nodes.filter((n) => n.type === 'note')) {
           const now = doc.nodes.find((n) => n.id === note.id);

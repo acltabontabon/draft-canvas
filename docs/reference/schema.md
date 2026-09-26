@@ -35,7 +35,8 @@ v(n+1)-shaped one:
 | v12 → v13 | `migrateAddActions` | Structural no-op — a v12 file simply has no canvas-level `actions`, which is what absent already means. Root-only, so deliberately *not* wrapped in `everyRoom`. The version still moves for v12's own reason: an older build's whitelist would strip the actions out of a v13 file and (in VS Code) write the stripped version back. |
 | v13 → v14 | `migrateProjectsToWrites` | The `projects` relationship is gone — a projection's write into a read store is a write — so any `semantic: 'projects'` becomes `'writes'`, keeping whether it was inferred or chosen and any label. |
 | v14 → v15 | `migrateAddC4Text` | Structural no-op — a v14 node simply has no `description` or `technology` (C4 text, kept only on services, data stores, queues, actors and components). The version still moves so an older build refuses a v15 file by name instead of its whitelist silently dropping the text, and (in VS Code) writing the stripped file back. |
-| v15 → v16 | `migrateAddOpenPoints` | Structural no-op — a v15 file simply has no canvas-level `openPoints` (what the discussion has not settled yet, attached to the shapes and connectors it concerns). Root-only like `actions`, so not wrapped in `everyRoom`. The version moves for the same reason v13's did: an older build's whitelist would strip the points and, in VS Code, write the stripped file back. |
+| v15 → v16 | `migrateAddOpenPoints` | Structural no-op — a v15 file simply has no canvas-level `openPoints` (what the discussion has not settled yet, attached to the shapes and connectors it concerns). Root-only, so not wrapped in `everyRoom`. The version moves for the same reason v13's did: an older build's whitelist would strip the points and, in VS Code, write the stripped file back. |
+| v16 → v17 | `migrateActionsToNotes` | The canvas-level `actions` list (v13–v16, the Takeaways feature) is gone. Each action becomes a note: one anchored to a shape or connector that still exists — at the root or inside any room — becomes a note attachment on it (`Action: …` / `Done: …`); the rest are gathered into one `Actions` note node below the diagram, one ☐/☑ line each, split only past the note text limit. Root-only entry, so not wrapped in `everyRoom`, but it walks rooms itself to resolve anchors. Fresh ids are minted for everything it creates. |
 
 Several of these are deliberate **structural no-ops**: versions where the on-disk shape didn't
 actually need to change, but an entry is still required. `migrateToCurrent` walks the chain from a
@@ -79,15 +80,14 @@ assume is well-formed. Its policy is **repair, don't reject**, applied only afte
   as a repair the caller can show the user.
 - Dangling references (an edge whose source/target no longer exists, a `parentId` pointing at a
   boundary that isn't there, a flow step referencing a missing edge) are dropped rather than kept
-  as landmines for later code to trip over. An action's `anchor` is the one of these resolved
-  *after* every room is in — ids are unique file-wide, so a valid anchor may point into a room
-  that hasn't been validated yet — and only the anchor is dropped, never the action.
+  as landmines for later code to trip over. An open point's `targets` are resolved *after* every
+  room is in — ids are unique file-wide, so a valid target may point into a room that hasn't been
+  validated yet.
 
-`actions` and `openPoints` are the two collections read at the root only. A room carrying either is
-ignored rather than merged upward: a room is a room, but the meeting is the file. An open point's
-`targets` are resolved after every room is in, like an action's anchor — but unlike an anchor, an
-attachment to something gone is dropped, and a point left with no target is dropped with it: a marker
-on nothing is a lie the canvas could never draw. A point shared across several elements keeps the
+`openPoints` is read at the root only. A room carrying one is ignored rather than merged upward: a
+room is a room, but the meeting is the file. An open point's `targets` are resolved after every room
+is in; an attachment to something gone is dropped, and a point left with no target is dropped with
+it: a marker on nothing is a lie the canvas could never draw. A point shared across several elements keeps the
 ones that remain.
 
 The same `parseDocument()` funnel backs every entry point that reads a document from outside the

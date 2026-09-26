@@ -36,7 +36,6 @@ export const AGENT_LIMITS = {
   flowsPerRequest: 20,
   stepsPerFlow: 60,
   notesPerRequest: 60,
-  actionsPerRequest: 50,
   openPointsPerRequest: 50,
   openPointContextLength: LIMITS.maxOpenPointContextLength,
   openPointTargets: LIMITS.maxOpenPointTargets,
@@ -50,7 +49,6 @@ export const AGENT_LIMITS = {
   groupLabelLength: 80,
   noteLength: 1_000,
   codeLength: 4_000,
-  actionLength: LIMITS.maxActionLength,
   flowTitleLength: LIMITS.maxFlowTitleLength,
   captionLength: 120,
   insideDepth: LIMITS.maxInsideDepth,
@@ -126,13 +124,6 @@ export interface NoteSpec {
   attachTo?: { kind: 'node' | 'edge'; id: string };
 }
 
-export interface ActionSpec {
-  id?: string;
-  text: string;
-  done?: boolean;
-  about?: string;
-}
-
 /** An open point an agent raises: its kind, what it is about (one or more ids), and optional context. */
 export interface OpenPointSpec {
   id?: string;
@@ -183,7 +174,6 @@ export interface StarterSpec {
 export interface CreateSpec extends RoomSpec {
   title: string;
   starter?: StarterSpec;
-  actions: ActionSpec[];
   layout: LayoutSpec;
 }
 
@@ -542,22 +532,6 @@ export function readFlow(r: Reader, item: Json, at: string, taken: Set<string> |
   return { id, title, ...(color ? { color } : {}), ...(variantOf ? { variantOf } : {}), steps };
 }
 
-export function readActions(r: Reader, value: unknown, path: string, taken: Set<string>, anchorable: Set<string>): ActionSpec[] {
-  const out: ActionSpec[] = [];
-  r.array(value, path, AGENT_LIMITS.actionsPerRequest).forEach((a, i) => {
-    const at = `${path}/${i}`;
-    const item = typeof a === 'string' ? { text: a } : r.object(a, at);
-    if (!item) return;
-    const id = item.id === undefined ? undefined : r.newId(item.id, `${at}/id`, taken);
-    const text = r.text(item.text, `${at}/text`, AGENT_LIMITS.actionLength, { required: true, singleLine: true });
-    const done = r.bool(item.done, `${at}/done`);
-    const about = typeof item.about === 'string' ? item.about : undefined;
-    if (about !== undefined && !anchorable.has(about)) r.problems.add('INVALID_REFERENCE', `${at}/about`, `no element or relationship "${about}"`);
-    if (text) out.push({ ...(id ? { id } : {}), text, ...(done ? { done } : {}), ...(about && anchorable.has(about) ? { about } : {}) });
-  });
-  return out;
-}
-
 /**
  * Open points an `add` op raises. `about` is required and must name elements or relationships in the
  * view (existing or added in the same op) — a point about nothing is refused, and an agent never
@@ -614,13 +588,6 @@ function readViewport(r: Reader, value: unknown, path: string): [number, number]
   return [value[0] as number, value[1] as number];
 }
 
-function allIds(room: RoomSpec, into: Set<string>) {
-  for (const n of room.nodes) {
-    into.add(n.id);
-    if (n.inside) allIds(n.inside, into);
-  }
-  for (const e of room.relationships) into.add(e.id);
-}
 
 /** A whole `create_diagram` request. `taken` starts empty: a new file has no ids yet. */
 export function readCreate(raw: unknown): CreateSpec {
@@ -665,13 +632,10 @@ export function readCreate(raw: unknown): CreateSpec {
     for (const id of [...ids.nodes.map((n) => n.id), ...ids.edges, ...ids.flows]) taken.add(id);
   }
   const room = readRoom(r, body, '', { taken, depth: 0, fallbackType, ...(existing ? { existing } : {}) });
-  const anchorable = new Set<string>();
-  allIds(room, anchorable);
-  const actions = readActions(r, body.actions, '/actions', taken, anchorable);
   const layout = readLayout(r, body.layout, '/layout', new Set(room.flows.map((f) => f.id)));
   if (!starter && room.nodes.length === 0) problems.add('INVALID_INPUT', '/nodes', 'a diagram needs at least one element (or a starter)');
   problems.throwIfAny();
-  return { ...room, title, ...(starter ? { starter } : {}), actions, layout };
+  return { ...room, title, ...(starter ? { starter } : {}), layout };
 }
 
 export function requireObject(raw: unknown): Json {

@@ -9,7 +9,6 @@ import {
   nodeCommands,
   openPointCommands,
   pasteAtCommand,
-  takeawaysCommands,
 } from './registry';
 import type { Command, CommandContext } from './types';
 import type { ContextMenuTarget } from '../store/uiStore';
@@ -88,7 +87,7 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
   const lastGroup = outgoing.length === 1 ? ['spotlight', 'flow-start-here'] : ['spotlight'];
   return grouped([
     pick(commands, ['edit-text', 'look-inside']),
-    pick(commands, ['attach-note', 'attach-code', 'capture-action', 'open-point-add']),
+    pick(commands, ['attach-note', 'attach-code', 'open-point-add']),
     pick(commands, ['add-consumer', 'add-dead-letter-queue', 'remove-dead-letter-queue', 'add-subscriber']),
     pick(commands, ['duplicate', 'copy', 'cut']),
     pick(commands, ['bring-to-front', 'bring-forward', 'send-backward', 'send-to-back']),
@@ -105,7 +104,7 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
 function boundaryMenu(commands: Command[]): ContextMenuEntry[] {
   return grouped([
     pick(commands, ['edit-text', 'select-contents']),
-    pick(commands, ['attach-note', 'attach-code', 'capture-action', 'open-point-add']),
+    pick(commands, ['attach-note', 'attach-code', 'open-point-add']),
     pick(commands, ['duplicate', 'copy', 'cut']),
     pick(commands, ['bring-to-front', 'bring-forward', 'send-backward', 'send-to-back']),
     pick(commands, ['spotlight']),
@@ -115,10 +114,10 @@ function boundaryMenu(commands: Command[]): ContextMenuEntry[] {
 }
 
 function nodeMenu(ctx: CommandContext, node: DraftNode): ContextMenuEntry[] {
-  // Capture lives in its own builder (it is a canvas-level command, not a node one), so it is
-  // borrowed in here the same way `paneMenu` borrows Select all — one command object, picked into
-  // a second menu, never a second copy of it.
-  const commands = [...nodeCommands(ctx, node), ...pick(takeawaysCommands(ctx), ['capture-action']), ...pick(openPointCommands(ctx), ['open-point-add'])];
+  // Raising a point lives in its own builder (it is a canvas-level command, not a node one), so it
+  // is borrowed in here the same way `paneMenu` borrows Select all — one command object, picked
+  // into a second menu, never a second copy of it.
+  const commands = [...nodeCommands(ctx, node), ...pick(openPointCommands(ctx), ['open-point-add'])];
   if (node.type === 'group') return boundaryMenu(commands);
   if (categoryOf(node) === 'junction') return junctionMenu(commands);
   return regularNodeMenu(ctx, node, commands);
@@ -138,7 +137,7 @@ function edgeMenu(commands: Command[]): ContextMenuEntry[] {
     // "Convert to junction" only exists while this connector is actually
     // drawn through a shared trunk.
     pick(commands, ['edge-route-direct', 'edge-convert-to-junction']),
-    pick(commands, ['attach-note', 'attach-code', 'capture-action', 'open-point-add']),
+    pick(commands, ['attach-note', 'attach-code', 'open-point-add']),
     pick(commands, ['spotlight']),
     pick(commands, ['delete']),
   ]);
@@ -190,7 +189,7 @@ export function contextMenuCommandsFor(
     case 'edge': {
       const edge = ctx.editor.document.edges.find((entry) => entry.id === target.id);
       return edge
-        ? edgeMenu([...edgeCommands(ctx, edge), ...pick(takeawaysCommands(ctx), ['capture-action']), ...pick(openPointCommands(ctx), ['open-point-add'])])
+        ? edgeMenu([...edgeCommands(ctx, edge), ...pick(openPointCommands(ctx), ['open-point-add'])])
         : [];
     }
     case 'selection': {
