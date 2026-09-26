@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
+import { CURRENT_VERSION } from '../src/document/types.ts';
 
 /**
  * Everything a discussion leaves on a canvas has to survive being saved, reopened and moved.
@@ -180,7 +181,8 @@ test('a desktop-created v15 diagram survives web editing and export', async ({ p
     useEditorStore.getState().setNodeC4Text('ordersDb', { technology: 'PostgreSQL 16' });
   });
   const exported = await exportDocument(page);
-  expect(exported.version).toBe(15);
+  // The v15 file is migrated on open, so the export carries whatever the current schema is.
+  expect(exported.version).toBe(CURRENT_VERSION);
   const nodes = exported.nodes as Array<Json & { id: string; description?: string; technology?: string; parentId?: string }>;
   for (const node of original.nodes) {
     const back = nodes.find((n) => n.id === node.id);

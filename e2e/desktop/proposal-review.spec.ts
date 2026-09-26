@@ -284,7 +284,8 @@ test('a proposal stuck "accepting" whose id merely collides with something unrel
   await expect(panel.getByRole('button', { name: 'Mark as applied' })).toHaveCount(0);
   await expect(panel).toContainText('Recovering from an interrupted accept');
   await expect(panel.getByRole('button', { name: 'Dismiss' })).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Reject' })).toBeVisible();
+  // `Accepting → Rejected` is refused by the backend (`resolve_outcome`), so Reject is not offered.
+  await expect(panel.getByRole('button', { name: 'Reject' })).toHaveCount(0);
   await expect(panel.getByRole('button', { name: 'Accept' })).toBeDisabled();
 });
 
