@@ -11,7 +11,43 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+A smaller Draft Canvas. This release removes what was not helping a developer draw and explain a
+system, keeps every diagram readable, and leaves two products: the web editor and the desktop app.
+
 ### Shared
+
+#### Removed
+
+- **Takeaways.** The actions list, its capture line, the status-bar chip and the Markdown copy are
+  gone. Nothing written down is lost: on opening, an action anchored to a shape or connector becomes a
+  note attached to it (`Action: …`, `Done: …`), and the rest gather into one **Actions** note below the
+  diagram. **Open points** are now the one way to mark what a discussion has not settled — press `I`
+  with something selected, or right-click and choose **Add open point…**. Document format v17. <!-- highlight -->
+- **The Learn drawer.** The in-app handbook of animated recipes is replaced by the documentation:
+  two new guides ([shapes, connectors and boundaries](docs/guides/shapes-and-connectors.md) and
+  [flows and presenting](docs/guides/flows-and-presentation.md)) join the existing ones, and the
+  toolbar's More menu has **Documentation**. The shortcut sheet (`?`) stays the in-app reference.
+- **GIF export.** The animated export of a flow is gone; present the flow live or record the screen.
+  PNG, SVG, `.draftcanvas`, `.dcenc` and the Mermaid and PlantUML sequence exports are unchanged.
+- **Draft Canvas for VS Code.** The extension is retired; 0.2.0 is its last release and only says so.
+  `.draftcanvas` files open as they are in the desktop app or, through **Import**, in the web editor.
+  [How to move a diagram](docs/guides/vscode-retired.md).
+
+#### Changed
+
+- **Diagrams in the browser are stored as plain records.** Versions 1.0 to 1.11 encrypted each stored
+  diagram with a key kept in the same browser profile, which protected the bytes against a copy made
+  without that key and against little else — while saving needed HTTPS and losing only the key lost
+  every diagram. Diagrams saved by those versions still open and are saved plain the next time you
+  edit them; nothing is rewritten on upgrade. The passphrase-protected `.dcenc` export is unchanged
+  and is the way to protect a diagram at rest. [What changed and why](SECURITY.md#browser-storage). <!-- highlight -->
+- **Five starters up front.** Monolith, Microservices, Event-Driven, Hexagonal and CQRS are offered
+  wherever you start a diagram; the other eight stay in the catalog, by name in the command palette,
+  and are listed in [Architecture examples](docs/guides/examples.md). The Browse-all dialog, the
+  category index and the home screens' decorations (the connector to the starters, the daily line,
+  the arrival animations) are gone. Diagrams already drawn from any starter are untouched.
+- **The command palette says "No matching commands."** when nothing matches, instead of handing the
+  question to the handbook.
 
 #### Added
 
@@ -62,6 +98,14 @@ the release notes and the in-app What's New are generated from here. See
   request/response connector the reply lights the caller as it lands.
 
 ### Desktop
+
+#### Changed
+
+- **The tray menu is four lines.** Show Draft Canvas, whether agent access is on and how many agents
+  are connected, Settings, Quit. The panel of drafts and recent files, the icon's unsaved dot and the
+  new/open/project shortcuts are gone; Home has all of that one click away. Closing the window still
+  hides it, so a connected agent keeps its app.
+- Home's **More ways in** gains **Connect an agent…**, which opens Settings → AI agents.
 
 #### Added
 

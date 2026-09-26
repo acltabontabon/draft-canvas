@@ -109,7 +109,7 @@
         <a href="#present">Present</a>
         <a href="#depth">Depth</a>
         <a href="#export">Export</a>
-        <a href="#agents" class="nav-rev">Agents<span aria-label=", in beta">&beta;</span></a>
+        <a href="#agents" class="nav-rev">Agents</a>
         <a href="#get">Get it</a>
       </nav>
       <a class="button button-primary masthead-cta" href="./editor/">Open editor</a>
@@ -125,8 +125,7 @@
           <strong id="moved-title">The editor moved. Your diagrams didn't.</strong>
           It opens at <code>/draft-canvas/editor/</code> now — everything you have drawn is still
           saved in this browser, exactly where it was. Nothing was moved, reset, or needs
-          re-importing. It also runs as a <a href="#desktop">desktop app</a> and a
-          <a href="#vscode">VS&nbsp;Code extension</a>.
+          re-importing. It also runs as a <a href="#desktop">desktop app</a>.
         </p>
         <a class="button button-primary" href="./editor/">Open your diagrams</a>
         <button class="moved-dismiss" id="moved-dismiss" type="button" aria-label="Dismiss this notice">
@@ -142,8 +141,8 @@
       <section class="hero" id="top">
         <div class="hero-words">
           <a class="rev-flag reveal" href="#agents">
-            <span class="rev-flag-tag"><svg viewBox="0 0 14 12" width="12" height="11" aria-hidden="true" focusable="false"><path d="M7 1l6 10H1z" /></svg>1.12 beta</span>
-            <span class="rev-flag-text">Your coding agent can draw now</span>
+            <span class="rev-flag-tag"><svg viewBox="0 0 14 12" width="12" height="11" aria-hidden="true" focusable="false"><path d="M7 1l6 10H1z" /></svg>Desktop</span>
+            <span class="rev-flag-text">Your coding agent can draw, in the desktop app</span>
             <svg class="rev-flag-arrow" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5" /></svg>
           </a>
           <p class="overline reveal">Architecture at meeting speed</p>
@@ -317,7 +316,7 @@
       <section class="titleblock reveal" aria-label="What Draft Canvas is for">
         <div><p class="overline">Who</p><p>Developers explaining software to other people.</p></div>
         <div><p class="overline">When</p><p>The meeting that suddenly needs a diagram.</p></div>
-        <div><p class="overline">Where</p><p>A browser tab, a desktop window, or a VS Code editor.</p></div>
+        <div><p class="overline">Where</p><p>A browser tab, or a desktop window.</p></div>
       </section>
 
       <!-- ================================================================
@@ -746,11 +745,10 @@
           </div>
 
           <ul class="formats reveal">
-            <li><span class="fmt">.draftcanvas</span><span class="fmt-d">Editable JSON. Byte-stable, diffable, what the desktop app and VS Code save.</span></li>
+            <li><span class="fmt">.draftcanvas</span><span class="fmt-d">Editable JSON. Byte-stable, diffable, what the desktop app saves.</span></li>
             <li><span class="fmt">.dcenc</span><span class="fmt-d">The same file behind a passphrase you choose. PBKDF2, 600,000 iterations, fresh salt.</span></li>
             <li><span class="fmt">.png</span><span class="fmt-d">Rendered at 2× by default, in the theme you are working in.</span></li>
             <li><span class="fmt">.svg</span><span class="fmt-d">Vector, with the text as text.</span></li>
-            <li><span class="fmt">.gif</span><span class="fmt-d">A flow playing itself, for a chat thread that will not open a link.</span></li>
             <li><span class="fmt">.mmd</span><span class="fmt-d">Mermaid sequence-diagram source, built from a flow.</span></li>
             <li><span class="fmt">.puml</span><span class="fmt-d">The same, as PlantUML.</span></li>
           </ul>
@@ -772,7 +770,7 @@
       </section>
 
       <!-- ================================================================
-           Δ — the revision. AI agents over MCP, in the desktop beta.
+           Δ — the revision. AI agents over MCP, in the desktop app.
 
            Told the way a drawing sheet records a change: the agent's proposal arrives in pencil,
            inside a revision cloud with a delta tag, and is inked only when someone accepts it. That
@@ -787,7 +785,7 @@
       <section class="chapter chapter-rev" id="agents" aria-labelledby="agents-title">
         <header class="slate reveal">
           <span class="numeral numeral-delta" aria-hidden="true">&Delta;</span>
-          <p class="overline">Revision 1.12 &middot; in the desktop beta</p>
+          <p class="overline">Desktop app only</p>
           <h2 id="agents-title">Your agent sketches in pencil. You ink&nbsp;it.</h2>
           <p class="sub">Draft Canvas speaks MCP, so the agent in your editor can draw</p>
         </header>
@@ -1131,20 +1129,17 @@
           </article>
         </div>
 
-        <!-- Points at the beta by name. When 1.12.0 ships, this chapter stops being a preview: drop
-             "in the desktop beta" from the overline, the β from the masthead and the hero flag, and
-             send this button to #desktop like the others. -->
         <div class="rev-cta reveal">
           <p class="rev-cta-actions">
-            <a class="button button-primary button-lg" href="https://github.com/acltabontabon/draft-canvas/releases/tag/desktop-v1.12.0-beta.1">
-              <span>Try the desktop beta</span>
-              <small>1.12.0-beta.1 &middot; macOS and Windows</small>
+            <a class="button button-primary button-lg" href="#desktop">
+              <span>Get the desktop app</span>
+              <small>macOS and Windows</small>
             </a>
             <a class="button button-lg" href="https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/connect-an-ai-agent.md">Connect an agent</a>
           </p>
           <p class="rev-cta-fine">
-            A beta updates itself to the next beta, then to 1.12. The web app and VS Code open what an
-            agent draws, but agents can only reach the desktop app.
+            Optional, and off until you turn it on. The web app opens what an agent draws, but agents can only reach the
+            desktop app. Tested end to end with Claude Code on macOS; Cursor by configuration.
           </p>
         </div>
       </section>
@@ -1197,13 +1192,13 @@
       </section>
 
       <!-- ================================================================
-           THE DOWNLOADS. Three places it runs, and what each one actually does.
+           THE DOWNLOADS. Two places it runs, and what each one actually does.
       ================================================================= -->
       <section class="get" id="get" aria-labelledby="get-title">
         <header class="slate reveal">
           <p class="overline">Free, open source, Apache 2.0</p>
           <h2 id="get-title">Use it where you work</h2>
-          <p class="sub">Three doors into the same editor</p>
+          <p class="sub">Two doors into the same editor</p>
         </header>
 
         <div class="dists">
@@ -1211,9 +1206,8 @@
             <p class="dist-kicker">01 · Browser</p>
             <h3>Open a tab and draw</h3>
             <p>
-              No account, no sign-up. Diagrams are saved in this browser's own storage, each one's
-              contents encrypted with a key that never leaves it, and the page keeps working once it
-              has loaded with the network off.
+              No account, no sign-up. Diagrams are saved in this browser's own storage, on this
+              device, and the page keeps working once it has loaded with the network off.
             </p>
             <p class="dist-act">
               <a class="button button-primary" href="./editor/">Open live editor</a>
@@ -1261,20 +1255,6 @@
               <a href="https://github.com/acltabontabon/draft-canvas/releases">All releases</a>
             </p>
           </article>
-
-          <article class="dist reveal" id="vscode">
-            <p class="dist-kicker">03 · VS Code</p>
-            <h3>Next to the code it describes</h3>
-            <p>
-              Open a <code>.draftcanvas</code> file from your workspace and you are in the editor, in
-              a tab. <kbd>⌘S</kbd> saves back to that same file, so the diagram is reviewed in the
-              pull request as the change it explains.
-            </p>
-            <p class="dist-act">
-              <a class="button" href="https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas">Get the extension</a>
-            </p>
-            <p class="dist-fine">The editor loads in the panel, so it needs a connection.</p>
-          </article>
         </div>
 
         <p class="dist-note">
@@ -1282,22 +1262,32 @@
           time — <a href="https://github.com/acltabontabon/draft-canvas#desktop">the README says how to get past it</a>.
         </p>
 
+        <p class="dist-note">
+          <strong>What&rsquo;s next.</strong> Draft Canvas 2.0 made the product smaller on purpose: web and
+          desktop, drawing and explaining, files and open points. The VS Code extension is
+          <a href="https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/vscode-retired.md">retired</a>;
+          what is being considered after this, and in what order, is written down in
+          <a href="https://github.com/acltabontabon/draft-canvas/blob/main/docs/reference/roadmap.md">the roadmap</a>
+          — as intentions, not promises.
+        </p>
+
         <aside class="local reveal">
           <h3>What &ldquo;local-first&rdquo; means here, exactly</h3>
           <div class="local-grid">
             <p>
-              <strong>In the browser</strong>, diagrams live in IndexedDB. The body of each one — every
-              label, note and snippet — is encrypted with AES-256-GCM before it is written, under a
-              key generated in this browser that no code path can read back out. Its title and shape
-              counts are not encrypted, so the Library can list it.
+              <strong>In the browser</strong>, diagrams live in IndexedDB as plain records, readable by
+              anything that can read this browser profile — the way a file in your home folder is. Earlier
+              versions encrypted them with a key kept in the same profile; those still open, and are saved
+              plain when next edited. For a diagram that must be protected at rest, export it as
+              <code>.dcenc</code>, behind a passphrase only you hold.
             </p>
             <p>
-              <strong>On the desktop and in VS Code</strong>, the file on disk <em>is</em> the storage:
-              plain JSON, yours to move, diff and back up. It is not encrypted, because it is a file
-              in your repository, and it should behave like one.
+              <strong>On the desktop</strong>, the file on disk <em>is</em> the storage: plain JSON, yours
+              to move, diff and back up. It is not encrypted, because it is a file in your repository, and
+              it should behave like one.
             </p>
             <p>
-              <strong>Nothing syncs between them.</strong> Three separate places, on purpose. Moving a
+              <strong>Nothing syncs between them.</strong> Two separate places, on purpose. Moving a
               diagram between them means exporting it and opening it, which is a file operation you
               can see happen.
             </p>
@@ -1349,7 +1339,6 @@
         <a href="https://github.com/acltabontabon/draft-canvas/blob/main/docs/index.md">Docs</a>
         <a href="https://github.com/acltabontabon/draft-canvas/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://github.com/acltabontabon/draft-canvas/releases">Releases</a>
-        <a href="https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas">VS&nbsp;Code</a>
         <a href="https://hub.docker.com/r/acltabontabon/draft-canvas">Docker</a>
         <a href="https://acltabontabon.com/">acltabontabon.com</a>
       </nav>

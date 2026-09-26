@@ -315,6 +315,20 @@ from becoming separate systems.
 | **Depth** | a node's `inside` + where you are standing → the room being edited | One seam (`depth/tree.ts` + the store's `path`): everything else still edits a plain document. A room exists exactly when it holds a shape, so navigating writes nothing. A level is stored only when someone said it; what the rooms inside show follows from it, and is never written down. |
 | **Open points** | one root-level list of `{kind, context?, targets[], resolved?}` → a marker per attached element, a count in the status bar, a list to return to | Metadata, never a shape: a point has no coordinates and changes no routing, size or semantics; its absence means only "nothing noted". Stored once and pointing at every element it concerns, so a shared question is one record. `removeElements` prunes attachments in the same operation and drops a point left with none — undo restores both. The marker is one pure display list (`openPoints/marker.ts`) the canvas and the exporter both emit; the edge placement is computed in each connector renderer by the same rule. Resolving keeps the point, folded away. |
 
+### Drawing style
+
+`clean`, `draft` and `sketch` are one parameterised renderer, not three: `PERSONALITY_PROFILES`
+(`ui/personality/`) feeds a handful of numbers — outline, bow, overshoot, strokes, retrace — into the
+same `describeNode`/`describeEdge` calls, with `clean` all zeros, and the roughening itself is ~400
+lines in `render/roughness/`. The setting is a device preference, never part of the document, so a
+diagram exported by one person renders in whichever style the next person prefers.
+
+The set is frozen: `clean` is the default and the identity, the other two stay as opt-in presets, and
+no further style is added. The honest cost is not a second renderer but the `retrace` branches in the
+node describers and the arrow-style branches in both edge renderers, which every silhouette change has
+to keep in step. A later pass may collapse `draft` and `sketch` into one; nothing persisted is at
+stake either way.
+
 ### Keyboard model
 
 One handler, one focus model, one source of truth for shortcut strings. The canvas is **a single

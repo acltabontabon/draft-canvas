@@ -40,6 +40,7 @@ Running your own copy is covered in the [README](../README.md#try-it). The VS Co
 | [The website](reference/website.md) | Build, preview and deploy the landing page, and see how the editor's move was made safe |
 | [Agent integration](reference/agent-integration.md) | See how the desktop app's MCP connector works: tools, guarantees about retries and saving, layout, C4, security and limits |
 | [Desktop updates](reference/desktop-updates.md) | Set up and check the desktop app's signed updates (maintainers) |
+| [What comes next](reference/roadmap.md) | The five pieces of work kept out of 2.0, in order, with scope and limits |
 | [Security](../SECURITY.md) | Read the threat model, key lifecycle and how to report a concern |
 | [Changelog](../CHANGELOG.md) | See what changed in each release |
 
