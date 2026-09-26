@@ -33,15 +33,15 @@ export interface FlowFrameOptions {
 /** Mirrors `.react-flow__node`'s explain-mode opacity/filter in `canvas.css`. */
 const NODE_TIER_DECORATION: Record<ExplainTier, Decoration> = {
   active: { opacity: 1 },
-  shown: { opacity: 0.65, filter: 'grayscale(0.2)' },
-  hidden: { opacity: 0.3, filter: 'grayscale(0.5)' },
+  shown: { opacity: 0.72, filter: 'grayscale(0.15)' },
+  hidden: { opacity: 0.38, filter: 'grayscale(0.45)' },
 };
 
 /** Mirrors `.dc-edge[data-active/shown/dimmed]`'s opacity in `canvas.css`. */
 const EDGE_TIER_DECORATION: Record<ExplainTier, Decoration> = {
   active: { opacity: 1 },
-  shown: { opacity: 0.55 },
-  hidden: { opacity: 0.22 },
+  shown: { opacity: 0.62 },
+  hidden: { opacity: 0.3 },
 };
 
 /**

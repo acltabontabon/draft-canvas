@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { orderedWithVariants } from '../src/ui/Editor/FlowBar';
+import { orderedWithVariants } from '../src/presentation/flowChrome';
 import { createFlow } from '../src/document/flow';
 
 describe('orderedWithVariants (FlowPicker grouping)', () => {

@@ -49,6 +49,11 @@ const PATHS = {
   // A stepped route with an arrowhead — the same orthogonal elbow the canvas draws connectors
   // with, so the glyph is the product's own vocabulary rather than a generic "path" pictogram.
   flow: 'M4 7h4a3 3 0 0 1 3 3v4a3 3 0 0 0 3 3h4 M15 14l3 3-3 3',
+  // Presentation's Overview: four corner marks — the register marks a room's sheet already uses —
+  // around the whole picture, rather than a generic "expand" arrow pair.
+  overview: 'M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5',
+  // Presentation's pointer: a ring with a point at its centre.
+  pointer: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 12h.01',
 } as const;
 
 export type IconName = keyof typeof PATHS;

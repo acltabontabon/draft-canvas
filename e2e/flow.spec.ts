@@ -189,6 +189,9 @@ test.describe('Flows', () => {
     await page.getByRole('button', { name: 'Present', exact: true }).click();
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Happy path');
+    // The opening first — the flow's title over its whole path — and the story on the first press.
+    await expect(page.locator('.dc-present-card[data-kind="opening"]')).toContainText('Happy path');
+    await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 3');
 
     await page.keyboard.press('ArrowRight');
@@ -327,6 +330,7 @@ test.describe('Flows', () => {
     await page.locator('.dc-flow-item').nth(1).getByRole('button', { name: /^Present/ }).click();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Fast path');
     await expect(page.locator('.dc-explain-flow-pos')).toContainText('Flow 2 of 2');
+    await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
   });
 
@@ -343,19 +347,28 @@ test.describe('Flows', () => {
 
     await page.locator('.dc-flow-item').nth(0).getByRole('button', { name: /^Present/ }).click();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Happy path');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
 
     // Step within the flow, then leave it for the next one — the two must stay distinct.
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 2 / 2');
     await page.keyboard.press('Shift+ArrowRight');
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Payment retries');
-    // The destination starts at its own beginning, never in the middle of someone else's story.
+    // The destination opens at its own beginning, never in the middle of someone else's story.
+    await expect(page.locator('.dc-present-card[data-kind="opening"]')).toContainText('Payment retries');
+    await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
 
-    // The end of the last flow is the end of the walkthrough, and says so rather than wrapping.
+    // Past the last step the story closes on its whole path; the end of the last flow is the end
+    // of the walkthrough, and says so rather than wrapping.
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 2 / 2');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-present-card[data-kind="closing"]')).toBeVisible();
     await expect(page.locator('.dc-explain-end')).toHaveText('End');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-flow-title')).toContainText('Payment retries');
     await page.keyboard.press('Shift+ArrowRight');
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Payment retries');
 
@@ -439,6 +452,7 @@ test.describe('Flows', () => {
     await page.getByRole('button', { name: 'Present', exact: true }).click();
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Walkthrough');
+    await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 1');
   });
 });

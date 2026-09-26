@@ -209,6 +209,20 @@ different index into the document's own `flows` order, so a switch is a fresh st
 destination's step 1 and there is no second ordering to keep in step. It never wraps — the end of
 the last flow is the end of the walkthrough, not a loop back to the first.
 
+A flow is told in three kinds of moment (`FlowPlaybackState.stage`): the *opening* frames the
+whole flow under its title before step 1, each *step* frames one interaction, and the *closing*
+returns to the whole path after the last. The overviews light every member at once (`shown`, via
+`edgeTierInPlayback`/`nodeTierInPlayback` in `document/flow.ts`); a step lights one interaction and
+plays its signal — one stroke along the active connector's own drawn path (`DraftEdgeView`'s
+`.dc-signal`, keyed per transition so it plays once and never finishes late), then stillness. The
+camera is directed, not centred: `presentation/composition.ts` says what a step is a picture of
+(its shapes, the connector as drawn, a boundary it crosses) and `presentation/framing.ts` decides
+whether the camera holds, slides or cuts to show it — pure functions, tested on their own — while
+`useFlowPlayback` judges against the camera it *asked for* when a move is still in flight, so a
+burst of presses converges. A presenter's own pan or zoom sets `uiStore.presentation.framing` to
+`'manual'` and the camera is theirs until they ask for it back. Nothing here reads the document as
+anything but authored steps: no timing, no outcome, no execution is inferred.
+
 While a flow plays, the step's attachments tell the story beside it. The pipeline is derived, not
 scheduled: step → who speaks (`presentation/presentationAttachments.ts`: the step's connectors,
 spotlighted nodes, then the node a connector first arrives at) → presence (current callout plus at

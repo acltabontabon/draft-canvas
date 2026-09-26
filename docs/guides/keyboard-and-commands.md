@@ -119,11 +119,21 @@ with a shortcut or the mouse, and it is a good way to discover what exists.
 ## While presenting
 
 `⌘Enter`, the **Present** button in the toolbar, and **Start presentation** in the palette all do the
-same thing: start the flow and fit it to the view. Press `⌘Enter` again to leave.
+same thing: open the flow — its title beside its whole path — and wait for you to begin. Press
+`⌘Enter` again to leave.
 
-Presenting is read-only. `→` or `Space` goes to the next step, `←` to the previous one, and `Esc`
-leaves. `⌘K` still works, and shows only presentation commands. `I` still opens the line for
-capturing an action.
+Presenting is read-only. `→` or `Space` moves forward: it begins the story from the opening, goes to
+the next step, and past the last step closes on the whole path, then on to the next flow. `←` goes
+back the same way, to the opening from step 1. `Home` and `End` jump to the first and last step, and
+a digit `1`–`9` jumps straight to that step; the marks on the control strip do the same with a
+click. `Esc` leaves. `⌘K` still works, and shows only presentation commands. `I` still opens the
+line for capturing an action.
+
+The camera is directed: it holds still while the next step already reads, slides a little when it
+has to, and cuts to a new composition only for a long handoff. `O` is **Overview** — the whole flow,
+keeping your step; `O` again returns. Panning or zooming by hand stops the camera following the
+story; `R` (**Re-centre**) hands it back. `P` toggles the pointer, a soft ring that follows the
+cursor. The control strip recedes while nothing moves and comes back on any movement or key.
 
 With more than one flow, you can move between them without leaving the presentation — which is what
 makes it possible to follow a question from the room and carry on. `Shift+→` starts the next flow,

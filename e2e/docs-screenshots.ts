@@ -242,10 +242,12 @@ async function main() {
     await page.mouse.click(700, 560); // empty canvas: deselect, leaving the Flows panel open
     await shot(page, 'flows-panel');
 
-    // Presenting.
+    // Presenting: the opening, then the first step once its signal has settled.
     await page.getByRole('button', { name: 'Present', exact: true }).click();
-    await shot(page, 'presenting');
+    await shot(page, 'presenting-opening');
     await page.keyboard.press('Space');
+    await page.waitForTimeout(1400);
+    await shot(page, 'presenting');
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
 

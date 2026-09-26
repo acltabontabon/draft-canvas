@@ -206,6 +206,35 @@ export function explainNodeTier(
 }
 
 /**
+ * Where a presentation is, as far as tiers are concerned: a numbered step, or one of the two
+ * overview moments around the steps (the opening before step 1, the closing after the last). In an
+ * overview every member of the flow is lit at once as one path — `'shown'` — and nothing is
+ * `'active'`, because no single interaction is being explained yet (or any more). Mirrors
+ * `FlowPlaybackState` in `store/editorStore.ts` without importing it: this module stays a model.
+ */
+export interface PlaybackMoment {
+  step: number;
+  stage?: 'opening' | 'closing';
+}
+
+/** `edgeTierAt`, aware of the opening and closing overviews. */
+export function edgeTierInPlayback(flow: DraftFlow | undefined, edgeId: string, moment: PlaybackMoment): ExplainTier {
+  if (moment.stage) return lensEdgeTier(flow, edgeId) === 'member' ? 'shown' : 'hidden';
+  return edgeTierAt(flow, edgeId, moment.step);
+}
+
+/** `explainNodeTier`, aware of the opening and closing overviews. */
+export function nodeTierInPlayback(
+  flow: DraftFlow | undefined,
+  edges: readonly DraftEdge[],
+  nodeId: string,
+  moment: PlaybackMoment,
+): ExplainTier {
+  if (moment.stage) return lensNodeTier(flow, edges, nodeId) === 'member' ? 'shown' : 'hidden';
+  return explainNodeTier(flow, edges, nodeId, moment.step);
+}
+
+/**
  * The lens's two tiers: a connector is either part of the currently-inspected
  * flow or it isn't. Deliberately distinct from `ExplainTier`: that type is
  * step-progression-based ("explained yet, explaining now, not yet reached")

@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Handle, NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { maxSizeFor, minSizeFor } from '../document/factory';
-import { explainNodeTier, lensNodeTier, type ExplainTier } from '../document/flow';
+import { lensNodeTier, nodeTierInPlayback, type ExplainTier } from '../document/flow';
+import { stepContextOf } from '../presentation/stepContext';
 import { normalizeNoteText } from '../document/noteText';
 import { anchorBandOf } from '../document/queueGeometry';
 import type { DraftNode } from '../document/types';
@@ -53,6 +54,14 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // A string, not an object: the selector runs for every node on every store
   // change, and only the nodes whose tier actually flips re-render.
   const explainTier = useEditorStore((state) => explainTierFor(state, id));
+  // Its part in the step being explained (where the signal leaves from, where it arrives, or the
+  // boundary it crosses) — a string, for the same reason as the tier — and, for the destination
+  // only, the transition to greet the signal's arrival with; `null` everywhere else.
+  const explainRole = useEditorStore((state) => explainRoleFor(state, id));
+  const arrivalKey = useEditorStore((state) => {
+    const role = explainRoleFor(state, id);
+    return role === 'target' || role === 'both' ? (stepContextOf(state)?.transitionKey ?? null) : null;
+  });
   const focused = useEditorStore((state) => isNodeFocused(state.focus, id));
   const lensMember = useEditorStore((state) => lensMemberFor(state, id));
   const updateNodeText = useEditorStore((state) => state.updateNodeText);
@@ -374,6 +383,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-selected={selected ? 'true' : undefined}
       data-explain-active={explainTier === 'active' ? 'true' : undefined}
       data-explain-shown={explainTier === 'shown' ? 'true' : undefined}
+      data-explain-role={explainRole === 'crossed' ? undefined : (explainRole ?? undefined)}
+      data-explain-crossed={explainRole === 'crossed' ? 'true' : undefined}
       data-focused={focused ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
       data-editing={editing ? 'true' : undefined}
@@ -506,6 +517,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           {'<>'} {attachmentCount}
         </button>
       )}
+
+      {/* The ring the signal arrives into: keyed on the transition so it plays once per arrival and
+          stays as the step's static emphasis after. Chrome — never exported. */}
+      {arrivalKey !== null && <span key={arrivalKey} className="dc-arrival" aria-hidden="true" />}
 
       <SvgSurface className="dc-node-surface" width={effectiveWidth} height={effectiveHeight}>
         {shapes}
@@ -745,11 +760,24 @@ function editorStyle(
   };
 }
 
-/** This node's Presentation Mode dimming tier — `hidden` whenever playback is off. */
+/** This node's Presentation Mode dimming tier — `hidden` whenever playback is off. In the opening
+ *  and closing overviews every member reads `shown` at once (`nodeTierInPlayback`). */
 function explainTierFor(state: EditorStore, id: string): ExplainTier {
   if (!state.flowPlayback.active || !state.flowPlayback.flowId) return 'hidden';
   const flow = state.document.flows.find((f) => f.id === state.flowPlayback.flowId);
-  return explainNodeTier(flow, state.document.edges, id, state.flowPlayback.step);
+  return nodeTierInPlayback(flow, state.document.edges, id, state.flowPlayback);
+}
+
+/** What this node is to the step being explained — see `stepContextOf`. */
+function explainRoleFor(state: EditorStore, id: string): 'source' | 'target' | 'both' | 'crossed' | null {
+  const context = stepContextOf(state);
+  if (!context) return null;
+  const source = context.sources.has(id);
+  const target = context.targets.has(id);
+  if (source && target) return 'both';
+  if (target) return 'target';
+  if (source) return 'source';
+  return context.crossed.has(id) ? 'crossed' : null;
 }
 
 /** Whether this node belongs to the selected (not presented) flow's lens —

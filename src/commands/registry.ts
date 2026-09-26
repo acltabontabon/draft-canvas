@@ -199,6 +199,49 @@ function presentModeCommands(ctx: CommandContext): Command[] {
           })),
         }),
       },
+      {
+        id: 'step-first',
+        title: 'First step',
+        group: 'flow',
+        shortcut: 'Home',
+        keywords: ['start', 'beginning', 'replay', 'again'],
+        run: (inner) => inner.playback.first(),
+      },
+      {
+        id: 'step-last',
+        title: 'Last step',
+        group: 'flow',
+        shortcut: 'End',
+        keywords: ['end', 'finish'],
+        run: (inner) => inner.playback.last(),
+      },
+      // The camera's two moves, named so the palette teaches them: pull back to the whole flow
+      // without losing the step, and hand the camera back after a manual pan.
+      {
+        id: 'present-overview',
+        title: ctx.ui.presentation.framing === 'overview' ? 'Back to the step' : 'Overview — keep the step',
+        group: 'view',
+        shortcut: 'O',
+        keywords: ['whole', 'flow', 'zoom out', 'context', 'camera'],
+        run: (inner) => (inner.ui.presentation.framing === 'overview' ? inner.playback.resumeFraming() : inner.playback.overview()),
+      },
+      {
+        id: 'present-reframe',
+        title: 'Re-centre on the step',
+        group: 'view',
+        shortcut: 'R',
+        keywords: ['camera', 'frame', 'follow', 'resume', 'guided'],
+        hint: ctx.ui.presentation.framing === 'manual' ? 'The camera was moved by hand' : undefined,
+        run: (inner) => inner.playback.resumeFraming(),
+      },
+      {
+        id: 'present-pointer',
+        title: ctx.ui.presentation.pointer ? 'Pointer off' : 'Pointer',
+        group: 'view',
+        shortcut: 'P',
+        keywords: ['spotlight', 'laser', 'cursor', 'point', 'attention'],
+        run: (inner) => inner.ui.setPresentation({ pointer: !inner.ui.presentation.pointer }),
+      },
     );
     // Moving between flows, offered *while* a flow is playing — the whole point being that a
     // question from the room doesn't have to end the presentation to be answered.

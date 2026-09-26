@@ -148,6 +148,8 @@ export function PresentationCallout({
 
     const flowBar = chromeBox('.dc-explain');
     const exitButton = chromeBox('.dc-present-exit');
+    // The step's caption, or the opening/closing card, in whichever corner it took.
+    const card = chromeBox('.dc-present-caption, .dc-present-card');
     // The action capture line, when it is up: the one other thing presentation puts on screen.
     // Absent almost always, so this is `null` and costs nothing — but a callout that placed
     // itself underneath it would hide the sentence somebody is reading out loud.
@@ -165,7 +167,7 @@ export function PresentationCallout({
       preferBelow: anchor.preferBelow,
       avoid: anchor.avoid.map(toScreen),
       soft,
-      exclusions: [flowBar, exitButton, captureLine]
+      exclusions: [flowBar, exitButton, card, captureLine]
         .filter((box): box is Box => box !== null)
         .map((box) => inflate(box, CHROME_MARGIN)),
       bounds,

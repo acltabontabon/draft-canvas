@@ -347,14 +347,12 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       setMode('present', getViewport());
       if (flowId) playback.pickFlow(flowId);
       else if (playback.canStart) playback.start();
+      // A flow that started has framed its own opening (`useFlowPlayback`'s directed camera). Only
+      // with none chosen — the picker, or nothing to present — is the whole diagram fitted, with
+      // room at the bottom for the control bar, which is over the canvas rather than beside it.
+      if (useEditorStore.getState().flowPlayback.flowId) return;
       void fitView({
-        // Read *after* the flow has started, not before: both paths write the flow they chose to
-        // the store synchronously, and `flowFitViewNodes` now follows the flow being presented as
-        // well as the lens — so this is the flow actually about to be shown. (It used to have to
-        // be read first, back when scoping the fit went dark the moment playback turned on.)
         nodes: flowFitViewNodes(useEditorStore.getState()),
-        // Room for the arrowheads and captions at the edges of the flow, and — at the bottom —
-        // for the control bar, which is over the canvas rather than beside it.
         padding: { top: '9%', right: '9%', bottom: '128px', left: '9%' },
         duration: motionMs(320),
       });
@@ -424,6 +422,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   );
 
   const presenting = mode === 'present';
+  const chromeReceded = useUiStore((state) => state.presentation.idle);
 
   // Stable, so the memoized `Canvas` (and React Flow under it) skips renders the editor makes for
   // its own chrome.
@@ -536,7 +535,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           <DepthTransition />
 
           {presenting && (
-            <div className="dc-present-exit">
+            <div className="dc-present-exit" data-receded={chromeReceded ? 'true' : undefined}>
               {!playback.active && playback.canStart && (
                 <Button variant="quiet" icon="play" onClick={playback.start}>
                   Present a flow

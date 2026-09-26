@@ -18,6 +18,8 @@ async function presentSubmitCommand(page: Page) {
   // The flow picker is a menu, and each flow one of its options — see `FlowBar.tsx`, where that
   // role is what stands the walkthrough's own arrow keys down while the list is open.
   await page.getByRole('menuitemradio', { name: 'Submit command' }).click();
+  // Through the opening (the title over the whole path) to the first step.
+  await page.keyboard.press('ArrowRight');
   await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 6');
 }
 

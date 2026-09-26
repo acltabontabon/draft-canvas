@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -26,7 +26,10 @@ import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { pathKey } from '../depth/tree';
+import { findFlow } from '../document/flow';
+import { accentOf } from '../render/theme/tokens';
 import { lensFlow, useEditorStore } from '../store/editorStore';
+import { PresentationPointer } from './presentation/PresentationPointer';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../ui/theme/useTheme';
@@ -451,6 +454,15 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const selection = useEditorStore((state) => state.selection);
   const mode = useEditorStore((state) => state.mode);
   const explainActive = useEditorStore((state) => state.flowPlayback.active);
+  // The opening and closing overviews light the whole path at full strength; a step lights one
+  // interaction. One attribute on the container, so the switch costs no per-node work.
+  const explainOverview = useEditorStore((state) => state.flowPlayback.active && state.flowPlayback.stage !== undefined);
+  // The presentation's one accent — the flow's own colour when it has one, else the selection
+  // colour — handed to every arrival ring, boundary outline and caption through a single variable.
+  const explainAccent = useEditorStore((state) => {
+    if (!state.flowPlayback.active || !state.flowPlayback.flowId) return undefined;
+    return findFlow(state.document, state.flowPlayback.flowId)?.accent;
+  });
   const focusActive = useEditorStore((state) => state.focus.active);
   // A flow merely selected (not presented) acts as a gentler lens — see
   // `docs/reference/architecture.md`'s "Flows and presentation". `lensFlow` owns the rule for when that
@@ -1728,6 +1740,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     clearHover();
     if (!event) return;
     const ui = useUiStore.getState();
+    // A presenter's own hand on the camera (a drag, a wheel — never the presentation's own moves,
+    // which come with no event): guided framing stands down until asked back (`resumeFraming`).
+    if (useEditorStore.getState().mode === 'present') ui.setPresentation({ framing: 'manual' });
     if (ui.contextMenu) ui.setContextMenu(null);
     if (ui.quickConnect) {
       ui.setQuickConnect(null);
@@ -1757,9 +1772,15 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       className="dc-canvas"
       data-attach-drag={carryingCapsule ? 'true' : undefined}
       data-explain={explainActive ? 'on' : undefined}
+      data-explain-stage={explainOverview ? 'overview' : undefined}
       data-focus={focusActive ? 'on' : undefined}
       data-lens={lensActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}
+      style={
+        explainActive
+          ? ({ '--dc-explain-accent': explainAccent ? accentOf(theme, explainAccent).chip : theme.selection } as CSSProperties)
+          : undefined
+      }
       onPointerDownCapture={onCanvasPointerDown}
       onClickCapture={onCanvasClickCapture}
       onPointerLeave={clearHover}
@@ -1780,6 +1801,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         extraDim={explainActive ? PRESENTATION_EXTRA_DIM : 0}
       />
       <Markers />
+      {mode === 'present' && <PresentationPointer />}
       <ReactFlow
         nodes={nodes}
         edges={edges}

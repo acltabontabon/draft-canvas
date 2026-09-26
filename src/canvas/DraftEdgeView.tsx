@@ -4,7 +4,8 @@ import { useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import type { DraftNode } from '../document/types';
 import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
-import { edgeTierAt, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
+import { edgeTierInPlayback, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
+import { stepContextOf } from '../presentation/stepContext';
 import { markerRef } from '../render/svg/markers';
 import {
   LABEL_LINE_GAP,
@@ -165,11 +166,19 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // own tier actually flipped, instead of every connector on the canvas (same as `DraftNodeView`).
   const tier = useEditorStore((state) => explainTierForEdge(state, id));
   const playbackActive = useEditorStore((state) => state.flowPlayback.active);
+  // The opening and closing overviews draw the whole path with a little more presence than an
+  // already-told step has mid-story — the width is inline, so it has to be decided here.
+  const overview = useEditorStore((state) => state.flowPlayback.active && state.flowPlayback.stage !== undefined);
   // Only the active connector can be in its response phase, so only it re-renders when that flips.
   const responsePhase = useEditorStore(
     (state) => state.flowPlayback.phase === 'response' && explainTierForEdge(state, id) === 'active',
   );
   const playingAccent = useEditorStore((state) => playingFlowOf(state)?.accent);
+  // The one-shot signal replays exactly when this key changes (a new step, flow or reply phase)
+  // and only the active connector carries one — every other connector reads a constant `null`.
+  const transitionKey = useEditorStore((state) =>
+    explainTierForEdge(state, id) === 'active' ? (stepContextOf(state)?.transitionKey ?? null) : null,
+  );
   const stepNumber = useEditorStore((state) =>
     state.selectedFlowId ? stepIndexOf(findFlow(state.document, state.selectedFlowId), id) : undefined,
   );
@@ -338,6 +347,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // unchanged.
   const pulseTarget: 'request' | 'response' =
     isActiveStep && edge?.hasResponse && responsePhase ? 'response' : 'request';
+  // An asynchronous interaction's signal is a short packet let go of, a synchronous one a longer
+  // stroke that reads as a call being made — the same distinction the dashed line already draws.
+  const asyncSignal = Boolean(edge?.async) || edge?.kind === 'event' || edge?.kind === 'async';
 
   // Merely *selecting* a flow (not presenting it) is a gentler lens: every
   // member reads equally lit, there is no step progression — see
@@ -359,8 +371,16 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // once, the way the selection lens above does. Presentation already layers
   // its own active/shown/hidden opacity tiers; tinting all of them with the
   // flow's colour at the same time would read as busy rather than calm.
-  const presentationAccent =
-    isActiveStep && playingAccent ? accentOf(theme, playingAccent).chip : undefined;
+  // With no flow accent, a connector the diagram itself coloured keeps that colour while it is the
+  // one being explained — a red compensation path stays red — and only a plain one borrows the
+  // selection colour to stand out.
+  const presentationAccent = !isActiveStep
+    ? undefined
+    : playingAccent
+      ? accentOf(theme, playingAccent).chip
+      : edge?.accent && edge.accent !== 'neutral'
+        ? accentOf(theme, edge.accent).chip
+        : undefined;
   const color =
     presentationAccent ?? lensAccent ?? (edge ? resolveEdgeColor(edge, { accent: sourceAccent }, theme) : theme.edge);
 
@@ -637,7 +657,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         markerEnd={edge.directed && !usesHandDrawnArrow ? markerRef(strokeColor, markerVariantForEdge(edge)) : undefined}
         style={{
           stroke: strokeColor,
-          strokeWidth: isActiveStep ? 2.6 : selected || attachTarget ? 2.4 : lensMember ? 2.0 : hoverShown ? 2.0 : 1.6,
+          strokeWidth:
+            isActiveStep ? 2.6 : selected || attachTarget ? 2.4 : lensMember || (overview && isShownStep) ? 2.0 : hoverShown ? 2.0 : 1.6,
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
@@ -697,6 +718,36 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           strokeLinejoin="round"
           opacity={0.8}
         />
+      )}
+
+      {/* Presentation's signal: one stroke that travels this connector's own drawn path, source to
+          target (or back along the reply line in the response phase), once per step transition —
+          keyed on the transition so a repeat of the same connector at a later step plays again,
+          and unmounted the moment the step moves on so nothing stale finishes afterwards. Drawn
+          with `pathLength="1"` so the CSS keyframes are the same for a short bend and a long
+          sweep; the dash is the signal, the gap hides everything else. Canvas-only chrome, never
+          exported (`edges/describe.ts` has the GIF's own looping pulse instead). */}
+      {isActiveStep && transitionKey !== null && (
+        <g key={transitionKey} className="dc-signal" data-async={asyncSignal ? 'true' : undefined} aria-hidden="true">
+          <path
+            className="dc-signal-glow"
+            d={pulseTarget === 'response' && responseDrawnPath ? responseDrawnPath : drawnPath}
+            pathLength={1}
+            fill="none"
+            pointerEvents="none"
+            stroke={strokeColor}
+            strokeLinecap="round"
+          />
+          <path
+            className="dc-signal-stroke"
+            d={pulseTarget === 'response' && responseDrawnPath ? responseDrawnPath : drawnPath}
+            pathLength={1}
+            fill="none"
+            pointerEvents="none"
+            stroke={strokeColor}
+            strokeLinecap="round"
+          />
+        </g>
       )}
 
       {/* Where a dropped Note/Code will actually land: this connector's own label point, the
@@ -1231,8 +1282,9 @@ function playingFlowOf(state: EditorStore) {
   return active && flowId ? findFlow(state.document, flowId) : undefined;
 }
 
-/** This connector's Presentation tier — a string, so only connectors whose tier flips re-render. */
+/** This connector's Presentation tier — a string, so only connectors whose tier flips re-render.
+ *  In the opening and closing overviews every member reads `shown` at once (`edgeTierInPlayback`). */
 function explainTierForEdge(state: EditorStore, id: string): ExplainTier {
   const flow = playingFlowOf(state);
-  return flow ? edgeTierAt(flow, id, state.flowPlayback.step) : 'hidden';
+  return flow ? edgeTierInPlayback(flow, id, state.flowPlayback) : 'hidden';
 }

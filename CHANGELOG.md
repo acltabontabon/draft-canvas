@@ -12,6 +12,16 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Shared
 
+#### Added
+
+- **Follow the signal** — presenting a flow is a spatial story. It opens with the flow's title beside its whole path, each step sends one signal along the connector from where the interaction starts to where it arrives, the destination lights up, and then everything holds still while you talk. A caption in the corner names the step with the labels already on the canvas and shows what the connector means: a condition, an event, a retry, a failure path, a reply, the boundary it crosses. After the last step the flow closes on its whole path, with Replay and the next flow a click away. <!-- highlight -->
+- **A directed camera** — the presentation holds still while the next step already reads, slides a little when it has to, and only recomposes for a long handoff. Pan or zoom by hand whenever you like and **Re-centre** (`R`) hands the camera back; **Overview** (`O`) pulls back to the whole flow without losing the step.
+- A control strip that recedes while you talk, with chapter marks for jumping straight to a step (`1`–`9`, `Home`, `End`), and a pointer (`P`) — a soft ring that follows the cursor.
+
+#### Changed
+
+- The rest of the diagram stays readable while a step is shown, at lower emphasis, instead of fading almost away; a connector the diagram itself coloured keeps its colour while it is the one being explained.
+
 #### Fixed
 
 - Dragging a Note or Code card to attach it no longer hides its host's connectors for the drag duration.

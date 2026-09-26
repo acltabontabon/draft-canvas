@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
 import { useFlowPlayback } from '../src/presentation/useFlowPlayback';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { PRESENTATION_AT_REST, useUiStore } from '../src/store/uiStore';
 
 /**
  * `useFlowPlayback` decides what "Present" means: the active flow when it has something to
@@ -62,7 +63,8 @@ describe('useFlowPlayback — what Present starts', () => {
     const { result } = mount();
     expect(result.current.flows.map((f) => f.id)).toEqual([checkout, refund]);
     act(() => result.current.start());
-    expect(useEditorStore.getState().flowPlayback).toMatchObject({ active: true, flowId: refund, step: 1 });
+    // …opening with its title over the whole path: the story starts on the presenter's first press.
+    expect(useEditorStore.getState().flowPlayback).toMatchObject({ active: true, flowId: refund, step: 0, stage: 'opening' });
   });
 
   it('falls back to the one playable flow, then to the picker', () => {
@@ -128,17 +130,21 @@ describe('useFlowPlayback — moving between flows', () => {
     expect(result.current.flowIndex).toBe(1);
   });
 
-  it('starts the destination at its own step 1, with the phase reset', () => {
+  it('starts the destination at its own opening, with the phase reset', () => {
     const { checkout, refund } = threeFlows();
     const { result, rerender } = mount();
     act(() => result.current.pickFlow(checkout));
     rerender();
+    act(() => result.current.next());
+    rerender();
+    expect(useEditorStore.getState().flowPlayback.step).toBe(1);
 
     act(() => result.current.nextFlow());
     expect(useEditorStore.getState().flowPlayback).toMatchObject({
       active: true,
       flowId: refund,
-      step: 1,
+      step: 0,
+      stage: 'opening',
       phase: 'request',
     });
     // Step badges follow the flow being presented, not the one it was started from.
@@ -282,7 +288,7 @@ describe('useFlowPlayback — switching to a named variant lands on the shared s
     expect(failure.steps[landedStep - 1]?.edgeId).toBe(edgeShared.id);
   });
 
-  it('always starts at step 1 when switching between two unrelated flows', () => {
+  it('always opens afresh when switching between two unrelated flows', () => {
     const edgeA = connectedPair();
     const edgeB = connectedPair();
     useEditorStore.setState((state) => ({
@@ -299,6 +305,145 @@ describe('useFlowPlayback — switching to a named variant lands on the shared s
     act(() => result.current.pickFlow('f2'));
     // f2's step 2 also references edgeA (shared with f1's step 1) — but f1/f2 are not variants of
     // one another, so pairing must never kick in here.
-    expect(useEditorStore.getState().flowPlayback.step).toBe(1);
+    expect(useEditorStore.getState().flowPlayback).toMatchObject({ flowId: 'f2', step: 0, stage: 'opening' });
+  });
+});
+
+/**
+ * The shape of one telling: an opening that frames the whole flow under its title, the steps, and
+ * a closing that returns to the whole path — then the next flow's opening, never a wrap. Every
+ * transition is the presenter's own press; nothing here runs on a timer.
+ */
+describe('useFlowPlayback — opening, steps, closing', () => {
+  beforeEach(reset);
+
+  function twoStepFlow(title = 'Checkout') {
+    const state = useEditorStore.getState();
+    const a = state.addNode({ type: 'service', x: 0, y: 0, text: 'A' });
+    const b = state.addNode({ type: 'service', x: 300, y: 0, text: 'B' });
+    const c = state.addNode({ type: 'service', x: 600, y: 0, text: 'C' });
+    const ab = state.connect(a.id, b.id)!;
+    const bc = state.connect(b.id, c.id)!;
+    const flow = useEditorStore.getState().createFlow(title)!;
+    useEditorStore.getState().addEdgeToFlow(flow, ab.id);
+    useEditorStore.getState().addEdgeToFlow(flow, bc.id);
+    return flow;
+  }
+
+  it('walks opening → step 1 → step 2 → closing, and back the same way', () => {
+    const flow = twoStepFlow();
+    const { result, rerender } = mount();
+    act(() => result.current.pickFlow(flow));
+    rerender();
+    expect(result.current.stage).toBe('opening');
+    expect(result.current.current).toBeNull();
+
+    act(() => result.current.next());
+    rerender();
+    expect(result.current.stage).toBe('step');
+    expect(result.current.step).toBe(1);
+    expect(result.current.current?.step).toBe(1);
+
+    act(() => result.current.next());
+    rerender();
+    expect(result.current.step).toBe(2);
+
+    act(() => result.current.next());
+    rerender();
+    expect(result.current.stage).toBe('closing');
+    expect(result.current.atEnd).toBe(true);
+    // The closing keeps the last step's number, so "back" lands where the story ended…
+    expect(result.current.step).toBe(2);
+    expect(result.current.current).toBeNull();
+
+    // …and the end of the last flow is the end: another press changes nothing.
+    act(() => result.current.next());
+    rerender();
+    expect(result.current.stage).toBe('closing');
+
+    act(() => result.current.previous());
+    rerender();
+    expect(result.current).toMatchObject({ stage: 'step', step: 2 });
+    act(() => result.current.previous());
+    act(() => result.current.previous());
+    rerender();
+    expect(result.current).toMatchObject({ stage: 'opening', step: 0 });
+    // The opening is where going back stops.
+    act(() => result.current.previous());
+    rerender();
+    expect(result.current.stage).toBe('opening');
+  });
+
+  it('closes into the next flow\'s opening, and replays from the closing', () => {
+    const first = twoStepFlow('First');
+    const second = twoStepFlow('Second');
+    const { result, rerender } = mount();
+    act(() => result.current.pickFlow(first));
+    act(() => result.current.last());
+    rerender();
+    expect(result.current).toMatchObject({ stage: 'step', step: 2 });
+    act(() => result.current.next());
+    rerender();
+    expect(result.current.stage).toBe('closing');
+    expect(result.current.atEnd).toBe(false);
+
+    act(() => result.current.replay());
+    rerender();
+    expect(result.current).toMatchObject({ stage: 'step', step: 1, flow: expect.objectContaining({ id: first }) });
+
+    act(() => result.current.last());
+    act(() => result.current.next());
+    act(() => result.current.next());
+    rerender();
+    expect(result.current).toMatchObject({ stage: 'opening', step: 0, flow: expect.objectContaining({ id: second }) });
+  });
+
+  it('jumping to a step leaves any overview stage, and rapid presses converge on the last one', () => {
+    const flow = twoStepFlow();
+    const { result, rerender } = mount();
+    act(() => result.current.pickFlow(flow));
+    act(() => result.current.goTo(2));
+    rerender();
+    expect(result.current).toMatchObject({ stage: 'step', step: 2 });
+    act(() => {
+      result.current.next();
+    });
+    rerender();
+    expect(result.current.stage).toBe('closing');
+    act(() => {
+      result.current.goTo(1);
+      result.current.next();
+      result.current.previous();
+      result.current.first();
+    });
+    rerender();
+    expect(result.current).toMatchObject({ stage: 'step', step: 1 });
+  });
+
+  it('the Overview action keeps the step and marks the camera as pulled back until framing resumes', () => {
+    const flow = twoStepFlow();
+    const { result, rerender } = mount();
+    act(() => result.current.pickFlow(flow));
+    act(() => result.current.goTo(2));
+    rerender();
+    act(() => result.current.overview());
+    rerender();
+    expect(result.current).toMatchObject({ stage: 'step', step: 2 });
+    expect(useUiStore.getState().presentation.framing).toBe('overview');
+    // The presenter's own hand on the camera is remembered the same way, until they ask for the frame back.
+    act(() => useUiStore.getState().setPresentation({ framing: 'manual' }));
+    act(() => result.current.resumeFraming());
+    expect(useUiStore.getState().presentation.framing).toBe('guided');
+    expect(result.current.step).toBe(2);
+  });
+
+  it('stopping puts presentation state back to rest', () => {
+    const flow = twoStepFlow();
+    const { result } = mount();
+    act(() => result.current.pickFlow(flow));
+    act(() => useUiStore.getState().setPresentation({ pointer: true, framing: 'manual' }));
+    act(() => result.current.stop());
+    expect(useUiStore.getState().presentation).toEqual(PRESENTATION_AT_REST);
+    expect(useEditorStore.getState().flowPlayback).toMatchObject({ active: false, flowId: null, step: 0 });
   });
 });

@@ -245,7 +245,10 @@ test.describe('Takeaways', () => {
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-toolbar')).toHaveCount(0);
 
-    // The one bare key presentation lets through.
+    // Into the first step (the opening has no step to capture against), then the one bare key
+    // presentation lets through.
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 1');
     await page.keyboard.press('i');
     await expect(page.locator(CAPTURE)).toBeFocused();
     await expect(page.locator('.dc-takeaways-chip')).toContainText('Orders → Payments');

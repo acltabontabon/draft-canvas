@@ -1080,26 +1080,90 @@
   line-height: 1.5;
 }
 
-/* A pulse traveling along the active connector during Presentation Mode —
-   the one thing this animation needs to answer is "who is talking to whom".
-   `data-flow-active` carries which half of a request/response connector's exchange is animating
-   (`'request'` or `'response'` — see `FlowPlaybackState.phase`); a plain connector with no
-   `response` is always `'request'` while active, i.e. this is exactly the old boolean pulse,
-   unchanged. The response line's own path already runs target → source (see `RESPONSE_LANE_DELTA`
-   in `edges/routing.ts`), so the same dash-offset keyframe below already travels the correct visual
-   direction for a reply — no separate "reverse" animation is needed. */
+/* ------------------------------------------------------------- signal --- */
+
+/*
+ * Presentation's signal: one stroke that travels the active connector's own drawn path, source to
+ * target, once per step — the answer to "who is talking to whom", and then stillness. The path is
+ * drawn with `pathLength="1"`, so a dash of 0.26 is always about a quarter of the way along
+ * whatever the connector's real length is, and the same keyframes serve a short bend and a long
+ * sweep. The dash starts just before the path (offset 0.26 puts it at −0.26…0) and ends just past
+ * it (offset −1 puts it at 1…1.26): invisible at both ends, so the completed state is the plain
+ * emphasised connector, with nothing left blinking. The reply half of a request/response
+ * connector plays the same way along its own line, which already runs target → source.
+ *
+ * `data-async` shortens the dash: an asynchronous interaction is a packet let go of, a synchronous
+ * one a call being made — the same distinction the dashed base line already draws. Reduced motion
+ * plays nothing: the static emphasis (below, and the arrival ring) carries the step alone.
+ */
+.dc-canvas {
+  --dc-signal-ms: 760ms;
+  --dc-signal-dash: 0.26;
+}
+
+.dc-signal {
+  --dc-signal-dash-here: var(--dc-signal-dash);
+}
+
+.dc-signal[data-async='true'] {
+  --dc-signal-dash-here: 0.12;
+}
+
+.dc-signal-stroke,
+.dc-signal-glow {
+  stroke-dasharray: var(--dc-signal-dash-here) 1;
+  stroke-dashoffset: var(--dc-signal-dash-here);
+  opacity: 0;
+}
+
+.dc-signal-stroke {
+  stroke-width: 3.2;
+}
+
+.dc-signal-glow {
+  stroke-width: 9;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  .dc-edge[data-flow-active='request'] .dc-edge-line {
-    stroke-dasharray: 3 9;
-    animation: dc-flow-pulse 900ms linear infinite;
+  /* Visible only while travelling: the dash is off both ends of the path at rest, so holding the
+     end state (`both`) shows nothing — but the opacity still has to come up for the ride. */
+  .dc-signal-stroke {
+    animation:
+      dc-signal-travel var(--dc-signal-ms) var(--dc-ease-in-out) both,
+      dc-signal-shown var(--dc-signal-ms) linear both;
   }
 
-  .dc-edge[data-flow-active='response'] .dc-edge-response-line {
-    stroke-dasharray: 3 9;
-    animation: dc-flow-pulse 900ms linear infinite;
+  .dc-signal-glow {
+    animation:
+      dc-signal-travel var(--dc-signal-ms) var(--dc-ease-in-out) both,
+      dc-signal-glow-shown var(--dc-signal-ms) linear both;
+  }
+
+  @keyframes dc-signal-travel {
+    from {
+      stroke-dashoffset: var(--dc-signal-dash-here);
+    }
+    to {
+      stroke-dashoffset: -1;
+    }
+  }
+
+  @keyframes dc-signal-shown {
+    0%,
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes dc-signal-glow-shown {
+    0%,
+    100% {
+      opacity: 0.22;
+    }
   }
 }
 
+/* The lens's one-shot pulse (below) keeps its own keyframe. */
 @keyframes dc-flow-pulse {
   to {
     stroke-dashoffset: -24;
@@ -2835,26 +2899,36 @@
   transition: opacity 180ms ease, filter 180ms ease;
 }
 
+/* Three tiers, and the surrounding architecture stays readable at the quietest of them: the
+   audience keeps its bearings by seeing where the rest of the system is, at lower emphasis, not
+   by having it taken away. `render/svg/flowFrame.ts` mirrors these numbers for the GIF. */
 .dc-canvas[data-explain='on'] .react-flow__node {
-  opacity: 0.3;
-  filter: grayscale(0.5);
+  opacity: 0.38;
+  filter: grayscale(0.45);
   transition: opacity 180ms ease, filter 180ms ease;
 }
 
 .dc-canvas[data-explain='on'] .dc-edge[data-dimmed='true'] {
-  opacity: 0.22;
+  opacity: 0.3;
   transition: opacity 180ms ease;
 }
 
 /* An already-explained step stays visible but subdued — between the active
    step (fully lit) and one not reached yet (dimmed like everything else). */
 .dc-canvas[data-explain='on'] .dc-edge[data-shown='true'] {
-  opacity: 0.55;
+  opacity: 0.62;
   transition: opacity 180ms ease;
 }
 
 .dc-canvas[data-explain='on'] .dc-edge[data-active='true'] {
   opacity: 1;
+}
+
+/* The connector being explained also wears a soft halo in the presentation's accent — a
+   `filter`, never an inline style, so it stays in CSS beside the tiers. Static: this is the
+   completed state the signal leaves behind, still obvious after the motion has ended. */
+.dc-canvas[data-explain='on'] .dc-edge[data-active='true'] .dc-edge-line {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-explain-accent, var(--dc-selection)) 55%, transparent));
 }
 
 /*
@@ -2864,19 +2938,19 @@
 .dc-edge-label[data-dimmed='true'],
 .dc-edge-step[data-dimmed='true'],
 .dc-edge-meta[data-dimmed='true'] {
-  opacity: 0.22;
+  opacity: 0.3;
   transition: opacity 180ms ease;
 }
 
 .dc-edge-label[data-shown='true'],
 .dc-edge-step[data-shown='true'],
 .dc-edge-meta[data-shown='true'] {
-  opacity: 0.55;
+  opacity: 0.62;
   transition: opacity 180ms ease;
 }
 
 .dc-edge-label[data-active='true'] {
-  border-color: var(--dc-selection);
+  border-color: var(--dc-explain-accent, var(--dc-selection));
 }
 
 /* The two nodes either end of the current step stay fully lit. */
@@ -2887,20 +2961,105 @@
 
 /* Endpoints of an already-explained step stay visible but subdued. */
 .dc-canvas[data-explain='on'] .react-flow__node:has(.dc-node[data-explain-shown='true']) {
-  opacity: 0.65;
-  filter: grayscale(0.2);
+  opacity: 0.72;
+  filter: grayscale(0.15);
 }
 
 /* A connector's attachment chips are portalled like its label — they recede with their step too,
    so a quiet step's chip never competes with the one the story is on. */
 .dc-canvas[data-explain='on'] .dc-attachment-chip-row[data-explain-tier='hidden'] {
-  opacity: 0.22;
+  opacity: 0.3;
   transition: opacity 180ms ease;
 }
 
 .dc-canvas[data-explain='on'] .dc-attachment-chip-row[data-explain-tier='shown'] {
-  opacity: 0.55;
+  opacity: 0.62;
   transition: opacity 180ms ease;
+}
+
+/* The opening and the closing: the whole path at full strength, nothing singled out. Every member
+   is `shown` there (`edgeTierInPlayback`), so the overview is the shown tier lifted to full — the
+   rest of the diagram keeps its quiet place around it. */
+.dc-canvas[data-explain-stage='overview'] .react-flow__node:has(.dc-node[data-explain-shown='true']) {
+  opacity: 1;
+  filter: none;
+}
+
+.dc-canvas[data-explain-stage='overview'] .dc-edge[data-shown='true'],
+.dc-canvas[data-explain-stage='overview'] .dc-edge-label[data-shown='true'],
+.dc-canvas[data-explain-stage='overview'] .dc-edge-step[data-shown='true'],
+.dc-canvas[data-explain-stage='overview'] .dc-edge-meta[data-shown='true'],
+.dc-canvas[data-explain-stage='overview'] .dc-attachment-chip-row[data-explain-tier='shown'] {
+  opacity: 1;
+}
+
+.dc-canvas[data-explain-stage='overview'] .dc-edge-step[data-shown='true'] {
+  border-color: var(--dc-explain-accent, var(--dc-selection));
+}
+
+/* Where the signal leaves from: a quiet ring, so the pair reads as a pair. */
+.dc-canvas[data-explain='on'] .dc-node[data-explain-role='source'] {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--dc-explain-accent, var(--dc-selection)) 55%, transparent);
+  transition: box-shadow 180ms ease;
+}
+
+/* Where it arrives: the ring the signal lands in — timed to its arrival, then held as the step's
+   static emphasis. Keyed per transition in `DraftNodeView`, so it plays once per arrival. */
+.dc-arrival {
+  position: absolute;
+  inset: -5px;
+  border: 2px solid var(--dc-explain-accent, var(--dc-selection));
+  border-radius: calc(var(--dc-radius) + 4px);
+  pointer-events: none;
+}
+
+.dc-node[data-type='group'] .dc-arrival {
+  border-radius: 17px;
+}
+
+.dc-node[data-type='ellipse'] .dc-arrival {
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-arrival {
+    animation: dc-arrival calc(var(--dc-signal-ms) * 0.7) var(--dc-ease-out) calc(var(--dc-signal-ms) * 0.82) both;
+  }
+
+  @keyframes dc-arrival {
+    from {
+      opacity: 0;
+      scale: 1.08;
+      box-shadow: 0 0 0 10px color-mix(in srgb, var(--dc-explain-accent, var(--dc-selection)) 24%, transparent);
+    }
+    to {
+      opacity: 1;
+      scale: 1;
+      box-shadow: 0 0 0 0 transparent;
+    }
+  }
+}
+
+/* A boundary the step crosses: brought forward with its name, outlined in the accent, so the
+   handoff reads as leaving one place for another. Held for the step; only its entrance moves. */
+.dc-canvas[data-explain='on'] .react-flow__node:has(.dc-node[data-explain-crossed='true']) {
+  opacity: 0.92;
+  filter: none;
+}
+
+.dc-node[data-explain-crossed='true']::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 1.5px solid color-mix(in srgb, var(--dc-explain-accent, var(--dc-selection)) 70%, transparent);
+  border-radius: 15px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-node[data-explain-crossed='true']::before {
+    animation: dc-fade-in 420ms var(--dc-ease-out) both;
+  }
 }
 
 /* ------------------------------------------------ presentation callout --- */
@@ -3281,6 +3440,29 @@
 
 .dc-editor[data-mode='present'] .react-flow__pane {
   cursor: grab;
+}
+
+/* The presenter's pointer (`PresentationPointer.tsx`): a soft ring in the accent, positioned by a
+   transform written straight to the DOM. Above the diagram, under the chrome; never a hit target. */
+.dc-present-pointer {
+  position: absolute;
+  top: -22px;
+  left: -22px;
+  z-index: 5;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--dc-explain-accent, var(--dc-selection));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--dc-explain-accent, var(--dc-selection)) 14%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--dc-explain-accent, var(--dc-selection)) 10%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  will-change: transform;
+}
+
+.dc-present-pointer[data-shown='true'] {
+  opacity: 1;
 }
 
 /* React Flow paints its own selection box; align it with our palette. */

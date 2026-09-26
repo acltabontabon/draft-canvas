@@ -109,14 +109,27 @@ A flow is a numbered path through connectors. It's how you say "first this happe
 
    ![The Flows panel listing "Place an order" with two steps, and numbered badges on the two connectors.](../media/guides/flows-panel.png)
 
-4. Click **Present** in the toolbar. The editor gets out of the way and the flow starts at step 1.
-   Press `→` or `Space` for the next step and `←` to go back. `Esc` returns to editing, to the same
-   view and the same selection you left. `⌘Enter` does the same as the button.
+4. Click **Present** in the toolbar. The editor gets out of the way and the flow opens: its title
+   beside the whole path, framed with the rest of the diagram quietly around it. Press `→` or
+   `Space` to begin. Each press tells one step: a signal travels the connector from where the
+   interaction starts to where it arrives, the destination lights up, and a caption in the corner
+   names the two shapes and what the step says. Then everything is still, so you can talk. `←` goes
+   back, and after the last step the flow closes on its whole path, with **Replay** and the next
+   flow a click away. `Esc` returns to editing, to the same view and the same selection you left.
+   `⌘Enter` does the same as the button.
+
+   ![The opening of a presentation: the flow's title and its route on the left, the whole diagram framed beside it.](../media/guides/presenting-opening.png)
 
 While a step is showing, the notes attached to what it shows appear beside it. The note on the queue
 appears when the flow first reaches the queue.
 
 ![Presenting step 1 of 2: the first connector is highlighted, the rest of the diagram is faded, and the queue's note appears above it.](../media/guides/presenting.png)
+
+The camera follows the story rather than each shape: it holds still while the next step already
+reads, slides a little when it has to, and only recomposes for a long handoff. Pan or zoom by hand
+whenever you like; **Re-centre** (`R`) hands the camera back. **Overview** (`O`) pulls back to the
+whole flow without losing your place, and the pointer (`P`) is a soft ring that follows your cursor
+for pointing at things.
 
 If you have more than one flow, Draft Canvas asks **Present which flow?** first — and you can change
 your mind later without stopping. The bar names the flow you are in and where it sits (`Place an

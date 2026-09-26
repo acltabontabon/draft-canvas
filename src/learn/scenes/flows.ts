@@ -50,7 +50,7 @@ export const addToFlow: Scene = {
 
 export const presentFlow: Scene = {
   label:
-    'Presentation starts; step 1 highlights Checkout placing the order, the right arrow key moves to step 2, Orders charging the card. Shift and the right arrow key then start the next flow, Restock, at its own step 1, and Escape ends it.',
+    'Presentation opens on the flow, and the right arrow key begins it: step 1 highlights Checkout placing the order, the next press moves to step 2, Orders charging the card. Shift and the right arrow key then open the next flow, Restock, and Escape ends it.',
   frames: [
     { ms: 1000, step: 'Start presenting', add: { nodes: NODES, edges: EDGES }, flow: ['e1', 'e2'], overlay: { kind: 'keys', keys: ['mod', 'enter'] } },
     {

@@ -171,6 +171,42 @@ function initialContinuationsEnabled(): boolean {
 }
 
 
+/** Which corner of the canvas the step caption sits in — chosen to keep off the interaction. */
+export type CaptionCorner = 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right';
+
+/**
+ * Presentation Mode's own transient state — everything about *how the story is being shown* that
+ * is not the story itself (that is `editorStore.flowPlayback`). Never persisted. Reset whenever
+ * presenting ends (`resetPresentation`), so nothing here outlives the walkthrough it was made in.
+ */
+export interface PresentationState {
+  /**
+   * `'guided'` while the camera goes where the flow leads; `'manual'` from the moment the presenter
+   * pans or zooms by hand until they ask for the guided frame back (or a step needs it);
+   * `'overview'` after the Overview action pulled back to the whole flow with the step kept. Guided
+   * framing never fights a hand on the camera: a manual camera is left alone by resizes, and only a
+   * step that has left the screen moves it.
+   */
+  framing: 'guided' | 'manual' | 'overview';
+  /** Where the step caption sits, worked out from the interaction's place on screen. */
+  captionCorner: CaptionCorner;
+  /** The soft pointer that follows the cursor for calling attention to an area. */
+  pointer: boolean;
+  /** The control strip has receded: no pointer or key for a while, and nothing in it focused. */
+  idle: boolean;
+  /** The flow-space box the camera was last asked to frame (a step's interaction, or a whole flow)
+   *  — `null` with nothing framed. Read by the caption to stay off it as the camera moves. */
+  focus: { x: number; y: number; width: number; height: number } | null;
+}
+
+export const PRESENTATION_AT_REST: PresentationState = {
+  framing: 'guided',
+  captionCorner: 'bottom-left',
+  pointer: false,
+  idle: false,
+  focus: null,
+};
+
 export interface UiStore {
   /** The preset a canvas click will place, or null for plain selection. */
   armed: Preset | null;
@@ -246,6 +282,8 @@ export interface UiStore {
    * never speaks for an unrelated later step; clicking the same element again, or Escape, lets it go.
    */
   presentationReveal: PresentationReveal | null;
+  /** How the presentation is being shown — see `PresentationState`. */
+  presentation: PresentationState;
   /** Whether the Flows panel — the one surface for flows (`FlowPanel.tsx`) — is visible. */
   flowPanelOpen: boolean;
   /** Whether the proposal review panel (`desktop/ui/ProposalPanel.tsx`, desktop only) is open, and
@@ -459,6 +497,10 @@ export interface UiStore {
     target: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null,
   ) => void;
   setPresentationReveal: (target: PresentationReveal | null) => void;
+  /** Patches presentation state — a no-op (same object, no re-render) when nothing changes. */
+  setPresentation: (patch: Partial<PresentationState>) => void;
+  /** Everything back to rest: the exit every way out of presenting goes through. */
+  resetPresentation: () => void;
   setFlowPanelOpen: (open: boolean) => void;
   requestFlowRename: (flowId: string | null) => void;
   /** Opens the proposal panel (optionally straight to one proposal), or closes it. */
@@ -578,6 +620,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   armedAnchor: null,
   openAttachmentDetail: null,
   presentationReveal: null,
+  presentation: PRESENTATION_AT_REST,
   flowPanelOpen: false,
   proposalPanelOpen: false,
   proposalPanelId: null,
@@ -670,6 +713,18 @@ export const useUiStore = create<UiStore>((set, get) => ({
     }),
   setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
+  setPresentation: (patch) =>
+    set((state) => {
+      const current = state.presentation;
+      // The pointer and the idle flag flip on pointer events, so an unchanged write must cost
+      // nothing: every node's and connector's selectors run on each store update.
+      const same = (Object.keys(patch) as (keyof PresentationState)[]).every((key) =>
+        key === 'focus' ? sameBox(patch.focus, current.focus) : patch[key] === current[key],
+      );
+      return same ? state : { presentation: { ...current, ...patch } };
+    }),
+  resetPresentation: () =>
+    set((state) => (state.presentation === PRESENTATION_AT_REST ? state : { presentation: PRESENTATION_AT_REST })),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   setProposalPanelOpen: (proposalPanelOpen, proposalId = null) => set({ proposalPanelOpen, proposalPanelId: proposalPanelOpen ? proposalId : null }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
@@ -952,3 +1007,12 @@ function reidentify(previous: ContinuationOffer, next: ContinuationOffer): Conti
  * every mouse move to track that would be absurd.
  */
 export const pointer = { x: 0, y: 0, known: false };
+
+function sameBox(
+  a: PresentationState['focus'] | undefined,
+  b: PresentationState['focus'],
+): boolean {
+  if (a === undefined) return true;
+  if (a === null || b === null) return a === b;
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}

@@ -33,6 +33,9 @@ export function PresentationCalloutLayer() {
   const active = useEditorStore((state) => state.flowPlayback.active);
   const flowId = useEditorStore((state) => state.flowPlayback.flowId);
   const step = useEditorStore((state) => state.flowPlayback.step);
+  // In the opening and closing overviews no step is being told, so nothing speaks on its own —
+  // only a presenter's click does (the reveal keeps the real step's scope, below).
+  const overview = useEditorStore((state) => state.flowPlayback.stage !== undefined);
   const presenting = useEditorStore((state) => state.mode === 'present');
   const flow = useEditorStore((state) =>
     active && flowId ? (findFlow(state.document, flowId) ?? null) : null,
@@ -53,8 +56,9 @@ export function PresentationCalloutLayer() {
     const edgesById = edgeIndex(edges);
     // No flow playing: presentation still answers a presenter's click on a chip or badge.
     if (!flow) return reveal ? revealedSubject('present', reveal, nodesById, edgesById) : null;
+    if (overview) return reveal ? revealedSubject(scope, reveal, nodesById, edgesById) : null;
     return resolvePresentationSubject({ flowId: flow.id, steps, step, nodesById, edgesById, reveal });
-  }, [flow, steps, step, nodes, edges, reveal]);
+  }, [flow, steps, step, overview, scope, nodes, edges, reveal]);
 
   const { current, leaving, settle } = useCalloutPresence(subject);
   const shown = [leaving, current].filter((entry) => entry !== null);

@@ -329,8 +329,11 @@ test.describe('Draft Canvas', () => {
     await expect(page.locator('.dc-edge-step')).toHaveCount(2);
 
     await page.getByRole('button', { name: 'Present', exact: true }).click();
-    // The flow just built is the active one, so presentation starts it directly.
+    // The flow just built is the active one, so presentation starts it directly — opening with
+    // its title over the whole path; the first press begins the story.
     await expect(page.locator('.dc-explain')).toBeVisible();
+    await expect(page.locator('.dc-present-card[data-kind="opening"]')).toBeVisible();
+    await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
     await expect(page.locator('.dc-canvas[data-explain="on"]')).toBeVisible();
     // Editing chrome is gone while presenting.

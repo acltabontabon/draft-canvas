@@ -140,6 +140,15 @@ Each of these has a failure mode that is silent, delayed, or both.
   Continuation's ghost connector in `src/canvas/ContinuationGhost.tsx` is a preview, never
   exported, and reuses the routing/dash/marker helpers rather than restating them — it is exempt,
   and so is `src/canvas/AgentPreviewLayer.tsx`, which draws with the same ghost pieces.)
+- **Presentation is a reading of the document, never a change to it, and its motion is one-shot.**
+  A flow's telling (`flowPlayback.stage`: opening, steps, closing) and the camera's own state
+  (`uiStore.presentation`) are transient; nothing about presenting is saved, undone or exported. The
+  signal along the active connector (`DraftEdgeView`'s `.dc-signal`) is keyed on the transition so it
+  plays once and unmounts when the step moves on — never a loop, and never anything that finishes
+  after a later press. The camera decides *whether* to move in `presentation/framing.ts` (pure) and
+  judges against the camera it asked for while a move is in flight (`useFlowPlayback`), which is
+  what makes a burst of presses converge instead of skipping a reframe. A presenter's own pan sets
+  `framing: 'manual'`, and guided framing stands down until asked back.
 - **An AI agent's preview never enters the document.** What an agent is preparing is shown from
   `uiStore.agentPreview` (the provisional layer) and `src/desktop/agentActivity.ts` (the status line
   and generation view) — never through the editor store, its history or autosave. Only the commit

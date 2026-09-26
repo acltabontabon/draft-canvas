@@ -3,7 +3,7 @@ import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // Only used for the one-off "pasted/duplicated content was capped" toast (`notify`) — paste and
 // duplicate are the only place a document-size limit can be hit from a trusted, in-app action
 // rather than at import, and there's no other place in the app that already surfaces that.
-import { useUiStore } from './uiStore';
+import { PRESENTATION_AT_REST, useUiStore } from './uiStore';
 import { edgeIndex, nodeIndex } from './selectors';
 import {
   createAttachment,
@@ -180,6 +180,14 @@ export interface FlowPlaybackState {
    * site sets this directly. Absent reads exactly like `'request'`.
    */
   phase?: 'request' | 'response';
+  /**
+   * Which moment of the flow's telling this is, beyond a numbered step. `'opening'` frames the
+   * whole flow with its title before the first step (`step` is `0` there); `'closing'` is the
+   * overview the story returns to after its last step (`step` stays at the last one, so "back"
+   * lands where the walkthrough ended). Absent means an ordinary step. Both overview stages light
+   * the flow's whole path at once; only a step lights one interaction. Never persisted — see above.
+   */
+  stage?: 'opening' | 'closing';
 }
 
 /**
@@ -958,6 +966,7 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     quickConnect: null,
     contextMenu: null,
     presentationReveal: null,
+    presentation: PRESENTATION_AT_REST,
     flowRenameRequestId: null,
     jumpFlashId: null,
     editRequestId: null,
@@ -2555,6 +2564,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A card left open from editing carries edit actions (Delete, Detach) that presentation must
     // never offer — while presenting, attachments speak through the callout instead.
     if (mode === 'present') useUiStore.getState().setOpenAttachmentDetail(null);
+    // The pointer, a manual camera, a receded strip: all of it was about the walkthrough that is
+    // ending, and none of it may greet the next one.
+    if (mode === 'edit') useUiStore.getState().resetPresentation();
     set((s) => {
       const entering = mode === 'present' && s.mode !== 'present';
       const leaving = mode === 'edit' && s.mode === 'present';

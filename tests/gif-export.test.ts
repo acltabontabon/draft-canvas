@@ -82,12 +82,12 @@ describe('renderFlowFrameSvg (Phase 4.3 GIF export frames)', () => {
     const parsed = parseSvg(svg);
 
     // C is only touched by step 2's edge, not yet reached at step 1.
-    expect(nodeGroup(parsed, 400, 0)?.getAttribute('opacity')).toBe('0.3');
-    expect(nodeGroup(parsed, 400, 0)?.getAttribute('filter')).toBe('grayscale(0.5)');
+    expect(nodeGroup(parsed, 400, 0)?.getAttribute('opacity')).toBe('0.38');
+    expect(nodeGroup(parsed, 400, 0)?.getAttribute('filter')).toBe('grayscale(0.45)');
 
     const amber = DARK.accents.amber.chip;
     const hidden = edgePath(parsed, amber);
-    expect(hidden?.closest('g')?.getAttribute('opacity')).toBe('0.22');
+    expect(hidden?.closest('g')?.getAttribute('opacity')).toBe('0.3');
     expect(hidden?.hasAttribute('stroke-dasharray')).toBe(false);
   });
 
@@ -98,13 +98,13 @@ describe('renderFlowFrameSvg (Phase 4.3 GIF export frames)', () => {
 
     const teal = DARK.accents.teal.chip;
     const amber = DARK.accents.amber.chip;
-    expect(edgePath(parsed, teal)?.closest('g')?.getAttribute('opacity')).toBe('0.55');
+    expect(edgePath(parsed, teal)?.closest('g')?.getAttribute('opacity')).toBe('0.62');
     expect(edgePath(parsed, amber)?.closest('g')?.getAttribute('opacity')).toBe('1');
 
     // A is only touched by the now-shown step; B is an endpoint of both, and
     // takes the best (active) tier — matching `explainNodeTier`'s contract.
-    expect(nodeGroup(parsed, 0, 0)?.getAttribute('opacity')).toBe('0.65');
-    expect(nodeGroup(parsed, 0, 0)?.getAttribute('filter')).toBe('grayscale(0.2)');
+    expect(nodeGroup(parsed, 0, 0)?.getAttribute('opacity')).toBe('0.72');
+    expect(nodeGroup(parsed, 0, 0)?.getAttribute('filter')).toBe('grayscale(0.15)');
     expect(nodeGroup(parsed, 200, 0)?.getAttribute('opacity')).toBe('1');
   });
 
@@ -133,7 +133,7 @@ describe('renderFlowFrameSvg (Phase 4.3 GIF export frames)', () => {
     const parsed = parseSvg(svg);
     // The active node's tier opacity is unaffected by the preset.
     expect(nodeGroup(parsed, 0, 0)?.getAttribute('opacity')).toBe('1');
-    expect(nodeGroup(parsed, 400, 0)?.getAttribute('opacity')).toBe('0.3');
+    expect(nodeGroup(parsed, 400, 0)?.getAttribute('opacity')).toBe('0.38');
   });
 
   it('frames the camera viewport via viewBox, not a content-bounds fit', () => {

@@ -3367,6 +3367,13 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 /* -------------------------------------------------------------- explain -- */
 
+/*
+ * Presentation Mode's chrome (`FlowBar.tsx`). The diagram is the thing on screen; everything here
+ * is typeset around it — a control strip that recedes while the presenter talks, and one card at a
+ * time in a corner: the opening, the step's caption, the closing. Composition does the work, not
+ * decoration: one accent (`--dc-explain-accent`, the flow's own colour or the selection colour),
+ * quiet surfaces, confident type. Both themes come from the same tokens.
+ */
 .dc-explain {
   position: absolute;
   bottom: 18px;
@@ -3377,18 +3384,271 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   flex-direction: column;
   gap: 8px;
   align-items: center;
-  max-width: min(760px, calc(100% - 32px));
+  max-width: min(860px, calc(100% - 32px));
+  transition: opacity 260ms ease, translate 260ms var(--dc-ease-out);
+}
+
+/* Receded: no pointer, no key for a while. Almost gone, but the shape of the story stays legible
+   as a faint rail — and it returns on the first movement, or the moment anything in it is reached
+   for with the keyboard or hovered. */
+.dc-explain[data-receded='true']:not(:hover):not(:focus-within) {
+  opacity: 0.22;
+  translate: 0 4px;
 }
 
 .dc-explain-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px 6px 14px;
+  gap: 6px;
+  padding: 6px 8px 6px 12px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-pill);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
+}
+
+/* Presentation's chapter marks: one per step, filled once told, the current one in the accent and
+   a little longer. Each is a real button naming its step, so the row is also direct navigation. */
+.dc-present-timeline {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin: 0;
+  padding: 0 4px;
+  list-style: none;
+}
+
+.dc-present-tick {
+  display: block;
+  width: 14px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.dc-present-tick::before {
+  content: '';
+  display: block;
+  height: 4px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: var(--dc-border-strong);
+  transition: background-color 160ms ease, transform 160ms var(--dc-ease-out);
+}
+
+.dc-present-tick[data-covered='true']::before {
+  background: color-mix(in srgb, var(--dc-explain-accent, var(--dc-selection)) 55%, var(--dc-border-strong));
+}
+
+.dc-present-tick[aria-current='step']::before {
+  background: var(--dc-explain-accent, var(--dc-selection));
+  transform: scaleY(1.6);
+}
+
+.dc-present-tick:hover::before {
+  background: var(--dc-text-muted);
+}
+
+.dc-present-tick:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--dc-radius-xs);
+}
+
+/* Past a dozen steps, a scrubber: the native control, in the accent. */
+.dc-present-scrubber {
+  width: 160px;
+  margin: 0 6px;
+  accent-color: var(--dc-explain-accent, var(--dc-selection));
+}
+
+.dc-explain-reframe {
+  color: var(--dc-explain-accent, var(--dc-selection));
+}
+
+/* ------------------------------------------------ presentation cards --- */
+
+/* The opening and closing cards, and the step caption: one surface each, placed in a corner of the
+   canvas — the caption in whichever the camera left clear (`data-corner`), the cards bottom-left.
+   Above the strip's row, inside the same margin the framed interaction keeps. */
+.dc-present-card,
+.dc-present-caption {
+  position: absolute;
+  z-index: var(--dc-z-bar);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 18px 14px 20px;
+  border: 1px solid var(--dc-border);
+  border-left: 3px solid var(--dc-explain-accent, var(--dc-selection));
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  color: var(--dc-text);
+}
+
+.dc-present-card {
+  bottom: 88px;
+  left: 24px;
+  max-width: min(440px, calc(100% - 48px));
+}
+
+.dc-present-caption {
+  width: max-content;
+  max-width: min(360px, calc(100% - 48px));
+  pointer-events: none;
+}
+
+.dc-present-caption[data-corner='bottom-left'] {
+  bottom: 88px;
+  left: 24px;
+}
+
+.dc-present-caption[data-corner='bottom-right'] {
+  right: 24px;
+  bottom: 88px;
+}
+
+.dc-present-caption[data-corner='top-left'] {
+  top: 64px;
+  left: 24px;
+}
+
+.dc-present-caption[data-corner='top-right'] {
+  top: 64px;
+  right: 24px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-present-card,
+  .dc-present-caption {
+    animation: dc-present-card-in 260ms var(--dc-ease-out) both;
+  }
+
+  @keyframes dc-present-card-in {
+    from {
+      opacity: 0;
+      translate: 0 6px;
+    }
+  }
+}
+
+.dc-present-eyebrow {
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dc-present-title {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.dc-present-headline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+}
+
+.dc-present-name {
+  overflow-wrap: anywhere;
+}
+
+.dc-present-arrow {
+  color: var(--dc-explain-accent, var(--dc-selection));
+  font-weight: 500;
+}
+
+.dc-present-text {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.dc-present-route {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  margin-top: 2px;
+  color: var(--dc-text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.dc-present-route-stop {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.dc-present-meta {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-top: 6px;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+}
+
+.dc-present-hint kbd {
+  display: inline-block;
+  min-width: 20px;
+  margin-right: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: var(--dc-radius-xs);
+  font-family: var(--dc-font);
+  font-size: 11.5px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.dc-present-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.dc-present-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.dc-present-chip {
+  padding: 1px 7px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-xs);
+  background: var(--dc-edge-label-bg);
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.dc-present-chip[data-tone='warn'] {
+  border-color: color-mix(in srgb, var(--dc-danger) 45%, var(--dc-border));
+  color: var(--dc-danger);
 }
 
 .dc-explain-count,
@@ -3649,6 +3909,11 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   box-shadow: var(--dc-shadow-panel);
   opacity: 0.35;
   transition: opacity 140ms ease;
+}
+
+/* Recedes with the strip: one idea of "the chrome is resting", not two timers. */
+.dc-present-exit[data-receded='true']:not(:hover):not(:focus-within) {
+  opacity: 0.12;
 }
 
 .dc-present-exit:hover,
