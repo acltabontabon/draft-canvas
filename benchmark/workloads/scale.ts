@@ -4,7 +4,7 @@
  * Unlike the tiled-starter workloads (`generator.ts`), these are shaped like a C4-aware diagram
  * that has grown: system boundaries holding container boundaries holding shapes, a sub-boundary
  * three levels down, connectors that cross boundaries and each other, notes and code on shapes and
- * on connectors, a few shapes with a room inside them, flows and actions. That is exactly the mix
+ * on connectors, a few shapes with a room inside them, and flows. That is exactly the mix
  * the interaction work has to survive, and none of it is in the starter tiles.
  *
  * Everything is derived from a seeded PRNG and explicit ids, so the same size always produces the
@@ -16,7 +16,6 @@ import { categoryOf, inferRelationship } from '../../src/document/connectorSeman
 import { createAttachment, createDocument, createEdge, createNode } from '../../src/document/factory';
 import type {
   ConnectorKind,
-  DraftAction,
   DraftDocument,
   DraftEdge,
   DraftFlow,
@@ -64,7 +63,6 @@ export interface ScaleManifest {
   roomNodes: number;
   roomEdges: number;
   flows: number;
-  actions: number;
   /** Free-floating notes placed on open canvas, for the attach/drag scenarios. */
   looseNoteIds: string[];
 }
@@ -514,7 +512,7 @@ export function buildScaleDocument(spec: ScaleSpec): { document: DraftDocument; 
     rooms += 1;
   }
 
-  // ---- Flows and actions -------------------------------------------------------------------
+  // ---- Flows ----------------------------------------------------------------------------
   const flows: DraftFlow[] = [];
   const flowCount = Math.min(4, Math.max(1, Math.floor(spec.nodes / 60)));
   for (let f = 0; f < flowCount; f += 1) {
@@ -525,11 +523,6 @@ export function buildScaleDocument(spec: ScaleSpec): { document: DraftDocument; 
     }));
     if (steps.length > 0) flows.push({ id: `f${f}`, title: `Flow ${f + 1}`, steps, accent: (['teal', 'blue', 'violet', 'amber'] as const)[f % 4] });
   }
-  const actions: DraftAction[] = [
-    { id: 'act0', text: 'Confirm the timeout with @Priya', anchor: { kind: 'node', id: hosts[0]?.id ?? nodes[0]!.id } },
-    { id: 'act1', text: 'Decide who owns the retry queue' },
-    { id: 'act2', text: 'Write up the migration plan', done: true },
-  ];
 
   // ---- Assemble ----------------------------------------------------------------------------
   const base = createDocument(`Benchmark — ${spec.label}`);
@@ -539,7 +532,6 @@ export function buildScaleDocument(spec: ScaleSpec): { document: DraftDocument; 
     nodes,
     edges,
     flows,
-    actions,
     level: 'container',
     // Frames the first system, and the loose notes to its left, at a readable zoom; scenarios that
     // need the whole field ask for fit-to-view themselves.
@@ -559,7 +551,6 @@ export function buildScaleDocument(spec: ScaleSpec): { document: DraftDocument; 
     roomNodes,
     roomEdges,
     flows: flows.length,
-    actions: actions.length,
     looseNoteIds,
   };
 
