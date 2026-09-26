@@ -49,6 +49,12 @@ const PATHS = {
   // A stepped route with an arrowhead — the same orthogonal elbow the canvas draws connectors
   // with, so the glyph is the product's own vocabulary rather than a generic "path" pictogram.
   flow: 'M4 7h4a3 3 0 0 1 3 3v4a3 3 0 0 0 3 3h4 M15 14l3 3-3 3',
+  sliders: 'M4 7h9 M17 7h3 M15 5v4 M4 17h3 M11 17h9 M9 15v4',
+  // Two shapes and the connector an agent drew between them — the product's own vocabulary again.
+  agent: 'M3 4h7v6H3z M14 14h7v6h-7z M6.5 10v3a2 2 0 0 0 2 2H14 M17.5 4.5v2 M16.5 5.5h2',
+  refresh: 'M20 11a8 8 0 0 0-14.3-4.9 M4 4v4h4 M4 13a8 8 0 0 0 14.3 4.9 M20 20v-4h-4',
+  alert: 'M12 3l9.5 17h-19z M12 10v4.5 M12 17.5h.01',
+  external: 'M14 4h6v6 M20 4l-9 9 M18 14v6H4V6h6',
   // Presentation's Overview: four corner marks — the register marks a room's sheet already uses —
   // around the whole picture, rather than a generic "expand" arrow pair.
   overview: 'M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5',

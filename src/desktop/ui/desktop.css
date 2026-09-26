@@ -1222,64 +1222,6 @@
   }
 }
 
-/* ---- settings ----------------------------------------------------------- */
-
-.dc-settings-group {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  /* A fieldset is as wide as its widest content by default; a long command line would widen the
-     whole dialog and clip every hint beside it. */
-  min-inline-size: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.dc-settings-group legend {
-  padding: 0 0 12px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--dc-text-muted);
-}
-
-.dc-settings-choice {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  cursor: pointer;
-}
-
-.dc-settings-choice input {
-  margin-top: 3px;
-  accent-color: var(--dc-selection);
-}
-
-.dc-settings-hint {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-}
-
-/* A second group in Settings sits apart from the first by space, not a rule. */
-.dc-settings-group + .dc-settings-group {
-  margin-top: 26px;
-}
-
-.dc-settings-update {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 12.5px;
-}
-
-.dc-settings-update > span {
-  flex: 1;
-  min-width: 0;
-}
-
 /* ---- updates: the chip ------------------------------------------------------ */
 
 .dc-update-chip {
@@ -1542,56 +1484,6 @@
   .dc-update-gauge > span {
     animation: none !important;
   }
-}
-
-/* ---- settings: AI agents ---------------------------------------------------- */
-
-.dc-agent-folders {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-left: 24px;
-}
-
-.dc-agent-status {
-  margin: 0;
-  font-size: 12.5px;
-}
-
-.dc-agent-connect {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-}
-
-.dc-agent-setup-head {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  font-size: 12.5px;
-}
-
-.dc-agent-setup pre {
-  margin: 4px 0 0;
-  padding: 8px 10px;
-  overflow-x: auto;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-sm);
-  background: var(--dc-code-bg);
-  font-family: var(--dc-mono);
-  font-size: 11.5px;
-  line-height: 1.5;
-  white-space: pre;
-  user-select: text;
-}
-
-.dc-agent-warning {
-  margin: 0;
-  padding: 8px 10px;
-  border-left: 3px solid var(--dc-danger);
-  font-size: 12.5px;
 }
 
 /* ─── AI agents at work (`AgentActivity.tsx`) ───────────────────────────────────────────────────

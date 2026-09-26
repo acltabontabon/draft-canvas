@@ -35,6 +35,10 @@ the release notes and the in-app What's New are generated from here. See
 - A proposal interrupted mid-accept now offers "Mark as applied" instead of asking you to decide something that's already happened.
 - **AI diagrams layout clearly** — notes attach to their shapes or connectors and move with them; multiple labelled connectors from one shape that share meaning bundle into one trunk with labelled branches; external systems called from a boundary sit beside it instead of far away; "Clean up" flips the whole view when it reads better. <!-- highlight -->
 
+#### Changed
+
+- **Settings has room to breathe** — General, AI agents and Updates each get their own page. AI agents reads top to bottom: access and where connections stand, the folders (nested ones say when a ticked folder already reaches them, and stay visible while access is off), one agent's setup at a time, and Disconnect set apart.
+
 #### Fixed
 
 - Accepting a proposal re-checks the diagram's revision in one atomic step.

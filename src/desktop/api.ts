@@ -234,7 +234,18 @@ export interface AgentSettings {
   /** `ready`: a hidden window keeps answering. `restart-needed`: after a restart it will (macOS 14+).
    *  `unverified`: this system offers no supported way to keep a hidden window running. */
   background: 'ready' | 'restart-needed' | 'unverified';
-  projects: { handle: Handle; name: string; displayPath: string; agent: boolean }[];
+  projects: AgentProject[];
+}
+
+/** A listed folder, as Settings → AI agents shows it. */
+export interface AgentProject {
+  handle: Handle;
+  name: string;
+  displayPath: string;
+  agent: boolean;
+  /** The nearest other listed folder this one sits inside. A ticked one already reaches this one,
+   *  since access is granted by path prefix. Absent from a shell older than the field. */
+  within?: Handle | null;
 }
 
 export interface AgentPatch {

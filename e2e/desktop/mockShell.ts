@@ -51,6 +51,9 @@ export interface ShellHandle {
   recoveryIds(): string[];
   /** What the message boxes said. */
   asked(): { title: string; message: string; buttons: string[] }[];
+  /** Changes what the agent connector reports (connections, background support, a sidecar warning…);
+   *  the page hears of it the way it would from the shell. */
+  setAgent(patch: Record<string, unknown>): void;
   /** Seeds a proposal directly into the mock store, as if `submit_proposal` had already run. */
   addProposal(proposal: Record<string, unknown>): void;
   proposal(id: string): Record<string, unknown> | undefined;
@@ -96,7 +99,15 @@ export async function installMockShell(page: Page): Promise<void> {
     const agentFolders = new Map<string, boolean>();
     const agentView = () => ({
       ...agentSettings,
-      projects: listedProjects.map((handle) => ({ ...folder(handle).info, agent: agentFolders.get(handle) ?? false })),
+      projects: listedProjects.map((handle) => {
+        // The nearest other listed folder this one sits inside — the shell compares canonical roots;
+        // the mock's display paths are the same shape, so a prefix test with a separator stands in.
+        const path = folder(handle).info.displayPath;
+        const within = listedProjects
+          .filter((other) => other !== handle && path.startsWith(`${folder(other).info.displayPath}/`))
+          .sort((a, b) => folder(b).info.displayPath.length - folder(a).info.displayPath.length)[0];
+        return { ...folder(handle).info, agent: agentFolders.get(handle) ?? false, within: within ?? null };
+      }),
     });
     let agentSettings: Record<string, unknown> = { enabled: false, listening: false, connections: 0, sidecarPath: '/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp', sidecarWarning: null, background: 'restart-needed', projects: [] };
     const proposals = new Map<string, Record<string, unknown>>();
@@ -410,6 +421,10 @@ export async function installMockShell(page: Page): Promise<void> {
       answer: (...choices) => void answers.push(...choices),
       cancelNextExport: () => void (cancelExport = true),
       trayArt: () => trayArt,
+      setAgent: (patch) => {
+        agentSettings = { ...agentSettings, ...patch };
+        emit({ type: 'agent-changed' });
+      },
       seed: ({ recents: seeded = [], drafts = [], projects = [] }) => {
         for (const project of projects) {
           const handle = `p_${(handles += 1)}`;

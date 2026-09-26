@@ -10,7 +10,7 @@ use crate::state::{AppState, HostEvent};
 use crate::util::now_ms;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
@@ -66,6 +66,9 @@ pub struct AgentProject {
     pub name: String,
     pub display_path: String,
     pub agent: bool,
+    /// The nearest other listed folder this one sits inside, by handle. Access is granted by prefix
+    /// (`scope::in_scope`), so a ticked parent already reaches everything in here — Settings says so.
+    pub within: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -89,18 +92,33 @@ fn background(agent: &Agent) -> BackgroundSupport {
 fn settings_of(state: &AppState, agent: &Agent) -> AgentSettings {
     let settings = state.settings.get();
     let sidecar = sidecar_path();
-    let projects = settings
+    let projects: Vec<(AgentProject, PathBuf)> = settings
         .projects
         .iter()
         .filter_map(|p| {
             let info = project_info(state, Path::new(&p.path)).ok()?;
-            Some(AgentProject {
-                handle: info.handle,
-                name: info.name,
-                display_path: info.display_path,
-                agent: p.agent,
-            })
+            let root = state.project(&info.handle).ok()?.root;
+            Some((
+                AgentProject {
+                    handle: info.handle,
+                    name: info.name,
+                    display_path: info.display_path,
+                    agent: p.agent,
+                    within: None,
+                },
+                root,
+            ))
         })
+        .collect();
+    let roots: Vec<&Path> = projects.iter().map(|(_, root)| root.as_path()).collect();
+    let within: Vec<Option<String>> = nearest_containers(&roots)
+        .into_iter()
+        .map(|container| container.map(|i| projects[i].0.handle.clone()))
+        .collect();
+    let projects = projects
+        .into_iter()
+        .zip(within)
+        .map(|((project, _), within)| AgentProject { within, ..project })
         .collect();
     AgentSettings {
         status: AgentStatus {
@@ -113,6 +131,23 @@ fn settings_of(state: &AppState, agent: &Agent) -> AgentSettings {
         },
         projects,
     }
+}
+
+/// For each root, the index of the deepest *other* root that contains it — the same component-wise
+/// `starts_with` test `scope::in_scope` grants access by, on the same canonical roots. Two entries for
+/// one folder don't contain each other.
+fn nearest_containers(roots: &[&Path]) -> Vec<Option<usize>> {
+    roots
+        .iter()
+        .map(|root| {
+            roots
+                .iter()
+                .enumerate()
+                .filter(|(_, other)| *other != root && root.starts_with(other))
+                .max_by_key(|(_, other)| other.components().count())
+                .map(|(i, _)| i)
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -475,5 +510,26 @@ mod tests {
             resolve_outcome(ProposalStatus::Accepting, ProposalStatus::Dismissed),
             ResolveOutcome::Proceed
         ));
+    }
+
+    #[test]
+    fn a_folder_inside_another_listed_folder_names_the_nearest_one() {
+        let roots = [
+            Path::new("/work/app"),
+            Path::new("/work/app/web"),
+            Path::new("/work/app/web/docs"),
+            Path::new("/work/app-web"),
+            Path::new("/work"),
+        ];
+        assert_eq!(
+            nearest_containers(&roots),
+            vec![Some(4), Some(0), Some(1), Some(4), None]
+        );
+    }
+
+    #[test]
+    fn the_same_folder_listed_twice_is_not_inside_itself() {
+        let roots = [Path::new("/work/app"), Path::new("/work/app")];
+        assert_eq!(nearest_containers(&roots), vec![None, None]);
     }
 }

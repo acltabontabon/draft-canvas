@@ -10,6 +10,9 @@ export type RenameTarget =
   | { kind: 'recent'; handle: Handle; name: string }
   | { kind: 'project'; project: Handle; relPath: string; name: string };
 
+/** The pages of Settings, in rail order (see `settings/SettingsDialog.tsx`). */
+export type SettingsCategory = 'general' | 'agents' | 'updates';
+
 /** What the open document is, for the status bar, the window title and Home. */
 export type DesktopDoc =
   | { kind: 'none' }
@@ -56,6 +59,8 @@ export interface DesktopState {
   recovery: RecoveryEntry[];
   settings: DesktopSettings;
   settingsOpen: boolean;
+  /** The Settings page showing; kept across openings so Settings reopens where it was left. */
+  settingsCategory: SettingsCategory;
   renameTarget: RenameTarget | null;
   /** Where an update stands, as the shell last said. Null until it has. */
   update: UpdateSnapshot | null;
@@ -77,6 +82,7 @@ const INITIAL: DesktopState = {
   recovery: [],
   settings: { closeBehavior: 'ask', autoCheckUpdates: true },
   settingsOpen: false,
+  settingsCategory: 'general',
   renameTarget: null,
   update: null,
   updateOpen: false,

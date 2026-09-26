@@ -1,12 +1,12 @@
 import { Button } from '../../ui/common/Button';
 import { Modal } from '../../ui/common/Modal';
 import { desktopStore } from '../store';
-import { canCheck, describeUpdate, inlineParts, parseNotes, updateStatusLine, type UpdateView } from '../updates';
+import { describeUpdate, inlineParts, parseNotes, type UpdateView } from '../updates';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 
 /**
  * Updating, as the page shows it: a chip that appears only when there is something to take (or a
- * download under way), a panel that says what and asks, and a section in Settings. Every word comes
+ * download under way), a panel that says what and asks, and a page in Settings (`settings/UpdateSettings.tsx`). Every word comes
  * from `describeUpdate`; every decision is the shell's.
  */
 
@@ -133,39 +133,5 @@ function ReleaseNotes({ notes }: { notes: string | null }) {
         ),
       )}
     </section>
-  );
-}
-
-/** Settings → Updates: the switch, where things stand, and a way to look now. */
-export function UpdateSettings() {
-  const { update, settings } = useDesktopState();
-  const controller = useDesktopController();
-  const view = describeUpdate(update);
-  return (
-    <fieldset className="dc-settings-group">
-      <legend>Updates</legend>
-      <label className="dc-settings-choice">
-        <input type="checkbox" checked={settings.autoCheckUpdates} onChange={(event) => void controller.setAutoCheckUpdates(event.target.checked)} />
-        <span>
-          Check for updates automatically
-          <span className="dc-muted dc-settings-hint">Once a day, and only to look. Nothing is downloaded or installed until you say so.</span>
-        </span>
-      </label>
-      <div className="dc-settings-update">
-        <span className="dc-muted" role="status">
-          {update ? `${update.currentVersion} installed. ` : ''}
-          {updateStatusLine(update)}
-        </span>
-        {view.version ? (
-          <Button variant="quiet" onClick={() => desktopStore.update({ settingsOpen: false, updateOpen: true })}>
-            Show update
-          </Button>
-        ) : (
-          <Button variant="quiet" disabled={!canCheck(update)} onClick={() => void controller.checkForUpdate()}>
-            Check for updates
-          </Button>
-        )}
-      </div>
-    </fieldset>
   );
 }

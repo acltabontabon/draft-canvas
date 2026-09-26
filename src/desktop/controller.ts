@@ -1328,13 +1328,15 @@ export class DesktopController {
   }
 
   /** Switch agent access, one folder's permission, or the connection secret; the shell answers
-   *  with where things now stand. */
-  async configureAgent(patch: AgentPatch): Promise<void> {
+   *  with where things now stand. False when it couldn't (and the person has been told). */
+  async configureAgent(patch: AgentPatch): Promise<boolean> {
     try {
       this.store.update({ agent: await this.api.agentConfigure(patch) });
+      return true;
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-agent-configure' });
       this.ui.notify(`Couldn’t change agent access: ${describe(error)}`);
+      return false;
     }
   }
 

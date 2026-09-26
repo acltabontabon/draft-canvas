@@ -1,0 +1,712 @@
+/* ─── Settings (`settings/`) ─────────────────────────────────────────────────────────────────────
+   A rail of pages beside the page showing. The dialog keeps one height whichever page is open, so
+   moving along the rail never makes it jump; the page is the only thing that scrolls, and the
+   title, close control and rail stay put. Everything is built from the pieces in `layout.tsx`:
+   a new setting is a row, never new CSS. */
+
+.dc-modal-settings {
+  /* Amber for "needs you, but isn't broken", mixed toward the theme's own text colour so it stays
+     legible on both grounds without a second definition per theme. */
+  --dc-prefs-warn: color-mix(in srgb, #e0a82e 62%, var(--dc-text));
+  --dc-prefs-tint: color-mix(in srgb, var(--dc-text) 3%, var(--dc-surface));
+  height: min(660px, calc(100dvh - 48px));
+  max-height: calc(100dvh - 48px);
+}
+
+.dc-modal-settings .dc-modal-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 212px minmax(0, 1fr);
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ---- the rail ---------------------------------------------------------------- */
+
+.dc-prefs-rail {
+  min-height: 0;
+  padding: 16px 10px;
+  overflow-y: auto;
+  border-right: 1px solid var(--dc-border);
+  background: color-mix(in srgb, var(--dc-canvas) 55%, var(--dc-surface));
+  border-bottom-left-radius: var(--dc-radius-lg);
+}
+
+.dc-prefs-rail [role='tablist'] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-prefs-tab {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--dc-radius);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 90ms ease,
+    color 90ms ease;
+}
+
+.dc-prefs-tab svg {
+  flex: none;
+  color: var(--dc-text-faint);
+  transition: color 90ms ease;
+}
+
+.dc-prefs-tab:hover {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+.dc-prefs-tab[aria-selected='true'] {
+  background: var(--dc-selection-soft);
+  color: var(--dc-text);
+  font-weight: 600;
+}
+
+.dc-prefs-tab[aria-selected='true'] svg {
+  color: var(--dc-selection);
+}
+
+/* The page you're on, marked the way the canvas marks a selection: a short stroke of the accent. */
+.dc-prefs-tab[aria-selected='true']::before {
+  content: '';
+  position: absolute;
+  inset-block: 9px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--dc-selection);
+}
+
+.dc-prefs-tab:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
+}
+
+/* ---- the page ---------------------------------------------------------------- */
+
+.dc-prefs-panel {
+  min-height: 0;
+  padding: 28px 40px 44px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.dc-prefs-page {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  /* A reading measure: rows don't stretch across a wide window. */
+  max-width: 640px;
+}
+
+.dc-prefs-page-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--dc-text);
+}
+
+.dc-prefs-page-head p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--dc-text-muted);
+}
+
+/* ---- sections ---------------------------------------------------------------- */
+
+.dc-prefs-section {
+  /* A fieldset is as wide as its widest content by default; a long path would widen the page. */
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dc-prefs-section[data-apart] {
+  padding-top: 28px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-prefs-section-title {
+  display: block;
+  margin: 0;
+  padding: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--dc-text);
+}
+
+.dc-prefs-section-description {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dc-text-muted);
+}
+
+.dc-prefs-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 14px;
+  min-width: 0;
+}
+
+/* A list of like things (the folders): one quiet frame with hairlines, not a box per row. */
+.dc-prefs-rows[data-list] {
+  gap: 0;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-prefs-tint);
+}
+
+.dc-prefs-rows[data-list] > .dc-prefs-row {
+  --dc-prefs-inset: 14px;
+  padding-block: 11px;
+  padding-inline-end: 14px;
+}
+
+.dc-prefs-rows[data-list] > .dc-prefs-row + .dc-prefs-row {
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-prefs-section:disabled .dc-prefs-rows {
+  opacity: 0.55;
+}
+
+/* ---- rows ---------------------------------------------------------------------- */
+
+.dc-prefs-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  /* A folder inside another listed folder steps in under it. */
+  padding-inline-start: calc(var(--dc-prefs-inset, 0px) + var(--dc-prefs-depth, 0) * 24px);
+}
+
+.dc-prefs-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dc-prefs-label {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--dc-text);
+}
+
+.dc-prefs-detail {
+  font-family: var(--dc-mono);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dc-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.dc-prefs-description {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dc-text-muted);
+}
+
+.dc-prefs-choice {
+  cursor: pointer;
+}
+
+.dc-prefs-section:disabled .dc-prefs-choice {
+  cursor: default;
+}
+
+.dc-prefs-choice > input:not(.dc-prefs-switch) {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 2px 0 0;
+  accent-color: var(--dc-selection);
+  cursor: inherit;
+}
+
+.dc-prefs-choice > input:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+/* Reachable through a ticked folder around it: said in the accent, the box itself left alone. */
+.dc-prefs-choice:has(input[data-inherited]) .dc-prefs-description {
+  color: var(--dc-selection);
+}
+
+/* A master on/off: the switch sits at the end of the row. */
+.dc-prefs-choice[data-toggle] {
+  flex-direction: row-reverse;
+  align-items: center;
+}
+
+.dc-prefs-switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-border-strong);
+  appearance: none;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.dc-prefs-switch::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 140ms var(--dc-ease-out);
+}
+
+.dc-prefs-switch:checked {
+  background: var(--dc-selection);
+}
+
+.dc-prefs-switch:checked::before {
+  transform: translateX(14px);
+}
+
+.dc-prefs-switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dc-prefs-action {
+  align-items: center;
+}
+
+.dc-prefs-control {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+/* A secondary action that still needs to look pressable on a quiet page. */
+.dc-prefs-outline {
+  height: 30px;
+  padding: 0 12px;
+  border-color: var(--dc-border-strong);
+  color: var(--dc-text);
+}
+
+.dc-prefs-empty {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--dc-border-strong);
+  border-radius: var(--dc-radius);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dc-text-muted);
+}
+
+.dc-prefs-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dc-text-muted);
+}
+
+.dc-prefs-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.dc-prefs-note[data-tone='on'] svg {
+  color: var(--dc-selection);
+}
+
+.dc-prefs-note[data-tone='warn'] svg {
+  color: var(--dc-prefs-warn);
+}
+
+.dc-prefs-note[data-tone='error'] {
+  color: var(--dc-text);
+}
+
+.dc-prefs-note[data-tone='error'] svg {
+  color: var(--dc-danger);
+}
+
+/* ---- AI agents: where things stand ------------------------------------------ */
+
+.dc-prefs-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-prefs-tint);
+}
+
+.dc-prefs-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 0;
+}
+
+.dc-prefs-fact dt {
+  font-size: 11.5px;
+  color: var(--dc-text-faint);
+}
+
+.dc-prefs-fact dd {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dc-text);
+}
+
+.dc-prefs-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dc-border-strong);
+}
+
+.dc-prefs-fact[data-tone='on'] .dc-prefs-dot {
+  background: var(--dc-selection);
+  box-shadow: 0 0 0 3px var(--dc-selection-soft);
+}
+
+.dc-prefs-fact[data-tone='warn'] .dc-prefs-dot {
+  background: var(--dc-prefs-warn);
+}
+
+.dc-prefs-fact[data-tone='off'] dd {
+  color: var(--dc-text-muted);
+}
+
+/* ---- AI agents: connecting one ------------------------------------------------ */
+
+.dc-prefs-client {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.dc-prefs-step {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dc-text);
+}
+
+.dc-prefs-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.dc-prefs-inline a.dc-button {
+  height: 30px;
+  padding: 0 12px;
+  text-decoration: none;
+}
+
+.dc-prefs-inline a.dc-button:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+.dc-prefs-copy {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-code-bg);
+}
+
+.dc-prefs-copy-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border-bottom: 1px solid var(--dc-border);
+  font-size: 11.5px;
+  color: var(--dc-text-faint);
+}
+
+.dc-prefs-copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 90ms ease,
+    color 90ms ease;
+}
+
+.dc-prefs-copy-button:hover {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+.dc-prefs-copy-button:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-prefs-copy-button[data-state='copied'] {
+  color: var(--dc-selection);
+}
+
+.dc-prefs-copy-button[data-state='failed'] {
+  color: var(--dc-danger);
+}
+
+.dc-prefs-copy pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  font-family: var(--dc-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+  color: var(--dc-text);
+  user-select: text;
+  outline: none;
+}
+
+/* A one-line command wraps so all of it shows; a config keeps its shape and scrolls instead. */
+.dc-prefs-copy:not([data-multiline]) pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dc-prefs-copy[data-multiline] pre {
+  max-height: 180px;
+}
+
+.dc-prefs-copy pre:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--dc-selection);
+}
+
+.dc-prefs-disclosure-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: -6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dc-prefs-disclosure-toggle:hover {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+.dc-prefs-disclosure-toggle:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-prefs-disclosure-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* `display: flex` above would otherwise beat the `hidden` attribute. */
+.dc-prefs-disclosure-body[hidden] {
+  display: none;
+}
+
+/* ---- Updates ------------------------------------------------------------------ */
+
+.dc-prefs-update {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-lg);
+  background: var(--dc-prefs-tint);
+}
+
+.dc-prefs-update-glyph {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--dc-surface-hover);
+  color: var(--dc-text-muted);
+}
+
+.dc-prefs-update[data-tone='ok'] .dc-prefs-update-glyph,
+.dc-prefs-update[data-tone='news'] .dc-prefs-update-glyph {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+.dc-prefs-update[data-tone='error'] .dc-prefs-update-glyph {
+  background: color-mix(in srgb, var(--dc-danger) 14%, transparent);
+  color: var(--dc-danger);
+}
+
+.dc-prefs-update-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dc-prefs-update-version {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dc-text);
+}
+
+.dc-prefs-update-line {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dc-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.dc-prefs-update[data-tone='error'] .dc-prefs-update-line {
+  color: var(--dc-text);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-prefs-update[data-tone='busy'] .dc-prefs-update-glyph svg {
+    animation: dc-prefs-spin 1.1s linear infinite;
+  }
+}
+
+@keyframes dc-prefs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-prefs-tab,
+  .dc-prefs-switch,
+  .dc-prefs-switch::before {
+    transition: none;
+  }
+}
+
+/* ---- a smaller window --------------------------------------------------------- */
+
+/* The rail becomes a row of tabs above the page: every page still a click away, nothing scrolls sideways
+   but the tab row itself. */
+@media (max-width: 720px) {
+  .dc-modal-settings .dc-modal-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .dc-prefs-rail {
+    padding: 8px 12px;
+    overflow: auto hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--dc-border);
+    border-bottom-left-radius: 0;
+  }
+
+  .dc-prefs-rail [role='tablist'] {
+    flex-direction: row;
+    gap: 4px;
+  }
+
+  .dc-prefs-tab {
+    min-height: 32px;
+    padding: 4px 10px;
+  }
+
+  .dc-prefs-tab[aria-selected='true']::before {
+    inset: auto 10px -8px;
+    width: auto;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+  }
+
+  .dc-prefs-panel {
+    padding: 22px 20px 32px;
+  }
+}
+
+@media (max-width: 560px) {
+  .dc-prefs-action {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dc-prefs-control {
+    justify-content: flex-start;
+  }
+
+  .dc-prefs-update {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dc-prefs-update > .dc-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}

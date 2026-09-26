@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cursorDeeplink, cursorServerConfig, genericConfigJson } from '../../src/desktop/ui/AgentSettings';
+import { cursorDeeplink, cursorServerConfig, genericConfigJson } from '../../src/desktop/ui/settings/agentModel';
 
 describe('Cursor MCP setup', () => {
   it('builds the deeplink and the pasted-config fallback from the same server definition', () => {

@@ -15,18 +15,19 @@ but agents can't reach them.
 
 ## Turn it on
 
-1. Open **Settings** (`⌘,` / `Ctrl+,`, or from the tray menu) and find **AI agents**.
-2. Tick **Let coding agents on this computer draw diagrams**.
+1. Open **Settings** (`⌘,` / `Ctrl+,`, or from the tray menu) and choose **AI agents**.
+2. Turn on **Allow agent access**.
 3. Tick each project folder an agent may use. A folder appears here once you have opened it in Draft
-   Canvas. Agents can list, read, create and change diagrams only in the folders you tick.
-4. Set up your agent from the same place:
+   Canvas. Agents can list, read, create and change diagrams only in the folders you tick — and in
+   everything inside them, so a ticked folder already covers the folders listed under it.
+4. Under **Connect an agent**, pick your agent and follow its setup:
    - **Claude Code**: run the copied command, for example
      `claude mcp add draft-canvas -- "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"`.
    - **Cursor**: click **Add to Cursor** — it opens Cursor and adds Draft Canvas to its MCP
      configuration for you. If nothing opens (no `cursor://` links registered, or you'd rather add it
-     to a project's own configuration first), use **Or copy the config instead** and paste it into
+     to a project's own configuration first), use **Copy the config instead** and paste it into
      `~/.cursor/mcp.json`, or a project's `.cursor/mcp.json`.
-   - **Other agents**: add the copied `mcpServers` entry to the agent's MCP configuration.
+   - **Other MCP clients**: add the copied `mcpServers` entry to the agent's MCP configuration.
 
 Draft Canvas must be running while the agent works: the connector talks to the running app. It
 doesn't start the app for you, and it says so if the app isn't open.
@@ -157,8 +158,8 @@ changed in that case.
 - **Disconnect agents** in Settings ends every open connection and replaces the connection secret.
   Agents you have set up reconnect on their next request.
 - Untick a folder to put it out of reach at once, including any retry of an earlier request.
-- Untick **Let coding agents on this computer draw diagrams** to turn access off completely. Nothing
-  can connect until you turn it on again.
+- Turn off **Allow agent access** to turn access off completely. Nothing can connect until you turn
+  it on again; your folder choices are kept.
 
 ## When something goes wrong
 

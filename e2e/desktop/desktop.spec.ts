@@ -615,11 +615,18 @@ test('an update is offered quietly, and nothing happens to it until it is asked 
   await expect.poll(called).toContain('update_install');
 });
 
+/** Opens Settings the way the menu does, on the page named. */
+async function openSettings(page: Page, category?: 'General' | 'AI agents' | 'Updates') {
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'settings' }));
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  if (category) await settings.getByRole('tab', { name: category }).click();
+  return settings;
+}
+
 test('Settings has the update switch, and turning it off tells the shell', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
-  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'settings' }));
-  const settings = page.getByRole('dialog', { name: 'Settings' });
+  const settings = await openSettings(page, 'Updates');
   const auto = settings.getByRole('checkbox', { name: /Check for updates automatically/ });
   await expect(auto).toBeChecked();
   await auto.uncheck();
@@ -638,18 +645,19 @@ test('Settings → AI agents is off until turned on, and each folder is allowed 
   await page.addInitScript(() => window.__shell.seed({ projects: [{ name: 'platform', diagrams: [] }, { name: 'payments', diagrams: [] }] }));
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
-  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'settings' }));
-  const settings = page.getByRole('dialog', { name: 'Settings' });
-  const access = settings.getByRole('checkbox', { name: /Let coding agents on this computer draw diagrams/ });
+  const settings = await openSettings(page, 'AI agents');
+  const access = settings.getByRole('switch', { name: 'Allow agent access' });
   await expect(access).not.toBeChecked();
-  // Nothing about folders or connecting shows while access is off.
-  await expect(settings.getByRole('group', { name: 'Folders agents may use' })).toHaveCount(0);
+  // While access is off the folders stay in view, kept as they were but out of reach.
+  const folders = settings.getByRole('group', { name: 'Allowed folders' });
+  await expect(folders.getByRole('checkbox', { name: /platform/ })).toBeDisabled();
+  await expect(folders.getByRole('checkbox', { name: /payments/ })).toBeDisabled();
 
   await access.check();
   await expect(access).toBeChecked();
-  const folders = settings.getByRole('group', { name: 'Folders agents may use' });
   const platform = folders.getByRole('checkbox', { name: /platform/ });
   const payments = folders.getByRole('checkbox', { name: /payments/ });
+  await expect(platform).toBeEnabled();
   await expect(platform).not.toBeChecked();
   await expect(payments).not.toBeChecked();
   await payments.check();
@@ -667,6 +675,93 @@ test('Settings → AI agents is off until turned on, and each folder is allowed 
   );
   expect(patches[0]).toEqual({ enabled: true });
   expect(patches[1]).toMatchObject({ project: { agent: true } });
+});
+
+test('Settings moves between pages by keyboard, shows one agent setup at a time, and ends connections apart from setup', async ({ page }) => {
+  await page.addInitScript(() =>
+    window.__shell.seed({
+      projects: [
+        { name: 'platform', diagrams: [] },
+        { name: 'web', path: 'platform/web', diagrams: [] },
+        { name: 'platform-tools', diagrams: [] },
+      ],
+    }),
+  );
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  const settings = await openSettings(page);
+
+  // It opens on the page it was last left at (General, the first time), with focus on that tab.
+  const general = settings.getByRole('tab', { name: 'General' });
+  await expect(general).toHaveAttribute('aria-selected', 'true');
+  await expect(general).toBeFocused();
+  await settings.getByRole('radio', { name: 'Quit Draft Canvas' }).check();
+  await expect
+    .poll(() => page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'settings_set').map((call) => (call.args as { patch: unknown }).patch)))
+    .toContainEqual({ closeBehavior: 'quit' });
+
+  await general.focus();
+  await page.keyboard.press('ArrowDown');
+  const agents = settings.getByRole('tab', { name: 'AI agents' });
+  await expect(agents).toBeFocused();
+  await expect(agents).toHaveAttribute('aria-selected', 'true');
+  await expect(settings.getByRole('tabpanel', { name: 'AI agents' })).toBeVisible();
+  await page.keyboard.press('End');
+  await expect(settings.getByRole('tab', { name: 'Updates' })).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(general).toHaveAttribute('aria-selected', 'true');
+  await agents.click();
+
+  // Nothing to disconnect until access is on.
+  const disconnect = settings.getByRole('button', { name: 'Disconnect agents' });
+  await expect(disconnect).toBeDisabled();
+  await settings.getByRole('switch', { name: 'Allow agent access' }).check();
+  await expect(disconnect).toBeEnabled();
+
+  // A ticked folder reaches the folder inside it — said on the inner row, whose own box is left alone.
+  const folders = settings.getByRole('group', { name: 'Allowed folders' });
+  await folders.getByRole('checkbox', { name: /^platform ~\/work\/platform$/ }).check();
+  const web = folders.getByRole('checkbox', { name: /web/ });
+  await expect(web).not.toBeChecked();
+  await expect(web).toHaveAccessibleDescription('Already reachable through platform');
+  await expect(folders.getByRole('checkbox', { name: /platform-tools/ })).not.toHaveAccessibleDescription(/reachable/);
+
+  // One client's setup at a time.
+  const command = settings.getByText(/^claude mcp add draft-canvas/);
+  await expect(command).toBeVisible();
+  await expect(settings.getByText(/"mcpServers"/)).toHaveCount(0);
+  // The segmented control's radios are visually hidden; its label is what a pointer presses.
+  await settings.getByRole('radio', { name: 'Cursor' }).check({ force: true });
+  await expect(command).toHaveCount(0);
+  await expect(settings.getByRole('link', { name: 'Add to Cursor' })).toHaveAttribute('href', /^cursor:\/\/anysphere\.cursor-deeplink\/mcp\/install/);
+  const fallback = settings.getByRole('button', { name: 'Copy the config instead' });
+  await expect(fallback).toHaveAttribute('aria-expanded', 'false');
+  await fallback.click();
+  await expect(fallback).toHaveAttribute('aria-expanded', 'true');
+  await expect(settings.getByText(/"mcpServers"/)).toBeVisible();
+  await settings.getByRole('radio', { name: 'Other MCP clients' }).check({ force: true });
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await settings.getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(settings.getByRole('button', { name: 'Copied' })).toBeVisible();
+  // The whole config, not just what the block has room to show.
+  expect(JSON.parse(await page.evaluate(() => navigator.clipboard.readText()))).toEqual({
+    mcpServers: { 'draft-canvas': { command: '/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp' } },
+  });
+
+  // Ending connections is its own action, and says it happened.
+  await page.evaluate(() => window.__shell.setAgent({ connections: 2 }));
+  await expect(settings.getByRole('status').filter({ hasText: '2 connected' })).toBeVisible();
+  await disconnect.click();
+  await expect(disconnect).toHaveText('Disconnected');
+  await expect(settings.getByRole('status').filter({ hasText: 'None connected' })).toBeVisible();
+  const patches = await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'agent_configure').map((call) => (call.args as { patch: unknown }).patch));
+  expect(patches).toContainEqual({ rotate: true });
+
+  // Escape closes Settings; reopening returns to the page it was left on.
+  await page.keyboard.press('Escape');
+  await expect(settings).toHaveCount(0);
+  await openSettings(page);
+  await expect(settings.getByRole('tab', { name: 'AI agents' })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('the tray panel draws each diagram and chooses only through the shell', async ({ page }) => {
