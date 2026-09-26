@@ -1,4 +1,4 @@
-import { memo, type CSSProperties } from 'react';
+import { memo } from 'react';
 import { Mark } from './Fingerprint';
 import type { ShapeBox } from './shapeLayout';
 import { GLYPH_HEIGHT, GLYPH_WIDTH, type StarterShape } from './starterShapes';
@@ -87,17 +87,17 @@ function arrowhead({ end, heading }: Route): string {
 
 /**
  * A starter's topology at tile size: the library fingerprint's own marks (`Mark`, same kinds,
- * same classes), with connectors routed and arrowed the way the canvas draws them. Each connector
- * carries a second, normally invisible copy — the pulse — that CSS runs once along it on hover or
- * focus, delayed by its depth so the pulse reads in the order the system does.
+ * same classes), with connectors routed and arrowed the way the canvas draws them. Every path is
+ * a stroke and nothing else: an SVG path fills itself black unless told not to, and a connector
+ * with a bend once drew a solid wedge across the tile when its styling went missing.
  */
 export const StarterGlyph = memo(function StarterGlyph({ starter }: { starter: StarterShape }) {
-  const { shape, depths, boxes } = starter;
+  const { shape, boxes } = starter;
   const routes = shape.edges.map(([from, to], i) => {
     const a = boxes[from];
     const b = boxes[to];
     const path = a && b ? route(a, b) : null;
-    return path ? { ...path, key: i, depth: depths[i] ?? 0 } : null;
+    return path ? { ...path, key: i } : null;
   });
 
   return (
@@ -115,10 +115,9 @@ export const StarterGlyph = memo(function StarterGlyph({ starter }: { starter: S
       {routes.map(
         (path) =>
           path && (
-            <g key={`e${path.key}`} className="dc-starter-edge" style={{ '--d': path.depth } as CSSProperties}>
-              <path className="dc-starter-edge-line" d={path.d} />
-              <path className="dc-starter-edge-arrow" d={arrowhead(path)} />
-              <path className="dc-starter-edge-pulse" d={path.d} pathLength={1} />
+            <g key={`e${path.key}`} className="dc-starter-edge">
+              <path className="dc-starter-edge-line" d={path.d} fill="none" />
+              <path className="dc-starter-edge-arrow" d={arrowhead(path)} fill="none" />
             </g>
           ),
       )}

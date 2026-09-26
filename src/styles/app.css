@@ -1066,13 +1066,30 @@ kbd {
   font-size: 12.5px;
   font-variant-caps: all-small-caps;
   letter-spacing: 0.06em;
+  text-align: center;
+}
+
+/* Rows centre, so five tiles read as one composed group whatever the column count leaves on the
+   last row, and the label and the hint sit on the same axis as the drawings. Five fit one row
+   where there is room; where there is not, the grid narrows to three across so the split is
+   3 + 2 rather than 4 + 1. */
+.dc-home-starters {
+  container-type: inline-size;
 }
 
 .dc-starter-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px 24px;
-  justify-content: flex-start;
+  gap: 20px 24px;
+  justify-content: center;
+  max-width: 816px;
+  margin: 0 auto;
+}
+
+@container (width < 816px) {
+  .dc-starter-grid {
+    max-width: 480px;
+  }
 }
 
 .dc-starter-grid-pending {
@@ -1082,6 +1099,7 @@ kbd {
 .dc-home-more {
   margin: 18px 0 0;
   font-size: 12.5px;
+  text-align: center;
 }
 
 .dc-home-more kbd {
@@ -1105,15 +1123,19 @@ kbd {
   position: relative;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 4px;
-  min-width: 0;
+  /* As wide as its drawing and no wider: a description laid out under the name wraps beneath
+     the swatch instead of stretching the tile to its own length. */
+  width: 144px;
   padding: 0 0 4px;
   border: 0;
   border-radius: 3px;
   background: none;
   color: var(--dc-text-muted);
   font: inherit;
-  text-align: left;
+  /* The drawing is centred in its swatch; its name and description share that centre line. */
+  text-align: center;
   cursor: pointer;
   outline: 2px solid transparent;
 }
@@ -1192,6 +1214,7 @@ kbd {
 
 .dc-starter-name {
   min-width: 0;
+  max-width: 100%;
   padding: 0 2px;
   overflow: hidden;
   font-size: 13px;
