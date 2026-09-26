@@ -47,9 +47,12 @@ async function labelNode(page: Page, index: number, text: string) {
 async function connect(page: Page, fromIndex: number, toIndex: number) {
   const source = page.locator('.dc-node').nth(fromIndex);
   await source.hover();
-  const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
+  // A handle turns visible only a frame after its node is hovered (a `visibility` transition), and
+  // until then a press on it falls through to whatever is beneath — here, the connector already
+  // leaving this handle, so the drag never starts a second one. `hover()` waits until the handle
+  // itself takes the pointer.
+  await source.locator('.dc-handle').nth(1).hover();
   const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
   await page.mouse.down();
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
   await page.mouse.up();
