@@ -60,7 +60,7 @@ either one distribution's own shell or tooling around the editor.
 | Path | What's there |
 | --- | --- |
 | `src/` | The editor: React + TypeScript, built by Vite. Every distribution runs this code |
-| `src/desktop/` | The desktop app's screens and logic (Home, Browse, updates, the tray panel), compiled out of the web build |
+| `src/desktop/` | The desktop app's screens and logic (Home, Browse, updates, settings), compiled out of the web build |
 | `src-tauri/` | The desktop app's native side in Rust (Tauri 2): windows, tray, dialogs, file I/O, updater |
 | `src-tauri/mcp/` | `draft-canvas-mcp`, the MCP connector an AI agent launches; bundled inside the desktop app ([Agent integration](docs/reference/agent-integration.md)) |
 | `www/` | The landing page at <https://acltabontabon.com/draft-canvas/>: a separate Vite project sharing no dependency with the app ([The website](docs/reference/website.md)) |
@@ -73,7 +73,7 @@ either one distribution's own shell or tooling around the editor.
 
 At the root, besides the usual manifests and tool configs:
 
-- `index.html` is the editor's entry page, and `tray.html` the desktop tray panel's (a desktop build input only).
+- `index.html` is the editor's entry page.
 - `Dockerfile` and `nginx.conf` build the Docker image: the web build served by nginx.
 - Four Playwright configs, one per target: `playwright.config.ts` (the dev server), `playwright.dist.config.ts`
   (the built app, offline), `playwright.web.config.ts` (the assembled Pages build) and
@@ -130,7 +130,7 @@ reaches the canvas. Files arrive through `src/export/project.ts`.
 | You changed | Also run |
 | --- | --- |
 | The editor (`src/`) | `npm run e2e` |
-| Anything only the desktop app uses (`src/desktop/`, `src-tauri/`, `tray.html`) | `npm run desktop:check` and `npm run e2e:desktop` |
+| Anything only the desktop app uses (`src/desktop/`, `src-tauri/`) | `npm run desktop:check` and `npm run e2e:desktop` |
 | AI agent support (`src/agent/`, `src/layout/`, `src-tauri/src/agent/`, `src-tauri/mcp/`) | The above, plus `npm run agent:schemas` if `src/agent/schema.ts` changed, and `npx tsx e2e/agent-gallery.ts --base <dev server> --out <dir>` to look at the layout gallery in both themes |
 | The landing page (`www/`) or `scripts/assemble-web.mjs` | `npm run e2e:web` |
 | `Dockerfile`, `nginx.conf` | `docker build .`, then run the image and open it |
