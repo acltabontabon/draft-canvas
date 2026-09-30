@@ -7,13 +7,14 @@ import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { markerRef } from '../render/svg/markers';
 import type { Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
-import { layoutText } from '../render/text/layout';
+import { baselineOf, layoutText, type TextLayout } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../ui/personality/usePersonality';
 import {
   LABEL_LINE_GAP,
   RESPONSE_SEED_SUFFIX,
   arrowSeed,
+  captionAnchor as captionBaseline,
   endTangent,
   labelLaneOffset,
   rectOf,
@@ -29,6 +30,7 @@ import {
 } from './routing';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
 import { badgeCrowds, badgePoint } from './badgePoint';
+import { attachmentRowBelowsSourceOrTarget, captionSideOf, describeAttachmentChips } from './attachmentChips';
 import { bridgePath } from './bridge';
 import type { Crossing } from './crossings';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
@@ -107,19 +109,20 @@ export function labelChipRect(side: Side, x: number, y: number, w: number, h: nu
 }
 
 /**
- * Mirrors `captionAnchor` in `DraftEdgeView.tsx`: a horizontal line's caption already clears it
- * with the pre-existing fixed offset; a vertical line needs the caption moved beside it instead,
- * since a y-only offset never leaves the line's own x-coordinate. `responseAway` is the signed
- * direction of this connector's own response line (0 when there is none) — see the live renderer's
- * own doc comment for why the flip is keyed off that sign rather than a single hardcoded side.
+ * The caption's box, for the exporter and for anything that must know where the canvas's caption
+ * sits: derived from `routing.ts`'s `captionAnchor` — the baseline the canvas draws at — so the two
+ * can't disagree. They used to be two formulas (a baseline 14 off the line on screen, a box 6 off
+ * it in the export), and a caption above its line exported several pixels lower than it showed.
+ * A vertical line's caption sits beside it, centred on the point.
  */
 export function captionAnchor(
   side: Side,
   x: number,
   y: number,
-  height: number,
+  layout: TextLayout,
   responseAway = 0,
 ): { x: number; y: number; align: TextAlign } {
+  const height = layout.height;
   if (side === 'right') {
     return responseAway > 0
       ? { x: x - LABEL_LINE_GAP, y: y - height / 2, align: 'end' }
@@ -130,7 +133,8 @@ export function captionAnchor(
       ? { x: x + LABEL_LINE_GAP, y: y - height / 2, align: 'start' }
       : { x: x - LABEL_LINE_GAP, y: y - height / 2, align: 'end' };
   }
-  return responseAway > 0 ? { x, y: y - 6 - height, align: 'middle' } : { x, y: y + 6, align: 'middle' };
+  const baseline = captionBaseline(side, x, y, responseAway).y;
+  return { x, y: baseline - baselineOf(layout, 0), align: 'middle' };
 }
 
 /** Mirrors `conditionTransform` in `DraftEdgeView.tsx` — stacked below the label for a horizontal
@@ -423,7 +427,7 @@ export function describeEdge(
           measurer: ctx.measurer,
         });
         const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
-        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout.height, captionResponseAway);
+        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout, captionResponseAway);
         overlay.push({
           t: 'text',
           x: caption.x,
@@ -618,6 +622,16 @@ export function describeEdge(
       translate: { x: center.x - MARKER_SIZE / 2, y: center.y - MARKER_SIZE / 2 },
       children: describeMarker(ctx.openPoints, { theme: ctx.theme, measurer: ctx.measurer }),
     });
+  }
+
+  // The connector's attachment chips, where the canvas hangs them — see `attachmentChips.ts`.
+  if (edge.attachments?.length) {
+    const source = nodes.get(edge.source);
+    const target = nodes.get(edge.target);
+    if (source && target) {
+      const below = attachmentRowBelowsSourceOrTarget(labelX, labelY, rectOf(source), rectOf(target), captionSideOf(edge, route.labelSide));
+      overlay.push(...describeAttachmentChips(edge.attachments, labelX, labelY, below, { theme: ctx.theme, measurer: ctx.measurer }));
+    }
   }
 
   return { route, line, responseLine, overlay, color };

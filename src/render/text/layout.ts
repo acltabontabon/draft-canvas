@@ -16,6 +16,25 @@ export interface TextLayout {
   ascent: number;
   descent: number;
   truncated: boolean;
+  /**
+   * `rtl` when the text's first strongly directional character is Hebrew, Arabic or another
+   * right-to-left script — its base direction, the way `dir="auto"` decides it. Absent means
+   * left-to-right. Without it Arabic and Hebrew labels drew with their punctuation and any Latin
+   * words in the wrong places, laid out as if they read left to right.
+   */
+  direction?: 'rtl';
+}
+
+const RTL_CHAR = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+const STRONG_CHAR = /\p{L}/u;
+
+/** A paragraph's base direction, from its first strong character (Unicode's rule, and `dir="auto"`'s). */
+export function baseDirection(text: string): 'ltr' | 'rtl' {
+  for (const ch of text) {
+    if (RTL_CHAR.test(ch)) return 'rtl';
+    if (STRONG_CHAR.test(ch)) return 'ltr';
+  }
+  return 'ltr';
 }
 
 export interface LayoutOptions {
@@ -37,6 +56,20 @@ const segmenter =
   typeof Intl !== 'undefined' && 'Segmenter' in Intl
     ? new Intl.Segmenter(undefined, { granularity: 'word' })
     : null;
+
+/**
+ * User-perceived characters: an emoji with its skin tone, a flag, a letter with its combining accent.
+ * Breaking or cutting inside one draws half of it (or a stray accent on the next line). Code points
+ * are the fallback where `Intl.Segmenter` is missing — still never half a surrogate pair.
+ */
+const graphemeSegmenter =
+  typeof Intl !== 'undefined' && 'Segmenter' in Intl
+    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+    : null;
+
+function graphemes(text: string): string[] {
+  return graphemeSegmenter ? [...graphemeSegmenter.segment(text)].map((s) => s.segment) : [...text];
+}
 
 function segments(text: string): string[] {
   const raw = segmenter ? [...segmenter.segment(text)].map((s) => s.segment) : (text.match(/\s+|\S+/g) ?? []);
@@ -173,6 +206,7 @@ export function layoutText(text: string, options: LayoutOptions): TextLayout {
     ascent,
     descent,
     truncated,
+    ...(baseDirection(text) === 'rtl' ? { direction: 'rtl' as const } : {}),
   };
   return layoutCache.set(key, layout);
 }
@@ -241,7 +275,7 @@ function breakLongToken(
 ): string[] {
   const out: string[] = [];
   let current = '';
-  for (const ch of token) {
+  for (const ch of graphemes(token)) {
     const candidate = current + ch;
     if (current !== '' && measurer.width(candidate, font) > maxWidth) {
       out.push(current);
@@ -261,12 +295,11 @@ function ellipsize(
   measurer: TextMeasurer,
 ): string {
   if (measurer.width(line + ELLIPSIS, font) <= maxWidth) return line + ELLIPSIS;
-  let cut = line;
-  while (cut.length > 0 && measurer.width(cut + ELLIPSIS, font) > maxWidth) {
-    // A whole code point at a time: half an emoji renders as a replacement box.
-    cut = cut.slice(0, /[\uDC00-\uDFFF]$/.test(cut) && cut.length > 1 ? -2 : -1);
-  }
-  return cut + ELLIPSIS;
+  // A whole grapheme at a time: half an emoji renders as a replacement box, and a letter without its
+  // accent is a different letter.
+  const parts = graphemes(line);
+  while (parts.length > 0 && measurer.width(parts.join('') + ELLIPSIS, font) > maxWidth) parts.pop();
+  return parts.join('') + ELLIPSIS;
 }
 
 /**

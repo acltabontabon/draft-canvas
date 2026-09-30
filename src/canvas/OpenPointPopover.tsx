@@ -388,6 +388,7 @@ function ContextField({
   };
   return (
     <textarea
+      dir="auto"
       ref={ref}
       className="dc-open-point-context nowheel"
       rows={2}

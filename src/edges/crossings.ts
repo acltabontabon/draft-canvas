@@ -131,8 +131,11 @@ const CELL = 256;
 const MAX_CROSSING_OPS = 4_000_000;
 
 /** And past this many connectors, don't even route. A diagram this dense has bigger problems than
- *  crossings, and the whole-document routing pass is the real cost here, not the pair tests. */
-const MAX_CROSSING_EDGES = 1200;
+ *  crossings. Set above the benchmark's Stress fixture (1,500 connectors, about 110 ms a commit once
+ *  corner pieces stopped being tested) so the published figures include this pass rather than
+ *  quietly skipping it — it was 1,200, and a diagram just under that paid a quarter of a second a
+ *  commit that no published number showed. */
+const MAX_CROSSING_EDGES = 1600;
 
 interface Vertex {
   x: number;
@@ -191,13 +194,27 @@ function glyphsOf(edge: DraftEdge, at: { x: number; y: number }): { x: number; y
   return [];
 }
 
+/**
+ * Each connector's lines from the last canvas plan, keyed by everything its route depends on. Routing
+ * every connector is almost all of a plan's cost, and a commit — a drag, a rename — changes the
+ * inputs of only the few connectors it touches: the rest reuse their lines instead of being routed
+ * again (a diagram of 1,200 connectors spent a quarter of a second per edit here). Rebuilt from the
+ * current connectors on every pass, so it never holds more than one entry per connector; and it holds
+ * only lines, never a plan's own working structures (see AGENTS.md on memoized plans).
+ */
+let routeMemo = new Map<string, { key: string; lines: Line[] }>();
+
+const rectKey = (rect: Rect) => `${rect.x},${rect.y},${rect.width},${rect.height}${rect.anchorBand ? `,${JSON.stringify(rect.anchorBand)}` : ''}`;
+
 /** Routes every connector once, exactly as the renderers do, and reduces each to a polyline plus
- *  the few points an arc must keep away from. */
-function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obstacleNodes: readonly DraftNode[]): Line[] {
+ *  the few points an arc must keep away from. `memoize` is the canvas's own pass; an export or a
+ *  mid-gesture plan routes afresh and leaves the memo to the canvas. */
+function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obstacleNodes: readonly DraftNode[], memoize = false): Line[] {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const lanes = laneIndex(edges);
   const plan = routingPlan(nodes, edges);
   const lines: Line[] = [];
+  const nextMemo = memoize ? new Map<string, { key: string; lines: Line[] }>() : null;
 
   for (const edge of edges) {
     const source = nodeById.get(edge.source);
@@ -208,6 +225,31 @@ function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obsta
     const obstacles = obstaclesForEdge(obstacleNodes, edge.source, edge.target);
     const sourceRect = rectOf(source);
     const targetRect = rectOf(target);
+
+    let key = '';
+    if (nextMemo) {
+      key = [
+        edge.source,
+        edge.target,
+        rectKey(sourceRect),
+        rectKey(targetRect),
+        JSON.stringify([edge.sourceAnchor, edge.targetAnchor, spine]),
+        edge.routing,
+        lane,
+        edge.hasResponse ? 1 : 0,
+        edge.kind,
+        edge.async ? 1 : 0,
+        dashForEdge(edge) === undefined ? 1 : 0,
+        obstacles.map(rectKey).join(';'),
+      ].join('|');
+      const memo = routeMemo.get(edge.id);
+      if (memo && memo.key === key) {
+        lines.push(...memo.lines);
+        nextMemo.set(edge.id, memo);
+        continue;
+      }
+    }
+    const firstLine = lines.length;
 
     const route = routeBetween(sourceRect, targetRect, edge.routing, {
       anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
@@ -258,7 +300,9 @@ function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obsta
         });
       }
     }
+    nextMemo?.set(edge.id, { key, lines: lines.slice(firstLine) });
   }
+  if (nextMemo) routeMemo = nextMemo;
   return lines;
 }
 
@@ -272,6 +316,12 @@ function blockingRects(nodes: readonly DraftNode[]): Rect[] {
 interface SegmentRef {
   line: number;
   index: number;
+  /** For a horizontal segment its y, and the x range it spans; for a vertical one its x and y range.
+   *  A horizontal and a vertical segment cross only where each one's `at` lies in the other's span —
+   *  four comparisons, where the full intersection test is a dozen operations and a division. */
+  at: number;
+  lo: number;
+  hi: number;
   /** The lowest grid cell this segment's box covers. Two segments are tested in the first cell
    *  *both* cover — `max` of these — which is what lets a pair reached from several cells be tested
    *  exactly once without remembering which pairs have been. */
@@ -279,10 +329,15 @@ interface SegmentRef {
   cy0: number;
 }
 
+/** A cell's segments by direction. Connectors are almost all right-angled, and two parallel segments
+ *  never cross (`intersect` refuses them), so a horizontal run is only ever tested against a vertical
+ *  or a slanted one: a crowded cell's pair count drops from (h + v)² to h × v. */
 interface Cell {
   cx: number;
   cy: number;
-  refs: SegmentRef[];
+  h: SegmentRef[];
+  v: SegmentRef[];
+  d: SegmentRef[];
 }
 
 /** Grid cells as one number, so a lookup allocates no string. Cells are far inside ±32768. */
@@ -337,7 +392,8 @@ function compute(
   previous?: ReadonlyMap<string, readonly Crossing[]>,
 ): ComputedPlan {
   if (edges.length < 2 || edges.length > MAX_CROSSING_EDGES) return EMPTY_PLAN;
-  const lines = linesOf(nodes, edges, obstacleNodes);
+  // `previous` is passed only by the canvas's own cached path — the one pass worth remembering routes for.
+  const lines = linesOf(nodes, edges, obstacleNodes, previous !== undefined);
   if (lines.length < 2) return EMPTY_PLAN;
   const blocking = rectGrid(blockingRects(nodes), BRIDGE_CLEARANCE);
 
@@ -348,17 +404,26 @@ function compute(
     for (let i = 0; i + 1 < line.points.length; i += 1) {
       const p = line.points[i]!;
       const q = line.points[i + 1]!;
+      // A piece of a rounded corner — both ends within `BRIDGE_CLEARANCE` of the same bend — lies
+      // wholly inside that bend's clearance, so `atBend` refuses every crossing on it. Left out of the
+      // grid, it costs nothing: the flattened corners were most of a large diagram's segments, and
+      // nine in ten of the pairs this plan used to test.
+      if (line.bends.some((bend) => near(bend, p, BRIDGE_CLEARANCE) && near(bend, q, BRIDGE_CLEARANCE))) continue;
       const x0 = Math.floor(Math.min(p.x, q.x) / CELL);
       const x1 = Math.floor(Math.max(p.x, q.x) / CELL);
       const y0 = Math.floor(Math.min(p.y, q.y) / CELL);
       const y1 = Math.floor(Math.max(p.y, q.y) / CELL);
-      const ref: SegmentRef = { line: lineIndex, index: i, cx0: x0, cy0: y0 };
+      const direction = p.y === q.y ? 'h' : p.x === q.x ? 'v' : 'd';
+      const ref: SegmentRef =
+        direction === 'v'
+          ? { line: lineIndex, index: i, cx0: x0, cy0: y0, at: p.x, lo: Math.min(p.y, q.y), hi: Math.max(p.y, q.y) }
+          : { line: lineIndex, index: i, cx0: x0, cy0: y0, at: p.y, lo: Math.min(p.x, q.x), hi: Math.max(p.x, q.x) };
       for (let cx = x0; cx <= x1; cx += 1) {
         for (let cy = y0; cy <= y1; cy += 1) {
           const key = cellKey(cx, cy);
-          const cell = cells.get(key);
-          if (cell) cell.refs.push(ref);
-          else cells.set(key, { cx, cy, refs: [ref] });
+          let cell = cells.get(key);
+          if (!cell) cells.set(key, (cell = { cx, cy, h: [], v: [], d: [] }));
+          cell[direction].push(ref);
         }
       }
     }
@@ -369,59 +434,79 @@ function compute(
   const keyOf = new Map<string, string>();
   let ops = 0;
 
+  /** Tests one segment pair in `cell`. `false` once the plan is over its budget. */
+  const test = (cell: Cell, refA: SegmentRef, refB: SegmentRef): boolean => {
+    if ((ops += 1) > MAX_CROSSING_OPS) return false;
+    // A segment pair is tested in the first cell both cover, and skipped in the others — the
+    // same pair is reached from every cell the two boxes share.
+    if (cell.cx !== (refA.cx0 > refB.cx0 ? refA.cx0 : refB.cx0)) return true;
+    if (cell.cy !== (refA.cy0 > refB.cy0 ? refA.cy0 : refB.cy0)) return true;
+    // In the order the lines were routed, so which of two connectors owns a crossing, and the order
+    // a connector's crossings are listed in, don't depend on how the cell sorted them.
+    if (refA.line > refB.line || (refA.line === refB.line && refA.index > refB.index)) [refA, refB] = [refB, refA];
+    const a = lines[refA.line]!;
+    const b = lines[refB.line]!;
+    // The same connector never crosses itself, and neither half of a request/response pair
+    // crosses the other: they are one relationship drawn as two lines.
+    if (a.edgeId === b.edgeId) return true;
+    record(a, refA.index, b, refB.index);
+    return true;
+  };
+
+  /** A crossing of segment `indexA` of `a` and `indexB` of `b`, if it is one worth a bridge. */
+  const record = (a: Line, indexA: number, b: Line, indexB: number): void => {
+    const crossing = intersect(a, indexA, b, indexB);
+    if (!crossing) return;
+    const { x, y, horizontalityA, horizontalityB } = crossing;
+
+    // Two connectors that meet at a shape, or at each other's ends, are joined there as far as
+    // a reader is concerned — an arc would claim otherwise. This one rule also keeps arcs off
+    // arrowheads. Connectors that leave the same shape and genuinely cross further out are a
+    // real crossing and still get one.
+    if (a.ends.some((end) => near(end, { x, y }, BRIDGE_CLEARANCE))) return;
+    if (b.ends.some((end) => near(end, { x, y }, BRIDGE_CLEARANCE))) return;
+    if (insideAnyRect(blocking, x, y)) return;
+    if (atBend(a, x, y) || atBend(b, x, y)) return;
+
+    const drawableA = drawable(a, x, y);
+    const drawableB = drawable(b, x, y);
+    const owner = chooseOwner(a, b, horizontalityA, horizontalityB, drawableA, drawableB);
+    if (!owner) return;
+    const other = owner === a ? b : a;
+    const ownerIndex = owner === a ? indexA : indexB;
+    const normal = bowOf(owner.points[ownerIndex]!, owner.points[ownerIndex + 1]!);
+
+    keyOf.set(owner.edgeId, owner.key);
+    const list = found.get(owner.edgeId);
+    const entry: Crossing = {
+      x,
+      y,
+      nx: normal.x,
+      ny: normal.y,
+      otherSource: other.source,
+      otherTarget: other.target,
+    };
+    // One foreign line crossing a bundle's shared trunk meets it once per member, at the same
+    // point every time. Those are one crossing, not N stacked arcs.
+    if (!list) found.set(owner.edgeId, [entry]);
+    else if (!list.some((existing) => near(existing, entry, 0.5))) list.push(entry);
+  };
+
   for (const cell of cells.values()) {
-    const refs = cell.refs;
-    for (let i = 0; i < refs.length; i += 1) {
-      const refA = refs[i]!;
-      for (let j = i + 1; j < refs.length; j += 1) {
+    const { h, v, d } = cell;
+    for (const a of h) {
+      for (const b of v) {
+        // A horizontal and a vertical segment share exactly one cell, so they are never reached twice;
+        // most pairs in a crowded cell simply don't touch, and are rejected here without `test`.
         if ((ops += 1) > MAX_CROSSING_OPS) return EMPTY_PLAN;
-        const refB = refs[j]!;
-        // A segment pair is tested in the first cell both cover, and skipped in the others — the
-        // same pair is reached from every cell the two boxes share.
-        if (cell.cx !== (refA.cx0 > refB.cx0 ? refA.cx0 : refB.cx0)) continue;
-        if (cell.cy !== (refA.cy0 > refB.cy0 ? refA.cy0 : refB.cy0)) continue;
-        const a = lines[refA.line]!;
-        const b = lines[refB.line]!;
-        // The same connector never crosses itself, and neither half of a request/response pair
-        // crosses the other: they are one relationship drawn as two lines.
-        if (a.edgeId === b.edgeId) continue;
-
-        const crossing = intersect(a, refA.index, b, refB.index);
-        if (!crossing) continue;
-        const { x, y, horizontalityA, horizontalityB } = crossing;
-
-        // Two connectors that meet at a shape, or at each other's ends, are joined there as far as
-        // a reader is concerned — an arc would claim otherwise. This one rule also keeps arcs off
-        // arrowheads. Connectors that leave the same shape and genuinely cross further out are a
-        // real crossing and still get one.
-        if (a.ends.some((end) => near(end, { x, y }, BRIDGE_CLEARANCE))) continue;
-        if (b.ends.some((end) => near(end, { x, y }, BRIDGE_CLEARANCE))) continue;
-        if (insideAnyRect(blocking, x, y)) continue;
-        if (atBend(a, x, y) || atBend(b, x, y)) continue;
-
-        const drawableA = drawable(a, x, y);
-        const drawableB = drawable(b, x, y);
-        const owner = chooseOwner(a, b, horizontalityA, horizontalityB, drawableA, drawableB);
-        if (!owner) continue;
-        const other = owner === a ? b : a;
-        const ownerIndex = owner === a ? refA.index : refB.index;
-        const normal = bowOf(owner.points[ownerIndex]!, owner.points[ownerIndex + 1]!);
-
-        keyOf.set(owner.edgeId, owner.key);
-        const list = found.get(owner.edgeId);
-        const entry: Crossing = {
-          x,
-          y,
-          nx: normal.x,
-          ny: normal.y,
-          otherSource: other.source,
-          otherTarget: other.target,
-        };
-        // One foreign line crossing a bundle's shared trunk meets it once per member, at the same
-        // point every time. Those are one crossing, not N stacked arcs.
-        if (!list) found.set(owner.edgeId, [entry]);
-        else if (!list.some((existing) => near(existing, entry, 0.5))) list.push(entry);
+        if (b.at < a.lo || b.at > a.hi || a.at < b.lo || a.at > b.hi) continue;
+        if (!test(cell, a, b)) return EMPTY_PLAN;
       }
+      for (const b of d) if (!test(cell, a, b)) return EMPTY_PLAN;
+    }
+    for (const a of v) for (const b of d) if (!test(cell, a, b)) return EMPTY_PLAN;
+    for (let i = 0; i < d.length; i += 1) {
+      for (let j = i + 1; j < d.length; j += 1) if (!test(cell, d[i]!, d[j]!)) return EMPTY_PLAN;
     }
   }
 

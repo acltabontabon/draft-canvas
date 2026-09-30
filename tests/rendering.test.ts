@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDocument, createEdge, createNode, minSizeFor } from '../src/document/factory';
+import { createAttachment, createDocument, createEdge, createNode, minSizeFor } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
 import { addFlow, addStepToFlow, createFlow } from '../src/document/flow';
 import { ACCENTS, BOUNDARY_PRESETS, NODE_TYPES } from '../src/document/types';
@@ -119,6 +119,38 @@ describe('text layout', () => {
       measurer,
     });
     expect(layout.lines.map((line) => line.text)).toEqual(['- first', '- second']);
+  });
+});
+
+describe('text layout keeps characters whole and reads in their own direction', () => {
+  it('never breaks or cuts inside an emoji sequence or a letter with its accent', () => {
+    const family = '👩‍👩‍👧‍👦';
+    const accented = 'e\u0301'; // é as e + combining acute
+    const token = `${family}${accented}`.repeat(12);
+    const layout = layoutText(token, { font: FONTS.nodeLabel, maxWidth: 60, lineHeight: 19, maxLines: 2, measurer });
+    const pieces = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    for (const line of layout.lines) {
+      for (const { segment } of pieces.segment(line.text.replace(/…$/, ''))) {
+        expect([family, accented]).toContain(segment);
+      }
+    }
+    expect(layout.truncated).toBe(true);
+  });
+
+  it('marks right-to-left text, and the SVG draws it that way without moving it', () => {
+    const hebrew = layoutText('שירות הזמנות (API)', { font: FONTS.nodeLabel, maxWidth: 400, lineHeight: 19, measurer });
+    const english = layoutText('Orders API (v2)', { font: FONTS.nodeLabel, maxWidth: 400, lineHeight: 19, measurer });
+    expect(hebrew.direction).toBe('rtl');
+    expect(english.direction).toBeUndefined();
+
+    const svg = (layout: typeof hebrew) =>
+      emitShape({ t: 'text', x: 10, y: 0, layout, font: FONTS.nodeLabel, fill: '#000', align: 'start' })
+        .map(serialize)
+        .join('');
+    // Left-aligned in both: the right-to-left one anchors its *end* (its left side) at x.
+    expect(svg(hebrew)).toContain('direction="rtl"');
+    expect(svg(hebrew)).toContain('text-anchor="end"');
+    expect(svg(english)).not.toContain('direction=');
   });
 });
 
@@ -457,6 +489,19 @@ function responseFixture(response?: string) {
   };
   return addEdges(addNodes(createDocument('Export'), [serviceA, serviceB]), [edge]);
 }
+
+describe('SVG export shows attachments the way the canvas does at rest', () => {
+  it("draws a connector's chip and a shape's badge, and makes room for them", () => {
+    const a = { ...createNode({ type: 'service', x: 0, y: 0, text: 'A' }), attachments: [createAttachment({ type: 'note', text: 'why' })] };
+    const b = createNode({ type: 'service', x: 400, y: 0, text: 'B' });
+    const edge = { ...createEdge({ source: a.id, target: b.id }), attachments: [createAttachment({ type: 'note', text: 'retries' })] };
+    const doc = addEdges(addNodes(createDocument('Attachments'), [a, b]), [edge]);
+    const { svg } = renderDocumentSvg(doc);
+    expect(svg).toContain('&lt;&gt; 1');
+    expect(svg).toContain('>NOTE<');
+    expect(parseSvg(svg).querySelector('parsererror')).toBeNull();
+  });
+});
 
 describe('SVG export — request/response connectors', () => {
   it('draws a second, resolving reply path with an open-variant marker when a response is set', () => {

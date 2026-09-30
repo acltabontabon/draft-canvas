@@ -93,7 +93,13 @@ function emitPath(shape: PathShape): SvgEl {
  * spills out of its box; with it, the glyphs stretch imperceptibly instead and
  * the diagram still reads correctly anywhere.
  */
+/** `start`/`end` name the reading direction's ends: in right-to-left text they swap, so keeping the
+ *  text where the layout put it (a left-aligned note stays left-aligned) means swapping them back. */
+const RTL_ANCHOR = { start: 'end', middle: 'middle', end: 'start' } as const;
+
 function emitText(shape: TextShape): SvgEl[] {
+  const rtl = shape.layout.direction === 'rtl';
+  const anchor = rtl ? RTL_ANCHOR[shape.align] : shape.align;
   return shape.layout.lines.map((line, index) =>
     el(
       'text',
@@ -105,7 +111,8 @@ function emitText(shape: TextShape): SvgEl[] {
         'font-size': n(shape.font.size),
         'font-weight': shape.font.weight,
         'font-style': shape.font.italic ? 'italic' : undefined,
-        'text-anchor': shape.align === 'start' ? undefined : shape.align,
+        'text-anchor': anchor === 'start' ? undefined : anchor,
+        direction: rtl ? 'rtl' : undefined,
         'letter-spacing': 0,
         opacity: shape.opacity,
         textLength: line.width > 0 ? n(line.width) : undefined,

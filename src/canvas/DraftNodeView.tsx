@@ -599,6 +599,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         // text moves the node instead. `nowheel`: same for scrolling a long editor, which would
         // otherwise pan the canvas.
         <textarea
+          dir={isCode ? 'ltr' : 'auto'}
           ref={editorRef}
           className={`dc-node-editor nodrag nowheel${isCode ? ' dc-node-editor-code' : ''}${isNote ? ' dc-node-editor-note' : ''}`}
           defaultValue={isCode ? (node.code ?? '') : (node.text ?? '')}

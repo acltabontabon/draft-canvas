@@ -12,6 +12,7 @@ import {
   placeLabel,
   rectOf,
   routeBetween,
+  runsThroughEnds,
   routeEdge,
   snappedAnchorForDrop,
 } from '../src/edges/routing';
@@ -24,10 +25,11 @@ import { DARK } from '../src/render/theme/tokens';
 import { EDGE_ROUTINGS, type DraftEdge, type DraftNode } from '../src/document/types';
 
 /**
- * Routing invariants: an explicit anchor represents the user's intent and
- * must never be silently overridden by the nearest-side heuristic, whether
- * the geometry agrees with it or not. `chooseSides` only ever fills in a side
- * that has no persisted anchor.
+ * Routing invariants: an explicit anchor represents the user's intent and is
+ * not overridden by the nearest-side heuristic just because the geometry
+ * disagrees with it. `chooseSides` fills in a side that has no persisted
+ * anchor — and one whose line would cut back through the shapes it joins
+ * (see the next block).
  */
 describe('routeBetween honours a persisted anchor over the nearest-side heuristic', () => {
   // Target sits directly to the right of source — chooseSides would pick
@@ -66,6 +68,37 @@ describe('routeBetween honours a persisted anchor over the nearest-side heuristi
       ...anchorPoint(sourceRect, 'right', 0.2),
       side: 'right',
     });
+  });
+});
+
+describe('a persisted anchor never draws a connector through the shapes it joins', () => {
+  const SIDE_LIST = ['top', 'right', 'bottom', 'left'] as const;
+  const a = { x: 400, y: 0, width: 176, height: 68 };
+  // Level, nearly level, off to either side, above, below, close and far: every way a shape is
+  // dragged after its connector was drawn.
+  const places = [[0, 0], [0, 10], [0, -20], [0, 120], [700, 0], [700, 15], [400, 200], [400, -200], [150, 0], [650, 30], [380, 90], [0, 60]];
+
+  it('falls back from a side that now faces away, for every pair of sides and every position', () => {
+    const through: string[] = [];
+    for (const [x, y] of places) {
+      const b = { x: x!, y: y!, width: 176, height: 68 };
+      for (const source of SIDE_LIST) {
+        for (const target of SIDE_LIST) {
+          const route = routeBetween(a, b, 'smoothstep', { anchors: { source: { side: source, offset: 0.5 }, target: { side: target, offset: 0.5 } } });
+          if (runsThroughEnds(route.d, a, b)) through.push(`${source}→${target} to (${x},${y})`);
+        }
+      }
+    }
+    expect(through).toEqual([]);
+  });
+
+  it('keeps the anchors as drawn when the shapes go back where they were', () => {
+    // Drawn right-to-left, the target dragged to the other side on the same row and then back.
+    const anchors = { source: { side: 'right' as const, offset: 0.5 }, target: { side: 'left' as const, offset: 0.5 } };
+    const swapped = routeBetween({ ...a }, { x: 0, y: 0, width: 176, height: 68 }, 'smoothstep', { anchors });
+    expect(swapped.source.side).toBe('left');
+    const restored = routeBetween({ ...a }, { x: 800, y: 0, width: 176, height: 68 }, 'smoothstep', { anchors });
+    expect([restored.source.side, restored.target.side]).toEqual(['right', 'left']);
   });
 });
 
@@ -957,5 +990,21 @@ describe('shapes only roughly in line get one straight connector, not a kink', (
     const route = routeBetween(source, target, 'smoothstep');
     expect(route.target.x).toBeGreaterThanOrEqual(target.x);
     expect(route.target.x).toBeLessThanOrEqual(target.x + target.width);
+  });
+});
+
+describe('a connector caption sits at the same height on the canvas and in the export', () => {
+  it('derives the exported box from the baseline the canvas draws at, above and below the line', async () => {
+    const { captionAnchor: captionBox } = await import('../src/edges/describe');
+    const { captionAnchor: captionBaseline } = await import('../src/edges/routing');
+    const { baselineOf, layoutText } = await import('../src/render/text/layout');
+    const { FONTS, LINE_HEIGHTS } = await import('../src/render/text/fonts');
+    const layout = layoutText('reads from', { font: FONTS.connectorCaption, maxWidth: 120, lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label, maxLines: 1 });
+    for (const away of [0, 1, -1]) {
+      for (const side of ['top', 'bottom'] as const) {
+        const box = captionBox(side, 100, 200, layout, away);
+        expect(box.y + baselineOf(layout, 0)).toBeCloseTo(captionBaseline(side, 100, 200, away).y, 6);
+      }
+    }
   });
 });

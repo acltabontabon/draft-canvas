@@ -6,6 +6,7 @@ import { boundsOf } from '../../document/operations';
 import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../../document/types';
 import { unresolvedOpenPoints, unresolvedOpenPointsFor } from '../../document/openPoints';
 import { MARKER_SIZE, describeMarker, describeMarkerKey, nodeMarkerOrigin } from '../../openPoints/marker';
+import { describeAttachmentBadge } from '../../edges/attachmentChips';
 import { laneIndex } from '../../edges/routing';
 import { routingPlan } from '../../edges/bundles';
 import { crossingPlan, withoutMoving } from '../../edges/crossings';
@@ -342,6 +343,13 @@ export function buildScene(
     if (node.type === 'group') backdropEls.push(group);
     else nodeEls.push(group);
     nodeEntries.push({ node, els });
+
+    // The "<> 2" badge a shape with attachments carries above its corner on the canvas.
+    const badge = describeAttachmentBadge(node, { theme: nodeCtx.theme, measurer: nodeCtx.measurer });
+    if (badge.length) {
+      markerEls.push(el('g', { transform: `translate(${n(node.x)} ${n(node.y)})`, ...decorateGroupAttrs(decoration) }, badge.flatMap(emitShape)));
+      shapeRects(badge, node.x, node.y, overlayRects);
+    }
 
     // The same tab, at the same place, `DraftNodeView` puts it — from the same two functions.
     const nodePoints = points.length ? unresolvedOpenPointsFor(points, { kind: 'node', id: node.id }) : [];

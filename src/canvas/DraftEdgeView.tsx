@@ -559,7 +559,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
         maxLines: 1,
       });
-      const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout.height, edge.hasResponse ? Math.sign(responseLaneFor(laneOffset)) : 0);
+      const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout, edge.hasResponse ? Math.sign(responseLaneFor(laneOffset)) : 0);
       const left = caption.align === 'start' ? caption.x : caption.align === 'end' ? caption.x - layout.width : caption.x - layout.width / 2;
       occupied = { left, top: caption.y, width: layout.width, height: layout.height };
     }
@@ -963,6 +963,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                 aria-label="Connector label"
                 className="dc-edge-label-input"
                 defaultValue={edge.label ?? ''}
+                // Held to what a load keeps, as it's typed, rather than cut off after the fact.
+                maxLength={LIMITS.maxLabelLength}
+                dir="auto"
                 spellCheck={false}
                 onBlur={(event) => {
                   updateEdgeLabel(edge.id, event.currentTarget.value.trim());
@@ -983,6 +986,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               // lines at most, then an ellipsis — with the whole label in the tooltip.
               <span
                 className="dc-edge-label-text"
+                dir="auto"
                 title={
                   drawsSharedLabel && mode === 'edit'
                     ? `${labelLayout?.truncated ? `${edge.label} — ` : ''}Shared by ${sharedLabel!.members.length} connectors. Click again for the next one.`
@@ -1053,6 +1057,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                   className="dc-edge-condition-input"
                   aria-label="Condition"
                   defaultValue={edge.condition ?? ''}
+                  maxLength={LIMITS.maxConditionLength}
+                  dir="auto"
                   spellCheck={false}
                   onBlur={(event) => {
                     setEdgeCondition(edge.id, event.currentTarget.value.trim());

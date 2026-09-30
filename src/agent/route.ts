@@ -16,7 +16,7 @@ import type { DraftEdge, DraftNode, Side } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { labelChipBox, labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
-import { labelLaneOffset, laneIndex, routeEdge } from '../edges/routing';
+import { anchorsHold, labelLaneOffset, laneIndex, routeEdge } from '../edges/routing';
 
 export interface Box {
   x: number;
@@ -476,6 +476,9 @@ export function repairAnchors(
 
 /** A route's cost as `routeCost` would give it, drawn without trunks or lanes (see `repairAnchors`). */
 function roughCost(edge: DraftEdge, nodes: readonly DraftNode[], byId: Map<string, DraftNode>): number | undefined {
+  // A pair of sides the router wouldn't draw as given (one facing away, the line cutting back
+  // through a shape) is no candidate at all: its recorded anchors would describe another route.
+  if (!anchorsHold(edge, byId)) return undefined;
   try {
     const route = routeEdge(edge, byId, { obstacles: obstaclesForEdge(nodes, edge.source, edge.target) });
     return route ? routeCost(pathPoints(route.d)) : undefined;

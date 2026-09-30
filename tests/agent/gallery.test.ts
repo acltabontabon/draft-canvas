@@ -12,6 +12,7 @@ import type { DraftDocument } from '../../src/document/types';
 import { GALLERY, type GalleryCase } from '../fixtures/agent/gallery';
 import { legibilityOf } from '../../src/agent/legibility';
 import { routingPlan } from '../../src/edges/bundles';
+import { anchorsHold } from '../../src/edges/routing';
 import { nearestElement } from '../../src/agent/read';
 import { readingDirectionOf } from '../../src/agent/arrange';
 
@@ -48,6 +49,10 @@ describe('layout gallery', () => {
         const view = path.length ? viewOf(doc, path)! : doc;
         const focus = touched && path.length === 0 ? touched : undefined;
         expect(checkQuality(view.nodes, view.edges, ctx, focus).errors, `view ${path.join('/') || 'top'}`).toEqual([]);
+        // Every anchor the layout chose is one the router draws as given — never one it overrides
+        // because the line would cut back through a shape (see `anchorsHold`).
+        const byId = new Map(view.nodes.map((n) => [n.id, n]));
+        for (const edge of view.edges) expect(anchorsHold(edge, byId), `anchors of ${edge.id}`).toBe(true);
         void graph;
       });
       // The same request lays out the same way, to the pixel.

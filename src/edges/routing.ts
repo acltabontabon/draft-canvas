@@ -490,6 +490,10 @@ export function resolveSides(
   targetRect: Rect,
   anchors?: RouteAnchors,
 ): { source: Side; target: Side } {
+  return sidesFor(sourceRect, targetRect, workableAnchors(sourceRect, targetRect, anchors));
+}
+
+function sidesFor(sourceRect: Rect, targetRect: Rect, anchors?: RouteAnchors): { source: Side; target: Side } {
   // Cheap, and only needed for whichever side has no persisted anchor.
   const fallback = !anchors?.source || !anchors?.target ? chooseSides(sourceRect, targetRect) : null;
   return {
@@ -1160,8 +1164,115 @@ export function routeBetween(
   routing: EdgeRouting,
   options?: RouteOptions,
 ): RoutedEdge {
+  const anchors = workableAnchors(sourceRect, targetRect, options?.anchors, routing);
+  return routeWith(sourceRect, targetRect, routing, anchors === options?.anchors ? options : { ...options, anchors });
+}
+
+/**
+ * The persisted anchors a route can actually use. An anchor is the user's choice and is kept —
+ * unless the shapes have since moved so that it faces away from the other end and the line it
+ * produces runs straight through one of the two shapes it joins (drawn right-to-left, then the
+ * target dragged to the other side on the same row: the path went out of A's right side, back
+ * through A and on through B). Then the end that faces away falls back to the nearest side, as an
+ * end with no anchor would; the document still holds the anchor, so moving the shapes back
+ * restores it.
+ */
+function workableAnchors(sourceRect: Rect, targetRect: Rect, anchors: RouteAnchors | undefined, routing: EdgeRouting = 'smoothstep'): RouteAnchors | undefined {
+  if (!anchors?.source && !anchors?.target) return anchors;
+  const sourceFaces = faces(sourceRect, anchors.source?.side, centreOf(targetRect));
+  const targetFaces = faces(targetRect, anchors.target?.side, centreOf(sourceRect));
+  // Both ends point at each other (or have no anchor): the common case, and never a through-route.
+  if (sourceFaces && targetFaces) return anchors;
+  const clean = (candidate: RouteAnchors | undefined) =>
+    !runsThroughEnds(routeWith(sourceRect, targetRect, routing, { anchors: candidate }).d, sourceRect, targetRect);
+  if (clean(anchors)) return anchors;
+  const candidates: (RouteAnchors | undefined)[] = [];
+  if (!sourceFaces) candidates.push(anchors.target ? { target: anchors.target } : undefined);
+  if (!targetFaces) candidates.push(anchors.source ? { source: anchors.source } : undefined);
+  candidates.push(undefined);
+  // `findIndex`, not `find`: "no anchors at all" is itself a candidate, and `find` can't tell it
+  // from finding nothing.
+  const index = candidates.findIndex(clean);
+  return index === -1 ? anchors : candidates[index];
+}
+
+/**
+ * Whether a connector's persisted anchors are drawn as they say (see `workableAnchors`). Anything
+ * that *chooses* anchors — the agent's layout — must only choose ones this holds for: an overridden
+ * anchor still sits in the document, and what reads it (lanes, caption groups, quality checks)
+ * would disagree with the line that is actually drawn.
+ */
+export function anchorsHold(edge: DraftEdge, nodes: Map<string, DraftNode>): boolean {
+  const source = nodes.get(edge.source);
+  const target = nodes.get(edge.target);
+  if (!source || !target) return true;
+  const anchors = { source: edge.sourceAnchor, target: edge.targetAnchor };
+  return workableAnchors(rectOf(source), rectOf(target), anchors, edge.routing) === anchors;
+}
+
+const centreOf = (rect: Rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+
+/** Whether a side (absent: no anchor, so no opinion) looks towards `point`. */
+function faces(rect: Rect, side: Side | undefined, point: { x: number; y: number }): boolean {
+  switch (side) {
+    case undefined:
+      return true;
+    case 'right':
+      return point.x > rect.x + rect.width;
+    case 'left':
+      return point.x < rect.x;
+    case 'top':
+      return point.y < rect.y;
+    case 'bottom':
+      return point.y > rect.y + rect.height;
+  }
+}
+
+/** Whether any run of the path passes through the inside of either rect — not merely along or out
+ *  of its edge (a few pixels in, to leave where the path starts and ends out of it). */
+export function runsThroughEnds(d: string, a: Rect, b: Rect): boolean {
+  const points = flattenPath(d);
+  for (let i = 1; i < points.length; i += 1) {
+    if (segmentEntersRect(points[i - 1]!, points[i]!, a) || segmentEntersRect(points[i - 1]!, points[i]!, b)) return true;
+  }
+  return false;
+}
+
+function segmentEntersRect(from: { x: number; y: number }, to: { x: number; y: number }, rect: Rect): boolean {
+  const inset = 3;
+  const left = rect.x + inset;
+  const right = rect.x + rect.width - inset;
+  const top = rect.y + inset;
+  const bottom = rect.y + rect.height - inset;
+  if (left >= right || top >= bottom) return false;
+  // Liang–Barsky: clip the segment to the inset rect; anything left of it is inside.
+  let t0 = 0;
+  let t1 = 1;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const clip = (p: number, q: number): boolean => {
+    if (p === 0) return q >= 0;
+    const t = q / p;
+    if (p < 0) {
+      if (t > t1) return false;
+      if (t > t0) t0 = t;
+    } else {
+      if (t < t0) return false;
+      if (t < t1) t1 = t;
+    }
+    return true;
+  };
+  return clip(-dx, from.x - left) && clip(dx, right - from.x) && clip(-dy, from.y - top) && clip(dy, bottom - from.y) && t1 - t0 > 1e-6;
+}
+
+function routeWith(
+  sourceRect: Rect,
+  targetRect: Rect,
+  routing: EdgeRouting,
+  options?: RouteOptions,
+): RoutedEdge {
   const anchors = options?.anchors;
-  const { source: sourceSide, target: targetSide } = resolveSides(sourceRect, targetRect, anchors);
+  const { source: sourceSide, target: targetSide } = sidesFor(sourceRect, targetRect, anchors);
 
   const sourcePoint = anchorPoint(sourceRect, sourceSide, anchors?.source?.offset);
   const targetPoint = anchorPoint(targetRect, targetSide, anchors?.target?.offset);

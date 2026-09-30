@@ -33,29 +33,9 @@ export function rectOfInternal(node: InternalNode, type?: DraftNodeType): Rect |
   return band ? { ...rect, anchorBand: band } : rect;
 }
 
-/** How far a connector's attachment chip row floats off its label point, in flow units. */
-export const ATTACHMENT_ROW_GAP = 12;
-
-/**
- * Whether a UI element floating above `(x, y)` at roughly `NOMINAL_REACH`
- * pixels tall would land inside the connector's own source or target node — the
- * short-connector failure mode both a connector's attachment chip row and `EdgeInspectorPopover`
- * avoid by flipping to sit below the connector instead. A single-point check, not a real
- * box-overlap test: the row's own width is unknown until rendered, and its anchor point is what
- * decides which side reads as belonging to the connector.
- */
-const NOMINAL_REACH = 150;
-
-export function attachmentRowBelowsSourceOrTarget(x: number, y: number, sourceRect: Rect, targetRect: Rect, captionSide?: Side): boolean {
-  // Words already above the line own that side: the row hangs below the line instead of on top of
-  // them (a caption placed above a horizontal line was covered by its own connector's chip row).
-  if (captionSide === 'top') return true;
-  const bottom = y - ATTACHMENT_ROW_GAP;
-  const top = bottom - NOMINAL_REACH;
-  const overlapsRect = (rect: Rect) =>
-    x > rect.x && x < rect.x + rect.width && rect.y < bottom && rect.y + rect.height > top;
-  return overlapsRect(sourceRect) || overlapsRect(targetRect);
-}
+// The chip row's placement moved beside the exporter's copy of the row (`edges/attachmentChips.ts`),
+// so the canvas and the picture hang it off the same point by the same rule.
+export { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, captionSideOf } from '../edges/attachmentChips';
 
 /**
  * A connector's label point, routed exactly as `DraftEdgeView` draws it — obstacles, lane, bundle
@@ -86,12 +66,6 @@ export function edgeLabelPoint(
   return { x: route.labelX + labelNudge.x, y: route.labelY + labelNudge.y, side: route.labelSide };
 }
 
-/** Which side of its line a connector's label chip sits on, when it has one. A relationship caption
- *  is not counted: `captionAnchor` draws it below a horizontal line whatever `labelSide` says, so
- *  sending the chip row below for it would land the row on the caption instead. */
-export function captionSideOf(edge: DraftEdge, labelSide: Side): Side | undefined {
-  return edge.label ? labelSide : undefined;
-}
 
 export interface ScreenRect {
   left: number;

@@ -8,7 +8,7 @@ import { useTheme, useThemeValue } from '../ui/theme/useTheme';
 import { Icon } from '../ui/common/Icon';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
-import { attachmentLookFor } from './attachmentLook';
+import { attachmentLookFor } from '../nodes/attachmentLook';
 import { useSettle } from './useContinuation';
 import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
 
@@ -497,6 +497,7 @@ function AttachmentChip({
             {pinned && editing ? (
               attachment.type === 'code' ? (
                 <textarea
+                  dir="ltr"
                   autoFocus
                   aria-label="Attached code"
                   className="dc-attachment-editor dc-attachment-editor-code"
@@ -513,6 +514,7 @@ function AttachmentChip({
                 />
               ) : (
                 <textarea
+                  dir="auto"
                   autoFocus
                   aria-label="Attached note"
                   className="dc-attachment-editor"

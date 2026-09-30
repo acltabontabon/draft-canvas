@@ -15,7 +15,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
 import { useThemeValue } from '../../ui/theme/useTheme';
 import { ReadOnlyCode } from '../AttachmentPresentation';
-import { attachmentLookFor } from '../attachmentLook';
+import { attachmentLookFor } from '../../nodes/attachmentLook';
 import { flattenPath } from '../../edges/routing';
 import { rectOfInternal } from '../edgeGeometry';
 import { useOverlayPosition, type OverlayFrame } from '../useOverlayPosition';

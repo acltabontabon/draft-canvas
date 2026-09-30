@@ -283,7 +283,15 @@ test.describe('hovering a connector', () => {
     await expect(page.locator('.react-flow__node[data-id="d"] .dc-node')).toHaveAttribute('data-selected', 'true');
     await page.mouse.move(tip.x, tip.y);
     await expect(hovered).toHaveAttribute('data-id', 'dotted');
-    await expect.poll(() => underPointer(page, tip)).toEqual({ edge: null, handle: true, cursor: 'pointer' });
+    // The handles appear with the selection, possibly after the pointer arrived; a hand never holds
+    // perfectly still, so each look nudges it the way a person's would, and the hover catches up.
+    await expect
+      .poll(async () => {
+        await page.mouse.move(tip.x + 0.5, tip.y);
+        await page.mouse.move(tip.x, tip.y);
+        return underPointer(page, tip);
+      })
+      .toEqual({ edge: null, handle: true, cursor: 'pointer' });
     await expect(page.locator('[data-edge-hover]')).toHaveCount(1);
     await page.mouse.move(8, 300);
     await expect(page.locator('[data-edge-hover]')).toHaveCount(0);

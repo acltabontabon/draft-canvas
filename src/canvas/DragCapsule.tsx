@@ -16,7 +16,7 @@
 import { memo } from 'react';
 import type { CSSProperties } from 'react';
 import type { DraftNode } from '../document/types';
-import { attachmentLookFor } from './attachmentLook';
+import { attachmentLookFor } from '../nodes/attachmentLook';
 import { useThemeValue } from '../ui/theme/useTheme';
 import type { DragCapsuleState } from '../store/uiStore';
 

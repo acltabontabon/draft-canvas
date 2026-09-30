@@ -4,7 +4,7 @@
  * so they keep fast refresh.
  */
 import type { Attachment } from '../document/types';
-import { NOTE_ACCENTS, NOTE_LABELS } from '../nodes/describe';
+import { NOTE_ACCENTS, NOTE_LABELS } from './describe';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { accentOf, type Theme } from '../render/theme/tokens';
 
