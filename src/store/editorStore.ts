@@ -114,6 +114,7 @@ import {
 } from '../document/openPoints';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { DEFAULTS, LIMITS } from '../document/limits';
+import { cleanText, cleanTextFields } from '../document/sanitize';
 import {
   capabilityFor,
   categoryOf,
@@ -1046,6 +1047,16 @@ function withLevel(doc: DraftDocument, level: ViewLevel | undefined): DraftDocum
   return next;
 }
 
+/**
+ * Tells the person when what they typed was longer than the field holds. The operation itself cuts
+ * it (`cleanTextFields`), the same way a load would — this only makes that visible, where before the
+ * text came back shorter on the next open with nothing having said so.
+ */
+function noticeTruncation(patch: object): void {
+  if (!cleanTextFields(patch).truncated) return;
+  useUiStore.getState().notify('That was longer than this field holds, so the end was cut off.', 'info');
+}
+
 function notifyNothingAdded(tooDeep: boolean): void {
   useUiStore
     .getState()
@@ -1430,6 +1441,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   updateNodeById(id, patch, label = 'Change node') {
+    noticeTruncation(patch);
     get().apply(label, (doc) => {
       const before = doc.nodes.find((n) => n.id === id);
       let next = updateNode(doc, id, patch);
@@ -1531,6 +1543,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   updateEdgeById(id, patch, label = 'Change connector') {
+    noticeTruncation(patch);
     get().apply(label, (doc) => updateEdge(doc, id, patch));
   },
 
@@ -1790,7 +1803,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   updateEdgeLabel(id, rawLabel) {
     // Held to what a load keeps (`parseDocument`), so a save never holds text the next open trims.
-    const label = rawLabel.slice(0, LIMITS.maxLabelLength);
+    noticeTruncation({ label: rawLabel });
+    const label = cleanText(rawLabel, LIMITS.maxLabelLength);
     // An unlabeled connector committed empty is the same connector — `''` and absent both read blank.
     get().apply(
       'Label connector',
@@ -2260,6 +2274,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   updateAttachment(hostId, attachmentId, patch) {
+    noticeTruncation(patch);
     get().apply('Edit attachment', (doc) => updateAttachmentOp(doc, hostId, attachmentId, patch));
   },
 
@@ -2303,6 +2318,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   updateEdgeAttachment(edgeId, attachmentId, patch) {
+    noticeTruncation(patch);
     get().apply('Edit attachment', (doc) => updateEdgeAttachmentOp(doc, edgeId, attachmentId, patch));
   },
 

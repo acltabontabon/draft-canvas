@@ -9,6 +9,7 @@ import { pruneOpenPoints } from './openPoints';
 import { defaultSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
+import { cleanTextFields } from './sanitize';
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
 import type {
@@ -111,6 +112,7 @@ export function updateNode(
   patch: Partial<Omit<DraftNode, 'id'>>,
 ): DraftDocument {
   let changed = false;
+  patch = cleanTextFields(patch).patch;
   const nodes = doc.nodes.map((node) => {
     if (node.id !== id) return node;
     const next: DraftNode = applyPatch<DraftNode>(node, patch);
@@ -131,6 +133,7 @@ export function updateEdge(
   patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>,
 ): DraftDocument {
   let changed = false;
+  patch = cleanTextFields(patch).patch;
   const edges = doc.edges.map((edge) => {
     if (edge.id !== id) return edge;
     const next = applyPatch<DraftEdge>(edge, patch);
@@ -795,10 +798,11 @@ export function updateAttachment(
 ): DraftDocument {
   const host = doc.nodes.find((n) => n.id === hostId);
   if (!host?.attachments) return doc;
+  const cleaned = cleanTextFields(patch).patch;
   let changed = false;
   const next = host.attachments.map((a) => {
     if (a.id !== attachmentId) return a;
-    const patched = applyPatch<Attachment>(a, patch);
+    const patched = applyPatch<Attachment>(a, cleaned);
     if (sameFields(patched, a)) return a;
     changed = true;
     return patched;
@@ -865,10 +869,11 @@ export function updateEdgeAttachment(
 ): DraftDocument {
   const edge = doc.edges.find((e) => e.id === edgeId);
   if (!edge?.attachments) return doc;
+  const cleaned = cleanTextFields(patch).patch;
   let changed = false;
   const next = edge.attachments.map((a) => {
     if (a.id !== attachmentId) return a;
-    const patched = applyPatch<Attachment>(a, patch);
+    const patched = applyPatch<Attachment>(a, cleaned);
     if (sameFields(patched, a)) return a;
     changed = true;
     return patched;

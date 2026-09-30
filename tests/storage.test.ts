@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
 import { cloneDocumentAsNew, createDocument, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
@@ -498,6 +498,22 @@ describe.each([
   ['IndexedDbRepository', () => IndexedDbRepository.open()],
   ['MemoryRepository', () => Promise.resolve(new MemoryRepository())],
 ])('background image storage (%s)', (_name, open) => {
+  /** Pruning spares an image stored in the last day (another tab may be about to name it); these
+   *  tests prune as if that day had passed. */
+  const aDayLater = () => vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 25 * 60 * 60 * 1000);
+  afterEach(() => vi.restoreAllMocks());
+
+  it('spares an image another tab stored moments ago, even though nothing on disk names it yet', async () => {
+    const repository = await open();
+    if (!(repository instanceof IndexedDbRepository)) return; // one tab only: nothing else can be about to name it
+    await repository.saveBackgroundImage('d_fresh', new Blob(['x'], { type: 'image/png' }), { width: 1, height: 1 }, 'bg_new');
+    await repository.pruneBackgroundImages('d_fresh', null);
+    expect(await repository.loadBackgroundImage('d_fresh', 'bg_new')).not.toBeNull();
+    aDayLater();
+    await repository.pruneBackgroundImages('d_fresh', null);
+    expect(await repository.loadBackgroundImage('d_fresh', 'bg_new')).toBeNull();
+  });
+
   it("removing or pruning a document never touches another document's images whose id extends it with #", async () => {
     const repository = await open();
     const dims = { width: 10, height: 10 };
@@ -505,6 +521,7 @@ describe.each([
     await repository.saveBackgroundImage('d_x', image(), dims, 'bg_a');
     await repository.saveBackgroundImage('d_x#1', image(), dims, 'bg_b');
 
+    aDayLater();
     await repository.pruneBackgroundImages('d_x', null);
     expect(await repository.loadBackgroundImage('d_x', 'bg_a')).toBeNull();
     expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
@@ -544,6 +561,7 @@ describe.each([
     expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_a'))!.width).toBe(2);
     expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_b'))!.width).toBe(3);
 
+    aDayLater();
     await repository.pruneBackgroundImages(doc.metadata.id, { imageId: 'bg_b' });
     expect(await repository.loadBackgroundImage(doc.metadata.id)).toBeNull();
     expect(await repository.loadBackgroundImage(doc.metadata.id, 'bg_a')).toBeNull();
@@ -715,6 +733,85 @@ describe('autosave', () => {
 
     autosave.dispose();
     vi.useRealTimers();
+  });
+
+  /** A repository whose next save waits until the test releases it — a write "in flight". */
+  class GatedRepository extends MemoryRepository {
+    release: (() => void) | null = null;
+    failNext = false;
+    readonly calls: Array<{ title: string; options: unknown }> = [];
+
+    async save(document: DraftDocument, base?: Parameters<MemoryRepository['save']>[1], options?: Parameters<MemoryRepository['save']>[2]) {
+      this.calls.push({ title: document.metadata.title, options });
+      if (this.release === null) {
+        await new Promise<void>((resolve) => (this.release = resolve));
+        if (this.failNext) {
+          this.failNext = false;
+          throw new Error('transient');
+        }
+      }
+      return super.save(document, base, options);
+    }
+  }
+
+  it('writes an undo made while the edit it undoes is still being written', async () => {
+    const repository = new GatedRepository();
+    const stored = documentWith('Original');
+    await MemoryRepository.prototype.save.call(repository, stored);
+    const autosave = new Autosave({ repository, onStateChange: () => {}, debounceMs: 0, maxWaitMs: 0 });
+    autosave.track(stored);
+
+    autosave.schedule({ ...stored, metadata: { ...stored.metadata, title: 'Edited' } });
+    await vi.waitFor(() => expect(repository.release).not.toBeNull());
+    // ⌘Z hands back the very object tracked from disk while "Edited" is mid-write.
+    autosave.schedule(stored);
+    repository.release!();
+
+    await vi.waitFor(async () => expect(await autosave.flush()).toBe(true));
+    expect((await repository.load(stored.metadata.id))!.metadata.title).toBe('Original');
+    expect(autosave.hasPendingWork).toBe(false);
+    autosave.dispose();
+  });
+
+  it('keeps a content edit a content write when its write failed with a pan queued behind it', async () => {
+    const repository = new GatedRepository();
+    repository.failNext = true;
+    const stored = documentWith('Original');
+    await MemoryRepository.prototype.save.call(repository, stored);
+    const autosave = new Autosave({ repository, onStateChange: () => {}, debounceMs: 0, maxWaitMs: 0 });
+    autosave.track(stored);
+
+    const edited = { ...stored, metadata: { ...stored.metadata, title: 'Edited' } };
+    autosave.schedule(edited);
+    await vi.waitFor(() => expect(repository.release).not.toBeNull());
+    autosave.schedule({ ...edited, viewport: { x: 5, y: 5, zoom: 1 } }, { cameraOnly: true });
+    repository.release!();
+
+    await vi.waitFor(() => expect(repository.calls).toHaveLength(1));
+    expect(await autosave.flush()).toBe(true);
+    expect(repository.calls.at(-1)!.options).not.toEqual({ cameraOnly: true });
+    expect((await repository.load(stored.metadata.id))!.metadata.title).toBe('Edited');
+    autosave.dispose();
+  });
+
+  it('lets the canvas close once a failed edit is undone back to what is stored', async () => {
+    const repository = new GatedRepository();
+    repository.failNext = true;
+    const stored = documentWith('Original');
+    const states: string[] = [];
+    const autosave = new Autosave({ repository, onStateChange: (state) => states.push(state.status), debounceMs: 0, maxWaitMs: 0 });
+    autosave.track(stored);
+
+    autosave.schedule({ ...stored, metadata: { ...stored.metadata, title: 'Edited' } });
+    await vi.waitFor(() => expect(repository.release).not.toBeNull());
+    repository.release!();
+    await vi.waitFor(() => expect(states.at(-1)).toBe('error'));
+
+    autosave.schedule(stored);
+    expect(states.at(-1)).toBe('idle');
+    expect(await autosave.flush()).toBe(true);
+    expect(repository.calls).toHaveLength(1);
+    autosave.dispose();
   });
 
   describe('camera-only writes', () => {

@@ -13,7 +13,6 @@ import {
   isBackgroundImageKeyOf,
   isQuotaError,
   reconcileMetadata,
-  sameSharedMetadata,
   sharedMetadataOf,
   summarize,
   type DraftRepository,
@@ -87,7 +86,17 @@ interface BackgroundImageRow {
   mimeType: string;
   width: number;
   height: number;
+  /** When it was stored — see `pruneBackgroundImages`. Absent on rows from before 1.12. */
+  savedAt?: number;
 }
+
+/**
+ * How long a background image nothing on disk points at is kept anyway. Another tab with this canvas
+ * open may have just picked it (the image is stored at once, the setting that names it only on its
+ * next autosave), or may still hold it in its undo history; pruning it from under that tab left its
+ * saved background pointing at nothing.
+ */
+const UNREFERENCED_IMAGE_GRACE_MS = 24 * 60 * 60 * 1000;
 
 interface DraftDb extends DBSchema {
   documents: {
@@ -119,6 +128,8 @@ export class IndexedDbRepository implements DraftRepository {
    * from an open editor compares it with the row to catch another tab's delete or newer content.
    */
   private readonly stamps = new Map<string, string | undefined>();
+  /** See `DraftRepository.takeRepairs`. */
+  private readonly repairs = new Map<string, string[]>();
 
   private constructor(db: IDBPDatabase<DraftDb>) {
     this.db = db;
@@ -162,6 +173,12 @@ export class IndexedDbRepository implements DraftRepository {
     } catch (error) {
       throw new StorageUnavailableError(error);
     }
+  }
+
+  takeRepairs(id: string): string[] | undefined {
+    const found = this.repairs.get(id);
+    this.repairs.delete(id);
+    return found;
   }
 
   async has(id: string): Promise<boolean> {
@@ -294,6 +311,9 @@ export class IndexedDbRepository implements DraftRepository {
     }
 
     const priorVersion = isRecord(rawDocument) ? rawDocument.version : undefined;
+    const changed = result.repairs.filter((line) => !line.startsWith('Upgraded document format'));
+    if (changed.length > 0) this.repairs.set(id, changed);
+    else this.repairs.delete(id);
     return { document: result.document, priorVersion, row };
   }
 
@@ -365,44 +385,32 @@ export class IndexedDbRepository implements DraftRepository {
     const conflictIn = (row: DraftSummary | undefined) =>
       !checked ? null : !row ? 'deleted' : row.contentStamp !== known ? 'changed' : null;
     try {
-      // Reconciling the summary happens outside the transaction, so a rename that lands between
-      // reading the summary and writing is caught by re-reading it there, and the merge is redone.
-      for (let attempt = 1; ; attempt += 1) {
-        const before = base ? await this.db.get('documents', id) : undefined;
-        const early = conflictIn(before);
-        if (early) {
-          if (cameraOnly) return;
-          throw new DocumentConflictError(early);
-        }
-        const written = base && before ? reconcileMetadata(document, base, before) : document;
-        const body = plainBody(written);
-        const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
-        if (before || checked) {
-          const current = await tx.objectStore('documents').get(id);
-          const late = conflictIn(current);
-          if (late) {
-            await tx.done;
-            if (cameraOnly) return;
-            throw new DocumentConflictError(late);
-          }
-          if (before && current && attempt < METADATA_WRITE_ATTEMPTS && !sameSharedMetadata(current, before)) {
-            await tx.done;
-            continue;
-          }
-        }
-        // A camera move keeps the stamp it found (`checked` guarantees `known` is that stamp), so what
-        // other tabs last read is still true of the content.
-        const stamp = cameraOnly ? known! : createId('s');
-        await Promise.all([
-          tx.objectStore('documents').put({ ...summarize(written), contentStamp: stamp }),
-          tx.objectStore('bodies').put(body),
-          tx.done,
-        ]);
-        this.stamps.set(id, stamp);
-        requestPersistenceOnce();
-        if (written !== document) return sharedMetadataOf(written.metadata);
-        return;
+      // One readwrite transaction, opened before the first `await`: the flush a closing tab fires from
+      // `pagehide` gets no further than the task it started in, so a save that first awaited a
+      // separate read never created its write at all. Reading, reconciling and writing inside the one
+      // transaction also leaves no gap for another tab's rename to land in — IndexedDB serializes
+      // overlapping readwrite transactions — so the merge never needs redoing.
+      const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
+      const before = base || checked ? await tx.objectStore('documents').get(id) : undefined;
+      const conflict = conflictIn(before);
+      if (conflict) {
+        await tx.done;
+        if (cameraOnly) return;
+        throw new DocumentConflictError(conflict);
       }
+      const written = base && before ? reconcileMetadata(document, base, before) : document;
+      // A camera move keeps the stamp it found (`checked` guarantees `known` is that stamp), so what
+      // other tabs last read is still true of the content.
+      const stamp = cameraOnly ? known! : createId('s');
+      await Promise.all([
+        tx.objectStore('documents').put({ ...summarize(written), contentStamp: stamp }),
+        tx.objectStore('bodies').put(plainBody(written)),
+        tx.done,
+      ]);
+      this.stamps.set(id, stamp);
+      requestPersistenceOnce();
+      if (written !== document) return sharedMetadataOf(written.metadata);
+      return;
     } catch (error) {
       if (isQuotaError(error)) throw new QuotaExceededError(error);
       throw error;
@@ -577,6 +585,7 @@ export class IndexedDbRepository implements DraftRepository {
         mimeType: blob.type,
         width: dims.width,
         height: dims.height,
+        savedAt: Date.now(),
       });
     } catch (error) {
       if (isQuotaError(error)) throw new QuotaExceededError(error);
@@ -603,8 +612,14 @@ export class IndexedDbRepository implements DraftRepository {
   async pruneBackgroundImages(documentId: string, keep: { imageId?: string } | null): Promise<void> {
     const kept = keep ? backgroundImageKey(documentId, keep.imageId) : null;
     const tx = this.db.transaction('backgroundImages', 'readwrite');
-    const keys = [documentId, ...(await ownedImageKeys(tx.store, documentId))];
-    await Promise.all([...keys.filter((key) => key !== kept).map((key) => tx.store.delete(key)), tx.done]);
+    const keys = [documentId, ...(await ownedImageKeys(tx.store, documentId))].filter((key) => key !== kept);
+    const rows = await Promise.all(keys.map((key) => tx.store.get(key)));
+    const cutoff = Date.now() - UNREFERENCED_IMAGE_GRACE_MS;
+    const stale = keys.filter((_, index) => {
+      const row = rows[index];
+      return row !== undefined && (row.savedAt === undefined || row.savedAt < cutoff);
+    });
+    await Promise.all([...stale.map((key) => tx.store.delete(key)), tx.done]);
   }
 }
 

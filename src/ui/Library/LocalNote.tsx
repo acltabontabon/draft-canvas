@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { DraftRepository } from '../../storage';
+import { isStoragePersisted } from '../../lib/storagePersistence';
 import { Icon } from '../common/Icon';
 
 /**
@@ -16,6 +17,7 @@ import { Icon } from '../common/Icon';
 export function LocalNote({ durable, repository }: { durable: boolean; repository: DraftRepository | null }) {
   const [open, setOpen] = useState(!durable);
   const estimate = useStorageEstimate(repository, open);
+  const persisted = usePersisted(durable);
 
   return (
     <div className="dc-local" data-warn={durable ? undefined : 'true'}>
@@ -40,6 +42,12 @@ export function LocalNote({ durable, repository }: { durable: boolean; repositor
               Anything you draw is lost when this tab closes. Export it to keep it.
             </p>
           )}
+          {persisted === false && (
+            <p className="dc-warn">
+              This browser hasn&rsquo;t promised to keep them: it may clear them when space runs low, and
+              Safari does after a week without a visit. Back up or export what matters.
+            </p>
+          )}
           <p>
             Clearing this browser&rsquo;s site data deletes them. Export a <code>.draftcanvas</code>{' '}
             file to keep a copy you control.
@@ -49,6 +57,22 @@ export function LocalNote({ durable, repository }: { durable: boolean; repositor
       )}
     </div>
   );
+}
+
+/** Whether storage is persisted, read once — only asked where storage is durable at all. */
+function usePersisted(durable: boolean): boolean | null {
+  const [persisted, setPersisted] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!durable) return;
+    let cancelled = false;
+    void isStoragePersisted().then((value) => {
+      if (!cancelled) setPersisted(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [durable]);
+  return persisted;
 }
 
 /** One read of `navigator.storage.estimate()`, and only once the detail is open. */

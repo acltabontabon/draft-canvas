@@ -9,6 +9,7 @@
  */
 import { createId } from './ids';
 import { LIMITS } from './limits';
+import { cleanText } from './sanitize';
 import { migrateToCurrent, UnsupportedVersionError } from './migrate';
 import { defaultSizeFor } from './factory';
 import {
@@ -80,18 +81,8 @@ export type NormalizeResult =
 
 const finite = (value: unknown, fallback: number): number => (isFiniteNumber(value) ? value : fallback);
 
-/**
- * Control characters have no place in a label and confuse DOM and SVG alike.
- * Tab, newline and carriage return are deliberately kept: code cards
- * legitimately contain them.
- */
-// oxlint-disable-next-line no-control-regex -- matching them is the point
-const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
-
 function text(value: unknown, max: number): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const cleaned = value.replace(CONTROL_CHARS, '');
-  return cleaned.length > max ? cleaned.slice(0, max) : cleaned;
+  return typeof value === 'string' ? cleanText(value, max) : undefined;
 }
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {

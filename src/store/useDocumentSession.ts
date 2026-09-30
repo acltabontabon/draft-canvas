@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
 import { createId } from '../document/ids';
+import { LIMITS } from '../document/limits';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { hostKind } from '../host/hostInfo';
 import { logDiagnostic } from '../lib/diagnostics';
@@ -33,6 +34,36 @@ async function loadEditorStore(): Promise<EditorStoreModule> {
  * re-derived at each door. Must be called *after* `setDocument`, which clears the request it sets
  * along with the rest of the outgoing canvas's UI state.
  */
+/** How often, at most, a save measures the file it wrote. Serializing a large diagram costs a few
+ *  tens of milliseconds, which is fine now and then, not after every burst of typing. */
+const SIZE_CHECK_INTERVAL_MS = 15_000;
+let lastSizeCheck = 0;
+let sizeWarnedFor: string | null = null;
+
+/**
+ * Warns once per canvas when the file is nearing what an import accepts (`LIMITS.maxFileBytes`). The
+ * browser stores more than that without complaint, so without this a big canvas could grow into an
+ * export that Draft Canvas itself refuses to open again.
+ */
+function warnIfNearFileLimit(module: EditorStoreModule, notify: (message: string, tone?: 'info' | 'error') => void): void {
+  const now = Date.now();
+  if (now - lastSizeCheck < SIZE_CHECK_INTERVAL_MS) return;
+  lastSizeCheck = now;
+  const file = module.fileOf(module.useEditorStore.getState());
+  if (sizeWarnedFor === file.metadata.id) return;
+  // UTF-16 length is a lower bound on the UTF-8 bytes, which is the right side to err on for a warning.
+  const bytes = JSON.stringify(file).length;
+  if (bytes < LIMITS.maxFileBytes * 0.8) return;
+  sizeWarnedFor = file.metadata.id;
+  const mb = (bytes / 1024 / 1024).toFixed(1);
+  notify(
+    bytes >= LIMITS.maxFileBytes
+      ? `This canvas is ${mb} MB — more than a file can hold (${LIMITS.maxFileBytes / 1024 / 1024} MB), so its export won't open again. Move parts into their own canvases.`
+      : `This canvas is ${mb} MB, close to the ${LIMITS.maxFileBytes / 1024 / 1024} MB a file can hold. Consider moving parts into their own canvases.`,
+    bytes >= LIMITS.maxFileBytes ? 'error' : 'info',
+  );
+}
+
 export function arriveWith(document: DraftDocument, context: { reopening: boolean; fresh?: boolean }): void {
   const ui = useUiStore.getState();
   // A canvas just created (blank, or seeded by a Starter) already opens at the right viewport —
@@ -175,7 +206,10 @@ export function useDocumentSession(): DocumentSession {
     const controller = new Autosave({
       repository,
       // Saves only ever run for an open canvas, so the store is loaded by the time one reports.
-      onStateChange: (state) => editorStoreModule?.useEditorStore.getState().setSaveState(state),
+      onStateChange: (state) => {
+        editorStoreModule?.useEditorStore.getState().setSaveState(state);
+        if (state.status === 'saved' && editorStoreModule) warnIfNearFileLimit(editorStoreModule, notify);
+      },
       onMetadataAdopted: (id, metadata) => editorStoreModule?.useEditorStore.getState().adoptStoredMetadata(id, metadata),
       // The status bar keeps the choice on screen; this makes sure it's noticed.
       onConflict: (_id, kind) =>
@@ -298,6 +332,12 @@ export function useDocumentSession(): DocumentSession {
       // the Library — closing a canvas clears `openId` but leaves the store holding it. Arriving is
       // a question about the screen, not about the store.
       arriveWith(loaded, { reopening: openIdRef.current === loaded.metadata.id });
+      // What the load had to repair is kept in memory only until the next real edit saves it — say so
+      // now, rather than let the diagram quietly differ from what was stored.
+      const repairs = repository.takeRepairs?.(id);
+      if (repairs && repairs.length > 0) {
+        notify(`Opened with repairs, kept on your next edit: ${repairs.join(' ')}`);
+      }
       setOpenId(loaded.metadata.id);
     },
     [notify, refreshLibrary, repository],

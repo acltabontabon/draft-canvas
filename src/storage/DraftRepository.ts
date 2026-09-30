@@ -18,6 +18,12 @@ export interface DraftRepository {
   list(): Promise<DraftSummary[]>;
   load(id: string): Promise<DraftDocument | null>;
   /**
+   * What the last `load(id)` had to repair to open it (a dropped dangling connector, text cut to a
+   * limit), handed over once and then forgotten. Optional: a store that never repairs has nothing to
+   * say. A routine format upgrade isn't listed — only what changed the diagram itself.
+   */
+  takeRepairs?(id: string): string[] | undefined;
+  /**
    * Writes the document. With `base` — the title/project this editor last loaded or wrote — a
    * rename or move made meanwhile elsewhere (another tab's Library) is kept rather than reverted;
    * resolves with the metadata actually written when that differs from the document's own.

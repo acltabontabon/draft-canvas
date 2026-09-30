@@ -75,6 +75,8 @@ export class Autosave {
   /** Whether every version queued since the last write moved only the camera — see `SaveOptions.cameraOnly`. */
   private pendingCameraOnly = false;
   private inFlight = false;
+  /** The version whose write is in flight, if any — see `schedule`. */
+  private writing: DraftDocument | null = null;
   private current: Promise<void> | null = null;
   private lastFailed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -118,13 +120,19 @@ export class Autosave {
    */
   schedule(document: DraftDocument, options?: { cameraOnly?: boolean }): void {
     if (this.disposed) return;
+    const id = document.metadata.id;
     // The very object just tracked from disk — a canvas re-opened in place (taking another tab's copy
     // after a conflict, or restoring the stored copy) — is already stored. Writing it again would
     // only mint a new content stamp, and the other tab's next save would then report a conflict
     // nobody caused. Anything queued for it is superseded: the editor now shows what's stored.
-    if (this.loaded.get(document.metadata.id) === document) {
-      if (this.pending?.metadata.id === document.metadata.id) {
+    // Not while a write of some *other* version of it is in flight, though: that write is about to
+    // replace what's stored, so an undo that hands back the tracked object mid-write has to be written
+    // after it — skipping it left the undone edit on disk to come back on the next open.
+    const writingOther = this.writing !== null && this.writing.metadata.id === id && this.writing !== document;
+    if (this.loaded.get(id) === document && !writingOther) {
+      if (this.pending?.metadata.id === id) {
         this.pending = null;
+        this.pendingCameraOnly = false;
         // The edit that marked the status dirty is gone, and with it the write its timer was
         // armed for — without this the status would stay "dirty" until some later real save.
         if (this.timer) {
@@ -132,7 +140,14 @@ export class Autosave {
           this.timer = null;
         }
         this.firstDirtyAt = 0;
-        if (this.state.status === 'dirty' && !this.conflict) this.emit({ status: 'idle' });
+        // A failed write of the version just abandoned no longer matters: the screen is back to what's
+        // stored. Left set, closing the canvas would refuse with "could not be saved" over nothing.
+        if (!this.conflict) {
+          this.lastFailed = false;
+          if (this.state.status === 'dirty' || this.state.status === 'error') {
+            this.emit({ status: 'idle', message: undefined });
+          }
+        }
       }
       return;
     }
@@ -182,6 +197,7 @@ export class Autosave {
     this.pending = null;
     this.pendingCameraOnly = false;
     this.inFlight = true;
+    this.writing = document;
     this.firstDirtyAt = 0;
 
     this.savingIndicator = setTimeout(() => {
@@ -226,6 +242,11 @@ export class Autosave {
       if (this.pending === null) {
         this.pending = document;
         this.pendingCameraOnly = cameraOnly;
+      } else {
+        // The newer version queued behind this write inherits what this one carried: a pan made while
+        // a content write was failing was queued as camera-only, and written that way the content
+        // edit would ride a save that keeps the old content stamp — or is dropped outright.
+        this.pendingCameraOnly &&= cameraOnly;
       }
       this.clearSavingIndicator();
       if (error instanceof DocumentConflictError) {
@@ -245,6 +266,7 @@ export class Autosave {
       console.error('[draft-canvas] Autosave failed.', error);
     } finally {
       this.inFlight = false;
+      this.writing = null;
       if (this.pending && !this.lastFailed && !this.disposed) {
         this.timer = setTimeout(() => void this.flush(), 0);
       }
